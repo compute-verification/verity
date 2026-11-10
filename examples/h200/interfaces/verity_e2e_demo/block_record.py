@@ -14,31 +14,6 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-<<<<<<< 99c8914848
-  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
-  A leg whose ``server`` is not the block's is carried but not composed.
-* ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg of its product
-  ran on the block's server and accepted, else pending with what is ``missing``), the run's own composed answer
-  (``onsite``, a field name, not the product) when it wrote one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this
-  block, the composed legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it. The
-  statement names five audits; the wipe is ``outside_statement``. The product (`PRODUCTS`) is onsite's, every leg, unless
-  ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
-  not composed, so they leave its verdict neither pending nor missing.
- * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and
-  JointHorizonLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
-  δ of `DELTAS` needs over the period (δ / blocks).
-||||||| merged common ancestors
-  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
-  A leg whose ``server`` is not the block's is carried but not composed.
-* ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
-  server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote
-  one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
-  `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
-* ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
-  block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
-=======
   ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
   proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
   block's is carried but not composed.
@@ -52,9 +27,8 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
   not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
->>>>>>> 7af4d24fca3e
 
 `check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
 the Lean answer and extra legs.
@@ -69,14 +43,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-<<<<<<< 99c8914848
 from verity.core.periods import block_count
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
-||||||| merged common ancestors
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
-=======
 from verity.core.protocols.reporting import DELTAS, PERIODS
->>>>>>> 7af4d24fca3e
 from verity.core.protocols.profile import Stratified
 
 FORMAT = "verity/block-record/v2"

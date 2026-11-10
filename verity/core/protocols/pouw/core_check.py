@@ -83,20 +83,10 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-<<<<<<< 99c8914848
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.profile import Work, WorkStratum
-||||||| merged common ancestors
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-=======
 from verity.core.protocols.spot.one_stage import registration as R
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.one_stage import registered as G
->>>>>>> 7af4d24fca3e
+from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, fold_roots, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
