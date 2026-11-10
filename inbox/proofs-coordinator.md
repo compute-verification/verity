@@ -28733,3 +28733,59 @@ The ETA for node A is #8520's 70 to 81 min of composing [read], plus drawing and
 - rows 1 and 2's four items with their `/dev/shm` paths and whether their pins agree;
 - rows 3 to 14 as soon as `aeed` has them;
 - the rest after that.
+
+## LEDGER, Tue 10 Nov 16:23Z: PRF-496: the comment for Daniel's draft is below, ready to paste; items 3 and 4 are checked at their sources, and items 1, 2 and 4 changed with what I found
+
+**The page.** "SPOT: efficient zero-knowledge proofs via sampling" (`40e399515d9e80d68fb6f7c40c185a15`). All five sentences are in it word for word [read]. The fetch says it shows the page as of Mon 9 Nov 19:10Z, last edited that day at 02:36Z, so an edit after 19:10Z would not show [read].
+
+**What changed since my draft of the issue.**
+- **Item 4 has a source after all.** Figure 4's stored data holds both of Daniel's numbers, as sampling rates: 5.9 orders of magnitude at a whole request's tokens as one block, and 9.2 at 16-bit proof blocks [run: `figure4.json` in `art:d8a21de96d8e5394bc9d987ff5e83293b0733e94de4a4332924121bfd550027a`, rendered Sat 7 Nov]. What the figure does not hold is the split "if KV caches are an exfiltration risk": its axis is a block's output bits. That "6" and "roughly 10" came from these two points is my reading [guess].
+- **Item 3 has two faults, not one.** No spend record a lane can read [run, read: below], and the model's name: Daniel's ruling of Mon 9 Nov 19:44Z has every agent run Claude Fable 5.2, replacing the 14 Oct ruling that coordinators run Opus 5.5 [relayed: top's note `top/20261109T2055Z-finding-ledger-rules`, row R01, which cites the decisions log; I did not read the log].
+- **Item 2 is weaker than "nothing exists".** `benchmarks/numerical/README.md` on `main` says the evidence store keeps the final render of the tables that compared the systems [read]. I did not find that render's id and could not read it [run: below], so I cannot say it lacks a 10 to 100 times cell.
+- **Item 1's source moved.** On `main` at c3ae3eaaf0 `SpotKSTwo` takes two open premises, not three (#8309 landed), and `trust.base` gained the trusted host of the auditor's devices (#8377) [run: the lock at c3ae3eaaf0 against 7af4d24fca].
+
+### The comment, ready to paste
+
+~~~text
+Five sentences in the draft that we cannot source yet, with a sentence we can source for each. (proofs, Tue 10 Nov, against the draft as edited Mon 9 Nov.)
+
+1. "its security is provably based entirely on: the integrity of this one small computer; one or two cryptographic assumptions", and for SPOT "It does not add any new ones" and "No additional trust assumptions".
+Today the proofs trust SHA-512's collision resistance, the verifier server's random bytes, and that server's log of the coins it flips. Past that, the one-stage theorem still takes one premise we have not proved (the record the verifier reads is the one the challenger kept), the two-stage theorem takes two, and the weight-theft bound takes three, one of them a hardness assumption about the model. If the theft claim covers the network path, the network certifier's host is trusted as well.
+Sourced: "Its security rests on this one small computer, which must flip its coins at random and keep a log of them, and on the collision resistance of SHA-512. The weight-theft bound also assumes that honest use of the model does not give its weights away. The premises the Lean proofs still take are listed with the proofs."
+
+2. "in early benchmarks we found it outperformed other proof systems by 10-100x when coupled with SPOT".
+Nothing in the repository compares proof systems today: the other systems' code was deleted, and the September tables that compared them are kept only in the evidence store. We have not found the two numbers behind "10-100x" there.
+Sourced: end the paragraph at "... satisfying (3)." The clause can return with the two runs it compares.
+
+3. "With about $10,000 of engineering by Claude Opus 5.5".
+No lane can read what the agents cost: the figure is on the Cursor account's usage page. And more than one model did the work: your ruling of Mon 9 Nov moved every agent to Claude Fable 5.2.
+Sourced: "Nearly all of the code and proofs were written by AI agents." (95% of the repository's commits are theirs.) The dollar figure and the models can be added from the account.
+
+4. "Can save 6 OOMs. Or roughly 10 OOMs if KV caches are an exfiltration risk".
+Figure 4 has both numbers, but they are split by the size of a block, not by whether KV caches count, and they are the sampling rate needed, not a cost saved.
+Sourced: "To keep GLM-5.3's FP4 weights in over a year, it is enough to check one block in 750,000 when a block is a whole request's tokens (5.9 orders of magnitude below proving everything), and one in 1.7 billion when a block is a 16-bit proof block (9.2 orders). That is over a datacenter's year; over the world's it is one in 1.5 billion."
+One caution beside it: at 10% total cost, the proof overhead measured by Sat 7 Nov bought a rate 103 times below the 16-bit line (5 times below with the per-expert cut).
+
+5. "No runtime commitments".
+Serving does commit while it runs, at each replay-block boundary: in our GLM-5.3 run at 131,072 tokens of context it hashed and copied 311 GB at each of 46 boundaries and stalled 2.0 s at each (the median). What the two-stage design avoids is any commitment past those.
+Sourced: "No commitments beyond the replay-block boundaries: the inside of a replay block is committed only when it is sampled and replayed."
+~~~
+
+### Each item's source
+
+| # | What I read | Mark |
+|---|---|---|
+| 1 | The lock `Security/lean-audit.json` at `main` c3ae3eaaf0. `trust.base`: four forms of SHA-512's collision resistance, two of the server's uniform bytes, three facts of the challenger's log (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `TrustedHost` (new since 7af4d24fca, #8377). `SampledKSLiveV5` (deployed): `trust_gap` = `RecordCustodyZKJPLaw`; #8411, which proves custody, is open at 1562e328da. `SpotKSTwo` (not in `deployed`): open `Claims.SamplingGeneric.CompiledTwo.Scope` and `SpotFlock.Addresses`, domain `SpotFlock.Built`. `Theft`: open `HonestUseHard`, `LeaksThrough`, `Simulable`. `TheftServed`: `HonestUseHard`, `Simulable`. `TheftServedTied` (new, #8311): those two with `AdviceCovered` and `EgressTied` | [run] |
+| 1 | `HonestUseHard`'s docstring, `Security/Definitions/WeightSecurity/Assumptions.lean:44-47`: no outsider of the class steals the weights by honest use except with probability p. `LeaksThrough` (`:49-57`) is "the audit's to discharge", `EgressTied` "the network certifier's" | [read] |
+| 2 | `git grep` under `benchmarks/` on `main` for the other systems' names: only `benchmarks/numerical`, whose README says their code was deleted in `2091252fe3` and that the store keeps the tables' final render | [run] |
+| 2 | That render: its id is in no note I searched (proofs, top, benchmarks, the September lanes, one minute each), and `research data select` lists nothing from my VM (no index). One checkpoint of 24 Sep names a "Table 2" with one system's overhead on a 4090 at 6.6e6 times, which is against plain computing, not against Flock | [run], not covered: the store's index |
+| 3 | No spend figure for agents in top's, infra's or comms' notes (bounded search). INF-630 is machine rental (about \$2.4k + \$4.4k + \$0.8k). Infra's notes of 18 Oct list Cursor spend as "not read (no access)", readable with the admin key | [run], [read] |
+| 3 | `git shortlog -sn --no-merges origin/main`: 39,805 of 41,836 commits are authored "Cursor Agent", 95.1%; Daniel 1,711. The public export's history may differ | [run] |
+| 4 | `figure4.json`: target 376.7 GB of FP4 weights, δ = 2^-40. `need`, datacenter year: 16 bits 5.847e-10 (one in 1.71e9, 9.23 orders), 31 bits (the mean proof block) 7.200e-10, 144,000 bits (a request's tokens) 1.325e-06 (one in 754,501, 5.88 orders), 262,144 bits 2.412e-06. World year: 6.827e-10 (9.17 orders) and 1.325e-06 (5.88). `bought` at a total cost of 10%: (A) 5.689e-12 at h = 1.40e10; (A′) 1.159e-10 at h = 6.87e8; the target h = 1e7 buys 7.96e-09, 13.6 times the 16-bit rate | [run] |
+| 4 | Not covered: a render at `main`'s head. #7894 (the world year as the headline scope) landed after this render; both scopes give 9.2 and 5.9. The `bought` rates rest on Figure 1's overheads of 7 Nov, which the proving work has moved since | [read: `git log`], [guess] |
+| 5 | r20261108-195819-b00b `out/table.md`: arm `boundary`, 46 edges, stall p50 1.99 s and max 2.21 s, pause p50 1.64 s, "GB hashed / copied" 311.3 / 311.3 at an edge, roots equal. Its `meta.json` `what`: "the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels and copied to host memory" | [run] |
+| 5 | The design's rule, AGENTS.md ("Integrations are frontends"): the values are committed before any coin, and "under a two-stage sampling design, a sampled replay block's interior between its two stages" | [read] |
+
+**Not covered.** The draft's sub-pages ("SPOT security definitions", "Notes", "Old"). The Cursor account's usage. The decisions log itself.
+
+**For the ledger.** Rows S7 and S10 to S13 take these sources in today's claims pass.
