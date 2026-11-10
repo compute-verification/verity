@@ -92,7 +92,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
     (hA3 : ∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (hpa : ∀ t < T, ∀ B, (W t).pa B ≤ x ^ B.card)
     (hT : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      PeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
           (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
@@ -100,7 +100,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
           (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS)
     (hL : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      PeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))

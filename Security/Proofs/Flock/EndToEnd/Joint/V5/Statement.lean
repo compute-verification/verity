@@ -364,7 +364,7 @@ noncomputable def run (W : ℕ → JointAuditV5) (T : ℕ) (s : Strategy (game W
 
 /-- **The strategies the period plays window `t` with**: `τ` plays window `t` on some run of the period at `s`. -/
 def Plays (W : ℕ → JointAuditV5) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  PeriodPlays (fun t => (W t).game) 0 T s t τ
+  MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 /-- **The most harm in the period's confidence set**: the largest total weight over every choice of a set of proof
 blocks in each of the run's windows whose laws' own misses multiply to at least `δ`. -/

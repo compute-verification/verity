@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled
 /-!
 # A `--zk` session's record holds the coins its tree's log shows opened
 
-`Spot.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where the record's
+`Spot.Challenger.challengePhaseTreeReason` accepts a session's record (`none`), at any tables, only where the record's
 coin tree is one the release log shows sampled (`trees`, `coinTreesOf`'s) under the record's root, and each round the
 record gives coins of is one the log shows opened of that tree, with those coins' SHA-512 (`round_held`): its link's
 points as the session stream's round 0, and each stream's rounds. Its loops return at their first reason, so where a
@@ -99,15 +99,15 @@ def StreamHeld (t : LoggedTree) (s : Json) : Prop :=
   ∀ name rounds, getD s "stream" = .str name → getD s "rounds" = .arr rounds →
     ∀ x ∈ rounds.zipIdx, RoundHeld t name x
 
-/-- **A record `sessionTreeReason` accepts, at any tables, holds the coins its tree's log shows opened**: its coin
+/-- **A record `challengePhaseTreeReason` accepts, at any tables, holds the coins its tree's log shows opened**: its coin
 tree's root is that of a tree of the log, and each round the record gives coins of (`Verity.Sampled.recordRound`) is
 one the log shows opened of that tree, with those coins' SHA-512. -/
 theorem round_held {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json} {stream : String}
-    {k : Nat} {cs : ByteArray} (h : sessionTreeReason trees tables record = none)
+    {k : Nat} {cs : ByteArray} (h : challengePhaseTreeReason trees tables record = none)
     (hr : Verity.Sampled.recordRound record stream k = some cs) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
       ∃ o, t.opening stream k = some o ∧ o.coins = sha512Hex cs := by
-  unfold sessionTreeReason at h
+  unfold challengePhaseTreeReason at h
   dsimp only [Id.run] at h
   split at h
   case h_2 => cases h
@@ -197,10 +197,10 @@ theorem round_held {trees : Array LoggedTree} {tables : Array (String × Option 
     obtain ⟨r, hrk, hcs⟩ := Option.bind_eq_some_iff.1 hr
     exact hall x (Array.mem_of_find?_eq_some hx) _ rs hxn hxr (r, k) (Array.mem_zipIdx_iff_getElem?.2 hrk) cs hcs
 
-/-- **Each session `sessionsTreeReason` accepts has a record `sessionTreeReason` accepts at its tables.** -/
+/-- **Each session `challengePhasesTreeReason` accepts has a record `challengePhaseTreeReason` accepts at its tables.** -/
 theorem sessions_held {trees : Array LoggedTree} {records : Array (String × Array (String × Option Nat) × Json)}
-    (h : sessionsTreeReason trees records = none) : ∀ x ∈ records, sessionTreeReason trees x.2.1 x.2.2 = none := by
-  unfold sessionsTreeReason at h
+    (h : challengePhasesTreeReason trees records = none) : ∀ x ∈ records, challengePhaseTreeReason trees x.2.1 x.2.2 = none := by
+  unfold challengePhasesTreeReason at h
   dsimp only [Id.run] at h
   refine ret_held ?_ (fun w _ hw => by cases hw) h
   rintro ⟨name, tables, record⟩ u s hs
@@ -208,7 +208,7 @@ theorem sessions_held {trees : Array LoggedTree} {records : Array (String × Arr
   case h_1 => exact .inl ⟨_, _, hs.symm⟩
   rename_i hne
   refine .inr ⟨_, hs.symm, ?_⟩
-  cases hr : sessionTreeReason trees (name, tables, record).2.1 (name, tables, record).2.2 with
+  cases hr : challengePhaseTreeReason trees (name, tables, record).2.1 (name, tables, record).2.2 with
   | none => rfl
   | some w => exact (hne w (by rw [hr]; rfl)).elim
 
@@ -349,11 +349,11 @@ theorem opened_in {log : List String} {trees : Array LoggedTree} (h : coinTreesO
 
 
 /-- **A round a record gives coins of is an open line of the release log** naming the record's tree, with that round's
-stream and number and those coins' SHA-512: where the log's trees are `coinTreesOf`'s and `sessionTreeReason` accepts
+stream and number and those coins' SHA-512: where the log's trees are `coinTreesOf`'s and `challengePhaseTreeReason` accepts
 the record against them, at any tables. -/
 theorem open_held {log : List String} {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
     {stream : String} {k : Nat} {cs : ByteArray} (ht : coinTreesOf log = .ok trees)
-    (h : sessionTreeReason trees tables record = none) (hr : Verity.Sampled.recordRound record stream k = some cs) :
+    (h : challengePhaseTreeReason trees tables record = none) (hr : Verity.Sampled.recordRound record stream k = some cs) :
     ∃ l ∈ log, ∃ n after, OpenLine l (Verity.Sampled.recordTree record) ⟨stream, k, n, after, sha512Hex cs⟩ := by
   obtain ⟨t, htm, hroot, o, ho, hc⟩ := round_held h hr
   have hp := Array.find?_some ho
@@ -408,12 +408,12 @@ theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h
 
 /-- **Each record v2's evidence names holds to the trees where `treesHeld` accepts**: the record a session's blob
 parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordOn` reads it (`null` where it doesn't parse),
-is one `sessionTreeReason` accepts against them, at the tables `treesHeld` reads for its session. -/
+is one `challengePhaseTreeReason` accepts against them, at the tables `treesHeld` reads for its session. -/
 theorem records_held {p : Spot.OneStageZk.Own} {ts : Array LoggedTree} {e : Spot.OneStageZk.Evidence}
     {bs : Core.Blobs} (h : Spot.OneStageZk.treesHeld p ts e bs = .ok ()) {r} (hr : r ∈ e.sessions)
     {w : String} {b : ByteArray} {str : String} {rec : Json} (hb : (bs.get r.record w).toOption = some b)
     (hs : String.fromUTF8? b = some str) (hp : (Flock.JsonParse.parse str).toOption.getD .null = rec) :
-    ∃ tabs, sessionTreeReason ts tabs rec = none := by
+    ∃ tabs, challengePhaseTreeReason ts tabs rec = none := by
   unfold Spot.OneStageZk.treesHeld at h
   dsimp only at h
   obtain ⟨named, hn, hrest⟩ := bind_ok h
@@ -422,11 +422,11 @@ theorem records_held {p : Spot.OneStageZk.Own} {ts : Array LoggedTree} {e : Spot
       ∀ w b str, (bs.get r.record w).toOption = some b → String.fromUTF8? b = some str →
       (r.name, Spot.OneStageZk.rootBTables p bs str, (Flock.JsonParse.parse str).toOption.getD .null) ∈
         named) ?_ e.sessions.toList [] #[] named (by simp) hn
-  · have hsess : sessionsTreeReason ts named = none := by
+  · have hsess : challengePhasesTreeReason ts named = none := by
       split at hrest
       case h_1 => cases hrest
       rename_i hne
-      cases hw : sessionsTreeReason ts named with
+      cases hw : challengePhasesTreeReason ts named with
       | none => rfl
       | some w => exact (hne w hw).elim
     have hmem := hI r (by simpa using hr) w b str hb hs

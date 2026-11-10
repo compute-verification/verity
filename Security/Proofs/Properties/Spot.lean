@@ -840,7 +840,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ RunSeedSalt rec v ∧ RunPoolReset rec v ∧ WindowPoolWeek rec v ∧
       WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True := by
     intro c
     simp only [j13]
@@ -855,7 +855,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
+      (RunSeedSalt rec v ∧ RunPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
         (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True) := by
     intro c
     simp only [j12]

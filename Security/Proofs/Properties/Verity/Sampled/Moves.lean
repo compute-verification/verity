@@ -36,7 +36,7 @@ and holds what it reads to v2's check and to the writer.
   session's writer keeps an accepted transcript's view (`WritesView`, which `wrZP` does), what it writes for that
   outcome is accepted.
 
-What the link's message binds is the record's: `Spot.Challenger.sessionTreeReason` opens the link points after
+What the link's message binds is the record's: `Spot.Challenger.challengePhaseTreeReason` opens the link points after
 the SHA-512 of `root_F` and every `link.root_b` entry, while `Record.decode` reads only the tables' entries. The two are
 one message where `link.root_b` names exactly the session's tables, which v2 doesn't check today.
 -/

@@ -83,7 +83,7 @@
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.Coins",
-  "Proofs.Properties.Challenger.Session",
+  "Proofs.Properties.Challenger.ChallengePhase",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",

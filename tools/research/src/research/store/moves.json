@@ -1763,6 +1763,11 @@
         "Security/Properties/NetworkCertifier/Check/LinkWindow.lean": "Security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
         "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean": "verity/core/protocols/network/lean/NetworkCheck/TransferBlocks.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Properties/Challenger/Session.lean": "Security/Proofs/Properties/Challenger/ChallengePhase.lean"
+      }
     }
   ]
 }

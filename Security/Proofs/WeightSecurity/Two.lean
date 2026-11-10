@@ -238,7 +238,7 @@ theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hcap : ∀ t < T, WindowCap (Lv t) δ K) (ε : ℕ → ℝ)
     (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
-    (herr : ∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+    (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.value (Served.Undetected (T * (K - 1) + 1)) (twoRun H Lv δ T s) ≤
       ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := by
@@ -281,7 +281,7 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hcap : ∀ t < T, WindowCap (Lv t) δ K)
-    (herr : ∀ θ r t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
+    (herr : ∀ θ r t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.avg (fun z : Ω × R => Verity.Game.value
         (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (twoRun H Lv δ T (s (gen z.1) z.2))) ≤
