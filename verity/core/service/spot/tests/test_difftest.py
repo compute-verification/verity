@@ -4318,15 +4318,15 @@ def _read_registered(c: dict, x: int) -> dict:
         **lean, "registered": {**reported, f"{s['template']}/z": {"value": value, "root": e["root"]}}}}}
 
 
-#: Values only the interior registers, in `_read_interior`: a history table `h`, and an all-ones `ones` that a read's
-#: `ok` port reads.
+#: Values only the interior registers, in `_read_interior`: a history table `h`, and `opened`, which a read's `ok` port
+#: reads: the word 1 a passing read's `ok` holds.
 INTERIOR_VALUES = [{"value": "h", "root": "7b" * 64, "domain": "7c" * 64, "leaves": 8},
-                   {"value": "ones", "root": "7d" * 64, "domain": "7e" * 64, "leaves": 8}]
+                   {"value": "opened", "root": "7d" * 64, "domain": "7e" * 64, "leaves": 8}]
 
 
 def _read_interior(c: dict, x: int) -> dict:
-    """`c` with its interior registering `INTERIOR_VALUES`, and its first statement reading `h` at a port `z` or `ones`
-    at a port `ok`, neither an interior root, slot 0 its first row, as its template's reference statement reads it and
+    """`c` with its interior registering `INTERIOR_VALUES`, and its first statement reading `h` at port `z` or `opened`
+    at port `ok`, neither an interior root, slot 0 its first row, as its template's reference statement reads it and
     the verifier of record reports it. By `x`, that read is at its root, domain and leaves, at another root, domain or
     leaf count, or of a value neither registration registers. Only the first passes `second-read`, which takes a value
     only the interior registers at the interior's entry."""
@@ -6163,8 +6163,8 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
 def test_round_two_reads_values_only_the_interior_registers_and_names_each(pieces):
     """Reads of values only the interior registers, Lean's the Python's whole (`second-read`, `second_interior_reads`),
     over the two-template interior after a replay sample of two. PAIR's statement reading such a value
-    (`_read_interior`: a history table `h` at `z`, an all-ones `ones` at `ok`) passes at its root, domain and leaves. It
-    is refused at another root, domain or leaf count, and reading a value neither registration registers
+    (`_read_interior`: a history table `h` at `z`, a passing read's `opened` at `ok`) passes at its root, domain and
+    leaves. It is refused at another root, domain or leaf count, and reading a value neither registration registers
     (`second-read`). Each such read is named (`second_interior_reads`, at another root too), and none of the honest
     statements, a linked read or a read of the boundary's `w` is. The attached record carries the names where there are
     any (`second_stage.attach`)."""
@@ -6177,9 +6177,9 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (x, got)
-    h, ones = ({"template": pair, "port": p, "value": v} for p, v in (("z", "h"), ("ok", "ones")))
+    h, opened = ({"template": pair, "port": p, "value": v} for p, v in (("z", "h"), ("ok", "opened")))
     for case, want in [(honest, []), (linked, []), (_read_registered(honest, 0), []), (_read_interior(honest, 0), [h]),
-                       (_read_interior(honest, 1), [ones]), (_read_interior(honest, 2), [h]),
+                       (_read_interior(honest, 1), [opened]), (_read_interior(honest, 2), [h]),
                        (_read_interior(honest, 8), [])]:
         got = second_interior_reads(copy.deepcopy(case))
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
