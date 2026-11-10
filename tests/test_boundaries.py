@@ -1,17 +1,21 @@
-"""The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the import order over the tree.
+"""The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over the tree.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
-    catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, the served
-    workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
-    (ml.protocols) on the catalog and their protocols;
-    ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  until a protocol's verifier is its Lean, its Python verifier and each
-    device load and reach only the places the listing (``tests/import_order.toml``) froze for them in ``trusted``, the
-    soundness path, which only shrinks;  under ``verity/``, outside the verifiers and the devices, only the files
-    their ``loaded_by`` lists load one, tests included, and that only shrinks too;  no unit imports
-    another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
-    imports the standard library, its declared dependencies and itself;  ``infra/`` is the listing's last row, which no file
-    of another row loads, a test included, but the ties it lists;
+The import order is one listing, ``tests/import_order.toml``, and the checks at the end of this file read only it:
+
+    a file loads only what its own row or an earlier row holds, in Python and in Lean, but for the ties the listing
+    names by file (``against``), which only shrink;  no file under a ``verifier/`` loads one under a ``prover/``;
+    until a protocol's verifier is its Lean, its Python verifier and each device load and reach only the places the
+    listing froze for them in ``trusted``, the soundness path, which only shrinks;  under ``verity/``, outside the
+    verifiers and the devices, only the files their ``loaded_by`` lists load one, tests included, and that only shrinks
+    too;  a directory under ``verity/`` with an import root of its own is a ``distribution`` the listing names with
+    its owner, which no file of ``verity`` loads;  ``infra/`` is the last row, which no file of another row loads, a
+    test included, but the ties it lists.
+
+Beside the order:
+
+    ``verity`` imports the standard library, its declared dependencies and itself, never another distribution of the
+    workspace (Flock, an integration, a benchmark, a tool) or an external runtime, and a verifier, a device and the
+    scalar references (``STDLIB_ONLY``) no dependency;  the bottom row imports the standard library alone;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``).
@@ -51,82 +55,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
-#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` and ``settings`` are shared by all.
-ALLOWED = {
-    "ml.circuits": set(),
-    "ml.randomness": set(),
-    "ml.crypto": set(),
-    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
-    "hardware": set(),
-    "ml.commitments": {"ml.circuits", "ml.crypto"},
-    # the catalog and the kernels, distributions of their own before the platform layout
-    "ml.circuits.silicon": {"ml.circuits"},
-    "ml.circuits.targets": {"ml.circuits", "ml.circuits.silicon"},
-    "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
-    "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
-    "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
-    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
-    # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
-    # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
-    # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
-    "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
-    "core.claims": set(),
-    # An auditor party's signed period roots and liveness records,
-    # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
-    "core.attest": set(),
-    # The deployment API: the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and
-    # reads frames with it, signs and verifies only through keys its caller hands it, and checks a configuration against what
-    # a protocol and a workload declare to it, so neither gains an ml edge.
-    "core.wire": set(),
-    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
-    # views a protocol reads. Its digests are canonical JSON's, the wire's.
-    "core.site": {"core.wire"},
-    "core.deploy": {"core.wire"},
-    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: the Site's
-    # entries and check, canonical JSON and SHA-512 only, so it reaches no ml.
-    "core.protocols.registration": {"core.wire", "core.site"},
-    "core.protocols.profile": {"ml.circuits"},
-    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
-    # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    # SPOT[Flock]'s inference server, proof server and verifier, the core deployment's ZK server and workers, and the
-    # challenger both run are parties of the deployment layer (`parties`), their messages the wire's.
-    "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
-                                      "ml.randomness", "core.protocols.profile", "core.protocols.record"},
-    # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.reporting"},
-    # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
-    # deployment layer, its messages the wire's.
-    "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
-    # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.configuration.deploy.stream`).
-    # The remote bandwidth audit commits receipts in frame-v3-sha512
-    # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof system's one challenger's (`spot.challenger`).
-    # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
-    # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.spot", "core.protocols.pous", "core.wire",
-                                        "core.deploy", "core.protocols.reporting"},
-    # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
-    "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
-                            "core.protocols.spot"},
-    # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
-    # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
-    # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
-    "core.protocols.record": set(),
-    # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
-    "core.protocols.reporting": set(),
-    # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
-    # certifier's are stated over their protocol's parameters and records in core (the listing's `loaded_by`), and PoUW's schemes
-    # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).
-    "ml.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                          "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.spot"},
-    "ml.protocols.pous": {"ml.circuits", "ml.commitments"},
-    "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.spot"},
-}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
@@ -143,11 +71,10 @@ STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definit
                "verity/claims", "verity/hardware", "verity/spot", "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
-#: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units and its
-#: row of the listing, the trees each of whose Python files (tests included) is checked, its Lean packages and its
-#: analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's Python units, its row,
-#: modules and Lean (its packages and its Security areas).
-SPOT_PYTHON = ("core.protocols.spot",)
+#: certified input and imports none of the certifier, and the two compose only above both.  Sampled proofs' row of the
+#: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
+#: and its analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's modules and Lean
+#: (its packages and its Security areas).
 SPOT_ROW = "verity/spot"
 CERTIFIER_ROW = "verity/protocols/certifier"
 SPOT_TREES = ("verity/spot", "verity/spot/verifier/lean", "verity/flock/verifier",
@@ -155,7 +82,6 @@ SPOT_TREES = ("verity/spot", "verity/spot/verifier/lean", "verity/flock/verifier
 SPOT_LEAN = ("verity/spot/verifier/lean", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
-CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
 CERTIFIER_MODULES = ("verity.protocols.certifier.verifier", "verity.protocols.certifier.prover", "verity.protocols.certifier.device")
 CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/protocols/certifier/device/lean",
                   "verity/protocols/certifier/verifier/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
@@ -284,39 +210,12 @@ def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)
     return out
 
 
-def _unit(dotted: str) -> str | None:
-    """The unit a module under ``verity`` (``ml.circuits.cut``) belongs to, or None for a grouping or a top-level file."""
-    parts = dotted.split(".")
-    return next((".".join(parts[:n]) for n in range(len(parts), 0, -1) if ".".join(parts[:n]) in ALLOWED), None)
-
-
-def _dotted(path: Path) -> str:
-    parts = path.relative_to(SRC).with_suffix("").parts
-    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
-
-
 def _external(name: str, imported: bool, allowed: set[str]) -> bool:
     """Whether a non-``verity`` ``name`` breaks the rules: it is forbidden and not ``allowed``, or it is imported and is
     neither stdlib nor in ``allowed``."""
     top = name.split(".")[0]
     return (top in FORBIDDEN_EXTERNAL and top not in allowed) or (
         imported and top != "verity" and top not in sys.stdlib_module_names and top not in allowed)
-
-
-@pytest.mark.parametrize("unit", sorted(ALLOWED))
-def test_core_unit_imports_only_inward(unit: str) -> None:
-    files = [p for p in _sources() if _unit(_dotted(p)) == unit]
-    assert files, f"unit {unit!r} has no source: remove it from ALLOWED"
-    offenders = []
-    for path in files:
-        for name, line, imported in _imports(path):
-            parts = name.split(".")
-            target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
-            third_party = set() if unit.startswith("core.protocols.") else DEPENDENCIES
-            if (_external(name, imported, third_party)
-                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
-                offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
-    assert not offenders, "\n".join(offenders)
 
 
 #: A read of another package at run time, matched in the text: its package data (``importlib.resources``) or a module an import
@@ -353,22 +252,6 @@ def test_a_run_time_read_is_found() -> None:
            "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
            'q = resources.files("verity.definitions.ops") / "tables"\nr = resources.files(__package__)\n')
     assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
-
-
-def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
-    """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
-    ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
-    library and nothing else: ``verity/__init__.py`` re-exports nothing, and ``verity/errors.py`` and the settings registry
-    ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
-    offenders = []
-    for path in _sources():
-        if _unit(_dotted(path)) is not None:
-            continue
-        if path.name != "__init__.py" and path.parent != SRC:
-            offenders.append(f"{path.relative_to(SRC)}: outside every unit; add its package to ALLOWED")
-        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line, imported in _imports(path)
-                      if _external(name, imported, set()) or name.split(".")[0] == "verity"]
-    assert not offenders, "\n".join(offenders)
 
 
 def test_every_source_directory_is_a_package() -> None:
@@ -419,16 +302,6 @@ def test_the_bottom_row_imports_the_standard_library_alone() -> None:
                            + "\n".join(offenders))
 
 
-def _reached(allowed: dict[str, set[str]], units: Iterable[str]) -> set[str]:
-    """The units ``units`` reach in ``allowed``, directly or through one another."""
-    reached, todo = set(), list(units)
-    while todo:
-        for v in allowed.get(todo.pop(), set()) - reached:
-            reached.add(v)
-            todo.append(v)
-    return reached
-
-
 def _covered(rel: str, globs: Iterable[str]) -> bool:
     """Whether ``rel`` is a path ``globs`` name or lies under one (``*`` crosses directories, as ``fnmatch``'s does)."""
     return any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(rel, g + "/*") for g in globs)
@@ -447,14 +320,10 @@ def _spot_python_offenders() -> list[str]:
 
 
 def test_spot_never_imports_the_network_certifier_in_python() -> None:
-    """SPOT[Flock]'s Python imports no unit of the network certifier (``SPOT_PYTHON``): ``ALLOWED`` lets sampled proofs
-    reach none of ``CERTIFIER_PYTHON``, and no file of its trees, Flock's and their tests among them, imports one.  The
-    listing's order says the same of every load: it puts the certifier's row (``CERTIFIER_ROW``) after sampled proofs'
-    (``SPOT_ROW``) and lists no tie out of the rows up to sampled proofs' into a later one, so nothing sampled proofs'
-    Python loads, directly or through another file, is the certifier's."""
-    assert set(CERTIFIER_PYTHON) <= set(ALLOWED), f"CERTIFIER_PYTHON names a unit ALLOWED doesn't: {CERTIFIER_PYTHON}"
-    reached = sorted(_reached(ALLOWED, SPOT_PYTHON) & set(CERTIFIER_PYTHON))
-    assert not reached, f"{SPOT_NOT_CERTIFIER}: ALLOWED lets {SPOT_PYTHON} reach {reached}"
+    """SPOT[Flock]'s Python imports none of the network certifier.  The listing puts the certifier's row
+    (``CERTIFIER_ROW``) after sampled proofs' (``SPOT_ROW``) and lists no tie out of the rows up to sampled proofs' into
+    a later one, so nothing sampled proofs' Python loads, directly or through another file, is the certifier's; and no
+    file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``CERTIFIER_MODULES``."""
     listing = _listing()
     spot, certifier = listing.steps[SPOT_ROW], listing.steps[CERTIFIER_ROW]
     assert spot < certifier, f"{SPOT_NOT_CERTIFIER}: tests/import_order.toml lists {CERTIFIER_ROW} no later than {SPOT_ROW}"
