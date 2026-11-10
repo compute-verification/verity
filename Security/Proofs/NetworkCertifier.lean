@@ -34,6 +34,7 @@ public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
+public import Proofs.NetworkCertifier.PoolRoots
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -95,7 +96,9 @@ run's relation at the rows its extracted trace holds, and the period's bound, wh
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
 pick where every audit accepts. At the empty pool the period's bound is the bound with checked inputs over windows that
 each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarried` gives their nontrivial lemmas and
-`SampledLeakCarried`'s honest one.
+`SampledLeakCarried`'s honest one. `PoolRoots` proves the period bound's premise on the opened rows' roots
+(`CarriedRoots`) from each run's in-circuit check of its roots (`CheckedRoots`) and the record rule (`PoolChained`), as
+the lemma `rootsOfChecked`.
 -/
 
 @[expose] public section

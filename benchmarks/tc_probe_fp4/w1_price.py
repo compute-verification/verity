@@ -143,7 +143,7 @@ def flop_per_mma(row: str) -> int:
     return 2 * 16 * 8 * ROWS[row][1]
 
 
-def _bytes(rng, fmt: str, shape) -> np.ndarray:
+def _bytes(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...]) -> np.ndarray:
     if fmt == "e2m1":  # a code at bits [2,6) of its 8-bit container
         return rng.integers(0, 16, size=shape, dtype=np.uint32) << 2
     if fmt == "e4m3":
@@ -180,7 +180,7 @@ def fragments(row: str, nwarps: int, seed: int) -> np.ndarray:
     return f
 
 
-def _f32_words(rng, shape, lo: int, hi: int, signed: bool) -> np.ndarray:
+def _f32_words(rng: np.random.Generator, shape: int | tuple[int, ...], lo: int, hi: int, signed: bool) -> np.ndarray:
     v = rng.uniform(1.0, 2.0, size=shape) * np.exp2(rng.integers(lo, hi, size=shape))
     if signed:
         v *= rng.choice([-1.0, 1.0], size=shape)
@@ -223,7 +223,7 @@ def loops_of(text: str) -> dict:
     out: dict = {}
     fn, ins = None, []
 
-    def flush():
+    def flush() -> None:
         if fn is None:
             return
         at = {a: i for i, (a, _) in enumerate(ins)}
@@ -446,7 +446,7 @@ class FakeW1:
         pass
 
 
-def _median(xs):
+def _median(xs: list[float]) -> float | None:
     return statistics.median(xs) if xs else None
 
 
@@ -544,7 +544,8 @@ def main(argv: list[str] | None = None) -> int:
         record["op_inputs_sha256"] = hashlib.sha256(init.tobytes()).hexdigest()
         dev.cvt_setup(init, op_blocks * tpb, len(ops), op_blocks)
 
-    def launch(item, iters, want=False):
+    def launch(item: tuple[str, str, int | None], iters: int,
+               want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         kind, name, mode = item
         if kind == "mma":
             return dev.run(ROWS[name][0], mode, slot[name], nblocks, wpb, iters, want=want)
