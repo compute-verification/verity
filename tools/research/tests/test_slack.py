@@ -3053,6 +3053,91 @@ def test_a_cursor_agent_without_research_notes_token_reads_the_notes_with_the_ag
     assert slack.notes_token() == "t0k" and slack.notes_token_source() == "env"
 
 
+class _NotesGitHub:
+    """GitHub's contents API on the notes refusing the bearer `t0k` with `status`, in `mod`'s urlopen, and the agents' GitHub
+    broker giving an hour's token to whoever asks it. Each request's bearer, and each asking of the broker."""
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def __init__(self, monkeypatch, mod, status: int):
+        self.status, self.seen, self.asked = status, [], 0
+        monkeypatch.setattr(mod.urllib.request, "urlopen", self.urlopen)
+        monkeypatch.setattr(mod.urllib.request, "build_opener", lambda *handlers: self)
+        monkeypatch.setattr(mod, "_notes_token", {})
+        monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+        for k in ("RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"):   # notes_sync sets them in os.environ: undone after
+            monkeypatch.setenv(k, "")
+            monkeypatch.delenv(k)
+        monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+
+    def urlopen(self, req, timeout):
+        self.seen.append((req.get_method(), req.get_header("Authorization")))
+        if req.get_header("Authorization") == "Bearer t0k":
+            raise urllib.error.HTTPError(req.full_url, self.status, "x", {}, None)
+        return self.Reply(b'[{"name": "x.json"}]')
+
+    def open(self, req, timeout=None):
+        self.asked += 1
+        return self.Reply(json.dumps({"token": "agent-minted", "expires_at": "1970-01-01T01:00:00Z"}).encode())
+
+
+REFUSED_SAID = "notes: RESEARCH_NOTES_TOKEN was refused by GitHub: it is expired or revoked; "
+
+
+@pytest.mark.parametrize("method, status", [("GET", 401), ("PUT", 403)])
+def test_a_notes_api_call_whose_given_token_github_refuses_is_made_once_more_with_the_agents_brokers(monkeypatch, capsys, method, status):
+    """An agent without a notes clone lists and writes people.d through GitHub's API: when the token its VM injects has expired,
+    the call names the variable and still succeeds, by the agents' GitHub broker."""
+    from research import notes_sync
+
+    github = _NotesGitHub(monkeypatch, slack, status)
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: "dummy-identity")
+    monkeypatch.setattr(notes_sync, "clock", lambda: 0.0)
+    monkeypatch.setattr(notes_sync, "_BROKER_REFUSED", [(0.0, "the broker answered HTTP 503")])     # out a moment ago: the variable
+    assert slack.notes_api(method, "people.d", {"message": "m"} if method == "PUT" else None) == [{"name": "x.json"}]
+    assert github.seen == [(method, "Bearer t0k"), (method, "Bearer agent-minted")] and github.asked == 1
+    assert capsys.readouterr().err == REFUSED_SAID + "going on with the GitHub broker's token\n"
+    assert slack.notes_token_source() == "agent-broker" and slack.notes_api("GET", "people.d") and github.asked == 1
+    assert capsys.readouterr().err == "", "said once"
+
+
+def test_a_notes_api_call_refused_with_no_agents_broker_to_go_on_with_fails_as_before(monkeypatch, capsys):
+    from research import notes_sync
+
+    github = _NotesGitHub(monkeypatch, slack, 401)                                # conftest: no Cursor identity here
+    with pytest.raises(slack.SlackError, match="^notes: GitHub GET people.d: HTTP 401$"):
+        slack.notes_api("GET", "people.d")
+    assert github.seen == [("GET", "Bearer t0k")] and github.asked == 0, "asked once, and no broker without an identity"
+    assert capsys.readouterr().err == REFUSED_SAID + "the GitHub broker gave no token to go on with (no Cursor identity here)\n"
+    os.environ.update({notes_sync.TOKEN_ENV: "t0k", notes_sync.SOURCE_ENV: "broker", notes_sync.EXPIRES_ENV: "7200"})
+    monkeypatch.setattr(notes_sync, "clock", lambda: 0.0)                           # the broker's own token, refused: not the variable
+    with pytest.raises(slack.SlackError, match="^notes: GitHub GET people.d: HTTP 401$"):
+        slack.notes_api("GET", "people.d")
+    assert len(github.seen) == 2 and github.asked == 0 and capsys.readouterr().err == ""
+
+
+def test_slack_py_deployed_alone_answers_a_refused_notes_token_as_before(monkeypatch, capsys):
+    """The Slack events service runs this file with no `notes_sync` beside it: there a refused $RESEARCH_NOTES_TOKEN stays the
+    HTTP error it was, asked once, with nothing said and no broker but the service's own."""
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location("research_slack_alone", slack.__file__)
+    alone = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "research_slack_alone", alone)
+    spec.loader.exec_module(alone)
+    github = _NotesGitHub(monkeypatch, alone, 403)
+    assert alone.notes_token() == "t0k" and alone.notes_token_source() == "env"
+    with pytest.raises(alone.SlackError, match="^notes: GitHub PUT people.d/x.json: HTTP 403$"):
+        alone.notes_api("PUT", "people.d/x.json", {"message": "m"})
+    assert github.seen == [("PUT", "Bearer t0k")] and github.asked == 0 and capsys.readouterr().err == ""
+
+
 def notes_clone(tmp_path) -> Path:
     import subprocess
     bare, clone = tmp_path / "notes.git", tmp_path / "notes"
