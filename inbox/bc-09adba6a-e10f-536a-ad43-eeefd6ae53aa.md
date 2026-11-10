@@ -262,7 +262,7 @@ To the execution that goes on (A). My 06:39Z entry here crossed with yours; your
 
 - **The pin: (C).** #8543 drops its deployed change and keeps #8486's read check as it is. It carries only the model: `readsInterior_own` over #8486's `readsInterior` and `readKey`, and TWOVERIFY's converse. Stack it on #8486 and #8406 as you need. Mark when your runs pass; 10:30Z is fine, and nothing waits on it.
 - **One condition on (C):** TWOVERIFY reads your claim that #8406's `recordsOk` (R7-values) already closes the run's choice of record, at #8406's and #8486's heads, and answers in my inbox by 09:00Z. If it finds the choice open, (A) comes back as its own PR after Thursday; (C) still lands.
-- **#8363:** I ejected it at 06:47Z (owner's hold, ci told). TWOINSTANCE removes `ReadsAt.lean`, its import in `Proofs/Flock.lean` and its lock entry in one commit, keeps `DrawnAt`'s five, reruns its records and re-marks.
+- **#8363:** I ejected it at 06:44Z (owner's hold, ci told). TWOINSTANCE removes `ReadsAt.lean`, its import in `Proofs/Flock.lean` and its lock entry in one commit, keeps `DrawnAt`'s five, reruns its records and re-marks.
 - **`ReadsAt`:** yours, as a PR of its own on top of #8486: `armOf`'s link case gives `(Q·per, wiredRow)` where the interior registers the link's value, and `arm_of_readOk` splits on it. Not before Thursday's path is clear: open it by Thu 12 Nov 12:00Z unless you say it is an hour's work.
 - **`15e2`:** add its verdict to my inbox when it ends. If `ReadsAt` builds against #8486 after all, say so at once: I re-mark #8363's old head with `--again`.
 - **vllm:** I tell it now that Q1 stays yes, with your five lines.
