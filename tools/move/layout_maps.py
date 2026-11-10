@@ -33,7 +33,8 @@ whichever component they are in: circuit-check finds a module's bindings beside 
 A SUITE MOVES WHOLE. A `pyproject.toml` that configures pytest is a suite, and every file under its test directories
 goes where the pyproject goes (or stays where it stays), whichever component it is in: no map splits a suite, and
 splitting one is its owner's change after the moves. The script names each place where that puts one component's
-tests in another's directory ("with its suite"), and the trust check lets a suite's tests go with it. An archived
+tests in another's directory ("with its suite"), and the trust check lets a suite's tests go with it. A test whose
+code the layout sends into another suite goes into that suite with it, by a row of `EXCEPT` for the test. An archived
 test stays archived.
 
 AN EMPTIED PACKAGE LEVEL. The `__init__.py` of a package level the moves empty (every other file under it leaves, and
@@ -151,9 +152,14 @@ EXCEPT = [
     ("verity/core/service/vstar/", "verity/flock/verifier/vstar_cli/",
      "V*'s command package: the rule gives `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the "
      "Flock verifier's own Lean sources, and a checkout that ignores case merges the two"),
-    ("verity/core/protocols/network/lean/", "verity/protocols/certifier/verifier/network/lean/",
-     "the network check's Lake package: the rule puts it on `verifier/lean/`, where the certifier program's Lake package "
-     "goes, which it requires; it takes `network/lean/`, beside the suite that builds it"),
+    ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
+     "the certifier program's Lake package: the rule puts it on `verifier/lean/`, where the network check's Lake package "
+     "goes (two lakefiles, manifests, locks and toolchains on one path); the program is what the device runs"),
+    ("verity/ml/commitments/tests/test_leaves.py", "integrations/vllm/tests/commitments/test_leaves.py",
+     "the test of `leaves.py`, which goes into the integration: it goes into the integration's suite with the module it "
+     "tests; left with its own suite, a test under `verity/` would import an integration"),
+    ("verity/ml/commitments/tests/test_vllm_v1.py", "integrations/vllm/tests/commitments/test_vllm_v1.py",
+     "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -461,7 +467,7 @@ def plan(data, owner, say, suites=()):
         t = posixpath.dirname(p)
         while t and t not in tests:
             t = posixpath.dirname(t)
-        if not t or owner[p] == "archived":
+        if not t or owner[p] == "archived" or excepted(p)[0] == p:   # a row of its own: with the code it tests
             continue
         pp = tests[t]
         pdir = posixpath.dirname(pp)
