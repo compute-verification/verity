@@ -26,4 +26,5 @@ inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "ve
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/protocols/reporting.py", "verity/ml/__init__.py", "verity/circuits",
           "verity/spot/verifier/profile.py", "benchmarks/census/deployments.json", "verity/protocols/inference_only/nci/calibrations.json",
-          "verity/protocols/__init__.py", "verity/spot/__init__.py", "verity/spot/verifier/__init__.py"]
+          "verity/protocols/__init__.py", "verity/spot/__init__.py", "verity/spot/verifier/__init__.py",
+          "verity/protocols/inference_only/__init__.py"]
