@@ -54,4 +54,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
           "verity/configuration/deploy", "verity/configuration/wire",
-          "verity/circuits", "verity/commitments", "verity/configuration/__init__.py", "verity/hardware/__init__.py"]
+          "verity/circuits", "verity/commitments", "verity/configuration/__init__.py", "verity/hardware/__init__.py",
+          "verity/composite/__init__.py"]

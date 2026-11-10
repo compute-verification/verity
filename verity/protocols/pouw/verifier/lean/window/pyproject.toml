@@ -49,4 +49,5 @@ inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "v
           "verity/spot/verifier/one_stage/partition.py",
           "verity/spot/verifier/one_stage/produced.py",
           "verity/spot/verifier/one_stage/registered.py",
-          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]
+          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
+          "verity/definitions/__init__.py"]

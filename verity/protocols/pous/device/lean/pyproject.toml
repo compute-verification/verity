@@ -30,4 +30,5 @@ inputs = ["verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",
           "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
           "verity/flock/verifier/interface",
-          "verity/difftest/lean", "verity/protocols/pous/verifier/tests/pous_test_signer.py"]
+          "verity/difftest/lean", "verity/protocols/pous/verifier/tests/pous_test_signer.py",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/commitments/attest/__init__.py"]
