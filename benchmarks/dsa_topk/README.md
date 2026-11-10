@@ -57,7 +57,7 @@ PYTHONPATH=DIR${PYTHONPATH:+:$PYTHONPATH} VERITY_DSA_TOPK=canonical [VERITY_DSA_
 
 ## Measuring
 
-On a GPU node with the pin's venv (`integrations/vllm/verity_vllm/ops/pod_bootstrap.sh`'s `venv312`):
+On a GPU node with the pin's venv (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`'s `venv312`):
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source -- bash benchmarks/dsa_topk/run.sh

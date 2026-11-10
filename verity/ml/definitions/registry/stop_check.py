@@ -1,5 +1,5 @@
 """A request's length check: whether its outputs end where `stop_rule.StopRule_v1` computes, as one Call a Program returns as a
-check (`integrations/vllm`'s `program.frontend.stop_rule`).
+check (`adapters/vllm`'s `program.frontend.stop_rule`).
 
 `StopCheck_v1{T, STOP, MAX_TOKENS, PROMPT_LEN, MAX_MODEL_LEN, FINISH}` (ids: Array<T, i32>) -> bit is 1 exactly when
 `StopRule_v1{T, NSTOP}` over the T outputs ``ids``, the stop ids STOP and the constants MAX_TOKENS, PROMPT_LEN and

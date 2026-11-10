@@ -96,7 +96,7 @@ def params(r: dict, logprobs: bool = False) -> Any:
 
 
 def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> dict:
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 

@@ -164,7 +164,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
     import torch
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     sys.path.insert(0, str(HERE))
     from servetax_plugin import step_outputs_hook
     from verity_vllm.engine.hooks import Hooks

@@ -57,7 +57,7 @@ The run exits 0 when it is as expected: both ranks accepted with every negative 
 rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``--out`` holds the windows as committed
 (``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """

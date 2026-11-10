@@ -9,7 +9,7 @@ logits, with no `run` value and no advice.
 * `DsaTopKRow` is the long-row check: the three above over the indices 0..N-1, whose output is `sorted(topk_set(scores, TOPK))`.
 
 These are the accelerators (`_v1`); `boolean_dsa_topk_mask` holds the definitions on bits, which circuit-check and
-integrations/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
+adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
 
 The concentrator is the inverse butterfly over P = 2^L positions, L = ceil(log2 N), position j < N holding row j and the rest
 empty.  Stage t = 0..L-1 has a switch over each pair (p, p + 2^t), p's bit t zero: crossed when its setting bit is 1.  Member j,

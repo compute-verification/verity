@@ -43,11 +43,11 @@ sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 # M0's import roots in its own tree: the layout with verity at the root, else the one before it
-m0path() { if [ -f $1/packages/verity/pyproject.toml ]; then echo $1/packages/verity/src:$1/backends/numerical/python:$1/verity/ml/flock/python:$1/integrations/vllm
-           else echo $1:$1/catalog:$1/kernels:$1/experimental:$1/benchmarks/numerical/python:$1/verity/ml/flock/python:$1/integrations/vllm; fi; }
+m0path() { if [ -f $1/packages/verity/pyproject.toml ]; then echo $1/packages/verity/src:$1/backends/numerical/python:$1/verity/ml/flock/python:$1/adapters/vllm
+           else echo $1:$1/catalog:$1/kernels:$1/experimental:$1/benchmarks/numerical/python:$1/verity/ml/flock/python:$1/adapters/vllm; fi; }
 M0PATH=$(m0path $W/m0)
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/adapters/vllm
 if [ "${RUN:-a0}" = a2 ]; then
   rm -rf $W/served && mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))

@@ -31,11 +31,11 @@ REGISTRY: dict[str, str] = {
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
-    "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
-    "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
-    "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
-    "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
-    "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",
+    "vllm.build": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
+    "vllm.plan": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
+    "vllm.match": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
+    "vllm.commit": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
+    "vllm.replay": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",
 }
 
 
@@ -138,7 +138,7 @@ def load(spec_or_name: str, source_root: Path | str | None = None) -> Tool:
     except (ImportError, AttributeError) as e1:
         obj = None
         e2: Exception = e1
-        for cand in (root, *list(root.parents)[:6]):     # `--cwd integrations/vllm`: the declaration's file sits at the repo root above
+        for cand in (root, *list(root.parents)[:6]):     # `--cwd adapters/vllm`: the declaration's file sits at the repo root above
             try:
                 obj = from_tree(spec, cand)
                 break

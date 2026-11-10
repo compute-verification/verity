@@ -30,7 +30,7 @@ population Program of its one Definition at ``--n`` instances and that Program's
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 

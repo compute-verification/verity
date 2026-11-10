@@ -47,7 +47,7 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 import torch_rate as tr  # noqa: E402
 
-CONFIG = ROOT / "integrations/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B_INT8.config.json"
+CONFIG = ROOT / "adapters/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B_INT8.config.json"
 PROMPTS = ("1024", "4096", "8192", "16384", "8x1024", "16x1024", "32x1024")
 PEAK = {"bf16": 2048, "s8": 4096}
 SMS = 132

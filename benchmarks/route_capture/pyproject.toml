@@ -21,8 +21,8 @@ inputs = [
     "verity/ml/circuits",
     "verity/ml/definitions",
     "verity/ml/kernels",
-    "integrations/vllm/verity_vllm",
-    "integrations/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
-    "integrations/vllm/workloads/SHA256SUMS",
-    "integrations/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
+    "adapters/vllm/verity_vllm",
+    "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
+    "adapters/vllm/workloads/SHA256SUMS",
+    "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
 ]
