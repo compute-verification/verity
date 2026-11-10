@@ -82,8 +82,8 @@ uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-on
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
   `Security/Definitions/Nci/Remote.lean`, whose
   `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
-  min-cut bound's `alphaHE` and `shareF` and state its `HE` and `HEShared`, found through the lock, which
-  `tests/test_min_cut.py` holds `min_cut.py` to.
+  min-cut bound's `alphaHE`, `shareF` and `workHEOn` and state its `HE`, `HEShared` and `HECharged`, found through
+  the lock, which `tests/test_min_cut.py` holds `min_cut.py` to.
 
 ## The model
 
@@ -128,9 +128,10 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
 
-**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE` and `HEShared` (`min_cut.HE`,
-`min_cut.HE_SHARED`), each function one side of an inequality they conclude or that inequality solved for one term; it
-is standard library only, so another benchmark loads it by path. A work of `N` MACs with `O` output wires needs at
+**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
+(`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
+that inequality solved for one term; it is standard library only, so another benchmark loads it by path. `HECharged`
+is stated and no lock lists a proof of it. A work of `N` MACs with `O` output wires needs at
 least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
@@ -140,6 +141,18 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
   row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
   input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
+- `min_cut.bound_charged(c, k, n, blocks=…, untied=…, w=…, N=…, O=…, size=…)` is the bound over a monitoring
+  period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word` fresh bits in
+  the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a set of blocks
+  with the rest charged whole: `N ≤ H + T + ½ √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks read between
+  them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output wires and
+  `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. A block that reads more
+  than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by default there
+  is none and no block is charged. It gives the slowdown, the blocks charged at most, the MACs they hold and their
+  share of the blocks and of the MACs, and what it rests on: `HECharged`, (H) at the most a block that isn't charged
+  reads, (E), and two premises no Lean statement gives, the period's bound on the untied words and an untied word's
+  bits. With no untied word it is `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block
+  count.
 - The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
   weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
   `b_a`, an output at `b_a`, and `outputs_per_product` from the model's shape. It bounds the declared inference
@@ -156,7 +169,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `beta`; `bound(c, k, n, N, O, size) → Bound` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, w, N, O, size) → Charged`, `best_w` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
