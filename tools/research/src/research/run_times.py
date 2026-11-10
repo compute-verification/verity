@@ -103,8 +103,9 @@ def cause(why: str | None) -> str:
 
 
 def times(rec: dict, now: datetime) -> dict:
-    """The run of record ``rec`` (`run_records.record`) as a row: what it is, when each thing happened, how it came out and its
-    three times in seconds. A run still in line has waited until ``now``."""
+    """The run of record ``rec`` (`run_records.record`) as a row: what it is, when each thing happened, how it came out, its
+    three times in seconds, what it waited behind and, cancelled in line, by what and why. A run still in line has waited
+    until ``now``."""
     st, sl, rf = rec.get("status") or {}, rec.get("slot") or {}, rec.get("refused") or {}
     launched, started, ended = rid_time(rec["run"]), _t(st.get("started_utc")), _t(st.get("ended_utc"))
     since, took, job = _t(sl.get("since")), _t(sl.get("took")), _t(rec.get("job_started"))
@@ -124,15 +125,14 @@ def times(rec: dict, now: datetime) -> dict:
         outcome, at = "no slot", ended
     else:
         outcome, at = "no record", None
-    if outcome == "cancelled" and cancel.get("reason"):
-        behind = f"{behind or 'in line'}; cancelled ({cancel.get('actor')}): {cancel['reason']}"
     begun = (job or at) if outcome == "started" else None
     return {"run": rec["run"], "machine": rec.get("machine"), "pool": rec.get("pool") or UNKNOWN, "kind": rec.get("kind") or UNKNOWN,
             "by": rec.get("by"), "outcome": outcome, "launched": f"{launched:%Y-%m-%dT%H:%M:%SZ}", "claimed": rec.get("claimed"),
             "joined": sl.get("since"), "took": sl.get("took"), "job_started": rec.get("job_started"),
             "ended": st.get("ended_utc"), "state": st.get("state"),
             "wait_s": _s(launched, at), "ship_s": _s(launched, _t(rec.get("claimed"))), "line_s": _s(since, at) if since else None,
-            "setup_s": _s(took, job), "run_s": _s(begun, ended), "behind": behind}
+            "setup_s": _s(took, job), "run_s": _s(begun, ended), "behind": behind,
+            "cancel": f"{cancel.get('actor')}: {cancel['reason']}" if outcome == "cancelled" and cancel.get("reason") else None}
 
 
 def _stats(vals: list[float]) -> dict:
@@ -359,7 +359,8 @@ def render(s: dict, rows: list[dict], start: datetime, end: datetime, over: floa
               f"{'run':<22} {'machine':<16} {'pool':<9} {'kind':<12} {'by':<18} {'wait':>6} {'outcome':<9} waited behind"]
     for r in late:
         lines.append(f"{r['run']:<22} {str(r['machine'])[:16]:<16} {r['pool'][:9]:<9} {r['kind']:<12} {str(r['by'] or '-')[:18]:<18} "
-                     f"{r['wait_s'] / 60:>6.1f} {r['outcome']:<9} {str(r['behind'] or '-')[:W]}")
+                     f"{r['wait_s'] / 60:>6.1f} {r['outcome']:<9} {str(r['behind'] or '-')[:W]}"
+                     + (f"; cancelled ({r['cancel'][:W]})" if r["cancel"] else ""))
     if isinstance(graph, str):
         lines += ["", f"graph2's tasks: UNREAD ({graph})"]
     elif graph is not None:

@@ -100,7 +100,7 @@ def test_a_run_cancelled_in_line_counts_with_the_time_it_waited(runs):
     rows = _rows(runs)
     r = rows[CANCELLED]
     assert (r["outcome"], r["kind"], r["wait_s"], r["run_s"]) == ("cancelled", "Lean records", 1200.0, None)
-    assert r["behind"] == "3 check(s) ahead in line; cancelled (manual): ran elsewhere"
+    assert (r["behind"], r["cancel"]) == ("3 check(s) ahead in line", "manual: ran elsewhere")
     s = R.summary(list(rows.values()))
     assert s["all"]["over"] == 2 and [x["run"] for x in R.slow(list(rows.values()))] == [CANCELLED, WAITED], "the longest first"
     assert s["kind"]["Lean records"]["wait"] == {"n": 1, "p50_min": 20.0, "p90_min": 20.0, "p95_min": 20.0}
@@ -157,8 +157,8 @@ def test_a_command_is_read_for_its_kind_its_pool_and_whom_it_is_for():
 
 
 def test_percentiles_are_by_kind_machine_and_pool():
-    def row(i, kind, machine, pool, wait_min, outcome="started"):
-        return {"run": f"r{i}", "kind": kind, "machine": machine, "pool": pool, "outcome": outcome, "wait_s": wait_min * 60.0,
+    def row(i, kind, machine, pool, wait_min):
+        return {"run": f"r{i}", "kind": kind, "machine": machine, "pool": pool, "outcome": "started", "wait_s": wait_min * 60.0,
                 "ship_s": 6.0, "line_s": wait_min * 60.0 - 6, "setup_s": None, "run_s": 600.0, "behind": None}
 
     rows = [row(i, "quick suites", "cpu-2" if i % 2 else "cpu-10", "research", float(i)) for i in range(1, 21)]
@@ -253,6 +253,8 @@ def test_the_table_names_each_run_over_ten_minutes_and_a_window_takes_only_its_l
     assert "runs that waited over 10 min: 1 of the 2 that asked to start; behind: slots busy 1" in out
     named = out.split("runs that waited over")[1]
     assert WAITED in named and "every check slot is taken (r1: busy)" in named and AT_ONCE not in named and "graph2" not in out
+    assert R.main(["--runs", str(runs), "--until", "2026-10-28T11:00:00Z", "--hours", "1"]) == 0
+    assert "cancelled 3 check(s) ahead in line; cancelled (manual: ran elsewhere)" in " ".join(capsys.readouterr().out.split())
     assert "refused: 1 (MemoryNotAvailable 1)" in out
 
 
