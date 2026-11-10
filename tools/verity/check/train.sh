@@ -111,8 +111,9 @@ tell() {
   if [ "$rc" -ne 0 ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${records:+ --cc-records}${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
-      --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
+    # from the queue's own checkout, never the checked commit's tree: its code would run with the queue's Slack token
+    (cd "${root:-.}" && uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" \
+      --quiet --report --file "$why.post") > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"
 }
@@ -164,8 +165,10 @@ if [ -n "$bookkeep" ]; then
   else echo "train: ${sha:0:12}'s check.py predates --bookkeeping-warn: its lock run fails on bookkeeping"; fi
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
-# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
-setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
+# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The
+# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`
+setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN \
+  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
