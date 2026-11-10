@@ -2074,6 +2074,16 @@
         "verity/core/deploy/": "verity/configuration/deploy/",
         "verity/core/wire/": "verity/configuration/wire/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/machine_model/": "verity/hardware/pouw/machine_model/",
+        "verity/core/primitives/": "verity/hardware/",
+        "verity/core/protocols/record.py": "verity/hardware/protocols/record.py",
+        "verity/core/protocols/registration.py": "verity/hardware/protocols/registration.py",
+        "verity/core/protocols/tests/test_record.py": "verity/hardware/tests/test_record.py",
+        "verity/core/site/": "verity/hardware/site/"
+      }
     }
   ]
 }

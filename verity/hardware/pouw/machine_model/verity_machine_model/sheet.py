@@ -25,7 +25,7 @@ from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 SHEET = "sheet.toml"
 ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
 
@@ -320,7 +320,7 @@ def _doc(text: str) -> list[str]:
 
 
 def _rel(s: Sheet) -> str:
-    return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
+    return f"verity/hardware/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:

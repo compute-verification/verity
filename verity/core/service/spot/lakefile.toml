@@ -54,7 +54,7 @@ root = "Spot.VerifierMain"
 name = "sampled-proofs-plancheck"
 root = "Spot.PlanCheckMain"
 
-# The Site's port (`CoreProtocol.Site`), which `tests/test_site_difftest.py` holds to `verity.core.site`: the
+# The Site's port (`CoreProtocol.Site`), which `tests/test_site_difftest.py` holds to `verity.hardware.site`: the
 # registration log is the proof service's record, and this package requires both the interface and the harness.
 [[lean_exe]]
 name = "site-difftest"

@@ -20,7 +20,7 @@ path = "../../../protocols/network/lean"
 
 [[require]]
 name = "core_world"
-path = "../../../primitives/world"
+path = "../../../../hardware/world"
 
 [[require]]
 name = "lms"

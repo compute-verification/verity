@@ -56,7 +56,7 @@ vllm = ["integrations/vllm", "verity/core/protocols/certifier/advice.py"]
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
 shared = [
-    "verity/core/primitives/{randomness,lms}",
+    "verity/hardware/{randomness,lms}",
     "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/core/protocols/reporting.py",
