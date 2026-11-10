@@ -22389,3 +22389,77 @@ Read: your note headed 02:18Z (first committed as 02:35Z), FUSEDSERVE 02:18Z, VE
 **Corrections.** My 01:58Z entry says the NET-283 draft is 299 words; `wc -w` says 300, which is the limit. My 01:51Z entry cites "my 01:22Z entry"; that entry is headed 01:17Z.
 
 Next: row 5 after 04:20Z and row 7 when your note names the holder, re-pushed by 05:00Z; an entry by 03:30Z either way.
+
+## LEDGER, Tue 10 Nov 02:30Z: tasks 1, 2 and 5 done; seven issue files on `cursor/proofs-inbox`; no session of served values has been accepted by Lean
+
+Your 01:58Z message reached me through the file inbox. The 00:30Z resume never arrived, so nothing was done twice.
+
+**Each task.**
+- **Task 1: done.** `issues/ledger-01.md` to `ledger-03.md`.
+- **Task 2: done.** `issues/ledger-04.md` to `ledger-07.md`. Item 6 is fixed on ASK-262's posted page, so it has no
+  issue: the page says A is "not yet proved for two stages" and "Nothing in it is proved".
+- **The carried line: done.** It is in BINDKSAT's and BREAKEVEN's file inboxes (`cursor/proofs-inbox`, c3648760f1),
+  with where each half is read and the arithmetic marked as mine and unchecked.
+- **Task 5: done.** In note `proofs/20261109T2010Z-report-claims-ledger` (synced, 4a641935c7): section 3's new last
+  column and three new rows, and section 5's row S20.
+- **Task 3: not started** (due Tue 12:00Z). So there is no benchmarks reply text yet.
+- **Task 4: not started** (due Tue 20:00Z). So there is no TOP-389 section yet. You resume me for both.
+
+**The issue files**, on `cursor/proofs-inbox` (last commit ef4c1a9a0a). Each body is 228 to 301 words.
+
+| File | `to:` | Title |
+|---|---|---|
+| `issues/ledger-01.md` | @proofs | Every run that feeds the SPOT post carries a stamp of the configuration of record: its digest and the switches the run has off (Wed 11 Nov) |
+| `issues/ledger-02.md` | @proofs | Each SPOT figure's caption names the switches its cards are off the configuration of record at, and `render.py --strict` refuses them (Fri 13 Nov) |
+| `issues/ledger-03.md` | @proofs | The verifier's texts, three goals and the post say one thing about what the Lean verifier does with a two-stage run (Thu 12 Nov; the wording follows the page to Daniel) |
+| `issues/ledger-04.md` | @proofs | Three sentences proofs wrote say what their sources say: the morning synthesis on d7bf, NET-281's cap in bits, and the two-stage goal's boundary values (Tue 10 Nov) |
+| `issues/ledger-05.md` | @proofs | Daniel has, in one comment on his draft, the five sentences the ledger cannot source and a sentence it can for each (Wed 11 Nov) |
+| `issues/ledger-06.md` | @proofs | The replay card's factor is measured at a 131,072 context in busy GPU-seconds, or the card says it is unmeasured there (Thu 12 Nov) |
+| `issues/ledger-07.md` | @vllm | VLLM-250 says how far Monday's two-stage rehearsal got: a first stage and its replay, with no second stage, proof or verdict (Tue 10 Nov) |
+
+- 04 groups items 4, 10 and 13. 05 is item 9 with rows S10 to S13. 06 is item 11. 07 is item 14.
+- Six are to @proofs because proofs owns the code or wrote the page: `benchmarks/spot_figures/`, `serve_tax/` and
+  `verity/core/protocols/spot/` are proofs' in the registry, and NET-281 carries the label `from:proofs`.
+- 03 names no decision as made. It says the page is not up and quotes your PRF-477 comment for its date.
+- 02 builds on #8423. 01 adds files and moves nothing, so the freeze does not stop it.
+
+**What task 5 found.** Five things you may not have.
+
+1. **Lean did run on the proof-overhead card's sessions, and refused every one.** Of the 22 runs
+   `cards/proof_overhead.glm-5.3.json` names on `main`, 14 ran `flock-verify verify --zk`. Their
+   `records/verify.jsonl` hold 77 verdicts. Every one is `accepted: false`, "refused: a session without the verifier's
+   program (--program)", recorded `passes: true` (`benchmarks/one_stage/zk_cost.py:472`) [run]. The other 8 runs have
+   no such record. So a harness line that says "passes" is Lean refusing for No Program.
+2. **Two relayed statements do not agree.** SERVEDCARD (01:20Z): a block needs "a Program for each block", which does
+   not exist yet. VERIFYFAST-B (01:12Z): eleven block types were accepted by Lean `verify --zk` with a Program. I read
+   two such acceptances in the runs `main`'s verifier-cost card names, r20261107-163607-8de4 and r20261107-163659-b576:
+   `VERDICT {"accepted":true, …}`, "over the verifier's program (2 units)" [run]. I have not read how those Programs
+   were made, or why the proving harness passes none. One of the two workers can say in a line.
+3. **Your 01:58Z facts are older than SERVEDCARD's last word** [relayed, its entries of 01:20Z, 02:06Z, 02:09Z]. The
+   form check now refuses 3 of 41 staged types (`TopPStatsHead` too), and r20261109-234617-7270 ended with no result.
+   "At most 12%" is now "about 10%, at most 16% if FlashInfer's slots rows are refused". I cite these as relayed.
+4. **Row S20, what the auditor learns.** A two-stage serve's public `commit.json` holds `window`, `prompt`, `outputs`,
+   `spans` and `seconds`: r20261109-220303-3352's `out/boundary/w1/p256-o256/commit.json` has `spans: 8` [run]. So the
+   record shows each window's load by class, and also how long each commit took. The post does not say so.
+5. **H10 moved.** On `cursor/proofs-twomiss-ac23` at 29aa4bb5fb the files hold `compilerKSRegTwo`, `compilerMissTwo`
+   and `compilerPeriodTwoReg`, with no `sorry` line in the nine Lean files it changes [read; my grep]. The lock is
+   unchanged there and the branch has no PR. It still bounds undetected incorrect replay blocks, not theft.
+
+Section 4 also has two new items: 15 (two goals say "proved for the Lean verifier with `Evaluates` and `Reveals`
+open", where the lock's open premises for `SpotKSTwo` are `Scope`, `Embeds` and `FrameIs`; in ledger-03) and 16 (the
+harness's "passes"). The smell catalogue has two entries for these and for VLLM-250.
+
+**What I could not verify.**
+- Whether `cursor/proofs-twomiss-ac23` builds and passes the Lean check. I read files and ran no build.
+- SERVEDCARD's form verdicts and shares, and that Lean would refuse Window 1's sessions. What I did read of Window 1
+  (r20261110-013529-74a7): 65 statements, 34 types, 260 sessions, all `accepted: true`, and no Lean record in its
+  file list.
+- VERIFYFAST-B's eleven acceptances on #8453. I read two, on `main`'s card.
+- That round 1 reads `spans`, and that the advice binding's `bits` is public. Both are relayed from vllm's PRF-477
+  comment of Mon 23:41Z and the catalogue's entry.
+- The r₁ values in the carried line (2.08e-6, BINDKSAT's; 3.8e-6, ASK-262's table) and my arithmetic on them.
+- CLAIMSCHECK r4's searches behind ledger-05's items 3 and 4.
+- Whether the morning synthesis's sentence on d7bf reached Daniel.
+- The times of my reads between 02:00Z and 02:15Z, which are good to about five minutes.
+
+I wait on no run. I made no Linear or Slack write, and my branch `cursor/proofs-ledger-a3d8` has no commit.
