@@ -16,7 +16,7 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's host. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `bash benchmarks/pous/served_case.sh PIECES` | PoUS's and the wipe's cases for the composite, built after a served run from what it kept (`served_case.py`). `PIECES` is the run's public pieces directory, and each piece's `case.json` and `answer.json` go to its private directory. |
-| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` runs `served_case.sh` and writes each case's protocol and verdict to the run's `verdicts.txt`. |
+| `benchmarks/pous/onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` runs `served_case.sh` and writes each case's protocol and verdict to the run's `verdicts.txt`. |
 
 Read from outside `benchmarks/`:
 
@@ -24,11 +24,11 @@ Read from outside `benchmarks/`:
   directory on `sys.path`. It imports `benchmarks/pous/p2_v1/reference.py`, P2's reference.
 - `benchmarks/pous/p2_v1/wire.py`, with the reference and the vector files beside it: only PoUS's Lean check
   (`verity/protocols/pous/verifier/check/`) reads it, to hold the Lean to it. The served path never loads it.
-- `band_gpu/harness.py`, imported by a test of that check.
-- `p2_v1/bandwidth-mem69-v2.json`, the fixture store's registration, which live_verifier's host gives PoUB's party
-  under `bw_party --fixture`.
-- `served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
-  configured.
+- `benchmarks/pous/band_gpu/harness.py`, imported by a test of that check.
+- `benchmarks/pous/p2_v1/bandwidth-mem69-v2.json`, the fixture store's registration, which live_verifier's host gives
+  PoUB's party under `bw_party --fixture`.
+- `benchmarks/pous/served_piece.sh`, `benchmarks/pous/streamed_wipe/served_wipe.sh` and
+  `benchmarks/pous/onsite_pieces.sh`, named by their paths where a served run is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:

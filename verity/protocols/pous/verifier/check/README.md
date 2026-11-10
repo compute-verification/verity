@@ -24,6 +24,9 @@ What code outside this directory may use. Everything else here is internal.
 `lake build` here builds the executables. The three difftest executables (`pous-setup-difftest`, `pous-audit-difftest`,
 `pous-verdict-difftest`) and `scripts/difftest_vectors.py` are internal: the suite drives them.
 
-What this directory reads from `benchmarks/`, each loaded by its path: P2's reference, wire and vector files
-(`benchmarks/pous/p2_v1/`), which `interop.py` and the vector tests hold the Lean to, and the harness's responder
-(`benchmarks/pous/band_gpu/harness.py`), which one test of the timed audit drives.
+What this directory reads from `benchmarks/`, each loaded by its path:
+
+- P2's reference and wire, `benchmarks/pous/p2_v1/reference.py` and `benchmarks/pous/p2_v1/wire.py`, and their vector
+  files, `benchmarks/pous/p2_v1/vectors.json`, `benchmarks/pous/p2_v1/audit-vectors.json` and
+  `benchmarks/pous/p2_v1/audit-negative-vectors.json`: `interop.py` and the vector tests hold the Lean to them.
+- The harness's responder, `benchmarks/pous/band_gpu/harness.py`, which one test of the timed audit drives.
