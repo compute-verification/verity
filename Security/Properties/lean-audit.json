@@ -57,6 +57,7 @@
   "Properties.Pous.EndToEndAt",
   "Properties.Pous.PeriodAt",
   "Properties.Pous.PeriodDeployed",
+  "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
   "Properties.Pous.Obligation",
