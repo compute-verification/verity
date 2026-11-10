@@ -41,6 +41,8 @@ RELATIONS: dict[str, str] = {
     "StopCheck_v1":
         "integrations/vllm/tests/program/predict/test_steps.py::"
         "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
+    "SeedCheck_v2":
+        "integrations/vllm/tests/program/test_seed_rule.py::test_the_word_check_accepts_the_rules_seed_alone",
 }
 
 
@@ -67,9 +69,18 @@ class Kind:
 #: declared field by field (`RUN`)
 PARAMS: dict[str, Kind] = {
     "prompt": Kind("certified", "the request's prompt ids: ingress v0's parse unit outputs them, else its certified body "
-                                "(`predict.steps.request_of`)"),
+                                "(`predict.ingress_policy.request_of`)"),
     "input_ids": Kind("certified", "a step wrapper's token ids (the Build's step trace): the prompt's and earlier samples'"),
-    "seed": Kind("certified", "the request's seed, its certified body's or the public default (`predict.steps.policy_of`)"),
+    "seed": Kind("witness", "the seed a stochastic request's sampler read, which serving decides: its Program's seed rule holds it "
+                            "to its certified body's seed, else the one derived from the window's seed salt and its certified id "
+                            "(`frontend.seed_rule`, `predict.ingress_policy.policy_of`); a step wrapper's is its Build trace's", "",
+                 "SeedCheck_v2"),
+    "seeded": Kind("certified", "whether the request's certified body names a seed: ingress v1's parse unit outputs it "
+                                "(`IngressSampled_v1`)"),
+    "body_seed": Kind("certified", "the seed the request's certified body names, 0 where it names none: ingress v1's parse unit "
+                                   "outputs it (`IngressSampled_v1`)"),
+    "seed_salt": Kind("certified", "the window's seed salt, the challenger's coin released at its open (``window.seed_salt``)"),
+    "user": Kind("certified", "the request's certified id's bytes: ingress v1's parse unit outputs them (`IngressSampled_v1`)"),
     "prefix": Kind("block", "a request's first C positions' rows: the producers' outputs (a prefix-cache hit) or the last "
                             "window's edge ports (a carried request)"),
     "prefix_ik": Kind("block", "the indexer's key rows of the history, as ``prefix``"),
