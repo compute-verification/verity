@@ -422,8 +422,8 @@ theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guara
     show tapeInd Q p ≤ if E [] then 1 else 0
     unfold tapeInd
     by_cases hQ : Q p.tape
-    · rw [if_pos hQ, if_pos (h ([], p.tape) rfl hQ)]
-    · rw [if_neg hQ]
+    · rw [ite_eq_left hQ, ite_eq_left (h ([], p.tape) rfl hQ)]
+    · rw [ite_eq_right hQ]
       exact zero_le
   | m :: l, E, i, p, w, h =>
     sessionOffK_le_prob (D := D i) (M := M.member i (memberPts m)) (dg := m.dg) (J := memberTabs S Rg m) (B := B i)
