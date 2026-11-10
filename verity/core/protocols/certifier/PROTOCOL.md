@@ -1653,7 +1653,7 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The length terms in the slice. `ChargeCount_v2` charges them, bitlen(max_tokens) + 1 bits each, but the compile
     slice's class keeps `ChargeLink_v1{D}`, which counts the segment alone. While the registration sends lengths
     (`send_lengths`, on until a proof holds the length rule), the charge the slice holds to c is short of each window's
-    tail, about 9 bits a request, so nothing in the circuit holds c to cover it, until the slice calls
+    tail, bitlen(max_tokens) + 1 bits a request, so nothing in the circuit holds c to cover it, until the slice calls
     `window_charge.build_link` with length slots or the length rule is proved and the tail goes.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
