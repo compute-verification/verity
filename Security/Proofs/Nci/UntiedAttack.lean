@@ -21,6 +21,12 @@ leave out.
   (`sum_card_unregistered_asInputs_le`), which the file states only for `untie`.
 * **The output values' term over a set `G` of blocks** is at most the output wires in the blocks of `G`
   (`sum_card_fedBy_on_le`), which are at most `O` (`sum_card_inter_on_le_O`).
+* **Each block at its own cap**, with the words as inputs: `k` and `b` for each word it reads, with no threshold
+  (`card_unregistered_asInputs_block_le`), and all blocks together without `OneReader`
+  (`sum_card_unregistered_asInputs_pairs_le`). One block's count at its own cap, with the outputs it holds a wire of
+  in place of `O` (`counts_block`).
+* **Two instances of the count over a set of blocks.** A MAC with a gate in each of two blocks is an entry of the
+  block that reads across (`toyS_*`). Of the two output wires of `Nci.Cut.Toy`, one is in block 0 (`toyO_*`).
 * **(H) carries over.** `κ` from the unregistered inputs only grows when gates leave `θ` or become inputs
   (`kappaWords_le_untie`, `kappaWords_le_asInputs`), so (H) at `d` gives (H) at `d.untie E` and at `d.asInputs T`
   (`hardness_untie`, `hardness_asInputs`), `Π` at the untied circuit is at most `Π` at `d` (`piMax_untie_le`), and
@@ -243,6 +249,38 @@ theorem sum_card_unregistered_asInputs_le {m : ℕ} (d : RegisteredCircuit) (P :
         rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_sum]
     _ ≤ m * k + b * 𝒲.card := Nat.add_le_add_left (Nat.mul_le_mul_left b hsum) _
 
+/-- **Each block at its own cap, with the words as inputs.** A block that read at most `k` gates outside `θ` reads, with
+the words as inputs, at most `k` and `b` for each word it then reads: a cap of its own, with no threshold. -/
+theorem card_unregistered_asInputs_block_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b : ℕ}
+    (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hk : ReadsAtMost d P k) (u : Fin m) :
+    ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card ≤
+      k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card := by
+  have hg : (P.asInputs (𝒲.biUnion id)).gates u = P.gates u \ 𝒲.biUnion id := P.asInputs_gates (𝒲.biUnion id) u
+  calc ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card
+      = ((d.asInputs (𝒲.biUnion id)).unregistered (P.gates u \ 𝒲.biUnion id)).card :=
+        congrArg (fun S => ((d.asInputs (𝒲.biUnion id)).unregistered S).card) hg
+    _ ≤ (d.unregistered (P.gates u) ∪
+          (d.D.asInputs (𝒲.biUnion id)).into (P.gates u \ 𝒲.biUnion id) ∩ 𝒲.biUnion id).card :=
+        card_le_card (d.unregistered_asInputs_subset (𝒲.biUnion id) (P.gates u))
+    _ ≤ (d.unregistered (P.gates u)).card +
+          ((d.D.asInputs (𝒲.biUnion id)).into (P.gates u \ 𝒲.biUnion id) ∩ 𝒲.biUnion id).card :=
+        card_union_le _ _
+    _ ≤ k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card :=
+        Nat.add_le_add (hk u)
+          (card_into_inter_biUnion_le (d.D.asInputs (𝒲.biUnion id)) 𝒲 h𝒲 (P.gates u \ 𝒲.biUnion id))
+
+/-- **All blocks together, a word read by any number of blocks.** With the words as inputs the blocks read at most
+`m k` gates outside `θ` and `b` for each pair of a block and a word it reads. -/
+theorem sum_card_unregistered_asInputs_pairs_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b : ℕ}
+    (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hk : ReadsAtMost d P k) :
+    ∑ u, ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card ≤
+      m * k + b * ∑ u : Fin m, (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card :=
+  calc ∑ u, ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card
+      ≤ ∑ u : Fin m, (k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card) :=
+        sum_le_sum fun u _ => card_unregistered_asInputs_block_le d P 𝒲 h𝒲 hk u
+    _ = m * k + b * ∑ u : Fin m, (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card := by
+        rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_sum]
+
 /-! ### (H) carries over to the untied circuit and to the circuit with gates as inputs -/
 
 /-- `κ` grows with the set the paths start from. -/
@@ -415,6 +453,96 @@ theorem sum_card_inter_on_le_O {ι : Type} [Fintype ι] (P : Partition C m) (W :
     _ = W.O := rfl
 
 end Outputs
+
+/-! ### One block's count, and two instances of the count over a set of blocks -/
+
+section Block
+
+open Nci.Cut.SecurityProofs (inBlock readWords fedBy leaving card_inBlock_sq_le card_fedBy_le kappaWords_readWords_le
+  bY_mul_card_clear_le)
+
+/-- **One block, at its own cap and with its own share of the output values.** The MACs block `u` holds, squared, are
+at most `Π` at the block's cap times the outputs it holds a wire of and the outputs in its `E(block)`, and those cost
+it `b_y` leaving gates each. -/
+theorem counts_block {d : RegisteredCircuit} {ι : Type} [Fintype ι] [DecidableEq ι] {m κ : ℕ} (P : Partition d.D m)
+    (W : Work d.D ι) (u : Fin m) (hκ : (d.unregistered (P.gates u)).card ≤ κ) :
+    (∑ a, (inBlock P W u a).card) ^ 2 ≤ piMax d W κ *
+        ((univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card + (W.clear (P.gates u)).card) ∧
+      W.bY * (W.clear (P.gates u)).card ≤ (leaving (P.gates u)).card := by
+  have hpi : W.pi (readWords P W u) ≤ piMax d W κ := by
+    unfold piMax
+    exact Finset.le_sup (f := W.pi) (mem_filter.2 ⟨mem_univ _, (kappaWords_readWords_le P W u).trans hκ⟩)
+  exact ⟨(card_inBlock_sq_le P W u).trans (Nat.mul_le_mul hpi (card_fedBy_le P W u)),
+    bY_mul_card_clear_le W (P.gates_subset_computed u)⟩
+
+/-- On `TA`, one matmul whose one MAC is the two computed gates, with the last gate its output's wire. -/
+def MS : Matmul TA where
+  ni := 1
+  nj := 1
+  nl := 1
+  w := fun _ => {0}
+  x := fun _ => {1}
+  y := fun _ => {3}
+  w_inj := fun a b _ => Subsingleton.elim a b
+  x_inj := fun a b _ => Subsingleton.elim a b
+  mac := fun _ => {2, 3}
+  mac_computed := by decide
+  mac_connected := fun _ => ⟨⟨2, by decide⟩, fun T hT hne hT' => ⟨2, by decide, 3, by decide, by decide, by
+    constructor
+    · intro h2 h3
+      refine hT' (Subset.antisymm hT fun g hg => ?_)
+      rcases mem_insert.1 hg with rfl | hg
+      · exact h2
+      · rw [mem_singleton.1 hg]
+        exact h3
+    · intro h3
+      obtain ⟨g, hg⟩ := hne
+      rcases mem_insert.1 (hT hg) with rfl | hg'
+      · exact hg
+      · rw [mem_singleton.1 hg'] at hg
+        exact absurd hg h3⟩⟩
+  reads_w := by decide
+  reads_x := by decide
+  feeds_y := fun _ => ⟨3, by decide, 3, mem_singleton_self _, .refl _⟩
+
+/-- The charged work on `TA`: `MS` alone. -/
+def WS : Work TA Unit where
+  M := fun _ => MS
+  mac_disjoint := by decide
+
+/-- One MAC is charged on `TA`. -/
+theorem toyS_N : WS.N = 1 := by decide
+
+/-- `PA2` splits it: one gate in block 0, one in block 1. -/
+theorem toyS_split : (univ.filter fun s : WS.Mac => ∀ u, ¬ WS.mac s ⊆ PA2.gates u).card = 1 := by decide
+
+/-- Neither block holds a MAC whole. -/
+theorem toyS_whole : ∀ u, ∑ a, (inBlock PA2 WS u a).card = 0 := by decide
+
+/-- Block 0 reads nothing outside `θ`. -/
+theorem toyS_reads_0 : (dA.unregistered (PA2.gates 0)).card = 0 := by decide
+
+/-- Block 1 reads one gate outside `θ`, the MAC's gate in block 0. -/
+theorem toyS_reads_1 : (dA.unregistered (PA2.gates 1)).card = 1 := by decide
+
+/-- The two blocks read one gate outside `θ` between them: the MAC is counted against the entries of both blocks, and
+against those of block 0 alone it would not be counted. -/
+theorem toyS_entries : ∑ u, (dA.unregistered (PA2.gates u)).card = 1 := by decide
+
+/-- On `Nci.Cut.Toy` the work has two output wires. -/
+theorem toyO_whole : Toy.W.O = 2 := by decide
+
+/-- One of them is in block 0 of `Toy.P2`. -/
+theorem toyO_share :
+    ∑ o : Toy.W.Out, (Toy.W.y o ∩ ({0} : Finset (Fin 2)).biUnion Toy.P2.gates).card = 1 := by decide
+
+/-- Block 0 of `Toy.P2` holds a wire of one output. -/
+theorem toyO_hit : (univ.filter fun o : Toy.W.Out => ¬ Disjoint (Toy.W.y o) (Toy.P2.gates 0)).card = 1 := by decide
+
+/-- Block 0 of `Toy.P2` feeds one output. -/
+theorem toyO_fed : (fedBy Toy.P2 Toy.W 0).card = 1 := by decide
+
+end Block
 
 /-! ### `Circuit.asInputs` and `Accounting.Placed.cut` -/
 
