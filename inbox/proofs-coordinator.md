@@ -33674,3 +33674,66 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 - [run] #8339's title and body are replaced (21:46Z), as your 19:59Z entry said. The title is "Two-stage guard: the fixture exported again at main's guard, with the rows its Held reads". The body names the new head, both merges and all four runs.
 
 **Not done:** no mark. If `main` moves again I do not merge; I report what the move touches of TwoAt's and Code's closures and of the six suites' inputs.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 22:02Z: the close is done (`c67f` as expected); `test_remote_agrees`' 1,084 s are 51% Lean, 39% reference, 9% making cases; the cut is pushed at `0f04bef880b4`, its two runs queued
+
+**1. The close is done. Head stays `0ab9be91a6b0`; I push nothing more to it.**
+- `r20261110-201606-c67f`, the spot service suite at `0ab9be91a6b0`: 253 passed, 2 skipped, 2 failed. [run]
+- The two failures are `test_history_difftest.py::test_roots_of_a_windows_history_table` and `::test_a_wrong_root_of_a_windows_history_table_is_refused`, both `AttributeError: module 'verity.ml.windows.interface' has no attribute 'History'`: vllm's file, the expected state. [run]
+- The two mended tests (`test_a_work_draws_design_is_cores`, `test_the_slots_of_a_population_of_nested_templates`) are in the directory the run covered and are neither failed nor skipped. [run: the log names only failures and skips; read: `test_difftest.py` at the head]
+
+**2. Item 1, where `test_remote_agrees`' time goes.** `r20261110-212105-acf7`, `origin/main` `5482988e3496`, vy-nebius-cpu-7 at load 22 to 66, the one test with a timer around each phase. [run]
+
+| part | seconds | share |
+|---|---|---|
+| the test's call | 1,084.0 | |
+| the examples, in the Lean server | 550.4 | 51% |
+| the examples, in the Python reference | 424.6 | 39% |
+| making the cases (the draw, the periods, the signed sessions) | 97.8 | 9% |
+| the harness around them | 11.2 | 1% |
+| the Lean build of the server, inside the test | 0.2 | |
+
+- **The Lean build is no part of it.** `lake build remote` took 110 s before the test, after `setup.sh` restored main's build in 8 s. [run]
+- **The megabytes are all of it.** A case is 2.99 MB on average (8.3 MB at most). The 355 cases of at most 1 MB cost 0.2 s on both sides together. The 645 larger ones cost Lean 0.18 s a MB and the reference 0.14 s a MB. [run]
+- **The reference ran every subprotocol's Python four times a case:** `answer` 100 s, `verdicts` 103 s, `committed` 106 s, `tied` 113 s. [run]
+- **Lean, by subprotocol** (40 lists of cases, 4.7 MB a case): 0.91 s a case as it is, 0.22 s with PoUW's period's bytes zeroed, 0.80 s with sampled proofs' zeroed, 0.11 s with all three zeroed. So PoUW's period check is about 0.69 s (75%), sampled proofs 0.11 s, the framing 0.11 s. [run]
+- **Making the cases:** 57.7 s is the subprotocols' own Python saying what each drawn case is (`as_component`), 17.5 s `one_record`, 6.9 s PoUW's periods. [run]
+
+**3. The cut: `cursor/proofs-composition-test-time-cf05` at `0f04bef880b4`, 5 commits on `5482988e3496`.**
+- **The Python side, with no test changed** (`61db652240`, `3bb08a357c`): the harness's framing checks hex and ASCII a buffer at a time, and a composition's subprotocols answer once a case.
+  - A remote example's reference goes from 0.34 s to 0.054 s on my VM. [run, local, not of record]
+  - On a node the reference alone takes 1000 remote cases in 138 s, the draw included (`r20261110-211930-f0ae`, at `3bb08a357c`, cpu-1 at load 68). [run]
+  - Lean's 550 s stay, so the thousand stay over 5 minutes: about 710 s. [guess: 98 + 60 + 550]
+- **The tests I change, for the CI-485 mark.**
+  - Unchanged in name, decorators, signature and case count: `test_remote_agrees`, `test_onsite_agrees`, `test_product_over_remotes_subprotocols_is_remote`, `test_product_over_onsites_subprotocols_is_onsite`. I change their docstrings (what each catches that a cheaper test can't) and remove `test_onsite_agrees`' last line, `generic bandwidth > 0`.
+  - New: `test_remote_agrees_on_fewer_cases` and `test_onsite_agrees_on_fewer_cases` (150 cases); `test_product_over_remotes_subprotocols_is_remote_on_fewer_cases` and `test_product_over_onsites_subprotocols_is_onsite_on_fewer_cases` (50 cases); `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` (10 directed cases, the remote line's own text with `composite`'s `mutation` argument).
+  - `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` gains `@pytest.mark.slow` (140 s in `7cdc`'s quick tier).
+- **Why new names, not two sizes of one test and not a variable.** This replaces what I said at 21:17Z.
+  - ci's list leaves out a name with every parametrization of it (#8714). The pod's list holds `test_remote_agrees` and three more composition tests by your word of 21:16Z (ci on CI-485, 21:52Z; I have not read which three). [read] Two sizes as one parametrized test (`8aa082c227`, undone in `0f04bef880`) would have left a candidate with neither.
+  - A variable nothing sets runs the thousand nowhere (ci's answer on #8722). It would also need a declared setting in `verity/settings.py`, at the lines where the remote line declares `VERITY_COMPOSITION_SERVED`.
+  - With names of their own the short forms stay in a candidate's check and ci's list needs no edit.
+- **What a short form no longer catches: what the generator draws seldom.**
+  - A disagreement that one case in a hundred shows escapes 150 cases 22% of the time, and 1000 cases 0.004%. [arithmetic]
+  - By the reference's reasons at seed 0 (`f0ae`): 150 remote cases reach 10 kinds of the composition's refusals against 17 at 1000, and 29 kinds of subprotocol outcome against 60. 150 onsite cases reach 9 against 14, 43 against 100, and 19 combinations of the seven verdicts against 94. [run]
+  - Every floor `_agree` asks holds at 150 at seeds 0, 1 and 2, the lowest count 17 against a floor of 3. `generic bandwidth` does not (0 of 150 at seed 2), hence the directed test. [run]
+
+**4. Left.**
+- `r20261110-215917-54a6` (cpu-11, queued at 21:59Z): at `0f04bef880`, the file without the four listed tests, with timers, then the `verity-difftest` suite. It gives each short form's seconds and the new harness test's Lean half.
+- `r20261110-220016-8acd` (cpu-9, queued at 22:00Z): at `0f04bef880`, `suites.py --fresh verity-core-composition`, every test. The verdict of record, and the four long tests' seconds at the head.
+- Item 3: `acf7` is in that step since 21:50Z. About 80 minutes more. [guess]
+- Then the PR, unmarked, its number in my entry.
+
+**5. Questions, each with what I do unless told otherwise.**
+- **The sizes, 150 and 50.** I keep them if every short form is under 5 minutes in `54a6`. If `test_onsite_agrees_on_fewer_cases` is over, I lower 150 to 100, where every floor also holds at the three seeds. [run, `f0ae`]
+- **The merge with the remote line conflicts in this file at two places** (trial `git merge-file` against `0ab9be91a6b0`'s copy). [run, local] Whoever lands second resolves it so:
+  - after `test_onsite_agrees`: keep its short form, the directed test once (the text is the same on both lines), and the remote line's `test_product_names_only_the_composites`;
+  - the product tests: delete `test_product_over_remotes_subprotocols_is_remote` and its short form, since the remote line has no `product_remote_server`.
+  - I do it on my branch if `remote` lands first, or hand lean this text if mine does.
+
+**6. Text for other lanes.**
+- **ci:** if our four names on the candidate list are the four long tests above, this needs no edit to it: they stay the long tests, and the five new tests run in a candidate's check. Their seconds follow from `54a6`.
+- **compute-accounting:** PoUW's period check is 0.69 s of the 0.91 s the Lean server takes a remote case (324 KB of evidence, 284 KB of commitment): 75% of this difftest's Lean half. [run, `acf7`] And `core_check.py`'s `canonical` and `_unhex` scan a character at a time in Python; the forms now in `verity_difftest/protocol.py` (`61db652240`) took another 9% off the reference in a local trial. [run, local] Not my file, no change made.
+
+**Runs since 21:17Z:** `32de` cancelled when its duplicate `acf7` took a slot. `8eb9` replaced by `f0ae`, which ended. `95cd`, a duplicate of `c67f`, cancelled when `c67f` took its slot at 21:32Z. `9e08` cancelled before a slot, superseded by `54a6`.
+
+Next entry when `54a6` ends, or by 23:00Z.
