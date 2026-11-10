@@ -14,8 +14,10 @@ table, of
   output row `o0` of 16, each VU's two hm96 slots and one `sha512x3` slot, bound to the program and partition below;
 * the public file (`pubOf`): two instances reading `i0`'s one shared row, each its own `o0` row, every value and salt
   zero, with the run's input set and its ports' bindings to the run;
-* the program (`progText`): its root a batch of two members of the primitive `T_v1`, partitioned by
-  `Q_template_instance` v0 at `T_v1` (`partObj`);
+* the partition (`partObj`): `Q_template_instance` v0 at `T_v1`, over the program `progText`, whose root is a batch of
+  two members of the primitive `T_v1`. The statement carries no program, so the verifier takes the partition's units
+  as stated, as it does for any session without `--program`: `Program.decode`, which derives them, keys its tables by
+  `String.hash`, which the kernel does not evaluate;
 * the draw (`drawJ`): unit 0 of the two;
 * the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
 
@@ -200,7 +202,7 @@ def regJ : Json := Json.mkObj [("format", js "verity/registered-reads/v1"), ("po
 def rawOf (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : FlockDeploy.Raw :=
   { statement := NAME, circuit := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C), tables := [], zk := true,
     osCoins := false, count := 1, draw := some (printJson drawJ).toUTF8, partition := some (printJson partObj).toUTF8,
-    program := some progBytes, work := none, workTable := none, stratified := none, closure := none,
+    program := none, work := none, workTable := none, stratified := none, closure := none,
     registered := some (printJson regJ).toUTF8, publicInputs := none }
 
 def raw (r : Run) : FlockDeploy.Raw := rawOf r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash
