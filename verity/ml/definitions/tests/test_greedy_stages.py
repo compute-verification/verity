@@ -1,9 +1,9 @@
 """`TokenSelect_v1{V}` (greedy sampling) cut into units of at most a Flock block each (`registry.greedy_stages`), and their twin,
 from which the serving reader commits a row's units:
 
-* every unit's Definition on the twin's inputs for it (its lanes of the row, or its chunks' pairs) computes the twin's outputs,
-  and the twin's token is `TokenSelect_v1`'s as the circuit evaluator computes it, on rows of ties (within a chunk and across
-  chunks), NaN, -inf, +inf and signed zeros, at small V and at GLM-5.3's;
+* every unit's Definition on the twin's inputs for it (its lanes of the row, and the combine's chunks' pairs) computes the twin's
+  outputs, and the twin's token is `TokenSelect_v1`'s as the circuit evaluator computes it, on rows of ties (within a chunk and
+  across chunks), NaN, -inf, +inf and signed zeros, at small V and at GLM-5.3's;
 * at the served statics the combine computes the token's two words on rows whose winner sits past 2^16 lanes and ties across
   chunks;
 * `plan` wires each combine parameter to its chunk's output of its type, every output is one 16-bit word, and `cut` counts its
@@ -74,14 +74,13 @@ def rows(V: int, seed: int) -> dict[str, np.ndarray]:
 
 
 def via_units(V: int, x: np.ndarray) -> dict[tuple, list[int]]:
-    """Every unit of `plan(V)` evaluated on its lanes of ``x`` or on its writers' outputs."""
+    """Every unit of `plan(V)` evaluated on its lanes of ``x`` and on its writers' outputs."""
     outs: dict[tuple, list[int]] = {}
     for u in G.plan(V):
-        if u.key[0] == "chunk":
-            got = evaluate(u.defn, [int(v) for v in x[u.lanes[0]:u.lanes[1]]])
-        else:
-            got = evaluate(u.defn, *(outs[k][j] for _p, k, j in u.wires))
-        outs[u.key] = [int(v) for v in got]
+        wires = {p: (k, j) for p, k, j in u.wires}
+        args = [[int(v) for v in x[u.lanes[0]:u.lanes[1]]] if p == "logits" else outs[wires[p][0]][wires[p][1]]
+                for p, _t in u.defn.signature()[0]]
+        outs[u.key] = [int(v) for v in evaluate(u.defn, *args)]
     return outs
 
 
@@ -115,19 +114,21 @@ PLANTED = [({70000: ONE}, NINF, 70000), ({131072: ONE, 154879: ONE}, NINF, 13107
 
 
 def test_the_served_combine_computes_the_token_s_two_words():
-    """The units at GLM-5.3's statics on rows whose winner each `PLANTED` names: its chunks' pairs off the twin (whose chunk
-    Definitions the slow test holds), the combine evaluated on them."""
+    """The units at GLM-5.3's statics on rows whose winner each `PLANTED` names: the combine evaluated on the row's last chunk
+    and its other chunks' pairs off the twin (whose chunk Definitions the slow test holds)."""
     combine = G.plan(SERVED_V)[-1]
+    lo, hi = combine.lanes
     for lanes, x0, want in PLANTED:
-        tok, words = G.twin(SERVED_V, _planted(lanes, x0))
-        got = evaluate(combine.defn, *(int(words[k][j][0]) for _p, k, j in combine.wires))
+        x = _planted(lanes, x0)
+        tok, words = G.twin(SERVED_V, x)
+        got = evaluate(combine.defn, [int(v) for v in x[lo:hi]], *(int(words[k][j][0]) for _p, k, j in combine.wires))
         assert tok == want and [int(v) for v in got] == [want & 0xFFFF, want >> 16], (lanes, x0)
 
 
 @pytest.mark.slow
 def test_the_served_units_compute_the_call_s_token():
     """Rows of GLM-5.3's vocabulary through every unit's Definition and through `TokenSelect_v1{V=154880}`.  It catches what
-    the small rows can't: a chunk of 16,384 lanes and the last one of 7,424, and the combine's high word; its seconds are the
+    the small rows can't: a chunk of 16,384 lanes, the combine's last chunk of 7,424, and its high word; its seconds are the
     evaluator's, about six a row."""
     xs = rows(SERVED_V, seed=16)
     for name in ("plain", "ties", "nan0", "tie_later"):
@@ -144,10 +145,11 @@ def _fields(ret) -> list:
 def test_the_plan_wires_each_pair_to_its_chunk_and_every_output_is_a_16_bit_word(V):
     units = G.plan(V)
     chunks = units[:-1]
-    assert [u.lanes for u in chunks] == b1.chunks(V, G.width(V)) and units[-1].key == ("combine",)
+    assert [u.lanes for u in units] == b1.chunks(V, G.width(V)) and units[-1].key == ("combine",)
     assert [u.defn.bindings["FIRST"] for u in chunks] == [True] + [False] * (len(chunks) - 1)
     seen = {u.key: u.defn for u in chunks}
     params = dict(units[-1].defn.signature()[0])
+    assert params["logits"].n == units[-1].lanes[1] - units[-1].lanes[0]
     assert [(p, k, j) for p, k, j in units[-1].wires] == [w for c in range(len(chunks))
                                                           for w in ((f"b{c}", ("chunk", c), 0), (f"i{c}", ("chunk", c), 1))]
     for p, k, j in units[-1].wires:
@@ -158,12 +160,14 @@ def test_the_plan_wires_each_pair_to_its_chunk_and_every_output_is_a_16_bit_word
 
 
 def test_the_served_cut_s_units():
-    """At GLM-5.3's vocabulary the Call is 11 units of 4 Definitions: nine chunks of 16,384 lanes (the first FIRST), the last
-    of 7,424, and their combine."""
+    """At GLM-5.3's vocabulary the Call is 10 units of 3 Definitions: nine chunks of 16,384 lanes (the first FIRST), and the
+    combine, which reads the last chunk of 7,424."""
     cut = G.cut(bind(b1.TokenSelect, V=SERVED_V))
-    assert [(descriptor_id(d), n) for d, n in cut] == [("GreedyChunk_v1{N=16384,FIRST=true}", 1), ("GreedyChunk_v1{N=16384,FIRST=false}", 8),
-                                           ("GreedyChunk_v1{N=7424,FIRST=false}", 1), ("GreedyCombine_v1{V=154880,N=16384}", 1)]
-    assert Counter(u.key[0] for u in G.plan(SERVED_V)) == {"chunk": 10, "combine": 1}
+    assert [(descriptor_id(d), n) for d, n in cut] == [("GreedyChunk_v1{N=16384,FIRST=true}", 1),
+                                                       ("GreedyChunk_v1{N=16384,FIRST=false}", 8),
+                                                       ("GreedyCombine_v1{V=154880,N=16384}", 1)]
+    assert Counter(u.key[0] for u in G.plan(SERVED_V)) == {"chunk": 9, "combine": 1}
+    assert G.plan(SERVED_V)[-1].lanes == (147456, 154880)
     assert b1.CUTS["TokenSelect_v1"] == G.__name__
 
 

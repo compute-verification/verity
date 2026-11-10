@@ -182,14 +182,14 @@ print(json.dumps({"failures": [f["code"] for f in F.failures], "whole": b["whole
 
 def test_glm53_greedy_select_is_held_to_the_block_by_its_chunks():
     """GLM-5.3's greedy `TokenSelect_v1` at its served vocabulary (V = 154,880) is past the block whole (2^28 bits) and cut by
-    `b1.CUTS` into ten chunks and their combine, whose largest, a chunk of 16,384 lanes, is a quarter of the block.  Checked in a
-    process of its own: a chunk registers a constant for each of its lanes, and every later test of this session that goes
+    `b1.CUTS` into nine chunks of 16,384 lanes and the combine, which reads the last 7,424, each a quarter of the block.  Checked
+    in a process of its own: a chunk registers a constant for each of its lanes, and every later test of this session that goes
     through the registry's primitives (`test_declared_tables`) would go through those 16,384."""
     r = subprocess.run([sys.executable, "-c", GREEDY_SERVED], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
     assert json.loads(r.stdout.strip().splitlines()[-1]) == {
         "failures": [], "whole": 28, "k_log": 25,
-        "cut": [["GreedyChunk_v1", 1, 25], ["GreedyChunk_v1", 8, 25], ["GreedyChunk_v1", 1, 24], ["GreedyCombine_v1", 1, 24]]}
+        "cut": [["GreedyChunk_v1", 1, 25], ["GreedyChunk_v1", 8, 25], ["GreedyCombine_v1", 1, 25]]}
 
 
 def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
