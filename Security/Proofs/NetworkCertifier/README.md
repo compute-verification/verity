@@ -26,9 +26,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                decisions, n_hits, the hits, n_resumes, n_order, the order entries, n_lag), each integer
                                a bin and a uniform offset (binned, uniform), counted in one segment (window), the carry
                                the decisions' and the last order entry's position and rank, a run's charges (charges)
-../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
-                               (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
-                               wardenCode), the fail cell (failCell) and the client's view (clientView)
+../../Definitions/NetworkCertifier/Cells.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
+                               (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
+                               certifierCode), the fail cell (failCell) and the client's view (clientView)
 ../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
                                server's uplink: its record format (TapRecord: on a schedule it holds, every cell its
                                code sends reads back from its record) and its one code run giving the cells and the
@@ -67,8 +67,8 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causali
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
                                          per link-window
-Warden.lean     the warden's code is the client view: its lane is the client view of its first late
-                                         cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
+Cells.lean     the warden's code is the client view: its lane is the client view of its first late
+                                         cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
                                          Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
                                          committed gate at one bit leaves every step's egress as it was

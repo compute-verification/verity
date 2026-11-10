@@ -33,6 +33,6 @@ tests = [
     "tests/test_tick_corpus.py",
     "tests/test_tick_job.py",
     "tests/test_traffic.py",
-    "tests/test_warden_probes.py",
+    "tests/test_network_certifier_probes.py",
 ]
 paths = ["benchmarks/network_e2e/traces"]

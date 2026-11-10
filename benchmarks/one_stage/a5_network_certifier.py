@@ -2,13 +2,13 @@
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
 (``--challenger local``). No served window has transfer gates yet (the I/O
 shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the network certifier), so
-this window stands in for one, its cells a network certifier run's (`warden_serve.py rehearse`, ``--run``).
+this window stands in for one, its cells a network certifier run's (`network_certifier_serve.py rehearse`, ``--run``).
 
-* **The rows** are the network certifier's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
+* **The rows** are the network certifier's, one a bucket (`network_certifier_rows`, registration v2): row t − first_bucket of a link-window is
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
 * **The window** (`window`), under ``<ROOT>/rank0`` and the law ``work:2``: 2n units of the transfer-gate template
-  `WardenRowIdentity{S·B}` (`warden_zk.py`'s toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
+  `WardenRowIdentity{S·B}` (`network_certifier_zk.py`'s toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
   the rest, ``--rest`` units of `WardenRowIdentity{2B}` over rows of their own (another template, so another stratum),
   standing in for the compiled model steps. The verifier's work table (`serving_rows.work_table_of`) proves every
   transfer-gate unit (work 0, floor all of them: selection All) beside the rest's drawn share, and a5's transfer-gate
@@ -17,18 +17,18 @@ this window stands in for one, its cells a network certifier run's (`warden_serv
     committed under the network certifier's salt for that row, so its ``b || c`` is the network certifier's;
   - chunk ``c1``, the egress gates: unit i's ``o0`` is the bucket row of connection q's egress cell D·r + i (the D buckets
     before are its delay's pads), under the network certifier's salts.
-  These are the Program's units' wiring (`warden_rows.Units`, `links`), fixed from public structure alone (the schedule, the
+  These are the Program's units' wiring (`network_certifier_rows.Units`, `links`), fixed from public structure alone (the schedule, the
   ordinals and the signed wiring, never the cells' bytes): q is the lowest connection admitted in link-windows the network certifier
   registered with n ingress cells and D·r + n egress cells. r of a connection's cells share a row, so r units open each row.
   Each chunk is a shared-row member (its ``row`` rows a table, each unit its own row) whose header names the units' value
-  (`warden_rows.Units.value`, the head's value and the units' digest), its registered port's rows, each row's position in
-  the link-window and its path to the network certifier's root (`warden_rows.Cells.statement`).
+  (`network_certifier_rows.Units.value`, the head's value and the units' digest), its registered port's rows, each row's position in
+  the link-window and its path to the network certifier's root (`network_certifier_rows.Cells.statement`).
 * **The verifier's reads** (`reads`): each link-window's registration read under the deployment's key and session and the
-  schedule (`warden_rows.check_registration`), and from it the verifier's own ``--registered`` file of each chunk
-  (`warden_rows.port` of the Program's units: their value, the head's root, and the row of each unit's read, placed by the
+  schedule (`network_certifier_rows.check_registration`), and from it the verifier's own ``--registered`` file of each chunk
+  (`network_certifier_rows.port` of the Program's units: their value, the head's root, and the row of each unit's read, placed by the
   wiring the network certifier signed), which a5 hands Lean's verify of each drawn chunk (`a5.audit`'s ``registered``), so a statement
   made for any other units' wiring is refused, even at the same rows. The wiring is opened to the verifier as the units'
-  wiring is: `warden_rows`' named gap. A transfer gate is addressed as (row, byte, bit): bit 8k + i of a unit's
+  wiring is: `network_certifier_rows`' named gap. A transfer gate is addressed as (row, byte, bit): bit 8k + i of a unit's
   registered port is bit i of byte k of its row, row t − first_bucket bucket t (the registration's ``layout``), and the
   unit's own cell is its slot's bytes, which the summary lists for each unit (``links``: the cell, row, bucket, slot and
   words).
@@ -38,11 +38,11 @@ this window stands in for one, its cells a network certifier run's (`warden_serv
 * **Negatives**, beside a5's (the registered reads' three and the verdict reporting another root, on chunk c0; the
   transfer-gate negatives; R1 to R4 and the sample's): the prover's own root over the link-window's rows (one byte off) under
   the network certifier's certificate, refused by `check_registration`; the window's provenance naming another root, refused by
-  `source`; the reads no honest read is, on the ingress link-window, each refused by `warden_rows.port` by name: a foreign
+  `source`; the reads no honest read is, on the ingress link-window, each refused by `network_certifier_rows.port` by name: a foreign
   read (another connection's cell, under a wiring that drops the connection holding its slot), a duplicate read, a
   padding-slot read (of a connection holding no slot, and under a wiring that puts one in empty slots) and a read past the
   connection's cells; and c1's statement made for another units' wiring (`made_for`), each refused by the host's read of
-  Lean's registered reads (`warden_rows.refusal`) by name: made for a pad of the delay where the Program reads a data cell
+  Lean's registered reads (`network_certifier_rows.refusal`) by name: made for a pad of the delay where the Program reads a data cell
   ("not another value"), those rows under the Program's value ("reads position"), and two units' cells swapped, at the
   Program's rows ("not another value").
 * **Refused runs**, each to pass every check before the sample, draw the unit and be refused by Lean's registered reads by
@@ -54,7 +54,7 @@ Lean's registered reads by its reason. ``--out`` holds the window as committed (
 a5's records (``rank0/``, ``challenger/``, ``summary.json``); the network certifier's rows and salts stay in ``--run``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_network_certifier.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
@@ -75,15 +75,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces"))
 
-import warden_serve as ws  # noqa: E402
-from warden_zk import WardenRowIdentity, flip  # noqa: E402
+import network_certifier_serve as ws  # noqa: E402
+from network_certifier_zk import WardenRowIdentity, flip  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import network_certifier_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
+from verity.core.protocols.certifier.network_certifier import END, NetworkCertifierParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
@@ -95,25 +95,25 @@ RULE = "work:2"
 #: each chunk's registered port, by the network certifier record it opens: the ingress cells are the circuit's input, the egress its output
 LINKS = {ws.INGRESS: ("c0", "row"), ws.EGRESS: ("c1", "o0")}
 #: the egress chunk's statement made for another units' wiring (`made_for`), and what Lean's registered reads, and the host's
-#: read of them (`warden_rows.refusal`), refuse it by
+#: read of them (`network_certifier_rows.refusal`), refuse it by
 MADE_FOR = {"pad": "not another value", "pad-named": "reads position", "swapped": "not another value"}
 
 
-def first_cells(params: WardenParams) -> dict[str, int]:
+def first_cells(params: NetworkCertifierParams) -> dict[str, int]:
     """Each link's first cell the Program's units read of a connection admitted in the link-window: ingress its cell 0, egress
     its cell D·r (the D buckets before are its delay's pads, the schedule's)."""
     return {ws.INGRESS: 0, ws.EGRESS: params.delay * params.slots}
 
 
 def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
-    """Each link's link-window of connection q and the Program's units' wiring on it (`warden_rows.Units`), fixed from public
+    """Each link's link-window of connection q and the Program's units' wiring on it (`network_certifier_rows.Units`), fixed from public
     structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes): q the lowest connection admitted
     (its first row past the window's first, or window 0) in link-windows the network certifier registered with n ingress cells and D·r + n
     egress cells, unit i reading its cell `first_cells` + i. Each with the registration as the verifier reads it, the network certifier's
     opening (the record's rows and wiring under its salts) held to its head, the row and slot the network certifier's wiring places each
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = WardenParams(**dep["params"])
+    params = NetworkCertifierParams(**dep["params"])
     key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = ws.read_records(run, params)
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
@@ -152,7 +152,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     return out
 
 
-def templates(params: WardenParams) -> tuple:
+def templates(params: NetworkCertifierParams) -> tuple:
     """The transfer-gate template over one bucket row's S·B bytes, and the rest's over 2B bytes."""
     tg, rest = WR.row_bytes(params), 2 * params.cell_bytes
     if tg == rest:
@@ -184,7 +184,7 @@ def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
 def provenance(at: dict[str, SimpleNamespace]) -> dict:
     """What the window's registration names of the network certifier's cells: per link, its value, root, certificate digest, the
     registration's SHA-512, and the units' reads (q, k) and the rows they open."""
-    return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[ws.INGRESS].connection,
+    return {"stand-in": "benchmarks/one_stage/a5_network_certifier.py", "connection": at[ws.INGRESS].connection,
             "links": {name: {"value": x.head.value, "root": x.head.root.hex(), "certificate": x.registration["certificate"]["digest"],
                              "registration_sha512": hashlib.sha512(json.dumps(x.registration, sort_keys=True).encode()).hexdigest(),
                              "units": x.units.digest().hex(), "reads": [list(r) for r in x.reads], "rows": list(x.positions)}
@@ -225,7 +225,7 @@ def made_for(x: SimpleNamespace, kind: str | None = None) -> SimpleNamespace:
 
 def refused(x: SimpleNamespace, st: SimpleNamespace, reads_from: int = 0) -> str | None:
     """The host's read of a statement's registered entry against the verifier's port of the Program's units, as Lean's
-    registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    registered reads make it (`network_certifier_rows.refusal`): None when they accept, else why not."""
     port = WR.port(x.head, x.opening.wiring, x.params, x.units, reads_from)
     return WR.refusal(port, x.dom, st.entry, [WR.bc(r, s) for r, s in zip(st.rows, st.salts)])
 
@@ -255,7 +255,7 @@ def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered:
         registered[m.key] = {port: st.entry}
         entries.append([[m.base, m.base + m.n, f"connection-{x.connection}", 0, 0, x.units.value(x.head), m.key, 0, 0]])
     c = CS.commit(mine, data, salts_of=salts_of)
-    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_warden.py"}}, IX.index_doc(mine.members, entries, mine.run),
+    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_network_certifier.py"}}, IX.index_doc(mine.members, entries, mine.run),
              kind="stand-in", registered=registered, registrar=R)
     return c
 
@@ -326,7 +326,7 @@ def padded(x: SimpleNamespace) -> tuple[WR.Wiring, tuple[int, int], tuple[int, i
 
 def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, dict]:
     """The prover's own root over the ingress link-window's rows (one byte off) under the network certifier's certificate, the window's
-    provenance naming another root, the reads no honest read is, each refused by `warden_rows.port` by name: a foreign read
+    provenance naming another root, the reads no honest read is, each refused by `network_certifier_rows.port` by name: a foreign read
     (`crossed`), a duplicate read, a padding-slot read (of a connection holding no slot, and under `padded`'s wiring) and a
     read past the connection's cells; and the egress chunk's statement made for another units' wiring (`made_for`: a pad in
     a data cell's place, its rows under the Program's value, two units swapped), each refused by the host's read of Lean's
@@ -422,8 +422,8 @@ def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="a5_warden.py", description=__doc__.splitlines()[0])
-    ap.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory (warden_serve.py rehearse)")
+    ap = argparse.ArgumentParser(prog="a5_network_certifier.py", description=__doc__.splitlines()[0])
+    ap.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory (network_certifier_serve.py rehearse)")
     ap.add_argument("--units", type=int, default=16, help="n: each transfer-gate chunk's units")
     ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work law")
     ap.add_argument("--m0-pythonpath", required=True)

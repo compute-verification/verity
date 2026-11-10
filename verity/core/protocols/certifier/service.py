@@ -134,11 +134,11 @@ derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVE
 sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof
 block takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 
-**A network certifier link** (`LinkWindows(warden=WardenProfile(…))`) is the active network certifier's (`warden.Warden`) own two records
+**A network certifier link** (`LinkWindows(network_certifier=NetworkCertifierProfile(…))`) is the active network certifier's (`network_certifier.NetworkCertifier`) own two records
 of each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_certifier.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
-cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
+cells, r for each live connection and the rest padding (`network_certifier.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
@@ -164,11 +164,11 @@ reference's accept bit (`reference`), never a violation's kind.
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
 the Lean refuses the case. On a network certifier link the Lean reads the network certifier's parameters digest
-(`lean_case`'s ``warden``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
+(`lean_case`'s ``network_certifier``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- on a network certifier link, the network certifier's parameters digest (`WardenProfile.digest`, which the network certifier's deployment publishes
-  as its schedule's, `warden.WardenParams.digest`), which neither derives;
+- on a network certifier link, the network certifier's parameters digest (`NetworkCertifierProfile.digest`, which the network certifier's deployment publishes
+  as its schedule's, `network_certifier.NetworkCertifierParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -384,7 +384,7 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
 )
 #: a network certifier link's: no occupancy profile and no sync, the network certifier's schedule instead, which puts its counts
 PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
-    S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
+    S.Public("warden", "structure", "the active warden's schedule (`network_certifier.NetworkCertifierParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
@@ -442,7 +442,7 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
                "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
-               "link, or LinkWindows.warden on a warden's)")
+               "link, or LinkWindows.network_certifier on a warden's)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -546,9 +546,9 @@ class Hidden:
 
 
 @dataclass(frozen=True)
-class WardenProfile:
-    """A network certifier link's profile (`LinkWindows.warden`, the module docstring's "A network certifier link"): the
-    link's windows and the network certifier's parameters digest (`warden.WardenParams.digest`), which both ends' heads
+class NetworkCertifierProfile:
+    """A network certifier link's profile (`LinkWindows.network_certifier`, the module docstring's "A network certifier link"): the
+    link's windows and the network certifier's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -567,7 +567,7 @@ class LinkWindows:
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) has no egress profile, nor has a network certifier's (`warden`: the active network certifier's records, its key
+    link (`served`, FIXLEN) has no egress profile, nor has a network certifier's (`network_certifier`: the active network certifier's records, its key
     and session the certifier's here, its counts its schedule's, and no sync, so `sync_set` is unread)."""
 
     link: str
@@ -580,12 +580,12 @@ class LinkWindows:
     proof_deadline: float | None = None
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
-    warden: WardenProfile | None = None
+    network_certifier: NetworkCertifierProfile | None = None
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
-        if self.warden is not None:
+        if self.network_certifier is not None:
             if self.served is not None or tuple(self.occupancy) != (None, None):
                 raise ValueError("a warden link's counts are its schedule's: it has no occupancy or served profile")
             if self.ingress_params != self.params:
@@ -610,7 +610,7 @@ class LinkWindows:
     @property
     def kind(self) -> str:
         """``"served"``, ``"warden"``, or ``"plain"`` (neither: its egress counts are its occupancy profile's)."""
-        return "served" if self.served is not None else "warden" if self.warden is not None else "plain"
+        return "served" if self.served is not None else "warden" if self.network_certifier is not None else "plain"
 
     def declares(self, direction: int, window: int, counts: Sequence[int]) -> bool:
         """Whether `counts` are the occupancy profile's for the end (0 egress, 1 ingress) in the window: always for an
@@ -621,7 +621,7 @@ class LinkWindows:
     @property
     def charge(self) -> float:
         """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a network certifier link, which declares no sync."""
-        return 0.0 if self.warden is not None else self.sync_set.bits
+        return 0.0 if self.network_certifier is not None else self.sync_set.bits
 
     def head_key(self, direction: int) -> tuple[int, int, int]:
         """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 1 when
@@ -632,9 +632,9 @@ class LinkWindows:
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
         binds Σ_sync, the ingress grid's none; on a network certifier link both are the network certifier's
-        (`WardenProfile.digest`)."""
-        if self.warden is not None:
-            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
+        (`NetworkCertifierProfile.digest`)."""
+        if self.network_certifier is not None:
+            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_certifier.digest)
         if direction == 0:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
@@ -651,7 +651,7 @@ class LinkWindows:
         """The link's windows, which `network_verdict` takes by default: the served or network certifier profile's, else the
         egress occupancy profile's."""
         self._profiled()
-        derived = self.served or self.warden
+        derived = self.served or self.network_certifier
         return derived.windows if derived is not None else len(self.occupancy[0])
 
     @cached_property
@@ -695,10 +695,10 @@ class LinkWindows:
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
                                                           self.served.windows, self.served.own]}),
-            **({} if self.warden is None else {"warden": [self.warden.windows, self.warden.digest.hex()]})})
+            **({} if self.network_certifier is None else {"warden": [self.network_certifier.windows, self.network_certifier.digest.hex()]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN if self.warden is not None
+        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN if self.network_certifier is not None
                   else PUBLIC)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
@@ -943,7 +943,7 @@ class LinkWindows:
             and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
 
     def _profiled(self) -> None:
-        if self.occupancy[0] is None and self.served is None and self.warden is None:
+        if self.occupancy[0] is None and self.served is None and self.network_certifier is None:
             raise ValueError(_NO_PROFILE)
 
     @staticmethod
@@ -967,7 +967,7 @@ class LinkWindows:
                          self.bits("pub")) if proved else None
         word = opened if opened is not None else 0
         accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
+                    and (self.network_certifier is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
         return self._decided(draw, sessions, accepted, {"verdict": int(accepted), "deadline": word >> 1 & 1})
 
     def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1021,8 +1021,8 @@ class LinkWindows:
             "session": bytes(self.certifier_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": _profile(self.occupancy[0])},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": _profile(self.occupancy[1])}}
-        if self.warden is not None:
-            case["warden"] = self.warden.digest.hex()
+        if self.network_certifier is not None:
+            case["warden"] = self.network_certifier.digest.hex()
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1091,7 +1091,7 @@ class LinkWindows:
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
-        if self.warden is not None:
+        if self.network_certifier is not None:
             public = {"verdict": int(sealed and headed), "deadline": int(egress.head.deadline and ingress.head.deadline)}
             return {"of_record": False, "accepted": sealed and headed, "public": public}
         audit = Audit()

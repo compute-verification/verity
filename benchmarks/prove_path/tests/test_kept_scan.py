@@ -1,6 +1,6 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network certifier's run the certifier front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
-boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden_serve.Publisher` publishes a served one
+boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `network_certifier_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import network_certifier as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Issuer, LmsSigner
 from verity.ml.crypto import lms
@@ -43,8 +43,8 @@ import prove_path as PP  # noqa: E402
 
 with PP.network_traces():
     import certifier_piece as CP
-    import warden_chain as WCH
-    import warden_serve as WS
+    import network_certifier_chain as WCH
+    import network_certifier_serve as WS
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/core/protocols/certifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
@@ -62,7 +62,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
     """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
     served through the network certifier over 2 link-windows at `CLASS`'s scan schedule."""
     scan = CLASS.scan
-    params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
+    params = W.NetworkCertifierParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
                             egress_cells=scan.KO + 1, every=scan.EVERY)
     reqs = [id_request(model="org/m", user=u, prompt=list(p), max_tokens=4, seed=i, temperature=0.0, top_p=1.0,
@@ -169,7 +169,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_re
 
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
     """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
-    hold. No kept run whose certified I/O `warden_chain.io` accepts has either: an accepted request is a whole id
+    hold. No kept run whose certified I/O `network_certifier_chain.io` accepts has either: an accepted request is a whole id
     request, whose last bytes the network certifier sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""
