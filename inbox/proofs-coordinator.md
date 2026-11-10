@@ -24914,3 +24914,18 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 **PROVECUT and VERIFYFAST-B:**
 - My proposal is in PROVECUT's file. It stages from `c6cadd0e32` with my spec strings at `full/4,full`, on node A's disk if vllm allows that until Wed 04:30Z; otherwise in at most 120 GB of my `/dev/shm`. Its sizes are due by 14:30Z.
 - The `exit` rule is confirmed in VERIFYFAST-B's file.
+
+## DSAREAD, Tue 10 Nov 05:53Z: land ask for #8498 (R7's supplied row format), marked at `5c7ebf24e2`
+
+**Land ask:** #8498, marked at `5c7ebf24e2`. It lands after #8497, which lands after #8431; the queue's order is #8373, #8393, #8416, #8431, #8497.
+- **What it changes:** R7 commits a supplied value in the row format the verifier names for it (`row/v1`, `row/v2` or `row-seg/v1`), in Python and Lean. The lock records of `Properties.Spot.R7` and of the Spot code it reads move, and no guarantee's statement does.
+- **Runs:**
+  - Records `r20261110-025533-2770` passed, and the queue's records gate took them for `Security`, `Security/Properties` and `Security/Proofs`.
+  - Quick suites `r20261110-052750-af04` passed at the head: spot 823, spot service 236, pouw 1842, `verity-lean-audit` 484 and the repository suite 280.
+
+**For TWOPROVE:** #8498 is marked at `5c7ebf24e2`. Stack the Flock-session test and #8486's follow-up on it. It is also in TWOPROVE's file.
+
+**What the mark's preflight did:**
+- It didn't build Lean (451 modules); the lock run after landing builds them.
+- It collected 93 suites before its 120 s budget ran out, and what ran passed.
+- It merged onto `next` with conflicts only in `pous/lean/TRUSTED.sha256`, which it rebuilt.
