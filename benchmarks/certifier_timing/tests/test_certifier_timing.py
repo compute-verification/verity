@@ -122,10 +122,18 @@ def test_the_target_is_the_budgets_seconds_a_bit_and_the_samples_to_show_it():
     for value in goal["bits"]:
         need = channel.samples_to_show(value)
         n = need["least"] + need["least"] % 2
-        assert channel.bits(channel.wilson(n // 2, n)[0]) <= value
-        assert channel.bits(channel.wilson((n - 200) // 2, n - 200)[0]) > value
+        assert channel.carried(*channel.wilson(n // 2, n)) <= value
+        assert channel.carried(*channel.wilson((n - 200) // 2, n - 200)) > value
+        # an error rate as far over one half as under it shows the same, never less
+        over, under = (channel.carried(*channel.wilson(n // 2 + k, n)) for k in (40, -40))
+        assert over == pytest.approx(under, rel=1e-9) and over > value
         more = ((channel.Z95 + channel.Z_POWER) / channel.Z95) ** 2
         assert abs(need["nine_in_ten"] - more * (need["least"] + channel.Z95 ** 2)) <= more + 1
+        # nine in ten: the error rates within the two-sided 90% of one half have their upper bound under the value
+        edge = round(channel.Z_POWER * math.sqrt(need["nine_in_ten"]) / 2)
+        m = need["nine_in_ten"] + need["nine_in_ten"] % 2
+        assert channel.carried(*channel.wilson(m // 2 + edge - 2, m)) <= value < channel.carried(
+            *channel.wilson(m // 2 + edge + 3, m))
     # the run that shows it is as long whatever the interval: the scored intervals double as the interval halves
     assert channel.samples_to_show(0.05 / 600)["least"] == pytest.approx(2 * channel.samples_to_show(0.1 / 600)["least"],
                                                                          rel=1e-2)

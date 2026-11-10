@@ -7,10 +7,12 @@ ones, so the score is of a decoder fixed before the bits it reads.
 
 **The number.** A decoder wrong at rate e on uniform bits leaves H(bit | arrivals) ≤ H(e) (Fano), so the arrivals carry
 at least 1 − H(e) bits an interval, 0 at e ≥ 1/2: `bits`. It bounds from below what this server's writes move, under
-this decoder; nothing here bounds a channel from above. `lower` and `upper` are `bits` at the ends of e's 95% Wilson
-interval over the scored samples, which takes the scored intervals' errors as independent. For a server whose bits
-move nothing they are exactly: the bits are uniform and independent of every arrival, so each scored guess is wrong
-with probability one half whatever the arrivals did.
+this decoder; nothing here bounds a channel from above. `lower` and `upper` are of e's 95% Wilson interval over the
+scored samples, which takes the scored intervals' errors as independent: `lower` is `bits` at its upper end, and
+`upper` is 1 − H at its end farther from one half (`carried`), since a decoder wrong more often than not carries as
+much read the other way up. So an error rate that comes out over one half never makes `upper` small. For a server
+whose bits move nothing the interval is exact: the bits are uniform and independent of every arrival, so each scored
+guess is wrong with probability one half whatever the arrivals did.
 
 **The decoder** is one threshold on one feature, both chosen on the even samples: the offset itself, or `step`, the
 offset less the mean of the `STEP_WINDOW` offsets around it without their `STEP_DROP` largest. `step` drops what moves
@@ -35,8 +37,8 @@ from collections import Counter
 
 #: the two-sided 95% normal quantile, `wilson`'s and `samples_to_show`'s
 Z95 = 1.959963984540054
-#: the one-sided normal quantile of `samples_to_show`'s power, nine runs in ten
-Z_POWER = 1.2815515655446004
+#: the two-sided normal quantile of `samples_to_show`'s power, nine runs in ten
+Z_POWER = 1.6448536269514722
 #: the offsets around a sample, half before and half after, whose mean `step` subtracts, and how many of their
 #: largest it leaves out
 STEP_WINDOW, STEP_DROP = 16, 2
@@ -55,6 +57,12 @@ def entropy(p: float) -> float:
 def bits(error: float) -> float:
     """1 − H(error), the bits an interval a binary decoder wrong at rate `error` shows; 0 from one half on."""
     return 1.0 - entropy(error) if error < 0.5 else 0.0
+
+
+def carried(low: float, high: float) -> float:
+    """The most bits an interval a binary decoder's answers carry, read either way up, when its error rate is between
+    `low` and `high`: 1 − H at the end farther from one half."""
+    return 1.0 - entropy(low if 0.5 - low >= high - 0.5 else high)
 
 
 def wilson(wrong: int, n: int, z: float = Z95) -> tuple[float, float]:
@@ -141,7 +149,7 @@ def measure(samples: list[tuple[float, int]], seed: int = 0) -> dict:
     read = not math.isinf(cut)
     return out | {
         "n": len(test), "bits": bits(wrong / len(test)) if read else 0.0, "lower": bits(high) if read else 0.0,
-        "upper": bits(low),
+        "upper": carried(low, high),
         "decoder": {"feature": name, "threshold_us": None if math.isinf(cut) else round(cut * 1e6, 3), "side": side,
                     "train_n": len(train), "train_wrong": train_wrong, "wrong": wrong,
                     "error": wrong / len(test), "error_95": [low, high]},
@@ -157,7 +165,7 @@ def pool(measures: list[dict]) -> dict:
         return {"runs": len(measures), "n": 0, "bits": None, "lower": None, "upper": None}
     low, high = wilson(wrong, n)
     return {"runs": len(measures), "n": n, "wrong": wrong, "error": wrong / n, "bits": bits(wrong / n),
-            "lower": bits(high), "upper": bits(low)}
+            "lower": bits(high), "upper": carried(low, high)}
 
 
 def target(interval_s: float) -> dict:
@@ -179,8 +187,8 @@ def _margin(value: float) -> float:
 def samples_to_show(value: float) -> dict:
     """The scored intervals it takes to show a number of at most `value` bits an interval, for a decoder truly at
     chance: `least`, with which a run whose error rate comes out at exactly one half has its upper bound at `value`
-    (half the runs come out under one half and show more), and `nine_in_ten`, with which nine runs in ten show it.
-    A run scores half its intervals, so it lasts twice either count. A channel at or over `value` is never shown
+    (every other run shows more, so no run of fewer shows it), and `nine_in_ten`, with which nine runs in ten show
+    it. A run scores half its intervals, so it lasts twice either count. A channel at or over `value` is never shown
     under it, and a channel between 0 and `value` takes more."""
     d = _margin(value)
     return {"bits": value, "least": math.ceil(max(0.0, Z95 ** 2 / (4 * d * d) - Z95 ** 2)),

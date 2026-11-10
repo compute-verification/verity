@@ -28,8 +28,9 @@ The network certifier fails a delayed interval closed, so `delay` runs only agai
 
 `channel.measure` fits a decoder on the even intervals, one threshold on the arrival's offset after R_t or on its
 `step` (the offset less its neighbours' trimmed mean, which drops a drift), and scores it on the odd ones. A decoder
-wrong at rate e on uniform bits shows at least 1 − H(e) bits an interval: `bits`, with the ends of e's 95% Wilson
-interval as `lower` and `upper`. `run` prints one JSON line and writes it to `--out`/result.json:
+wrong at rate e on uniform bits shows at least 1 − H(e) bits an interval: `bits`, with `lower` and `upper` from e's
+95% Wilson interval. `upper` is 1 − H at the interval's end farther from one half, so a decoder that came out wrong
+more often than not never makes it small. `run` prints one JSON line and writes it to `--out`/result.json:
 
 | Key | What it is |
 | --- | --- |
@@ -72,8 +73,9 @@ guard fails reports no number.
 
 One node's whole timing channel may carry a bit every 240 to 600 seconds (`channel.SECONDS_A_BIT`), so at an
 interval of τ seconds the certifier's share is at most τ/240 to τ/600 bits an interval. `target` prints both ends and
-the scored intervals it takes to show a number that small (`channel.samples_to_show`): `least`, at which a decoder
-truly at chance has its upper bound at the target half the time, and `nine_in_ten`. A run scores half its intervals.
+the scored intervals it takes to show a number that small (`channel.samples_to_show`): `least`, at which a run whose
+decoder came out wrong exactly half the time has its upper bound at the target and every other run shows more, and
+`nine_in_ten`, at which nine runs in ten of a decoder truly at chance show it. A run scores half its intervals.
 The time a run takes to show the target is about the same at every τ, since the target grows with τ as the intervals
 a second fall.
 
