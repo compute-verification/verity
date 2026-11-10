@@ -238,6 +238,7 @@ theorem sum_lt_of_le_prod {α : Type} (l : List α) (pa : α → ENNReal) (m : �
     ENNReal.ofReal_lt_ofReal_iff'.2 ⟨hle.trans_lt hK, (pow_nonneg hx K).trans_lt hK⟩
   exact absurd (hin.trans (prod_le_pow_sum l pa m hx hpa)) (not_le.2 hlt)
 
+open Classical in
 theorem wrongInAt_subset_cell (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
     (ι : ℕ → Bool) : wrongInAt s Pt Pρ val ρ t ι ⊆ cell Pt Pρ ρ t :=
   filter_subset _ _
@@ -314,6 +315,7 @@ theorem FregTwo_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P
     (r e : Fin (L.V.k x) → Coin) : L.FregTwo H P x ω (forkOn (L.stage2 x) r e) = L.FregTwo H P x ω r := by
   simp only [FregTwo, iregVal_forkOn]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem inScopeTwo_of (L : CompiledTwo Coin A) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hx : L.Scope x) (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) : InScopeTwo Pt d s := by
