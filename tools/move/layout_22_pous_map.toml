@@ -1,15 +1,16 @@
 # The layout move of PoUS, to `verity/protocols/pous`: what `tools/move/layout.py --map
-# tools/move/layout_22_pous_map.toml` moves and rewrites. 200 files in 7 components, in 80 rows.
+# tools/move/layout_22_pous_map.toml` moves and rewrites. 200 files in 80 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
 # - `verity/core/devices/memory_challenger/lean/scripts/replay.py` to
-#   `verity/protocols/pous/device/memory_challenger/lean/scripts/replay.py`: an archived file (an open change deletes
-#   it) inside the memory challenger's Lake package, which moves whole by one row.
-# The layout's maps run in the order of their names. This one must run after `layout_21_archive_map.toml`: it renames
-# a package that those maps take modules out of, and would rename their modules with it. The format is
+#   `verity/protocols/pous/device/memory_challenger/lean/scripts/replay.py`: an archived file inside the memory
+#   challenger's Lake package, which moves whole by one row.
+# The layout's maps run in the order of their names. This one runs after `layout_21_archive_map.toml`: it renames a
+# package that those maps take modules out of, and would rename their modules with it. The format is
 # `layout_map.toml`'s.
 
 [roots]

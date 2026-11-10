@@ -1,12 +1,13 @@
 # The layout move of Flock's prover, to `verity/flock/prover`: what `tools/move/layout.py --map
-# tools/move/layout_04_flock_prover_map.toml` moves and rewrites. 423 files in 11 components, in 128 rows.
+# tools/move/layout_04_flock_prover_map.toml` moves and rewrites. 423 files in 128 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
-# - `verity/ml/flock/python/verity_flock/` to `verity/flock/prover/python/verity_flock/`: a Python package moves
-#   whole: eleven bench drivers are modules of `verity_flock`, which the plain rule would leave in a second
+# - `verity/ml/flock/python/verity_flock/` to `verity/flock/prover/python/verity_flock/`: a module goes with its
+#   import package: eleven bench drivers are modules of `verity_flock`, which the rule would leave in a second
 #   `verity/flock/python/verity_flock/` with no `__init__.py`, outside the distribution that keeps the name.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
@@ -150,6 +151,13 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/flock/" = "verity/flock/prover/"
 "verity/ml/flock/tests/" = "verity/flock/prover/tests/"
 "verity/ml/flock/tests/fixtures/" = "verity/flock/prover/tests/fixtures/"
+
+[split]
+# references to a directory this move splits that stay right: "old file: old directory" = why
+"verity/ml/flock/live/src/circuit.rs: verity" = "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root, before the move and after it: the crate is as deep in `verity/flock/prover/live` as in `verity/ml/flock/live`"
+"verity/ml/flock/live/src/firewall.rs: verity" = "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root, before the move and after it: the crate is as deep in `verity/flock/prover/live` as in `verity/ml/flock/live`"
+"verity/ml/flock/live/src/lookup.rs: verity" = "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root, before the move and after it: the crate is as deep in `verity/flock/prover/live` as in `verity/ml/flock/live`"
+"verity/ml/flock/live/src/sha512_native.rs: verity" = "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root, before the move and after it: the crate is as deep in `verity/flock/prover/live` as in `verity/ml/flock/live`"
 
 [retired]
 paths = []

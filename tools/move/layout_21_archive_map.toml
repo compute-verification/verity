@@ -1,9 +1,10 @@
 # The layout move of what the layout archives, to `archive`: what `tools/move/layout.py --map
-# tools/move/layout_21_archive_map.toml` moves and rewrites. 126 files in 1 components, in 20 rows.
+# tools/move/layout_21_archive_map.toml` moves and rewrites. 126 files in 20 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
 
@@ -29,9 +30,9 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "benchmarks/pous/hbm_audit/" = "archive/benchmarks/pous/hbm_audit/"
 "benchmarks/resource_accounting/" = "archive/benchmarks/resource_accounting/"
 "examples/h200/" = "archive/examples/h200/"
-"verity/core/protocols/bandwidth/" = "archive/verity/protocols/bandwidth/"
-"verity/core/protocols/pous/period_reports.py" = "archive/verity/protocols/pous/period_reports.py"
-"verity/core/protocols/pous/tests/test_pous_period_reports.py" = "archive/verity/protocols/pous/tests/test_pous_period_reports.py"
+"verity/core/protocols/bandwidth/" = "archive/verity/core/protocols/bandwidth/"
+"verity/core/protocols/pous/period_reports.py" = "archive/verity/core/protocols/pous/period_reports.py"
+"verity/core/protocols/pous/tests/test_pous_period_reports.py" = "archive/verity/core/protocols/pous/tests/test_pous_period_reports.py"
 
 [retired]
 paths = []
@@ -65,6 +66,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks.pous.hbm_audit" = "archive.benchmarks.pous.hbm_audit"
 "benchmarks.resource_accounting" = "archive.benchmarks.resource_accounting"
 "examples.h200" = "archive.examples.h200"
-"verity.core.protocols.bandwidth" = "archive.verity.protocols.bandwidth"
-"verity.core.protocols.pous.period_reports" = "archive.verity.protocols.pous.period_reports"
-"verity.core.protocols.pous.tests.test_pous_period_reports" = "archive.verity.protocols.pous.tests.test_pous_period_reports"
+"verity.core.protocols.bandwidth" = "archive.verity.core.protocols.bandwidth"
+"verity.core.protocols.pous.period_reports" = "archive.verity.core.protocols.pous.period_reports"
+"verity.core.protocols.pous.tests.test_pous_period_reports" = "archive.verity.core.protocols.pous.tests.test_pous_period_reports"

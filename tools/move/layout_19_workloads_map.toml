@@ -1,11 +1,12 @@
 # The layout move of the demos and the recursion end-to-end run, to `workloads`: what `tools/move/layout.py --map
-# tools/move/layout_19_workloads_map.toml` moves and rewrites. 36 files in 5 components, in 6 rows.
+# tools/move/layout_19_workloads_map.toml` moves and rewrites. 36 files in 6 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
-# - `examples/README.md` to `workloads/README.md`: the demos' index: the plain rule gives
+# - `examples/README.md` to `workloads/README.md`: the demos' index: the rule gives
 #   `workloads/dither_full_util/examples/README.md`, inside one demo.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.

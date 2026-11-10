@@ -1,12 +1,13 @@
 # The layout move of network certification, to `verity/protocols/certifier`: what `tools/move/layout.py --map
-# tools/move/layout_09_certifier_map.toml` moves and rewrites. 290 files in 10 components, in 90 rows.
+# tools/move/layout_09_certifier_map.toml` moves and rewrites. 290 files in 90 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
-# - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/`: the certifier program's
-#   Lake package: the plain rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
+# - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/lean/`: the certifier
+#   program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
 #   lakefiles, manifests, locks and toolchains on one path).
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
@@ -77,7 +78,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/certifier/io_tie.circuit-check.json" = "verity/protocols/certifier/verifier/io_tie.circuit-check.json"
 "verity/core/protocols/certifier/io_tie.circuit-check.py" = "verity/protocols/certifier/verifier/io_tie.circuit-check.py"
 "verity/core/protocols/certifier/io_tie.py" = "verity/protocols/certifier/verifier/io_tie.py"
-"verity/core/protocols/certifier/lean/" = "verity/protocols/certifier/device/program/"
+"verity/core/protocols/certifier/lean/" = "verity/protocols/certifier/device/program/lean/"
 "verity/core/protocols/certifier/lean_audit.py" = "verity/protocols/certifier/verifier/lean_audit.py"
 "verity/core/protocols/certifier/online.py" = "verity/protocols/certifier/verifier/online.py"
 "verity/core/protocols/certifier/out_commit.py" = "verity/protocols/certifier/verifier/out_commit.py"
@@ -171,7 +172,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.certifier.head_check" = "verity.protocols.certifier.verifier.head_check"
 "verity.core.protocols.certifier.io_request" = "verity.protocols.certifier.verifier.io_request"
 "verity.core.protocols.certifier.io_tie" = "verity.protocols.certifier.verifier.io_tie"
-"verity.core.protocols.certifier.lean" = "verity.protocols.certifier.device.program"
+"verity.core.protocols.certifier.lean" = "verity.protocols.certifier.device.program.lean"
 "verity.core.protocols.certifier.lean_audit" = "verity.protocols.certifier.verifier.lean_audit"
 "verity.core.protocols.certifier.online" = "verity.protocols.certifier.verifier.online"
 "verity.core.protocols.certifier.out_commit" = "verity.protocols.certifier.verifier.out_commit"

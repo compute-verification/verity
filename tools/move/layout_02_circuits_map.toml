@@ -1,15 +1,16 @@
 # The layout move of the circuit language, to `verity/circuits`: what `tools/move/layout.py --map
-# tools/move/layout_02_circuits_map.toml` moves and rewrites. 94 files in 6 components, in 89 rows.
+# tools/move/layout_02_circuits_map.toml` moves and rewrites. 94 files in 89 rows. Written by
+# `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
-# row a file. Nothing is edited, split or deleted.
+# row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
 # - `verity/ml/circuits/tests/test_settings.py` to `verity/circuits/tests/test_settings.py`: the one file the layout
 #   keeps (it tests `verity/settings.py`) whose directory moves away from under it: it goes with the suite that runs
 #   it.
-# The layout's maps run in the order of their names. This one must run after `layout_01_definitions_map.toml`: it
-# renames a package that those maps take modules out of, and would rename their modules with it. The format is
+# The layout's maps run in the order of their names. This one runs after `layout_01_definitions_map.toml`: it renames
+# a package that those maps take modules out of, and would rename their modules with it. The format is
 # `layout_map.toml`'s.
 
 [roots]
