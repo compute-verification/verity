@@ -24,17 +24,26 @@ every package's lakefile, not a reading of the text).
 Findings are counted per ``(file, rule)``, the key the ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) pools a
 list's counts by, so each rule's total is held apart.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its
 pair; ``module-doc`` and ``long-file`` find one a file.  The tree is held to the list and to nothing else: no base commit
-is read.  A pair found more often than its entry allows, or found with no entry, fails, naming each site and its fix.  An
-entry that allows more than is found only warns (``Stale``), naming the count to lower it to, so a change that fixes a
+is read.  A pair found more often than its entry allows, or found with no entry, is reported with each site and its fix,
+by one of two tests:
+
+* ``test_no_new_findings`` holds ``module-doc``, ``long-file`` and ``heartbeats-uncommented`` (``SOFT``).  It is
+  bookkeeping (``tests/conftest.py``'s ``BOOKKEEPING``): what it finds warns and the suite passes, since each can be put
+  right after landing with no claim false meanwhile, and a later change fixes it or records it.
+* ``test_no_new_unlimited_heartbeats`` holds ``heartbeats-unlimited`` (``HARD``) and fails: a declaration with no bound
+  can hang every later build and check, which no later change undoes for the runs in between.
+
+An entry that allows more than is found only warns (``Stale``), naming the count to lower it to, so a change that fixes a
 finding never fails for the entry it leaves behind, and ``--prune`` deletes and lowers what this tree no longer finds.
 
 The list is written by this module, never by hand.  ``--record`` rewrites it to the tree's counts, for a merge that brings
-files written before the bar held them: the merge commits the rewritten list once.  It lists no new ``maxHeartbeats 0``
-(``HARD``): ``heartbeats-unlimited`` is allowed only where the list already has it, at most as often, so a new one fails
-until it has a bound.  A file that moves takes its entries with it, in the same change (``--move``).
+files written before the bar held them: the merge commits the rewritten list once.  It lists no new ``maxHeartbeats 0``:
+``heartbeats-unlimited`` is allowed only where the list already has it, at most as often, so a new one fails until it has
+a bound.  A file that moves takes its entries with it, in the same change (``--move``).
 
-The ratchet gate runs ``test_no_new_findings`` as a change's base has it, outside pytest, when the change touches this
-module or its list.  So the module imports only the standard library and that test takes no fixture.
+The ratchet gate runs both ``test_no_new`` tests as a change's base has them, outside pytest, when the change touches this
+module or its list; there what the soft rules find counts as well.  So the module imports only the standard library and
+those tests take no fixture.
 
     python3 tests/lint/test_lean_bar.py --counts          # each rule's findings, by package
     python3 tests/lint/test_lean_bar.py --move OLD NEW    # a file (or directory) moved: its entries follow it
@@ -63,7 +72,7 @@ BUILT = (".lake",)
 #: the lines a file may run to, Mathlib's ``linter.style.longFile``
 LONG = 1500
 FIELDS = ("file", "rule", "count")
-#: the rule `--record` never adds an entry of, or raises one of
+#: the rule whose new finding fails, and which `--record` never adds an entry of, or raises one of
 HARD = "heartbeats-unlimited"
 #: each rule and its fix
 RULES = {
@@ -73,14 +82,22 @@ RULES = {
                  f"{LONG} lines; a generator splits its output.",
     "heartbeats-unlimited": "Give it a bound: measure the declaration (`set_option profiler true in`, or `#count_heartbeats "
                             "in` where Mathlib is imported), fix the proof (`simp only [...]`, a split-out lemma, a smaller "
-                            "`decide`) and set the number it then needs. No command lists a new one.",
+                            "`decide`) and set the number it then needs.",
     "heartbeats-uncommented": "Say why the declaration needs the bound in a `--` comment on the option's line or the line "
                               "above it.",
 }
-FIX = (f"Fix each as its rule says. Never edit tests/lint/allowlists/{NAME}.json by hand. If a merge brought these files, "
-       f"`python3 tests/lint/test_{NAME}.py --record` rewrites the list to this tree's counts: commit it with the merge. It "
-       f"lists no new `maxHeartbeats 0` ({HARD}), which fails until it has a bound. If a file moved, move its entries in "
-       f"the same change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
+#: the rules whose new finding warns (`test_no_new_findings`, bookkeeping)
+SOFT = tuple(rule for rule in RULES if rule != HARD)
+MOVE = (f"Never edit tests/lint/allowlists/{NAME}.json by hand. If a file moved, move its entries in the same change: "
+        f"`python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
+#: what to do about a finding, by whether its rule fails
+FIX = {
+    False: "This warns and the suite passes: fix each as its rule says, in this change or a later one. If a merge brought "
+           f"these files, `python3 tests/lint/test_{NAME}.py --record` rewrites the list to this tree's counts: commit it "
+           f"with the merge. {MOVE}",
+    True: "This fails, and no command lists a new one: give each a bound, as its rule says, before the change lands. "
+          f"{MOVE}",
+}
 
 #: where a comment or a string literal opens; a character literal of a quote opens none
 _OPEN = re.compile(r"""--|/-|'"'|'\\"'|(?<![\w'.])r#*"|["]""")
@@ -197,10 +214,12 @@ def found(root: Path = ROOT) -> Counter:
     return Counter((f, rule) for f, rule, *_ in scan(root))
 
 
-def held(sites: tuple[tuple[str, str, int, str], ...], have: Counter) -> None:
-    """The findings ``sites`` (`scan`) held to the list ``have``: a (file, rule) pair found more often than its entry
-    allows, or with no entry, fails with its sites and its rule's fix; an entry that allows more than is found only warns
-    (`Stale`), naming the count to lower it to."""
+def held(sites: tuple[tuple[str, str, int, str], ...], have: Counter, rules: tuple[str, ...] = tuple(RULES)) -> None:
+    """The findings ``sites`` (`scan`) of ``rules`` held to the list ``have``'s entries of them: a (file, rule) pair found
+    more often than its entry allows, or with no entry, fails with its sites and its rule's fix; an entry that allows more
+    than is found only warns (`Stale`), naming the count to lower it to."""
+    sites = tuple(s for s in sites if s[1] in rules)
+    have = Counter({k: n for k, n in have.items() if k[1] in rules})
     got = Counter((f, rule) for f, rule, *_ in sites)
     stale = [f"  {f} [{rule}]: {n} allowed, {got[f, rule]} found: "
              + (f"lower its count to {got[f, rule]}" if got[f, rule] else "delete the entry")
@@ -216,11 +235,17 @@ def held(sites: tuple[tuple[str, str, int, str], ...], have: Counter) -> None:
            + "\n".join(f"    {f}:{line} {what}" for line, what in sorted(where[f, rule]))
            for (f, rule), n in sorted(got.items()) if n > have[f, rule]]
     assert not new, (f"the Lean bar: {len(new)} (file, rule) pair(s) found more often than tests/lint/allowlists/{NAME}.json "
-                     f"allows. {FIX}\n" + "\n".join(new))
+                     f"allows. {FIX[rules == (HARD,)]}\n" + "\n".join(new))
 
 
 def test_no_new_findings() -> None:
-    held(scan(), allowed())
+    """Bookkeeping (``tests/conftest.py``): what it finds of ``SOFT`` warns, and the suite passes."""
+    held(scan(), allowed(), SOFT)
+
+
+def test_no_new_unlimited_heartbeats() -> None:
+    """Not bookkeeping: a ``maxHeartbeats 0`` the list doesn't have fails."""
+    held(scan(), allowed(), (HARD,))
 
 
 def _rules(src: str) -> list[tuple[str, int]]:
@@ -282,7 +307,7 @@ def _tree(root: Path) -> None:
         (root / path).write_text(src, encoding="utf-8")
 
 
-def test_an_unlisted_finding_fails_a_listed_one_passes_and_a_stale_entry_only_warns(tmp_path: Path) -> None:
+def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_only_warns(tmp_path: Path) -> None:
     _tree(tmp_path)
     a, b = "Security/Proofs/A.lean", "Security/Proofs/B.lean"
     assert files(tmp_path) == [a, b, "verity/core/c/C.lean"]
@@ -292,21 +317,29 @@ def test_an_unlisted_finding_fails_a_listed_one_passes_and_a_stale_entry_only_wa
         warnings.simplefilter("error")
         held(scan(tmp_path), exact)
 
-    def fails(have: Counter) -> str:
+    def fails(have: Counter, rules: tuple[str, ...]) -> str:
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                held(scan(tmp_path), have)
+                held(scan(tmp_path), have, rules)
         except AssertionError as e:
             return str(e)
         raise AssertionError(f"{dict(have)} passed")
+    # each rule's finding is its own test's: the soft rules' test never reports `maxHeartbeats 0`, nor the hard one theirs
+    assert SOFT == ("module-doc", "long-file", "heartbeats-uncommented") and HARD not in SOFT and {*SOFT, HARD} == set(RULES)
     for rule in RULES:
         (k,) = [k for k in exact if k[1] == rule]
-        why = fails(exact - Counter({k: 1}))
+        mine, other = (SOFT, (HARD,)) if rule in SOFT else ((HARD,), SOFT)
+        why = fails(exact - Counter({k: 1}), mine)
         assert "1 (file, rule) pair(s)" in why and f"  {k[0]} [{rule}]: 1 found, 0 allowed. {RULES[rule]}" in why, why
-        assert "by hand" in why and f"test_{NAME}.py --record" in why and f"test_{NAME}.py --move OLD NEW" in why, why
-    assert f"    {a}:1 maxHeartbeats 0" in fails(exact - Counter({(a, "heartbeats-unlimited"): 1}))
-    assert f"    {b}:{LONG + 1} {LONG + 1} lines, 1 past {LONG}" in fails(exact - Counter({(b, "long-file"): 1}))
+        assert "by hand" in why and f"test_{NAME}.py --move OLD NEW" in why, why
+        assert ("This warns" in why and f"test_{NAME}.py --record" in why) if rule in SOFT else (
+            "This fails" in why and "--record" not in why), why
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            held(scan(tmp_path), exact - Counter({k: 1}), other)
+    assert f"    {a}:1 maxHeartbeats 0" in fails(exact - Counter({(a, HARD): 1}), (HARD,))
+    assert f"    {b}:{LONG + 1} {LONG + 1} lines, 1 past {LONG}" in fails(exact - Counter({(b, "long-file"): 1}), SOFT)
 
     loose = exact + Counter({(a, "heartbeats-uncommented"): 2, ("verity/core/c/C.lean", "module-doc"): 1,
                              ("Security/Gone.lean", "long-file"): 1})
@@ -326,7 +359,17 @@ def test_an_unlisted_finding_fails_a_listed_one_passes_and_a_stale_entry_only_wa
     unlimited = Counter({(a, HARD): 1})
     assert recorded(Counter(), found(tmp_path)) == exact - unlimited == recorded(exact - unlimited, found(tmp_path))
     assert recorded(exact, exact + unlimited) == exact and recorded(exact + unlimited, exact) == exact
-    assert f"  {a} [{HARD}]: 1 found, 0 allowed" in fails(recorded(Counter(), found(tmp_path)))
+    assert f"  {a} [{HARD}]: 1 found, 0 allowed" in fails(recorded(Counter(), found(tmp_path)), (HARD,))
+
+
+def test_only_the_soft_rules_are_bookkeeping() -> None:
+    """`tests/conftest.py` lists `test_no_new_findings` and not `test_no_new_unlimited_heartbeats`: a `maxHeartbeats 0`
+    the list doesn't have fails the suite."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("lean_bar_conftest", ROOT / "tests" / "conftest.py")
+    conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conftest)
+    assert conftest.BOOKKEEPING[f"tests/lint/test_{NAME}.py"] == ("test_no_new_findings",)
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:

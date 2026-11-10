@@ -23,17 +23,19 @@ table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
 ruff's findings (`test_repo_ruff.py`), except handlers that swallow what they catch (`test_repo_silent_excepts.py`), and
 what Mathlib's style linters refuse of a Lean file under `Security/` or `verity/core/` (`test_lean_bar.py`, per file and
 rule: no `/-!` module docstring, more than 1,500 lines, a `maxHeartbeats` of 0, one with no comment saying why). A file
-with more findings than its entry allows, or with findings and no entry, fails, except that lane text, retired terms and
-ruff's style findings are bookkeeping: they warn, and a later PR fixes them (ruff's errors, `ERRORS` in its lint, still
-fail). An entry that allows more than is found doesn't, so the list can run ahead of the tree (the Lean bar warns of one,
-naming the count to lower it to); the ratchet gate, which holds nothing (`off_gate` in `tools/verity/check/policy.toml`),
-reports a change that grows a list or adds a finding to a file it touches.
+with more findings than its entry allows, or with findings and no entry, fails, except that lane text, retired terms,
+ruff's style findings and three of the Lean bar's rules (the module docstring, the length, the uncommented override) are
+bookkeeping: they warn, and a later PR fixes them. Ruff's errors (`ERRORS` in its lint) and a new `maxHeartbeats 0`
+(`test_no_new_unlimited_heartbeats`) still fail. An entry that allows more than is found doesn't, so the list can run
+ahead of the tree (the Lean bar warns of one, naming the count to lower it to); the ratchet gate, which holds nothing
+(`off_gate` in `tools/verity/check/policy.toml`), reports a change that grows a list or adds a finding to a file it
+touches.
 
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:
-lane text, ruff's lint, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries and
-Markdown caps. A scan's own tests, and a listed test that raises anything but a failed check, still fail.
+lane text, ruff's lint, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries,
+Markdown caps and the Lean bar's three soft rules. A scan's own tests, and a listed test that raises anything but a failed check, still fail.
 `test_bookkeeping.py` holds the list to the tree.
 
 ~~~sh
@@ -44,7 +46,7 @@ python3 tests/lint/test_repo_lane_text.py --record    # the list becomes what th
 
 Every lint takes `--move` and `--prune`; lane text, retired terms and the Lean bar take `--record`, which rewrites the list
 to the tree's counts. The Lean bar's is for a merge that brings files written before the bar held them, and it lists no new
-`maxHeartbeats 0`, which fails until it has a bound (`test_lean_bar.py --counts` prints each rule's findings by Lake
+`maxHeartbeats 0`, which fails the suite until it has a bound (`test_lean_bar.py --counts` prints each rule's findings by Lake
 package). Each lint reads no history, so a renamed file's findings count under its new path: move its entry with it, or
 the ratchet gate flags the change.
 
