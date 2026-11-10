@@ -1025,7 +1025,7 @@ class Listing(NamedTuple):
     steps: dict[str, int]                               # each listed directory's step: the bottom row's 0, one a row
     distributions: dict[str, dict[str, str]]            # each distribution of its own under ``verity/``, by directory
     against: dict[tuple[str, str], set[str]]            # each excepted pair of rows: the first's files that load the second
-    #: each verifier's and device's directory: the places its Python ``loads`` and ``reaches``, and the files it is ``loaded_by``
+    #: each verifier's and device's entry, by its path: the places its Python ``loads`` and ``reaches``, and the files it is ``loaded_by``
     trusted: dict[str, dict[str, set[str]]]
 
 
@@ -1036,7 +1036,7 @@ def _listing(text: str | None = None) -> Listing:
     assert "." in steps and len(steps) == sum(map(len, doc["order"])), "the order lists `.` and each directory once"
     return Listing(steps, {e["directory"]: {k: v for k, v in e.items() if k != "directory"} for e in doc.get("distribution", [])},
                    {(e["loader"], e["loaded"]): set(e["files"]) for e in doc.get("against", [])},
-                   {e["directory"]: {k: set(e.get(k, ())) for k in TRUSTED} for e in doc.get("trusted", [])})
+                   {e["path"]: {k: set(e.get(k, ())) for k in TRUSTED} for e in doc.get("trusted", [])})
 
 
 def _row(path: str, steps: dict[str, int]) -> str:
@@ -1061,12 +1061,16 @@ def _part(path: str, name: str) -> str | None:
     return "/".join(parts[:parts.index(name) + 1]) if name in parts else None
 
 
-def _trusted(path: str) -> str | None:
+def _trusted(path: str, entries: Iterable[str] = ()) -> str | None:
     """The verifier's or the device's directory ``path`` is in: the outermost ``verifier/`` or ``device/`` directory above
-    it under ``verity/``, or None."""
-    parts = path.split("/")[:-1]
-    at = next((i for i, part in enumerate(parts) if part in ("verifier", "device")), None)
-    return "/".join(parts[:at + 1]) if at is not None and parts[0] == "verity" else None
+    it under ``verity/``, or None.  Where ``entries`` (the listing's ``trusted``) name a file or a sub-directory of it, the
+    deepest of them at or above ``path`` instead: the directory's own entry holds what no other names."""
+    parts = path.split("/")
+    at = next((i for i, part in enumerate(parts[:-1]) if part in ("verifier", "device")), None)
+    if at is None or parts[0] != "verity":
+        return None
+    entries = set(entries)
+    return next((e for n in range(len(parts), at + 1, -1) if (e := "/".join(parts[:n])) in entries), "/".join(parts[:at + 1]))
 
 
 def _distribution(path: str, listing: Listing) -> str | None:
@@ -1260,31 +1264,34 @@ def _into_distributions(loads: Iterable[Load], listing: Listing) -> list[Load]:
 
 
 def _trusted_loads(loads: Iterable[Load], listing: Listing) -> dict[str, tuple[dict[str, Load], dict[str, list[str]], dict[str, Load]]]:
-    """For each verifier's and each device's directory (``_trusted``): the places (``_place``) outside it that its Python
-    (``_source``) loads, each with one such load; the places it reaches through those files' own loads and so on, each with
-    the chain of files to it; and the Python files under ``verity/`` outside every verifier and device that load a file
-    of it, a test or a binding included, each with one such load.  Every load counts, at load, inside a function or named
-    in a string."""
+    """For each verifier's and each device's entry (``_trusted``, split as the listing's ``trusted`` splits a directory):
+    the places outside it that its Python (``_source``) loads, each with one such load; the places it reaches through
+    those files' own loads and so on, each with the chain of files to it; and the Python files under ``verity/`` outside
+    every verifier and device that load a file of it, a test or a binding included, each with one such load.  A place is
+    another entry, or outside them the directory one level below a row (``_place``).  Every load counts, at load, inside
+    a function or named in a string."""
+    entries = set(listing.trusted)
+    at = functools.cache(lambda f: _trusted(f, entries) or _place(f, listing.steps))
     by: dict[str, list[Load]] = {}
     loaders: dict[str, dict[str, Load]] = {}
     for x in loads:
         if x.loader.endswith(".py"):
             if _held(x):
                 by.setdefault(x.loader, []).append(x)
-            if x.loader.startswith("verity/") and _trusted(x.loader) is None and (d := _trusted(x.loaded)) is not None:
-                loaders.setdefault(d, {}).setdefault(x.loader, x)
+            if x.loader.startswith("verity/") and _trusted(x.loader) is None and _trusted(x.loaded) is not None:
+                loaders.setdefault(at(x.loaded), {}).setdefault(x.loader, x)
     own: dict[str, list[str]] = {}
     for f in sorted(by):
-        if _source(f, listing) and (d := _trusted(f)) is not None:
-            own.setdefault(d, []).append(f)
+        if _source(f, listing) and _trusted(f) is not None:
+            own.setdefault(at(f), []).append(f)
     out = {}
     for d in sorted(own.keys() | loaders.keys()):
         files = own.get(d, [])
-        inside = lambda f: _trusted(f) == d and _distribution(f, listing) is None  # noqa: E731, B023
+        inside = lambda f: at(f) == d and _distribution(f, listing) is None  # noqa: E731, B023
         direct: dict[str, Load] = {}
         for x in (x for f in files for x in by[f]):
             if not inside(x.loaded):
-                direct.setdefault(_place(x.loaded, listing.steps), x)
+                direct.setdefault(at(x.loaded), x)
         via: dict[str, str | None] = dict.fromkeys(files)
         todo = files[::-1]
         while todo:
@@ -1295,11 +1302,11 @@ def _trusted_loads(loads: Iterable[Load], listing: Listing) -> dict[str, tuple[d
                     todo.append(x.loaded)
         reach: dict[str, list[str]] = {}
         for f in sorted(via):
-            if not inside(f) and (at := _place(f, listing.steps)) not in reach:
+            if not inside(f) and at(f) not in reach:
                 chain = [f]
                 while (before := via[chain[-1]]) is not None:
                     chain.append(before)
-                reach[at] = chain[::-1]
+                reach[at(f)] = chain[::-1]
         out[d] = (direct, reach, loaders.get(d, {}))
     return out
 
@@ -1321,8 +1328,9 @@ def _hold_trusted(loads: Iterable[Load], listing: Listing) -> None:
                      "what the file needs to a row both load, or pass it in:\n" + "\n".join(new))
     stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.trusted.items())
              for kind, now in zip(TRUSTED, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
-    assert not stale, ("entries of `trusted` (tests/import_order.toml) the tree no longer has; delete them, and a "
-                       f"directory left with none: {stale}")
+    stale += [f"{d}: no load and no loader" for d, lists in sorted(listing.trusted.items()) if d not in found and not any(lists.values())]
+    assert not stale, ("entries of `trusted` (tests/import_order.toml) the tree no longer has; delete them, and an "
+                       f"entry left with none: {stale}")
 
 
 def _hold_distributions(dirs: Set[str], loads: Iterable[Load], listing: Listing) -> None:
@@ -1373,10 +1381,12 @@ def test_a_verifier_or_a_device_gains_no_load_and_no_loader() -> None:
     it for each ``verifier/`` and ``device/`` directory under ``verity/``: ``loads``, every place outside it that its
     Python loads, other verifiers and devices among them; ``reaches``, the places those files load in turn, and so on;
     and ``loaded_by``, the Python files under ``verity/`` outside every verifier and device that load it, a prover's
-    and a test's alike.  A place is the directory one level below a row (``_place``).  All three only shrink, as each
-    verifier becomes its Lean and what a prover needs leaves its verifier: a place or a file the tree adds fails, a place
-    with the chain of files that reaches it, and so does a listed one the tree no longer has.  AGENTS.md names each row
-    reached."""
+    and a test's alike.  A place is another entry, or outside them the directory one level below a row (``_place``).
+    Where one directory holds two things that are held apart, the listing names a file or a sub-directory of it as an
+    entry of its own, the directory's entry is the rest, and a load between the two is held as any other.  All three
+    lists only shrink, as each verifier becomes its Lean and what a prover needs leaves its verifier: a place or a file
+    the tree adds fails, a place with the chain of files that reaches it, and so does a listed one the tree no longer
+    has.  AGENTS.md names each row reached."""
     listing = _listing()
     _hold_trusted(_tree_loads()[1], listing)
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
@@ -1437,6 +1447,7 @@ ORDER_TREE = {
     "verity/protocols/pouw/verifier/check/interop.py": "import verity.flock.prover.stage\n",
     "verity/protocols/pouw/device/__init__.py": "",
     "verity/protocols/pouw/device/serve.py": "from verity.protocols.pouw.verifier import check\n",
+    "verity/protocols/pouw/device/party.py": "from verity.protocols.pouw.device import serve\n",
     "verity/protocols/pouw/prover/__init__.py": "",
     "verity/protocols/pouw/prover/build.py": "from verity.protocols.pouw.verifier import check\n",
     "verity/protocols/pouw/prover/tests/test_build.py": "from verity.protocols.pouw.device import serve\n",
@@ -1451,7 +1462,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     verifier: its import of its prover inside a function and that of a distribution inside it, the places it loads, at
     the grain of a row's packages, and the place it reaches only through another file; not its prover's import of it,
     its test's or its Lean script's of the prover, nor, among its places, what a distribution inside it loads.  Into a
-    verifier or a device: a prover's file and a prover's test; not a device's file."""
+    verifier or a device: a prover's file and a prover's test; not a device's file.  Where the listing names a file of a
+    device as an entry of its own: that file's load of the rest of its directory."""
     for f, text in ORDER_TREE.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text, encoding="utf-8")
@@ -1480,6 +1492,9 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
                                                 f"{check}/interop.py", f"{verifier}/check.py")] == ["verity/flock", None, check, None]
     assert [_trusted(f) for f in (f"{check}/interop.py", f"{device}/serve.py", f"{prover}/build.py", "tools/verifier/run.py")] == [
         verifier, device, None, None]
+    party = f"{device}/party.py"
+    assert [_trusted(f, {party, check}) for f in (party, f"{device}/serve.py", f"{check}/interop.py", f"{prover}/build.py")] == [
+        party, device, check, None]
     assert sorted({(x.loader, x.line, x.loaded) for x in _to_provers(loads)}) == [
         (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
         (f"{check}/interop.py", 1, "verity/flock/prover/stage.py")]
@@ -1496,6 +1511,11 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert [sorted(x) for x in found[device]] == [["verity", "verity/protocols", "verity/protocols/pouw", verifier],
                                                   sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
     assert [sorted(x) for x in found["verity/flock/verifier"]] == [[], [], ["verity/difftest/package_above.py"]]
+    split = _trusted_loads(loads, listing._replace(trusted={party: {}}))
+    assert list(split) == ["verity/flock/verifier", device, party, verifier], list(split)
+    assert [sorted(x) for x in split[device]] == [sorted(x) for x in found[device]], split[device]
+    assert [sorted(x) for x in split[party]] == [["verity", "verity/protocols", "verity/protocols/pouw", device],
+                                                 sorted([*reach, device, verifier]), []], split[party]
 
     held = Listing(steps, own, {pair: set(files) for pair, files in _against(loads, steps).items()},
                    {d: dict(zip(TRUSTED, map(set, lists))) for d, lists in found.items()})
@@ -1525,12 +1545,19 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         _hold_trusted(loads, without(device, loaded_by=f"{prover}/tests/test_build.py"))
     with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{verifier} is loaded by {prover}/build.py:1: "):
         _hold_trusted(loads, without(verifier, loaded_by=f"{prover}/build.py"))
-    with pytest.raises(AssertionError, match=f"delete them, and a directory left with none: \\['{verifier}: reaches tools'"):
+    with pytest.raises(AssertionError, match=f"delete them, and an entry left with none: \\['{verifier}: reaches tools'"):
         _hold_trusted(loads, held._replace(trusted=held.trusted | {
             verifier: held.trusted[verifier] | {"reaches": held.trusted[verifier]["reaches"] | {"tools"}}}))
     with pytest.raises(AssertionError, match="left with none: \\['verity/spot/verifier: loaded_by verity/spot/plan.py'"):
         _hold_trusted(loads, held._replace(trusted=held.trusted | {
             "verity/spot/verifier": {"loads": set(), "reaches": set(), "loaded_by": {"verity/spot/plan.py"}}}))
+    with pytest.raises(AssertionError, match=f"left with none: \\['{device}/gone.py: no load and no loader'"):
+        _hold_trusted(loads, held._replace(trusted=held.trusted | {f"{device}/gone.py": dict.fromkeys(TRUSTED, set())}))
+    parts = held._replace(trusted={d: dict(zip(TRUSTED, map(set, lists))) for d, lists in split.items()})
+    _hold_trusted(loads, parts)
+    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{party} loads {device}: {party}:1: "):
+        _hold_trusted(loads, parts._replace(trusted=parts.trusted | {
+            party: parts.trusted[party] | {"loads": parts.trusted[party]["loads"] - {device}}}))
     with pytest.raises(AssertionError, match="loads no other distribution.*\n.*package_above.py:1: python package"):
         _hold_distributions(tree.dirs, loads, held)
     for entry in ({"reason": "no owner"}, {"owner": "proofs", "date": "2026-11-18", "reason": "both"}, {"owner": "proofs", "date": "soon"}):
