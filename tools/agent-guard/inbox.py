@@ -157,7 +157,7 @@ def unpulled(repo: Path, agent: str) -> tuple[int, str | None]:
 
 
 #: seconds between `send --wait`'s looks at origin, and the longest it may wait: no tool call blocks more than 20 minutes
-WAIT_EVERY_S, WAIT_CAP_S = 5.0, 1200.0
+WAIT_EVERY_S, WAIT_MAX_S = 5.0, 1200.0
 
 
 def taken(repo: Path, agent: str, ident: str) -> bool:
@@ -356,7 +356,7 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
     g.add_argument("--file")
     s.add_argument("--local", action="store_true", help="this VM's inbox only, no push")
     s.add_argument("--wait", type=float, metavar="S", help=f"then say whether a VM took it within S seconds (at most "
-                                                           f"{WAIT_CAP_S:g}); exit 1 when none did")
+                                                           f"{WAIT_MAX_S:g}); exit 1 when none did")
     s.add_argument("--repo", type=Path, default=Path("."), help="the checkout whose origin carries the message")
     p = sub.add_parser("pull")
     p.add_argument("agent")
@@ -395,8 +395,8 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
         if a.local:
             print(f"queued for {a.agent}: {send(a.agent, text)}")
             return 0
-        if a.wait is not None and not 0 < a.wait <= WAIT_CAP_S:
-            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_CAP_S:g} seconds (no tool call blocks more than "
+        if a.wait is not None and not 0 < a.wait <= WAIT_MAX_S:
+            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_MAX_S:g} seconds (no tool call blocks more than "
                              "20 minutes)")
         try:
             before = unpulled(a.repo, full_id(a.agent))
