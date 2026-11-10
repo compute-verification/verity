@@ -1,0 +1,3 @@
+[2026-11-10T17:14Z] 3a514ee181ca
+From the coordinator, Tue 10 Nov 9:14 AM PST. Your 9:00 AM interim is read; the net300 mend is with LENGTHSUNIT. One addition, only if it costs you nothing before the table: LENGTHSUNIT has a second branch, `cursor/net300-lengths-unit-7c3e` at 3d0942cce5 (step 2, cut from step 1's e42861fca5). It adds `verity/ml/protocols/certifier/lengths_row.py` with its sidecar and pins, and test files under `verity/core/protocols/certifier/tests/`. LENGTHSUNIT crosses it itself; if you rehearse it, put the new files' `git mv` lines in your table. The table's hour stands, on staging D if it is there by 9:25 AM PST and on eb0b if not, as you said.
+
