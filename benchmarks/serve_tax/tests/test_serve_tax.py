@@ -500,12 +500,14 @@ def test_a_terminated_arm_kills_its_servers_group_within_the_runners_grace(monke
 def result(completed: int = 200, failed: int = 0, duration: float = 100.0, good: float | None = 150.0, tok: float = 300.0) -> dict:
     """A result as `vllm bench serve --save-result` writes it (its keys at the integration's pin), ``good`` requests
     within the SLO."""
-    return {"date": "20260101-000000", "backend": "openai", "model_id": "/ck", "tokenizer_id": "/ck", "num_prompts": completed + failed,
+    return {"date": "20260101-000000", "endpoint_type": "openai", "backend": "openai", "label": None, "model_id": "glm-5.3",
+            "tokenizer_id": "/ck", "num_prompts": completed + failed,
             "request_rate": "inf", "burstiness": 1.0, "max_concurrency": 8, "duration": duration, "completed": completed,
             "failed": failed, "total_input_tokens": 51200, "total_output_tokens": int(tok * duration),
             "request_throughput": completed / duration, "request_goodput": None if good is None else good / duration,
-            "output_throughput": tok, "total_token_throughput": tok + 512.0, "max_output_tokens_per_s": 2 * tok,
-            "max_concurrent_requests": 8, "mean_ttft_ms": 410.0, "median_ttft_ms": 400.0, "std_ttft_ms": 20.0,
+            "output_throughput": tok, "total_token_throughput": tok + 512.0, "latencies": [4.0] * completed,
+            "queue_times": [0.001] * completed, "max_output_tokens_per_s": 2 * tok,
+            "max_concurrent_requests": 8, "rtfx": 0.0, "mean_ttft_ms": 410.0, "median_ttft_ms": 400.0, "std_ttft_ms": 20.0,
             "p99_ttft_ms": 900.0, "mean_tpot_ms": 31.0, "median_tpot_ms": 30.0, "std_tpot_ms": 2.0, "p99_tpot_ms": 45.0,
             "mean_itl_ms": 30.5, "median_itl_ms": 29.0, "std_itl_ms": 3.0, "p99_itl_ms": 70.0, "mean_e2el_ms": 4000.0,
             "median_e2el_ms": 3900.0, "std_e2el_ms": 300.0, "p99_e2el_ms": 5200.0}
@@ -516,7 +518,7 @@ def test_a_pass_of_vllms_client_holds_a_concurrency_and_counts_goodput_against_t
     argv = S.bench_argv(glm, Path("/ck"), 8123, chat, 16, tmp_path, "chat@16-r2", dataset="/data/sharegpt.json")
     assert argv[1:] == [
         "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai", "--base-url", "http://127.0.0.1:8123",
-        "--endpoint", "/v1/completions", "--model", "/ck", "--served-model-name", "glm-5.3",
+        "--endpoint", "/v1/completions", "--model", "glm-5.3", "--tokenizer", "/ck",
         "--dataset-name", "sharegpt", "--dataset-path", "/data/sharegpt.json", "--num-prompts", "200", "--seed", "0",
         "--request-rate", "inf", "--max-concurrency", "16", "--ignore-eos", "--temperature", "0",
         "--goodput", "ttft:2000", "tpot:80", "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",

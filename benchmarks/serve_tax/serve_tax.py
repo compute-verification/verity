@@ -585,14 +585,17 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
                dataset: str | None = None, prompts: int | None = None, seed: int = 0) -> list[str]:
     """One pass of vLLM's client against the server on ``port``: ``load``'s prompts (the same ones under one seed, so
     every arm and rep serves the same requests) at concurrency ``rung``, greedy and each decoding to its length, with
-    goodput against the model's SLO and its result saved to ``d``. The client sends no request of its own before the
-    pass (no ready check: `wait_ready` has waited), so every request it sends is in its result, and request k's
+    goodput against the model's SLO and its result saved to ``d``. The client sends no completion of its own before
+    the pass (no ready check: `wait_ready` has waited), so every completion it sends is in its result, and request k's
     X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
-    (`servetax_plugin.release_key`). The tokenizer is the checkpoint's."""
+    (`servetax_plugin.release_key`). It names the served model in every request and takes its tokenizer from the
+    checkpoint; for its synthetic datasets it first asks the server's ``/tokenize``, which the engine never sees,
+    whether the server counts the first prompt's tokens as it does, and trims every prompt to the server's count
+    where it doesn't."""
     slo = dict(zip(("ttft", "tpot"), model.slo))
     return [sys.executable, "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai",
             "--base-url", f"http://127.0.0.1:{port}", "--endpoint", "/v1/completions",
-            "--model", str(checkpoint), "--served-model-name", model.served,
+            "--model", model.served, "--tokenizer", str(checkpoint),
             *(["--trust-remote-code"] if "--trust-remote-code" in model.args else []),
             *load.dataset, *(["--dataset-path", dataset] if dataset else []),
             "--num-prompts", str(prompts or load.prompts), "--seed", str(seed),
