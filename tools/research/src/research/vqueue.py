@@ -29,9 +29,13 @@ the `Action`s that bring the world closer to it.  The loop builds the snapshot, 
 ticks but what the next snapshot reads (the refs, the labels, graph2's results, and the outcomes it recorded), so a restart
 repeats nothing that matters: a candidate's ref is named by its sha and enqueueing a check twice queues it once.
 
-Only the lowest candidate's verdict is read: one above it is checked on a base that may still fail, so its verdict counts once
-the candidates below it are on `main`.  Bisecting keeps no state of its own: a suspect's `cap` (half the suspects of the
-newest failed outcome it was in) bounds the batches it goes into until it reaches `main` or is ejected.
+Only the lowest candidate's verdict is read whole: one above it is checked on a base that may still fail, so its pass counts
+once the candidates below it are on `main`.  Its fail counts at once, as the lowest's would, once its base's word on each of
+its own failures is known (`Failed.base_tests`); until then it waits, since its base may yet fail the same.  The lowest fail
+on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
+failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
+its own: a suspect's `cap` (half the suspects of the newest failed outcome it was in) bounds the batches it goes into until
+it reaches `main` or is ejected.
 """
 from __future__ import annotations
 
@@ -204,8 +208,10 @@ BASE_DROPPED = "its base was dropped"
 
 def decide(s: Snapshot) -> list[Action]:
     """The actions ``s`` calls for, in the order they are applied: the drops of the candidates off main's chain, what the
-    lowest candidate's verdict calls for, then, while the chain is shorter than `depth`, one batch built on its top: one a
-    tick, since the batch above it would sit on the sha the loop gives this one.
+    lowest candidate's verdict calls for, what the lowest fail above it calls for (as the lowest's fail would, once its base's
+    word on each of its own failures is known; until then nothing, and nothing is built above it), then, while the chain is
+    shorter than `depth`, one batch built on its top: one a tick, since the batch above it would sit on the sha the loop gives
+    this one.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -260,7 +266,20 @@ def decide(s: Snapshot) -> list[Action]:
             if s.now - c1.enqueued > 2 * s.pending_s:
                 acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s check is still pending {2 * s.pending_s / 3600:g} h after its first "
                                          f"enqueue, {c1.tries} times enqueued"))
-    if len(chain) < s.depth:
+    held = False
+    for k, c in enumerate(chain):
+        if c is c1 or _reading(c.verdict) != FAIL or not c.verdict.failed:
+            continue
+        if held := any(f.base_tests is None for f in c.verdict.failed if not _inherited(f)):
+            break
+        if (rerun := _rerun(c, ready)) is not None:
+            acts.append(rerun)
+        else:
+            ejected |= _failed(c, ready, _outcomes(s, acts), acts, red=c.base == s.main)
+            acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
+            chain = chain[:k]
+        break
+    if len(chain) < s.depth and not held:
         base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
@@ -452,10 +471,12 @@ def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
     return Rerun(c1.sha, keys)
 
 
-def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True) -> set[int]:
-    """What a failed lowest candidate calls for: the ring of the reds it shows, the ejection its own failures make (or, with
-    none, its infra errors that follow the tree; with ``tree`` False, every infra error of a check that keeps erring, which
-    ejects nobody), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
+def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True,
+            red: bool = True) -> set[int]:
+    """What a failed candidate calls for: the ring of the reds it shows (with ``red``: its base is `main`, which they say is
+    red; else none is rung or recorded), the ejection its own failures make (or, with none, its infra errors that follow the
+    tree; with ``tree`` False, every infra error of a check that keeps erring, which ejects nobody), if any, and its drop;
+    the PRs it ejects.  Only those suspect anyone."""
     v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
     own = tuple(f for f in v.failed if not _inherited(f))
     by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or (_tree(v) if tree else v.infra))]
@@ -475,13 +496,13 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
                                    "change (an undeclared read, a hang, an untraced program) is the change's to fix", _tree(v))
     suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
-    acts += _red(c1, outcomes)
+    acts += _red(c1, outcomes) if red else []
     if eject is not None:
         acts.append(eject)
     why = (f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1) if tree else
            f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody")
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL, suspects, c1.base,
-                                          tuple(f for f in v.failed if _inherited(f)))))
+                                          tuple(f for f in v.failed if _inherited(f)) if red else ())))
     return set() if eject is None else {eject.number}
 
 

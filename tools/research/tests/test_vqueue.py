@@ -111,12 +111,48 @@ def test_meets(files, inputs, want):
 
 # ---- 1. the chain --------------------------------------------------------------------------------------------------------------
 
-def test_the_chain_is_ordered_from_main_and_only_its_lowest_verdict_is_read():
+def test_the_chain_is_ordered_from_main_and_only_its_lowest_verdict_is_read_whole():
     ready = prs(1, 2, 3, 4)
     assert decide(snap(cand("c2", "c1", 3, state=PASS), cand("c1", MAIN, 1, 2), ready=ready)) == []
     assert decide(snap(cand("c2", "c1", 3, state=FAIL), cand("c1", MAIN, 1, 2), ready=ready)) == []
     assert decide(snap(cand("c2", "c1", 3), cand("c1", MAIN, 1, 2, state=PASS), ready=ready)) == [
         Advance("c1"), Drop("c1", "on main", Outcome((1, 2), heads(1, 2), PASS)), Build((4,), "c2", 1)]
+
+
+@pytest.mark.parametrize("lowest", [PENDING, PASS])
+def test_a_fail_above_the_lowest_candidate_is_decided_at_once_and_nothing_is_built_on_it(lowest):
+    """A candidate above the lowest whose check failed, still running or not, on tests its base passed, is decided as the
+    lowest's fail is: its lone suspect ejected, the candidates above it dropped as a base failure, and the next batch built
+    on the candidate below it (`main`, once the lowest passed), never on it.  While its base hasn't said, it waits, and
+    nothing is built above it."""
+    ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3), pr(4)]
+    t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/x.py")
+    s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False),
+             cand("c3", "c2", 3), ready=ready, depth=3)
+    passed = [Advance("c1"), Drop("c1", "on main", Outcome((1,), heads(1), PASS))] if lowest == PASS else []
+    assert decide(s) == [*passed, Eject(2, "h2", "step pytest failed, and its changed files meet their inputs, no other "
+                                                "member's", (t,)),
+                         Drop("c2", "failed: step pytest", Outcome((2,), heads(2), FAIL, (2,), "c1")),
+                         Drop("c3", "its base failed"), Build((3, 4), "c1", 3 if lowest == PASS else 2)]
+    unsaid = by_tests("step pytest", {"pkg::t"}, None, "pkg/x.py")
+    s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(unsaid,), ended=False),
+             ready=ready, depth=3)
+    assert decide(s) == passed
+
+
+def test_a_fail_above_the_lowest_candidate_bisects_its_suspects_reruns_a_lone_one_and_waits_on_what_is_inherited():
+    """Its suspects are bisected; a lone member whose failures meet none of its files is rerun afresh first; one its base
+    fails too waits for its check's end."""
+    ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3, None, "pkg/y.py"), pr(4)]
+    t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(t,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Drop("c2", "failed: step pytest", Outcome((2, 3), heads(2, 3), FAIL, (2, 3), "c1")),
+                         Build((2,), "c1", 2)]
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 4, state=FAIL, failed=(t,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Rerun("c2", (t.key,)), Build((2, 3), "c2", 1)]
+    red = by_tests("step pytest", {"pkg::t"}, {"pkg::t"}, "pkg/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(red,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Build((4,), "c2", 1)]
 
 
 def test_a_candidate_off_the_chain_is_dropped_with_every_candidate_above_it():
@@ -1153,7 +1189,7 @@ class World:
                 self.seen["a tree error retried"] += not s.tree_ejects and any(f.tree for f in c.verdict.infra) and not persists
                 assert (Retry(c.sha) in acts) == (not bisect and not aside) and (c.sha in decided) == (bisect or aside), where
                 assert (not aside or lone) and Advance(c.sha) not in acts, where
-                assert tree or not any(isinstance(a, Eject) for a in acts), where
+                assert tree or not any(isinstance(a, Eject) and a.number in c.members for a in acts), where
                 told = lone and any(o.state == INFRA and (c.members[0], c.heads[0]) in zip(o.members, o.heads) for o in s.history)
                 rung = any(isinstance(a, Ring) and a.sha == c.sha and a.pr is None for a in acts)
                 assert rung == (not tree and c.tries >= min(s.rings, 2) and not (aside and told)), where
