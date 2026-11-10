@@ -451,7 +451,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     x = a.x
     manifest = x.manifest or str(CHECKPOINTS)
     grain = Grain(*(int(g) for g in x.grain.split(","))) if x.grain else _GRAIN
-    registered, law = _registered(x.phi, x.default_seed), D.parse_law(x.law)
+    registered, law = _registered(x.phi, x.default_seed), D.parse_design(x.law)
     if isinstance(a, CommitOptions):
         served = WW.record_words(registered, a.served_dir, a.served_manifest) if a.served_dir else None
         registration, t, win = commit(registered, _key(a.key_file), x.checkpoint_dir, manifest, law=law, cap=x.cap,

@@ -35,7 +35,7 @@ from verity.ml.commitments.gates.sha512 import IV
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 
-LAW, CAP = D.parse_law("work:1"), 16
+LAW, CAP = D.parse_design("work:1"), 16
 EMBED = "model.embed_tokens.weight"
 
 
