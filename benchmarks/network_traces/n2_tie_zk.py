@@ -34,7 +34,7 @@ through `tie_service.Ties`, the verifier's tie source).
   its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the advice
   swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
   swapped advice's schedule, so it has no lanes to register (`EXPECT`).
-* **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate
+* **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
@@ -359,7 +359,7 @@ def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, 
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
-    """The one circuit: `IngressTie.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+    """The one circuit: `IngressTie.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own."""
     rows = [(r, M.V2, tie.bits(r), list(tie.layout[r])) for r in TS.ROWS]
     out.mkdir(parents=True, exist_ok=True)
@@ -369,7 +369,7 @@ def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(tie.proof_unit, "unit/ingress-tie-bucket", rows, [(M.V2, (0,))],
+        st = M.CS.UnitStager(tie.proof_block, "unit/ingress-tie-bucket", rows, [(M.V2, (0,))],
                              circuit=out / "circuit.txt", bind=bound)
         st.pin
     finally:
@@ -612,10 +612,10 @@ def prove(a) -> int:
     M.PF.executable = lambda: Path(a.lean)
     Z._record_lean_runs(M.PF)
     sg = stager(M, tie, out / "stager")
-    summary["stager"] = {"unit": tie.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "nbl": sg.nbl,
+    summary["stager"] = {"unit": tie.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "nbl": sg.nbl,
                          "pin": sg.st.pin, "circuit_sha512": sg.circuit_sha512,
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {tie.proof_unit.id}, {sg.lower_s} s, k_log {sg.k_log} + {sg.nbl}, {summary['stager']['ands']} ANDs, "
+    log(f"stager: {tie.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log} + {sg.nbl}, {summary['stager']['ands']} ANDs, "
         f"pin {sg.st.pin[:16]}")
     summary["staging"] = stage(M, sg, tie, rounds, out)
     log(f"staged: {summary['staging']}")

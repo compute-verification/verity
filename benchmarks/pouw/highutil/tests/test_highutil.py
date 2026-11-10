@@ -465,7 +465,7 @@ def test_each_block_is_issued_before_the_last_is_waited_for_and_seeds_open_two_b
 class _FirstBlockOnly(P.RefDriver):
     """A prover that runs every step on block 0's operands, never the registered block 1's."""
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return 0
 
 

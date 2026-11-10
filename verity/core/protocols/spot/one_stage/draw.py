@@ -66,7 +66,7 @@ def digits(s: str) -> bool:
     return s.isascii() and s.isdigit()
 
 
-def parse_law(text: str) -> dict[str, Any]:
+def parse_design(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
     expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
     A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
@@ -198,7 +198,7 @@ def _nat(x: Any) -> bool:
     return _int(x) and x >= 0
 
 
-def same_law(a: Any, b: Any) -> bool:
+def same_design(a: Any, b: Any) -> bool:
     """Two sampling design objects are the same canonical bytes (so `true` is not `1`, as the Lean verifier reads them)."""
     try:
         return canonical_json(a) == canonical_json(b)
@@ -306,7 +306,7 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
     n, units = draw["population"], draw["units"]
     if (why := tables_problem(law_of(draw), tables)) is not None:
         c.fail("tables", why)
-    if not same_law(law_of(draw), dict(law)):
+    if not same_design(law_of(draw), dict(law)):
         c.fail("law", {"drawn": law_of(draw), "verifier": dict(law)})
     if n != registration["population"]:
         c.fail("population", {"drawn": n, "registered": registration["population"]})
@@ -355,6 +355,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_law", "parse_rate",
-           "proved", "rate_count", "same_law", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
+__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_design", "parse_rate",
+           "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
            "work_table"]

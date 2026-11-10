@@ -1656,7 +1656,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, DR.parse_design(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")

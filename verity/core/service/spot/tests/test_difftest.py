@@ -3170,7 +3170,7 @@ DRAW_INPUTS = st.one_of(
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
 DRAW = D.Port(PIECES, "draw", draw, DRAW_INPUTS, package=PACKAGE)
 RAN_OUT = D.Port(PIECES, "ran_out", ran_out, DRAW_INPUTS, package=PACKAGE)
-#: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
+#: Law texts `draw.parse_design` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",

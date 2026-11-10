@@ -269,7 +269,7 @@ class All:
 @dataclass(frozen=True)
 class Law:
     """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
-    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
+    one in one-stage's syntax (`draw.parse_design`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
     draws `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
     proof blocks each registration brings, so every proof block is sampled with probability at least NUM/DEN however large the prover
     makes N; a fixed `subset:K` draws each with K/N."""
@@ -279,7 +279,7 @@ class Law:
     def __post_init__(self) -> None:
         if D.parse_rate(self.text) is None:
             try:
-                D.parse_law(self.text)
+                D.parse_design(self.text)
             except ValueError:
                 raise ValueError("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), subset:K, stratified:K, "
                                  f"work:K or bernoulli:NUM/DEN, not {self.text!r}") from None
@@ -342,7 +342,7 @@ def _replay_law(text: Any) -> bool:
     if D.parse_rate(text) is not None:
         return True
     try:
-        return D.parse_law(text)["law"] == "subset"
+        return D.parse_design(text)["law"] == "subset"
     except (ValueError, TypeError):
         return False
 
@@ -731,7 +731,7 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
     rate = D.parse_rate(text)
     if rate is None:
-        return D.parse_law(text)
+        return D.parse_design(text)
     k = D.rate_count(*rate, n)
     if not 1 <= k <= n:
         raise _refuse("rate", {"law": text, "population": n, "k": k})

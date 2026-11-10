@@ -1433,7 +1433,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         roots.append(r)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
     k = sum(m["n"] for m in members) if k is None else k
-    law = M.D.parse_law(f"stratified:{k}")
+    law = M.D.parse_design(f"stratified:{k}")
     win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}

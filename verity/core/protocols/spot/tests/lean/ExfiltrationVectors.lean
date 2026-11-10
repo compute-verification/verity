@@ -32,7 +32,7 @@ theorem audit_exfiltration_numerator {C : Circuit} {n : ℕ} (P : Partition C n)
     {session : Finset (Fin n) → Reg → Game Bool} {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
     {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
-    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : Partition.AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ)
     (K : Finset (Fin n) → Finset (Fin C.N)) (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D)
     (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u) {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H)

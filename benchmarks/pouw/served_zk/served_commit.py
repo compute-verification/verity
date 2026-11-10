@@ -985,7 +985,7 @@ class Challenger:
         """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
         Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = D.parse_law(st.spec.selection.text)
+        law = D.parse_design(st.spec.selection.text)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         codes = self._of_record(name, self.record.registration,

@@ -43,14 +43,14 @@ inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeho
 [fleet.world-h200]
 location = "h200-hgx"
 count = { value = 4.687e7, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (1.58312e16 x 3.1536e7 x 0.4)", status = "derived" }
-eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
+eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
 location = "gb200-nvl72"
 count = { value = 2.061e6, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (3.6e17 x 3.1536e7 x 0.4)", status = "derived" }
-eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
+eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 

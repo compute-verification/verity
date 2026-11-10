@@ -18,7 +18,7 @@ commitments are the registered ones:
 * `trial_rows_leZC`: the trial's rows mass at a registered read is at most `t'(1 + k)/2^256`, under A2 for the rows
   finder (`RowsCRZC`), since the trial's opening and the registrant's then collide (`ValueBindingZ.collide_spec`);
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
-* `analysisZCRows`, `zk_rowsLinkSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
+* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
   `δ_rows` at most `δ_link`'s closed form;
 * `zk_flock_drawnC_rows`: `Audit.extraction_audit_drawn` at it.
 -/
@@ -382,12 +382,12 @@ noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
 /-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose binding error carries the rows: at a prover whose
 link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `δ_link + δ_rows` with
 each at most `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`rowsBoundZC`). -/
-theorem zk_rowsLinkSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
+theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
     {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZCRows (L := L) A Hs P planZ tab vb isRead wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).BindSound
       (rowsBoundZC A Hs P planZ tab vb isRead wo k Rw M ρ t') := by
   intro R τ tgt
   unfold rowsBoundZC
@@ -501,6 +501,6 @@ theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown
   extraction_audit_drawn (analysisZCRows A Hs P planZ tab vb isRead wo
       (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
     (zc_knowledgeSound_rows A Hs P planZ tab vb isRead wo _ _ hlow hown hj)
-    (zk_rowsLinkSoundC A Hs P planZ tab vb isRead wo hlow hown hRw hM hρ hr hj ht) σ
+    (zk_rowsBindSoundC A Hs P planZ tab vb isRead wo hlow hown hRw hM hρ hr hj ht) σ
 
 end FlockSoundness.Discharge.ZkLink

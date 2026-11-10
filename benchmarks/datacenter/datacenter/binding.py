@@ -97,7 +97,7 @@ class Placed:
         return all(all(a < b for a, b in zip(t, t[1:])) for t in self.ticks.values())
 
     def block(self, device: str | None) -> str | None:
-        b = self.datacenter.block_of(device) if device is not None else None
+        b = self.datacenter.zone_of(device) if device is not None else None
         return b.name if b else None
 
     def source(self, k: int) -> str | None:
@@ -309,7 +309,7 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
         if k in named:
             device[k] = named[k]
         elif L.binding(program, k) != L.REGISTRATION:
-            inside = [device[r] for r in sorted(readers.get(k, ())) if dc.block_of(device[r]) is not None]
+            inside = [device[r] for r in sorted(readers.get(k, ())) if dc.zone_of(device[r]) is not None]
             device[k] = inside[0] if inside else default
     p = Placed(program, dc, device, {}, {}, deliver, tuple(stores), registration)
     read: dict[int, list[Value]] = {}
@@ -379,7 +379,7 @@ def crosses(p: Placed, v: Value, dst: str) -> bool:
     """Whether value `v`, read at device `dst`, comes from another block: never for a registered value with a copy in
     every block that reads it."""
     src = p.home(v)
-    return src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst)
+    return src is not None and p.datacenter.zone_of(src) is not p.datacenter.zone_of(dst)
 
 
 def crossings(p: Placed) -> list[Crossing]:

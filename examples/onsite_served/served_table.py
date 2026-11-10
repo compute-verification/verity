@@ -39,7 +39,7 @@ from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.pous import wipe_parties as WP
 from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage.draw import parse_law
+from verity.core.protocols.spot.one_stage.draw import parse_design
 from verity.core.wire import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,7 +65,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
     try:
-        parse_law(law)
+        parse_design(law)
     except ValueError as e:
         raise Refused("law", str(e)) from None
 

@@ -46,9 +46,9 @@ SparseMlaBlockV2 = flat("SparseMlaBlock", 2, ["DR", "DV", "NVIS", "FIRST", "BN",
 
 def _head(B, S, q_nope, q_rope, kv):
     """`SparseMlaHead_v1`'s body on bits over `SparseMlaBlock_v2`, epilogue `INV`."""
-    def block_of(nvis, first):
+    def tile_of(nvis, first):
         return bind(SparseMlaBlockV2, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
-    return M.head(bit_steps(B), S, block_of, S.INV, q_nope, q_rope, kv)
+    return M.head(bit_steps(B), S, tile_of, S.INV, q_nope, q_rope, kv)
 
 
 SparseMlaHeadV2 = flat("SparseMlaHead", 2, ["T", "DR", "DV", "BN", "DOT", "INV", "SCALE"], lambda S: M._head_type(S, BF16), _head,

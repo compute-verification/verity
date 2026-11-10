@@ -60,7 +60,7 @@ theorem receiptSeed_vec : (receiptSeed vSalt 46 vRootA vRootB).take 8 = [67, 165
 
 theorem seed_vec : (seed vSalt 46 vRootA vRootB).take 8 = [153, 133, 229, 243, 77, 209, 250, 249] := by decide +kernel
 
-theorem noiseBlock_vec : (noiseBlock (callSeed vSalt 40 vRootA vRootB) 24).take 8 = [230, 11, 151, 120, 76, 147, 166, 149] := by decide +kernel
+theorem noiseChunk_vec : (noiseChunk (callSeed vSalt 40 vRootA vRootB) 24).take 8 = [230, 11, 151, 120, 76, 147, 166, 149] := by decide +kernel
 
 theorem unitBlocks_vec : unitBlocks 8 64 4 8 1 2 = (4, 24) := by decide +kernel
 

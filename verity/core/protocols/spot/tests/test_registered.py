@@ -704,7 +704,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     rec, _ = _record(prog, reg)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
+    args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
     ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
@@ -734,7 +734,7 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": reg.root.hex()}
 
     def decide(verdicts):
-        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, verdicts,
+        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]

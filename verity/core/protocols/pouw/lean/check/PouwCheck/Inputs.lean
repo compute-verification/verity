@@ -207,7 +207,7 @@ refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its
 
 deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
 
-/-- `parse_law`'s spelling. -/
+/-- `parse_design`'s spelling. -/
 def lawName : Flock.Draw.Law → String
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"

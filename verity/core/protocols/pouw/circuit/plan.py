@@ -13,7 +13,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the sampling design's budget over the strata it samples.
 * `WorkLaw` is the verifier's work sampling design with its floors (`Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
-  verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the sampling design `verify` derives from it. K is
+  verifier's floor. `work_table` is the verifier's `--work-table` and `design_object` the sampling design `verify` derives from it. K is
   a **execution phase's** budget: a call samples its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
   floor ⌈K_y·n_c/N⌉ of the execution phase's N, K_y = K (`window_laws`).
 
@@ -360,7 +360,7 @@ def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int
     return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
 
 
-def law_object(lay: Layout, law: WorkLaw) -> dict:
+def design_object(lay: Layout, law: WorkLaw) -> dict:
     """The sampling design `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call
     (`Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkLaw.budget`)."""
@@ -396,6 +396,6 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
 
 
 __all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
-           "draw", "law_object",
+           "draw", "design_object",
            "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_laws",
            "work_table"]

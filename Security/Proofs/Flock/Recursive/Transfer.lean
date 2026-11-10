@@ -255,7 +255,7 @@ theorem zk_linkSoundCandC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisCandZC (L := L) A Hs P planZ tab vb Sk wv (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (fun R τ => linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ +
         candTermZC A Hs P planZ tab vb Sk wv R τ k Rw ρ) := by
   intro R τ tgt

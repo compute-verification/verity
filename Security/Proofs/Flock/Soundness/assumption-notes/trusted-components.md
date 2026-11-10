@@ -36,7 +36,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   `guarantees` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
   - `guarantees`: each guarantee's signature as Lean prints it, with its named assumptions.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
-    `FlockSoundness` and `FlockLevel3`), and which guarantees read them. Some are in proof files (`LinkSound.lean`,
+    `FlockSoundness` and `FlockLevel3`), and which guarantees read them. Some are in proof files (`BindSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
   - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     A rewritten record is shown when it lands on `main`; nobody signs off and nothing
