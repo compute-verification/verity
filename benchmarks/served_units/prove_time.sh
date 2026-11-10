@@ -115,7 +115,7 @@ gpu_sample() {
   done > $1/smi.tsv
 }
 # session UNIT N: stage.py's statement's sessions (session_at)
-session() { local nm=$(name "$1" $2); session_at $nm $FW/data/$nm-$KEY; }
+session() { local nm=$(name "$1" $2); local d=$FW/data/$nm-$KEY; session_at $nm $d; }
 # session_at NAME DIR: a verifier process and WARM + RUNS prover sessions against DIR's statement, into $O/$DEV/NAME
 session_at() {
   local nm=$1 d=$2 G= GS=; local o=$O/$DEV/$nm
