@@ -10,7 +10,8 @@ three runs predate the one format the command reads (`benchmarks/one_stage/serve
 `steady/RUN/rate/rate.json` holds each of their proof server reports as that script's rows, a staged type and prover
 count a row with the fields the command reads: a statement's mean GPU-seconds as its reciprocal `statements_per_s` on
 one GPU, a report that was stopped or timed out as a void row whose prover exited nonzero, and one with a session not
-accepted as a void row with a refused session. `refusals/rate/rate.json` is made up: one row that is a steady-state
+accepted as a void row with a refused session. `server-reports/RUN/` holds the runs' reports themselves, as the store does,
+for the reader of runs from before `rate.json`. `refusals/rate/rate.json` is made up: one row that is a steady-state
 measurement and one of each way a row isn't. The figures pinned below hold this code's arithmetic to a computation done
 independently of it on the same records; they publish no measurement, and what the command says of a workload is what
 it prints from the store's records of record."""
@@ -864,7 +865,8 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     assert {x["target"]: x["why"] for x in doc["refused"]} == {
         "r20261109-000000-0003": "not in the store or on its remote", "r20261109-000000-0002": "kept no run files",
         "r20261109-000000-0001": "holds no proof server rate (`out/rate/rate.json`, which "
-                                 "`benchmarks/one_stage/server_rate.py` writes)",
+                                 "`benchmarks/one_stage/server_rate.py` writes) and no proof server report "
+                                 "(`*/server-k*/server.json` with its `types.json`)",
         newest: "superseded by r20261109-000000-0001"}
     assert doc["inputs"][2]["targets"] == [older, oldest]
     # without the newest run each type takes the fullest statement the others measured: the six light types' full
@@ -977,6 +979,33 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
         notlist: "its `rate.json` isn't a list of rows",
         alone: f"superseded by {notlist}", stands: f"superseded by {notlist}"}
     assert doc["inputs"][2]["targets"] == [] and {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
+
+
+def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_path):
+    """The three runs as they are in the store, their proof server reports (`server-reports/RUN/`) and no `rate.json`: read from
+    the reports, they give the table their `rate.json` rows give, each `server-kK` report's types at K provers. The rows
+    name the report they come from."""
+
+    s = Store(tmp_path)
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s.record(s.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s.record(census_art(s), R.CENSUS)
+    for run in RUNS:
+        files = tmp_path / "report-files" / run
+        shutil.copytree(FIXTURES / "server-reports" / run, files / "out")
+        s.ran(run, files, rc=0 if run == RUNS[-1] else 1)
+        s.record(run, R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert doc["refused"] == [] and doc["inputs"][2]["what"] == "8 staged types measured at steady state at 1 prover"
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-9)
+    steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
+    assert {r["record"] for r in steady_rows} == {RUNS[-1]} and {r["provers"] for r in steady_rows} == {1}
+    assert sum("out/light-va2/server-k1" in r["note"] for r in steady_rows) == 6
+
+    two = R.build("flock", "glm53", provers=2, store=s.fresh("second"), root=REPO)
+    at_two = [r for r in two["rows"] if r["source"] == P.STEADY]
+    assert len(at_two) == 6 and {(r["record"], r["provers"]) for r in at_two} == {(RUNS[0], 2)}
+    assert all("out/light/server-k2" in r["note"] for r in at_two)
 
 
 # ---- the command ---------------------------------------------------------------------------------------------------------------

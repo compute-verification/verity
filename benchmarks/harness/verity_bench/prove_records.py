@@ -10,15 +10,15 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
-| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`) |
+| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
-says which and how to label it. A steady-state run or art that is superseded, a run that holds no `RATES` and an art
-that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
+says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
+report and an art that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
 failed or was skipped). A row is a steady-state
 measurement when every session it ran was accepted and none refused, it isn't void, every process exited 0 and its
-statement cache's hit rate was flat (`row_why`); one that isn't, or that lacks a field, is named with its reason on its
+statement cache's hit rate was flat (`row_why`, and `report_why` for a report); one that isn't, or that lacks a field, is named with its reason on its
 block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only. A row
 whose staged Definition is no block type of the census under its cut is on no row and in no figure: it is listed
 under "Unread", with its own figure where it is a steady-state measurement.
@@ -49,6 +49,9 @@ PLAN_FILE = "mix.json"
 RATES = "out/rate/rate.json"
 #: the same rows in an art that holds them itself: its one run's, as completed or corrected after the run
 ART_RATES = "rate.json"
+#: a proof server's report in the files of a run from before `RATES`, the staged types it proved beside it, and its K
+#: (`server-kK`) the provers it ran; read only where a run holds no `RATES`
+REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: what a row holds for the command to read it, by the script's names (`stage.word`, the census type it was staged for,
 #: names its block type, and `stage.definition`, the form staged, where it has no `stage.word`; `void`,
 #: the reasons a row has no rate, is there only when it has none, and `verify_s` only where the verifier was timed)
@@ -226,7 +229,8 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None) -> P.St
 
 
 def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
-    """Every row of a run's `RATES` that names a staged Definition, and why the rest (or the run) can't be read."""
+    """Every row of a run's `RATES` that names a staged Definition, or, in a run that holds none, every staged type of
+    its proof server reports; and why the rest (or the run) can't be read."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
@@ -235,9 +239,43 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
     files = out.get("run_files") or out.get("run_record")
     if not files:
         return [], ["kept no run files"]
-    if not store.listing(files, [RATES]):
-        return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes)"]
-    return _rows(json.loads((Path(store.fetch(files, paths=[RATES])) / RATES).read_text()), run)
+    if store.listing(files, [RATES]):
+        return _rows(json.loads((Path(store.fetch(files, paths=[RATES])) / RATES).read_text()), run)
+    held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
+    paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
+    if not paths:
+        return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes) and no "
+                    f"proof server report (`{REPORTS}` with its `{TYPES}`)"]
+    tree = Path(store.fetch(files, paths=[*paths, *(p.rsplit("/", 1)[0] + "/" + TYPES for p in paths)]))
+    found = []
+    for path in paths:
+        where = path.rsplit("/", 1)[0]
+        report, types = json.loads((tree / path).read_text()), json.loads((tree / where / TYPES).read_text())
+        why, provers = report_why(report), int(where.rsplit("/server-k", 1)[1])
+        for name, staged in report["types"].items():
+            gpu, verify = ((report.get(k) or {}).get(name) for k in ("gpu_s_by_type", "verify_s"))
+            found.append(P.Steady(
+                name, types[name]["definition"], staged["k_log"], staged["c"], staged["full"], run, where,
+                gpu and gpu["mean"], verify and verify["mean"],
+                why or (None if gpu else "no statement of it finished in the steady span"), provers=provers))
+    return found, []
+
+
+def report_why(report: Mapping[str, Any]) -> str | None:
+    """Why a proof server's report (`REPORTS`, from runs before `RATES`) isn't a steady-state measurement, or None when
+    it is one."""
+
+    if (report.get("host_limit") or {}).get("stopped_at_s"):
+        return "stopped at the host's memory limit"
+    if report.get("timed_out"):
+        return "timed out"
+    if any(report.get("rc") or [1]):
+        return f"its provers exited {report.get('rc')}"
+    if report.get("accepted") is not True:
+        return "not every session was accepted"
+    if report.get("flat") is not True:
+        return "its statement cache's hit rate wasn't flat"
+    return None
 
 
 def _rows(doc: Any, run: str, art: str | None = None) -> tuple[list[P.Steady], list[str]]:
@@ -511,7 +549,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     if doc["unread"]:
         lines += ["", "Unread (steady-state rows of record whose staged Definition is no block type of this census under "
                   "its cut; they are in no figure above):", ""]
-        lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else f', run ' + x['run']}: `{x['type']}` at "
+        lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "
                   + (f"not a steady-state measurement: {x['why']}" if x["seconds"] is None else
                      f"measured at steady state, {_n(1e3 * x['seconds'])} ms per block") for x in doc["unread"]]

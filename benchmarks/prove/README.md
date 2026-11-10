@@ -71,12 +71,12 @@ research data label OLD superseded_by NEW --by LANE                       retire
 
 An input that isn't labelled or is superseded is refused, by name and with the label that would fix it; so is a slot
 two unsuperseded targets claim, and a sampling plan and a census that don't cover each other. A steady-state run or
-art that is superseded, a run that holds no `out/rate/rate.json` and an art that names no run are left out and listed
-under "Refused".
+art that is superseded, a run that holds neither `out/rate/rate.json` nor a proof server report and an art that names
+no run are left out and listed under "Refused".
 
 ## A steady-state row
 
-A steady-state run's one format is `out/rate/rate.json` as `benchmarks/one_stage/server_rate.py` writes it: a list of
+A steady-state run's format is `out/rate/rate.json` as `benchmarks/one_stage/server_rate.py` writes it: a list of
 rows, one a staged type and prover count. The command reads, by the script's names:
 
 | Field | What it is |
@@ -101,6 +101,11 @@ with the run in its meta's `runs`. Labelled, the art gives those rows in place o
 that run's, each type's row names the art as its record and the run that measured it, and the run's files aren't
 read. Such an art holds one run's rows: one that names several runs is listed under "Refused". An art that holds no
 `rate.json` stands for the runs it names, each read from its own files.
+
+A run from before `server_rate.py` holds no `rate.json`, only its proof server reports: each `*/server-kK/server.json`
+with the `types.json` beside it. Such a run is read from those, each staged type of a report as its row at K provers,
+a steady-state measurement when the report wasn't stopped or timed out, every prover exited 0, every session was
+accepted and its cache was flat. A run that holds `rate.json` is read from it alone.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
 serving MFU (`benchmarks/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).

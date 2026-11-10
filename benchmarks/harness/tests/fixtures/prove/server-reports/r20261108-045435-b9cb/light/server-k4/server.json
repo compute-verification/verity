@@ -1,0 +1,110 @@
+{
+ "types": {
+  "dsa-logits-v3": {
+   "c": 1024,
+   "full": 4096,
+   "k_log": 23
+  },
+  "fr-w13": {
+   "c": 256,
+   "full": 1024,
+   "k_log": 25
+  },
+  "fr-w2": {
+   "c": 256,
+   "full": 1024,
+   "k_log": 25
+  },
+  "residual-add": {
+   "c": 128,
+   "full": 512,
+   "k_log": 26
+  },
+  "sm-fp8-k2048": {
+   "c": 1024,
+   "full": 4096,
+   "k_log": 23
+  },
+  "sm-fp8-k6144": {
+   "c": 512,
+   "full": 2048,
+   "k_log": 24
+  }
+ },
+ "gpu_s_by_type": {
+  "fr-w2": {
+   "n": 61,
+   "mean": 0.7427,
+   "max": 1.2805
+  },
+  "fr-w13": {
+   "n": 63,
+   "mean": 0.7311,
+   "max": 1.3758
+  },
+  "sm-fp8-k2048": {
+   "n": 32,
+   "mean": 0.6799,
+   "max": 3.9658
+  },
+  "residual-add": {
+   "n": 27,
+   "mean": 0.8518,
+   "max": 0.9205
+  },
+  "dsa-logits-v3": {
+   "n": 69,
+   "mean": 0.4314,
+   "max": 0.6053
+  },
+  "sm-fp8-k6144": {
+   "n": 33,
+   "mean": 0.4839,
+   "max": 0.6705
+  }
+ },
+ "verify_s": {
+  "dsa-logits-v3": {
+   "n": 82,
+   "mean": 1.2189,
+   "max": 1.552
+  },
+  "fr-w13": {
+   "n": 121,
+   "mean": 2.3608,
+   "max": 2.6497
+  },
+  "fr-w2": {
+   "n": 121,
+   "mean": 2.3656,
+   "max": 2.5993
+  },
+  "residual-add": {
+   "n": 56,
+   "mean": 3.245,
+   "max": 3.6442
+  },
+  "sm-fp8-k2048": {
+   "n": 66,
+   "mean": 1.0823,
+   "max": 1.323
+  },
+  "sm-fp8-k6144": {
+   "n": 40,
+   "mean": 1.5125,
+   "max": 1.7551
+  }
+ },
+ "timed_out": false,
+ "rc": [
+  0,
+  0,
+  0,
+  0
+ ],
+ "accepted": false,
+ "flat": true,
+ "host_limit": {
+  "stopped_at_s": null
+ }
+}
