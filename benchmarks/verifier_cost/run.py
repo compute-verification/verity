@@ -3,7 +3,7 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      inference block per Call), checked by `nci-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
       gates, by `nci-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
@@ -89,7 +89,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
+    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)

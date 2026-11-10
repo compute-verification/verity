@@ -6,12 +6,12 @@ must be `nci-check --policy`'s.
       the inference-only check's own vectors: each `runs` entry of its lean-audit.json generated and its exe timed, the largest
       Program the difftests' references give a verdict on, and each liveness case's big instance (`n` past `WALK`)
   serve --out DIR --phases EXE --scratch DIR [--config NAME ...]
-      Serve_v1 (`run.serve`) at each config, word-level and on bits (`lift.on_bits`), θ its registered inputs, one IU
+      Serve_v1 (`run.serve`) at each config, word-level and on bits (`lift.on_bits`), θ its registered inputs, one inference block
       per Call (`run.instance`)
   glm --out DIR --phases EXE --scratch DIR --workload PATH [--word-only]
       GLM-5.3's rank 0 workload Program of the B1 Build (root: its inputs and one Call, the request) word-level as built,
       then on bits: `verity.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
-      (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one IU, the
+      (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one inference block, the
       request, at `inference_only_glm.GAMMA`, `inference_only_glm.ALPHA`
 
 DIR/CASE.jsonl has a row per check: the description's sizes, `nci-check --policy`'s seconds, peak RSS and verdict, and
@@ -72,7 +72,7 @@ def verdict_of(lines: list[str]):
 
 
 def small(v):
-    """A verdict without its IU list past 8 IUs."""
+    """A verdict without its inference block list past 8 inference blocks."""
     if isinstance(v, dict) and len(v.get("ius") or []) > 8:
         return v | {"ius": f"{len(v['ius'])} IUs", "ius_sha256": hashlib.sha256(json.dumps(v["ius"]).encode()).hexdigest()}
     return v
