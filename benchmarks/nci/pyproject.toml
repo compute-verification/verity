@@ -19,4 +19,14 @@ inputs = [
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "benchmarks/rho/rho/__init__.py",
   "benchmarks/rho/rho/theorem.py",
+  # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
+  # core's monitoring periods
+  "benchmarks/rho/rho/instances.py",
+  "benchmarks/rho/rho/params.py",
+  "benchmarks/rho/data",
+  "verity/__init__.py",
+  "verity/errors.py",
+  "verity/core/__init__.py",
+  "verity/core/protocols/__init__.py",
+  "verity/core/protocols/reporting.py",
 ]

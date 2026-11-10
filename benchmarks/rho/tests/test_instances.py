@@ -25,6 +25,28 @@ def test_legs_and_fanout_are_derived_from_the_matrices(m):
     assert m.fanout == instances.derived_fanout(m)
 
 
+@pytest.mark.parametrize("m", [m for m in shaped() if m.attention], ids=lambda m: m.name)
+def test_the_attention_matrices_are_the_ones_the_attention_table_implies(m):
+    assert tuple((x.d_in, x.d_out) for x in m.matrices["attention"]) == instances.attention_matrices(m)
+    assert {(x.copies, x.active) for x in m.matrices["attention"]} == {(m.layers, m.layers)}
+
+
+def test_models_are_every_model_of_the_registry():
+    models = instances.models()
+    assert sorted(models) == REG.names("model")
+    assert all(m == instances.model(REG, n) for n, m in models.items())
+    # only DeepSeek-V4-Pro's attention is of neither kind
+    assert [n for n, m in models.items() if not m.attention] == ["deepseek-v4-pro"]
+
+
+def test_the_widths_at_hand():
+    kimi, dense = instances.model(REG, "kimi-k2"), instances.model(REG, "dense-100b")
+    assert [instances.width(kimi, g) for g in ("dense", "experts", "shared", "router")] == [18432, 2048, 2048, 384]
+    # a GELU MLP has one matrix reading d_model, so its input's reach is its width
+    assert instances.width(dense, "dense") == instances.derived_fanout(dense) == 4 * 12288
+    assert instances.width(dense, "experts") == 0
+
+
 def test_the_per_layer_shape_at_hand():
     kimi = instances.model(REG, "kimi-k2")
     att = 7168 * 1536 + 1536 * 12288 + 7168 * 576 + 512 * 16384 + 8192 * 7168

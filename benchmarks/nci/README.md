@@ -174,9 +174,8 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
 
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
 updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
-circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's config and
-its report's pretraining
-schedule. The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
+circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's shape
+(`benchmarks/rho/data/models.toml`, read through `rho.instances`) and its report's pretraining schedule (`RECIPES`). The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
 shape with a fifth of its tokens at 32k; reported runs put at most about 5% of their tokens above their base context
