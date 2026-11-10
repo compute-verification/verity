@@ -8,11 +8,11 @@ import random
 
 import pytest
 
-import verity.ml.circuits.ops.prims  # noqa: F401  (the one-stage tests' primitives)
-import verity.ml.circuits.ops.scalar  # noqa: F401
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+import verity.circuits.ops.prims  # noqa: F401  (the one-stage tests' primitives)
+import verity.circuits.ops.scalar  # noqa: F401
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
 

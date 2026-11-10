@@ -96,7 +96,7 @@ EPS = 0.01
 LEAK_BITS = 2.0 ** 30
 #: the code-based commitment's rates ρ: a codeword is 1/ρ its row
 RATES = (1 / 2, 1 / 4)
-#: the pieces' ANDs (their circuit-check pins: `verity/ml/circuits/ops/*.circuit-check.json`)
+#: the pieces' ANDs (their circuit-check pins: `verity/circuits/ops/*.circuit-check.json`)
 F32_FMA, F32_MUL, F32_ADD, F32_MAX, EX2, RCP, F2BF16, F32_DIV, S8_CLAMP = 4498, 2406, 823, 283, 688, 197, 77, 2493, 71
 F32_RINT = 275
 

@@ -2,9 +2,9 @@
 
 A *twin* re-implements one registered composite (`verity/ml/definitions/registry/b1.py`) for speed — numpy over whole operands,
 or the C++ models of `cpp/` through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
+`verity.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
 declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
-are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
+are core `verity.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
 
     covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
     words = instance(spec, KERNEL)(*args, **spec.statics)
@@ -43,8 +43,8 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import self_check
-from verity.ml.circuits.defs import SpecializedDefinition, bind
+from verity.circuits.evaluation import self_check
+from verity.circuits.defs import SpecializedDefinition, bind
 from verity.ml.definitions.numerics.kernel_registry import Declined, covers, instance, register
 from verity.ml.definitions.registry import b1, prims as P
 from verity.ml.definitions.numerics import cuda_rmsnorm_rows as CNR, prims_twins
@@ -705,7 +705,7 @@ DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.
                "RMSNormFusedCuda_v2": b1.RMSNormFusedCuda, "Attention_v3": b1.AttentionV3}
 DEFINITIONS.update(CNR.TWIN_DEFINITIONS)
 # ---------------------------------------------------------------------------------------------------------
-# the twins as core `verity.ml.circuits.evaluation` kernels, checked against the reference by core `self_check`
+# the twins as core `verity.circuits.evaluation` kernels, checked against the reference by core `self_check`
 # ---------------------------------------------------------------------------------------------------------
 
 KERNEL = "twin"

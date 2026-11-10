@@ -164,8 +164,8 @@ def _program(path: Path, d: int) -> Path:
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
 
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.circuits.program import Program
 
     path.write_bytes(canonical_json(encode_program(Program(TM.rope_head(d).definition()))))
     return path

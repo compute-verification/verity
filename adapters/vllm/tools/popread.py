@@ -282,7 +282,7 @@ def _gate_chunk(a: int, b: int) -> tuple[bytes, bytes, bytes, bytes]:
     """Gates a..b-1 of the Call: per gate its declared width, flags (1: a constant, no parameters; 2: wiring; 4: reads outside
     the Call), and the in-Call operands it reads (CSR: end offsets, operands), as `CallGraph` enumerates them."""
     from array import array
-    from verity.ml.circuits.cut import WIDE_FAN_IN, wide_operands
+    from verity.circuits.cut import WIDE_FAN_IN, wide_operands
     c, call, n, wiring = _GATES
     lo = call.offset
     hi = lo + n
@@ -312,8 +312,8 @@ class LeanGraph:
         import multiprocessing
         from array import array
         from concurrent.futures import ProcessPoolExecutor
-        from verity.ml.circuits.cut import WIRING, QueryInapplicable, call_scope
-        from verity.ml.circuits.layout import resolve
+        from verity.circuits.cut import WIRING, QueryInapplicable, call_scope
+        from verity.circuits.layout import resolve
         c, call = call_scope(fn)
         lo, n = call.offset, fn.gates
         spans = [(a, min(a + CHUNK_GATES, n)) for a in range(0, n, CHUNK_GATES)]
@@ -378,7 +378,7 @@ class LeanGraph:
 
 def lean_units(fn: Any, memo: dict[str, int], jobs: int = 1) -> int:
     """`cut.evaluate_definition(fn, 16).units`, each body cut as a whole cut by core's `cut_word` on its `LeanGraph`."""
-    from verity.ml.circuits.cut import WIRING, cut_word, separable
+    from verity.circuits.cut import WIRING, cut_word, separable
     got = memo.get(fn.id)
     if got is not None:
         return got
@@ -402,7 +402,7 @@ BIG_GATES = 1_000_000
 
 def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
     import time
-    from verity.ml.circuits.cut import CallGraph, evaluate_definition, separable
+    from verity.circuits.cut import CallGraph, evaluate_definition, separable
     fn = _PENDING[i]
     t = time.monotonic()
     out = {"definition": fn.id, "gates": fn.gates, "units": lean_units(fn, {}, jobs), "seconds": round(time.monotonic() - t, 1)}
@@ -511,8 +511,8 @@ class Units:
 
 def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int, int], int]:
     """Q_word{X=16, W=32} v1's units per Call (root node index), and the population (`partition_object.Partition`'s)."""
-    from verity.ml.circuits import partition_object as PO
-    from verity.ml.circuits.cut import QueryInapplicable
+    from verity.circuits import partition_object as PO
+    from verity.circuits.cut import QueryInapplicable
     from verity.ml.definitions.boolean import load_program
     program, _digest = load_program(Path(path))
     calls = PO.calls(program)
@@ -584,7 +584,7 @@ class Egress:
 def descriptor_egress(desc: dict[str, Any], W: Walk, units: dict[int, int] | None) -> dict[str, Any]:
     """E per root Call: the declared output leaves (the root's `ret`) written by it or any Call downstream of it, one reverse
     sweep over the topologically ordered root body.  Components join Calls that read one another, so two share only inputs."""
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits.types import type_from_json
     root = W.defs[desc["root"]]
     nodes = root["body"]["nodes"]
     n = len(nodes)
@@ -768,8 +768,8 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
     (`eos_keyed`), and every row of an engine step holding one of them is in a batch whose shape that stop would change
     (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the workload serves
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
-    from verity.ml.circuits.codec import encode_program
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import encode_program
+    from verity.circuits.program import Program
     from verity.ml.definitions.call_scope import specialization
 
     P = build["program"]

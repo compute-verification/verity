@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import Program
+from verity.circuits import Program
 from verity.ml.definitions.registry import lifted as L
 from verity.ml.definitions.numerics import serve3_reference as ref
 from tests.program import test_lifted_moe as PMOE
@@ -34,7 +34,7 @@ def _run(sp, inputs):
 def _gate_for_gate(pl, tl, pu, tu):
     """The lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
     carries the unlifted word (an Active word is its payload; G1 keeps the weights unwidened)."""
-    from verity.ml.circuits.layout import resolve
+    from verity.circuits.layout import resolve
     last = pl.input_coll(len(pl.root.signature()[0]) - 1)
     eg = {resolve(pl.circuit.root_scope, r) for r in last.refs}
     assert len(eg) == 1 and pl.gates == pu.gates + 1, (pl.gates, pu.gates)
@@ -194,10 +194,10 @@ def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_w
 
 @pytest.mark.parametrize("norm", [False, True])
 def test_the_renormalising_router_keeps_a_bot_row_bot_and_an_active_row_bit_exact(norm):
-    from verity.ml.circuits import bind
+    from verity.circuits import bind
     from verity.ml.definitions.registry import moe
     from verity.ml.definitions.registry.prims import BF16
-    from verity.ml.circuits.types import Array
+    from verity.circuits.types import Array
     R = bind(moe.MoeRouterTopKNorm if norm else moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=2)
     T_L = Array(E, BF16)
     rng = np.random.default_rng(11)

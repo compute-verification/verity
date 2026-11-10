@@ -15,11 +15,11 @@ reads are decoded once.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.ml.definitions.registry import boolean_flashmla as BF
 from verity.ml.definitions.registry import flashmla_prefill as P
 from verity.ml.definitions.registry.boolean_dsa import flat

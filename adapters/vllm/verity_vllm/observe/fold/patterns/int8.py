@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, is_row_major

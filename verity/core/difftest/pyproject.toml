@@ -23,7 +23,7 @@ untraced = ["tests/test_example_port.py", "tests/test_protocol_port.py"]
 # (`Flock.Canon` and what it imports, and the package's configuration); the protocol-mode tests build the core protocol
 # interface's example (`core-protocol-example`), which reads the same files and the interface package. The annotation
 # port's test builds `annot-difftest`, which reads `Flock.Annot`, `Flock.AnnotExpand` and what they import
-# (`verity_difftest.annot.INPUTS`), and holds it to `verity.ml.circuits.query_ast`.
+# (`verity_difftest.annot.INPUTS`), and holds it to `verity.circuits.query_ast`.
 inputs = ["verity/core/protocols/interface", "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
           "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean",
@@ -31,4 +31,4 @@ inputs = ["verity/core/protocols/interface", "verity/core/service/flock/lakefile
           "verity/core/service/flock/Flock/Annot.lean", "verity/core/service/flock/Flock/AnnotExpand.lean",
           "verity/core/service/flock/Flock/Hash.lean", "verity/core/service/flock/Flock/Program.lean",
           "verity/core/service/flock/Flock/Sizes.lean", "verity/core/service/flock/Flock/Steps.lean",
-          "verity/__init__.py", "verity/ml/__init__.py", "verity/ml/circuits"]
+          "verity/__init__.py", "verity/ml/__init__.py", "verity/circuits"]

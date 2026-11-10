@@ -70,7 +70,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import partition_object as PO
+from verity.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -79,7 +79,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.windows.population import population_program, template_partition
 
 from . import wiring as WI

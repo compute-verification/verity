@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll
+from verity.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.value_types import shape_of, width_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.types import RecordType
+from verity.circuits.types import RecordType
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
 from verity_vllm.program.predict import aot as A

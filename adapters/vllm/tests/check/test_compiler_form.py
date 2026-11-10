@@ -9,7 +9,7 @@ from collections import Counter
 
 import pytest
 
-from verity.ml.circuits.codec import encode_program
+from verity.circuits.codec import encode_program
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_compare import compare_steps

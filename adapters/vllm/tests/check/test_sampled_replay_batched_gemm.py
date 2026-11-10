@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 
 from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity_vllm.program import compact as CP
 from verity.ml.definitions.numerics import batched_gemm_rows, rows
@@ -62,7 +62,7 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
     the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity.ml.circuits.defs import conformance_label
+    from verity.circuits.defs import conformance_label
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
     assert p is batched_gemm_rows.PROVENANCE

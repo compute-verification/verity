@@ -17,11 +17,11 @@ import itertools
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import lookup_primitive
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.reference import statics_of
-from verity.ml.circuits.ops.prims import F2fpBf16
+from verity.circuits.codec import lookup_primitive
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.reference import statics_of
+from verity.circuits.ops.prims import F2fpBf16
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity.ml.definitions.numerics import rows as RK
@@ -152,7 +152,7 @@ def test_align_blocks_are_the_kernel_s_in_every_atomic_order(E: int, P: int, BM:
 def test_align_bodies_are_cut_per_pair() -> None:
     """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
     pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
-    from verity.ml.circuits.cut import separable
+    from verity.circuits.cut import separable
     from verity.ml.definitions import word as W
     from verity.ml.definitions.cross_call import members_check
     for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):

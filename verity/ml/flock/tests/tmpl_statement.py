@@ -49,7 +49,7 @@ def sections(text: str) -> tuple[str, dict, list[tuple[str, str]]]:
 
 def template(out: Path) -> dict:
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity_flock import circuit as FC
     from verity_flock import tmpl as T
 

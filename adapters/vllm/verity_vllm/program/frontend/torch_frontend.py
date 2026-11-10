@@ -11,7 +11,7 @@ supply shapes only and whose real implementations refuse to run), compose them w
 (leaf custom ops, never `vmap`), and are exported with `torch.export`. The exported graph is then guarded —
 every node must be one of: a Verity op minted here, a static view (`slice`/`select`/`cat`/`stack`/`view`/
 `permute`/`unbind`/identity aliases → reference rearrangement, no gates) or `getitem` plumbing — and translated
-into `verity.ml.circuits` objects (`CompositeDefinition` bodies over `Builder.call/batch/scan`, `Program`). Everything
+into `verity.circuits` objects (`CompositeDefinition` bodies over `Builder.call/batch/scan`, `Program`). Everything
 else fails closed with a `FrontendError` code.
 
 Elaboration order: a `@function` is exported once per specialisation (static bindings). Children are elaborated
@@ -34,15 +34,15 @@ from typing import Any, Callable, Sequence
 import torch
 from torch.utils import _pytree as pytree
 
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition,
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition,
                     SpecializedDefinition, _static_key)
-from verity.ml.circuits.defs import bind as ir_bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.liveness import DeadGateReport
-from verity.ml.circuits.liveness import dead_gates as _dead_gates
-from verity.ml.circuits.types import Array, Tuple as TupleT, Type
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.liveness import DeadGateReport
+from verity.circuits.liveness import dead_gates as _dead_gates
+from verity.circuits.types import Array, Tuple as TupleT, Type
 from verity_vllm.program.frontend.correspond import compare_bodies
 from verity_vllm.program.frontend.errors import DeadGateWarning, FrontendError
 from verity_vllm.program.frontend.graph_translate import _guard, _Spec, _translate
@@ -144,7 +144,7 @@ def _fmt(v) -> str:
 
 
 def _ir_static(v, where: str):
-    """A static value as `verity.ml.circuits` accepts it: a finite binding record, never a closure. An `Ops` bundle is
+    """A static value as `verity.circuits` accepts it: a finite binding record, never a closure. An `Ops` bundle is
     the record of its role bindings (§8.3: the selected functions are part of the specialisation's identity)."""
     if isinstance(v, Ops):
         return {k: _ir_static(f, where) for k, f in sorted(v._roles.items())}
@@ -283,7 +283,7 @@ class Function(_Callable):
         sd, _, _ = self._resolve(param_types, statics)
         return sd
 
-    # -- verity.ml.circuits hooks ----------------------------------------------------------------------------
+    # -- verity.circuits hooks ----------------------------------------------------------------------------
     def _key(self, S) -> tuple:
         return tuple((k, _static_key(getattr(S, k))) for k in self.static)
 

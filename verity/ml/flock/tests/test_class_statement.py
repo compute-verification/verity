@@ -16,11 +16,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-pytest.importorskip("verity.ml.circuits.units")
+pytest.importorskip("verity.circuits.units")
 pytest.importorskip("verity.ml.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
@@ -93,7 +93,7 @@ def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_add
     import gc
     import weakref
 
-    from verity.ml.circuits import partition_object as PO
+    from verity.circuits import partition_object as PO
 
     monkeypatch.setattr(CS, "id", lambda o: 0, raising=False)
     gemm_fp = _gemm_fp()
@@ -118,7 +118,7 @@ def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(
     block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the IR evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.evaluation.reference import signature_of
 
     units, s, cl, act, uc, groups = _fp_class(dtype, 128)
     plain = CS.class_lowering(act, uc, "unit-class/plain", groups)
@@ -188,7 +188,7 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     from circuit_check import checks as CK
     from circuit_check import vectors as V
     from verity.ml.commitments.rowleaf import bit_row
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.evaluation.reference import signature_of
 
     units, _s, cl, act, uc, groups = _fp_class(dtype, 128)
     merged, joins, bits = CS.element_rows(act, uc, groups)
@@ -243,7 +243,7 @@ def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_templ
     in META ``program_digests``, by core's descriptor id with its Program's digest, so that a verifier given the program finds
     each unit an activation of the circuit's template (f05d's refusal named ``unit-class/…``). The name is a binding: the class
     digest is the one the class has naming itself, and only the circuit's pin moves."""
-    from verity.ml.circuits.codec import descriptor_id, program_digest
+    from verity.circuits.codec import descriptor_id, program_digest
 
     units, s, cl, act, uc, _groups = _fp_class("e4m3", 128)
     assert uc.computing == act.graph.n

@@ -9,17 +9,17 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.batch import type_shape
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.boolean import trace as TR
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_attention as BAt
 

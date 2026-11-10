@@ -117,7 +117,7 @@ def lowering(card: dict | None) -> str:
     """The s8 lowering credited_ands counts, on the card's own step (sm_120's when no card is given)."""
     sm90 = bool(card) and str(card.get("arch", "")).startswith("sm_90")
     return (f"GemmAccumulatorS8_v2{{K, **{'GEMM_SM90_S8' if sm90 else 'GEMM_SM120_S8'}}} "
-            "(verity.ml.circuits.ops.boolean.gemm)")
+            "(verity.circuits.ops.boolean.gemm)")
 
 
 def load_card(spec: str) -> dict:

@@ -11,7 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     compressed block table's row of blocks of 2), which reach their window, lanes, slot and length, and at small ones; the
     length also at the widest active top-k width, 8192.  The c128a row is not bound at 8192: its `Dsv4ShortContextTopK_v1{8192,
     128}` spells two 32-bit literals per lane, and each `Const32[...]_v1` a body reaches is a target of its own (16,328 here)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsv4_decode_metadata as X
 
     S = X.DSV4_DECODE_METADATA

@@ -192,11 +192,11 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
-    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert not forces_cold(["Security/Proofs/X.lean", "verity/circuits/README.md", "verity/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
 

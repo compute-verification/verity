@@ -10,8 +10,8 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     """`DsaWaksmanOrder_v1`'s settings are 21 one-bit words, which `boolean.bit_type` leaves one 21-bit element on bits, so
     `evaluate_words` refuses the word Definition's vectors: the word view compares `DsaWaksmanOrder_v2` with it bit by bit, and a
     Boolean version that flips one bit of every output word is caught."""
-    import verity.ml.circuits.evaluation.bits as EB
-    from verity.ml.circuits.defs import bind
+    import verity.circuits.evaluation.bits as EB
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsa_topk as BT
 
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)

@@ -240,7 +240,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the population programs `population_program` and `mixed_population_program` (`verity.ml.circuits.population`'s,
+  and the population programs `population_program` and `mixed_population_program` (`verity.circuits.population`'s,
   which an integration builds its window's program with).
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
@@ -274,7 +274,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`verity.ml.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
+  in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## The registration
@@ -287,7 +287,7 @@ population, the sampling design expanded over the verifier's program and query, 
 with its leaf count and domain, the leaf layer, the anchors, the window (its provenance, `served` or `stand-in`, and the
 stream and prover it is bound to) and `previous`, the digest of this prover's last record. A record that registers values
 is `verity/registration/v2`: the same keys and `registered` (below), so v1's bytes are unchanged. Its digest is
-`SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical JSON (RFC 8785, `verity.ml.circuits.codec.canonical_json`).
+`SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical JSON (RFC 8785, `verity.circuits.codec.canonical_json`).
 
 The verifier holds the record to its own copies with R1 to R7 (`check`):
 
@@ -351,7 +351,7 @@ named with each. A rule leaves this list in the change whose Lean states it.
 
 ### The partition
 
-Core's `verity/partition/v1` (`verity.ml.circuits.partition_object`, applied by `one_stage.partition`) is
+Core's `verity/partition/v1` (`verity.circuits.partition_object`, applied by `one_stage.partition`) is
 `{"format": "verity/partition/v1", "program": <SHA-512 of the program>, "query": {"name", "version", "params"}}`, with
 digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 
@@ -370,7 +370,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
 states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
 is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
-core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
+core's `verity/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
 `tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered

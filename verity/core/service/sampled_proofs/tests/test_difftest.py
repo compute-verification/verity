@@ -63,11 +63,11 @@ from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, h
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, input_id, is_input
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, RecordType, Tuple, Value
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program, input_id, is_input
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, RecordType, Tuple, Value
 
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
 

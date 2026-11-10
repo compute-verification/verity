@@ -56,7 +56,7 @@ from typing import Any, Callable, Iterator
 import verity_difftest as DT
 from verity_difftest import protocol as PR
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
-from verity.ml.circuits import codec, partition_object as PO
+from verity.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
@@ -119,15 +119,15 @@ def population_version(program) -> int:
 
 
 def decode(desc: dict):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     return codec.decode_program(desc, REGISTRY)
 
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
     """`decode`, each primitive the descriptor names that the current registry lacks standing in by the descriptor's own
     signature, never evaluated (the registration's checks and the draw read the program's shape only); and their ids."""
-    from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits.defs import REGISTRY, PrimitiveDefinition
+    from verity.circuits.types import type_from_json
 
     def opaque(*_: Any) -> int:
         raise RuntimeError("an opaque stand-in is never evaluated")
@@ -1453,10 +1453,10 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     the roots the Lean verdict opened registered reads against; `audit_negatives` re-decided it with the record's roots as
     the sessions'."""
     from verity_numerical.bench.input_sets import InputSet
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import coll_concat
-    from verity.ml.circuits.types import Array
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import coll_concat
+    from verity.circuits.types import Array
     base = "run"
     summary = run.json(f"{base}/summary.json")
     n, cols = summary["n"], summary["cols"]
@@ -1987,8 +1987,8 @@ def a6(run: Run) -> Iterator[Case]:
     Definition, else the templates the run's `program.json` defines), the law `stratified:k`, each member port's set-bound
     domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
     map from member to its public file's SHA-512."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as OG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as OG
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     base = "out/a6"
     a = run.json(f"{base}/audit.json")
@@ -2117,8 +2117,8 @@ def a7(run: Run) -> Iterator[Case]:
     (`check3/`) is outside (`A7_CHECK3`)."""
     from types import SimpleNamespace
 
-    from verity.ml.circuits import requirement_units as RU
-    from verity.ml.circuits.defs import bind
+    from verity.circuits import requirement_units as RU
+    from verity.circuits.defs import bind
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"
     a = run.json(f"{base}/audit.json")

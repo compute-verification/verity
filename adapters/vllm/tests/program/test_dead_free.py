@@ -9,10 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.program import Program
 from verity.ml.windows import interface as IF
 from verity_flock import circuit as FC, class_statement as CS, ir_lower as IL
 from verity_flock.gf2 import Circuit

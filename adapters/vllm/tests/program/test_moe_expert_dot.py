@@ -9,11 +9,11 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity.ml.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
-from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import moe as M
@@ -126,12 +126,12 @@ def test_gp01_reads_an_sm120_component_as_the_declared_indexed_construction(tmp_
 
 
 def test_the_static_pair_forms_are_the_dot_forms():
-    """`verity.ml.circuits.ops.moe`'s `MoePairGemm(W)_v1` (the word view of the padded static MoE form's Boolean pair units,
+    """`verity.circuits.ops.moe`'s `MoePairGemm(W)_v1` (the word view of the padded static MoE form's Boolean pair units,
     `ops.boolean.moe`) is `MoeExpertGemm(W)_v2` at the same statics, on every expert id and on ids outside [0, E), through the
     pair forms' kernels and the registry's reference."""
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.ops import moe as SM
-    from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.ops import moe as SM
+    from verity.circuits.ops.prims import AmpereBF16TcDot16
 
     rng = np.random.default_rng(9)
     ids = np.asarray([*range(E), E, 1 << 31, (1 << 32) - 1], np.uint32)

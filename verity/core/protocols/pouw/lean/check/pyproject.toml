@@ -54,7 +54,7 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/service/sampled_proofs/lake-manifest.json",
           "verity/core/service/sampled_proofs/lean-toolchain", "verity/core/service/sampled_proofs/SampledProofs.lean",
           "verity/core/service/sampled_proofs/SampledProofs",
-          "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/core/protocols/interface", "verity/core/protocols/pouw/lean/window",
           "verity/core/protocols/pouw/lean/commit", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/primitives/lms/lean/lakefile.toml", "verity/core/primitives/lms/lean/lake-manifest.json",

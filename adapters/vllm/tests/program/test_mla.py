@@ -12,13 +12,13 @@ import itertools
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import bind
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops.boolean import gemm as BG
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.registry import mla as M
 from verity_vllm.program import mla_capture as MC

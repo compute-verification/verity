@@ -36,7 +36,7 @@ registered block, and the writer records one at its values' last structural read
 credited past it: weights only the first steps read are freed after the last of them, and a gathered table (an
 embedding, the experts a router indexes) stays until the last step whose gather may select any of its rows, whichever
 rows the run selected.  That every free but a re-key's (below), of a registered block or a written one, is at its
-values' last structural reader is the memory-map unit's to prove (`verity.ml.circuits.requirement_units`,
+values' last structural reader is the memory-map unit's to prove (`verity.circuits.requirement_units`,
 `PROTOCOL.md` §8 "The requirement's link").  A
 step's frees apply before its writes; a step frees a slot at most once, only a live one, and writes a slot at most
 once.  A block is written once, complete and encoded (deferred residency):

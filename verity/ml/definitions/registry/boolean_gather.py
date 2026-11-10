@@ -1,5 +1,5 @@
 """The vocabulary gather and the embedding as Boolean Definitions: the next version of each word Definition, the same function on
-bits (`verity.ml.circuits.boolean.trace`).
+bits (`verity.circuits.boolean.trace`).
 
     GatherBf16x{V}_v2       (token: Array<32, Value<1>>, column: Array<V, Array<16, Value<1>>>) -> Array<16, Value<1>>
                             word view: GatherBf16x{V}_v1, column[token] for 0 <= token < V (signed), else 0x7FFF
@@ -20,7 +20,7 @@ bits (`verity.ml.circuits.boolean.trace`).
     GatherChunkXor_v1{C}    (words: Array<C, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             the C words' XOR, and 0x7FC00000's once more for an even C: no word Definition
 
-A gather of at most `CHUNK` (1024) words is traced from `verity.ml.circuits.boolean.gather.gather`: the multiplexer tree over the
+A gather of at most `CHUNK` (1024) words is traced from `verity.circuits.boolean.gather.gather`: the multiplexer tree over the
 token's 32 bits, a word past the end standing for the constant 0x7FFF, so a token outside [0, V) (a negative one is at least
 2^31 unsigned) selects 0x7FFF with no separate range check. A larger one is a tree of Calls, each Definition in it about 50k
 gates at most: the column's whole chunks of 1024 words by the token's low 10 bits (`GatherBf16x1024u10_v1`, one batch node),
@@ -30,7 +30,7 @@ lo >= r, and each case selects 0x7FFF. `GatherBf16x{N}u{k}_v1` over more than 10
 
 No gate of a gather reads the token alone (`gather`), so `Embedding_v2`'s H gathers, one per column of the table by one
 token, share no gate, and since its body reads only its parameters and returns every gather's word, it is cut gather by gather
-(`verity.ml.circuits.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
+(`verity.circuits.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
 
 The i32 and f32 gathers are the same tree over 32-bit words with -1 (0xFFFFFFFF) and the quiet NaN 0x7FC00000 for the word past
 the end, each made on demand as its word primitive is (`verity.ml.definitions.boolean._families`). `GatherF32x{V}_v2` is one
@@ -59,13 +59,13 @@ from functools import reduce
 from operator import xor
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.boolean.forms import add, const, const_bits
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.boolean.trace import definition, part
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
+from verity.circuits.boolean.forms import add, const, const_bits
+from verity.circuits.boolean.gather import gather
+from verity.circuits.boolean.trace import definition, part
 
 from . import b1
 from . import prims as P

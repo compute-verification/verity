@@ -144,10 +144,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import SpecializedDefinition
-from verity.ml.circuits.partition import Level
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import SpecializedDefinition
+from verity.circuits.partition import Level
+from verity.circuits.program import Program
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V

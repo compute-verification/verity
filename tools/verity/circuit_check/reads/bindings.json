@@ -164,103 +164,103 @@
    "groups": "0-59,61-65,85-91,94-95,101,111-114,122,142-152,154,156-161,167,178,184-189,198-215,303-327,336,393,395-396,405-406",
    "registry": true
   },
-  "verity.ml.circuits.ops.argmax.circuit-check#_core_roots": {
+  "verity.circuits.ops.argmax.circuit-check#_core_roots": {
    "groups": "0-59,62-64,85-91,94-95,101-104,111-112,114,142-160,166,178,184-189,198-204,216,263,303-326,328-329,333,336,400,407",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.argmax.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.argmax.circuit-check#_boolean_roots": {
    "groups": "0-59,62-64,85-91,94-95,101,111-114,123,142-160,178,184-189,198-214,216,303-331,333,336,400,408",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.gemm.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.gemm.circuit-check#_boolean_roots": {
    "groups": "0-59,61-64,67-68,85-92,94-98,101,105,111,113,116,124,142-160,178,184-189,198-216,281,303-315,328-329,394,409",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.gemm.circuit-check#_population_roots": {
+  "verity.circuits.ops.boolean.gemm.circuit-check#_population_roots": {
    "groups": "0-59,61-65,85-91,94-95,101,111-114,124,142-160,171-172,178,184-189,198-216,222-223,281,303-329,336,394-396,410-411",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots": {
+  "verity.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots": {
    "groups": "0-59,61-64,85-91,94-95,101,111-114,125,142-160,178,184-189,198-213,215-216,303-331,336,412",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.moe.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.moe.circuit-check#_boolean_roots": {
    "groups": "0-79,82-83,85-99,101-102,105,111-113,116-118,124,142-160,162-164,168-169,178,184-196,198-211,214-216,222-225,303-329,394,413-415",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.norm_quant.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.norm_quant.circuit-check#_boolean_roots": {
    "groups": "0-59,62-64,85-91,94-95,101,111-113,142-160,178,184-189,198-209,212-216,303-331,333,416-420",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.quant.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.quant.circuit-check#_boolean_roots": {
    "groups": "0-60,62-79,82-83,85-101,111-114,116-118,142-165,167-173,178,184-196,198-210,212-216,222,224-227,264,333,416-417,421",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.rmsnorm.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.rmsnorm.circuit-check#_boolean_roots": {
    "groups": "0-59,62-64,85-91,94-95,101,111-114,142-160,178,184-189,198-216,303-331,333,336,416,418-419",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.rows.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.rows.circuit-check#_boolean_roots": {
    "groups": "",
    "registry": false
   },
-  "verity.ml.circuits.ops.boolean.rowwise.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.rowwise.circuit-check#_boolean_roots": {
    "groups": "0-59,62-64,85-91,94-95,101,111-114,126,142-160,178,184-189,198-216,303-326,328-331,333,336,422",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.s8.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.s8.circuit-check#_boolean_roots": {
    "groups": "0-59,61-64,85-91,94-95,101,111-114,142-160,178,184-189,198-207,210-216,303-329,336,423-425",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.s8split.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.s8split.circuit-check#_boolean_roots": {
    "groups": "0-59,62-64,85-91,94-95,101,111-114,142-160,178,184-189,198-216,303-330,333,336,426-427",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.scalar.circuit-check#_boolean_constant_roots": {
+  "verity.circuits.ops.boolean.scalar.circuit-check#_boolean_constant_roots": {
    "groups": "0-35,37,39-40,42,44-59,61-64,69,85-91,94-95,101,111-112,114,142-156,158-160,178,184-189,198-216,303-331,336,428-430",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.shared_row.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.shared_row.circuit-check#_boolean_roots": {
    "groups": "0-79,82-83,85-101,105,111,113,116-117,124,126,142-165,167-173,178,184-196,198-204,208-210,212-216,224-226,264,281,394,401,410,417-418,422,431-433",
    "registry": true
   },
-  "verity.ml.circuits.ops.boolean.softmax_row.circuit-check#_boolean_roots": {
+  "verity.circuits.ops.boolean.softmax_row.circuit-check#_boolean_roots": {
    "groups": "0-59,61-64,67,85-91,94-96,101,105,111-113,124,142-160,178,184-189,198-206,208-216,281,303-326,328-329,394,431,434-436",
    "registry": true
   },
-  "verity.ml.circuits.ops.gemm.circuit-check#_core_roots": {
+  "verity.circuits.ops.gemm.circuit-check#_core_roots": {
    "groups": "0-35,37-83,85-99,101-105,111-112,116-118,142-165,167-173,178,184-196,198-204,216,263-264,281,303-326,328-329",
    "registry": true
   },
-  "verity.ml.circuits.ops.kv_cache.circuit-check#_core_roots": {
+  "verity.circuits.ops.kv_cache.circuit-check#_core_roots": {
    "groups": "0-33,35,37,39-40,42,44-59,62-64,80-81,85-91,94-95,101,111-112,114,142-156,158-160,178,184-189,198-216,303-331,333,336,437-438",
    "registry": true
   },
-  "verity.ml.circuits.ops.moe.circuit-check#_core_roots": {
+  "verity.circuits.ops.moe.circuit-check#_core_roots": {
    "groups": "0-35,37-83,85-99,101-102,105,111-112,116-118,142-165,167-173,178,184-196,198-212,214-216,222-226,264,303-330,413,439",
    "registry": true
   },
-  "verity.ml.circuits.ops.prims.circuit-check#_core_roots": {
+  "verity.circuits.ops.prims.circuit-check#_core_roots": {
    "groups": "0-32,34-35,37,39-40,42,44-59,62-64,80,85-91,94-95,101-105,111-112,142-156,158-160,178,184-189,198-204,216,263,281,303-326,328-329,336,440-443",
    "registry": true
   },
-  "verity.ml.circuits.ops.quant.circuit-check#_core_roots": {
+  "verity.circuits.ops.quant.circuit-check#_core_roots": {
    "groups": "0-31,33-35,37-60,62-80,82-83,85-104,111-112,114,116-118,142-173,178,184-196,198-204,216,227,263-264,333",
    "registry": true
   },
-  "verity.ml.circuits.ops.rows.circuit-check#_core_roots": {
+  "verity.circuits.ops.rows.circuit-check#_core_roots": {
    "groups": "0-35,37,39-40,42,44-54,57-59,61-64,81,85-91,94-95,101,111-112,114,142-156,158-160,178,184-189,198-205,207-216,303-331,336,347,400-401",
    "registry": true
   },
-  "verity.ml.circuits.ops.s8.circuit-check#_core_roots": {
+  "verity.circuits.ops.s8.circuit-check#_core_roots": {
    "groups": "0-31,33-35,37,39-40,42,44-59,61-64,80,85-91,94-95,101-104,111-112,114,142-156,158-160,178,184-189,198-204,216,263,282,303-326,328-329,336,423,440",
    "registry": true
   },
-  "verity.ml.circuits.population.circuit-check#_population_roots": {
+  "verity.circuits.population.circuit-check#_population_roots": {
    "groups": "0-30,32-59,61-64,85-91,94-95,101,111-114,142-160,178,184-189,198-216,303-331,336,444-446",
    "registry": true
   },
-  "verity.ml.circuits.requirement_units.circuit-check#_boolean_roots": {
+  "verity.circuits.requirement_units.circuit-check#_boolean_roots": {
    "groups": "0-30,32-54,57-59,62-64,85-91,94-95,101,111-114,142-160,178,184-189,198-216,303-331,333,336,347,444",
    "registry": true
   },
@@ -813,14 +813,14 @@
   {
    "files": [
     "tools/verity/circuit_check/src/circuit_check/targets.py",
-    "verity/ml/circuits/ops/prims_evidence.json",
-    "verity/ml/circuits/silicon/instructions_evidence.json",
-    "verity/ml/circuits/silicon/integer_evidence.json",
-    "verity/ml/circuits/silicon/models_evidence.json",
-    "verity/ml/circuits/silicon/total_fp8_evidence.json"
+    "verity/circuits/ops/prims_evidence.json",
+    "verity/circuits/silicon/instructions_evidence.json",
+    "verity/circuits/silicon/integer_evidence.json",
+    "verity/circuits/silicon/models_evidence.json",
+    "verity/circuits/silicon/total_fp8_evidence.json"
    ],
    "listed": [
-    "verity/ml/circuits/ops/boolean",
+    "verity/circuits/ops/boolean",
     "verity/ml/definitions/registry"
    ],
    "probes": [
@@ -881,9 +881,9 @@
     "verity/core/protocols/pouw",
     "verity/core/protocols/pouw/circuit",
     "verity/ml",
-    "verity/ml/circuits",
-    "verity/ml/circuits/boolean",
-    "verity/ml/circuits/ops",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/circuits/ops",
     "verity/ml/commitments",
     "verity/ml/commitments/gates",
     "verity/ml/definitions",
@@ -1051,12 +1051,12 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/requirement_units.py"
+    "verity/circuits/requirement_units.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean"
+    "verity/circuits/ops/boolean"
    ]
   },
   {
@@ -1071,7 +1071,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/kv_cache.py"
+    "verity/circuits/ops/kv_cache.py"
    ]
   },
   {
@@ -1883,10 +1883,10 @@
     "verity/core/protocols/pouw/leaf_lanes.py",
     "verity/core/protocols/pouw/schemes",
     "verity/core/protocols/sampled_proofs/one_stage/produced.py",
-    "verity/ml/circuits/evaluation",
-    "verity/ml/circuits/requirement.py",
-    "verity/ml/circuits/silicon",
-    "verity/ml/circuits/units.py",
+    "verity/circuits/evaluation",
+    "verity/circuits/requirement.py",
+    "verity/circuits/silicon",
+    "verity/circuits/units.py",
     "verity/ml/commitments/advice.py",
     "verity/ml/commitments/frame_v3",
     "verity/ml/commitments/gates/hm96.py",
@@ -1989,12 +1989,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/prims.circuit-check.json"
+    "verity/circuits/ops/prims.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/fp32.circuit-check.json"
+    "verity/circuits/ops/fp32.circuit-check.json"
    ]
   },
   {
@@ -2101,39 +2101,39 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/moe_evidence.json"
+    "verity/circuits/ops/moe_evidence.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/trace_cache.py"
+    "verity/circuits/ops/boolean/trace_cache.py"
    ],
    "probes": [
-    "verity/ml/circuits/ops/boolean/trace_cache/__init__.py"
+    "verity/circuits/ops/boolean/trace_cache/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/cast.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/moe.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/mufu.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/quant.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/rmsnorm.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/rows.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/s8.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/s8split.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/shared_row.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/softmax_row.circuit-check.json"
+    "verity/circuits/ops/boolean/cast.circuit-check.json",
+    "verity/circuits/ops/boolean/moe.circuit-check.json",
+    "verity/circuits/ops/boolean/mufu.circuit-check.json",
+    "verity/circuits/ops/boolean/quant.circuit-check.json",
+    "verity/circuits/ops/boolean/rmsnorm.circuit-check.json",
+    "verity/circuits/ops/boolean/rows.circuit-check.json",
+    "verity/circuits/ops/boolean/s8.circuit-check.json",
+    "verity/circuits/ops/boolean/s8split.circuit-check.json",
+    "verity/circuits/ops/boolean/shared_row.circuit-check.json",
+    "verity/circuits/ops/boolean/softmax_row.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/silicon/tc_step.py"
+    "verity/circuits/silicon/tc_step.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_ex2_delta_int8.xz"
+    "verity/circuits/ops/tables/mufu_ex2_delta_int8.xz"
    ]
   },
   {
@@ -2168,7 +2168,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/boolean.circuit-check.json"
+    "verity/circuits/boolean.circuit-check.json"
    ]
   },
   {
@@ -2235,32 +2235,32 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/argmax.circuit-check.json"
+    "verity/circuits/ops/boolean/argmax.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/gemm.circuit-check.json"
+    "verity/circuits/ops/boolean/gemm.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/gf2k.circuit-check.json"
+    "verity/circuits/ops/boolean/gf2k.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rowwise.circuit-check.json"
+    "verity/circuits/ops/boolean/rowwise.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_quadratic.json"
+    "verity/circuits/ops/tables/mufu_quadratic.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/attention.circuit-check.json"
+    "verity/circuits/ops/boolean/attention.circuit-check.json"
    ]
   },
   {
@@ -2270,7 +2270,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/scalar.circuit-check.json"
+    "verity/circuits/ops/boolean/scalar.circuit-check.json"
    ]
   },
   {
@@ -2300,7 +2300,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/elementwise.circuit-check.json"
+    "verity/circuits/ops/boolean/elementwise.circuit-check.json"
    ]
   },
   {
@@ -2436,7 +2436,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/partition_object.py"
+    "verity/circuits/partition_object.py"
    ]
   },
   {
@@ -2488,12 +2488,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/scalar.circuit-check.json"
+    "verity/circuits/ops/scalar.circuit-check.json"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/population.py"
+    "verity/circuits/population.py"
    ]
   },
   {
@@ -2541,7 +2541,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/mufu.circuit-check.json"
+    "verity/circuits/ops/mufu.circuit-check.json"
    ]
   },
   {
@@ -2696,58 +2696,58 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/rows.py",
-    "verity/ml/circuits/ops/boolean/shared_row.py"
+    "verity/circuits/ops/boolean/rows.py",
+    "verity/circuits/ops/boolean/shared_row.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/rows.py"
+    "verity/circuits/ops/rows.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/softmax_row.py"
+    "verity/circuits/ops/boolean/softmax_row.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/s8.py"
+    "verity/circuits/ops/boolean/s8.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/s8.py"
+    "verity/circuits/ops/s8.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/norm_quant.py"
+    "verity/circuits/ops/boolean/norm_quant.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/quant.py"
+    "verity/circuits/ops/quant.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/moe.py"
+    "verity/circuits/ops/boolean/moe.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/moe.py"
+    "verity/circuits/ops/moe.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/gf2k.py"
+    "verity/circuits/ops/boolean/gf2k.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/argmax.py"
+    "verity/circuits/ops/argmax.py"
    ]
   },
   {
@@ -2782,34 +2782,34 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/rmsnorm.py",
-    "verity/ml/circuits/ops/boolean/rowwise.py"
+    "verity/circuits/ops/boolean/rmsnorm.py",
+    "verity/circuits/ops/boolean/rowwise.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/quant.py"
+    "verity/circuits/ops/boolean/quant.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/argmax.py",
-    "verity/ml/circuits/ops/boolean/s8split.py"
+    "verity/circuits/ops/boolean/argmax.py",
+    "verity/circuits/ops/boolean/s8split.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/attention.py"
+    "verity/circuits/ops/boolean/attention.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/sqrt.py"
+    "verity/circuits/ops/boolean/sqrt.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/quant.circuit-check.py"
+    "verity/circuits/ops/quant.circuit-check.py"
    ]
   },
   {
@@ -3014,13 +3014,13 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/argmax.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/attention.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/elementwise.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/gemm.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/gf2k.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/rowwise.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/scalar.circuit-check.json"
+    "verity/circuits/ops/boolean/argmax.circuit-check.json",
+    "verity/circuits/ops/boolean/attention.circuit-check.json",
+    "verity/circuits/ops/boolean/elementwise.circuit-check.json",
+    "verity/circuits/ops/boolean/gemm.circuit-check.json",
+    "verity/circuits/ops/boolean/gf2k.circuit-check.json",
+    "verity/circuits/ops/boolean/rowwise.circuit-check.json",
+    "verity/circuits/ops/boolean/scalar.circuit-check.json"
    ]
   },
   {
@@ -3051,12 +3051,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_sqrt_delta_int8.xz"
+    "verity/circuits/ops/tables/mufu_sqrt_delta_int8.xz"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_rcp_delta_int8.xz"
+    "verity/circuits/ops/tables/mufu_rcp_delta_int8.xz"
    ]
   },
   {
@@ -3067,7 +3067,7 @@
     "verity/ml/definitions/numerics/kernel_zoo.py"
    ],
    "probes": [
-    "verity/ml/circuits/ops/tables",
+    "verity/circuits/ops/tables",
     "verity/ml/definitions/numerics/gemm_relation/__init__.py",
     "verity/ml/definitions/numerics/kernel_zoo/__init__.py"
    ]
@@ -3079,7 +3079,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_rsq_delta_int8.xz"
+    "verity/circuits/ops/tables/mufu_rsq_delta_int8.xz"
    ]
   },
   {
@@ -3110,8 +3110,8 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.json",
-    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks"
+    "verity/circuits/ops/tables/mufu_tanh_sm89.json",
+    "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks"
    ]
   },
   {
@@ -3134,12 +3134,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/gemm.circuit-check.py"
+    "verity/circuits/ops/gemm.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/s8.circuit-check.json"
+    "verity/circuits/ops/s8.circuit-check.json"
    ]
   },
   {
@@ -3231,7 +3231,7 @@
   {
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/pieces/PouwF32SqrtRn_v1.json",
-    "verity/ml/circuits/ops/sqrt.circuit-check.json"
+    "verity/circuits/ops/sqrt.circuit-check.json"
    ]
   },
   {
@@ -3395,27 +3395,27 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/mufu.py"
+    "verity/circuits/ops/mufu.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/sqrt.py"
+    "verity/circuits/ops/sqrt.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/ncp.py"
+    "verity/circuits/ops/ncp.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/gemm.py"
+    "verity/circuits/ops/boolean/gemm.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/gemm.py"
+    "verity/circuits/ops/gemm.py"
    ]
   },
   {
@@ -3562,7 +3562,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/library.py"
+    "verity/circuits/library.py"
    ]
   },
   {
@@ -3917,7 +3917,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/gemm.circuit-check.py"
+    "verity/circuits/ops/boolean/gemm.circuit-check.py"
    ]
   },
   {
@@ -3951,12 +3951,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/argmax.circuit-check.py"
+    "verity/circuits/ops/argmax.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/rows.circuit-check.py"
+    "verity/circuits/ops/rows.circuit-check.py"
    ]
   },
   {
@@ -4016,12 +4016,12 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/argmax.circuit-check.json"
+    "verity/circuits/ops/argmax.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/argmax.circuit-check.py"
+    "verity/circuits/ops/boolean/argmax.circuit-check.py"
    ]
   },
   {
@@ -4031,7 +4031,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/shared_row.circuit-check.py"
+    "verity/circuits/ops/boolean/shared_row.circuit-check.py"
    ]
   },
   {
@@ -4042,17 +4042,17 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/gf2k.circuit-check.py"
+    "verity/circuits/ops/boolean/gf2k.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/moe.circuit-check.py"
+    "verity/circuits/ops/moe.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/moe.circuit-check.py"
+    "verity/circuits/ops/boolean/moe.circuit-check.py"
    ]
   },
   {
@@ -4060,7 +4060,7 @@
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/MoeSelectBf16x128_v2.json",
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/MoeSelectBf16x256_v2.json",
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/MoeSelectBf16x3_v2.json",
-    "verity/ml/circuits/ops/boolean/moe.circuit-check.json"
+    "verity/circuits/ops/boolean/moe.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/MoePairCoordinateW_v2_E_3_K_16_DOT_HopperBF16WgmmaDot16_v2_-bb146ed7.json",
@@ -4069,22 +4069,22 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/norm_quant.circuit-check.py"
+    "verity/circuits/ops/boolean/norm_quant.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/quant.circuit-check.json"
+    "verity/circuits/ops/boolean/quant.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rmsnorm.circuit-check.json"
+    "verity/circuits/ops/boolean/rmsnorm.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rmsnorm.circuit-check.py"
+    "verity/circuits/ops/boolean/rmsnorm.circuit-check.py"
    ]
   },
   {
@@ -4095,37 +4095,37 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/quant.circuit-check.py"
+    "verity/circuits/ops/boolean/quant.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rowwise.circuit-check.py"
+    "verity/circuits/ops/boolean/rowwise.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/s8.circuit-check.py"
+    "verity/circuits/ops/s8.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/s8.circuit-check.py"
+    "verity/circuits/ops/boolean/s8.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/s8.circuit-check.json"
+    "verity/circuits/ops/boolean/s8.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/s8split.circuit-check.py"
+    "verity/circuits/ops/boolean/s8split.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/s8split.circuit-check.json"
+    "verity/circuits/ops/boolean/s8split.circuit-check.json"
    ]
   },
   {
@@ -4135,7 +4135,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/scalar.circuit-check.py"
+    "verity/circuits/ops/boolean/scalar.circuit-check.py"
    ]
   },
   {
@@ -4146,18 +4146,18 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/softmax_row.circuit-check.json"
+    "verity/circuits/ops/boolean/softmax_row.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rows.circuit-check.py"
+    "verity/circuits/ops/boolean/rows.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/rows.circuit-check.json",
-    "verity/ml/circuits/ops/boolean/shared_row.circuit-check.json"
+    "verity/circuits/ops/boolean/rows.circuit-check.json",
+    "verity/circuits/ops/boolean/shared_row.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/Bf16AddRow_v2_N_16_-10e62006.json",
@@ -4173,7 +4173,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/softmax_row.circuit-check.py"
+    "verity/circuits/ops/boolean/softmax_row.circuit-check.py"
    ]
   },
   {
@@ -4221,22 +4221,22 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/kv_cache.circuit-check.py"
+    "verity/circuits/ops/kv_cache.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/kv_cache_evidence.json"
+    "verity/circuits/ops/kv_cache_evidence.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/moe.circuit-check.json"
+    "verity/circuits/ops/moe.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/ops/prims.circuit-check.py"
+    "verity/circuits/ops/prims.circuit-check.py"
    ]
   },
   {
@@ -4256,19 +4256,19 @@
   },
   {
    "files": [
-    "verity/ml/circuits/requirement_units.circuit-check.py"
+    "verity/circuits/requirement_units.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/circuits/population.circuit-check.py"
+    "verity/circuits/population.circuit-check.py"
    ]
   },
   {
    "files": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/TemplateInstances_v1_template_PlanShard_v1_S_32_GAPS_2_N_2_-b666d74b.json",
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/TemplatePopulations_v1_templates_PlanShard_v1_S_32_GAPS_2_PlanMatch_v1_P_4_NR_16-7fe59e2a.json",
-    "verity/ml/circuits/requirement_units.circuit-check.json"
+    "verity/circuits/requirement_units.circuit-check.json"
    ]
   },
   {
@@ -4556,7 +4556,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/mufu.circuit-check.json"
+    "verity/circuits/ops/boolean/mufu.circuit-check.json"
    ]
   },
   {
@@ -4639,7 +4639,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/boolean/cast.circuit-check.json"
+    "verity/circuits/ops/boolean/cast.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/Const32_0x00000000__v2-3ec60e1b.json",
@@ -4825,7 +4825,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/ops/tables/mufu_tanh_quadratic.json"
+    "verity/circuits/ops/tables/mufu_tanh_quadratic.json"
    ]
   },
   {
@@ -5303,7 +5303,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/ops/boolean/mufu.py"
+    "verity/circuits/ops/boolean/mufu.py"
    ]
   }
  ],

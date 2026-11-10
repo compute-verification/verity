@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import array_of
+from verity.circuits.refs import array_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of

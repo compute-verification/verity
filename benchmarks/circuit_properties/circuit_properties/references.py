@@ -1,7 +1,7 @@
 """Reference circuits: the declared Boolean circuits the properties are measured on, and the designation of their counted
 products.
 
-* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.ml.circuits.ops.boolean.gemm`), one GEMM on bits.
+* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.circuits.ops.boolean.gemm`), one GEMM on bits.
 * `layer`: one transformer layer of the served b1 registry (`verity.ml.definitions.registry.b1`) at T positions, on bits:
   σ(`LayerPre_v1`), the Boolean `Attention_v3` (`Attention_v6`), σ(`LayerPost_v1`), wired as `_forward_positions_v4` wires
   one layer (not layer 0: the fused add+RMSNorm with the residual). The GEMMs are σ(b1's `Gemm_v1`), `Gemm_v4`, whose dot
@@ -15,11 +15,11 @@ no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's 
 
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import bit_type
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import bit_type
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 
 from .ops import Designation, Site
 
@@ -29,7 +29,7 @@ GEMM_PRODUCTS = Designation(sites=(Site(op=r"AmpereBF16TcDot16_v3", x="a", w="b"
 
 
 def boolean_gemm(K: int, N: int) -> Program:
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 

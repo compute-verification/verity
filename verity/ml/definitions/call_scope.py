@@ -1,4 +1,4 @@
-"""What `query.word` and `query.cross_call` share beyond core's `verity.ml.circuits.cut`: the registered Definition a spec names
+"""What `query.word` and `query.cross_call` share beyond core's `verity.circuits.cut`: the registered Definition a spec names
 (`specialization`), a spec id's parts (`spec_base`, `spec_statics`) and the violation both raise (`QueryRuleViolation`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ class QueryRuleViolation(ValueError):
 def specialization(fam: str, statics: dict[str, Any]):
     """The registered Definition `fam` bound to `statics` (a primitive as it is); function-valued statics (`DOT`, rendered
     `{"fn": id}` or as the bare id) resolve to the registered Definition they name."""
-    from verity.ml.circuits.codec import lookup_primitive
+    from verity.circuits.codec import lookup_primitive
     from verity.ml.definitions.registry.catalog import load
     reg, _errors = load()
     d = reg.defs.get(fam)
@@ -58,7 +58,7 @@ def static_value(v: Any) -> Any:
 
 def spec_statics(spec: str) -> dict[str, Any]:
     """The binding record of a spec id as Python values (`{"f64": hex}` -> float, lists -> tuples), in id order."""
-    from verity.ml.circuits.codec import _split_record
+    from verity.circuits.codec import _split_record
     out: dict[str, Any] = {}
     for k, v in _split_record(spec_record_id(spec)):
         try:

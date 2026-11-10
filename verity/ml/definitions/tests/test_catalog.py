@@ -72,7 +72,7 @@ REPLACED = {
                  "    if m.name not in ('quarantine', 'catalog'):\n"
                  "        importlib.import_module(package.__name__ + '.' + m.name)\n"),
     ("ops", "registry"): ("import importlib, pkgutil\n"
-                          "for name in ('verity.ml.circuits.ops', 'verity.ml.definitions.registry'):\n"
+                          "for name in ('verity.circuits.ops', 'verity.ml.definitions.registry'):\n"
                           "    package = importlib.import_module(name)\n"
                           "    for m in pkgutil.walk_packages(package.__path__, name + '.'):\n"
                           "        importlib.import_module(m.name)\n"),
@@ -82,7 +82,7 @@ REPLACED = {
 def _registered(code: str) -> list[str]:
     """The ids `REGISTRY` holds, in registration order, once ``code`` has run in a process of its own: the test modules beside
     this one import registry modules as they are collected, which reorders this process's registry."""
-    p = subprocess.run([sys.executable, "-c", code + "from verity.ml.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
+    p = subprocess.run([sys.executable, "-c", code + "from verity.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-2000:]
     return p.stdout.split()
@@ -101,15 +101,15 @@ def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
 
 
 def test_the_ops_scope_imports_every_module_of_ops():
-    """`load(("ops", "registry"))` imports every module of `verity.ml.circuits.ops` and of its subpackages besides the registry's,
+    """`load(("ops", "registry"))` imports every module of `verity.circuits.ops` and of its subpackages besides the registry's,
     and registers Definitions the registry alone does not: in a process of its own, so the list above stays the registry's."""
     code = ("import pkgutil, sys\n"
-            "from verity.ml.circuits import ops\n"
+            "from verity.circuits import ops\n"
             "from verity.ml.definitions.registry import catalog\n"
             "alone = len(catalog.load()[0].defs)\n"
             "registry, errors = catalog.load(('ops', 'registry'))\n"
             "assert not errors, errors\n"
-            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.ml.circuits.ops.') if m.name not in sys.modules]\n"
+            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.circuits.ops.') if m.name not in sys.modules]\n"
             "assert not missing, missing\n"
             "print(alone, len(registry.defs))\n")
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

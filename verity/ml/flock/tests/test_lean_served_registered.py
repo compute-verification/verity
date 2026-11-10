@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.circuits.codec import canonical_json, encode_program
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage.served import register_served
 

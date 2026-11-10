@@ -9,7 +9,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.ml.definitions.numerics.libdevice import nv_logf

@@ -12,9 +12,9 @@ from typing import Callable
 import numpy as np
 
 from verity.ml.kernels.tc import group_sum_total_batch
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16
 from verity.ml.definitions.numerics.derived_rows import f2fp_bf16, fma_rn, mul_rn, tc_dot32_e4m3
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.fp8 import MIN_SCALE_BITS, weight_blocks

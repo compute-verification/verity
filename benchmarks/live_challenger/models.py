@@ -44,7 +44,7 @@ import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 
 MANIFEST = Path("adapters/vllm/manifests/checkpoints-int8.json")
 #: the manifests a role may be in, each read from the pinned tree only: vLLM's int8 recipe pins; a role is listed exactly

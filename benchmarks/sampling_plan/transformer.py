@@ -59,9 +59,9 @@ from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_tab
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
-from verity.ml.circuits.codec import descriptor_id  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
 #: core's reporting deltas (`wipe_monitoring`), as floats
 DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
@@ -85,7 +85,7 @@ TILE_COLS = 32
 
 
 def pieces() -> dict[str, int]:
-    """Every pinned piece's ANDs (circuit-check's pins beside `verity.ml.circuits.ops`)."""
+    """Every pinned piece's ANDs (circuit-check's pins beside `verity.circuits.ops`)."""
     out: dict[str, int] = {}
     for f in sorted(Path(P.__file__).parent.glob("*.circuit-check.json")):
         out |= {k: v["and"] for k, v in json.loads(f.read_text()).get("pieces", {}).items() if "and" in v}

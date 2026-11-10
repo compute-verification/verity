@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The linear at K = 64 over two output rows and its quantizer Call (its product is `ops.gemm`'s `ScaledMmS8_v1`, checked there);
     one KV head's 3-key window at d = 32; one row of 33 keys (P V' over two k steps, the second zero-padded); and the primitives no
     composite here reaches whole."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import int8_exact as X
 
     scale = 32 ** -0.5

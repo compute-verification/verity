@@ -56,14 +56,14 @@ from typing import Any, ClassVar
 
 from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
+from verity.circuits import partition_object as PO
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
                              HopperE4m3QgmmaDot32)
-from verity.ml.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 
 from ..protocol import DomainError
 from ..schemes import pearl_c as C

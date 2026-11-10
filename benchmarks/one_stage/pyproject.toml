@@ -65,4 +65,4 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_bundle.py", "tests/test_prove_leg_served.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/circuits/ops"]

@@ -11,10 +11,10 @@ from math import comb
 
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
 from verity.core.protocols.profile import Bernoulli, Subset
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import (draw as D, partition as P, registration as R,

@@ -13,8 +13,8 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     `UnitStager` refuses before lowering.  Any other Definition, and one checked as a template's proof blocks, has its count
     recorded, not failed."""
     from verity_flock import circuit as FC
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
     from verity.ml.definitions.registry import prims as P
 
     fn = bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),

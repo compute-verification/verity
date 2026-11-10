@@ -13,7 +13,7 @@ from test_repository import ROOT, _tracked
 KEPT = {
     "verity/core/protocols/bandwidth/PROTOCOL.md": "experimental: the bandwidth audit over PoUS's store has no Lean verifier",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
-    "verity/ml/circuits/PROTOCOL.md": "a format: the circuit file",
+    "verity/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/ml/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
     "verity/ml/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
     "verity/ml/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",

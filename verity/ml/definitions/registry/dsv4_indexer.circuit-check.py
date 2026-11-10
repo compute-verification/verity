@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at DeepSeek-V4-Pro's served shapes: the indexer's 256-wide state score, 8-row columns, D = 128
     entries with a 64-wide rotary suffix, heads of 4 x 128 with 64 rotary, and the top-1024 fill at ratio 4."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsv4_indexer as I
 
     return [

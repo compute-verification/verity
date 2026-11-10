@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.ml.circuits.silicon.term import FORMATS, PRODUCT_WIDTH
+from verity.circuits.silicon.term import FORMATS, PRODUCT_WIDTH
 
 FP32_MIN_NORMAL_EXPONENT = -126
 FP32_MAX_EXPONENT = 127

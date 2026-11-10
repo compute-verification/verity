@@ -18,7 +18,7 @@ integers (F fraction bits, N greedy steps):
 and rounds q to its 24 leading bits, ties up: ``floor((q + 1) / 2)`` at q's 25th bit is the nearest of the exact ratio, so the
 only error is the ratio's distance from tanh|x|, about 2^-34 of a result ulp at `TANH_FN` = (72, 36) (every f32 word is checked
 against `TanhF32Rn_v1`, and the region's positive results are `tanh_rn`'s pinned entries). `GeluTanhMulBf16_v4` is
-`GeluTanhMulBf16_v1` on bits: ``a = (T)gelu_tanh(g)`` by `dense.gelu_tanh_bf16_bits`' f32 operations (`verity.ml.circuits.silicon.fp`)
+`GeluTanhMulBf16_v1` on bits: ``a = (T)gelu_tanh(g)`` by `dense.gelu_tanh_bf16_bits`' f32 operations (`verity.circuits.silicon.fp`)
 with `tanh_f32` at `GELU_TANH_FN` = (34, 17), F the fewest fraction bits that hold Y whole. That tanh misses RN32 in the last bits
 at some inner words, and no such miss reaches the activation: all 65,536 g give `gelu_tanh_bf16`'s words. Then
 ``bf16_rn(f32(a) * (f32(u) + 0.0f))`` with F2FP's NaN 0x7FFF. `GeluTanhMul_v4{I}` is a batch of I `GeluTanhMulBf16_v4` Calls
@@ -30,13 +30,13 @@ from __future__ import annotations
 from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
 from functools import lru_cache
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import (NOT, ONE, ZERO, add, compress_columns, const_bits, lzc, multiply, mux, or_reduce,
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import (NOT, ONE, ZERO, add, compress_columns, const_bits, lzc, multiply, mux, or_reduce,
                                               shl_window, sub)
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import dense as D
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.tables import TANH_RN_HI, TANH_RN_LO

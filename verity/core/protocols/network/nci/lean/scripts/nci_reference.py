@@ -5,7 +5,7 @@
 `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
 gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
 into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `NciCheck.Check`'s
-docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),
+docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.circuits`),
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
@@ -30,10 +30,10 @@ from __future__ import annotations
 import json
 from fractions import Fraction
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import PrimitiveDefinition, Registry
-from verity.ml.circuits.program import input_id, is_input, is_registered
-from verity.ml.circuits.types import type_from_json
+from verity.circuits import codec
+from verity.circuits.defs import PrimitiveDefinition, Registry
+from verity.circuits.program import input_id, is_input, is_registered
+from verity.circuits.types import type_from_json
 
 FIELDS = ("program", "theta", "owner", "gamma", "alpha")
 
@@ -160,7 +160,7 @@ FUEL = 2 ** 62
 def walk_bound(program) -> int:
     """`NciCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
     member's, once per Definition and multiplied through batches and scans) and the depth `H` they nest to."""
-    from verity.ml.circuits.parts import n_members
+    from verity.circuits.parts import n_members
     memo: dict[int, tuple[int, int]] = {}
 
     def of(fn) -> tuple[int, int]:
@@ -196,7 +196,7 @@ def evaluate_desc(inst) -> dict:
         program = codec.decode_program(desc, declared(desc))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("program") from e
-    from verity.ml.circuits.partition_object import order_violation
+    from verity.circuits.partition_object import order_violation
     if order_violation(program) is not None:
         raise Malformed("not-topological")
     if walk_bound(program) > FUEL // 2:
@@ -258,7 +258,7 @@ def record_digest(rec: dict) -> str:
 
 def lower(t) -> list[tuple[int, int]]:
     """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
-    from verity.ml.circuits.types import Array, RecordType, Tuple
+    from verity.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:
         return [(next(iter(ws)), t.leaves)]

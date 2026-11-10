@@ -1,9 +1,9 @@
 """PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean name the README cites is
-a guarantee in `Security/lean-audit.json`, a named assumption or a definition one states, and its FP8 conformance data is what `verity.ml.circuits.silicon`
+a guarantee in `Security/lean-audit.json`, a named assumption or a definition one states, and its FP8 conformance data is what `verity.circuits.silicon`
 computes. `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `Definitions/Pouw/Fp8Atom/` and
 their checks in `Proofs/Pouw/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the proofs' record holds for
 `Proofs.Pouw.Bulk`. The
-Lean audit runs `Proofs.Pouw.Bulk` on that bulk (`runs`); this is the half that says the data is still `verity.ml.circuits.silicon`'s."""
+Lean audit runs `Proofs.Pouw.Bulk` on that bulk (`runs`); this is the half that says the data is still `verity.circuits.silicon`'s."""
 from __future__ import annotations
 
 import gzip

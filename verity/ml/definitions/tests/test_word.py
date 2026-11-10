@@ -1,5 +1,5 @@
 """`verity.ml.definitions.word`'s cut, the copy circuit-check's partition verdict reads, held to core's reference
-(`verity.ml.circuits.cut`) on a spread of small Definitions: `Graph` is `CallGraph` field by field, `partition` gives
+(`verity.circuits.cut`) on a spread of small Definitions: `Graph` is `CallGraph` field by field, `partition` gives
 `cut_word`'s owner per gate, kind per unit and head per gate, and `cut_verdict` with `units`' width rule gives `check_cut`'s
 verdict, detail for detail, on the cut and on cuts broken every way the verdict names."""
 from __future__ import annotations
@@ -10,8 +10,8 @@ from functools import cache
 import numpy as np
 import pytest
 
-from verity.ml.circuits import cut
-from verity.ml.circuits.defs import bind
+from verity.circuits import cut
+from verity.circuits.defs import bind
 from verity.ml.definitions import word as W
 from verity.ml.definitions.call_scope import specialization
 
@@ -29,7 +29,7 @@ def _bound(module: str, name: str, **statics):
 
 def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
-    from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
@@ -37,9 +37,9 @@ def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
 
 def _twice():
     """The same F32Add computed twice, each copy read by its own output: a value computed in two units."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x):
@@ -51,9 +51,9 @@ def _twice():
 
 def _dead_input():
     """A parameter read only by wiring nothing reads (committed, unread), beside one returned through wiring."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x, y):

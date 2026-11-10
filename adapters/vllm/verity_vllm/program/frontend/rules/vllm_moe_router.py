@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, strided_view
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import Coll, array_of, strided_view
+from verity.circuits.types import Array
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape

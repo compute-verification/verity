@@ -74,12 +74,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.ops.fp32 import F32DivV2
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.scalar import F32Neg
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops.fp32 import F32DivV2
+from verity.circuits.ops.prims import const
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.scalar import F32Neg
 from verity.ml.definitions.numerics import dsv4_compressor_twin
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import dsv4_indexer as I

@@ -14,4 +14,4 @@ inputs = ["verity", "benchmarks/pouw/clear"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pouw_commit_lean_difftest.py"]
-paths = ["verity/core/protocols/pouw", "verity/ml/circuits/silicon", "verity/ml/crypto"]
+paths = ["verity/core/protocols/pouw", "verity/circuits/silicon", "verity/ml/crypto"]

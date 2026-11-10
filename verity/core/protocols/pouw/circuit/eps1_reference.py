@@ -62,9 +62,9 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import s8 as OS8
-from verity.ml.circuits.ops import prims as P
+from verity.circuits.defs import bind
+from verity.circuits.ops import s8 as OS8
+from verity.circuits.ops import prims as P
 from verity.ml.commitments import domains
 
 from ..protocol import DomainError
@@ -295,8 +295,8 @@ class Eps1Traced:
         return noise(the_seed, receipt, self.shape, tile, ctid)
 
     def digest(self) -> str:
-        from verity.ml.circuits.codec import program_digest
-        from verity.ml.circuits.program import Program
+        from verity.circuits.codec import program_digest
+        from verity.circuits.program import Program
 
         return program_digest(Program(self.check))
 

@@ -170,7 +170,7 @@ def _workload_task(task: dict) -> dict:
 def request_component(r, canon: dict):
     """A predicted request Program as GP-01's component (`program.workload.request_component`), its definitions shared through
     `canon` (one dict a composition)."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
     from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
@@ -264,8 +264,8 @@ def first_divergence(pred: dict, traced: dict) -> dict:
 
 
 def equivalence(pred_program, traced_desc: dict) -> dict:
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import decode_program
+    from verity.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
     from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
