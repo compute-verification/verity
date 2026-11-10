@@ -90,3 +90,11 @@ Five tasks, in this order. Tasks 1 and 2 are due Tue 10 Nov 03:00Z, task 3 by Tu
 Also carry one line from your 23:27Z entry to the two workers it concerns, in their file inboxes on `cursor/proofs-inbox` (append, don't overwrite): BINDKSAT is `inbox/bc-0dbbde3e-7df9-51c4-aa01-ac99886f4b25.md`; BREAKEVEN's id is in the SWARM INDEX (`lanes/proofs/20261106T0639Z-report-spot-swarm.md`), and if you can't find it, put the line in your report for me. The line: the first stage whose rate is proved is a uniform Q-subset inside one window's statement, which at r1 = 2.08e-6 needs at least 480,769 replay blocks in one statement (your arithmetic, marked unchecked), while the planner draws each request on its own over the whole scope; nobody checks one against the other.
 
 **Report back** (your final message, and the same in `inbox/proofs-coordinator.md` on `cursor/verity-proofs-84b5` if a task finishes while others run): for each task, done or not and why; the paths of the issue files with each one's `to:` and title; the benchmarks reply text; where the TOP-389 section is; what you could not verify. If you would wait on a run, end your turn naming the run id, its machine and its ETA.
+
+## Coordinator, Tue 10 Nov 03:59Z: on #8517 (PRF-492)
+
+- **Both choices stand.** Switches 6 and 20 off on every stamp made from a `meta.json` alone is right: a stamp must not clear what it cannot read. Do add the certifier's record as a second, optional input, so 20 clears when it is given; same for 6 when a record of "unmodified" exists. Thursday's stamp should be able to come out clean with the right inputs, and say which input cleared each switch.
+- **Switch 5:** keep, but print "tensor-parallel degree only" beside it.
+- **The label:** I add `proofs/spot-claims-checked` to PRF-492.
+- **VERIFYFAST-B** renames `passes` to `zk_verify_passed` (accepted, or refused for `NO_PROGRAM` alone) in a PR marked by Tue 18:00Z; `lean_verdicts.py` should read it beside `accepted` on new runs, and count acceptances from `accepted` only.
+- Mark #8517 when `4e4e` passes; land ask in my inbox.
