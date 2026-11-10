@@ -70,6 +70,17 @@ FINAL_SET = "final set"
 #: how a refused run's row's basis_own opens, and a reached run's whose trace failed (v1cycle's REFUSED_ROWS): a row
 #: with p from its record and no ρ
 REFUSED, FAILED = "refused: ", "unmeasured: trace failed"
+#: the note's opening, what a row is, whole and as short as the route's note takes with the art id and a cut's words
+ROWS = (f"Per start, g: finals points (p_any: reaching seeds' mean C over the finals' least; seeds, range in record) "
+        f"and every other reached search row ({OVERLAY}; p over the search H).",
+        f"Per start, g: finals points (p_any: C over the finals' least) and other reached search rows ({OVERLAY}).",
+        f"Per start, g: finals points (p_any) and other reached search rows ({OVERLAY}).")
+#: the note's sentence on what a rotation's product is priced as (te_core.rotations names it, te_core.gates prices it
+#: and te_core.tiles reads its operands at 32 bits), and what stays as traced: a part's affected and token shares are
+#: its traced step's, whose circuit holds the rotation as an f32 product, so a part whose log merges a cut's rotations
+#: with a block's attention products keeps shares measured at that price
+ROTATIONS = ("Rotations are at the TF32 product; a part mixing a cut's rotation with attention products keeps the "
+             "traced shares, measured at the f32 price.")
 #: the figure's inches per decade, on both axes, so an iso-S line S = p·rho_own runs at 45 degrees
 DECADE_IN = 1.5
 #: the figure's strip under each panel, the rows with p and no finite rho_own, each kind's marker
@@ -229,8 +240,9 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
 
 
 def note(cells: list[dict], art: str | None = None, said: str = "", brief: str = "") -> str:
-    """The panel's note within the route's `console.NOTE_MAX`: the split's cells by start, else their count, and the
-    cut's words (`said`), else `brief`'s; the headline's label and the art id stay whole."""
+    """The panel's note within the route's `console.NOTE_MAX`: what a row is (`ROWS`, at its first length that fits),
+    the split's cells by start, else their count, and the cut's words (`said`), else `brief`'s; the headline's label,
+    the rotations' price (`ROTATIONS`) and the art id stay whole."""
     split = {}
     for c in cells:
         if c["split"] == SEARCH:
@@ -239,12 +251,10 @@ def note(cells: list[dict], art: str | None = None, said: str = "", brief: str =
     where = "; ".join(f"{s} {'all g' if gs == every[s] else ', '.join(gs)}" for s, gs in split.items())
     count = f"{sum(c['split'] == SEARCH for c in cells)} of {len(cells)} cells"
 
-    def text(where: str, cut: str) -> str:
-        return (f"Per start, g: finals points (p_any: reaching seeds' mean C over the finals' least; seeds, range in "
-                f"record) and every other reached search row ({OVERLAY}; p over the search H). Finals on the search "
-                f"split: {where}. rho_own: search trace, {ap.OWN_K_LABEL}. S = p rho_own." + (f" {cut}" if cut else "")
-                + (f" Tables {art}." if art else ""))
-    tries = [(where, said), (count, said), (count, brief)]
+    def text(rows: str, where: str, cut: str) -> str:
+        return (f"{rows} Finals on the search split: {where}. rho_own: search trace, {ap.OWN_K_LABEL}. S = p rho_own. "
+                f"{ROTATIONS}" + (f" {cut}" if cut else "") + (f" Tables {art}." if art else ""))
+    tries = [(rows, *x) for rows in ROWS for x in ((where, said), (count, said), (count, brief))]
     return next((t for t in (text(*x) for x in tries) if len(t) <= console.NOTE_MAX), text(*tries[-1]))
 
 
