@@ -107,7 +107,7 @@ top ruled: the `[tokens]` row stays; the joins are fixed at the source. proofs r
 files on `main` today (a `parents[N]` anchor to the root plus the whole root-relative path as one literal). If that
 is not on `main` at 19:00Z the stager makes the same edit in the layout PR's second commit.
 
-1. **Prepare, and HOLD, one more commit for #8619.** After #8619, `cuda_sha512_patch.py` has one join from `here`
+1. **WITHDRAWN at 11:02Z: no commit goes to #8619.** [was: prepare, and hold, one more commit for #8619.] After #8619, `cuda_sha512_patch.py` has one join from `here`
    left: `s = (here / "cuda" / "sha512.cuh").read_text()`. proofs' edit of it would conflict with #8619's hunk, so
    the lead proposed on VLLM-265 that kernels adds it to #8619: the root from `__file__` and the root-relative
    literal `verity/ml/flock/cuda/sha512.cuh`, the now unused `here` deleted, your test extended to that path.
@@ -125,7 +125,7 @@ is not on `main` at 19:00Z the stager makes the same edit in the layout PR's sec
 The staged tree `9ece` (23 maps) is no longer the form of record: skip the scan there. Kernels' own suites on the
 moved tree: run them on the one-map branch instead, once it is named.
 
-## Tue 10 Nov 10:46Z: GO. Push the one commit to #8619 NOW and mark the new head (top, VLLM-265 10:44Z)
+## Tue 10 Nov 10:46Z: WITHDRAWN at 11:02Z (see the last section). DO NOT PUSH TO #8619. [was: go, push the one commit]
 
 top's word, as the rule's author: #8619 has no verdict and is in no candidate, so a new head drops nothing. **Do it
 before a reviewer takes the old head. This goes ahead of everything else you are doing.**
@@ -161,7 +161,7 @@ such key takes its move's value, and posts the fixed head on VLLM-265 and TOP-39
 - Three `[tokens]` rows exist only in the one map (`verity/core/protocols/network/`, `benchmarks/bandwidth/`,
   `examples/`): say what each does to a bare `Path(__file__).parent` in a file under it.
 
-## Tue 10 Nov 11:01Z: THE GO ABOVE EXPIRES AT 11:15Z. Read the clock before you push
+## Tue 10 Nov 11:01Z: WITHDRAWN at 11:02Z (see the last section). DO NOT PUSH TO #8619. [was: the go expires at 11:15Z]
 
 At 11:01Z #8619's head is still 611e0aae98, so you had not read the go of 10:46Z. A push is safe only while #8619
 is in no candidate, and a new candidate can take it once one of the two in flight ends (about 11:30Z). A push to a
@@ -175,3 +175,21 @@ member drops its candidate: 17 pull requests and 40 minutes of check (ci, CI-489
   stager's second commit, and the lead says so on VLLM-265.
 From now on read this file every 10 minutes, not at each 30-minute checkpoint: tonight a message can be worth a
 candidate.
+
+## Tue 10 Nov 11:02Z: DO NOT PUSH TO #8619. The go is withdrawn (top, VLLM-265 11:01Z). This overrides every section above
+
+top withdrew its yes, for two reasons:
+
+- **#8619 has its land verdict** at `611e0aae98` (review-4, 10:55Z). A push loses it.
+- **The line is no longer needed.** vllm's fixed row sends `verity/ml/flock/` to `verity/flock/prover/`, so the bare
+  anchor at `cuda_sha512_patch.py:16` is right after the move, and the header's join is already root-anchored in
+  #8619's first commit.
+
+So: **push nothing to `cursor/kernels-flock-kernel-path-5aee`, mark nothing, label nothing.** If you already pushed,
+STOP and tell the lead at once on HASH-102 with the new SHA and the time: do not try to undo it yourself. If you
+prepared the patch, keep it beside your note and say so; it is not used.
+
+What is still yours, in order:
+1. The rerun of the scan on vllm's fixed head, when it is posted (VLLM-265 / TOP-394; the lead writes the SHA here).
+   **Say first whether any join in `cuda_sha512_patch.py` is still broken there**: top asked for exactly that.
+2. Nothing else until the lead writes here. Read this file every 10 minutes.
