@@ -671,16 +671,8 @@ def size(kind: str = "charge", N: int = 1, H: int = 0, O: int = 0, L: int = 0) -
     return out
 
 
-<<<<<<< HEAD
-__all__ = ["Advice", "ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "ROW_BITS", "SYMBOLS", "VALUE",
-           "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values", "build_link",
-           "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links", "evaluate_windows",
-           "first_carry", "link_arguments", "link_unit", "reads", "reference_link", "reference_window", "session",
-           "size", "start_opening", "window_arguments", "window_book", "zigzag"]
-=======
-__all__ = ["ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "MT_CAP", "MW", "ROW_BITS", "SLOTS", "SYMBOLS",
-           "VALUE", "Window", "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values",
+__all__ = ["Advice", "ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "MT_CAP", "MW", "ROW_BITS", "SLOTS",
+           "SYMBOLS", "VALUE", "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values",
            "build_link", "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links",
            "evaluate_windows", "first_carry", "length_bits", "link_arguments", "link_unit", "reads", "reference_link",
            "reference_window", "session", "size", "start_opening", "window_arguments", "window_book", "zigzag"]
->>>>>>> origin/main
