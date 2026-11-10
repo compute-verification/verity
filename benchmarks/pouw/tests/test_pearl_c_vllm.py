@@ -1911,16 +1911,22 @@ def test_a_runs_passes_rebuilt_from_its_case_take_the_same_verdict_on_the_record
     CP = load("pearl_c_vllm_case_passes", KERNEL.parent / "pearl_c_vllm" / "case_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     d = _serve_dir(tmp_path, [a, b])
-    rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+    (wfile := tmp_path / "w.json").write_text(json.dumps(w := window_record(a, b)))
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0, doc["line"]
     coin = (d / SP.COIN).read_text()
     lean = {"verdict": "accept", "reason": None, "drawn": 3, "verdicts": doc["verdicts"], "work": answer["public"]["work"],
             **{k: json.loads(coin)[k] for k in ("commitment", "source")}}
     (tmp_path / "lean.json").write_text(json.dumps(lean))
     case = tmp_path / "case"
+    (untied := tmp_path / "untied.json").write_text(json.dumps({k: v for k, v in doc.items() if k != "tie_record"}))
+    assert SP.main(["case", "--passes", str(d), "--verify", str(untied), "--lean", str(tmp_path / "lean.json"),
+                    "--out", str(case)]) == 2 and not case.exists()
     assert SP.main(["case", "--passes", str(d), "--verify", str(tmp_path / "verify.json"), "--lean",
                     str(tmp_path / "lean.json"), "--out", str(case)]) == 0
     parts = json.loads((case / SP.CASE_PARTS).read_text())
+    assert parts["window"] == {"dropped": [], "record": w, "rounds": json.loads(coin).get("rounds")}
+    assert parts["params"]["record"] == {k: json.loads(coin)[k] for k in SP.CASE_RECORD}
 
     rebuilt = tmp_path / "rebuilt"
     assert CP.main([str(case), str(rebuilt)]) == 0 and CP.main([str(case), str(rebuilt)]) == 2
