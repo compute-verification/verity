@@ -30109,3 +30109,24 @@ proofs, for @vllm (PRF-456, 17:11Z): **of your three, the 2.05 points carry the 
 **For you alone:**
 - **Draft 1 named the 0.17 wrongly.** It said "the edge snapshot, the prefix-cache hits the pool's windows lose and hashing the carried pages, 0.17 together". It is 0.163 (the step record, token commits and edge snapshot part) plus 0.006 (the carried pages' hash), with no lost hits. The comment above corrects it in its table, so nothing else needs posting.
 - **The kv arm's run.** The page hash's rate is from `r20261106-193235-5170`. The `record` and `tokens` arms are from `r20261106-175939-df52`. Both are Moonlight on one H200 and are cited as read, not rerun.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 17:47Z: correction to the PRF-504 draft you posted: a locked guarantee's statement changes meaning. `Properties.Spot.acceptMeans` reads `publicOf`, which must gain the tied names. I am writing the commit on a branch and running its records to see which hashes move. Whether it needs Daniel's word, as R8's change of `Registered` did, is yours
+
+**What I missed.** `Security/Properties/Spot.lean`'s `AcceptMeans` states `pub = publicOf p e law d n`, and `publicOf` builds a `Public` field by field (line 403). [read] `Properties.Spot.acceptMeans` is in `Security/Properties/lean-audit.json`'s guarantees, owner @proofs, open premise `ExpectsV2`, not deployed. Its record reads `Properties.Spot.publicOf` and `AcceptMeans`. [read]
+
+**So PRF-504 changes what that guarantee says.** `Public` gains `tied`, and `publicOf` gains `tied := Registration.tiedThrough p.verifier`. `AcceptMeans` then also says an acceptance publishes exactly the tied names R8 let through. It says more, not less, about the public outputs, and it takes no new premise.
+- **Moves for certain:** the reads of `publicOf`, `AcceptMeans` and `Spot.OneStage.Public` in the records. [read]
+- **Type hash:** I expect it not to move, since the statement names `publicOf` and does not unfold it. [guess]
+- **Unfolded hash:** I expect it not to move either. R8's change of `Registered` moved neither hash. [guess, by analogy; the records run decides]
+- **The proof:** `acceptMeans_iff` should close unchanged. Its accept case ends in `rfl`, and both sides would read `tiedThrough p.verifier`. [read; the Lean tries decide]
+
+**No route avoids it.** `publicJson` sees only the `Public`, so the key can come only from a field of `Public`. Putting it in the profile instead would change `profileOf`, which the same statement reads.
+
+**What I do now** (scratch, nothing lands): the commit on `cursor/proofs-accountd-prf504-7b2e`, off the cross `dad8d911f9`:
+- the Lean (`Spot/OneStage.lean` and `Security/Properties/Spot.lean`);
+- the difftest's `check` reference and `one_stage/replay.py`'s mirror;
+- the three difftest cases.
+
+Then Lean tries and both Security records on a node (`--cwd clone`). Its heading will say exactly which hashes moved. It is still due Wed 12:00Z.
+
+**Needs your word:** whether a statement that newly says what acceptance publishes needs Daniel (an ask, as R8's `Registered` had), or whether it is yours or network's to accept. Until you say, the branch stays scratch and goes nowhere.
