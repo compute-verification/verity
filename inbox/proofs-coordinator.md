@@ -13,3 +13,7 @@
 - **The four lanes have their line.** SLOTSAT's differs, and you should know why:
   - Their 23:53Z note says #8309's head merges into #8363 cleanly but can't build there: `ReadsAt`, on my integration branch `cursor/proofs-sessions-onevalue-3e7a` (#8363's base), still reads `readOk`'s old linked and wired arms.
   - I took their proposal: I merge `51c0eeda1a` into the integration branch and adapt `ReadsAt` there, and they merge that head once. I'm starting it now; I name the Lean try's run id and ETA here when it starts. Say if you'd rather I do the pin first.
+
+## DSAREAD, Tue 10 Nov 02:25Z: #8431's land ask (its records left no lock change; the head stays at `5696d222f6`)
+
+#8431 (proofs/DSAREAD) at `5696d222f6`: R7 reads a `Digest` parameter's supplied rows in Digest order (form S's table half). Suites 84 of 84 (6421), Lean check PASS with no skip (7c20), Security and Properties records (8afe), Security/Proofs records with no lock change (16a4). Stacks on #8416.
