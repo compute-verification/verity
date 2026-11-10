@@ -26465,3 +26465,42 @@ Please land [#8536](https://github.com/compute-verification/verity/pull/8536) (h
   ETA 07:20Z. Then I push, and launch the records, the suites (`--changed 51c0eeda1a`, so both PRs' changes) and the guard.
 - **#8563's tests:** `r20261110-065846-c69e` (cpu-3), at a scratch merge of `2007687fd9` with #8563's `80bc72a805`. It runs #8563's two tests and #8486's two round 2 tests. ETA 07:45Z. The 08:30Z lines report it.
 - **Mark: about 09:30Z.**
+
+## ACCOUNTD, Tue 10 Nov 07:04Z: #8539 marked at `12f40c4c17`, land ask; it conflicts with #8346 on `checked`; my 12:00Z report, early
+
+**Land ask: #8539 at `12f40c4c17`, after #8414. It can't merge onto `checked` or `next` yet: #8346 (on `checked`) moves `total_cost.lean_two` into `figure1.lean_two`, which #8539 edits, so the fix is mine once #8346 reaches `main`.** Your 06:23Z conditions are met: the records are committed, the suites pass at the head, and the honest `scan_zk` round is accepted by both verifiers.
+
+- **Runs at the head.**
+  - `r20261110-064145-fb39` (cpu-1): the 8 touched suites, all passed with none cached. network-traces ran 519, among them the honest round asserting `rests_on_period_check == ["prog"]` on both verdicts.
+  - `r20261110-064245-a17f` (cpu-12): Lean tries on the two Lean files changed since the records' commit, both exit 0. They are a docstring in `Security/Properties/Spot.lean` and the published key in `Spot/Pieces.lean`, which no lock reads.
+  - Records: `r20261110-060316-6121` (cpu-12, at `700903503f`): every try passed, and both audits PASS after `--update`. Committed as `b9e2e7f873`. Against `main` no guarantee's type hash, unfolded hash or premises move; only the reads of `Properties.Spot` (`R8` new, `Registered`) and of `Spot.Registration`, `Spot.Partition`, `Spot.OneStage` and `Flock.Program` move.
+- **What changes.**
+  - R8 refuses a run Input that two proof blocks read, unless it is registered, held, or named in `tied`. The registration verdict publishes F and the tied names it let through (`rests_on_period_check`), with Python and Lean held equal.
+  - `scan_zk`'s honest round ties `prog`. Its verdict, its answer's `public` and `chain_record`'s scan step say the acceptance rests on the period check: the step reads `accepted on the period check`, never a bare accept, with no K.
+- **Your two conditions:** done in `ab09a419f3`. Network said yes to the extra key at 06:37Z, so `public.rests_on_period_check` is in (`12f40c4c17`). R8's before and after, the records that move, and the two period-half reviewers are at the top of the body.
+- **Network asks you (NET-302, 06:37Z)** to say by Tue noon PST whether we need "exactly `["prog"]`". Its `need` accepts a list that is absent or exactly `["prog"]`, and no word means yes. Absent-or-`["prog"]` is right for us: answers made before R8 carry no list, and no caller but the scan's honest round passes `tied`. I have not replied.
+- **The conflict.** It is textual in `total_cost.py` and its test. It is also semantic: #8346's `figure1.lean_two` calls `plancheck.two(..., served, ...)` without `fanout`, which #8539 makes a `ValueError`.
+  - Once #8346 is on `main`, I merge `main`, move `FANOUT` into `figure1` and pass it there and in `test_figure1.py`'s two asserts, then rerun the suites and the two records and re-mark.
+  - #8360 (queue position 6, stacked on #8346) will need the same `fanout=` if it adds a call.
+  - The marker also warned that the store holds no records pass on this head's own Lean inputs. The rerun after the merge gives one.
+- **A second execution:** none seen. Every commit, run and mark since 06:24Z is mine, and this execution has your 06:23Z entry.
+
+**12:00Z report (PRF-456, NET-297, and 03:44Z), early.** In full: `note:proofs/20261110T0619Z-draft-accountd-1200-report`.
+
+- **Verdict: our audit's public can carry network's form, with one change: `k` belongs to a stratum, not to a tie class.** Nothing computes it today: no verifier path evaluates `Spot.TwoStageCheck` on an audit, only the planner's check (`sampled-proofs-plancheck`). The field is one PR on top of #8539 (`Spot/SecondStage.lean` and `Spot/Record.lean`, their mirror, a difftest piece, and one new Properties statement). No locked statement changes. Thu 12 Nov 12:00Z marked holds for the field. It does not hold for the pooled statement over a period, which is new (network's item 5).
+- **03:44Z.**
+  - (1) None of the three is carried. `wrong_units` is per registration at its own δ, and S is only the planner's and the certifier's.
+  - (2) The change above.
+  - (3) The token-count unit is `StopRule_v1`'s n, an i32: the response length, the cell of the egress END. The ids are i32 words (`TOKEN_ID_BITS = 32`), so S = 32 × the cap.
+- **Exact or rounded.**
+  - `pool` is `TwoStageCheck.Point` without its classes, all exact; today only the planner's inputs to it are rounded (`plancheck.two`).
+  - `ln_count` is `classSum (classFactor D) classes`, an exact rational upper bound that adds over windows. So the period's bits are `checkTwoStage` of the concatenated point, and the period check must use `Spot.Interval`'s bounds at p, not floats.
+- **The cap lemma is two theorems, both proved on `main` with no assumptions.**
+  - `card_influenceTwo_le_served_min` (a Proofs lemma, not listed) charges a request at most its served bits.
+  - `twoStageCheckServedSound` (listed) bounds that sum by the check's bits.
+  - Premises: `InScopeTwo` (open, LEAN-186, 30 Nov), and the domain premises `ClassesCover`, `FirstStageAt` and `ServedCover`. Nothing checks `ServedCover` on GLM-5.3 today.
+- **The 49% is the planner's.** I reproduced it locally on network's stand-in at ten times their `k`, in the patterns' form: +48.7% for an S-bit stratum proved whole, +20.8% drawn 1 of 2, +8.2% for the stop block. The capped form stays under 0.0001%.
+  - It is the patterns' bound's looseness, not the count. So the stratum rule keeps that bound tight and is not a soundness rule.
+  - On `main`, `total_cost`'s request-grain line is in the patterns' form.
+- **Daniel:** nothing, unless the pooled statement needs a premise beyond `InScopeTwo` and `FirstStageAt` over the period's union.
+- **Text for PRF-456**, 180 words, with the verdict as its first line: in the note's last section.
