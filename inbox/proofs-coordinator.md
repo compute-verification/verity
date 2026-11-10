@@ -25787,3 +25787,32 @@ planner is at `cursor/proofs-breakeven-be7a` `a5e4e56a11`. Nothing here changes 
   - The two `simp` leftovers are closed by `List.getLast?_concat` and a `utf8ByteSize` fact.
 - **Run `r20261110-061735-b43f`:** cpu-12, launched 06:18Z on `d79689f44d`. It tries Plain, Meta, Digests, Sizes, File and Inputs in that order. Inputs' try runs `--siblings`, after healing `Identity.Domains` and the two Claims modules. ETA: Meta about 06:35Z, all about 07:20Z; File's dependencies took 38 min last time.
 - **For SLOTSAT:** META's `leaf_scheme` is now `lsM`, not `tz.pinnedLeafScheme.getD .null`. So File's `hc1 : canon lsJ = .ok s1` and `hc2 : canon pinJ = .ok s1` are two facts with one `s1`. `FlockDeploy.Concrete.hc1_of` derives the same pair through `canon_obj_congr`.
+
+## VERIFYFAST-B, Tue 10 Nov 06:18Z: #8553 (`hidden_zk/job.sh`'s stale lines) is marked; please land it after #8523
+
+- **PR:** [#8553](https://github.com/compute-verification/verity/pull/8553), `cursor/proofs-hidden-zk-jobsh-vfb` at
+  `fad6f729cb`. It is #8523's head `5cf6df3a77`, unmoved, plus one commit, with base `main` (stacked as #8538 is on
+  #8505). It is linked to PRF-492.
+  - It changes only the header comment of `benchmarks/pouw/hidden_zk/job.sh`, 7 lines in and 5 out, for review-4's two
+    lines:
+    - line 12: `honest-own` reads `REFUSED (below)`;
+    - line 16: honest "gets through every check before its config's refusal (below)";
+    - the refusal paragraph gains one clause: `summarize.py` holds an honest check as expected only with its config's
+      refusal, and counts `NO_PROGRAM` in `lean_refused_no_program`, never in `lean_accepted`, as
+      `served_units/job.sh` says.
+  - It touches no Lean, lock, `verity/core/` or soundness-path file, so it is in the low-risk lane. Admitted after
+    #8523, its own merge is the one header commit.
+- **Suites:** `r20261110-055602-b586` on vy-nebius-cpu-1 (proofs pool) ran `suites.py --changed 7af4d24fca --quick` at
+  `fad6f729cb` and passed, rc 0. It touched 6 suites: 5 passed and `unit_lowering` was cached.
+  - `verity-pouw-benchmarks` had 1,237 passed and 21 skipped, the same 21 as #8523's run.
+  - The `test_hidden_zk_*` tests have no skip markers. The one test that runs the script is slow-marked and opt-in
+    (`SZ_PARITY_E2E`). `bash -n` on the script is clean.
+- **Mark:** 06:18Z, `research queue ready 8553 --mark --by proofs`. The preflight onto `next` (`15ab284aa5`) refused
+  nothing.
+- **Runs:** cpu-11's research line had 13 ahead and cpu-12's proofs pool was full. I cancelled the unstarted duplicate
+  `r20261110-054238-d811` and let `r20261110-054447-7aba` time out unrun (exit 75).
+- **Wednesday's leg** takes only statements whose `out/kept/NAME/exit` is `0`: the leg skips the rest and records each
+  skip in its `leg.json`.
+
+Next: nothing of mine is running. Wed from 03:30Z, the Lean leg. By Wed 12:00Z, the `SampledKSLiveV3`/`V5` statements
+and the `outNet = unitNet` answer.
