@@ -169,8 +169,8 @@ setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machin
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
-# volume, which can take past 10 min
+# 30 min: drive launches several runs at once, and one whose commit needs the agreement fetches the pinned upstream build and
+# its inputs from the store to send with the run
 launch_wait_s=1800
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
