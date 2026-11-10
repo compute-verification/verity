@@ -50,7 +50,7 @@ from verity.core.protocols.spot.one_stage import draw as D, partition as P
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.program import Program
 from verity.ml.windows import rows as CS
-from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR
 
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
@@ -94,13 +94,17 @@ class Rule:
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
     served = layout.schemas()
     names = [*served, *(n for n, _ in rule.interior)]
+    supplied = tuple(IR.SUPPLIED.values()) if layout.layers else ()
     values = (tuple(S.Value(p, s, "serve") for p, s in served.items())
-              + tuple(S.Value(n, s, "interior") for n, s in rule.interior))
+              + tuple(S.Value(n, s, "interior") for n, s in rule.interior)
+              + tuple(S.Value(n, None, "interior", registered=True) for n in supplied))
     public = (S.Public("population", "structure", "the class's spans N; then the sampled spans' proof blocks Q n_rho"),
               S.Public("window", "structure", "provenance: the serve's run, the window, the class, the check, the index's leaf"),
               S.Public("leaf_layer", "structure", "the interior registration's public bodies' digest"),
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}, from the class and its spans") for v in names
-                for k in ("leaves", "domain")))
+                for k in ("leaves", "domain")),
+              *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: a Digest a sampled span, from the sample")
+                for v in supplied for k in ("leaves", "words", "domain")))
     digests = tuple(P.program_digest(Program(t)) for t in layout.templates)
     check = S.Check(digests[0] if len(digests) == 1 else digests, layout.query, proof_deadline=rule.proof_deadline)
     return S.Spec(values, S.TwoStage(layout.grain, rule.replay, rule.k), check, public, f"{BR.FORMAT}\0{layout.run}".encode())
@@ -183,6 +187,16 @@ class First:
         ireg = self.stream.register_interiors(self.draw, record, ports, **kwargs)
         self.coins.commit(bytes.fromhex(ireg.digest))
         return ireg, self.stream.select(ireg)
+
+    def history(self, layer: int, published: Mapping[str, Sequence[str]],
+                bodies: Mapping[str, bytes]) -> dict[str, Any]:
+        """The challenger's `history` for an interior whose reads open layer ``layer``'s tables (`interior_rows.history`,
+        `second`'s ``history``): each sampled span's table named from this stage's own sample, under the class record's
+        root for it, of its class's C strings, the prover's ``published`` ones; ``bodies`` the interior's released public
+        bodies by member key."""
+        L = self.layout
+        names = [BT.name(L.run, L.prompt, L.outputs, int(u), layer) for u in self.draw.units]
+        return IR.history(self.record, names, BT.WORDS, BT.positions(L.prompt, L.outputs, L.capacity), published, bodies)
 
 
 def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coins: CC.ChallengerCoins, *,
