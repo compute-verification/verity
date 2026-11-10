@@ -20,6 +20,8 @@ Nontrivial: each statement is false with a premise dropped or its bound halved.
   publishes the trace (`openHider`) under a proof system that says nothing (`muteZk`).
 * `genericSampledZKAt_needs_zk`: `GenericSampledZKAt` without its zero-knowledge premise is false, at a commitment that
   publishes nothing (`constHider`) under a proof system whose honest view its simulator never outputs (`leakZk`).
+* `genericSessionsZK_needs_each`: `GenericSessionsZK` with its sum stopped after the first session is false, at a
+  proof system that leaks at one statement only (`tellZk`), proved second.
 -/
 
 @[expose] public section
@@ -161,6 +163,40 @@ theorem genericSampledZKAt_needs_zk :
   have h1 : avg (fun _ : Unit => @ite ℝ≥0∞ (true = true) (Classical.propDecidable _) 1 0) ≤
       avg (fun _ : Unit => @ite ℝ≥0∞ (false = true) (Classical.propDecidable _) 1 0) + 0 := h0
   rw [avg_const, avg_const, ite_eq_left rfl, ite_eq_right (by decide : ¬ false = true), add_zero] at h1
+  exact absurd h1 (not_le.2 zero_lt_one)
+
+/-! ## Sessions in turn: every session's error counts -/
+
+/-- Any two experiments are `1`-close. -/
+theorem Close.one {V : Type} (a b : Exp V) : Close a b 1 :=
+  fun E => ⟨(prob_le_one E a.g a.s).trans le_add_self, (prob_le_one E b.g b.s).trans le_add_self⟩
+
+/-- The proof system whose honest view is its statement and whose simulator's is `false`: it leaks at the statement
+`true` and nowhere else. -/
+def tellZk : Zk Bool Unit Unit Bool :=
+  ⟨fun x _ _ => ⟨.ret x, PUnit.unit⟩, fun _ _ => ⟨.ret false, PUnit.unit⟩⟩
+
+/-- `tellZk` is zero knowledge at no error at the statement `false`, and at error `1` at `true`. -/
+theorem tellZk_zkAt (Rel : Bool → Unit → Prop) : tellZk.ZKAt Rel fun x _ _ => cond x 1 0 := by
+  intro x w _ v
+  cases x
+  · exact Close.refl _
+  · exact Close.one _ _
+
+/-- **`GenericSessionsZK` needs every session's error**: with the sum stopped after the first session it is false.
+`tellZk` is zero knowledge at its error (`tellZk_zkAt`), which is `0` at the first of the statements `false`, `true`;
+over the two sessions the honest view is `[false, true]` and the simulator's is `[false, false]`. -/
+theorem genericSessionsZK_needs_each :
+    ¬ ∀ (Stmt Wit VS View : Type) (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
+      Zs.ZKAt Rel ε →
+      Zs.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Zs.seqErr ε ((xs.zip ws).take 1) (v xs) := by
+  intro h
+  have h0 := (h Bool Unit Unit Bool tellZk (fun _ _ => True) (fun x _ _ => cond x 1 0) (tellZk_zkAt _)
+    [false, true] [(), ()] (List.Forall₂.cons trivial (List.Forall₂.cons trivial List.Forall₂.nil)) (fun _ _ => ())
+    fun l => l = [false, true]).1
+  have h1 : @ite ℝ≥0∞ ([false, true] = [false, true]) (Classical.propDecidable _) 1 0 ≤
+      @ite ℝ≥0∞ ([false, false] = [false, true]) (Classical.propDecidable _) 1 0 + (0 + 0) := h0
+  rw [ite_eq_left rfl, ite_eq_right (by decide : ¬ [false, false] = [false, true]), add_zero, add_zero] at h1
   exact absurd h1 (not_le.2 zero_lt_one)
 
 end FlockSoundness.SampledGeneric
