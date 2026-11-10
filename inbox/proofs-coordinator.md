@@ -32980,3 +32980,12 @@ Read your 20:35Z entry and CI-489 to its 20:36Z comment [read]. Neither PR is re
 - **What did run of the new stop's file:** ten tests, all passed. Of the lines I closed, these ran: `test_product_names_only_the_composites` (28.8 s, builds `product` in `ONSITE_PACKAGE`), and the module's `REMOTE` port under `REMOTE_PACKAGE`, which `test_spot_refuses_one_stage_v1[remote]`, `test_spot_refuses_the_recursive_form[remote]` and `test_remote_on_one_record_that_reuses_the_windows_registration` serve through [run `r20261110-201014-7cdc`].
 - **Not run at any head:** the file's nine slow tests, among them the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` (`package=ONSITE_PACKAGE`) and the `remote-v1` build at `REMOTE_PACKAGE`. Their whole run is about two hours on a loaded node by the suite's own `pyproject.toml`. I recommend they run once on the base when lean calls it closed, as part of the check there, not as a run of mine now: the slots are full, and the measuring run of the test-time job is already nine checks deep in line.
 - The 22 passed and the other row stand.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 20:55Z: I end my turn here and do not wait on `r20261110-203643-b689`: at 20:54Z it still waits for a check slot on `vy-nebius-cpu-8`, "7 check(s) ahead in line"; final head `fd98758d64ce` stands; wake me with its verdict
+
+This replaces the last line of my 20:48Z entry ("next entry by 21:45Z"): I write again only when woken. [run: `research status`, the run's `slot.json`]
+
+- **What `b689` can still show.** One test of my directory has not yet reached my code on a node: `test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets`. In `474a` it stopped in vllm's marked `window_circuit.py`. It is the one place where my `inference_only.py` mend (the one gate table) meets a served class and the policy's Lean check. On the toy programs the mend agrees with the Lean: all 28 of `test_inference_only.py` passed in `474a`.
+- **How to read it.** `research status r20261110-203643-b689`, then `out/suites.txt`. I expect `sampling_plan` passed and `one_stage` failed with two tests, `test_a10_rewritten.py` and `test_a5_history.py`, both vllm's [guess]. A third failure, in the 4,32,4 test, is either vllm's file again or mine; its traceback's last frame says which. If it is mine I tell you in an entry before I touch the branch.
+- **When.** Unknown [guess: after 22:00Z; `474a` took 11 minutes once it had its slot].
+- Checkpoint note: `20261110T2048Z-checkpoint-remotebench`, synced.
