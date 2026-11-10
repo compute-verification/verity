@@ -1158,7 +1158,7 @@ def test_a_tick_whose_mapping_of_old_heads_fails_says_so_and_returns_what_it_log
 
 def test_move_carry_jobs_says_how_many_old_heads_the_loop_maps_across_moves_at_once(monkeypatch, tmp_path):
     """`--move-carry-jobs N` is the queue's `mapped_jobs` (default `MAPPED_JOBS`); 0, or less, maps none, so no mark or
-    verdict carries across a move."""
+    verdict carries across a move.  The mappings are kept beside the own changes, in the log's directory."""
     seen: list[int] = []
 
     class Built(Exception):
@@ -1166,6 +1166,8 @@ def test_move_carry_jobs_says_how_many_old_heads_the_loop_maps_across_moves_at_o
 
     def loop(world, *args, **kw):
         seen.append(world.q.mapped_jobs)
+        assert (world.q._kept_at, world.q._mapped_at) == (tmp_path / "log" / "own-changes.json",
+                                                          tmp_path / "log" / "mapped-changes.json")
         raise Built
 
     monkeypatch.setattr(L, "Loop", loop)
