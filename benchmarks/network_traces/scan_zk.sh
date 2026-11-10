@@ -8,9 +8,9 @@
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
 #      SC_CLASS=w63|w63k4|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G
 #      (`prove --group G`: link-windows 0 … G − 1 in one registration)
-#      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
-#      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
-#      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
+#      SC_CERTIFIER_RUN=DIR (a certifier_tcp_serve run's directory, `prove --certifier-run`)  SC_REHEARSE=1 (first a rehearsal,
+#      `certifier_tcp_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
+#      fake's id-form answer SC_FIRST_MS after each (past the certifier's delay: a void run), SC_PROMPT_MAX and
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
 #      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
@@ -24,7 +24,7 @@
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
+# rehearsal's public files go in $OUT/certifier; its records and salts (the prover's) and its request values (traffic.json's
 # requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
@@ -56,20 +56,20 @@ EOF
 fi
 
 if [ -n "${SC_REHEARSE:-}" ]; then
-  log "sczk: rehearsing the warden at scan_zk's schedule"
+  log "sczk: rehearsing the certifier at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
+  "$PY" benchmarks/network_traces/certifier_tcp_serve.py rehearse --fake --ids --out "$W/certifier" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
     $("$PY" benchmarks/network_traces/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
-    | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
+    | tee -a "$OUT/certifier-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
-  mkdir -p "$OUT/warden"
-  for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
-    [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
+  mkdir -p "$OUT/certifier"
+  for f in deployment.json cells.jsonl certified.jsonl check.json certifier.json serve.log; do
+    [ -f "$W/certifier/$f" ] && cp "$W/certifier/$f" "$OUT/certifier/"
   done
-  SC_WARDEN_RUN=$W/warden
+  SC_CERTIFIER_RUN=$W/certifier
 fi
 CH=()
 if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-parent history the session's pin must be on
@@ -85,10 +85,10 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
   esac
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
-log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
+log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_CERTIFIER_RUN:+, certifier run $SC_CERTIFIER_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
 "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
-  ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
+  ${SC_CERTIFIER_RUN:+--certifier-run "$SC_CERTIFIER_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"

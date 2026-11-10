@@ -17,15 +17,15 @@
 #     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
+#     The STANDIN entries certifier and certifier:KIND are a5_certifier.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the certifier's signed roots, beside a drawn rest, on a certifier run rehearsed here first (certifier_tcp_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
-#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     link-window with a5_certifier.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
-#     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
-#     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
-#     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
+#     certifier:altered reads one cell a bit off, and certifier:pad, certifier:pad-named and certifier:swapped make the egress chunk's
+#     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_CERTIFIER_RUN=DIR
+#     audits that certifier run instead of rehearsing one (e.g. certifier_replay.py's, a served window's traffic through the
+#     certifier), A5_CERTIFIER_UNITS=N each transfer-gate chunk's units (a5_certifier.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
 #     o_proj and down_proj at H = 2048), beside a drawn rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
@@ -231,24 +231,24 @@ else
       keep $e
       continue
     fi
-    if [ "${e%%:*}" = warden ]; then
-      case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
-        *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
+    if [ "${e%%:*}" = certifier ]; then
+      case $e in certifier) REFUSE=();; certifier:altered) REFUSE=(--altered);; certifier:pad|certifier:pad-named|certifier:swapped) REFUSE=(--made-for ${e#certifier:});;
+        *) echo "STANDIN $e: certifier, certifier:altered, certifier:pad, certifier:pad-named or certifier:swapped"; exit 3;; esac
       [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
-      if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
-        mkdir -p $O/warden-run && cp $A5_WARDEN_RUN/{deployment.json,cells.jsonl,check.json} $O/warden-run/ || exit 8
-        ln -s $A5_WARDEN_RUN $W/warden-run
+      if [ -n "${A5_CERTIFIER_RUN:-}" ] && [ ! -d $W/certifier-run ]; then
+        mkdir -p $O/certifier-run && cp $A5_CERTIFIER_RUN/{deployment.json,cells.jsonl,check.json} $O/certifier-run/ || exit 8
+        ln -s $A5_CERTIFIER_RUN $W/certifier-run
       fi
-      if [ ! -d $W/warden-run ]; then
-        (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
-          --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
-        mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
-        [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
-          $O/warden-run/check.json; exit 8; }
+      if [ ! -d $W/certifier-run ]; then
+        (cd benchmarks/network_traces && $PY certifier_tcp_serve.py rehearse --fake --out $W/certifier-run --requests 6 --rate 1 --tail 5 \
+          --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/certifier-rehearse.log 2>&1; r=$?
+        mkdir -p $O/certifier-run && cp $W/certifier-run/{deployment.json,cells.jsonl,check.json} $O/certifier-run/
+        [ $r = 0 ] || { tail -20 $O/certifier-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
+          $O/certifier-run/check.json; exit 8; }
       fi
-      $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
-        --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
+      $TIME $PY benchmarks/one_stage/a5_certifier.py --run $W/certifier-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
+        --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_CERTIFIER_UNITS:+--units $A5_CERTIFIER_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
       keep $N

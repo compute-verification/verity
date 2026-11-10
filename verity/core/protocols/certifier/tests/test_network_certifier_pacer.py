@@ -129,7 +129,7 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
 
 
 def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
-    """Each link is passed just before the bucket that first writes to it, as the warden passes a client's connection
+    """Each link is passed just before the bucket that first writes to it, as the certifier passes a client's connection
     when it admits it. Waiting for a link's socket, the pacer may take a message whose arrival its last `poll` also
     reported, and it then waits for no other: every bucket is released and written, and each link carries its own."""
 

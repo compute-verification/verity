@@ -1,9 +1,9 @@
 """N2's execution phase verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on plain, served and warden link-windows, honest and tampered (the session refused, rejected, naming another
+and digest on plain, served and certifier link-windows, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
 shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
-missing or not certificates; the declared syncs off Σ_sync or missing; a warden link under another digest).
+missing or not certificates; the declared syncs off Σ_sync or missing; a certifier link under another digest).
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
 
@@ -77,20 +77,20 @@ def _served(tmp):
     return Case(run.lw, opening, run.stream.select(reg), served.SYNCS, tmp)
 
 
-def _warden(tmp):
-    """The plain link as a network certifier's (`WardenProfile`): both records certified under the network certifier's
+def _certifier(tmp):
+    """The plain link as a network certifier's (`CertifierProfile`): both records certified under the network certifier's
     parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
-    run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, plain.WARDEN_DIGEST))
+    run.lw = lw = replace(run.lw, occupancy=(None, None), certifier=SVC.CertifierProfile(3, plain.CERTIFIER_DIGEST))
     run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                            clock=run.clock)
-    warden = lambda d, r: run.issuer.certify(r, d, plain.PARAMS, plain.WARDEN_DIGEST)
-    opening = lw.commit(0, warden(plain.EGRESS, plain.egress_records()[0]),
-                        warden(plain.INGRESS, plain.ingress_records()[0]), plain.SALTS[0])
+    certifier = lambda d, r: run.issuer.certify(r, d, plain.PARAMS, plain.CERTIFIER_DIGEST)
+    opening = lw.commit(0, certifier(plain.EGRESS, plain.egress_records()[0]),
+                        certifier(plain.INGRESS, plain.ingress_records()[0]), plain.SALTS[0])
     return Case(lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)
 
 
-KINDS = {"plain": _plain, "served": _served, "warden": _warden}
+KINDS = {"plain": _plain, "served": _served, "warden": _certifier}
 
 
 def _header(data):
@@ -193,26 +193,26 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     assert rejected >= len(cases) - 30
 
 
-def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
+def test_a_certifier_link_window_reads_the_certifiers_digest_and_no_sync(tmp_path):
     """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network certifier's digest, or as the plain link whose grids carry the certifier's digests, is a reject by both; and
     a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
     grids) is refused, which `verify` rejects."""
-    c = _warden(tmp_path)
+    c = _certifier(tmp_path)
     honest = c.both()
     assert honest[0] == honest[1] and honest[1]["accepted"] and honest[1]["public"] == {"verdict": 1, "deadline": 1}
     for s in _syncs(c):
         assert c.both(syncs=s) == honest
     lw = c.lw
-    for other in (replace(lw, warden=SVC.WardenProfile(3, bytes(64))), replace(lw, warden=None)):
+    for other in (replace(lw, certifier=SVC.CertifierProfile(3, bytes(64))), replace(lw, certifier=None)):
         assert other.program == lw.program
         c.lw = other
         lean, python = c.both()
         assert lean == python and not python["accepted"]
     c.lw = lw
     case = lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
-    assert case["kind"] == "warden" and case["warden"] == plain.WARDEN_DIGEST.hex()
+    assert case["kind"] == "warden" and case["warden"] == plain.CERTIFIER_DIGEST.hex()
     assert SVC.LA.SERVER.call("link-window", case)["accepted"]
     grid = case["ingress"]["grid"]
     for edit in ({"warden": case["warden"][:-2]}, {"warden": case["warden"] + "00"}, {"warden": None},
@@ -237,7 +237,7 @@ def test_an_advised_link_window_is_refused_by_name(tmp_path):
     for advised in ({**case, "kind": "advised"}, {**case, "kind": "advised", **view}):
         with pytest.raises(ValueError, match="an advised link is refused"):
             SVC.LA.SERVER.call("link-window", advised)
-    with pytest.raises(ValueError, match="plain, served or a warden's, not shaped"):
+    with pytest.raises(ValueError, match="plain, served or a certifier's, not shaped"):
         SVC.LA.SERVER.call("link-window", {**case, "kind": "shaped"})
 
 

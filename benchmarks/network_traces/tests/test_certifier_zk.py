@@ -1,4 +1,4 @@
-"""warden_zk's host side on a network certifier run driven tick by tick (`test_warden_serve._run`): the driver reads the
+"""certifier_zk's host side on a network certifier run driven tick by tick (`test_certifier_tcp_serve._run`): the driver reads the
 egress registration under the deployment's key and session and holds the network certifier's opening to its head; the
 Program's proof blocks read the egress cells of the connection admitted in the execution phase with the most cells, from
 cell D·r on, chosen from the wiring and the schedule alone, each at its bucket's row and the slot the network
@@ -6,8 +6,8 @@ certifier's wiring places it; each member's statement is accepted or refused by 
 reads exactly as the member says (sender and receiver accepted; unsigned and altered by their rows; pad and swapped,
 made for other proof blocks' wiring, by their value, swapped at the Program's own rows; pad-named, under the Program's
 value, by its row's position); the
-scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
-unit is the identity on a row's bits. Nothing here lowers or proves (`warden_zk.prove` does, on a node)."""
+scan's public pieces hold every pad the certifier wrote, pad's read among them, and none of the Program's cells; the toy
+unit is the identity on a row's bits. Nothing here lowers or proves (`certifier_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -20,18 +20,18 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-from verity.core.protocols.certifier.warden import END
+from verity.core.protocols.certifier.certifier import END
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))
-import test_warden_serve as tws  # noqa: E402
+import test_certifier_tcp_serve as tws  # noqa: E402
 
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_zk", HERE / "warden_zk.py")
+    spec = importlib.util.spec_from_file_location("network_traces_certifier_zk", HERE / "certifier_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -43,7 +43,7 @@ UNITS = 8
 
 @pytest.fixture(scope="module")
 def at(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("warden-zk")
+    tmp = tmp_path_factory.mktemp("certifier-zk")
     out, key = tmp / "run", tmp / "key"
     out.mkdir()
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
@@ -71,7 +71,7 @@ def test_the_programs_units_read_the_egress_cells_after_the_delay(at):
     assert len(set(at.positions)) < UNITS, "a bucket's r cells of the connection share its row"
     port = WR.port(at.head, at.opening.wiring, p, at.units)
     assert port["reads"] == at.positions and port["words"] == WR.row_bytes(p) // 2
-    assert port["value"] == f"warden/egress/0/units/{at.units.digest().hex()}"
+    assert port["value"] == f"certifier/egress/0/units/{at.units.digest().hex()}"
 
 
 def test_each_members_statement_is_read_as_the_member_says(at):
@@ -125,7 +125,7 @@ def test_the_scans_public_pieces_hold_every_pad_and_none_of_the_programs_cells(a
 
 
 def test_the_toy_unit_is_the_identity_on_a_rows_bits(at):
-    defn = bind(wz.WardenRowIdentity, B=WR.row_bytes(tws.PARAMS))
+    defn = bind(wz.CertifierRowIdentity, B=WR.row_bytes(tws.PARAMS))
     row = at.opening.rows[at.positions[0]]
     bits = np.asarray([[(row[k // 8] >> (k % 8)) & 1 for k in range(8 * len(row))]], dtype=np.uint8)
     assert np.asarray(evaluate_bits(defn, bits)).reshape(-1).tolist() == bits.reshape(-1).tolist()

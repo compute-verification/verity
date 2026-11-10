@@ -17,14 +17,14 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
-`WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
-server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
-(`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
-their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
-sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
+`CERTIFIER`'s traces serve a trace's server and load through the active certifier: `certifier_tcp_serve.py serve` in front of the
+server, a process beside it on its host (``certifier beside the server, not on the auditor host``), and the client
+(`drive_certifier`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
+their own (`cpu_plan`), the relay under `certifier_probe.py` (its every tick, publish and collection) and the host's load
+sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/certifier/
 holds what the relay published (its deployment, certified records and connection log), the probes' records and the
-shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which relay served (its
-egress from the release a, or from the admission s) is the trace's meta.json `warden.egress_base`
+shim's record of every connection; `summarize` runs `certifier_tcp_serve.py check` on it first. Which relay served (its
+egress from the release a, or from the admission s) is the trace's meta.json `certifier.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
 the wire.
@@ -130,29 +130,29 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
-#: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
-#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
-#: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
+#: certifier trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
+#: active certifier (`verity.core.protocols.certifier.certifier`, run by `benchmarks/network_traces/certifier_tcp_serve.py serve`), in
+#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the certifier's egress base
+#: (`egress_base`), covers the slowest request's send to last token without the certifier (heavy 10.7 s, small KV 55.7 s,
 #: async greedy).
-WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
-WARDEN_WHERE = "warden beside the server, not on the auditor host"
-#: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
+CERTIFIER = {"certifier-heavy": ("heavy", 300), "certifier-smallkv": ("smallkv", 1200)}
+CERTIFIER_WHERE = "certifier beside the server, not on the auditor host"
+#: a stall of the client's event loop it records (`drive_certifier`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
-#: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
+#: the descriptors the client holds beside its connections' (the server's and certifier's pipes, the loop's, the logs')
 FD_MARGIN = 256
-#: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
+#: the certifier's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the certifier never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
-WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
+CERTIFIER_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
-#: seconds the warden runs past the last arrival's D, for the last responses' egress cells
-WARDEN_TAIL_S = 60.0
-#: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
-#: windows' records (`warden_probe`'s `publisher`)
-WARDEN_END_S = 900.0
-TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
-                                   f"({WARDEN_WHERE})")
-           for name, (base, d) in WARDEN.items()}
+#: seconds the certifier runs past the last arrival's D, for the last responses' egress cells
+CERTIFIER_TAIL_S = 60.0
+#: seconds the trace waits for the certifier past its last window: a spawned publisher may still be committing the last
+#: windows' records (`certifier_probe`'s `publisher`)
+CERTIFIER_END_S = 900.0
+TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active certifier, D = {d} buckets of 100 ms "
+                                   f"({CERTIFIER_WHERE})")
+           for name, (base, d) in CERTIFIER.items()}
 #: the certified tick (``--admit tick``): the network certifier's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
 #: calibrating trace's mean busy cycle (`tick_from`)
 TICK_BUCKET_MS = 100
@@ -446,14 +446,14 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 
 
 def http_request(body: dict, rid: str, host: str) -> bytes:
-    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the warden's client sends them."""
+    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the certifier's client sends them."""
     data = json.dumps(body, separators=(",", ":")).encode()
     return (f"POST /v1/completions HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nX-Request-Id: {rid}\r\n"
             f"Content-Length: {len(data)}\r\nConnection: close\r\n\r\n").encode() + data
 
 
 def read_response(data: bytes, times: list[float], payload: int, sent: float) -> dict:
-    """What `drive` records of a streamed completion, read from the bytes the warden's cells carried: `data`, and `times`,
+    """What `drive` records of a streamed completion, read from the bytes the certifier's cells carried: `data`, and `times`,
     when each `DATA` or `END` cell arrived (cell k carries bytes kP ... (k+1)P - 1, P = `payload`). A server-sent event's
     tokens arrived with the cell that completed it, so `chunks` has the seconds from `sent` to that cell's arrival."""
     head, sep, _ = data.partition(b"\r\n\r\n")
@@ -509,34 +509,34 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
     return rec
 
 
-def warden_modules():
-    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+def certifier_modules():
+    """`verity`'s certifier and `certifier_tcp_serve` (benchmarks/network_traces), imported only for a certifier trace."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.core.protocols.certifier import warden
+    from verity.core.protocols.certifier import certifier
 
-    import warden_serve
-    return warden, warden_serve
+    import certifier_tcp_serve
+    return certifier, certifier_tcp_serve
 
 
-async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
+async def drive_certifier(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
                        drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
-    """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
-    warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
-    close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
-    warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`.
+    """`drive` through the certifier: from the certifier's origin, each request at its arrival on a connection of its own to the
+    certifier's listener, sent as cells and read through the client shim (`certifier.cells`, `certifier.Shim`), to the certifier's
+    close. client.jsonl has `drive`'s fields (`read_response`) and each request's certifier ordinal and outcome, and
+    certifier/client.json the shim's record of every connection in `certifier_tcp_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
     every thread of the process with it (numpy's among them), with the garbage collector off and every object made
     before the drive frozen out of its reach (stalls every connection shares put cell reads late), and the descriptor
     table grown to hold every connection before the first is opened
-    (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
+    (`reserve_fds`). certifier/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
     after the origin, ms]), every collection that still ran, and the table's size."""
-    from warden_probe import Collections
+    from certifier_probe import Collections
 
-    warden, ws = warden_modules()
-    params = warden.WardenParams(**deployment["params"])
+    certifier, ws = certifier_modules()
+    params = certifier.CertifierParams(**deployment["params"])
     B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
     loop = asyncio.get_running_loop()
@@ -575,19 +575,19 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
             sent = time.time()
             rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(loop.time() - t0, 6), "send_unix": sent,
                    "max_tokens": r["max_tokens"], "seed": body.get("seed"), "output_ids": [], "chunks": []}
-            shim = warden.Shim(B, time.time)
+            shim = certifier.Shim(B, time.time)
             try:
                 reader, writer = await asyncio.open_connection(*listen)
                 try:
-                    writer.write(warden.cells(request, B))
+                    writer.write(certifier.cells(request, B))
                     await shim.read(reader)
                 finally:
                     writer.close()
                 rec["warden"] = {"ordinal": shim.ordinal, "outcome": shim.outcome}
-                times = [t for t, kind in shim.arrivals if kind in (warden.DATA, warden.END)]
+                times = [t for t, kind in shim.arrivals if kind in (certifier.DATA, certifier.END)]
                 rec |= read_response(bytes(shim.data), times, params.payload, sent)
                 if shim.outcome != "end":
-                    rec.setdefault("error", f"the warden's connection ended: {shim.outcome}")
+                    rec.setdefault("error", f"the certifier's connection ended: {shim.outcome}")
                 conns[k] = ws.connection_log(k, round(t0_unix - origin + at, 6), sent - origin, request, shim, origin)
             except asyncio.CancelledError:
                 rec["error"] = "cancelled at the drain deadline"
@@ -624,7 +624,7 @@ def reserve_fds(n: int) -> int:
     """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
     size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
     waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
-    cell read a bucket late (`warden_serve.reserve_fds`). The table never shrinks."""
+    cell read a bucket late (`certifier_tcp_serve.reserve_fds`). The table never shrinks."""
     n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
     fd = os.open(os.devnull, os.O_RDONLY)
     try:
@@ -644,7 +644,7 @@ def pin_threads(cpus) -> None:
 
 
 def cpu_plan(cpus: list[int]) -> dict | None:
-    """The job's cores split for a warden trace, so that nothing else runs on the warden's or the client's: the warden the
+    """The job's cores split for a certifier trace, so that nothing else runs on the certifier's or the client's: the certifier the
     last one (the last two from 8 cores, its publisher beside its ticker), the client the one before, and
     the server, its engine core and the host sampler the rest. None under 4 cores (nothing is pinned)."""
     cpus = sorted(cpus)
@@ -658,54 +658,54 @@ def taskset(cpus: list[int] | None) -> list[str]:
     return ["taskset", "-c", ",".join(map(str, cpus))] if cpus else []
 
 
-def egress_base(warden) -> str:
+def egress_base(certifier) -> str:
     """Which point the relay's D counts from, read from its module's docstring: egress cell i at
     a + D + i/r from the release a (the ingress end), or at s + D + i/r from the admission s."""
-    doc = warden.__doc__ or ""
+    doc = certifier.__doc__ or ""
     if "before a + D" in doc:
         return "release a (the ingress end): egress cell i at a + D + i/r"
     if "before s + D" in doc:
         return "admission s: egress cell i at s + D + i/r"
-    return "unknown (the warden's docstring names neither a + D nor s + D)"
+    return "unknown (the certifier's docstring names neither a + D nor s + D)"
 
 
-def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
+def start_certifier(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
                  cpus: list[int] | None = None) -> tuple[subprocess.Popen, dict]:
-    """`warden_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `warden_probe.py`
-    (its ticks, publishes and collections to d/warden/ticks.json), writing to d/warden/ (its log to serve.log) with a
-    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `WARDEN_TAIL_S`. Returns
+    """`certifier_tcp_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `certifier_probe.py`
+    (its ticks, publishes and collections to d/certifier/ticks.json), writing to d/certifier/ (its log to serve.log) with a
+    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `CERTIFIER_TAIL_S`. Returns
     the process and its deployment record."""
-    params = WARDEN_SCHEDULE | {"delay": delay}
+    params = CERTIFIER_SCHEDULE | {"delay": delay}
     tau = params["bucket_ms"] / 1000
-    windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
+    windows = math.ceil((span_s + delay * tau + CERTIFIER_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/certifier_tcp_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))]
     with open(w / "serve.log", "w") as log:
-        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "warden_probe.py"), "serve", "--upstream",
+        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "certifier_probe.py"), "serve", "--upstream",
                                  f"127.0.0.1:{port}", "--listen", "127.0.0.1:0", "--out", str(w), "--key", str(key),
                                  "--session", secrets.token_hex(32), "--windows", str(windows), "--start-in", "2", *flags],
                                 stdout=subprocess.PIPE, stderr=log, text=True, env=env)
     if "listening" not in json.loads(proc.stdout.readline() or "{}"):
         proc.wait()
-        raise RuntimeError(f"the warden exited with {proc.returncode} before it listened (warden/serve.log)")
+        raise RuntimeError(f"the certifier exited with {proc.returncode} before it listened (certifier/serve.log)")
     return proc, json.loads((w / "deployment.json").read_text())
 
 
-def check_warden(d: Path) -> int:
-    """`warden_serve.py check` of a warden trace's d/warden (its certificates, the audit of its records and the client's
-    cells against them), into d/warden/check.json."""
+def check_certifier(d: Path) -> int:
+    """`certifier_tcp_serve.py check` of a certifier trace's d/certifier (its certificates, the audit of its records and the client's
+    cells against them), into d/certifier/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/certifier_tcp_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
 def rate_of(model: Model, name: str, rate: float | None) -> float | None:
     """A trace's Poisson rate: `rate` where given, else the model's for the trace's load (None if it has none)."""
-    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE else WARDEN.get(name, (name,))[0])
+    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE else CERTIFIER.get(name, (name,))[0])
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
@@ -739,7 +739,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
               args: argparse.Namespace) -> dict:
     server_args, why = TRACES[name]
     sampling, async_scheduling = VARIANTS[args.variant]
-    base, delay = WARDEN.get(name, (name, None))
+    base, delay = CERTIFIER.get(name, (name, None))
     rate = rate_of(model, name, getattr(args, "rate", None))
     tick = getattr(args, "tick", None)
     hostile = HOSTILE.get(name)
@@ -770,8 +770,8 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     if delay is not None:
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
     t = clock()
-    warden = sampler = None
-    key = Path(tempfile.mkdtemp(prefix="trace-corpus-warden-")) if delay is not None else None
+    certifier = sampler = None
+    key = Path(tempfile.mkdtemp(prefix="trace-corpus-certifier-")) if delay is not None else None
     with open(d / "server.log", "wb") as log:
         server = subprocess.Popen([*taskset(cpus and cpus["server"]), *argv], stdout=log, stderr=subprocess.STDOUT, env=env,
                                   start_new_session=True)
@@ -788,31 +788,31 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                 "where": "the client's stand-in network certifier (corpus.StandIn)"}
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
-            warden, dep = start_warden(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"])
+            certifier, dep = start_certifier(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"])
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
-            meta["warden"] = {"where": WARDEN_WHERE, "egress_base": egress_base(warden_modules()[0]), "params": dep["params"],
+            meta["warden"] = {"where": CERTIFIER_WHERE, "egress_base": egress_base(certifier_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
                               "listen": dep["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
-                                     "warden/deployment.json)"}
+                                     "certifier/deployment.json)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
-                                        f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}",
+                                        f"certifier:{certifier.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
-            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
+            print(f"[corpus] {name}: certifier ({CERTIFIER_WHERE}) on {dep['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
-            meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
+            meta |= asyncio.run(drive_certifier(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
-                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + WARDEN_END_S)
+                meta["warden"]["rc"] = certifier.wait(max(0.0, end - time.time()) + CERTIFIER_END_S)
             except subprocess.TimeoutExpired:
-                meta["warden"]["rc"] = f"still running {WARDEN_END_S:g} s past its last window"
+                meta["warden"]["rc"] = f"still running {CERTIFIER_END_S:g} s past its last window"
             meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
     finally:
-        if warden is not None and warden.poll() is None:
-            warden.terminate()
-            warden.wait()
+        if certifier is not None and certifier.poll() is None:
+            certifier.terminate()
+            certifier.wait()
         if sampler is not None:
             sampler.terminate()
             sampler.wait()
@@ -858,8 +858,8 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(f"{args.model_id} has no rate for {missing}: give --rate")
     args.tick = None
     if args.admit == "tick":
-        if bad := [n for n in traces if n in WARDEN or n in HOSTILE]:
-            raise SystemExit(f"--admit tick serves through the client's stand-in network certifier, not the warden's or "
+        if bad := [n for n in traces if n in CERTIFIER or n in HOSTILE]:
+            raise SystemExit(f"--admit tick serves through the client's stand-in network certifier, not the certifier's or "
                              f"the hostile schedulers' traces {bad}")
         args.tick = tick_args(args.tick_from, args.tick_ms)
         print(f"[corpus] the certified tick: {json.dumps(args.tick)}", flush=True)
@@ -937,9 +937,9 @@ def main(argv: list[str] | None = None) -> int:
     import summary
 
     if args.cmd == "summarize":
-        for w in sorted(Path(args.dir).glob("*/warden/deployment.json")):
+        for w in sorted(Path(args.dir).glob("*/certifier/deployment.json")):
             if not (w.parent / "check.json").exists():
-                print(f"[corpus] {w.parent.parent.name}: warden check rc {check_warden(w.parent.parent)}", flush=True)
+                print(f"[corpus] {w.parent.parent.name}: certifier check rc {check_certifier(w.parent.parent)}", flush=True)
         summary.summarize(Path(args.dir))
         return 0
     out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))

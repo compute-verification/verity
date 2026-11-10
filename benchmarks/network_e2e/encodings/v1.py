@@ -6,22 +6,22 @@ self-delimiting code (`code_v1.py`) under the registered codebook.
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`V1Error`),
 deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
 
-**Certified, 0 bits** (`Record`, from the warden's signed records under design v3; the compile unit holds them as
+**Certified, 0 bits** (`Record`, from the certifier's signed records under design v3; the compile unit holds them as
 witness):
-- the warden's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
+- the certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
-The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
+  which the certifier's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
+The reference order is the certifier's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
-comes after the release and overtakes it under load (the trace corpus behind the warden: 2,970 inversions of 499,500
+comes after the release and overtakes it under load (the trace corpus behind the certifier: 2,970 inversions of 499,500
 pairs on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is
 sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released
 request not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)).
-`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's warden
+`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's certifier
 ordinal.
 
 **Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
@@ -148,7 +148,7 @@ class Request:
 
 @dataclass(frozen=True)
 class Record:
-    """The certified record: the requests in the warden's admission order."""
+    """The certified record: the requests in the certifier's admission order."""
 
     requests: tuple[Request, ...]
 
@@ -161,7 +161,7 @@ class Record:
 
 
 def release_order(record: Record) -> list[int]:
-    """The certified reference order: the warden's release order, each request's last ingress cell landing, by
+    """The certified reference order: the certifier's release order, each request's last ingress cell landing, by
     (`end`, ordinal)."""
     return sorted(range(len(record.requests)), key=lambda k: (record.requests[k].end, k))
 
@@ -243,13 +243,13 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
 
 def streams(advice: I1.Advice, record: Record) -> tuple[int, ...]:
     """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
-    request q, the warden's ingress ordinal of the stream that carries it."""
+    request q, the certifier's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
     return tuple(ordinal[q.id] for q in advice.requests)
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (the I/O tie's
+    """What a string carries under the record: the advice; `streams`, each I1 request's certifier ordinal (the I/O tie's
     egress side checks each cell's stream against its request q through it); and the arrival order, the ordinals in the
     order the engine took them."""
 
@@ -866,7 +866,7 @@ TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
-    or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    or on a `.released` view the certifier's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
     to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
@@ -963,8 +963,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
     ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
-                    help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
-                         "release), or the engine's own arrival stamp (warden: no deviations)")
+                    help="the certified order's stand-in: the client's send (client; on a .released view, the certifier's "
+                         "release), or the engine's own arrival stamp (certifier: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
     a = ap.parse_args(argv)

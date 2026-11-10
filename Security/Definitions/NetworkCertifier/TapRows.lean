@@ -6,7 +6,7 @@ public import Definitions.NetworkCertifier.SampledCharge
 # The network certifier's rows: its registration at the transfer gates, and the leak relation at them
 
 Definitions only. The audit's trace holds each step's egress rows at the layout's egress gates and its ingress at the
-ingress gates (`BoundaryGates`). The network certifier on the server's uplink, which functions as an active warden,
+ingress gates (`BoundaryGates`). The network certifier on the server's uplink, which functions as an active certifier,
 registers what it records there: openings `ops` under the statement's roots, one at each transfer gate before the
 horizon, whose values (`tapVal ops`) are its records' egress rows and the operator's moves on them (`TapOpens`). Its
 registered root is its signed root for the window, a function of what the server did, so these rows vary with the

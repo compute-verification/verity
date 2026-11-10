@@ -22,7 +22,7 @@ from dataclasses import replace
 
 from verity.core.protocols.certifier import io_tie as IT
 
-from test_network_certifier_io_tie import BIG, _cell_tampers, busiest, busy, commit, serve, wardens, with_cells
+from test_network_certifier_io_tie import BIG, _cell_tampers, busiest, busy, commit, serve, certifiers, with_cells
 
 
 def _witness_matching(inst: IT.Instance, cells) -> IT.Instance:
@@ -111,7 +111,7 @@ def test_the_only_free_in_bucket_order_is_byte_identical_cells() -> None:
     ids: the two cells of connection 1 swap freely, but they are byte-identical, so they commit to one value; so do
     each connection's two pads in bucket 0. Every other order is refused."""
     one = IT.Shape(BIG.B, 2, 4, P=4, S=4, DS=4)
-    link = serve(one, wardens(one, 2, 1), [0, 0], [[10, 10], [12, 13]], 2 * one.T)
+    link = serve(one, certifiers(one, 2, 1), [0, 0], [[10, 10], [12, 13]], 2 * one.T)
     inst = commit(one, link, 0)
     assert IT.reference(inst)
     assert [(p.stream, p.id) for p in map(IT.parse_cell, inst.cells[one.R:2 * one.R])] == [(1, 10), (1, 10), (2, 12),
