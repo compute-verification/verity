@@ -125,7 +125,7 @@ def coeffs(level: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     u, v, w = U1.reshape(7, 2, 2), V1.reshape(7, 2, 2), W1.reshape(2, 2, 7)
     if level == 1:
         return u, v, w
-    def kron(x):
+    def kron(x: np.ndarray) -> np.ndarray:
         return np.einsum("pij,qkl->pqikjl", x, x).reshape(49, 4, 4)
     return kron(u), kron(v), np.einsum("ijp,klq->ikjlpq", w, w).reshape(4, 4, 49)
 
@@ -616,7 +616,8 @@ def run_level(args: argparse.Namespace) -> int:
 
     ntn = NTILES * sh.native_per_tile
 
-    def launch(f, arm, iters):
+    def launch(f: str, arm: str,
+               iters: int) -> tuple[float, np.ndarray | None, np.ndarray] | tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         fam = fams[f]
         if arm == "native":
             return dev.run_native(fam.arows, fam.brows, fam.c0, sh, ntn, geo["native"]["blocks"], iters, want=False)
