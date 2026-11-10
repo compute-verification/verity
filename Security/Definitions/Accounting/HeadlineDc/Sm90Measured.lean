@@ -5,7 +5,7 @@ public import Definitions.Accounting.HeadlineDc.Sm90
 /-!
 # H200 (sm_90)'s measured headline instance: DC-90-ri and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`verity/hardware/pouw/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 

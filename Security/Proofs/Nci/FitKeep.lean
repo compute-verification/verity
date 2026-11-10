@@ -15,7 +15,7 @@ the bound: a citation that leaves work out charges it.
 * `fitBoundSlots_init` cuts by window: `s` is every gate outside the windows in `I`. It asks `FitsSlots` of the other
   windows only, and `ReachSlots`, counted outside `I`, of the threads started outside `I`. A thread an initialization
   window starts has every kept multiplication in a window it entered, whose entry fee pays for it, so it needs no
-  `ReachSlots`. The charge is the counted multiplications inside `I` (`benchmarks/nci/fit.py`, `left_out`).
+  `ReachSlots`. The charge is the counted multiplications inside `I` (`verity/protocols/inference_only/nci/fit.py`, `left_out`).
 * `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
   and `FitsSlots` at `keep T s`.
 -/

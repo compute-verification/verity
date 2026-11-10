@@ -19,8 +19,8 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
 import stream  # noqa: E402
-from verity.ml.crypto import blake3  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
+from verity.commitments.crypto import blake3  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
 
 VECTORS = json.loads((HERE / "tests" / "stream_vectors.json").read_text())
 CU = (HERE / "stream.cu").read_text()

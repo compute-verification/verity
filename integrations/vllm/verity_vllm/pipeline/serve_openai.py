@@ -11,7 +11,7 @@
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
-It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what the network certifier sends (`verity/protocols/certifier/device/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,

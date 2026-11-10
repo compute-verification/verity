@@ -23,9 +23,9 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/t
 setup
 # the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (fixtures/artifacts.json)
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
-  benchmarks/network_e2e/encodings/tests/fixtures verity/core/protocols/certifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
+  benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/spot/verifier && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

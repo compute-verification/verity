@@ -40,7 +40,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
+`cd verity/flock/prover && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs (its directory, its workspace dependencies, the paths it declares,
@@ -57,7 +57,7 @@ reviewed change: drive and the quick tier take that failure as not red until it 
 ## Where a test goes
 
 - **In the tests/ of the package it tests**, mirroring its modules (`verity/ml/circuits/tests/` tests
-  `verity.ml.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
+  `verity.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with its siblings' pytest
   table; a directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like
   `tools/verity/check`. A test file no suite runs fails `tests/test_repository.py`.

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity.core.protocols.pous")
+pytest.importorskip("verity.protocols.pous.verifier")
 
 WIPE_RESUME = Path(__file__).resolve().parents[1] / "wipe_resume"
 POUS_TESTS = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pous" / "tests"
@@ -26,7 +26,7 @@ def _load(name: str, where: Path = WIPE_RESUME):
 @pytest.fixture(scope="module")
 def streamed(tmp_path_factory):
     resume = _load("resume")
-    from verity.core.protocols.pous import streamed_wipe as sw
+    from verity.protocols.pous.verifier import streamed_wipe as sw
 
     def python(signed, commitment, *, trusted, schemes, decide):
         v = sw.verdict(signed, commitment, trusted=trusted, schemes=schemes)

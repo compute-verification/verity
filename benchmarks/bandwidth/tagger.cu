@@ -32,7 +32,7 @@
 #include <thread>
 #include <vector>
 
-#include "../../verity/ml/kernels/sha512.cuh"
+#include "../../verity/definitions/kernels/sha512.cuh"
 
 #define CK(x)                                                                                                  \
   do {                                                                                                         \
@@ -76,7 +76,7 @@ __device__ __forceinline__ uint32_t red64(uint64_t x) {
 
 __device__ __forceinline__ uint32_t mulmod(uint32_t a, uint32_t b) { return red64((uint64_t)a * b); }
 
-// BLAKE3 (the specification's reference implementation, as `verity.ml.crypto.blake3`).
+// BLAKE3 (the specification's reference implementation, as `verity.commitments.crypto.blake3`).
 #define B3_IV0 0x6A09E667u
 #define B3_IV1 0xBB67AE85u
 #define B3_IV2 0x3C6EF372u

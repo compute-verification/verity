@@ -6,7 +6,7 @@ import sys
 
 import torch
 
-from verity.ml.circuits.refs import Coll
+from verity.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
@@ -18,7 +18,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, 
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity.ml.definitions.registry.dsa_norm import check_block
+from verity.definitions.registry.dsa_norm import check_block
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
@@ -331,9 +331,9 @@ def module_type(cls) -> type | None:
 
 def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity.ml.protocols.pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
+    (`verity.protocols.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.ml.protocols.pouw import circuit
+    from verity.protocols.pouw.prover import circuit
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")

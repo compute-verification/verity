@@ -122,23 +122,23 @@ fi
 
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/flock/prover HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/spot/verifier && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)

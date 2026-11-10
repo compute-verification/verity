@@ -12,15 +12,15 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
-from verity.ml.windows import interface as IF, rows as CS
+from verity.circuits.defs import REGISTRY, bind
+from verity.spot.verifier.python.one_stage import draw as DR, partition as P, registration as R
+from verity.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
-from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import D, HEADS, LAW, ROPE

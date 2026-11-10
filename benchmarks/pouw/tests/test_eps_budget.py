@@ -11,7 +11,7 @@ import pytest
 from verity_machine_model.eps import design, designs, eps, machine
 from verity_machine_model.model import device, devices
 
-spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[1] / "eps_budget.py")
+spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "eps_budget.py")
 E = importlib.util.module_from_spec(spec)
 sys.modules["pouw_eps_budget"] = E
 spec.loader.exec_module(E)
@@ -93,7 +93,7 @@ def test_the_designs_reproduce_skips_figures():
 
 
 def test_the_registry_skip_is_eps_budgets_number():
-    """One ε_skip a design on each device: its `[skip]` in benchmarks/pouw/machine_model/data/designs/ (sm_120) or
+    """One ε_skip a design on each device: its `[skip]` in verity/hardware/pouw/machine_model/data/designs/ (sm_120) or
     data/devices/sm_NN/designs/ is design_skip's, to the three figures the registry writes."""
     for dev in devices():
         data = device(dev)

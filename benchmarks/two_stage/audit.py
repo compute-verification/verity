@@ -67,7 +67,8 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 import a5_coins as AC  # noqa: E402
 import toy as T  # noqa: E402
-from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
+from verity.spot.device import challenger as Ch, coins as CC
+from verity.spot.verifier.python import service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
@@ -232,9 +233,9 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
     `second_stage.replay_wires`, as the stream derives them), the reads the audit record's verdicts of record report,
     what they name of each session they accepted (`second_stage.verified_of`), and each template's reference header and
     registered reads the params ``proofs`` give."""
-    from verity.core.protocols.spot import second_stage as SS
-    from verity.core.protocols.spot.one_stage import audit as A, partition as P
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.spot.verifier.python import second_stage as SS
+    from verity.spot.verifier.python.one_stage import audit as A, partition as P
+    from verity.circuits.codec import descriptor_id
 
     replay = T.boundary_window(int(brec["population"]), len(sample)).program
     verdicts = record.get("verdicts") or {}

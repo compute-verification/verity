@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.spot.verifier.python.one_stage import partition as P
 
 
 def resized(population: Sequence[tuple[Any, int]]) -> list[tuple[Any, int]]:

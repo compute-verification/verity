@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity.core.protocols.spot.one_stage.served import ServedTree
-from verity.ml.circuits.codec import canonical_json
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.spot.verifier.python.one_stage import partition as P, registration as R
+from verity.spot.verifier.python.one_stage.served import ServedTree
+from verity.circuits.codec import canonical_json
 
 #: a statement's ``--registered`` file, one a call
 FILE = "pouw-h1-registered-c{call}.json"

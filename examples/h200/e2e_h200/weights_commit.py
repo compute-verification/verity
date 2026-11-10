@@ -48,9 +48,9 @@ from typing import Any
 import numpy as np
 from e2e_h200 import served_weights as SW
 
-from verity.core.protocols.spot.one_stage import registered as REG
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import merkle_depth
+from verity.spot.verifier.python.one_stage import registered as REG
+from verity.commitments import hm96
+from verity.commitments.merkle import merkle_depth
 
 from .program import _weight_type
 from .shape import SHAPES, forms

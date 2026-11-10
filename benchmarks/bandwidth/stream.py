@@ -41,8 +41,8 @@ import hashlib
 from collections.abc import Sequence
 
 from verity.core.protocols.bandwidth import tags
-from verity.ml.crypto import blake3
-from verity.ml.randomness import Key, derive
+from verity.commitments.crypto import blake3
+from verity.commitments.randomness import Key, derive
 
 STREAM_DOMAIN = "verity/bandwidth/stream/v1"
 ABSORB_DOMAIN = b"verity/bandwidth/stream/v1\0"

@@ -52,7 +52,7 @@ of the credited work, with the device that did it left to the attribution layer.
 against `T_cred`, the credited work priced on one device's machine, and nothing ties a committed tile to the GPU that
 computed it: the transcript commits tile digests, so a helper can supply whole tiles. A per-GPU reading needs LOC's host
 deduction (what the host CPU can compute of the credited work is deducted) and the peer-GPU premise, every billable GPU
-on the node credited each window or the node as the unit (`benchmarks/pouw/machine_model/README.md`, "The headline is
+on the node credited each window or the node as the unit (`verity/hardware/pouw/machine_model/README.md`, "The headline is
 per node"). Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take every device over 1% on
 some real host.
 

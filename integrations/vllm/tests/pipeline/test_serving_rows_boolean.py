@@ -18,16 +18,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
-from verity.ml.windows import rows as CS
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import REGISTRY, bind
+from verity.spot.verifier.python.one_stage import draw as DR, partition as P, registration as R
+from verity.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.ml.definitions import boolean as BB
-from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
-from verity.ml.definitions.call_scope import specialization
+from verity.definitions import boolean as BB
+from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.definitions.call_scope import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 
 from tests.pipeline import served_rope as SR

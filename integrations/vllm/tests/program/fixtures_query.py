@@ -6,7 +6,7 @@ circuit); `FIXTURES` maps a short name to a memoised constructor so suites can p
 
 Families (the query design's §5 table + the counterexample shapes of the query-interface freeze):
 
-  registry (verity/ml/definitions/registry/b1.py and the quarantines)
+  registry (verity/definitions/registry/b1.py and the quarantines)
     gemm                 Gemm_v1{K=32,N=6}                         members of the GemmCoordinate batch; DotBf16 chain inside
     rmsnorm_triton       RMSNormTriton_v1{N=32}                    reduction tree + normalize path (merged per output)
     rmsnorm_fused        RMSNormFusedCuda_v2{N=32}                 tuple return (normed, res')
@@ -42,16 +42,16 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Callable, Iterable
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits import query_ast as QA
-from verity.ml.circuits.layout import Scope
-from verity.ml.circuits.parts import Item, Part, n_members
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry.prims import BF16, F32, I32
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits import query_ast as QA
+from verity.circuits.layout import Scope
+from verity.circuits.parts import Item, Part, n_members
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, tuple_of
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.prims import BF16, F32, I32
+from verity.circuits.types import Array, Tuple
 
 # ---------------------------------------------------------------------------------------------------------
 # registry programs (small statics)
@@ -112,7 +112,7 @@ def gemm_v2_program(K: int = 32, N: int = 6) -> Program:
 
 
 def layer_norm_aten_program(N: int = 32, EPS: float = 1e-5) -> Program:
-    from verity.ml.definitions.registry import layer_norm as LN
+    from verity.definitions.registry import layer_norm as LN
     return Program(bind(LN.LayerNormAten, N=N, EPS=EPS))
 
 
@@ -133,7 +133,7 @@ def moe_sum_program(TOPK: int = 2, H: int = 4) -> Program:
 
 def gumbel_program(V: int = 8, SEED: int = 12345, POS: int = 3) -> Program:
     """`GumbelArgmaxBf16_v1{V,SEED,POS}`: the only supported family with gates wider than 32 bits (two `Const64`)."""
-    from verity.ml.definitions.registry import sampling as G
+    from verity.definitions.registry import sampling as G
     return Program(bind(G.GumbelArgmaxBf16, V=V, SEED=SEED, POS=POS))
 
 
@@ -494,7 +494,7 @@ def interface_w_out_bound(part: Part) -> int:
 
 
 def _type_widths(t) -> list[int]:
-    from verity.ml.circuits.types import RecordType, Value
+    from verity.circuits.types import RecordType, Value
     if isinstance(t, Value):
         return [t.w]
     if isinstance(t, Array):

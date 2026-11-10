@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.ml.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
@@ -36,7 +36,7 @@ it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
-computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
+computes (`verity.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
 own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
@@ -132,14 +132,14 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot import service as SV
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity.ml.circuits import partition_object as PO
+from verity.spot.verifier.python import service as SV
+from verity.spot.verifier.python.one_stage import partition as P, registration as R
+from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
@@ -749,7 +749,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     plan, values = EX.Plan(list(dict.fromkeys(m.template for m in ms)), rows), dict(weight_values or {})
     reg = registered(ms, rows) if weight_values else EX.declarations(plan)
     if tables is not None:
-        from verity.core.protocols.spot.one_stage import registered as G
+        from verity.spot.verifier.python.one_stage import registered as G
 
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
         values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest, module=G)

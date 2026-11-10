@@ -1,6 +1,6 @@
 """Authored examples for the torch frontend (acceptance material, frontend design §5–§6).
 
-Part 1 re-authors composites of TA1's registry (`verity/ml/definitions/registry/b1.py`) in PyTorch. Their `Program`
+Part 1 re-authors composites of TA1's registry (`verity/definitions/registry/b1.py`) in PyTorch. Their `Program`
 digests must equal the digests of TA1's hand-built definitions (same `Name_vN{statics}`, same parameter names,
 same body nodes and reference encodings). Part 2 is IFb's identity shapes (repeated argument, returned input,
 dead declared return). Part 3 is the fail-closed negatives.
@@ -11,11 +11,11 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from verity.ml.circuits.defs import CompositeDefinition, bind as ir_bind
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry.prims import BF16, F32, I32
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import CompositeDefinition, bind as ir_bind
+from verity.circuits.refs import tuple_of
+from verity.definitions.registry import b1
+from verity.definitions.registry.prims import BF16, F32, I32
+from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.program.frontend.schemas import Arr, Tup
 from verity_vllm.program.frontend.torch_frontend import batch, function, ops, scan
 
@@ -97,7 +97,7 @@ def NormedRow(x: Arr["K", BF16], w: Arr["N", "K", BF16], g: Arr["N", BF16], *, K
     return ops.RMSNormTriton(N=N, EPS=EPS)(y, g)
 
 
-# the same thing hand-built in verity.ml.circuits, for the digest comparison
+# the same thing hand-built in verity.circuits, for the digest comparison
 NormedRowIR = CompositeDefinition(
     "NormedRow", 1, ("K", "N", "EPS"),
     lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16))), ("g", Array(S.N, BF16))), Array(S.N, BF16)),

@@ -28,7 +28,7 @@ build_tests() {   # build_tests DEST: DEST/flock-live-tests, flock-live's lib te
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
   for p in link gpu-link; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/verity/ml/flock/live" crates/flock-live
+  cp -r "$SRC/verity/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
   for p in sha512 glue zk vtime; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
@@ -51,7 +51,7 @@ lean_verify() {   # lean_verify D O TAG: the Lean verifier on D's --zk session (
 
 run_shapes() {
   local shape K N n tag D O f TD z
-  TD=$(cached tests "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_tests)
+  TD=$(cached tests "$(tree_key verity/flock/prover/live verity/flock/prover/*.patch)" build_tests)
   [ -x "$TD/flock-live-tests" ] || { log "tests build FAILED"; tail -20 "$OUT/build-tests.log" | tee -a "$OUT/job.log"; }
   for shape in $SHAPES; do
     IFS=: read -r K N n <<< "$shape"

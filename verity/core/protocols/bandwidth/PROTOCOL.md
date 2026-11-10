@@ -4,7 +4,7 @@ A run of the bandwidth audit certifies how much of a fixed store a device read f
 within a deadline of a fresh seed. This is the audit over PoUS's store (v0), one of the subprotocols
 (`ARCHITECTURE.md`, Glossary), and no composite protocol runs it: its tag `ro-blake3/v1` is BLAKE3, which the one-hash
 rule (`AGENTS.md`, "Design rules") keeps off the served path. The bandwidth audit on the served path is PoUB
-(`verity/core/protocols/remote_bandwidth/`), which applies this audit's guarantee per pass. This package
+(`verity/protocols/poub/verifier/remote_bandwidth/`), which applies this audit's guarantee per pass. This package
 stays for the benchmarks that measure its tags (`benchmarks/bandwidth`).
 
 ## 1. What a run certifies, and on what
@@ -65,7 +65,7 @@ uniform registers (256 bytes a warp) and TLB, where a kernel can keep constants,
 across `σ`. The chip's are its copy-engine, PCIe and memory-controller buffers and its video engines. sm_120 has no
 Tensor Memory (the same reference, chapter 14).
 
-**The assumptions** that carry the bound to a real device are claims of `verity.core.claims`:
+**The assumptions** that carry the bound to a real device are claims of `verity.claims`:
 
 - **`random-oracle`** (assumption): the tag is a random oracle fresh at `σ`: for `ro-blake3/v1`, keyed BLAKE3 under a
   key derived from `σ` by SHA-512; for `ro-sha512/v1`, SHA-512 after a prefix that holds `σ`. The proof's oracle is one
@@ -130,7 +130,7 @@ by the verifier, would move this to the chip; the audit doesn't use it.
 
 ## 3. The store and its leaves
 
-`E` is PoUS's P2 store `C*` (`verity.core.protocols.pous.schemes.p2`): `N = 2^19` labels of 2,056 bytes (1.08 GB),
+`E` is PoUS's P2 store `C*` (`verity.protocols.pous.verifier.schemes.p2`): `N = 2^19` labels of 2,056 bytes (1.08 GB),
 encoded from the useful data `W` under PoUS's setup (`pous.setup`: the commitment to `W`, then the verifier's salt, then
 `vk`). Each label is two slow roots of its keyed payload, `c = ρ(σ_K(ρ(m + t)))`: under P2's assumptions a label is
 incompressible except through `W`, and rebuilding it from `W` takes two roots in sequence. `Params` refuses `T + RTT`
@@ -179,7 +179,7 @@ A run is one execution of the audit over one store (`Verifier.window()`, a `Wind
 1. **Seed.** The verifier samples a fresh 32-byte nonce from its own randomness and records it in the store's state
    (`Window.open`, §5). It derives the run's key from its own secret,
    `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
-   (`audit.window_key`, `verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock
+   (`audit.window_key`, `verity.commitments.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock
    (`Window.start`). The nonce is never a counter and never sampled twice for a store, so no two runs over a store share
    a key, whichever verifier, tag or restart opens them. A key fixed by a run number would repeat in every verifier
    counting from the same place: a fast-check run would reveal, after its commitment, the samples of the certified
@@ -228,7 +228,7 @@ leaf_c         SHA512(prefix(leaf, σ) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+
 root           RFC 6962 SHA-512 tree over the leaves: node = SHA512(0x01 ‖ left ‖ right)
 ~~~
 
-`frame` is `verity.ml.randomness.frame`. `ro-blake3/v1`'s message is 2,064 bytes, three BLAKE3 chunks (1,024, 1,024 and
+`frame` is `verity.commitments.randomness.frame`. `ro-blake3/v1`'s message is 2,064 bytes, three BLAKE3 chunks (1,024, 1,024 and
 16 bytes): 33 chunk compressions and 2 parent compressions, each starting from `K`, which keyed mode puts in every
 chunk's and every parent's chaining value. Its leaf of 16 tags takes 5 SHA-512 compressions after the prefix.
 
@@ -336,7 +336,7 @@ assumption is needed for the two properties of runs that overlap in time:
   16-tag leaves end short). Label `j` is the first bytes of the SHA-512s of
   `"verity/bandwidth/test-block/v1\0" ‖ u64be j ‖ u32be c` for `c = 0, 1, …`, concatenated.
 - `tests/test_openings.py`: `openings.py` against this audit's sampling term and slack, and its multiproof and
-  retention expectations by enumeration against `verity.ml.commitments.multiproof`.
+  retention expectations by enumeration against `verity.commitments.multiproof`.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), whose roots over
   the full store and the vectors' 37 labels must equal `tag_pass`'s before anything is timed; its harness (`gpu.py`:
   `challenger_device(tagger, gpu)`, `Tagger.tag_pass`, `open(j, store_tree)`, `Prover(tagger, store, blocks, scrub)`

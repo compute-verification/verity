@@ -29,8 +29,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.core.protocols.spot.optimize import row_ands, unit_class
-from verity.ml.definitions.call_scope import spec_base, spec_statics
+from verity.spot.optimize import row_ands, unit_class
+from verity.definitions.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
@@ -262,7 +262,7 @@ def table(c: dict) -> str:
 
 
 def card(c: dict) -> dict:
-    """The planner's card (`benchmarks/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
+    """The planner's card (`verity/spot/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
     request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps by row family
     (`gap_families`)."""
     keep = ("family", "prefill", "decode", "out_bits", "ands", "macs", "rows", "k_log")

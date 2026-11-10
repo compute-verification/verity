@@ -5,13 +5,13 @@ public import Definitions.Accounting.HeadlineDc.Encoding
 /-!
 # B200 (sm_100)'s headline instance: DS-100 and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`verity/hardware/pouw/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
 * `classes`: the 52 instruction classes of the DS-100 census, in the order `Fin 52` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
-* `ds100`, `sheet`: the B200's data sheet (DS-100), `benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml` as
+* `ds100`, `sheet`: the B200's data sheet (DS-100), `verity/hardware/pouw/machine_model/data/devices/sm_100/sheet.toml` as
   `Security/Definitions/Accounting/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the data
   sheet gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4
   sparse form at its dense twin's, its mma.sync whole, DMMA's at the f64 peak) and its operand type's dense MACs an SM

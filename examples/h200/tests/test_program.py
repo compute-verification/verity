@@ -12,9 +12,9 @@ from e2e_h200.shape import MINI, PV_K, TINY
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+from verity.circuits.codec import program_digest
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.refs import Affine, Concat, Explicit, Strided
 from e2e_h200 import served_weights as SW
 
 BATCH, STEPS = 2, 4

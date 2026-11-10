@@ -9,11 +9,11 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.spot.one_stage import produced as PR
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.spot.verifier.python.one_stage import produced as PR
+from verity.spot.verifier.python.one_stage import registered as G
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_vllm.errors import Refused
 
 M32 = (1 << 32) - 1
@@ -105,7 +105,7 @@ def lane_operands(x: dict, ln: int) -> tuple[list, list, list, list]:
 
 def partials(x: dict) -> np.ndarray:
     """The leaf's partials, a row a lane: `h1zy.lane_partial` of each lane's rows, its u16 words."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     out = []
     for ln in range(LL.lanes(*x["tile"])):
         a, b, _sa, _sw = lane_operands(x, ln)
@@ -117,7 +117,7 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     from verity_vllm.protocols.pouw.h1 import registered as NR
     from verity_vllm.protocols.pouw.h1 import served as SV
     sizes = [size for size, _w in CR.call_work(win["layout"])]
@@ -132,7 +132,7 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
 
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:
     """The statement's ok on its rows, the word reference's (`h1zy.lane_reference`, `h1zy.combine_reference`)."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     if kind == LL.LANE:
         a, b, sa, sw = lane_operands(x, ln)
         return Z.lane_reference(a, b, sa, sw, x["admit"], x["zy"], u32_words(rows[LL.PARTIALS][0]), x["salt"],

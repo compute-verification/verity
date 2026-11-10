@@ -8,8 +8,8 @@ import struct
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.ml.commitments.merkle import Opening
+from verity.protocols.poub.verifier.remote_bandwidth import receipts as rb
+from verity.commitments.merkle import Opening
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, NodeMemory, RemoteBandwidthReceipt, chain
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
@@ -202,7 +202,7 @@ def test_windows_chain_through_the_session():
 def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest():
     """The driver's `Registration.digest`, not the store's own log root, is the root before the session's first pass;
     a later window takes none."""
-    from verity.core.protocols.remote_bandwidth import audit
+    from verity.protocols.poub.verifier.remote_bandwidth import audit
     s = NodeMemory()
     weights(s)
     digest = audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32)).digest

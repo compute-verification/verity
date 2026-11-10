@@ -97,7 +97,7 @@ def test_flock_stage_writes_an_input_set_range(tmp_path):
     import numpy as np
 
     from verity_numerical.bench import generate as G
-    from verity_flock import input_sets as IS
+    from verity.flock.python.verity_flock import input_sets as IS
 
     sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
     stage = L.registry("C-Flock").stage(sub)

@@ -17,8 +17,8 @@ from e2e_h200.program import program
 from e2e_h200.shape import MINI, MINI_ROWS
 from e2e_h200 import served_weights as SW
 
-from verity.core.protocols.spot.one_stage import registered as REG
-from verity.ml.circuits.codec import program_digest
+from verity.spot.verifier.python.one_stage import registered as REG
+from verity.circuits.codec import program_digest
 
 SHAPE = MINI_ROWS
 SEED = SW.TEST_SEED

@@ -1,6 +1,6 @@
 # network_traces
 
-The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
+The network certifier (`verity/protocols/certifier/verifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
 record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
@@ -26,7 +26,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
+- **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.certifier.verifier.warden`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
@@ -84,7 +84,7 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+`workloads/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
@@ -213,7 +213,7 @@ over links is our composition, which no Lean statement covers. It holds except w
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
 
-**K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
+**K per monitoring period on a run**: `uv run verity/protocols/certifier/verifier/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
 the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each

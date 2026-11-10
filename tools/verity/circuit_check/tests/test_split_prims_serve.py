@@ -24,7 +24,7 @@ REWRITE = ("a change meant to add or move a family Definition rewrites the fixtu
            "`uv run python tools/verity/check/pins.py --write tools/verity/circuit_check/tests/fixtures/split/prims_serve.json`")
 #: the fixture's ``family``, which no test reads
 FAMILY = "primitives, composites and serving"
-REG = "verity.ml.definitions.registry"
+REG = "verity.definitions.registry"
 #: the family's Definition modules (`FAMILY` of integrations/vllm `tests/program/test_prims_serve_boundaries.py`)
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
@@ -33,9 +33,9 @@ DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", 
 def _digest(fn) -> str | None:
     """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
     a one-Call wrapper (which is not registered)."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.ml.circuits.program import Program
+    from verity.circuits import codec
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.circuits.program import Program
 
     if isinstance(fn, SpecializedDefinition):
         return codec.program_digest(codec.encode_program(Program(fn)))
@@ -49,7 +49,7 @@ def _digest(fn) -> str | None:
 
 def _family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family Definition module defines (not one it imports), by that module."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out: dict[str, str] = {}
     for name in DEFINITION_MODULES:

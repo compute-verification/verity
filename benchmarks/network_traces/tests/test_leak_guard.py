@@ -419,7 +419,7 @@ def _chain(tmp: Path, gates: str, *, py: str = sys.executable, **kw) -> subproce
     env = {"PATH": os.defpath, "HOME": str(tmp), "TMPDIR": str(tmp / "tmp"), "RESEARCH_RUN_DIR": str(tmp / "runs/r1"),
            "CR_MEM_GB": "1", "CR_GATES": gates, "CR_CACHE": str(tmp / "cache"), "PY": py}
     (tmp / "tmp").mkdir(exist_ok=True)
-    return subprocess.Popen(["bash", "benchmarks/network_traces/chain_record.sh"], cwd=ROOT, env=env,
+    return subprocess.Popen(["bash", "verity/protocols/certifier/verifier/network_traces/chain_record.sh"], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kw)
 
 

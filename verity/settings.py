@@ -3,7 +3,7 @@ environment variable ``verity`` reads, declared once.
 
 Each distribution declares every environment variable it reads once, in a `Registry` of its own, and reads them only through
 it: ``verity``'s is `REGISTRY` here, the vLLM integration's ``integrations/vllm/verity_vllm/settings.py``, and every other
-distribution's the ``settings.py`` beside its ``pyproject.toml`` (``tools/config/verity_config/settings.py``, which adds the
+distribution's the ``settings.py`` beside its ``pyproject.toml`` (``verity/configuration/config/verity_config/settings.py``, which adds the
 variables the tools around a run set, `SHARED` there, and finds a distribution's registry by path).  The machinery is here
 because ``verity`` imports no other distribution.  The vLLM integration keeps its own copy of it, because a Build's top-level
 process runs without ``verity`` on its path (``integrations/vllm/tests/pipeline/test_cli.py``'s dense-threads test).
@@ -413,7 +413,7 @@ RECORD_SCHEMA = "verity/settings/v1"
 
 REGISTRY = Registry(
     __file__, ("VERITY_ML_",),
-    # ---- verity.ml.circuits, its suites included
+    # ---- verity.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
     # ---- verity_flock's suite

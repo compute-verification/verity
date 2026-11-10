@@ -16,7 +16,7 @@ rows and columns is stored: ``w_<n>.npz`` (the sampled weight rows) once per sha
 
 ``check`` (any host): ``cpu_model.gemm_model`` with the target's step parameters on the stored operands, compared word for word.
 The step is cross-checked on a sample of every case's coordinates against the registered primitive itself
-(``verity.ml.circuits.evaluation.evaluate_batch``).  One inexact coordinate refuses the correspondence; there is no tolerance.  A bias case
+(``verity.circuits.evaluation.evaluate_batch``).  One inexact coordinate refuses the correspondence; there is no tolerance.  A bias case
 is compared under both epilogues the GEMM relations know (FP32 bias add before the rounding, as a cuBLASLt epilogue does, and
 a bf16 add after it, as vLLM's Triton linear does) and reports which one holds.
 
@@ -244,9 +244,9 @@ def capture(a: CaptureOptions) -> int:
 
 def step_model(dot: str):
     """``(the registered step primitive, a cpu_model TCModel with its parameters)`` for a ``GemmTarget.dot`` name."""
-    from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
-    from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
-    from verity.ml.definitions.numerics.mma import TCModel
+    from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16
+    from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
+    from verity.definitions.numerics.mma import TCModel
     from verity_vllm.program.frontend.targets import DOTS
 
     groupsum = {"AmpereBF16TcDot16": AMPERE_BF16_M16N8K16, "HopperBF16WgmmaDot16": HOPPER_BF16_WGMMA_K16}.get(dot)
@@ -259,8 +259,8 @@ def step_model(dot: str):
 def crosscheck(prim, model, x: np.ndarray, w: np.ndarray, rows: int, cols: int) -> tuple[int, int]:
     """``(exact, attempted)``: the FP32 chain of ``cpu_model`` against the registered primitive's own evaluation on the first
     ``rows`` x ``cols`` coordinates."""
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.definitions.numerics import cpu_model as CM
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.definitions.numerics import cpu_model as CM
 
     xs, ws = x[:rows], w[:cols]
     _, f32 = CM.gemm_model(model, xs, ws, None, CM.GemmModelSpec(model.name, bias_mode=0), want_f32=True)
@@ -273,7 +273,7 @@ def crosscheck(prim, model, x: np.ndarray, w: np.ndarray, rows: int, cols: int) 
 
 
 def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
-    from verity.ml.definitions.numerics import cpu_model as CM
+    from verity.definitions.numerics import cpu_model as CM
 
     x, gpu, rows = d["x"], d["gpu"], d["rows"]
     w, cols = wd["w"], wd["cols"]
@@ -293,7 +293,7 @@ def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
 
 
 def check(a: CheckOptions) -> int:
-    from verity.ml.definitions.numerics import cpu_model as CM
+    from verity.definitions.numerics import cpu_model as CM
     from verity_vllm.program.frontend.gemm_targets import gemm_target_for
 
     root = Path(a.case_dir)

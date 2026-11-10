@@ -5,7 +5,7 @@ The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
 `verity-pous/p2-store-layout/v1`): `store_layout` reads its JSON, the real store's (`store.py layout`, pinned by its
 `LAYOUT_SHA512`) or the toy's (`store-toy/toy.json`'s `layout`), with the key prefix:
 
-- the registered codec `p2-16448/v4` (`verity/core/protocols/pous/schemes/p2.py`): 2,056-byte big-endian blocks, block
+- the registered codec `p2-16448/v4` (`verity/protocols/pous/verifier/schemes/p2.py`): 2,056-byte big-endian blocks, block
   i = blocks_per_segment · s + v being block v of segment s;
 - block i's payload is W bytes [2054 i, 2054 i + 2054), bytes 2 .. 2055 of its decoded row, whose bytes 0 and 1 are zero;
 - each tensor (s8 [N, K] row-major) starts on a block, `first_block`, takes ⌈N K / 2054⌉ blocks, and its last block's
@@ -34,7 +34,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.core.protocols.pous.schemes import p2 as S
+from verity.protocols.pous.verifier.schemes import p2 as S
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
@@ -281,7 +281,7 @@ def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes,
     `setup.draw_salt(source, commitment)`, the auditor's coin `source` flipped after the store's commitment. Refused unless
     the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters, and
     under this coin and salt where `setup.json` records them."""
-    from verity.core.protocols.pous import setup as P
+    from verity.protocols.pous.verifier import setup as P
 
     salt = P.draw_salt(source, commitment)
     want = {"commitment": commitment.hex(), "layout_sha512": layout_sha512, "manifest": layout_doc.get("params"),

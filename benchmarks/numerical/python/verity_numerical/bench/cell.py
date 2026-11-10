@@ -43,7 +43,7 @@ from typing import Any, Iterable, Mapping
 
 from . import census as CN
 from . import contract, drivers, interaction, placement as PL
-from verity_flock import input_sets as IS
+from verity.flock.python.verity_flock import input_sets as IS
 from verity_flock import lowerings as LW
 from verity_flock import subcircuit_templates as TM
 

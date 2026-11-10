@@ -14,7 +14,7 @@ collective); `calls[k]` is Call k (= node k of the program function's body, the 
 with its occurrence, return slots and argument slots; in a batched Program (`prune.BATCHED`) a batch node's is its members'
 (`{"members": [...]}`), which no reader takes yet (`records` refuses it).  `load_correspondence(descriptor)` joins them into `CallCorrespondence`
 records and answers `owning_module(call_id)`, `return_slot(call_id, port)`, `arg_slot(call_id, input_index)`, and the
-module-body partition `calls_of_module(path)` that `verity_vllm.query` consumes.  Stdlib plus `verity.ml.circuits.codec`'s `canonical_json`:
+module-body partition `calls_of_module(path)` that `verity_vllm.query` consumes.  Stdlib plus `verity.circuits.codec`'s `canonical_json`:
 imports without torch.
 """
 
@@ -25,7 +25,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 
 SCHEMA = "runtime-correspondence/v1"
 NAMESPACE = "correspondence"   # the one annotation key the frontend writes the record under

@@ -1,11 +1,11 @@
-"""The bench's synthetic input sets (`verity_flock.synthetic`): named suites of them, and registering one in the evidence store.
+"""The bench's synthetic input sets (`verity.flock.python.verity_flock.synthetic`): named suites of them, and registering one in the evidence store.
 
     python -m verity_numerical.bench.generate --list
     python -m verity_numerical.bench.generate --template gemm-coordinate --param K=2048 --param semantics=sm80.mma.m16n8k16.bf16 \\
         --n 4096 --seed 20260926 --out DIR [--procs P] [--register]
     python -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 1024 --seed 1 --out DIR
 
-The sets are `verity_flock.synthetic`'s, each with its provenance naming the run that wrote it.  ``--register`` puts it in the
+The sets are `verity.flock.python.verity_flock.synthetic`'s, each with its provenance naming the run that wrote it.  ``--register`` puts it in the
 evidence store as an ``input-set/v1`` artifact (``research data put --tree ... --preserve``) and prints its id.
 """
 from __future__ import annotations
@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from verity_flock import input_sets as IS
+from verity.flock.python.verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
-from verity_flock import synthetic as SY
+from verity.flock.python.verity_flock import synthetic as SY
 
 
 def _versions() -> dict[str, Any]:
@@ -36,7 +36,7 @@ def _versions() -> dict[str, Any]:
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
              provenance: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """`verity_flock.synthetic.generate`, its provenance naming the run this runs under and its source commit."""
+    """`verity.flock.python.verity_flock.synthetic.generate`, its provenance naming the run this runs under and its source commit."""
     run = {"research_run": os.environ.get("RESEARCH_RUN_ID"), "versions": _versions()}
     return SY.generate(sub, n, seed, out, procs=procs, chunk=chunk, provenance={**run, **(provenance or {})})
 

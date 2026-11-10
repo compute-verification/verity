@@ -1,16 +1,16 @@
-"""C-interactive (Flock, live verifier): ``verity/ml/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
+"""C-interactive (Flock, live verifier): ``verity/flock/pod/30-cell.sh`` on both pods, then ``verity.flock.python.verity_flock.register``.
 
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
 writes its own instance files from it (``verity_flock.instance_file.write_set``); on a census frozen set the scripts rebuild it.
 
 The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
-``verity/ml/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
+``verity/flock/pod/61-circuit-cell.sh`` the same way (``verity.flock.python.verity_flock.circuit_bench``; the verifier stages only its public files).
 
-An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``verity/ml/flock/pod/33-ir-cell.sh`` instead: the
-cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
-``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
+An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``verity/flock/pod/33-ir-cell.sh`` instead: the
+cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity.flock.python.verity_flock.ir_bench``), and
+``verity.flock.python.verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
 
-The verifier pod runs ``ROLE=verifier`` (its own instance files, ``verity_flock.bench --serve-plan`` on :7400); the prover pod runs
+The verifier pod runs ``ROLE=verifier`` (its own instance files, ``verity.flock.python.verity_flock.bench --serve-plan`` on :7400); the prover pod runs
 ``ROLE=prover`` against it: the plateau sweep over ``POINTS`` (warm, ``RUNS`` timed sessions per point, the timing guard), the
 TCP-connect RTT probe to ``RTT_TARGET`` (the verifier pod's sshd) before the sweep, and the loopback probe at the plateau
 (``LOOPBACK=1``).  The plateau's ``result.json`` is the prover run's ``result.json``.
@@ -25,10 +25,10 @@ BACKEND = "C-interactive"
 FAMILY = "C-Flock"
 INTERACTIVE = True
 RESULT = "result.json"
-SCRIPT = "verity/ml/flock/pod/30-cell.sh"
-IR_SCRIPT = "verity/ml/flock/pod/33-ir-cell.sh"
+SCRIPT = "verity/flock/pod/30-cell.sh"
+IR_SCRIPT = "verity/flock/pod/33-ir-cell.sh"
 IR_PREFIX = "irf:"
-CIRCUIT_SCRIPT = "verity/ml/flock/pod/61-circuit-cell.sh"
+CIRCUIT_SCRIPT = "verity/flock/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
 RELATIONS = (CIRCUIT_PREFIX,)
@@ -75,7 +75,7 @@ def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
 
 def unmet(cell) -> str | None:
     if not cell.lane:
-        return "C-interactive registers its result under the producing lane (verity_flock.register --lane): plan the cell with --lane"
+        return "C-interactive registers its result under the producing lane (verity.flock.python.verity_flock.register --lane): plan the cell with --lane"
     if not cell.rtt_target:
         return "C-interactive's RTT probe needs --rtt-target (HOST:PORT of the verifier pod's sshd, not its session port)"
     return None
@@ -104,7 +104,7 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
         raise ValueError("C-interactive registers from both runs: --verifier-run")
     if not cell.lane:
         raise ValueError("C-interactive registers under the producing lane: the cell has no lane")
-    cmd = [sys.executable, "-m", "verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
+    cmd = [sys.executable, "-m", "verity.flock.python.verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
            "--out", str(out)]
     if cell.relation.startswith(IR_PREFIX) or cell.relation.startswith(CIRCUIT_PREFIX):
         cmd += ["--verifier-binary", ir_binary(prover_run)]
@@ -125,6 +125,6 @@ def ir_binary(prover_run: Path) -> str:
 
 
 def takes_lane() -> bool:
-    """Whether the installed ``verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68; unknown before)."""
-    r = subprocess.run([sys.executable, "-m", "verity_flock.register", "--help"], capture_output=True, text=True)
+    """Whether the installed ``verity.flock.python.verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68; unknown before)."""
+    r = subprocess.run([sys.executable, "-m", "verity.flock.python.verity_flock.register", "--help"], capture_output=True, text=True)
     return "--lane" in r.stdout

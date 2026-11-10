@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
-#   1. build   flock-circuit (verity/ml/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
+#   1. build   flock-circuit (verity/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
 #   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...], `+public-weights` for its --public-weights, `+packed-weights`
 #              for --public-weights --packed) at each N of
 #              PT_NS, PT_JOBS at a time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
@@ -25,7 +25,7 @@ UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}; NS=${PT_N
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
 [ -x /usr/bin/time ] || { echo "prove_time.sh needs GNU time at /usr/bin/time (apt-get install time)"; exit 1; }
 if [ $DEV = gpu ]; then
-  . verity/ml/flock/pod/cuda-13.3.sh
+  . verity/flock/pod/cuda-13.3.sh
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
 export PATH=$HOME/.cargo/bin:$PATH FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
@@ -40,7 +40,7 @@ echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
 if has build; then
   echo "== build $(date -u +%T)"
   ( flock 9; MODE=build GPU=$([ $DEV = gpu ] && echo 1 || echo 0) SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build \
-    bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
+    bash verity/flock/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $BUILT | tee $O/binary.sha256
 fi

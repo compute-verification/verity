@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
-PKG = "verity.ml.definitions.registry"
+PKG = "verity.definitions.registry"
 REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
@@ -44,9 +44,9 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.ml.definitions.evidence"
+EVIDENCE = "verity.definitions.evidence"
 
 
 def _core(name: str) -> bool:
@@ -55,11 +55,11 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
-                "verity.ml.definitions")
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
+                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
+                "verity.definitions")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
+                                or any(map(under, ("verity.spot.verifier.protocols", "verity.claims"))))
 
 
 def _verity(name: str) -> bool:
@@ -136,11 +136,11 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
-        "from verity.ml.circuits.defs import composite\n"
-        "from verity.ml.definitions.registry import prims as P, targets\n"
-        "from verity.ml.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity.circuits.defs import composite\n"
+        "from verity.definitions.registry import prims as P, targets\n"
+        "from verity.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity.ml.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
-        "imports verity_vllm.config", "imports verity.ml.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])
+        "imports verity_vllm.config", "imports verity.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])

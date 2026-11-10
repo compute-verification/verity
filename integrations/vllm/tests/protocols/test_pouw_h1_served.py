@@ -25,23 +25,23 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw import weights as Wt  # noqa: E402
-from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P, registered as G  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
-from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.merkle import tree_levels  # noqa: E402
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
+from verity.protocols.pouw.verifier import weights as Wt  # noqa: E402
+from verity.protocols.pouw.verifier.audit import hm96_salt  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
+from verity.spot.verifier.python.one_stage import partition as P, registered as G  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
+from verity.circuits.ports import In, Out, Ports  # noqa: E402
+from verity.circuits.refs import Coll, coll_concat  # noqa: E402
+from verity.circuits.types import Array, RecordType, Value  # noqa: E402
+from verity.commitments import hm96  # noqa: E402
+from verity.commitments.merkle import tree_levels  # noqa: E402
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
 from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import registered as NR  # noqa: E402
@@ -489,7 +489,7 @@ def test_register_writes_each_calls_file(tmp_path):
     assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(run.served.registered)
     assert sorted(p.name for p in tmp_path.iterdir()) == [SV.file_name(0), SV.file_name(2)] == [
         "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
 
 

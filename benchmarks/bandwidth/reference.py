@@ -21,8 +21,8 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from verity.core.protocols.bandwidth import audit, tags
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
-from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
+from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.pous.verifier.verifier import MerkleTree, leaf_hash
 
 ROOT = Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"

@@ -10,13 +10,13 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity_vllm.pipeline import components as C
 from verity_vllm.pipeline import global_program as G
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.records import workload as WL
-from verity.ml.definitions.registry import b1
+from verity.definitions.registry import b1
 
 SHAPES = ((3, 2), (5, 1))
 

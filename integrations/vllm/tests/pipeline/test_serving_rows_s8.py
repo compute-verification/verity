@@ -7,10 +7,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as OG
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.ml.windows import rows as CS
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as OG
+from verity.spot.verifier.python.one_stage import partition as P
+from verity.windows import rows as CS
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'

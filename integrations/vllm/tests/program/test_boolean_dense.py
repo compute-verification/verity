@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_dense`: the Boolean versions of `registry.dense`'s element-wise rows agree with their
+"""`verity.definitions.registry.boolean_dense`: the Boolean versions of `registry.dense`'s element-wise rows agree with their
 word Definitions (`trace.word_of`): the rows whose element reads one bf16 word on every word at Gemma-2's constants, the others on
 every pair of special words, on random words and on products and sums at f32's subnormal and overflow ends. They are pinned by
 gate count and program digest, a shared scalar's gates and its element's are the ANDs of the operation they cut, and they pass
@@ -12,19 +12,19 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.silicon import fp
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import boolean_dense as BD
-from verity.ml.definitions.registry import dense as D
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import partition_object as PO
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.boolean import trace as TR
+from verity.definitions.ops.boolean import elementwise as EW
+from verity.definitions.silicon import fp
+from verity.definitions.registry import b1
+from verity.definitions.registry import boolean_dense as BD
+from verity.definitions.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

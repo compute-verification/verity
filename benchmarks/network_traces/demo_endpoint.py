@@ -34,7 +34,7 @@ Commit window and writes ``summary.json``.
   and the clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run
   id and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again
   or after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run
-  root is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``)
+  root is a hiding commitment (`verity.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``)
   of the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving
   loop's own Commit (its per-slot trees), which network certification doesn't read.
 """
@@ -58,7 +58,7 @@ from typing import Any, Callable, Protocol, Sequence
 
 import numpy as np
 
-from verity.ml.commitments import advice as AC
+from verity.commitments import advice as AC
 
 SCHEMA = "verity-vllm/step-trace/v1"  # verity_vllm.engine.step_trace.SCHEMA
 ROW_BITS = 128
@@ -312,7 +312,7 @@ class Scheduler:
         (d / f"w{w}.json").write_text(json.dumps({"window": w, "rows": [list(r) for r in rows],
                                                   "salts": [s.hex() for s in reg.salts]}))
         rec = {"window": w, "run_id": run_id, "run_root": reg.root.hex(), "steps": self.window_steps_done,
-               "rows": len(rows), "scheme": "demo-endpoint/served-rows/v1 (verity.ml.commitments.advice, hm96-sha512)",
+               "rows": len(rows), "scheme": "demo-endpoint/served-rows/v1 (verity.commitments.advice, hm96-sha512)",
                "requests": [{"engine_id": q.rid, "user": q.user} for q in self.window_reqs.values()], "passed": True}
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")

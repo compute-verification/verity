@@ -15,13 +15,13 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 from verity_vllm.program.predict import window_weights as WW
 
-from verity.core.protocols.spot.one_stage import registered as REG, registration as R
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.spot.verifier.python.one_stage import registered as REG, registration as R
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 
 ST = {"K": 32, "N": 3, "DOT": HopperBF16WgmmaDot16}
 ROW, UNIT = bind(G.Gemm, **ST), bind(G.Gemm, **{**ST, "N": 1})

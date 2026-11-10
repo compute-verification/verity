@@ -16,7 +16,7 @@
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
-#  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
+#  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`workloads/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
@@ -309,7 +309,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.core.protocols.spot.one_stage import registration as REG
+from verity.spot.verifier.python.one_stage import registration as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -343,7 +343,7 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
     "$json" 2>&1 | cut -c1-1500)"
   "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | publish_lines
 import json, sys
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
 ok = IF.circuit_of(theirs) == mine
 print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields is the verifier's own "
@@ -396,7 +396,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
-  leanb=$TREE/verity/core/service/flock/.lake/build/bin
+  leanb=$TREE/verity/flock/verifier/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
@@ -552,7 +552,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    "$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     local sent all
@@ -799,7 +799,7 @@ mkdir -p "$D" "$ROOT/cache" "$FW"
 if [ -z "$FOLLOW" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
-  (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
+  (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
     || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
 fi
 
@@ -807,11 +807,11 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || return 7
+  (cd verity/flock/verifier && lake build flock-verify flock-firewall) || return 7
+  (cd verity/spot/verifier && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
+  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/flock/pod/60-circuit.sh || return 6
 }
 ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
 BUILD=$!

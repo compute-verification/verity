@@ -36,14 +36,14 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
         (t / "tools" / "verity" / d).mkdir(parents=True)
     (t / "verity" / "ml" / "flock" / "verifier").mkdir(parents=True)
     (t / "tools" / "verity" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
-    for pkg, deps in (("verity/core/service/flock", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
+    for pkg, deps in (("verity/flock/verifier", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
         d.mkdir(parents=True)
         (d / "lakefile.toml").write_text("")
         (d / "lean-toolchain").write_text(TOOLCHAIN + "\n")
         (d / "lean-audit.json").write_text("{}")
         (d / "lake-manifest.json").write_text(json.dumps({"packages": deps}))
-    (t / "verity" / "ml" / "flock" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
+    (t / "verity" / "flock" / "upstream_agreement" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
     (t / "tools" / "verity" / "lean" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
     for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)

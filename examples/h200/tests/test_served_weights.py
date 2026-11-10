@@ -9,13 +9,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import verity.ml.circuits.ops.scalar  # noqa: F401
-from verity.core.protocols.spot.one_stage import registered as REG
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates import embedding
+import verity.definitions.ops.scalar  # noqa: F401
+from verity.spot.verifier.python.one_stage import registered as REG
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
+from verity.commitments import hm96
+from verity.commitments.gates import embedding
 from e2e_h200 import served_weights as W
 
 FIXTURE = Path(__file__).parent / "fixtures" / "weights-v1.json"

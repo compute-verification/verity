@@ -78,11 +78,11 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     (`h1window.tile_unit`) or J10-R's (`h1tile.PouwH1Tile5`, serve-openai's pouw setting ``unit`` j10r). ValueError when
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits import partition_object as PO
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.circuits import partition_object as PO
+    from verity.circuits.codec import descriptor_id
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
 
@@ -141,7 +141,7 @@ def _h1_live():
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
     `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.spot.verifier.python.one_stage import partition as P
     return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
 
 
@@ -156,9 +156,9 @@ def lower_live(T: int, part: dict, path: Path) -> None:
 def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.circuits.codec import descriptor_id
     layout, why = CR.layout_of(descriptor)
     if why is not None:
         raise ValueError(f"the declared Program's layout: {why[1]}")
@@ -178,8 +178,8 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     """K's leaf statement ``kind`` of the window Program `win`: its Definition (`h1window.leaf_unit`), its leaf Program's
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.spot.verifier.python.one_stage import partition as P
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
@@ -208,7 +208,7 @@ def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
         import fast_stage
         fast_stage.install(path.parent / f".scratch-{kind}{k}")
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
     descriptor = gzip.decompress(program.read_bytes())
     defn, _desc, _part, bind = leaf_bound(rebuilt(descriptor), k, kind)
     tile = CR.layout_of(descriptor)[0]["tile"]
@@ -223,8 +223,8 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
-    from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw import leaf_lanes as LL
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.pouw.verifier import leaf_lanes as LL
     from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
@@ -269,8 +269,8 @@ def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, i
         kept = {}
     files, extra = {}, {}
     if live is not None:
-        from verity.core.protocols.pouw import credit as CR
-        from verity.core.protocols.spot.one_stage import partition as P
+        from verity.protocols.pouw.verifier import credit as CR
+        from verity.spot.verifier.python.one_stage import partition as P
         T, S = live
         part = live_part(T, S, CR._prefix(descriptor))
         extra["live_bind"] = {"T": T, "S": S, "partition": P.digest(part), "program": part["program"]}

@@ -45,7 +45,7 @@ zero-luck sampled rate; at `κ = p/(1 - p)` that is exactly the live analysis' c
 * `TemplateCondition` and `TemplateMoment`: `TileLuck` at h1tile's segment (32 columns, words of at most 32 skipped
   products, a one-bit dither so `q = 2^{-w}`, `p = 1/2`) with `M = 1` at `κ = 4` and `r·θ = 1/256`: `θ = 1/(256·r)` a
   product, and a seed group's premium at most `256·r·ln(T/δ)` products. The condition's largest `r·θ` at `κ = 4` is
-  about `0.0099` (`benchmarks/pouw/grind_price.py`), 2.5 times this proved point.
+  about `0.0099` (`verity/protocols/pouw/grind_price.py`), 2.5 times this proved point.
 
 What these don't give, and stays a premise: the skip decision is fixed by the query (E3, `HMu`'s no-leak premise:
 a cheater that sees its luck after the seed and picks which units to skip pays `C(n, w)` and needs more than

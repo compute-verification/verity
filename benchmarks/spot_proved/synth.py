@@ -19,7 +19,7 @@ TREES = None
 
 
 def blocks():
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     trees = json.dumps([AR.GLM53_H200_TREE] * 8, separators=(",", ":"))
     return {
         "SparseMlaSplitPart_T64": 'SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
@@ -70,8 +70,8 @@ def main() -> int:
     a = ap.parse_args()
     import a11
     import a11_kinds as K
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.spot.verifier.python.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
     out = Path(a.out)

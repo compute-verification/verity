@@ -1,10 +1,10 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
-- `lean-build:verity/core/service/flock`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
+- `lean-build:verity/flock/verifier`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
-- `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
-  check's conformance with `verity.ml.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
+- `lean-unit-cut:verity/flock/upstream_agreement/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
+  check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
@@ -15,9 +15,9 @@
   since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite that declares
   `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its `worker_gb`); its
   timeout is its own `timeout_s`, else the family's.
-- `flock-circuit-build:verity/ml/flock/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
+- `flock-circuit-build:verity/flock/prover/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
   builds. It outputs nothing: `cargo check` builds nothing a reader runs.
-- `flock-rust-tests:verity/ml/flock/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
+- `flock-rust-tests:verity/flock/prover/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
   itself: it reads nothing of flock-circuit-build's.
 
 A tree without the verifier's Lean package or its pin lists none of the Lean tasks, as check skips them there; one without
@@ -30,9 +30,9 @@ from pathlib import Path
 
 from .test_file import Imports, Layout, Tree, discover
 
-LEAN = "verity/core/service/flock"
+LEAN = "verity/flock/verifier"
 VERIFIER = "verity/ml/flock/verifier"
-FLOCK = "verity/ml/flock"
+FLOCK = "verity/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/verity/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
@@ -157,7 +157,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                 "inputs": package(root, files), "outputs": [{"name": e, "path": f"{bin_}/{e}"} for e in exes]})
     if "flock-verify" in exes and UNIT_CUT in files:
         out.append({"id": f"lean-unit-cut:{UNIT_CUT}", "kind": "lean-unit-cut", "env": "py",
-                    "about": "the Lean partition check's codes against verity.ml.circuits.partition's on random cuts",
+                    "about": "the Lean partition check's codes against verity.circuits.partition's on random cuts",
                     "vars": {"verify": f"{bin_}/flock-verify"}, "inputs": unit_cut_inputs(root, files),
                     "reads": [{"task": build, "output": "flock-verify"}],
                     "outputs": [{"name": "result", "path": "lean-unit-cut/result.json"}],

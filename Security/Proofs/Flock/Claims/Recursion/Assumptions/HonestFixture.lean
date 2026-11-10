@@ -69,7 +69,7 @@ completeness holds at it (`HonestWitSatisfies`), no part's recorded calls collid
 rounds before the last (`hist.take (kI x - 1)`) the inner prover's openings fit V\*'s levels (`IrShaped`) and the reps'
 tops differ (`TopsAt`).
 
-The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
+The run is `workloads/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
 16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
 on it:
 * `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*
@@ -95,7 +95,7 @@ on it:
 Prop in two ways: only Python joins the 10 per-part verdicts (no single compiled verdict exists), and its prover is
 Python's builder with Flock's CPU prover, not `refP`.
 
-What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
+What ties the two provers is `verity/flock/verifier/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
 whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for

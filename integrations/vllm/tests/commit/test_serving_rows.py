@@ -13,18 +13,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
+from verity.commitments import hm96
+from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
-from verity.ml.windows import flock_inputs as FI, rows as SR
+from verity.circuits.defs import REGISTRY, bind
+from verity.spot.verifier.python.one_stage import draw as D, partition as P, registration as R
+from verity.windows import flock_inputs as FI, rows as SR
 from verity_vllm.commit import index as IX
-from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
+from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))

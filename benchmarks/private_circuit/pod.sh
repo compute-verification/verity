@@ -13,22 +13,22 @@ set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-flock}; mkdir -p $O $W/bin
 nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo "threads $(nproc)" | tee -a $O/host.txt
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-LKEY=$(cd verity/core/service/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
+KEY=$(cat verity/flock/pod/20-gpu-link.sh verity/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+LKEY=$(cd verity/flock/verifier && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   if [ ! -x $L ]; then
-    rm -rf $W/lean && cp -r verity/core/service/flock $W/lean && rm -rf $W/lean/.lake
+    rm -rf $W/lean && cp -r verity/flock/verifier $W/lean && rm -rf $W/lean/.lake
     cd $W/lean && lake build flock-verify && cp .lake/build/bin/flock-verify $L
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 if [ ! -x $B ]; then
-  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash verity/ml/flock/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
+  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash verity/flock/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
   cp $W/flock-gpu-link/flock/target/release/flock-circuit $B
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }

@@ -14,7 +14,7 @@ leaf_c         SHA512(prefix(leaf) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+L−
 root           the RFC 6962 SHA-512 tree over the leaves (`pous.verifier`: node = SHA512(0x01 ‖ l ‖ r))
 ~~~
 
-`frame` is `verity.ml.randomness.frame`.  Every tag is seed-first, `H(σ, j, E_j)`: σ is in the first SHA-512 block,
+`frame` is `verity.commitments.randomness.frame`.  Every tag is seed-first, `H(σ, j, E_j)`: σ is in the first SHA-512 block,
 or in the BLAKE3 key every compression starts from, before `j` and any byte of `E_j`, so no state over a label can be
 computed before σ is known.
 
@@ -37,8 +37,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Protocol
 
-from verity.ml.crypto import blake3
-from verity.ml.randomness import frame
+from verity.commitments.crypto import blake3
+from verity.commitments.randomness import frame
 
 TAG_DOMAIN = b"verity/bandwidth/tag/v1\0"
 LEAF_DOMAIN = b"verity/bandwidth/tag-leaf/v1\0"

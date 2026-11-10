@@ -1,7 +1,7 @@
 """The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the core reference.
 
 Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with
-the SHA-512 constants read out of `verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants
+the SHA-512 constants read out of `verity/definitions/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants
 out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then `gpu.py windows` through
 `audit.Verifier`); these catch a layout or arithmetic slip before a GPU is leased.
 """
@@ -25,8 +25,8 @@ import gpu  # noqa: E402
 import reference  # noqa: E402
 import summarize  # noqa: E402
 from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E402
-from verity.ml.crypto import blake3  # noqa: E402
+from verity.protocols.pous.verifier.verifier import MerkleTree, node_hash  # noqa: E402
+from verity.commitments.crypto import blake3  # noqa: E402
 
 CU = (HERE / "tagger.cu").read_text()
 SHA512 = (HERE / re.search(r'#include "([^"]*sha512\.cuh)"', CU)[1]).read_text()
