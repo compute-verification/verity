@@ -142,8 +142,8 @@ class Registered:
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
     the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
     like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
-    the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether
-    class G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
+    the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether class
+    G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
     network), which no other Program reads and which takes the prefix cache off."""
 
     phi: Phi
@@ -172,8 +172,8 @@ class Registered:
                              "which a request's own table can't bind")
 
     @classmethod
-    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None, code: Any = None,
-           dsa_table_reads: bool = False) -> Registered:
+    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None,
+           code: Any = None, dsa_table_reads: bool = False) -> Registered:
         return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
                    served_model, code, dsa_table_reads)
 

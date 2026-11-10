@@ -678,10 +678,9 @@ class _Decoder:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
-def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None,
-                  table_reads: bool = False) -> BuildResult:
+def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8, with_desc: bool = True,
+                  C: int = 0, dead_free: bool = False, batched: bool = False, table_reads: bool = False, finish: Callable | None = None,
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -710,9 +709,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if (table_reads and not batched) or batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
-        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
-                         "table_reads (DSA's long rows by table reads) is the batched form's")
+    if batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
+        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish")
+    if table_reads and not batched:
+        raise ValueError("table_reads is the batched form's: DSA's long rows by table reads, with batched")
     dense = type(net) is _Decoder
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
