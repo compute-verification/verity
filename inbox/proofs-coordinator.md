@@ -28915,3 +28915,42 @@ The world's year:
 4. **How I varied the factor:** a scratch commit, `ed8b6a13ad` on `a5e4e56a11`, reads `DEFAULT_F` into `reprice.DEFAULT`. It is branch `scratch/prf456-default-f` in `/agent/repos/wt-prf456-default`, not pushed. I'm proposing no tree change from it.
 
 5. **What's left, in your order:** the three drafts (vllm's four questions on serving's share; kernels' prover count; the workload card's stop and tie Definitions), then PRF-497's second done-condition as a commit on a branch of my own. I start them now.
+
+## OUTERSTEP, Tue 10 Nov 16:36Z: PRF-499: the cap run is up, r20261110-163252-0788 on cpu-4 (16 prover vCPUs, claims 6 not 2), ETA about 22:30Z; no answer yet, and I expect no on time
+
+My id: `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`. No inbox file for me on `cursor/proofs-inbox` at 16:35Z. [run] No code change, nothing committed on `cursor/proofs-outerstep-7c3e`. The scripts I sent with the run are in its `inputs/`.
+
+**The run.** `r20261110-163252-0788` on vy-nebius-cpu-4, proofs slot p0 (cores 102-149), held since 16:32:57Z, at commit `c3ae3eaaf0` (today's `main`). [run] It is 2bb7's own path with `N=` in place of its served window:
+
+```
+research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as proofs --cwd source --mem-gb 256 --timeout 27000 --pool-wait 1800 --send job.sh --send memguard.py --send cpustat.py -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/job.sh PCPUS=16 NCPU=32 N=256 SUBCIRCUIT=silu-mul-v2/i16384/bf16 MEM_KILL_GB=250 RELEASE_WINDOWS_S=lead=5400,L0=3000,L=1200,alg=1500,cap=150,other=900'
+```
+
+`job.sh` runs, on the slot's first 32 cores:
+
+```
+bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i16384/bf16 N=256 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench RELEASE=1 TREE_FROM=local MODES=firewall STEPS=build,inner,vstage,vcap,oprove,lean PCPUS=16 RELEASE_WINDOWS_S=...
+```
+
+- The prover and the Lean session loop get cores 102-117 and the verifier 118-133: 16 and 16, as 2bb7 had on cpu-9. [run for the 32 cores, read for 85's split rule]
+- The staged inner statement is 256 blocks at `k_log` 27, `vus_per_block` 1, m 35. [run: its `out/stage.json`]
+- Beside it, on core 149: 2bb7's `/proc/stat` sampler, and a guard that records the job tree's summed RSS each second and ends the job past 250 GB, so an inner statement that doesn't fit can't fill the slice other lanes share.
+
+**ETA: about 22:30Z.** [guess] The release schedule is 19,650 s from the inner session's connection (about 16:45Z), then Lean verifies the 16 releases. The measured answer is the sum over parts of ready minus start, as for 2bb7's 2,598 s, not the schedule. L0's time and the peak RSS will be in the run's files by about 18:30Z. Please resume me when the run ends; an earlier look costs you one `research fetch r20261110-163252-0788 --all`.
+
+**What differs from the cap as PRF-499 states it.**
+
+1. **claims is 6, not 2:** the run's cap is `instances=256,claims=6,k_log=27,vus_per_block=1`. A staged inner statement with committed rows has link regions, and claims = 2 + 2 per region (`Stmt.extraClaims`). [read] This statement has 2 regions, as 2bb7's had (its algebra parts were `m29-k26-c6`). [run: both runs' `statement.txt`, 2bb7's `rec-statements.txt`] `claims=2` and `claims=6` give the same seven RecOpen levels and the same 16 statements; only the two algebra parts differ. [run: `rec_shape outer` on both caps, on my VM] I left `REC_CAP` unset, so the stager takes the session's own shape; I'll confirm the staged names from the run.
+2. **The inner unit** is 256 seeded instances of `silu-mul-v2/i16384/bf16`, not PoUB's opening unit. V*'s statements depend only on the shape (m, `k_log`, claims), so the outer step is the cap's; the inner step's own time and memory are not memory-accounting's.
+3. **Release windows** are longer than 85's defaults (lead 5,400 s, L0 3,000 s), so a slow inner proof at m 35 can't stop the session. They change when a part is released, not how long it takes to prove.
+4. **The cap is exactly at the verifier's limit:** 7 levels, 2 algebra parts and 7 caps are 16 statements, and `MAX_STATEMENTS` is 16. [run: `rec_shape`, `rec_budget`]
+
+**What 2bb7 was.** `r20261104-194030-2bb7`, cpu-9, commit `b9ea4245b3` (#6996's head), `bash zk-run.sh ZK_CPUS=128-159 PCPUS=16`: `stage.sh` over the served f889 window with `SUBCIRCUIT=silu-mul-v2/i8192/bf16 RELEASE=1 TREE_FROM=local MODES=firewall GPU=0`, 3 blocks at `k_log` 26, m 29, claims 6, 12 statements. Its parts took 937, 312, 359, 170 and 150 s (L0 to L4), 402 and 143 s (algebra), and 22 to 28 s a cap: 2,598 s. [run: recomputed from its `release.json` and `release-wall.tsv`]
+
+**What I expect: no on time, yes or close on memory.** [guess] The x1.08 to x1.09 that memory-accounting carried assumes L0 to L4 keep their size. At the cap their Merkle paths are longer (H 16, 15, 13, 12, 10 against 2bb7's 11, 10, 8, 7, 5) and L0's leaves are 64 lanes against 32:
+
+- L0 hashes 41 SHA-512 blocks an opening against 27. By 2bb7's rows per block it stays inside the same padded size (m 33), so about 940 to 1,450 s and about the same memory.
+- L1 and L2 hash 33 and 29 blocks against 23 and 19, which puts each just past the size 2bb7's had (m 32 against 31): about twice their 312 and 359 s.
+- Two more levels, larger algebra parts and two more caps add the rest.
+
+That sums to 3,300 to 5,000 s. The run decides.
