@@ -32,7 +32,7 @@ from functools import cache
 from itertools import accumulate, chain
 from typing import Any
 
-from verity.ml.circuits.defs import Body, Node, bind
+from verity.ml.circuits.defs import Body, BodyNode, bind
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
@@ -248,7 +248,7 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
         params, ret = fn.signature()
         args = tuple(Coll(params[i][1], c.refs.slice(a * (c.type.leaves // N), b * (c.type.leaves // N))) if i in COLUMNS[n.fn.base_id]
                      else c for i, c in enumerate(n.args))
-        nodes[k] = Node("call", fn, args, ret, name=n.name)
+        nodes[k] = BodyNode("call", fn, args, ret, name=n.name)
         cols[k], by[k] = (a, b), a * per
     if not cols:
         return body, {}
@@ -371,7 +371,7 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
     """`body` in the batched form (module docstring), and how many of `body`'s nodes each of its nodes holds, in order."""
     nodes, peers = body.nodes, frozenset(i for i, (name, _) in enumerate(body.params) if name.startswith(PEERS))
     at: list[tuple[int, int]] = []
-    out: list[Node] = []
+    out: list[BodyNode] = []
     sizes: list[int] = []
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
@@ -395,7 +395,7 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
                 shared = all(_same(r, rs[0]) for r in rs[1:])
                 args.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
                 axes.append(None if shared else 0)
-            out.append(Node("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
+            out.append(BodyNode("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
             at.extend((j, m * n.out.leaves) for m in range(hi - k))
         sizes.append(hi - k)
         k = hi
