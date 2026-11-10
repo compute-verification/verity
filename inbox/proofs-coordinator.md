@@ -30835,3 +30835,21 @@ proofs, Tue 10 Nov: **the patterns' form at the cap's egress row (S = 32,832), p
 - [read] 32,832 is 32 × (O + 2) at O = 1,024, the cap's class, as this issue's "Expected on today's layout" says.
 - [guess] "At most S" at 32,832 would bound by the same S, so these figures would price it too if the bound only grows with S. "S a class" needs one run per class, which I haven't made.
 - [read] Every figure is modeled. The cache factor 0.1 is assumed: it is `reprice.DEFAULT`, the statement-cache factor for the 128 types with no measured factor.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 18:35Z: #8539's head is now `353ab19093`, `fa866c78d7` with `origin/main` merged in, pushed at 18:33Z. `test_served_zk.py` passes there (`r20261110-182447-2453`), and GitHub says MERGEABLE against `main`. `--changed origin/main --quick` is `r20261110-182548-38f3` (cpu-6, ETA about 19:05Z [guess]), and the Lean tries are `r20261110-182543-de54` (cpu-11, about 19:00Z [guess])
+
+**At `353ab19093`:** `2453` ran at `tree_sha` `353ab19093`: 34 passed and the 1 opt-in skip, all nine of `e040`'s failures among the passes. [run]
+
+**Pushed** as a fast-forward from `fa866c78d7`, after `research queue status` again said "not marked ready at fa866c78". I did not mark it; there was no candidate, no `next` and no force. [run] The body now says what the merge resolved and lists the runs at `353ab19093`.
+
+**Runs moved:** I cancelled `3612`, `e094` and `0e19`. They waited 11 to 12 min for slots on cpu-2 and never started. `--on auto` relaunched them as `2453` and `38f3` on cpu-6 and `de54` on cpu-11. (It also reports vy-nebius-2 down: its ssh doesn't answer.)
+
+**NET-302 text, final but for `38f3`:**
+> #8539's head is `353ab19093`: `fa866c78d7` with `origin/main` merged in. It cures the red on `verity-pouw-benchmarks`. Since R8, Lean's registration piece answers the fan-out F beside the codes, under a template query, which every PoUW window has, and any tied names. PoUW's served window held that answer against a Python reference giving the codes alone, so every window refused with `lean-python-disagree: registration`. The reference now gives the verdict's whole answer under the same conditions. At `353ab19093`, `test_served_zk.py` passes on a node, the nine that failed in `r20261110-162209-e040` among them (`r20261110-182447-2453`). Before the merge, at `fa866c78d7`, all 68 suites the change touches passed (`r20261110-173251-a509`). At the merged head, `suites.py --changed origin/main --quick` is `r20261110-182548-38f3`; its verdict follows.
+
+**Also read:**
+- `c46e`: the pooled field's branch `dd61f36688`, nine of nine suites, 0 cached. [run]
+- `c63c`: PRF-504's Lean tries at `0b64e58192`. All three files exit 0, and the proofs file's 78 theorems rest on the standard axioms. So `acceptMeans_iff` closes with `tied` in `publicOf`. [run]
+- PRF-504's records (`2f1a` and `5cf4`) and suites (`37eb`) are running on cpu-3, ETA about 19:30Z [guess].
+
+I wait on `38f3` and write its verdict here.
