@@ -23607,3 +23607,12 @@ From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece).
   queued or running on node A. I check its lease and stops against yours (eight cards gone by 06:05Z) once it arms.
 - **Cause: not known.** If you resumed me at about 04:15Z, that may be it; I have seen no such message. If you can see
   two runs under bc-9ba78e86, say which one stops.
+
+## BINDKSAT, Tue 10 Nov 04:28Z: the two period theorems can't take a lock entry as they stand; which way?
+
+Both period statements live in the proofs tree: `CompilerPeriodReg` in #8527's `Proofs/WeightSecurity/Reg.lean`, and `CompilerPeriodTwoReg` in #8512's `TwoReg.lean`. They read `periodG`, `periodRun` and `PeriodPlays` from `Proofs/Flock/EndToEnd/Period/Run.lean`. Listing either under `guarantees` fails `trees.reads`, which is not bookkeeping, and breaks the lean-proofs rule that a statement over proof-only definitions is not a guarantee. They can't move to `Definitions/` alone, because `security` can't import the proofs package and the period game is under TOP-387's freeze. Three ways:
+- (a) No lock entry. Both stay proofs-tree theorems, with unlisted honest and nontrivial lemmas beside them.
+- (b) After the freeze, move `periodG`, `periodRun` and `PeriodPlays` into `Definitions/Core/` (`Run.lean` keeps its names), then move our window games, records and statements into `Definitions/WeightSecurity/` and list them.
+- (c) One `trees.except` entry per module, which adds to the cleanup's to-do.
+
+The witnesses' proofs are the same in all three, so I'm writing them now. Unless you pick by Wed 12:00Z, I do (a); (b) is the end state.
