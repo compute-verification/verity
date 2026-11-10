@@ -2,7 +2,10 @@ import math
 
 from rho import operating
 from rho.params import Registry
-from rho.scenario import build, evaluate_named
+from rho.scenario import YEAR, build, evaluate_named
+
+from verity.core.protocols import reporting
+from verity.ml.circuits import partition_v2
 
 REG = Registry.load()
 
@@ -13,7 +16,9 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     # the training MFU, and the dark pool takes that over its share (0.1%)
     sync = REG["exfil.sparseloco-sync.bits"]
     alone = evaluate_named(REG.override({"regime.onsite.timing": 0.0}), "reference-onsite-h200")
-    assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / (365 * 86400), 4.31, rel_tol=0.01)
+    assert YEAR == REG["horizon.year.seconds"] == dict(reporting.PERIODS)["year"]
+    assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / YEAR, 4.31, rel_tol=0.01)
+    assert operating.human(YEAR) == "1 years" and operating.human(YEAR - 1).endswith("days")
     r = evaluate_named(REG, "reference-onsite-h200")
     both = REG["regime.onsite.timing"] + REG["regime.onsite.side"]
     assert math.isclose(operating.exfil(r.scenario, sync)["one location"], sync / both)
@@ -44,14 +49,16 @@ def test_every_reference_has_an_operating_point():
 
 
 def test_incorrect_outputs_carry_every_reference_before_their_first_detection():
-    # from tiers' sampled-proof defaults at delta = 1e-6: the channel carries 1.06e17 bits before its first detection, and catches the weights with chance 8.33e-4, one
-    # SparseLoCo sync 1.77e-5 and 1,000 syncs 1.76%
+    # from tiers' sampled-proof defaults at delta = 1e-6, each incorrect block injecting the widest public size class of
+    # output bits: the channel carries 1.74e21 bits before its first detection, and catches the weights with chance
+    # 5.09e-8, one SparseLoCo sync 1.08e-9 and 1,000 syncs 1.08e-6
     row = operating.incorrect(REG, build(REG, "reference-remote-h200-sampled"))
     assert math.isclose(row.q, 2.0833e-15, rel_tol=1e-4)
-    assert math.isclose(row.capacity, 1.0610e17, rel_tol=1e-3)
+    assert math.isclose(row.capacity, 1.7384e21, rel_tol=1e-3)
+    assert math.isclose(row.capacity, math.log(1e6) * (1 / row.q + 1) * partition_v2.UNIT_CLASS_MAX)
     assert set(row.detect) == set(REG.names("exfil"))
     assert all(REG[f"exfil.{n}.bits"] < row.capacity for n in row.detect)
-    for name, p in (("weights-fp4", 8.330e-4), ("sparseloco-sync", 1.7708e-5), ("sparseloco-1000", 0.017552)):
+    for name, p in (("weights-fp4", 5.0863e-8), ("sparseloco-sync", 1.0808e-9), ("sparseloco-1000", 1.0808e-6)):
         assert math.isclose(row.detect[name], p, rel_tol=1e-3)
 
 
@@ -65,8 +72,9 @@ def test_incorrect_outputs_capacity_is_where_detection_reaches_one_minus_delta()
 def test_incorrect_outputs_are_the_same_in_either_regime_and_undetected_unmonitored():
     onsite = operating.incorrect(REG, build(REG, "reference-onsite-nvl72"))
     assert operating.incorrect(REG, build(REG, "reference-remote-h200")) == onsite
-    # every unit proved: the first incorrect step is sampled, so the channel carries J ln(1/δ) (1 + floor) steps' bits
-    assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * 16)
+    # every unit proved: the first incorrect block is sampled, so the channel carries J ln(1/δ) (1 + floor) blocks' bits,
+    # each the widest public size class of a block's outputs
+    assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * partition_v2.UNIT_CLASS_MAX)
     unmonitored = operating.incorrect(REG, build(REG, "unmonitored-h200-kimi"))
     assert unmonitored.capacity == math.inf and set(unmonitored.detect.values()) == {0.0}
 

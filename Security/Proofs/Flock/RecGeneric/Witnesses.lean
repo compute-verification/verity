@@ -76,7 +76,7 @@ theorem twoRounds_wf : twoRounds.WF :=
     fun i => Fin.elim0 i⟩
 
 /-- `E^rep` at one wait for no accepted rerun gives the assembled candidate wherever the judged run accepted. -/
-theorem erep_one_acc {D W Op : Type} (H : Msg → Msg) (run : D → Trace) (opens : Seen → List Op) (w : W) (d₀ : D)
+theorem erep_one_acc {D W Op : Type} (H : Msg → Msg) (run : D → Transcript) (opens : Seen → List Op) (w : W) (d₀ : D)
     (ρ : Fin 1 → Fin 0 → D) (h : (run d₀).out = .acc) :
     ((erep 1 0 0 opens (fun _ => some w) (fun _ => true) d₀ ρ).eval H run).1 = some w := by
   have hl : ((List.finRange 1).map fun i => (List.finRange 0).map (ρ i)) = [[]] := by rfl

@@ -21,8 +21,10 @@ from verity.ml.commitments.rowleaf import bit_row
 #: (V, H) -> EmbeddingReadSelect_v1's (And, Xor, Not) gates: in by 23 ANDs (V = 128,256 has its low 8 bits clear), then
 #: 16 H + 1
 SELECT = {(128256, 2048): (32792, 0, 61464), (128256, 4096): (65560, 0, 122904)}
-#: (V, H) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to
-READS = {(128256, 2048): 32322856, (128256, 4096): 45294886}
+#: (V, H) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to. Each SHA-512 compression is
+#: a call of `Sha512CompressFolded`, which XORs its arguments from the bits they hold: 9,033 more XORs than the compressions' gates
+#: written out, the same ANDs
+READS = {(128256, 2048): 32331889, (128256, 4096): 45303919}
 
 
 def _table(rng: random.Random, V: int, H: int) -> tuple[CommitmentDomain, list[list[int]], list[bytes], RT.RowTable]:

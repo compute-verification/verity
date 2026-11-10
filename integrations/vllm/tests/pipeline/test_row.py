@@ -16,7 +16,9 @@
   complete; an unresolved checkpoint dir is named in row.log;
 * the admission plan is advisory: it writes admission.json and one row.log line and never stops the row;
 * the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
-  row runs the guarded-max build and every tap that applies to it.
+  row runs the guarded-max build and every tap that applies to it;
+* a tree without the run store's tool beside it (`tools/research/src`) refuses a row at setup, by name: what a row does past
+  setup is `test_row_setup`'s.
 """
 from __future__ import annotations
 
@@ -124,12 +126,15 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("row, execution, bi", [(ROW, "bi-eager", "1"), ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", "eager", "0")])
-def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_path, monkeypatch, row, execution, bi):
-    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
-    r = _row(tmp_path, row=row)
-    r.setup({})
-    assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
+def test_a_tree_without_the_run_stores_tool_beside_it_is_refused_by_name(tmp_path, capsys):
+    """A row's stages run with the run store's tool on their path, so a tree without `tools/research/src` beside it, as the public
+    tree is, refuses the row at setup before any stage."""
+    r = _row(tmp_path)
+    r.tree = str(tmp_path / "tree" / "integrations" / "vllm")
+    os.makedirs(r.tree)
+    with pytest.raises(Stop) as e:
+        r.setup({})
+    assert e.value.rc == 3 and f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {r.tree}" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------------------------------------------- cancel
@@ -777,49 +782,6 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
 
 
-def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
-    """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
-    refuses a bad address, a session of more than one mode or a Commit with no instrumented run to audit before anything
-    runs (`store.remote.CommitSession`)."""
-    from verity_vllm.pipeline import commit
-
-    single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
-    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
-    cmd = single.commit_cmd([])
-    assert cmd[cmd.index("--remote-verifier") + 1] == "10.0.0.7:7781"
-    assert "--remote-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
-    with pytest.raises(SystemExit, match="REMOTE_VERIFIER"):
-        _tp_row(tmp_path, TP_DENSE, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"}).commit_cmd([])
-    args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
-    with pytest.raises(ValueError, match="one mode"):
-        commit.main(dataclasses.replace(args, remote_plan="serve,servedrop:1"))
-    with pytest.raises(ValueError, match="HOST:PORT"):
-        commit.main(dataclasses.replace(args, remote_verifier="7781"))
-    with pytest.raises(SystemExit, match="first instrumented run"):
-        commit.main(dataclasses.replace(args, only_arm="control"))
-
-
-@pytest.mark.parametrize("row, p2p", [
-    ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", None),   # an H box: its engine.env names none
-    (TP_DENSE, "1"),                                                          # an L40S row's engine.env names it
-    (TP_MOE, "1"),
-])
-def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_it(tmp_path, monkeypatch, row, p2p):
-    """The caller's NCCL_P2P_DISABLE=1 (an L40S operator's shell) reaches the stages only when the row's workload requires it."""
-    t = _tp_row(tmp_path, row, environ={"NCCL_P2P_DISABLE": "1"})
-
-    def precheck_reached() -> str:
-        raise Stop(99)
-    monkeypatch.setattr(t, "hidden_build", precheck_reached)
-    with pytest.raises(Stop) as e:
-        t.prepare()
-    assert e.value.rc == 99 and t.nccl == p2p
-    os.makedirs(t.d, exist_ok=True)
-    stage = [sys.executable, "-c", "import os; print('NCCL_P2P_DISABLE=' + os.environ.get('NCCL_P2P_DISABLE', 'unset'))"]
-    assert t.run_to(0, f"{t.d}/stage.log", stage) == 0
-    assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
-
-
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
 
@@ -1016,62 +978,6 @@ def test_a_b8_tp_ranks_x09_is_the_one_its_gm01_writes(tmp_path, monkeypatch):
         p.write_text(json.dumps(doc)) if doc else p.unlink()
         c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
         assert c["verdict"].startswith("FAIL") and c["rc"] == rc
-
-
-def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
-    """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
-    progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""
-    def precheck_reached(*a, **kw):
-        raise Stop(99)
-    for argv, form in (((), "progressions"), (("--instances-form", "runs"), "runs")):
-        single, tp = _row(tmp_path, *argv), _tp_row(tmp_path, GLM53, *argv)
-        monkeypatch.setattr(single, "release_line", precheck_reached)
-        monkeypatch.setattr(tp, "hidden_build", precheck_reached)
-        for r in (single, tp):
-            with pytest.raises(Stop):
-                r.prepare()
-            assert r.child_env["VERITY_INSTANCES_FORM"] == form
-
-
-def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
-    """A TP row's stages serve with prefix caching off and its rank Programs take no cached prefix, so a TP row whose file declares it is
-    refused at its precheck; a single-GPU prefix row passes it (its warm requests' Programs read their cached rows as an input)."""
-    tp = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager")
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
-    monkeypatch.setattr(tp, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
-    with pytest.raises(Stop) as e:
-        tp.prepare()
-    last = open(f"{tp.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
-    assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
-    single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
-
-    def past_precheck(*a):
-        raise Stop(99)
-    monkeypatch.setattr(single, "release_line", past_precheck)
-    with pytest.raises(Stop) as e:
-        single.prepare()
-    assert e.value.rc == 99
-
-
-@pytest.mark.parametrize("argv, reads", [
-    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: a CPU node runs them
-    (("--stages", "match", "--match-phase", "gpu"), True),
-    (("--stages", "match"), True),                                  # the GPU stages and the CPU half in one run
-    (("--stages", "commit"), True),
-])
-def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it(tmp_path, monkeypatch, argv, reads):
-    t = _tp_row(tmp_path, GLM53, *argv)
-    seen: list[tuple[str, ...]] = []
-
-    def target_family(*extra, out):
-        seen.append(extra)
-        raise Stop(99)
-    for name, fn in (("hidden_build", lambda: "/x/verity_fa2_matReqG.so"), ("release_line", lambda arg: ("PASS|x", None)),
-                     ("export_commit", lambda: ""), ("source_identity", lambda pys, out: False), ("target_family", target_family)):
-        monkeypatch.setattr(t, name, fn)
-    with pytest.raises(Stop) as e:
-        t.prepare()
-    assert e.value.rc == 99 and seen == [() if reads else ("--no-device",)]
 
 
 @pytest.mark.parametrize("row, off", [

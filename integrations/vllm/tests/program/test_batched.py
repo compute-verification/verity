@@ -11,7 +11,6 @@ from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Strided, conc
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import dense
 from verity.ml.definitions.replay import replayer
-from verity_vllm.commit import memory_map as MM
 from verity_vllm.correspondence.runtime import SCHEMA, RuntimeCorrespondence
 from verity_vllm.program import prune as P
 from verity_vllm.program import tp_binding as TB
@@ -107,14 +106,12 @@ def test_a_call_that_reads_the_run_ends_it():
     assert sizes == [1, 1, 1] and [n.form for n in form.nodes] == ["call"] * 3
 
 
-def test_the_calls_the_root_readers_take_alone_stay_calls():
-    """An attention's Call holds the KV `commit.memory_map` reads from one Call, and a collective reads its peer Inputs in one
-    operand of one Call (`tp_binding.rank_sites`): the form keeps both. The tables are the readers' own."""
-    assert (P.KV, P.LATENT, P.PEERS) == (MM.KV, MM.LATENT, TB.PEERS)
+def test_a_collective_stays_a_call():
+    """A collective reads its peer Inputs in one operand of one Call (`tp_binding.rank_sites`): the form keeps it, by the reader's
+    own prefix. An attention's Calls batch like any other: `commit.memory_map` reads each member's KV
+    (tests/commit/test_memory_map.py)."""
+    assert P.PEERS == TB.PEERS
     assert P.batched_form(_toy())[1][2:] == [1, 1]
-    sparse = type("Fn", (), {"name": "SparseMlaSplit", "signature": lambda self: ((("q", None), ("kv", None)), None)})()
-    paged = type("Fn", (), {"name": "Attention", "signature": lambda self: ((("q", None), ("kc", None), ("vc", None)), None)})()
-    assert P.holds_kv(sparse) and P.holds_kv(paged) and not P.holds_kv(MUL)
 
 
 def test_the_batched_records_keep_each_members_record_and_its_first_hint():

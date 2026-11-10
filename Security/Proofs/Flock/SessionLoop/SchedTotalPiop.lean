@@ -69,8 +69,8 @@ theorem pt_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW OpenM �
   e ▸ h
 
 /-- A transcript step: every one is a `modify`. -/
-theorem pt_modify (g : Transcript → Transcript) :
-    PT coins [] (fun _ => True) (liftTM (modify g : Transcript.TM Unit) : TMW OpenM Unit) :=
+theorem pt_modify (g : Flock.Transcript → Flock.Transcript) :
+    PT coins [] (fun _ => True) (liftTM (modify g : Flock.Transcript.TM Unit) : TMW OpenM Unit) :=
   fun t got _ => ⟨(((), g t), got), rfl, trivial, rfl⟩
 
 /-- **A PIOP round** takes its coin where it fits the count its squeeze header holds. -/
@@ -92,7 +92,7 @@ theorem pt_squeezeP (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
   · obtain ⟨cs, hc, hs⟩ := hF 0 (by simp [sq, h0])
     rw [Nat.add_zero] at hc
     have hs' : cs.size =
-        (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat := by
+        (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat := by
       rw [framed_count t kind hn]
       simpa [sq, h0] using hs
     rw [show (squeezeP (stepAsks coins false) kind n).run t = if n = 0 then _ else _ from rfl, ite_eq_right h0,
