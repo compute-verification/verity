@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
+"""`verity.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
 (`fstoch01_rows.npz`, over a tracked file's limit) the vectorised row and the lane walk equal the device's served token and the
 device kernel's masked row, and the `_v2` logs are the GPUs' words on every input of their probe, fetched from the evidence
 store.
@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from tests.program.test_sampling_rows import _gpu_paths, f32b, needs_tables
-from verity.ml.definitions.registry import sampling_rows as SR
+from verity.definitions.registry import sampling_rows as SR
 
 FIX = os.path.join(os.path.dirname(__file__), "data", "topp_split_fixture")
 #: the `_v2` logs' probe on the L40S and the H100: each FTZ build's output on every probed input word
@@ -47,7 +47,7 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
     from verity_vllm.properties.admission import evaluate_spec
-    from verity.ml.definitions.registry import sampling_topp_difftest as D
+    from verity.definitions.registry import sampling_topp_difftest as D
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
     meta = json.load(open(os.path.join(FIX, "fstoch01_rows.npz.json")))
     first = True

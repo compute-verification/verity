@@ -106,13 +106,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
-from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
-from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
+from verity.protocols.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
+from verity.protocols.poub.verifier import codec as rcodec  # noqa: E402
+from verity.protocols.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.poub.verifier import wire as rwire  # noqa: E402
+from verity.protocols.poub.verifier.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 
 OPENINGS_PART = 128
 """Openings a frame: a window's go out in parts, so a root waits for one part's send, not the window's."""

@@ -7,8 +7,8 @@ from __future__ import annotations
 import gzip
 import json
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query.required import partition_of
 

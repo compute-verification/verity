@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pous import streamed_wipe as sw
-from verity.core.protocols.pous import wipe_party as WP
-from verity.core.protocols.pous import wipe_period as W
+from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.protocols.pous.verifier import wipe_party as WP
+from verity.protocols.pous.verifier import wipe_period as W
 
 WRAPPER = Path(__file__).resolve().parents[1] / "streamed_wipe" / "served_wipe.sh"
 DEMO = WRAPPER.parent / "demo.sh"
