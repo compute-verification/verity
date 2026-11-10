@@ -33943,3 +33943,25 @@ def CompilerKSRegX : Prop :=
 - If an instance costs more than a copy once it elaborates, I copy and say which.
 
 **Next:** items 7 to 12 and the three witnesses, a try of `Reg.lean` and `RegX.lean`, then the chain.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 22:51Z: SetupAt's `cF` and `tabAt` made noncomputable (`4ff947f8a1`); the chain's try relaunched as `r20261110-224722-bb99` on `vy-nebius-cpu-3`, ETA about 23:35Z
+
+- [run] `aff2`'s log has two errors, both in `SetupAt.lean`'s compiled code (56:7 and 59:7). The module stopped after 4.7 s,
+  and its theorems elaborated with no error. The two modules after it, `InsSetup` and the one before `Scope`, never started.
+- [read] The cause: `cF` and `tabAt` were computable `abbrev`s over `cO` and `tabX`. `fwd_def` adds walked values without
+  compiled code, and Concrete marks its matching definitions `noncomputable def` (`stC`, `pC` in `Live.lean`).
+- [run] The fix, `4ff947f8a1` on `cursor/proofs-twowitness-0d28`, makes `cF` and `tabAt` `noncomputable abbrev`.
+  - A scan of every computable `def`, `abbrev` and `instance` in InstanceStmt's 17 files finds no other one naming a
+    `fwd_def` value (`cO cpX cX descX dtX lcX popX progX pubO setX stX tabX`), `cF` or `tabAt`.
+  - A plain-Lean probe shows that a `noncomputable abbrev` in a `module` file still unfolds by `rfl`.
+  - That scan runs before each launch from now on. It catches this class of stop in under a second.
+- [run] The relaunch: `--on auto` refuses `--pool` ("it takes no --queue or --pool: it is the queue itself"). Without
+  `--pool` it spilled to `vy-nebius-cpu-3`'s research pool, because `vy-nebius-2`'s ssh timed out and `vy-nebius-cpu-1`'s
+  slots were held.
+  - The run is `r20261110-224722-bb99`, on `vy-nebius-cpu-3`, launched 22:47Z. It took tree `build-2`, where 182 files
+    changed.
+  - At 22:50Z it was at module 9,870 of 11,004, with no error.
+- [guess] ETA about 23:35Z. In `aff2`, on `vy-nebius-cpu-12`'s `build-2` (110 files changed), `Setup` took 350 s. Most of
+  the other 1,134 modules are small. If Concrete's chain rebuilds on cpu-3's tree, allow until 23:50Z.
+- [guess] (A) still holds for Thu 12 Nov 18:00Z. Only `InsSetup` and `Scope` are still untried. A further stop costs one round,
+  under 45 minutes on a changed tree, and about 43 hours remain.
