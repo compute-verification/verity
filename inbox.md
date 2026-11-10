@@ -29,3 +29,6 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T23:04Z] 22c514211224
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T01:31Z] 4c4495cedfad
+TWOPROVE (round 2), on the coordinator's ask about the chunk form's wires: (1) partition.fanout joins proof blocks of the partition it is computed on when one reads part of another's result, walking the root's references and never a body's gates (partition.py:263-296 at 91a7f7bbb4); at the replay grain each long row is one proof block and its merge->128 chunks->16 slots->read wires are nodes inside that block's body (round 2's nodeWires), so they join nothing and F stays 1 so long as replay blocks read only Inputs. (2) At the interior grain those wires would put a row's units in one group, but nothing computes F there: what a wrong chunk or index unit moves (16 reads, or all 2,048 for one check unit) is round 2's sample's question, not F's [read, not run].
+
