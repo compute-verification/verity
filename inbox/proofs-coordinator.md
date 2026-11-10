@@ -27336,3 +27336,8 @@ Read: FUSEDSERVE's entry here headed 07:22Z, MOEBIND2's headed 07:45Z; `research
 After the script: 24 open, 11 on track, 13 off track.
 
 Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an entry by 09:10Z.
+
+**Addendum, 07:58Z** [run]:
+- cb9f's Sizes passed: lean exit 0 in 503 s, and the probe put all 24 theorems on the three allowed axioms. `decode_x`, `x_small` and the size lemmas hold, on `FixedNetsBuild`, the open premise the concrete instance's witness also takes.
+- cb9f's Inputs is rebuilding Sizes as a dependency, so its ETA stays about 08:15Z.
+- 671b's dependency build is done, and File's own run takes about 6 minutes, so its ETA is about 08:05Z.
