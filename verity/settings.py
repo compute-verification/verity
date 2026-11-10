@@ -30,7 +30,7 @@ it on.
 
 A registry's prefixes are its own: `EnvSettings.validate_environ` refuses a variable under one that it neither declares nor
 names as read elsewhere, naming it, so a misspelt or retired setting fails the run that carries it instead of being ignored.
-A program checks its registry at startup with `Registry.check`, which also refuses a declared value that doesn't parse and,
+A program checks its registry at startup with `EnvSettings.check`, which also refuses a declared value that doesn't parse and,
 on a run of record, a debug setting that is set.  ``verity``'s registry owns ``VERITY_ML_``, and since a library has no
 startup to check at, every read of it here (`get`, ``settings.NAME``) and its `record` refuse such a variable.  An area adds
 its prefix once every variable under it is declared.
@@ -416,19 +416,15 @@ REGISTRY = EnvSettings(
     # ---- verity.ml.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
-<<<<<<< 99c8914848
-    # ---- verity.core.protocols.composition's suite
-    Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
-            "suite's opt-in served test reads: which tests run, never what a verdict says"),
-||||||| merged common ancestors
-=======
     # ---- verity.ml.definitions' suite
     Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
             "at 43,008 and 131,072 keys, minutes): which tests run, never what a circuit computes"),
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
->>>>>>> e7b03e4a6c8
+    # ---- verity.core.protocols.composition's suite
+    Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
+            "suite's opt-in served test reads: which tests run, never what a verdict says"),
     schema=RECORD_SCHEMA)
 
 
