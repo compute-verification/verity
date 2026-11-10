@@ -172,7 +172,7 @@ def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
     """The mover stops at the root of the moved module's package, which the path map at BASE names. An `__init__.py`
     above it makes a package of a directory that was none (here `security/`, over the root `security/pous`), which no
     move needs; and with no map naming a root, no level is the mover's."""
-    for case, maps, let_in in (("root", {"tools/move/layout_map.toml": '[roots]\nnew = { pous = "security/pous" }\n'},
+    for case, maps, let_in in (("root", {"tools/move/layout_one/map.toml": '[roots]\nnew = { pous = "security/pous" }\n'},
                                 {"security/pous/__init__.py"}), ("no-map", {}, set())):
         repo, base = _repo(tmp_path / case, {**BASE_FILES, **maps})
         _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")

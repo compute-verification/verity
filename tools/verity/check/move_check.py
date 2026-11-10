@@ -54,7 +54,7 @@ Every path git sees changed must be one of:
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
 - a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
   directory had an `__init__.py`), and no higher than the root of that file's package after the move (`[roots] new` of a
-  path map at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
+  path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -965,11 +965,12 @@ def base_maps(base: Tree) -> list[tuple[dict, object]]:
 
 
 def package_roots(base: Tree) -> set[str]:
-    """The directory of each import package after a move, as the path maps at BASE give it (`[roots] new` of each
-    `tools/move/*.toml`): `tools/move/layout.py` writes package levels from a moved module up to its root and no higher."""
+    """The directory of each import package after a move, as the path maps at BASE give it (`[roots] new` of each `.toml`
+    under `tools/move/`, at any depth: a layout's maps may sit in a directory of their own): `tools/move/layout.py` writes
+    package levels from a moved module up to its root and no higher."""
     out = set()
     for p in base.files:
-        if not (p.startswith(MAPS) and p.endswith(".toml") and "/" not in p[len(MAPS):]):
+        if not (p.startswith(MAPS) and p.endswith(".toml")):
             continue
         try:
             new = tomllib.loads(base.text(p) or "").get("roots", {}).get("new", {})
