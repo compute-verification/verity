@@ -119,18 +119,27 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   cost is not the number.
 - **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
   whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
-  what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`) and
-  what it counts that no arm of vLLM's client turns on (`Model.target_counts`: GLM-5.3's counts admission on the
-  certified tick), so that a cost within the target is not read as the target met with those on.
+  what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`).
   `compiled-again` gives the noise floor, which reps inside one server lifetime don't see, and each load's verdict
   widens its interval by that load's floor at each end. The number's verdict follows from the loads':
   it misses where one load misses, meets only where both have run and meet, and otherwise cannot be told.
+- **The target's parts.** A model's target is the sum of its parts (`Model.target_parts`), each the cost model's
+  points for some of our changes (`serve_tax.CHANGES`, each read from an arm's data). GLM-5.3's are the certified
+  tick, the tie order of the canonical top-k, and the snapshot bundle (the edge snapshot, the prefix-cache hits lost
+  and page hashing). A cost is compared with the target only where its arm has every part's changes on. Where it
+  leaves one off, every verdict is `not comparable`, a fourth value, and the output names the changes that are off
+  with their parts: the cost is not of what the target is of, so it neither meets nor misses it, and no target is
+  made of the parts that are on. The `two-stage` arm leaves off admission on the certified tick and the edge
+  snapshot, which need the corpus's client, so its cost against the model's target is not comparable. A target
+  given with `--target` has no parts.
 - **The arms** are by default `compiled`, `compiled-again` and `two-stage`, and the cost is of the last one named.
   `--arms all` adds one arm for each change in between (`record`, `no-prefix-cache`, `boundary-rows`) and the canonical
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
-  at the number's load and rung, with its share of the whole for the arms from the measured one up to stock. A job of
-  `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks, which a
-  later job's `--loads` names.
+  at the number's load and rung, with its share of the whole for the arms from the measured one up to stock, and
+  with what its step turns on: beside each such change the target's part for it, with no verdict, or `not in the
+  model` for a change the target has no part for (the step record, the boundary commitment, the history tables). A
+  job of `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks,
+  which a later job's `--loads` names.
 - **The boundary commitment's line** says what the measured arm's commitment did, from its own records: the finished
   requests committed, those whose commit failed, and those committed with their history tables. An arm that asks for
   tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
@@ -147,8 +156,9 @@ finished job's arm directories, which may be of more than one job: a load served
 
 The run's `result.json` (`serve_tax.result_of`, written by the kit's writer) holds each load's cost as a measurement
 named by the load, and the number as one named by the model's metric id (`Model.metric`), with `ci95`, `target`,
-`target_basis`, `target_counts`, `verdict`, `better`, `load`, and `loads`, each load's cost beside it. A job in which
-a load has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
+`target_basis`, `target_parts` (each part with the changes the arm left off), `verdict` (one of the three, or `not
+comparable`), `better`, `load`, and `loads`, each load's cost beside it. A job in which a load has not run writes no
+entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
 ## Running it
 
