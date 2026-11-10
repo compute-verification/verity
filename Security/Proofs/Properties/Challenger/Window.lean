@@ -21,7 +21,7 @@ messages hash equal tagged digests, and equal digests are equal strings, or a co
 canonical text (`taggedBytes_inj2`). Every entry holds its keys in order (`ledgerEntry?`'s `sortedKeys` guard), so two
 entries whose unsigned canonical texts agree have equivalent fields other than `sig` (`entry_fields_equiv`, by
 `CanonRead.canon_inj`). The device's line is then an open of the same session, under v2, of the window's root, withheld
-(`executionPhase_opens`), and `drawCoins_opens` adds it to `ChallengePhase.sessionOf_bound`'s run.
+(`executionPhase_opens`), and `drawCoins_opens` adds it to `ChallengePhase.challengePhaseOf_bound`'s run.
 -/
 
 @[expose] public section
@@ -150,7 +150,7 @@ theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitme
     challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
       r'.1 = r.1 ∧ r'.2.1 = r.2 ∧ r'.2.2 = a.session) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, ChallengePhase.sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, ChallengePhase.challengePhaseOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, ‹_›, rfl, rfl, beq_iff_eq.1 ‹_›⟩
 
 -- `mvcgen` splits `drawCoins` into one goal per check it makes of the record's form, the window and the family
@@ -160,7 +160,7 @@ theorem drawCoins_withheld {w : String} {after ξ : ByteArray} (h : drawCoins ke
     withheldOn (getD coins "ledger") w = true := by
   refine of_triple (Q := fun _ => withheldOn (getD coins "ledger") w = true) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, ChallengePhase.trustedSessionOf_ok_spec, ChallengePhase.challengerStream_ok_spec]
+  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, ChallengePhase.trustedChallengePhaseOf_ok_spec, ChallengePhase.challengerStream_ok_spec]
 
 /-- **Every open of the window's root is withheld** in a ledger `withheldOn` accepts. -/
 theorem withheld_of {ledger : Json} {w : String} (h : withheldOn ledger w = true) {ls : Array Json} {l : Json}
@@ -392,7 +392,7 @@ theorem executionPhase_opens {w : String} {pins main : Json} {a : Audited}
   · exact .inr b
 
 /-- **A sample `drawCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
-the sample's window**, withheld, under v2, or the finder outputs a break: `ChallengePhase.drawCoins_session`'s run, with
+the sample's window**, withheld, under v2, or the finder outputs a break: `ChallengePhase.drawCoins_challengePhase`'s run, with
 `OpensOn`. -/
 theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
@@ -401,10 +401,10 @@ theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w
           releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins) := by
   obtain ⟨c, roots, ht, hs⟩ := ChallengePhase.drawCoins_ok h
   refine ⟨c, roots, hs, ?_⟩
-  obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedSessionOf_ok ht
+  obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedChallengePhaseOf_ok ht
   obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := challengePhaseNamed_sid hn
   rcases executionPhase_opens (dev := dev) (label := label) hp (drawCoins_withheld h) with hopen | b
-  · rcases ChallengePhase.sessionOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, hid, he, hr⟩ | b
+  · rcases ChallengePhase.challengePhaseOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, hid, he, hr⟩ | b
     · exact .inl ⟨s, hs', hid ▸ hopen, hc, he, hr⟩
     · exact .inr b
   · exact .inr b
