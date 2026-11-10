@@ -48,12 +48,12 @@ theorem sum_zip_snd_le {α β : Type} (f : α → ℝ) (hf : ∀ a, 0 ≤ f a) :
     simp only [List.zip_cons_cons, List.map_cons, List.sum_cons]
     exact add_le_add le_rfl (sum_zip_snd_le f hf l₁ l₂)
 
-theorem accSum_map {R R' : Type} (run : R → Trace) (k : ℕ) (g : R → ℝ) (f : R' → R) :
+theorem accSum_map {R R' : Type} (run : R → Transcript) (k : ℕ) (g : R → ℝ) (f : R' → R) :
     ∀ (l : List R') (a : ℕ), accSum run k g (l.map f) a = accSum (run ∘ f) k (g ∘ f) l a
   | [], _ => rfl
   | r :: l, a => by simp only [List.map_cons, accSum, accSum_map run k g f l, Function.comp]
 
-theorem accSum_nonneg {R : Type} (run : R → Trace) (k : ℕ) {g : R → ℝ} (hg : ∀ r, 0 ≤ g r) :
+theorem accSum_nonneg {R : Type} (run : R → Transcript) (k : ℕ) {g : R → ℝ} (hg : ∀ r, 0 ≤ g r) :
     ∀ (l : List R) (a : ℕ), 0 ≤ accSum run k g l a
   | [], _ => le_rfl
   | r :: l, a => by
@@ -63,16 +63,16 @@ theorem accSum_nonneg {R : Type} (run : R → Trace) (k : ℕ) {g : R → ℝ} (
     · exact add_nonneg (hg r) (accSum_nonneg run k hg l _)
     · exact accSum_nonneg run k hg l _
 
-theorem waitExp_nonneg {D : Type} [Fintype D] (run : D → Trace) (k K a : ℕ) : 0 ≤ waitExp run k K a :=
+theorem waitExp_nonneg {D : Type} [Fintype D] (run : D → Transcript) (k K a : ℕ) : 0 ≤ waitExp run k K a :=
   Ex_nonneg fun _ => Nat.cast_nonneg _
 
-theorem accExp_nonneg {D : Type} [Fintype D] (run : D → Trace) (k : ℕ) {g : D → ℝ} (hg : ∀ d, 0 ≤ g d) (K a : ℕ) :
+theorem accExp_nonneg {D : Type} [Fintype D] (run : D → Transcript) (k : ℕ) {g : D → ℝ} (hg : ∀ d, 0 ≤ g d) (K a : ℕ) :
     0 ≤ accExp run k g K a :=
   Ex_nonneg fun _ => accSum_nonneg run k hg _ _
 
 /-- A wait and the programs at its kept runs, indexed, rerun as the wait does and then as each program. Stated at
 every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
-theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R)
+theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (f : Fin k × (R × Seen) → RP R (List γ)) :
     (((waitAccC k rs []).bind fun l => flatMapRP f ((List.finRange k).zip l)).eval H run).2.2 =
       waitRuns run k rs 0 + (((List.finRange k).zip ((waitAccC k rs []).eval H run).1).map fun q =>
@@ -81,7 +81,7 @@ theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Trace) (k : 
 
 /-- **The outer wait and what follows it**, as reals: the wait's reruns and each kept run's body bound `B`. Stated at
 every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
-theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R)
+theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (body : Fin k × (R × Seen) → RP R (List γ)) (fin : List γ → β) (B : Fin k × (R × Seen) → ℝ)
     (hB : ∀ jo, (((body jo).eval H run).2.2 : ℝ) ≤ B jo) :
     ((((waitAccC k rs []).bind fun outer =>
@@ -95,7 +95,7 @@ theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Trace)
 and the bodies' coins `X`, the reruns are at most the wait's expected reruns and its kept runs' weights `G`, when each
 body averages at most `G` of its run, at every position. -/
 theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempty X] (H : Msg → Msg)
-    (run : R → Trace) (f : D' → R) (k K : ℕ) (Bf : Fin k → R → X → ℝ) (G : R → ℝ) (hB : ∀ j r, Ex (Bf j r) ≤ G r)
+    (run : R → Transcript) (f : D' → R) (k K : ℕ) (Bf : Fin k → R → X → ℝ) (G : R → ℝ) (hB : ∀ j r, Ex (Bf j r) ≤ G r)
     (hG : ∀ r, 0 ≤ G r) :
     Ex (fun c : (Fin K → D') × X => (waitRuns run k ((List.finRange K).map fun l => f (c.1 l)) 0 : ℝ) +
         (((List.finRange k).zip ((waitAccC k ((List.finRange K).map fun l => f (c.1 l)) []).eval H run).1).map
@@ -133,7 +133,7 @@ theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempt
 
 /-- `level_ex`'s bound against the wait's acceptance probability: at most `k` reruns for the wait, and `k` times
 the kept runs' weights given acceptance. -/
-theorem level_amortized {D R : Type} [Fintype D] [Nonempty D] (run : R → Trace) (f : D → R) (k K : ℕ) (G : R → ℝ)
+theorem level_amortized {D R : Type} [Fintype D] [Nonempty D] (run : R → Transcript) (f : D → R) (k K : ℕ) (G : R → ℝ)
     (hG : ∀ r, 0 ≤ G r) :
     Pr (fun d => (run (f d)).out = .acc) * (waitExp (run ∘ f) k K 0 + accExp (run ∘ f) k (G ∘ f) K 0) ≤
       k + k * Ex (fun d => (if (run (f d)).out = .acc then (1 : ℝ) else 0) * G (f d)) := by
@@ -151,22 +151,22 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- A checked unit's waits' reruns at coins `r` and its `E^rep` coins `ρ`: Flock's `m′` waits of `K′` samples, fresh on
 the unit's rounds. -/
-noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
+noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : ℝ :=
   ∑ a, (waitRuns (run' ∘ forkOn (D.rounds x u) r) (D.innerK x) ((List.finRange (D.innerCap x)).map (ρ a)) 0 : ℝ)
 
 /-- Position `i`'s unit's waits, `0` when fewer units are checked at `r`. -/
-noncomputable def posWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+noncomputable def posWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (i : Fin (nPU D x)) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : ℝ :=
   (((D.checked x r)[i.val]?).map fun u => unitWaits D x run' u r ρ).getD 0
 
 /-- Every position's expected unit waits at an accepted inner run `r`. -/
-noncomputable def innerW (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+noncomputable def innerW (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (r : Fin (D.V.k x) → Coin) : ℝ :=
   ∑ i, Ex fun ρ : D.UnitCoins x => posWaits D x run' i r ρ
 
 /-- The bound on an outer body at outer position `j` and run `r`, on its inner wait's coins `d` and the units' `ξ`. -/
-noncomputable def innerB (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+noncomputable def innerB (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (j : Fin (D.k x)) (r : Fin (D.V.k x) → Coin) (d : Fin (D.cap x) → Fin (D.V.k x) → Coin)
     (ξ : Fin (D.k x) × Fin (D.k x) × Fin (nPU D x) → D.UnitCoins x) : ℝ :=
   (waitRuns run' (D.k x) ((List.finRange (D.cap x)).map fun l => forkOn (D.stage2 x) r (d l)) 0 : ℝ) +
@@ -176,18 +176,18 @@ noncomputable def innerB (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (ru
 
 /-- An outer body's weight given its run `r`: the inner wait's expected reruns fresh on the second stage, and its kept
 runs' unit waits. -/
-noncomputable def outerG (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+noncomputable def outerG (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (r : Fin (D.V.k x) → Coin) : ℝ :=
   waitExp (run' ∘ forkOn (D.stage2 x) r) (D.k x) (D.cap x) 0 +
     accExp (run' ∘ forkOn (D.stage2 x) r) (D.k x) (innerW D x run' ∘ forkOn (D.stage2 x) r) (D.cap x) 0
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem unitWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
+theorem unitWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : 0 ≤ unitWaits D x run' u r ρ :=
   Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem posWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem posWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (i : Fin (nPU D x)) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : 0 ≤ posWaits D x run' i r ρ := by
   unfold posWaits
   cases (D.checked x r)[i.val]? with
@@ -195,12 +195,12 @@ theorem posWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x)
   | some u => exact unitWaits_nonneg D x run' u r ρ
 
 omit [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem innerW_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem innerW_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (r : Fin (D.V.k x) → Coin) : 0 ≤ innerW D x run' r :=
   Finset.sum_nonneg fun i _ => Ex_nonneg fun ρ => posWaits_nonneg D x run' i r ρ
 
 omit [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem outerG_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem outerG_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (r : Fin (D.V.k x) → Coin) : 0 ≤ outerG D x run' r :=
   add_nonneg (waitExp_nonneg _ _ _ _) (accExp_nonneg _ _ (fun _ => innerW_nonneg D x run' _) _ _)
 
@@ -208,7 +208,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 /-- A checked unit's extraction reruns as its waits do: Flock's `m′` waits on its session, at most. -/
 theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     (((unitExt D decode x s u r v ρ).eval H run').2.2 : ℝ) ≤ unitWaits D x run' u r ρ := by
   unfold unitExt
   split
@@ -240,7 +240,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 /-- At an accepted inner run `li`, every checked unit's extraction reruns at most its position's waits. -/
 theorem innerBody_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     (((innerBody D decode x s c j li).eval H run').2.2 : ℝ) ≤ ∑ i, posWaits D x run' i li.2.1 (c.2.2 (j, li.1, i)) := by
   unfold innerBody
   rw [flatMapRP_runs, Nat.cast_list_sum, List.map_map]
@@ -250,7 +250,7 @@ theorem innerBody_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decod
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_runs_le_innerB (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     (((outerBody D decode x s c jo).eval H run').2.2 : ℝ) ≤ innerB H D x run' jo.1 jo.2.1 (c.2.1 jo.1) c.2.2 := by
   unfold outerBody innerB
   rw [wait_flat_runs, Nat.cast_add, Nat.cast_list_sum, List.map_map]
@@ -259,7 +259,7 @@ theorem outerBody_runs_le_innerB (H : Msg → Msg) (D : Deploy Coin Col T) (deco
 omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- An outer body's bound averages at most `outerG` of its run: `level_ex` at the inner wait, fresh on the second
 stage. -/
-theorem Ex_innerB_le (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem Ex_innerB_le (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (j : Fin (D.k x)) (r : Fin (D.V.k x) → Coin) :
     Ex (fun c2 : (Fin (D.k x) → Fin (D.cap x) → Fin (D.V.k x) → Coin) ×
         (Fin (D.k x) × Fin (D.k x) × Fin (nPU D x) → D.UnitCoins x) => innerB H D x run' j r (c2.1 j) c2.2) ≤
@@ -285,7 +285,7 @@ omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **One position's unit waits, given acceptance**: over the second stage `d` at `r`, acceptance times position
 `i`'s expected unit waits is at most `m′·k′`. Resampling the unit's rounds keeps the checked units (`DrawFixed`), so
 acceptance weighs as the unit's own acceptance probability, against which its waits amortize. -/
-theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (i : Fin (nPU D x)) (r : Fin (D.V.k x) → Coin) :
     Ex (fun d : Fin (D.V.k x) → Coin => (if (run' (forkOn (D.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : D.UnitCoins x => posWaits D x run' i (forkOn (D.stage2 x) r d) ρ) ≤
@@ -334,7 +334,7 @@ theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run
 
 omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **An outer body's weight against the inner acceptance**: `ε₂(r) · outerG(r) ≤ k + k·n_PU·m′·k′`. -/
-theorem outerG_amortized {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem outerG_amortized {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (r : Fin (D.V.k x) → Coin) :
     Pr (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) * outerG D x run' r ≤
       D.k x + D.k x * (nPU D x * (D.innerWaits x * D.innerK x)) := by
@@ -361,7 +361,7 @@ omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- The extractor's reruns at a statement that parses: the replay, and at an accepted judged run the outer wait and
 each kept run's body bound. -/
 theorem E_runs_le_outer (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {x : Msg}
-    {s : AuditStatement} (hs : D.parse x = some s) (run' : (Fin (D.V.k x) → Coin) → Trace) (r₀ : Fin (D.V.k x) → Coin)
+    {s : AuditStatement} (hs : D.parse x = some s) (run' : (Fin (D.V.k x) → Coin) → Transcript) (r₀ : Fin (D.V.k x) → Coin)
     (c : (E D decode).C x) :
     ((((E D decode).ext x r₀ c).eval H run').2.2 : ℝ) ≤
       1 + (if (run' r₀).out = .acc then (1 : ℝ) else 0) *

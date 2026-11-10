@@ -27,14 +27,14 @@ open Claims
 
 /-! ## Reruns and own calls of a list's programs -/
 
-theorem flatMapRP_runs_le {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (B : ℕ)
+theorem flatMapRP_runs_le {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (B : ℕ)
     (l : List β) (h : ∀ b ∈ l, ((f b).eval H run).2.2 ≤ B) : ((flatMapRP f l).eval H run).2.2 ≤ l.length * B := by
   rw [flatMapRP_runs]
   refine (List.sum_le_length_nsmul _ B fun n hn => ?_).trans_eq (by simp)
   obtain ⟨b, hb, rfl⟩ := List.mem_map.1 hn
   exact h b hb
 
-theorem ownLog_flatMapRP_le {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (B : ℕ)
+theorem ownLog_flatMapRP_le {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (B : ℕ)
     (l : List β) (h : ∀ b ∈ l, (ownLog H run (f b)).length ≤ B) :
     (ownLog H run (flatMapRP f l)).length ≤ l.length * B := by
   rw [ownLog_flatMapRP]
@@ -47,7 +47,7 @@ theorem length_zip_finRange_le {α : Type} (k : ℕ) (l : List α) : ((List.finR
   exact min_le_left _ _
 
 /-- `checkRevealed`'s own calls: the commitment's checks of each opening, under its roots. -/
-theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     (ownLog H run (checkRevealed (R := R) Cm rs)).length = (rs.map fun p => ((Cm.opens p.1 p.2).eval H).2.length).sum := by
   unfold checkRevealed
@@ -86,7 +86,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 /-- A checked unit's extraction reruns at most `m′·K′` times: Flock's waits on its session. -/
 theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     ((unitExt D decode x s u r v ρ).eval H run').2.2 ≤ D.innerWaits x * D.innerCap x := by
   unfold unitExt
   split
@@ -105,7 +105,7 @@ theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem innerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     ((innerBody D decode x s c j li).eval H run').2.2 ≤ nPU D x * (D.innerWaits x * D.innerCap x) :=
   (flatMapRP_runs_le H run' _ _ _ fun iu _ => unitExt_runs_le H D decode x s iu.2 li.2.1 li.2.2 _ run').trans
     (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
@@ -113,7 +113,7 @@ theorem innerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : AuditStatement) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
-    (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     ((outerBody D decode x s c jo).eval H run').2.2 ≤
       D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)) := by
   unfold outerBody
@@ -125,7 +125,7 @@ theorem outerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
 /-- **The outer wait and what follows it** rerun at most `K + k·B` times: the wait over `K` samples, and at most `k`
 bodies of at most `B` reruns each. Stated at every `k`, so that the kernel never meets the deployed `k`'s
 `List.finRange`. -/
-theorem outer_runs_le {R γ β : Type} (H : Msg → Msg) (run : R → Trace) (k K B : ℕ) (rs : List R)
+theorem outer_runs_le {R γ β : Type} (H : Msg → Msg) (run : R → Transcript) (k K B : ℕ) (rs : List R)
     (hrs : rs.length = K) (body : Fin k × (R × Seen) → RP R (List γ)) (fin : List γ → β)
     (hB : ∀ jo, ((body jo).eval H run).2.2 ≤ B) :
     (((waitAccC k rs []).bind fun outer =>
@@ -168,7 +168,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 /-- A checked unit's extraction's own calls are its reveal's checks, at most `openCalls`. -/
 theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCallsLe H D)
     (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (u : ℕ)
-    (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     (ownLog H run' (unitExt D decode x s u r v ρ)).length ≤ D.openCalls x := by
   unfold unitExt
   split
@@ -182,7 +182,7 @@ theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCa
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCallsLe H D)
     (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (c : ECoins D x)
-    (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) (run' : (Fin (D.V.k x) → Coin) → Trace) :
+    (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) (run' : (Fin (D.V.k x) → Coin) → Transcript) :
     (ownLog H run' (outerBody D decode x s c jo)).length ≤ D.k x * (nPU D x * D.openCalls x) := by
   unfold outerBody
   rw [ownLog_bind, ownLog_of_noHash H run' (NoHash.waitAccC _ _ _), List.nil_append]
