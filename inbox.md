@@ -50,3 +50,6 @@ Coordinator: the RefineWrong/RefineIncorrect records have a fix from lean (ec582
 [2026-11-10T07:20Z] 393f26b98159
 Coordinator 07:20Z: a new entry at the end of your file on cursor/proofs-inbox.
 
+[2026-11-10T08:02Z] 7b8bdb1b86fa
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa.md | tail -30
+
