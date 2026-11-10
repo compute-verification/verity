@@ -57,12 +57,12 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def moved(repo: Path, *maps: str):
+def moved(repo: Path, *maps: str, deleted: tuple[str, ...] = ()):
     files = []
     for i, text in enumerate(maps):
         files.append(repo / f"map{i}.toml")
         files[-1].write_text(text)
-    return MOVED.Moved([str(f) for f in files], "HEAD", repo)
+    return MOVED.Moved([str(f) for f in files], "HEAD", repo, deleted)
 
 
 def suites(repo: Path, *maps: str) -> dict:
@@ -73,8 +73,8 @@ def suites(repo: Path, *maps: str) -> dict:
         m.close()
 
 
-def gone(repo: Path, *maps: str) -> dict:
-    m = moved(repo, *maps)
+def gone(repo: Path, *maps: str, deleted: tuple[str, ...] = ()) -> dict:
+    m = moved(repo, *maps, deleted=deleted)
     try:
         return GONE.check(m)
     finally:
@@ -157,6 +157,13 @@ def test_a_directory_emptied_by_file_rows_is_counted_until_a_tokens_row_names_it
     assert gone(repo, ROOTS + "[paths]\n" + PARTS + '[tokens]\n"old/lib/" = "new/lib/"\n')["count"] == 0
 
 
+def test_a_package_level_whose_init_a_later_commit_deletes_is_gone(repo: Path) -> None:
+    rows = ROOTS + "[paths]\n" + PARTS.replace('"old/lib/__init__.py" = "new/lib/__init__.py"\n', "")
+    assert gone(repo, rows)["count"] == 0                           # `old/lib` still holds its `__init__.py`
+    r = gone(repo, rows, deleted=("old/lib/__init__.py",))
+    assert (r["count"], [d["directory"] for d in r["directories"]]) == (3, ["old/lib"])
+
+
 def test_a_tokens_row_to_a_directory_that_holds_nothing_fails(repo: Path) -> None:
     r = gone(repo, ROOTS + "[paths]\n" + PARTS + '[tokens]\n"old/lib/" = "new/library/"\n')
     assert r["tokens_to_nothing"] == ["old/lib/ = new/library/"]
@@ -174,7 +181,7 @@ def test_the_commands_exit_1_with_the_paths(repo: Path, capsys: pytest.CaptureFi
     (repo / "good.toml").write_text(WHOLE)
     for module in (SUITES, GONE):
         m = MOVED.Moved
-        module.Moved = lambda maps, ref, m=m: m(maps, "HEAD", repo)
+        module.Moved = lambda maps, ref, deleted=(), m=m: m(maps, "HEAD", repo, deleted)
         try:
             assert module.main([str(repo / "good.toml")]) == 0
             assert module.main([str(repo / "bad.toml")]) == 1
