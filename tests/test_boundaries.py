@@ -91,14 +91,6 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the H200 example: its runner loads benchmark code by path
-    "archive/examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
-    "archive/examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
-    "archive/examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
-    "archive/examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the staging decode "
-                                       "(`benchmarks/torch_gpu/p2_stage`)",
-    "archive/examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
-                                                                 "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
     "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
@@ -124,13 +116,6 @@ BENCHMARKS_IMPORTERS = {
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
-    **dict.fromkeys((
-        "verity/protocols/pouw/verifier/tests/epoch_coins_vectors.py", "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_epoch_coins.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_kw.py",
-        "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
-    ), "compute-accounting: PoUW's clear lifecycle (`verity/protocols/pouw/clear`, and `pearl_c4`)"),
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
     **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
@@ -140,18 +125,22 @@ BENCHMARKS_IMPORTERS = {
     "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
-                     "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
-                     "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
-                    "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
-    **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
-                    "proofs: the live challenger's gate and model registry (`verity/composite/device/live_challenger`)"),
+                     "integrations/vllm/tests/protocols/pouw_h1_gpu.py"),
+                    "compute-accounting: H1's prover and producer (`benchmarks/pouw/h1_prove`, `served_h1`)"),
     **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
                      "integrations/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
                     "and `benchmarks/vllm_encoded/paged.py`"),
     "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
+    # what came under `verity/` from `benchmarks/` and still loads what stayed there
+    "verity/composite/datacenter/tests/test_datacenter.py": "network-accounting: PoUW's proved ticks "
+                                                            "(`benchmarks/pouw/proved_ticks.py`)",
+    "verity/composite/device/live_challenger/auditor.py": "proofs: the load's store, relay and commit "
+                                                          "(`benchmarks/network_traces/load_relay.py`)",
+    **dict.fromkeys(("verity/protocols/poub/device/live_verifier/tests/stub_verifier.py",
+                     "verity/protocols/poub/device/live_verifier/tests/test_host.py"),
+                    "memory-accounting: the remote session's processes and its tests' session (`benchmarks/remote_session`)"),
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
