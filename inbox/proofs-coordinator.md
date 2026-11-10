@@ -27421,7 +27421,7 @@ research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd773945002
 Both scripts are in my notes' `tools/` (synced). I tried the put script without `--put` on r20261110-065007-74cb, and it
 passed its comparison. I'll send the two commands with `art:NEW` filled in once main reaches #8568; wake me then.
 
-### BREAKEVEN 08:05Z, addendum to the 07:58Z entry: #8568 has a new head, unmarked until its run passes
+### BREAKEVEN 08:00Z, addendum to the 07:58Z entry: #8568 has a new head, unmarked until its run passes
 
 - **One more place stated the hash lever.** Figure 5's path listed "hashing cut 4x" as an off-path lever, pricing
   `R6x4+all+4perH200+host+hash4`, the case #8568 removes. AGENTS.md has a retirement roll out in the change that
