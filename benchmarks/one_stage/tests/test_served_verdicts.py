@@ -2503,22 +2503,26 @@ LIMITS_SAID = (": fixed with the policy before the serve, written by the develop
 
 def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_and_k_or_the_runs_settings(tmp_path):
     """Once the policy is written, the limits of its rate rule go beside it (inference-only-limits.json): α = k/c in
-    lowest terms and Γ = c of the policy's own numbers, with the policy file's SHA-512, or the run's ALPHA and GAMMA
-    where both are set, and the line says which, and that the developer wrote them. A policy that names no c writes
-    none and says so, and the policy step still passes."""
+    lowest terms and Γ = c of the policy's own numbers, in the unit of its c, with the count rule's (c, k, n) and the
+    policy file's SHA-512, or the run's ALPHA and GAMMA where both are set (in the unit LIMITS_UNIT states), and the
+    line says which, and that the developer wrote them. A policy that names no c writes none and says so, and the
+    policy step still passes."""
     policy = json.dumps({"c": 14, "k": 6, "n": 16})
     rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
     assert rc == 0 and lines[1:] == [
         "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID]
     assert json.loads((tmp_path / "own" / "out" / "inference-only-limits.json").read_text()) == {
         "format": "verity-bench/inference-only-limits/v1", "alpha": [3, 7], "gamma": 14,
+        "unit": "Boolean gates by the policy's gate table, the unit of its c", "count": {"c": 14, "k": 6, "n": 16},
         "from": "the policy's c and k (alpha = k/c, gamma = c)",
         "policy_sha512": hashlib.sha512(policy.encode()).hexdigest(),
         "written_by": "the developer; no auditor's device signed them"}
-    rc, lines, _ = _inference_only(tmp_path / "given", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100")
+    rc, lines, _ = _inference_only(tmp_path / "given", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100",
+                                   LIMITS_UNIT="Program gates in a block")
     assert rc == 0 and lines[1:] == ["INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA" + LIMITS_SAID]
     got = json.loads((tmp_path / "given" / "out" / "inference-only-limits.json").read_text())
-    assert (got["alpha"], got["gamma"], got["from"]) == ([1, 2], 100, "the run's ALPHA and GAMMA")
+    assert (got["alpha"], got["gamma"], got["unit"], got["from"]) == (
+        [1, 2], 100, "Program gates in a block", "the run's ALPHA and GAMMA")
     rc, lines, _ = _inference_only(tmp_path / "half", "inference-policy", IO_WRITE=policy, ALPHA="1/2")
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k")
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))

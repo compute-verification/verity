@@ -1087,17 +1087,19 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 }
 # The limits of the policy's rate rule (verity/inference-only/v0's α and Γ, which the composite's inference-only case is
 # checked at), fixed with the policy, so before serve-openai starts: the run's ALPHA and GAMMA where both are set, else
-# α = k/c and Γ = c of the policy's own c and k, the class's public numbers. They go to IO_LIMITS beside the policy, with
-# the policy file's SHA-512, and the deferral and the compose hand-off carry them as ALPHA and GAMMA (`fixed_limits`), so
-# no later step reads them off the served window's division. The developer writes them: no auditor's device signs them.
+# α = k/c and Γ = c of the policy's own c and k, the class's public numbers, so in the unit the policy counts c in:
+# Boolean gates by its gate table (the count rule's unit; the run's own are in LIMITS_UNIT, which it states). They go to
+# IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral and the
+# compose hand-off carry them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the served window's
+# division. The developer writes them: no auditor's device signs them.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
   [ -s "$IO_POLICY" ] || return 0
-  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" <<'EOF' 2>&1
+  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" <<'EOF' 2>&1
 import hashlib, json, sys
 from fractions import Fraction
-policy, out, alpha, gamma = sys.argv[1:5]
+policy, out, alpha, gamma, unit = sys.argv[1:6]
 body = open(policy, "rb").read()
 p = json.loads(body)
 given = bool(alpha and gamma)
@@ -1105,6 +1107,8 @@ a, g = (Fraction(alpha), int(gamma)) if given else (Fraction(p["k"], p["c"]), in
 if a < 0 or g < 1:
     sys.exit(f"alpha {a} and gamma {g} are no limits")
 doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator, a.denominator], "gamma": g,
+       "unit": (unit or "not stated") if given else "Boolean gates by the policy's gate table, the unit of its c",
+       "count": {x: p.get(x) for x in ("c", "k", "n")},
        "from": "the run's ALPHA and GAMMA" if given else "the policy's c and k (alpha = k/c, gamma = c)",
        "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer; no auditor's device signed them"}
 with open(out, "w") as f:
