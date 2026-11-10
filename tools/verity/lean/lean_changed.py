@@ -158,6 +158,7 @@ LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_f
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
+MOVED = _module(ROOT / "tools" / "verity" / "lean" / "moved.py", "lean_moved_for_lean_changed")
 #: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
 FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
@@ -329,6 +330,23 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
     tmp = tree / f"{LINKS}.tmp"
     tmp.write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
     os.replace(tmp, tree / LINKS)
+
+
+def carried(tree: Path, files: list[str], log=print) -> dict[str, str]:
+    """``tree``'s `LINKS`, read after each Lake package of this checkout (``files``, its tracked files) whose build
+    directory a layout move left at the package's former path in ``tree`` has had it moved along (`moved.carry`), with its
+    entry of `LINKS`. A tree is keyed by package paths and `.lake` is no tracked file: without this the first run after a
+    move would sync the package to its new path, find no build there and compile every module of it, the old build left
+    beside it. Called under the tree's lock, before `sync`."""
+    links = read_links(tree)
+    pkgs = sorted({f.rsplit("/", 1)[0] for f in files if "/" in f and f.rsplit("/", 1)[1] in MOVED.LAKEFILES})
+    got = MOVED.carry(tree, pkgs, MOVED.recorded(ROOT), log, prune=True)
+    for old, new in got.items():
+        if old in links:
+            links[new] = links.pop(old)
+    if got:
+        write_links(tree, links)
+    return links
 
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
@@ -1139,7 +1157,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return refused(None, pkg)
-            links = read_links(tree)
+            links = carried(tree, files, log)
             committed = as_found(todo)
             new: dict[str, bytes] = {}
             outcomes: dict[str, str] = {}
@@ -1363,7 +1381,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
-            t0, links, left = time.monotonic(), read_links(tree), left_by(tree)
+            t0, links, left = time.monotonic(), carried(tree, files, log), left_by(tree)
             mark(tree, package=pkg, phase="sync")
             n = sync(closure(pkg), files, tree)
             there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
@@ -1488,7 +1506,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
             if not hold_tree(held, tree, log):
                 doc["skipped"]["*"] = f"another run held {tree}"
                 return done(2)
-            links, left, sandbox, have = read_links(tree), left_by(tree), sandboxed(), set(tracked)
+            links, left, sandbox, have = carried(tree, tracked, log), left_by(tree), sandboxed(), set(tracked)
             for pkg, fs in sorted(by_pkg.items(), key=lambda kv: (rank(kv[0]), kv[0])):
                 t0 = time.monotonic()
                 mark(tree, package=pkg, phase="sync")
@@ -1630,7 +1648,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
-        links = read_links(tree)
+        links = carried(tree, files, log)
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
