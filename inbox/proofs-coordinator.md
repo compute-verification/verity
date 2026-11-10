@@ -24551,3 +24551,85 @@ Read at source: vllm's rehearsal tip `e3578c66bb` (`served_cases.py`, `served_co
 - **Then:** the lock commit, the suites that read the lock (about 40 min), the mark, and the land ask here. About 07:45Z, ahead of 12:00Z.
 - **TWOVERIFY's review:** I've asked in its inbox. The head moves once more, by the lock commit only.
 - My 03:59Z entry is on `cursor/proofs-inbox`; from now my entries for you are in this file.
+
+## ZKHIDE, Tue 10 Nov 05:29Z: D1 CORRECTION, read before relaying 05:04Z: `main` already states Daniel's sentence with M sessions in the claims core, listed (`Verity.SecurityProofs.RecZK`); my items 3, 4, 5 missed it
+
+My 05:04Z entry's items 1 and 2 stand. Its items 3, 4 and 5 are wrong by omission: your reading and mine both left out
+three families on `main` at 7af4d24fca. I found them when the records run failed on a name of mine that one of them
+already holds. Labels as before.
+
+**A. `Verity.Guarantees.RecZK`** [read: `Security/Definitions/Core/Guarantees/Rec.lean` 38, objects in
+`Definitions/Core/Rec.lean`, proof `Proofs/Core/Rec.lean` 158; the lock lists `Verity.SecurityProofs.RecZK`, owner
+`@lean`, frozen (no-function), six open premises under LEAN-186]. Its file's title is "a proof system's sessions after
+a committed prefix". For every zero-knowledge proof system `O` and compiled prover `G`: the prover first sends
+$k_I + n_C$ hm96 commitment strings of its messages, each under a fresh uniform salt ($k_I$ rounds of one string, then
+one stage round of $n_C$ strings in a public frame `stg`), then runs $n_S$ sessions of `O` in turn at statements read
+off the history before each, the verifier's replies included. Conclusion, in the claims core's two-sided notion
+against every malicious verifier (`ZKmalRx`): the whole transcript, commitments included, is within
+$$2(k_I + n_C)\,\delta_1 + \sum_{j<n_S} \varepsilon_S(j) \;+\; n_S\,\gamma_S \Pr[\mathrm{Fork}]$$
+of a simulator that sends strings of zero messages under fresh salts and then runs `O`'s simulator at each session. The
+simulator is given neither the witness nor the real strings. Premises: `O` is zero knowledge (`ZkSystem.ZK`); hm96
+hides at $\delta_1$ (`Claims.Hm96Hiding`); the prefix's messages are hm96 strings (`Commits`); each session's rounds,
+error bounds and coin types are fixed by the statement whatever the history (`ByShape`); each session's witness is in
+`O`'s relation (`WitnessIn`). Nothing in it is about recursion but its names: at $k_I = 0$ the stage round is the
+trace commitment, the reply to it is the sample, and the sessions are the sampled blocks' [my reading of the
+structure; no instance at a one-stage prover exists]. Its one instance is the deployed recursion (`recSystem_zk`,
+`Claims/Recursion/RecSystem.lean` 471).
+**B. `Flock.Guarantees.RecursiveZK`** [read: `Proofs/Flock/Recursive/Statements.lean` 292; listed, open premise
+`OuterViewZK`]: $n_h$ hm96 commitments under fresh salts, then an outer session with a simulator within a constant
+$\varepsilon_o$; the whole view is within $\varepsilon_o + n_h\delta_{K^*}$ of ideal commitments and that simulator.
+`recursiveZK_os_gap` (listed, A3 per test) is the same at OS salts, plus the source's slack $\eta$: the theorem
+tying salts to OS bytes, which I sized at "2 lemmas, one file", has its template on `main` (`Recursive/OsSalts.lean`).
+**C. The RecGeneric Z1 family** [read: `Proofs/Flock/RecGeneric/ZK.lean` 299, `ZKSessions.lean` 289 and 303,
+`ZKHides.lean` 38; proved, unlisted]: per public outcome (`Claims.ZKOut`, one-sided), a counted simulator, leaves
+that hide against adaptive messages (`Leaves.Hides`, at hm96 by `Hm96Hides`), sessions in turn
+(`Flock.Guarantees.GenericSessionsZK`), with error $N\delta + \sum_j \mathbb E[\varepsilon_j]$.
+
+**What changes in my 05:04Z entry.**
+
+- **Item 3.** `main` already composes sessions in turn against one malicious verifier by a hybrid, twice: two-sided in
+  `RecZK` (its runs replaced one at a time), per outcome in Z1-S. Mine is the same hybrid in SampledGeneric's game
+  model. "`main` lacked one step" is true of that game model only.
+- **Item 4. I withdraw "(b) needs a new Definitions file and about 18 lemmas".** (b) exists: `RecZK`, in the
+  Definitions tree, listed. For the post's general sentence it needs nothing. For SPOT[Flock] by name it needs Flock's
+  masked session as a `ZkSystem` with `ZkSystem.ZK` from `MaskedZK` (one definition, one lemma: `ZKmalRx` at one tape
+  is `ZKmalR`), then `RecZK` at it: one new file, no Definitions change, no frozen statement, no lock entry [guess on
+  size: `recOuter` and `recOuter_zk` do this for the recursive setup in about 30 lines]. What stays a premise there:
+  `Commits`, `ByShape` and `WitnessIn` of a one-stage prover, which no Lean model of the one-stage prover discharges.
+  `ByShape` is a real restriction: every session's rounds and coin types must be the same whatever the verifier
+  sampled, so blocks of different shapes need equal-shape sessions. My game-model statements have no such
+  restriction, and that, the explicit `Hider` at the executable's `commitString`, and the witnesses are all they add.
+- **My recommendation now:** the post cites `RecZK` (listed, Definitions tree, two-sided, malicious verifier), plus
+  the one-file instance at Flock's masked session. My PR #8536 is then optional proof material, not what the post
+  rests on. **Do you still want D2 as briefed?** I keep it building meanwhile.
+- **Item 5, what the post can say today, replacing my first paragraph** [every term read on `main`]: "In Lean
+  (`Verity.SecurityProofs.RecZK`): take any proof system that is zero knowledge against malicious verifiers with error
+  $\varepsilon_b$ per run. A prover first sends hm96 commitments to $N$ values, each under a fresh uniform salt, and
+  then proves $M$ statements, read off what was sent so far, in $M$ sessions in turn. Against every malicious
+  verifier, its whole view, commitments included, is within $2N\delta_1 + M\varepsilon_b$, plus $M\gamma$ times the
+  probability of finding a SHA-512 collision by forking the honest prover, of a simulator that commits to zeros and is
+  given no value." With `Flock.SecurityProofs.MaskedZK` beside it the post may add that Flock's masked session is
+  such a proof system, at $\varepsilon_{zk}(x)$ and $\gamma = 4t\,3^t$. It may not yet say "SPOT[Flock] is zero
+  knowledge" as one theorem: that is the instance.
+- **The salts gap is unchanged** and is the same in all of A, B, C and mine: uniform independent salts per
+  commitment; the served window's rows take ChaCha20-stream salts.
+
+**The clash and the fix.** [run r20261110-050514-d50a, rc 1, at c84bfeb937] `lean_changed.py --records Security/Proofs`
+failed at `Proofs/Flock.lean`: `Flock.Guarantees.GenericSessionsZK` is declared in `Proofs.Flock.RecGeneric.ZKSessions`.
+The sibling check had passed [run r20261110-044830-6bd4]; it skips modules not built in its slot. Mine is now
+`GenericSessionsZKAt` (b7afd40baa). I compared every name my files declare with every declaration under `Security/`
+and `verity/`: no other equal name [script on my VM, text match, not Lean]. The records run at b7afd40baa is
+r20261110-052213-2746, still waiting for a pool slot at 05:29Z.
+
+**Also since 05:04Z.** PR #8536 head b7afd40baa. New witness `genericSessionsZKAt_needs_each` (the sum cannot stop
+after the first session) [run r20261110-050825-a5db, rc 0, before the rename]. Quick suites from the merge base at
+c84bfeb937: 4 touched, 4 passed [run r20261110-050456-d3e6].
+
+**Next, unless you say otherwise:** the one-file instance of `RecZK` at Flock's masked session, in its own commit
+under `SampledGeneric/`, separable from the rest of the PR.
+
+**Could not verify.** That a one-stage SPOT[Flock] prover meets `Commits`, `ByShape` and `WitnessIn` (I read the
+definitions; nothing models that prover). Whether there is a fourth family: I listed every `def … : Prop` whose name
+holds `ZK`, `Zk` or `Hid` under `Security/` (34 files) and read the headers of the eight that are not Flock-session
+internals; `ZeroKnowledgeHidden` is one session's honest-verifier form and `EndToEndHidden` is soundness. Why LEAN-186's
+premises of `RecZK` show due 7 Nov: not read.
