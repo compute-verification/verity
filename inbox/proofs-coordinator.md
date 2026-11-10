@@ -33807,3 +33807,33 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 - If you'd rather it open now, it first needs `main`'s tip merged and `benchmarks/two_stage` rerun at that head. Its only run, `r20261110-191831-9c10`, was at `78e491e98b`, cut from `5482988e34` [read: my 19:18Z entry].
 
 **6. The Wed 12:00Z scoping entry** was posted at 21:39Z (`a900721bcf`), so nothing collides [run].
+
+## CONCRETE, Tue 10 Nov 22:17Z: the move is pushed, `cursor/proofs-concrete-leaves-1ca7` at `a6723b6558ca`, and not yet compiled: run `r20261110-220813-2263` on cpu-1 compiles it, ETA about 23:10Z
+
+**Branch.** `cursor/proofs-concrete-leaves-1ca7` at `a6723b6558ca81bd57a79e935e4c3e6e6f5dc010`: two commits on `main`'s tip `2b869ed35db5`, nine Lean files, no lock file. No PR. [run]
+
+- `ecfb490c68`, a pure move. `VBridge/Family/Text.lean` (new, 26 declarations) takes `Names.lean`'s facts about text that read no proof, and `Names.lean` imports it publicly. `Claims/Recursion/VStarNets.lean` keeps its name, its five recorded definitions and ten lemmas about lines, and imports `Text.lean` and `VStar.Compose` alone. `Claims/Recursion/VStarNetsThree.lean` (new) takes the rest (`nets_three`, `traceOk_staged`, `traceOkAt_staged`); `Claims.lean`, `VStarFinal.lean` and `VStarTraceAt.lean` import it.
+- `a6723b6558`: `Concrete/File.lean` drops its import of `Refine/Walk.lean`. It and `Public.lean` write `kernel_rfl'` (`Concrete/Fwd.lean`'s, the same proof term) for their 2 and 18 `kernel_rfl`.
+
+**What the three load now** [read: the branch's import graph]. Proofs modules upstream: `File` 4, `Public` 6, `Sizes` 7, `Setup` 8, `Trace` 205, `Regions` 213, where each had about 1,390; `ConcreteNet` 2, `VStarNets` 1, `Text` 0. `Trace`'s 205 are those of `Hm/Flat.lean` and `Total.lean`, as said at 21:36Z.
+
+**Against the 21:36Z entry**: its numbers stand. `ConcreteNet.lean` needed no edit, and the half that left `VStarNets.lean` is named `VStarNetsThree.lean`.
+
+**Checked on my VM** [run], none of it a build of the package:
+
+1. The move is pure: every line of `main`'s `Names.lean` and `VStarNets.lean` is in exactly one of the four files, in its order. The lines added are headers, docstrings, `namespace`, `open`, `end` and section headings.
+2. `lake env lean` on one scratch file outside the repository (Mathlib as built here, the verifier's 29 modules below `Flock.HmNets` inlined, seven `VStar` definitions copied): the bodies of `Text.lean`, `VStarNets.lean` and `ConcreteNet.lean` elaborate with no error. So `ConcreteNet`'s 55 `simp` calls that aren't `simp only` don't need what it stopped importing.
+3. No name is lost: of the 222 modules that see a different set of imports, none names an in-repo declaration it no longer sees (a script over tokens; its nine hits read, all false: a local name, a field, a tactic, a string). `File`, `Public`, `Sizes`, `Setup` and `Trace` name nothing of ArkLib, VCVio or the six core modules they no longer import by name (grep).
+4. The root suite's tests that read Lean, by file (`test_lean_packages`, `test_repository`, `test_doc_paths`, `test_lean_vocabulary`, `test_retired_terms`, `test_glossary_lean_names`): 90 passed, with the same seven bookkeeping warnings as `main`.
+
+**Not known yet**: whether `File`, `Public`, `Sizes`, `Setup` and `Trace` compile with less in sight. Their `simp` calls that aren't `simp only` (22, 24 and 3 in the first three) may read a lemma that came through the dropped imports. [guess] They don't: the goals are strings and JSON.
+
+**The run.** `r20261110-220813-2263` on `vy-nebius-cpu-1`, launched 22:08Z and waiting in line at 22:16Z; the launcher said about 19 min, 5 ahead. [run]
+
+- It runs `lean_changed.py --try Security/Proofs/Flock.lean --siblings`, then `--build` of the four modules that end the 19 recompiled ones outside `Proofs.Flock` (`Properties/Verity/Recursive/Audit`, `Sampled/Record/KS`, `Pass`, `Reg`).
+- If the try fails in `File`, `Public`, `Sizes` or `Setup`, it runs once more with `File.lean` and `Public.lean` as in the first commit, which tells which commit the failure belongs to.
+- The branch makes Lake recompile 227 modules: 51 min in series, longest chain 25.3 min, by eca8's times. [guess] **ETA about 23:10Z** [guess]; its cap is 120 min from its slot. `research status r20261110-220813-2263`; its `out/summary.txt` holds the exit codes.
+
+**Lock** [read]. No record should move, so I ran no `--update --moved`. The `reads` group `Proofs.Flock.Claims.Recursion.VStarNets` keeps `fileLs`, `joinNl`, `netLs`, `rowsLs` and `secLs` in that module, and its digest is over those definitions' hashes (`check.py`'s `module_digest`), not over the file. `Fwd.lean` and `Walk.lean`, which `compile_time` lists by file digest, are untouched. [guess] The unread cap of `Proofs/Flock` (241 modules) rises only if `Text.lean` or `VStarNetsThree.lean` is wholly unread, and both hold lemmas the staged part's proofs use; a records run says.
+
+**Next.** I wake at about 23:15Z, read the run and post its result here. If it fails: the errors, and a fix or a revert of the second commit on the branch. If it passes: my brief said no PR, and your 21:51Z word, which is later, says a branch gets its PR once its checks pass, so I open it unmarked with `research queue open` and name its number here, unless my mailbox says otherwise by then.
