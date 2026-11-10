@@ -150,17 +150,19 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   taken with the untied words as inputs, so the MACs that feed them, at most `untied_macs`, are added whole. A block
   that reads more than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by
   default there is none and no block is charged. `most` is the most untied words one block reads, where its caller
-  states one: below the threshold no block is charged and (H) is taken there. It gives the slowdown, the blocks
-  charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it rests on:
-  `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement gives, the
-  period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is `bound`'s
-  slowdown. `best_w` is the threshold at which it is largest for a block count. The two readings are quoted side by
-  side:
+  states one: below the threshold no block is charged and (H) is taken there. It gives the slowdown, the period's
+  pooled total in gates (`gates`, the most gates of the work the period's blocks hold) and its share of the blocks'
+  own, the blocks charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it
+  rests on: `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement
+  gives, the period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is
+  `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block count. Its three readings are
+  quoted side by side, each under its premise's name (`Charged.reading`), never one as another:
 
-  | reading | fixed before the period | a block over it | (H) is taken | adds to the policy's parameters |
+  | reading | (H) is asked | fixed before the period | a block over it | the count |
   |---|---|---|---|---|
-  | a threshold `w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | at `k + word · w` | `w` |
-  | none | nothing | no block is charged | where the block that reads the most untied words reads | nothing |
+  | one `β_x`, with the threshold `w` | once, at `k + word · w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | `HECharged` at the best set of blocks |
+  | one `β_x` at the top cap, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HECharged` at every block |
+  | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
 
 - `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
   `1 / (uncredited + 1 / slowdown)`: the dark share of `theorem.multiple_bound`, which no count covers. A figure of
@@ -181,7 +183,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size) → Charged`, `best_w`, `capped` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
