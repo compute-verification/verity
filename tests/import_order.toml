@@ -165,7 +165,8 @@ files = [
 loader = "benchmarks"
 loaded = "archive"
 files = [
-    "benchmarks/pous/p2_v1/harness.py",
+    "benchmarks/one_stage/prove_bundle.py",
+    "benchmarks/one_stage/served_verdicts.py",
 ]
 
 # What each verifier's and each device's Python loads, and what loads it, by `verifier/` or `device/` directory under
