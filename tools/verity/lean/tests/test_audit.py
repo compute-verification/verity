@@ -4886,6 +4886,19 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
     assert named & set(codes("P.AssumptionsX"))
 
 
+def test_assumptions_module_names_a_module_the_build_has_at_or_under_it():
+    """`assumptions_module` is a prefix wherever the check reads it, so the build needn't hold the named module itself:
+    a tree that holds only modules under it (`P.Home.Hash`) passes. A name with no module at or under it fails, and a
+    module that only shares the name's start (`P.HomeX`) is not under it."""
+    def codes(*modules):
+        f = facts(modules=[*facts()["modules"], *modules])
+        return [x.code for x in A.judge({**POLICY, "assumptions_module": "P.Home"}, f, FILES, update=True)[0]]
+    assert "assumptions.module" not in codes("P.Home")
+    assert "assumptions.module" not in codes("P.Home.Hash")
+    assert "assumptions.module" in codes()
+    assert "assumptions.module" in codes("P.HomeX", "P.HomeX.Hash")
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read

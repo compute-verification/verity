@@ -1487,11 +1487,11 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    if (home := policy.get("assumptions_module")) is not None and home not in set(facts["modules"]) | set(
-            facts.get("graph") or {}) | set(facts.get("source_modules") or ()):
-        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
-                             f"neither the build nor the packages it requires has a module of; name the one module the "
-                             f"named assumptions are declared in"))
+    if (home := policy.get("assumptions_module")) is not None and not any(under([home], m) for m in (
+            *facts["modules"], *(facts.get("graph") or {}), *(facts.get("source_modules") or ()))):
+        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, and "
+                             f"neither the build nor the packages it requires has a module at or under it; name the "
+                             f"module the named assumptions are declared in or under"))
     cited = stated_by(policy, facts)
     kept, premised, unfolds, recorded, compared, homes = {}, {}, {}, set(), set(), {}
     listed = listed_premises(policy) | dict.fromkeys(cited)
