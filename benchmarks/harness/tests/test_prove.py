@@ -253,6 +253,59 @@ def test_spot_prices_the_blocks_its_plan_samples_and_refuses_another_census_plan
         P.Spot(flock, plan([*cells, {"block": "Stray_v1{N=1}", "type": "", "taken": 1.0}]), serving).table(census)
 
 
+def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_differ():
+    """A plan's sample fits its planner's prices, and the table prices the same blocks from its own sources. Where the
+    plan states its prices the report gives the total at each, each source's proving time at both and the block type
+    that holds most of the difference; the table's own total doesn't move. A plan that prices none of its cells has
+    the one total, and one that prices only some is refused."""
+
+    census = P.Census.of(CENSUS)
+    flock = P.Flock((steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),), SESSIONS, "art:card")
+    serving = P.Serving(0.5, 4000.0, "stated")                    # 800 tokens in the plan's period, as above
+    cells = [{"block": GEMM64, "type": "gemm64", "taken": 4.0, "prove_s": 2.0},
+             {"block": GEMM32, "type": "", "taken": 2.0, "prove_s": 0.5}, {"block": NORM, "type": "norm", "taken": 0.8, "prove_s": 0.7}]
+    got = plan(cells)
+    assert got.priced == pytest.approx({GEMM64: 0.5, GEMM32: 0.25, NORM: 0.875})     # a cell's seconds over its blocks
+    table = P.Spot(flock, got, serving).table(census)
+    assert [r.planned for r in table.rows] == pytest.approx([0.5, 0.25, 0.875])
+    out = P.report(table, 1.0)
+    t, sampled = out["totals"], (40.0, 20.0, 8.0)
+    own = [r.cost.seconds for r in table.rows]
+    assert own[0] == 1.0 and t["gpus_per_serving_gpu"] == pytest.approx(sum(n * x for n, x in zip(sampled, own)) / 800)
+    its = t["planned"]
+    assert its["gpus_per_serving_gpu"] == its["gpu_seconds_per_token"] == pytest.approx((20 + 5 + 7) / 800)
+    # no session measured the K=32 GEMM or the norm: one steady-state type, two modeled from k_log
+    assert [(x["source"], x["block_types"]) for x in its["sources"]] == [(P.STEADY, 1), (P.MODELED, 2)]
+    assert [x["gpu_seconds_per_token"] for x in its["sources"]] == pytest.approx([40 / 800, (20 * own[1] + 8 * own[2]) / 800])
+    assert [x["planned_gpu_seconds_per_token"] for x in its["sources"]] == pytest.approx([20 / 800, (5 + 7) / 800])
+    gaps = [n * (x - y) for n, x, y in zip(sampled, own, (0.5, 0.25, 0.875))]
+    top = max(range(3), key=lambda i: abs(gaps[i]))
+    assert its["largest"] == {"block": table.rows[top].block, "seconds": own[top], "planned_seconds": table.rows[top].planned,
+                              "difference_share": pytest.approx(gaps[top] / sum(gaps))}
+    assert {r["block"]: r["planned_seconds"] for r in out["rows"]} == got.priced
+
+    page = {"workload": "toy", "model": "Toy", "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
+            "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    text = R.render(page)
+    assert "| ms per block | ms per block in the plan | source |" in text
+    assert "| 1,000 | 500 | measured at steady state |" in text
+    assert "- the same blocks at the sampling plan's own prices: 0.04 prover GPUs per serving GPU. Its planner sized" in text
+    assert ("- where the two differ, this table's proving time over the plan's by this table's source: measured at steady "
+            f"state 2x (1 block types), modeled from k_log {(20 * own[1] + 8 * own[2]) / 12:.3g}x (2 block types); `") in text
+    assert f"alone is {gaps[top] / sum(gaps):.1%} of the difference" in text
+    assert text.count(" --- |") == 9 + 6 + 6                              # the rows' table has the plan's column
+
+    bare = [{k: v for k, v in c.items() if k != "prove_s"} for c in cells]
+    one = P.report(P.Spot(flock, plan(bare), serving).table(census), 1.0)
+    assert one["totals"]["planned"] is None and one["totals"]["gpus_per_serving_gpu"] == t["gpus_per_serving_gpu"]
+    assert "in the plan" not in (plain := R.render(page | one)) and "own prices" not in plain
+    assert P.report(flock.table(census), 1.0)["totals"]["planned"] is None
+    with pytest.raises(ValueError, match=r"art:plan states its planner's seconds \(`prove_s`\) for 2 cell\(s\) and not for 1 "
+                                         r"\(Norm_v1.*prices every cell or none"):
+        plan([*cells[:2], bare[2]])
+
+
 @pytest.mark.parametrize(("change", "why"), [
     ({}, None),
     ({"host_limit": {"stopped_at_s": 310.3}, "rc": [-15], "accepted": False}, "stopped at the host's memory limit"),
@@ -363,15 +416,15 @@ def plan_art(s: Store, **change) -> str:
     return s.tree("evidence/v1", R.PLAN_FILE, fixture("mix.json") | change)
 
 
-def recorded(tmp: Path) -> tuple[Store, dict[str, str]]:
+def recorded(tmp: Path, **plan_change) -> tuple[Store, dict[str, str]]:
     """The fixtures' records in a store, each labelled its slot's record: the census, its cut, the single-session card,
-    the three proof server runs and the sampling plan."""
+    the three proof server runs and the sampling plan (with `plan_change` over its fields)."""
 
     s = Store(tmp)
     arts = {R.CENSUS: s.record(census_art(s), R.CENSUS),
             R.CUT: s.record(s.doc(R.CARD_SCHEMA, "partition.json", fixture("partition.json")), R.CUT),
             R.SINGLE: s.record(s.doc(R.CARD_SCHEMA, "proof_overhead.json", fixture("proof_overhead.json")), R.SINGLE),
-            R.SAMPLING: s.record(plan_art(s), R.SAMPLING)}
+            R.SAMPLING: s.record(plan_art(s, **plan_change), R.SAMPLING)}
     for run in RUNS:
         s.ran(run, run_files(tmp, run), rc=0 if run == RUNS[-1] else 1)
         s.record(run, R.STEADY)
@@ -451,6 +504,28 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- served tokens covered per second per prover GPU: 14,273 (range 14,273 to 41,509)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
     assert text.count("\n| `") == 150
+
+
+def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
+    """A plan of record whose cells state their planner's seconds: the table's total is the one its sources give, and
+    the plan's own is beside it, on every row and in the totals."""
+
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    spot = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    t = spot["totals"]
+    assert t["gpus_per_serving_gpu"] == pytest.approx(0.5409739676190373, rel=1e-12)
+    blocks = mix["replay_sample"] * sum(c["taken"] for c in mix["cells"])
+    assert t["planned"]["gpus_per_serving_gpu"] == pytest.approx(0.002 * blocks / mix["gpu_seconds"], rel=1e-9)
+    assert sum(x["block_types"] for x in t["planned"]["sources"]) == 150
+    assert [r["planned_seconds"] for r in spot["rows"]] == pytest.approx([0.002] * 150)
+    text = R.render(spot, rows=2)
+    assert "- prover GPUs per serving GPU: 0.541 (range 0.186 to 0.541), modeled" in text
+    assert f"- the same blocks at the sampling plan's own prices: {R._n(t['planned']['gpus_per_serving_gpu'])} prover GPUs" in text
+    # the plan's column is on every line of the rows' table, the rest's row included
+    table = text[text.index("| block type |"):].split("\n\n")[0].splitlines()
+    assert table[0].count("|") == 10 and "| ms per block in the plan |" in table[0] and len(table) == 2 + 2 + 1
+    assert table[-1].startswith("| 148 more block types | | ") and {line.count("|") for line in table} == {10}
 
 
 def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
