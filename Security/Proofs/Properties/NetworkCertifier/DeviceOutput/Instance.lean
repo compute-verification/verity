@@ -53,7 +53,7 @@ import all Std.Data.DHashMap.Basic
 import all Std.Data.DHashMap.Internal.AssocList.Basic
 import all Std.Data.DHashMap.Internal.Defs
 import all Std.Data.DHashMap.Raw
-public import Properties.CertifierNetwork.Runs
+public import Properties.NetworkCertifier.DeviceOutput.Runs
 
 /-!
 # The completeness statements' honest cases, instantiated
@@ -62,7 +62,7 @@ Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Pr
 `CertifierNetwork.DeviceOutputAccepted`) has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`,
 `W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it and a 64-byte
 salt, and a one-window configuration with a declared sync (`config`, with its `grid`, stated in
-`Properties.CertifierNetwork.Runs`) whose run ticks each grid once and hands nothing, its every salt that one. The
+`Properties.NetworkCertifier.DeviceOutput.Runs`) whose run ticks each grid once and hands nothing, its every salt that one. The
 run's hypotheses are `step` evaluated by the kernel (`decide +kernel`); the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
