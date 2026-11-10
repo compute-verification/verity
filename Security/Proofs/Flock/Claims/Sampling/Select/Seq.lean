@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.ExecDraw
 /-!
 # A sequential sample from one byte source misses no more often than its stages' bounds multiplied
 
-`Slots.select` reads its coins from one byte source in order (`SampledProofs.Draw.take`): a stratified or work sample runs
+`Slots.select` reads its coins from one byte source in order (`Spot.Draw.take`): a stratified or work sample runs
 its strata in turn, each stratum's sampler on a stream it extends and reruns until it samples (`Flock.Draw.onWith`), the
 next stratum starting where it stopped. Each stratum stops at a time its own bytes decide, and the bytes after it are
 uniform and unread, so the strata's samples are independent.
@@ -20,7 +20,7 @@ uniform and unread, so the strata's samples are independent.
 
 @[expose] public section
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.DrawExec Finset
 open scoped ENNReal
@@ -221,4 +221,4 @@ theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.B
           (Finset.sum_mul _ _ _).symm
       _ ≤ q * rest := mul_le_mul_left hsum _
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

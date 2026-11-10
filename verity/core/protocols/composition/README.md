@@ -141,7 +141,7 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW's period: `period_check.case`, with `credit.commit_of` reading each window's Commit record for remote's tie;
-- sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof check
+- sampled proofs: its form's split (`spot`) over one-stage v2's decoders and checks before the proof check
   (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage difftest's
   `check`, on v2's audits that drew nothing at the challenger's coins, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`

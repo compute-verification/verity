@@ -5,7 +5,7 @@ what an auditor with no devices at the site establishes about a datacenter servi
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
+- **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint

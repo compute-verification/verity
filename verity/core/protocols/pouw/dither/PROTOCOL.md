@@ -392,7 +392,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
     across hosts the prover controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
-  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
+  - The challenger's side is two premises, named as in `verity/core/protocols/spot/README.md`:
     - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
       `FleetSound` takes: a replica's strategy reads none of its own coins.
     - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,

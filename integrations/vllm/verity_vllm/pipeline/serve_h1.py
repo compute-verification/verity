@@ -288,7 +288,7 @@ class GateSessions:
     def reserve_draw(self, window: int, session: str) -> dict[str, Any]:
         """Window `window`'s sampling session, reserved withheld right after its session `session` (``reserve ...
         --withhold``) and held as its ``draw``. `CoinError` when the gate refuses, or reserves it plain."""
-        from verity.core.protocols.sampled_proofs.challenger import CoinError
+        from verity.core.protocols.spot.challenger import CoinError
 
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
         from verity_vllm.protocols.pouw.h1 import window as PHW

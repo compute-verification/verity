@@ -10,7 +10,7 @@ import pytest
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import window_salt as WS  # noqa: E402

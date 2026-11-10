@@ -1272,7 +1272,7 @@ outer session of the stream and every open, and `rec_live` closes the next conne
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the ZK server records no stop until a request comes, so its own count
 misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
-`verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
+`verity/core/protocols/spot/service.py`, bound into the stream's digest), and the two must agree in three
 places: the same b, the same stream (one ZK server stream a challenger stream), and one recursive session a proof session
 of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
 `rounds`, at most 4). So each ZK server failure but a skip is a `reject` or `late` there for each round the session

@@ -10,7 +10,7 @@ from verity.core.protocols.pouw.core_check import MANIFEST_RECORDED as MANIFEST_
 from verity.core.protocols.pouw.core_check import MANIFEST_SCHEMA
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.window import LIVE_SCHEME
-from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
+from verity.core.protocols.spot.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 

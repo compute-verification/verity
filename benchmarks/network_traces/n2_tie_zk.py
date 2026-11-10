@@ -76,7 +76,7 @@ from verity.core.protocols.certifier import io_request as Q, service as SVC  # n
 from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class

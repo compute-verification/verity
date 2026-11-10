@@ -87,7 +87,7 @@ def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
 
 
-def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
+def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
@@ -114,7 +114,7 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
-def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampled_proofs():
+def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):

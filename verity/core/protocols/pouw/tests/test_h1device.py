@@ -18,7 +18,7 @@ from verity.core.protocols.pouw.circuit import h1device as D
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]
 SHEET_90 = ROOT / "benchmarks" / "pouw" / "machine_model" / "data" / "devices" / "sm_90" / "sheet.toml"

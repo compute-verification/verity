@@ -50,7 +50,7 @@ def lean_components(path: Path) -> tuple[list[str], list[str]]:
 
 def configuration_ids() -> list[str]:
     """The ids `parties.IDS` gives as string literals."""
-    for node in ast.parse((PROTOCOLS / "sampled_proofs/parties.py").read_text()).body:
+    for node in ast.parse((PROTOCOLS / "spot/parties.py").read_text()).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["IDS"]:
             assert isinstance(node.value, ast.Dict), "parties.IDS is no longer a dict literal: read its ids as it is now"
             return [v.value for v in node.value.values if isinstance(v, ast.Constant)]

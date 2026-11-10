@@ -19,7 +19,7 @@ fold key is a function of seed_j. A unit with receipt keys calls `PouwUnitSeeds`
 one position.
 
 The one-stage verifier fills the salt, the positions and the roots itself, so the prover chooses none of them (`compile`'s
-docstring, `sampled_proofs.one_stage.registered.supplied_rows`).
+docstring, `spot.one_stage.registered.supplied_rows`).
 
 **J10-R**, a second noise form beside the
 one above, which no unit takes by default (`h1tile.PouwH1Tile5`, `h1tile.PouwH1Tile6`): one noise seed a call, one stream

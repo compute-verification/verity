@@ -40,7 +40,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES

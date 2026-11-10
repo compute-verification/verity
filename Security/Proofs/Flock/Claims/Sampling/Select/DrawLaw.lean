@@ -19,12 +19,12 @@ public import Proofs.Flock.Claims.Sampling.Select.Misses
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 open Lean (Json)
 
 namespace Claims.Sampling
 
-open Claims Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Claims Finset Properties.Spot Properties.Spot.SecurityProofs
 
 /-! ## `P_a(∅)` on a well-formed design -/
 

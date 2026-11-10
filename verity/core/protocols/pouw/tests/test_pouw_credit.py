@@ -25,9 +25,9 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -870,7 +870,7 @@ def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
 def test_the_commit_record_is_bound_under_calls_root():
     """The Commit record's digest is its format's tagged SHA-512 of its bytes (`registration.digest`), and `calls_root`
     binds it after the manifest and the served trees' digest, as vllm's `pouw_h1.calls_root` must, byte for byte."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     d = cases.window_instance(random.Random("honest/bound"))
     raw = bytes.fromhex(d["commit"])
     (digest, _reg), _ = Cr.commit_of(d["commit"])

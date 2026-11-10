@@ -3,7 +3,7 @@ module
 public import PouwWindow.Rounds
 public import PouwCheck.Inputs
 public import PouwCheck.Pass
-public import SampledProofs.ChallengerSession
+public import Spot.ChallengerSession
 
 /-!
 # A live execution phase's salt and round coins (`core_check.py`, "a live execution phase's salt and round coins")
@@ -11,12 +11,12 @@ public import SampledProofs.ChallengerSession
 `saltCheck` is `core_check.salt`. It reads the execution phase's coins and roots through the challenger's own session as
 `roundsCheck` does, never ones the prover hands in: the one session the auditor's signed v2 ledger opens and ends closed
 for the execution phase under the execution phase's pinned challenger key, run from a commit the host's pins log records and the
-verifier's copy of main's first-parent history holds (`saltSession`, over `SampledProofs.Challenger.pinnedSession` and
+verifier's copy of main's first-parent history holds (`saltSession`, over `Spot.Challenger.pinnedSession` and
 `sessionNamed`).
 S is the session the ledger's signed reserve entry names (a session opened without one is refused) and R the root its
 signed open entry opened S on; R is `windowOpenRoot` of the execution phase's weights' root, its round-0 request table's root and
 S; the session's log shows R, alone, as what its salt coin followed; and under the commitment the session signed, a live
-execution phase's, the salt coin is the execution phase's `pouw/salt` coin 0, opened after R (`SampledProofs.Challenger.liveReason`). A
+execution phase's, the salt coin is the execution phase's `pouw/salt` coin 0, opened after R (`Spot.Challenger.liveReason`). A
 refusal is `coin` (the key, the session or the coin rule's, in the challenger's words) or `salt` (a session opened
 without a reserve, the roots not of their form, the open root another execution phase's, or a log that shows another root), with
 Python's words.
@@ -26,7 +26,7 @@ commitment the prover hands in: the one session the auditor's signed v2 ledger o
 (`{root}`) under the execution phase's pinned challenger key, its record on the host the ledger opened it on and signed at the
 leaf and over the commitment the ledger's end names, its close signed under that key, and its release log and refused
 hellos the ones the ledger's end sealed, the host having run a commit its pins log records on main's first-parent line
-(`SampledProofs.Challenger.trustedSessionOf`, over `pinnedSession`). Under the commitment that session
+(`Spot.Challenger.trustedSessionOf`, over `pinnedSession`). Under the commitment that session
 signed, round `r`'s coin opened once,
 after the `r`-th round root, every recorded round's coin opened (`PouwWindow.roundsReason`), and the round roots are the
 ones the session's log shows the challenger received, in order. A refusal is `coin` (the key, the session or the coin
@@ -39,7 +39,7 @@ challenger didn't receive), with Python's words.
 namespace PouwCheck
 
 open Lean (Json)
-open SampledProofs.Challenger (ChallengerKey LiveOpening trustedSessionOf)
+open Spot.Challenger (ChallengerKey LiveOpening trustedSessionOf)
 
 /-- `core_check.SALT_FORM`, `OTHER_WINDOW` and `NOT_RECEIVED`: with `NO_RESERVE`, the reasons of a `salt` refusal. -/
 def SALT_FORM : String := "the window's weights' root and its round-0 request table's root are not SHA-512 digests"
@@ -64,7 +64,7 @@ def saltCheck (key ledger pins main window session weights requests opening : Js
   if windowOpenRoot w t a.session != r then throw ("salt", OTHER_WINDOW)
   unless (received.lookup PouwWindow.SALT).getD [] == [r] do throw ("salt", NOT_RECEIVED)
   let o ← (LiveOpening.ofJson opening).mapError fun e => ("coin", s!"the salt's {e}")
-  if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
+  if let some why ← port (Spot.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
 
 /-- `core_check.rounds`: none when `openings` are the execution phase's round coins over `roots`, read through the challenger's
 session, else the refusal. -/

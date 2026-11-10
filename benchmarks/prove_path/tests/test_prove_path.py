@@ -41,8 +41,8 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as P, registration as R
+from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits
+from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits

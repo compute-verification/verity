@@ -170,11 +170,11 @@ from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
-from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG, registration as RG  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k  # noqa: E402
+from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
+from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.core.protocols.spot.one_stage.draw import stratum_k  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
