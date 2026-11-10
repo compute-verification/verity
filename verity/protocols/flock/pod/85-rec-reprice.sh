@@ -169,7 +169,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 # the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
-CSHA=$(cd verity/core && find service/flock service/firewall protocols/interface difftest/lean -name .lake -prune -o -type f -print \
+CSHA=$(find verity/protocols/flock/verifier verity/difftest/lean -name .lake -prune -o -type f -print \
   | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
 FWS=$DD/fw RELEASE=${RELEASE:-0}

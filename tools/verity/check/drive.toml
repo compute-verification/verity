@@ -111,7 +111,7 @@ lowrisk_per_tick = 20
 # the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/core/", "verity/circuits/", "verity/definitions/kernels/", "verity/commitments/",
-                    "verity/commitments/crypto/", "verity/commitments/randomness/",
+                    "verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/", "verity/definitions/kernels/", "verity/commitments/", "verity/definitions/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes", "drive.py",
                     "queue.py",
                     "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
