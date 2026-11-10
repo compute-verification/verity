@@ -269,10 +269,34 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     return text, warned
 
 
-def reusable(cache: Path, pkg: str, k: str) -> bool:
-    """Whether ``pkg``'s pass under ``k`` is kept in ``cache`` with what its reuse needs: the pass, and for a package of
-    `UNREAD_FACTS` the facts its audit wrote."""
-    return (cache / f"{k}.json").is_file() and (pkg not in UNREAD_FACTS or (cache / "unread" / f"{k}.json").is_file())
+def reusable(cache: Path, pkg: str, k: str, files: list[str]) -> bool:
+    """Whether ``pkg``'s pass under ``k`` is kept in ``cache`` with what its reuse needs: the pass, still holding (`stale`),
+    and for a package of `UNREAD_FACTS` the facts its audit wrote."""
+    try:
+        entry = json.loads((cache / f"{k}.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return not stale(entry, files) and (pkg not in UNREAD_FACTS or (cache / "unread" / f"{k}.json").is_file())
+
+
+def whole_key(pkg: str, files: list[str]) -> str:
+    """The hash of all of ``pkg``'s own files (`content`), as a pass records a required package its audit could read whole."""
+    return hashlib.sha256(json.dumps(sorted(content(pkg, files).items())).encode()).hexdigest()
+
+
+def beside(pkg: str, tree: set[str], files: list[str]) -> dict[str, str]:
+    """{package: its `whole_key`} of each package ``pkg`` or one of its provers requires by path (as `inputs` takes them)
+    that the scratch tree (``tree``, its files) held more of than `read_files`, as it does when the run audits that package
+    too: ``pkg``'s audit could read those files, which its key doesn't hash, so its pass holds only while they are
+    unchanged."""
+    whole = {pkg, *provers(pkg)}
+    return {d: whole_key(d, files) for d in sorted({x for q in whole for x in path_deps(q)} - whole)
+            if (set(own_files(d, files)) - set(read_files(d, files))) & tree}
+
+
+def stale(entry: dict, files: list[str]) -> list[str]:
+    """The packages a kept pass (``entry``) records as read whole (`beside`) whose files have changed since."""
+    return [d for d, k in sorted((entry.get("beside") or {}).items()) if whole_key(d, files) != k]
 
 
 def keep_facts(cache: Path, pkg: str, k: str, rep: dict, out: Path) -> bool:
@@ -368,7 +392,8 @@ def tool_files(files: list[str]) -> list[str]:
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read: the files of ``pkg`` and of its provers, and of each package they
     require by path only what Lake and the audit read of it (`read_files`). The scratch tree holds no more, so a read of
-    another file of a required package fails the audit."""
+    another file of a required package fails the audit, unless the run audits that package too: then the pass records it
+    whole (`beside`) and holds only while it is unchanged."""
     whole = [pkg, *provers(pkg)]
     required = [d for q in whole for d in path_deps(q) if d not in whole]
     return sorted({*(f for p in dict.fromkeys(whole) for f in own_files(p, files)),
@@ -376,21 +401,29 @@ def inputs(pkg: str, files: list[str]) -> list[str]:
 
 
 #: a module that runs code while it compiles, which may read any file: an executable's reads at run time are no build's
-EVALUATES = re.compile(rb"(?:^|[\s(])(?:#eval!?|run_cmd|run_elab|run_meta|(?:builtin_)?initialize|elab|elab_rules|d?simproc)\b"
-                       rb"|@\[\s*(?:command_elab|term_elab|tactic|simproc|init|builtin_\w+)\b", re.M)
+EVALUATES = re.compile(rb"(?:^|[\s(])(?:#eval!?|#guard|run_cmd|run_elab|run_meta|run_tac|by_elab|(?:builtin_)?initialize|elab"
+                       rb"|elab_rules|macro|macro_rules|d?simproc|native_decide|plausible|slim_check)\b"
+                       rb"|(?:^|[\s(])eval%|\bdecide\s+\+native\b|\bofReduceBool\b"
+                       rb"|@\[\s*(?:command_elab|term_elab|tactic|macro|delab|app_unexpander|env_linter|norm_num|positivity"
+                       rb"|aesop|simproc|init|builtin_\w+)\b", re.M)
+#: a lakefile key that loads native code into Lean while it compiles the package's modules
+NATIVE = re.compile(rb"\b(?:precompileModules|plugins|dynlibs|moreLeanArgs|weakLeanArgs|moreLinkArgs|extern_lib)\b")
 INCLUDE_STR = re.compile(rb'include_str\s+"((?:[^"\\]|\\.)*)"')
 
 
 def read_files(pkg: str, files: list[str]) -> list[str]:
     """What Lake and the audit read of ``pkg`` when another package requires it by path: its modules, the files `CONFIG`
     lists, the files and directories its lakefile names under `[[input_file]]` and `[[input_dir]]`, and each file a module
-    names by a literal `include_str`. All its files where a module runs code while it compiles (`EVALUATES`) or names an
-    `include_str` by anything but a literal."""
+    names by a literal `include_str`. All its files where code runs while Lake configures it or compiles its modules (a
+    `lakefile.lean`, a lakefile key of `NATIVE`, a module of `EVALUATES`) or a module names an `include_str` by anything
+    but a literal."""
     own = own_files(pkg, files)
     named: set[str] = set()
     lf = ROOT / pkg / "lakefile.toml"
+    if not lf.is_file() or (ROOT / pkg / "lakefile.lean").exists() or NATIVE.search(lf.read_bytes()):
+        return own
     try:
-        lake = tomllib.loads(lf.read_text()) if lf.is_file() else {}
+        lake = tomllib.loads(lf.read_text())
     except (tomllib.TOMLDecodeError, UnicodeDecodeError):
         return own
     for kind in ("input_file", "input_dir"):
@@ -531,6 +564,9 @@ def explain(name: str, cache: Path) -> tuple[int, list[str]]:
     now = components(pkg, files, FLAGS)
     k = key_of(now)
     if (cache / f"{k}.json").is_file():
+        if changed := stale(json.loads((cache / f"{k}.json").read_text()), files):
+            return 0, [f"{pkg}: missed ({k[:12]}): its pass was audited beside {', '.join(changed)}, whose files have "
+                       "changed since"]
         return 0, [f"{pkg}: PASS reused ({k[:12]}): every file its audit reads is unchanged"]
     kept = []
     for f in cache.glob("*.json") if cache.is_dir() else ():
@@ -1399,6 +1435,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     cold = not fresh and not sandboxed()
     try:
         union = sorted({f for p in missed for f in inputs(p, files)})
+        tree = set(union)
         scratch_tree(work, union)
         audited = sorted(missed)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
@@ -1435,7 +1472,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
-                                           "components": (comps or {}).get(p)}))
+                                           "components": (comps or {}).get(p), "beside": beside(p, tree, files)}))
                 os.replace(tmp, cache / f"{keys[p]}.json")
         if r.returncode not in (0, 1) and not failed:
             failed = [f"check.py exit {r.returncode}"]
@@ -1499,6 +1536,10 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
+            if changed := stale(json.loads(entry.read_text()), files):
+                log(f"lean-audit: {p}: its pass ({k[:12]}) was audited beside {', '.join(changed)}, whose files have "
+                    "changed since: audited again")
+                continue
             if p in UNREAD_FACTS:
                 if (f := kept_facts(cache, p, k, out, log)) is None:
                     log(f"lean-audit: {p}: its pass ({k[:12]}) is kept without the facts the ratchet reads: audited again")

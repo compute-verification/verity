@@ -424,10 +424,57 @@ def test_a_required_package_enters_a_key_only_by_what_lake_and_the_audit_read(tm
         (root / "pkg/a" / f).write_bytes(before)
     assert keys() == was
     assert "pkg/a/README.md" not in LA.inputs("pkg/b", files) and "pkg/a/README.md" in LA.inputs("pkg/a", files)
-    (root / "pkg/a/Sub/D.lean").write_text('def d := 1\n\n#eval (IO.FS.readFile "notes.txt")\n')
+    for i, runs in enumerate(['#eval (IO.FS.readFile "notes.txt")', "example : True := by run_tac pure ()",
+                              "def e : Nat := by_elab pure (Lean.mkNatLit 1)", "def f := eval% 1 + 1", "#guard 1 + 1 == 2",
+                              'macro "t" : term => `(1)', "example : 2 = 2 := by decide +native"]):
+        (root / "pkg/a/Sub/D.lean").write_text(f"def d := 1\n\n{runs}\n")
+        was = keys()
+        (root / "pkg/a/notes.txt").write_text(f"read while it compiles {i}\n")
+        assert keys()["pkg/b"] != was["pkg/b"], runs                  # code run while it compiles: every file of it counts
+    (root / "pkg/a/Sub/D.lean").write_text("def d := 1\n\n#guard_msgs in\ntheorem t : True := trivial -- elaborated\n")
     was = keys()
-    (root / "pkg/a/notes.txt").write_text("read while it compiles\n")
-    assert keys()["pkg/b"] != was["pkg/b"]                           # code run while it compiles: every file of it counts
+    (root / "pkg/a/notes.txt").write_text("no code runs\n")
+    assert keys()["pkg/b"] == was["pkg/b"]
+
+
+def test_a_required_package_whose_lakefile_runs_or_loads_code_enters_whole(tmp_path, monkeypatch):
+    """A `lakefile.lean`, which Lake runs as it configures the package (and reads instead of a `lakefile.toml` beside it),
+    and a `lakefile.toml` key that loads native code into Lean as it compiles the package's modules (`NATIVE`) can each
+    read any file, so every file of the package enters its dependents' keys."""
+    root = _required_tree(tmp_path, monkeypatch)
+    files = LA.COMMON.tracked_files()
+    lf = root / "pkg/a/lakefile.toml"
+    toml = lf.read_text()
+    assert "pkg/a/README.md" not in LA.inputs("pkg/b", files)
+    lf.write_text(toml + "precompileModules = true\n")
+    assert "pkg/a/README.md" in LA.inputs("pkg/b", files)
+    lf.write_text(toml)
+    (root / "pkg/a/lakefile.lean").write_text("import Lake\nopen Lake DSL\n\npackage a\n")
+    assert "pkg/a/README.md" in LA.inputs("pkg/b", files)
+    lf.unlink()
+    assert "pkg/a/README.md" in LA.inputs("pkg/b", files)
+
+
+def test_a_pass_audited_beside_a_package_it_requires_holds_only_while_that_package_is_unchanged(tmp_path, monkeypatch):
+    """A run that audits a required package beside its requirer holds all of it in the scratch tree, so the requirer's
+    audit can read a file its key doesn't hash: its pass records that package whole and is reused only while it is
+    unchanged. A pass from a run that audited the requirer without it records nothing of it, so the narrower key saves an
+    audit from then on."""
+    root = _required_tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["pkg/a/README.md"]}))
+    rc, ran, doc = _run(tmp_path, 1)                   # a, b and c, which b proves, together: a's README is there for b
+    assert rc == 0 and sorted(r.split()[0] for r in ran) == ["pkg/a", "pkg/b", "pkg/c"]
+    assert _run(tmp_path, 2)[1] == []                  # nothing changed: every pass reused
+    (root / "pkg/a/README.md").write_text("a README b read\n")
+    assert "audited beside pkg/a, whose files have changed" in LA.explain("pkg/b", tmp_path / "cache" / "lean-audit")[1][0]
+    rc, ran, doc = _run(tmp_path, 3)
+    assert rc == 0 and sorted(r.split()[0] for r in ran) == ["pkg/a", "pkg/b", "pkg/c"], "b read it: not reused"
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    rc, ran, doc = _run(tmp_path, 4)                   # b's lock changed and a's didn't: b and c audited without a
+    assert rc == 0 and sorted(r.split()[0] for r in ran) == ["pkg/b", "pkg/c"]
+    (root / "pkg/a/README.md").write_text("a README no audit read\n")
+    rc, ran, doc = _run(tmp_path, 5)
+    assert rc == 0 and [r.split()[0] for r in ran] == ["pkg/a"] and sorted(doc["cached"]) == ["pkg/b", "pkg/c"]
 
 
 def test_a_read_of_a_required_package_beyond_its_key_fails(tmp_path, monkeypatch):
@@ -1210,7 +1257,8 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
     rc, ran, doc, seen = run(4)
     assert rc == 0 and ran == ["Security/Proofs"] and seen == ["Security", "Security/Proofs"], "other bytes: audited again"
     entry.unlink()
-    assert not LA.reusable(cache, "Security/Proofs", k) and LA.reusable(cache, "pkg/a", keys["pkg/a"])
+    files = LA.COMMON.tracked_files()
+    assert not LA.reusable(cache, "Security/Proofs", k, files) and LA.reusable(cache, "pkg/a", keys["pkg/a"], files)
     rc, ran, doc, seen = run(5)
     assert rc == 0 and ran == ["Security/Proofs"] and entry.is_file()
     rc, ran, doc, seen = run(6, only=["Security/Proofs"])

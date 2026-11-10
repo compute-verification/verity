@@ -768,7 +768,7 @@ def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool
     if not cache or files is None:
         return True
     pkgs = [p for p in la.packages(files) if not only or p in only]
-    return any(not la.reusable(cache_dir() / "lean-audit", p, la.key(p, files, la.FLAGS)) for p in pkgs)
+    return any(not la.reusable(cache_dir() / "lean-audit", p, la.key(p, files, la.FLAGS), files) for p in pkgs)
 
 
 def lean_fast(out: Path) -> str | None:

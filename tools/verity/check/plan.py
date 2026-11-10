@@ -334,10 +334,11 @@ def lean_parts(C, sources: list[Source]) -> list[Part]:
         for src in sources:
             entry = src.check / "lean-audit" / f"{k}.json"
             try:
-                rep = json.loads(entry.read_text())["report"]
+                e = json.loads(entry.read_text())
+                rep = e["report"]
             except (OSError, ValueError, KeyError, TypeError):
                 continue
-            if (isinstance(rep, dict) and not rep.get("failures") and rep.get("kind") != fast
+            if (isinstance(rep, dict) and not rep.get("failures") and rep.get("kind") != fast and not LA.stale(e, files)
                     and isinstance(rep.get("seconds"), dict) and "replay" in rep["seconds"]):
                 found.append(src.where(paths=[entry]))
         out.append(Part(f"lean-audit:{p}", "lean-audit", k, "passed" if found else "must-run", found))
