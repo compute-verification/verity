@@ -1,6 +1,7 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
 merge bases, when it has several), each queue merge on its own, no ratchet growing (a counted kind by its total, which a move
-between its keys keeps, and one keyed anew at its total is compared in the base's form; the other entries by number, per
+between its keys keeps, and one keyed anew at its total is compared in the base's form;
+a placing table's edit judging the edges of the modules a change adds and never those between its base's; the other entries by number, per
 ratchet, or by an entry's count, P10's sizes among them), a new,
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
@@ -302,6 +303,74 @@ def test_a_counted_kind_keyed_anew_at_its_total_is_compared_in_the_bases_form(re
                                                    "typed_records: verity_vllm/commit: [or-empty] (1 found, 0 allowed)"]), c["why"]
     assert c["why"].endswith(f"; {TYPED} or-empty is keyed anew and its total goes 4 -> 3: a kind keyed anew is compared in the "
                              "base's form only at the base's total, so change its keys in one change and its counts in another")
+
+
+IMPORTS = "integrations/vllm/tests/lint/_imports.py"
+LAYERING = "integrations/vllm/tests/lint/test_p09_layering.py"
+P09 = "integrations/vllm/tests/lint/allowlists/p09_layering.json"
+LAYER_MAP = '''\
+LAYER = {
+    "verity_vllm": "pipeline",
+    "verity_vllm.engine": "engine",
+    "verity_vllm.program": "program",
+}
+'''
+#: a toy P9: an `import MODULE` line of a module under verity_vllm that names one in a higher layer of `_imports.LAYER`
+LAYERING_LINT = '''\
+import json
+import re
+from pathlib import Path
+
+from . import _imports as I
+
+NAME = "p09_layering"
+RANK = {"pipeline": 3, "engine": 2, "program": 1, "core": 0}
+HERE = Path(__file__).resolve().parent
+
+
+def rank(module):
+    return RANK[I.LAYER[max((k for k in I.LAYER if module == k or module.startswith(k + ".")), key=len)]]
+
+
+def test_no_new_violations():
+    root = HERE.parents[1]
+    known = {p.relative_to(root).with_suffix("").as_posix().replace("/", "."): p for p in sorted(root.glob("verity_vllm/**/*.py"))}
+    found = [f"{src[12:]} -> {dst[12:]}" for src, p in known.items() for dst in re.findall(r"^import (\\S+)$", p.read_text(), re.M)
+             if dst in known and rank(src) < rank(dst)]
+    allowed = {e["detail"] for e in json.loads((HERE / "allowlists" / f"{NAME}.json").read_text())["entries"]}
+    new = [f"  {v}" for v in found if v not in allowed]
+    assert not new, "layering:\\n" + "\\n".join(new)
+'''
+
+
+def test_a_placing_tables_edit_judges_the_edges_of_the_modules_a_change_adds_and_never_those_between_its_bases(repo):
+    """A change that places a module of its base in core and adds the module that first imports it passes: the base's
+    table finds that import alone, at a new module's edge, which the change's table admits.  The same row with an import
+    from a module the base holds fails, naming that import and what to do, beside a new module's or alone; and so does a
+    new module's import that the change's own table refuses."""
+    seed, old, rule = (f"integrations/vllm/verity_vllm/{f}" for f in ("engine/seed.py", "program/old.py", "program/rule.py"))
+    core, uses = (lambda m: {IMPORTS: LAYER_MAP.replace("}", f'    "verity_vllm.{m}": "core",\n}}')}), "import verity_vllm.engine.seed\n"
+    repo.commit("layers", {IMPORTS: LAYER_MAP, LAYERING: LAYERING_LINT, P09: _allowlist(), seed: "S = 1\n", old: "O = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("seed is core, and a new module imports it", {**core("engine.seed"), rule: uses})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p09_layering"]), c["why"]
+    assert c["why"].endswith(f"the base's lint code (p09_layering) finds 1 violation(s) only at the edges of the module(s) the "
+                             f"change adds, which the change's tables admit ({IMPORTS}'s LAYER)")
+    repo.commit("and a module of the base imports it too", {old: uses})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p09_layering: program.old -> engine.seed"]), c["why"]
+    repo.git("checkout", "-q", "-b", "direct", "main")
+    repo.commit("seed is core, and a module of the base imports it", {**core("engine.seed"), old: uses})
+    [c] = G.gate("main", "direct")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p09_layering: program.old -> engine.seed"]), c["why"]
+    assert c["why"].endswith(f"; the change edits {IMPORTS}'s LAYER, which judge(s) the edges of the modules it adds: between "
+                             "modules its base holds the base's tables judge, so the row lands in one change and that import in "
+                             "the next")
+    repo.git("checkout", "-q", "-b", "refused", "main")
+    repo.commit("another row, and a new module's import neither table admits", {**core("program.old"), rule: uses})
+    [c] = G.gate("main", "refused")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p09_layering: program.rule -> engine.seed"]), c["why"]
 
 
 def _size(symbol: str, lines: int) -> dict:

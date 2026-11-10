@@ -55,7 +55,10 @@ at least as much, so a move from one file to another passes, but the kind's tota
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. A lint that keys a counted kind anew (per file where it was per package) is compared in the
 base's form, the base's lint held to the base's entries, when the change keeps that kind's total: re-key in one change and
-lower the counts in another. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
+lower the counts in another. A change that edits P9's layer map or package units (`_imports.LAYER`, `PACKAGE_OF`) is
+judged by its own table at the edges of the modules it adds and by the base's between modules the base holds: a row may
+change with the new module that first imports under it, and an import between two existing modules waits for the next
+change. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
