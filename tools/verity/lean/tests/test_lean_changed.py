@@ -989,6 +989,60 @@ def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_bu
     assert any("siblings: Proofs.Flock.X and Proofs.Z both declare 'f'" in s and "; 1 unchecked" in s for s in said), said
 
 
+def test_tree_takes_a_slot_tree_that_is_a_link_onto_another_volume_and_refuses_one_outside_the_records_trees(
+        trying, tmp_path, monkeypatch):
+    """A node links a slot's tree onto a larger volume (`made`), so it resolves to a path outside the records trees:
+    `--tree` takes it by the link, in `lean-records/`, as `--build` always did. A tree anywhere else is still refused:
+    the link's own target named directly, a path that only passes through `lean-records/`, and a link there that leads
+    to another part of the check cache, as one to check's own tree does."""
+    tree, calls = trying
+    target = tmp_path / "volume" / "lean-records_build-1"
+    target.mkdir(parents=True)
+    tree.mkdir(parents=True)
+    link = tree.parent / "build-1"
+    link.symlink_to(target, target_is_directory=True)
+    assert LC.kept_tree(link) and LC.kept_tree(tree) and LC.kept_tree(tree.parent / "build-9"), "a link, a directory, a new one"
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", tree=link, log=said.append) == 0, said
+    assert [c[1] for c in calls["build"]] == [link, link] and (target / ".lock").is_file(), "built there, through the link"
+    assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", f"{link}/"]) == 0
+    (step := tmp_path / "cache" / "lean-changed").mkdir()
+    (to_step := tree.parent / "build-2").symlink_to(step, target_is_directory=True)
+    (target / "deep").symlink_to(tmp_path / "volume", target_is_directory=True)
+    for outside in (target, step, to_step, link / "deep", tree.parent / ".." / "lean-changed",
+                    link / ".." / ".." / "lean-changed", tree.parent, tmp_path / "volume"):
+        assert not LC.kept_tree(outside), outside
+        calls["build"].clear()
+        said.clear()
+        assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", tree=outside, log=said.append) == 2
+        assert calls["build"] == [] and any("is not under" in s for s in said), outside
+
+
+def test_records_takes_a_slot_tree_that_is_a_link_onto_another_volume_and_refuses_one_outside(fast, tmp_path, monkeypatch):
+    """`--records --tree` on a slot's linked tree, as `--try` takes it; check's own step tree is refused, nothing run."""
+    _, _, calls = fast
+    target = tmp_path / "volume" / "lean-records_build-1"
+    link = tmp_path / "cache" / LC.RECORDS / "build-1"
+    link.symlink_to(target, target_is_directory=True)
+
+    def sync(_closure, _files, t):
+        (t / "pkg").mkdir(parents=True, exist_ok=True)
+        (t / "pkg" / "lean-audit.json").write_text(OLD)
+        return 0
+
+    monkeypatch.setattr(LC, "sync", sync)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", tree=link, out=tmp_path / "out", log=said.append) == 0, said
+    assert calls and all(cwd == link for _, cwd in calls) and (target / "pkg").is_dir(), "check.py ran on the linked tree"
+    calls.clear()
+    (step := tmp_path / "cache" / "lean-changed").mkdir()
+    (to_step := link.parent / "build-2").symlink_to(step, target_is_directory=True)
+    for outside in (target, step, to_step):
+        said.clear()
+        assert LC.audit_records("pkg", tmp_path / "deps", tree=outside, out=tmp_path / "out", log=said.append) == 2
+        assert not calls and any("is not under" in s and "the fast path builds only on its own trees" in s for s in said)
+
+
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):
     _, calls = trying
     calls["deps_rc"] = 3
