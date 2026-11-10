@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pous.Wipe
+public import Proofs.Properties.Pous.Lemmas.Wipe
 public import Mathlib.Algebra.Group.End
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.Real

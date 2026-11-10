@@ -556,7 +556,7 @@ class DatasetIdentity:
 class _StoreView:
     """The few LocalStore calls this module makes, with the labels folded into ``key -> [values in ts order]``."""
 
-    def __init__(self, store: Any):
+    def __init__(self, store: Any) -> None:
         self.store = store
         self._attempts: dict[str, dict | None] = {}
 
@@ -564,7 +564,7 @@ class _StoreView:
         rows = self.store.index.select_artifacts(kind=kind)
         return [r["id"] if isinstance(r, dict) else str(r) for r in rows]
 
-    def manifest(self, art_id: str):
+    def manifest(self, art_id: str) -> Any:
         return self.store.get_manifest(art_id)
 
     def labels(self, art_id: str) -> dict[str, list[str]]:
@@ -891,7 +891,8 @@ def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> li
         return []
     if contract is None:
         try:
-            from verity_numerical.bench import contract as _contract  # a sibling workspace package; absent -> no contract sets
+            # a sibling workspace package; absent -> no contract sets
+            from verity_numerical.bench import contract as _contract
         except ImportError:
             return []
         contract = _contract
@@ -1672,7 +1673,7 @@ def publish(rep: TrustReport, store: Any, *, by: str = "trust", push: bool = Tru
 DEFAULT_STORE_CLASS = "research.store.local:LocalStore"
 
 
-def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS):
+def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS) -> Any:
     """The evidence store for the CLI: the store class is named as data (``module:Class``) and resolved at run time; any
     object with the :class:`LocalStore` surface documented at the top of this module works."""
     import importlib

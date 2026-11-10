@@ -97,7 +97,7 @@ def code_identity(tree: str | os.PathLike = ".") -> dict[str, Any]:
     from verity_vllm.pipeline import source_identity
 
     tree = Path(tree)
-    ident = source_identity.code_identity(source_identity.normalise_tree(tree))
+    ident = source_identity.code_identity_of("the hot worker's key", source_identity.normalise_tree(tree))
     export = {}
     for name, cands in (("EXPORT.json", (tree / "EXPORT.json",)), ("RELEASE.json", (tree / "RELEASE.json", RELEASE_JSON))):
         for f in cands:                                        # RELEASE.json lives beside the tree (/workspace/cp/RELEASE.json), not in it

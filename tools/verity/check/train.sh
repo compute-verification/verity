@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `tools/verity/check/train.sh COMMIT MACHINE [--agreement]`: the lander's recorded check of a train, and the one way the lander
 # launches a check. It runs the merge queue's command (`research.jobs.dispatch.command`: `check.py --record --on MACHINE`, against
-# origin/main, on the passes it gathers from the newest recorded checks) in a priority slot and past a failed step, and refuses
+# origin/main, on the passes of the newest recorded checks, which the run fetches) in a priority slot and past a failed step, and refuses
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
@@ -169,9 +169,9 @@ setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machin
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 60 min: the queue launches a check's shards at once, each gathering and combining its verdict packs into TMPDIR on the
-# control pod's network volume, which takes 7 to 20 min a shard and past 30 with three at once
-launch_wait_s=3600
+# 30 min: drive launches several runs at once, and one whose commit needs the agreement fetches the pinned upstream build and
+# its inputs from the store to send with the run
+launch_wait_s=1800
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break

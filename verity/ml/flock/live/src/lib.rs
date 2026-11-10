@@ -107,6 +107,41 @@ pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f:
     flock_core::spawn_scoped(sc, f)
 }
 
+/// Serves `l`'s connections, one session each, up to `concurrency` at once and `max` of them (unbounded: `None`), until
+/// `make` gives none: session `i`'s `serve(i, connection, build())`, on its own thread. `make` runs before each accept and
+/// `build`, a session's server, on the session's thread after it, so a slow build holds up no other session. A session's
+/// panic stops the process.
+pub fn serve_sessions<T, B: FnOnce() -> T + Send>(l: &std::net::TcpListener, max: Option<usize>, concurrency: usize,
+                                                   mut make: impl FnMut() -> Option<B>, serve: impl Fn(usize, TcpStream, T) + Sync) {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::{Condvar, PoisonError};
+    let free = (Mutex::new(concurrency.max(1)), Condvar::new());
+    std::thread::scope(|sc| {
+        for i in 0.. {
+            if Some(i) == max {
+                break;
+            }
+            {
+                let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
+                while *n == 0 {
+                    n = free.1.wait(n).unwrap_or_else(PoisonError::into_inner);
+                }
+                *n -= 1;
+            }
+            let Some(build) = make() else { break };
+            let (conn, _) = l.accept().unwrap();
+            let (serve, free) = (&serve, &free);
+            spawn_scoped(sc, move || {
+                if catch_unwind(AssertUnwindSafe(|| serve(i, conn, build()))).is_err() {
+                    std::process::exit(101);
+                }
+                *free.0.lock().unwrap_or_else(PoisonError::into_inner) += 1;
+                free.1.notify_one();
+            });
+        }
+    });
+}
+
 /// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
 pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
     let n = parts.iter().map(|p| p.as_ref().len()).sum();
@@ -2742,6 +2777,65 @@ mod thread_stack_tests {
         let states = pool.install(|| flock_core::run_hetero_chunks_stateful(64, || 0usize, |s, _| *s += chunk(&helped)));
         assert_eq!(states.iter().sum::<usize>(), 64 * (16 << 10));
         assert_eq!(flock_core::all_core_pool().install(|| deep(16 << 10)), 16 << 10);
+    }
+}
+
+#[cfg(test)]
+mod serve_sessions_tests {
+    use std::{
+        io::{Read, Write},
+        net::{TcpListener, TcpStream},
+        sync::{OnceLock, mpsc::channel},
+        thread::{self, ThreadId},
+    };
+
+    /// Two sessions' builds, each held until both have started, run at once, each on its own session's thread: a slow
+    /// build (a statement's first check) holds up neither the accepting thread nor another session. A build on the accepting
+    /// thread returns at once, so that failure fails the test rather than hanging it.
+    #[test]
+    fn a_slow_build_holds_up_no_other_session() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let accepting: OnceLock<ThreadId> = OnceLock::new();
+        let (started_tx, started) = channel::<(usize, ThreadId, bool)>();
+        let (opens, waits): (Vec<_>, Vec<_>) = (0..2).map(|_| channel::<()>()).unzip();
+        let mut waits = waits.into_iter().enumerate();
+        let accepting = &accepting;
+        let make = move || {
+            accepting.get_or_init(|| thread::current().id());
+            let (k, gate) = waits.next()?;
+            let started = started_tx.clone();
+            Some(move || {
+                let me = thread::current().id();
+                let on_accepting = accepting.get() == Some(&me);
+                started.send((k, me, on_accepting)).unwrap();
+                if !on_accepting {
+                    gate.recv().unwrap();
+                }
+                k
+            })
+        };
+        let serve = |i: usize, mut conn: TcpStream, k: usize| conn.write_all(&[i as u8, k as u8]).unwrap();
+        let (first, second, mut got) = thread::scope(|sc| {
+            let server = sc.spawn(move || super::serve_sessions(&l, Some(2), 2, make, serve));
+            let mut clients: Vec<TcpStream> = (0..2).map(|_| TcpStream::connect(addr).unwrap()).collect();
+            let first = started.recv().unwrap();
+            // the second build starts while the first still waits for its gate
+            let second = (!first.2).then(|| started.recv().unwrap());
+            for o in &opens {
+                // a build that returned at once has dropped its gate
+                let _ = o.send(());
+            }
+            server.join().unwrap();
+            let got: Vec<[u8; 2]> = clients.iter_mut().map(|c| { let mut b = [0; 2]; c.read_exact(&mut b).unwrap(); b }).collect();
+            (first, second, got)
+        });
+        assert!(!first.2, "session {}'s build ran on the accepting thread", first.0);
+        let second = second.unwrap();
+        assert!(!second.2 && second.1 != first.1, "the two builds ran on one thread");
+        assert_ne!(first.0, second.0);
+        got.sort();
+        assert_eq!(got, [[0, 0], [1, 1]], "each session served on its own build");
     }
 }
 

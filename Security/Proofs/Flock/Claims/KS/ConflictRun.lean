@@ -69,7 +69,7 @@ open FlockSoundness.Refine (ebind_ok)
 step at the prover's messages is in the trace's verifier log. -/
 theorem stepWith_acc_log {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       t.msgs.map Prod.fst = as → (Claims.stepWith H P x ω vnext n hist as t).out = .acc →
         ∀ p ∈ ((vnext ((Claims.stepWith H P x ω vnext n hist as t).msgs.map Prod.fst)).eval H).2,
           p ∈ (Claims.stepWith H P x ω vnext n hist as t).vLog := by
@@ -100,7 +100,7 @@ theorem run_acc_log {Ω Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims
 
 theorem stepWith_prefix {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       ∃ ext, (Claims.stepWith H P x ω vnext n hist as t).msgs = t.msgs ++ ext := by
   intro n
   induction n with
@@ -121,7 +121,7 @@ theorem stepWith_prefix {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.
 
 theorem stepWith_head {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) (n : ℕ) (hist : List (Claims.Msg × Claims.Msg))
-    (as : List Claims.Msg) (t : Claims.Trace) (h : (Claims.stepWith H P x ω vnext n hist as t).out = .acc) :
+    (as : List Claims.Msg) (t : Claims.Transcript) (h : (Claims.stepWith H P x ω vnext n hist as t).out = .acc) :
     ∃ rest, (Claims.stepWith H P x ω vnext n hist as t).msgs.map Prod.fst =
       t.msgs.map Prod.fst ++ ((P.next x hist ω).eval H).1 :: rest := by
   cases n with

@@ -459,10 +459,11 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
   rw [heq σ _ (by simp [slotGates]),
     List.map_congr_left fun g hg => heq σ g (by simp [slotGates, hg])]
 
-variable {Coin Col T : Type}
+variable {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
-theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+theorem rAcc_of_r (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
     (hR : R H D.commit D.parse D.partition δ x w) : RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR
@@ -483,14 +484,14 @@ end NetTiming.SampledAuditProof
 
 open NetTiming.SampledAuditProof in
 /-- **The sampled audit implies `Accepted`, at `ε` at `δ` over the selection**
-(`NetTiming.Guarantees.SampledAuditAccepted`): `KS`'s bound at the stronger relation on the smaller scope, `R δ` giving
-`RAcc δ` there (`rAcc_of_r`). -/
+(`NetTiming.Guarantees.SampledAuditAccepted`): `Compiled.KS`'s bound at the stronger relation on the smaller scope,
+`R δ` giving `RAcc δ` there (`rAcc_of_r`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
-  intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  intro Coin _ _ _ A H D L K S lay k hKS δ hδ x hx Ω _ _ P
+  have h := hKS δ hδ x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR
-  cases ((Claims.Sampling.E D decode).eval H P x s.1 s.2.1 s.2.2).1 with
+  cases (D.E.eval H P x s.1 s.2.1 s.2.2).1 with
   | none => exact id
   | some w => exact rAcc_of_r H D lay k hδ hx

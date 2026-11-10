@@ -86,7 +86,8 @@ open Claims Claims.Sampling Claims.Sampling.Reference Properties.Spot
 open Lean (Json)
 
 /-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
-`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/
+`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`, so every
+unit has the statement's `N₀`. -/
 def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     (bytes : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L x) → Fin 256)
     (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Seen → Option (Msg × Seen)) : Code :=
@@ -94,7 +95,8 @@ def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     checked := fun x r => ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD []
     rounds := fun x _ => sr x
     sessions := fun _ => 1
-    session := fun x _ v => sess x v }
+    session := fun x _ v => sess x v
+    unitN₀ := fun x _ => c.innerN₀ x }
 
 /-- **One session that every checked unit shares has `SessionSlots`**: the first checked unit's session is every
 checked unit's. -/

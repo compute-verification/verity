@@ -30,11 +30,11 @@ def erepProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble 
 /-! ## One wait -/
 
 /-- **A wait's weighted reruns**: `Σ w` over the samples `rs` it reruns at, from `a` accepted so far. -/
-def waitCost {R : Type} (run : R → Trace) (w : R → ℝ) (k : ℕ) : List R → ℕ → ℝ
+def waitCost {R : Type} (run : R → Transcript) (w : R → ℝ) (k : ℕ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else w r + waitCost run w k rs (if (run r).out = .acc then a + 1 else a)
 
-theorem waitCost_nonneg {R : Type} (run : R → Trace) {w : R → ℝ} (hw : ∀ r, 0 ≤ w r) (k : ℕ) :
+theorem waitCost_nonneg {R : Type} (run : R → Transcript) {w : R → ℝ} (hw : ∀ r, 0 ≤ w r) (k : ℕ) :
     ∀ (rs : List R) (a : ℕ), 0 ≤ waitCost run w k rs a := by
   intro rs
   induction rs with
@@ -46,7 +46,7 @@ theorem waitCost_nonneg {R : Type} (run : R → Trace) {w : R → ℝ} (hw : ∀
     · exact le_rfl
     all_goals exact add_nonneg (hw r) (ih _)
 
-theorem waitAcc_cost_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (w : R → ℝ) (k : ℕ) :
+theorem waitAcc_cost_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (w : R → ℝ) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen),
       (((waitAcc k rs acc).rerunsAt H run).map w).sum = waitCost run w k rs acc.length := by
   intro rs
@@ -57,13 +57,13 @@ theorem waitAcc_cost_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (w : R 
     simp only [waitAcc, waitCost]
     split_ifs with h hacc
     · simp [RP.rerunsAt]
-    · simp only [RP.rerunsAt, List.map_cons, List.sum_cons, Trace.seen, hacc, ↓reduceIte, ih,
+    · simp only [RP.rerunsAt, List.map_cons, List.sum_cons, Transcript.seen, hacc, ↓reduceIte, ih,
         List.length_append, List.length_singleton]
-    · simp only [RP.rerunsAt, List.map_cons, List.sum_cons, Trace.seen, hacc, ↓reduceIte, ih]
+    · simp only [RP.rerunsAt, List.map_cons, List.sum_cons, Transcript.seen, hacc, ↓reduceIte, ih]
 
 /-- **Wald's identity for one wait**: over `K` uniform samples, its expected weighted reruns from `a` accepted are the
 expected weight times its expected reruns `N(K, a)`. -/
-theorem waitCost_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (w : D → ℝ) (k K : ℕ) :
+theorem waitCost_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (w : D → ℝ) (k K : ℕ) :
     ∀ a, Ex (fun σ : Fin K → D => waitCost run w k ((List.finRange K).map σ) a) = Ex w * waitExp run k K a := by
   induction K with
   | zero => intro a; simp [waitCost, waitExp, waitRuns, Ex]
@@ -109,7 +109,7 @@ theorem waitCost_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (w 
 /-! ## The waits and `E^rep` -/
 
 /-- The waits' weighted reruns are at most the waits', each on its own, for a nonnegative weight. -/
-theorem firstWait_cost_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Trace) {w : R → ℝ} (hw : ∀ r, 0 ≤ w r)
+theorem firstWait_cost_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) {w : R → ℝ} (hw : ∀ r, 0 ≤ w r)
     (k : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), (((firstWait k opens assemble check rss).rerunsAt H run).map w).sum ≤
       (rss.map fun rs => waitCost run w k rs 0).sum := by
@@ -131,7 +131,7 @@ theorem firstWait_cost_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
     · exact ih
 
 /-- **`E^rep` reruns at most `1 + m·K` times** over any samples, against every run. -/
-theorem erepProg_runs_le {D W Op : Type} (H : Msg → Msg) (run : D → Trace) (m k K : ℕ) (opens : Seen → List Op)
+theorem erepProg_runs_le {D W Op : Type} (H : Msg → Msg) (run : D → Transcript) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     ((erepProg m k K opens assemble check d₀ ρ).eval H run).2.2 ≤ 1 + m * K := by
   simp only [erepProg, RP.eval]
@@ -144,7 +144,7 @@ theorem erepProg_runs_le {D W Op : Type} (H : Msg → Msg) (run : D → Trace) (
 
 /-- **`E^rep`'s expected weighted reruns**: over a uniform judged sample and uniform waits' samples, against every run and
 for every nonnegative weight `w` of a sample, `𝔼[Σ w] ≤ (1 + m·k) · 𝔼[w]`. -/
-theorem erepProg_cost_exp {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Msg) (run : D → Trace) {w : D → ℝ}
+theorem erepProg_cost_exp {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Msg) (run : D → Transcript) {w : D → ℝ}
     (hw : ∀ d, 0 ≤ w d) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) :
     Ex (fun s : D × (Fin m → Fin K → D) =>
       (((erepProg m k K opens assemble check s.1 s.2).rerunsAt H run).map w).sum) ≤ (1 + m * k) * Ex w := by
@@ -154,7 +154,7 @@ theorem erepProg_cost_exp {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → 
           ∑ i, waitCost run w k ((List.finRange K).map (s.2 i)) 0 := by
     intro s
     obtain ⟨d₀, ρ⟩ := s
-    simp only [erepProg, RP.rerunsAt, Trace.seen, List.map_cons, List.sum_cons]
+    simp only [erepProg, RP.rerunsAt, Transcript.seen, List.map_cons, List.sum_cons]
     refine add_le_add le_rfl ?_
     by_cases h : (run d₀).out = .acc
     · simp only [h, ↓reduceIte, one_mul]
