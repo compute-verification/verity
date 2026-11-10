@@ -1379,9 +1379,11 @@ class LakeArtifacts:
             return 0
         used: dict[str, float] = {}
         for e in (self.store / MK.INDEX).glob("*.json"):
-            at = e.stat().st_mtime
             try:
+                at = e.stat().st_mtime
                 doc = json.loads(e.read_text())
+            except FileNotFoundError:
+                continue                                # `module_keys.entry` removed it since, which this lock doesn't hold off
             except ValueError:
                 e.unlink(missing_ok=True)               # damaged on disk, as `module_keys.entry` takes it
                 continue
@@ -1398,7 +1400,11 @@ class LakeArtifacts:
             own, n, horizon = own - size, n + 1, mtime
         for e in [*(self.store / MK.INDEX).glob("*.json"), *(self.store / "outputs").glob("*/*.json"),
                   *(self.store / MK.UNSTORED).glob("*.json")]:
-            if e.stat().st_mtime <= horizon:
+            try:
+                old = e.stat().st_mtime <= horizon
+            except FileNotFoundError:
+                continue
+            if old:
                 e.unlink(missing_ok=True)
         return n
 
