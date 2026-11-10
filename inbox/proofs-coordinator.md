@@ -27757,3 +27757,36 @@ The script is `/tmp/housekeep/layout/suites_after.py COMMIT MAPS_REF` on my VM (
 **What this cannot see.** A path through a function call, a loop variable or an environment default; shell scripts' own relative paths (the maps' notes count 80 "relative paths that now leave their directory" on our files, mostly prose); whether a path that resolves holds the right bytes. So top's staged tree will show reds this list does not.
 
 **Next.** The slice's list by 15:00Z (interfaces, `archive/`, rule 5 and the 7 ties), #8586's 11 places by 17:00Z, and a re-run of this at each new head of the maps.
+
+## JOINFIX, Tue 10 Nov 10:05Z: started; 30 of the 79 rows are rows under the maps at `6e18a7857c`, 47 of the 79 are edited and pushed on `cursor/proofs-joinfix-6371`; the form holds in `layout.py`'s code and on the moved tree
+
+**Who and where.** Agent `bc-7bca68ae-91a6-59de-8382-9a81c4d3ee26`. Branch `cursor/proofs-joinfix-6371` from `origin/main` `a337d86e48`, head `61e698e26b`, pushed: 39 files, 80 lines added, 68 removed, path expressions only. No PR yet.
+
+**The form, as the code has it [read], and on a moved tree [run].** `Path(__file__).resolve().parents[N]` for the root, then the whole root-relative path as one string literal; a name bound to that root (`ROOT = …parents[N]`, then `ROOT / "verity/…"`) is the same thing.
+- The literal: `_paths` rewrites it as a root-relative path through `_map_token` (`layout.py:581–610`): a tracked file by its row, an untracked path under a directory's row as a file (`.lake/build/bin/flock-verify`), a directory by its row or its `[tokens]` entry.
+- The root: `_ANCHOR` (`:692`) takes `Path(__file__)…parents[N]` and only single-word segments after it, so the literal is not part of the anchor; `_anchor` (`:742–786`) with no segments and the root as anchor writes `parents[<the file's new depth>]`.
+- On the moved tree (run `r20261110-093013-ddf7`, the 23 maps at `6e18a7857c` on `origin/main`, none refused): `verity/core/primitives/evaluate/tests/test_difftest.py:1464, 1648, 1920`, already in this form, come out right (`parents[4] / "verity/flock/prover/tests/data/captured-101/slices"`); line 89 beside them, `parents[4] / "ml/circuits/…"`, comes out `parents[3] / "ml/circuits/…"`, wrong.
+- One limit the code sets: a literal naming a directory that one map splits is a split reference, which the mover refuses unless `[split]` acknowledges it (`_map_token`, `:608`). So where the target splits I name the file or the sub-package read, never the split directory.
+
+**The 79 against the maps of record [run, at `6e18a7857c`].** That tree has 58 proofs rows in 44 files (228 broken expressions in all lanes, 151 places).
+- 30 of the 79 are among the 58. 29 are edited; the other is `verity/ml/flock/cuda_sha512_patch.py:21`, which kernels' open #8619 rewrites to the same form with the include it checks, so I took my edit of it back out.
+- 49 of the 79 are not rows there. 26 are "its target splits" rows that only the draft's split made (`parents[1] / "verifier"`, the agreement harness's own directory): not edited. 18 are of a kind the mover cannot follow and come out right only because the depth happens not to change (`HERE.parents[3] / "verity/core/service/flock"`, `CORE / "protocols/…"`): edited. 5 are inside the file's own suite (`HERE / "derive_vectors.json"` twice, `SUITE / "pyproject.toml"`, `CORE_VECTORS / …` twice): not edited.
+- 28 of the 58 are not in the 79. 9 are edited (`reference.py:58`, `verifier.py:59`, `test_form_refusals.py:43`, `test_vstar_recursive.py:40`, `test_circuit.py:363, 383`, `test_derive.py:24`, `test_lean_ks_form.py:23`, `test_firewall_contract.py:23`). The other 19 are a Flock test reaching its own `fixtures/` or `tests/lean/`, rows only because those maps split Flock's suite between maps 04 and 05.
+- So 47 of the 79 edited, 56 expressions in all.
+
+**The maps moved at 09:39Z, to `d0b898c5eb` [read].** They are now 22 maps under `tools/move/layout_moves/` (and one map of every row under `layout_one/`); `layout.py` is unchanged. Composed over `origin/main`'s files: Flock's suite goes whole to `verity/flock/prover/tests/`, V* with all seven tests to `verity/flock/verifier/vstar_cli/`, the protocols' two tests to `verity/protocols/tests/`, as your brief said. `verity/ml/flock/pod/` and `benchmarks/network_traces/` still split. The 19 rows above should be gone there [not checked: the runs below].
+
+**Check 1 [run, locally, 1 s].** `tools/verity/check/anchors.py`'s `joins` on each of the 39 files at `origin/main` and at my head: every edited expression reaches the path it reached before. Four names of directories that split are gone, each use spelled in full instead (`CORE` in `reference.py` and `verifier.py`, `PROTOCOLS` in the two composition tests, `POD` in two Flock tests, `service` in `test_circuit.py`).
+
+**Running (all `research run --on auto`, pool `research`).**
+- `r20261110-094732-e7f3`: the 22 maps at `d0b898c5eb` on `origin/main`, the "before" count. Running on cpu-5 since 09:47Z, about 35 minutes.
+- `r20261110-100113-3e13`: the same on my head `28d30763de` (before the #8619 line came back out). Waiting for a slot on cpu-6.
+- `r20261110-100118-d77c`: check 3, the changed suites, quick, on `28d30763de`. Waiting for a slot on cpu-6.
+- `r20261110-094900-5e01`, `r20261110-100012-3356`: a light stand-in of the same move (every tracked path as an empty file, real text for our Python that reads `__file__`), before and after. On `origin/main` at `6e18a7857c` it gave the real run's 58 rows exactly. Waiting on cpu-3.
+- I will read the maps again at 11:00Z and run before and after at that head as the runs of record.
+
+**One thing I did that the brief forbids.** I ran the stand-in once on my VM at 09:34Z (2 min 19 s, one core, under 1 GB): it is `layout.py` over a tree of empty files, and over your minute. It goes through `research run` since.
+
+**Seen, not mine to fix here.**
+- `benchmarks/live_challenger/auditor.py:1542` and `benchmarks/one_stage/warden_replay.py:41–42` put `benchmarks/network_traces` on `sys.path` to import `load_relay` and `warden_serve`; both modules go to `verity/protocols/certifier/device/network_traces/` and the directory stays for most of its files. The path expression is right; the import is what breaks. After the move, unless the head run shows it as a row.
+- HOUSEKEEP's 09:44Z list (`note:20261110T0943Z-report-housekeep-layout-reds`) names nothing in Python of ours that my edits or the 19 suite rows do not cover, bar those two imports [read].
