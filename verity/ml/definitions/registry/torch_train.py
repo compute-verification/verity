@@ -72,12 +72,12 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
-from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.refs import tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry.boolean_moe import nv_expf_in, nv_expf_out
 
 __all__ = ["RmsNormTorch", "RmsNormTorchBackward", "RmsNormTorchIn", "RmsNormTorchOut", "RmsNormTorchWeightGrad", "SiluTorch",

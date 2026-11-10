@@ -41,11 +41,11 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader, decode
 from verity.core.protocols.certifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
 

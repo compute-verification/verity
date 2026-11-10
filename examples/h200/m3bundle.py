@@ -54,13 +54,13 @@ from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
 from e2e_h200.window import Locator, Registered, Run, Segment  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops.boolean import gemm as BG  # noqa: E402
-from verity.ml.circuits.ops.boolean import quant as BQ  # noqa: E402
-from verity.ml.circuits.ops.boolean import rmsnorm as RN  # noqa: E402
-from verity.ml.circuits.ops.boolean import rows as BR  # noqa: E402
-from verity.ml.circuits.ops.boolean import rowwise as RW  # noqa: E402
-from verity.ml.circuits.ops.boolean import softmax_row as SR  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.ops.boolean import gemm as BG  # noqa: E402
+from verity.circuits.ops.boolean import quant as BQ  # noqa: E402
+from verity.circuits.ops.boolean import rmsnorm as RN  # noqa: E402
+from verity.circuits.ops.boolean import rows as BR  # noqa: E402
+from verity.circuits.ops.boolean import rowwise as RW  # noqa: E402
+from verity.circuits.ops.boolean import softmax_row as SR  # noqa: E402
 from verity.ml.windows import interface as IF, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 

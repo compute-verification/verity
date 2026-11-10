@@ -43,7 +43,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import act as _ACT
 from verity.ml.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T

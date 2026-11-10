@@ -4,12 +4,12 @@
 `DsaLatentRow_v2{KVL, R, EPS}` is `DsaLatentRow_v1` on bits, a composite of `DsaRMSNorm_v2` and `boolean_rope.RoPEHeadGptJ_v3`."""
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import boolean_rope as BR
 from verity.ml.definitions.registry import dsa_norm as DN
 from verity.ml.definitions.registry.boolean_dsa import bit_ops, flat

@@ -124,17 +124,17 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import ports as _ports
-from verity.ml.circuits.boolean.forms import NOT, and_reduce
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite
-from verity.ml.circuits.ops import fp32 as F
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits import boolean as BL
+from verity.circuits import ports as _ports
+from verity.circuits.boolean.forms import NOT, and_reduce
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite
+from verity.circuits.ops import fp32 as F
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.refs import Coll, Explicit, array_of, concat
+from verity.circuits.types import Array, RecordType, Value
 
 from verity.core.protocols.pouw.leaf_lanes import LEAST_K
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks

@@ -6,7 +6,7 @@ public import Definitions.Core.Scalar
 # Vectors: the scalar primitives of `verity.ml.circuits.ops.scalar`
 
 Each theorem is one input of a primitive of `verity.ml.circuits.ops.scalar` and the word its Python returns, checked by
-the kernel against `Verity.Scalar`. `verity/ml/circuits/ops/tests/test_lean_scalar_vectors.py` checks the same vectors against
+the kernel against `Verity.Scalar`. `verity/circuits/ops/tests/test_lean_scalar_vectors.py` checks the same vectors against
 the Python, so a change on either side fails a build: the transcription cannot drift silently. Every operand is a word of
 its parameter's width.
 -/

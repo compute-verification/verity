@@ -52,4 +52,4 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_m3bundle.py", "tests/test_replay.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/circuits/ops"]

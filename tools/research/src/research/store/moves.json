@@ -1742,6 +1742,11 @@
       "paths": {
         "integrations/vllm/": "adapters/vllm/"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/circuits/": "verity/circuits/"
+      }
     }
   ]
 }

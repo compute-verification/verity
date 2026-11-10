@@ -12,9 +12,9 @@ from functools import cache
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.reference import evaluate_call, standalone_call
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.reference import evaluate_call, standalone_call
 from verity.ml.definitions.numerics import twins as TW
 from verity.ml.definitions.registry import cuda_rmsnorm as C
 

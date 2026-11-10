@@ -92,11 +92,11 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier.head_check import BIT, _part

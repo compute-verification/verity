@@ -37,19 +37,19 @@ parameter, so a registered row of W is ``K / R`` codes.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import moe as BM
-from verity.ml.circuits.ops.boolean import norm_quant as NQ
-from verity.ml.circuits.ops.boolean import quant as BQ
-from verity.ml.circuits.ops.boolean import rmsnorm as RN
-from verity.ml.circuits.ops.boolean import rows as BR
-from verity.ml.circuits.ops.boolean import rowwise as RW
-from verity.ml.circuits.ops.boolean import softmax_row as SR
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import moe as BM
+from verity.circuits.ops.boolean import norm_quant as NQ
+from verity.circuits.ops.boolean import quant as BQ
+from verity.circuits.ops.boolean import rmsnorm as RN
+from verity.circuits.ops.boolean import rows as BR
+from verity.circuits.ops.boolean import rowwise as RW
+from verity.circuits.ops.boolean import softmax_row as SR
+from verity.circuits.ports import In, Ports
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 from e2e_h200 import served_weights as SW
 

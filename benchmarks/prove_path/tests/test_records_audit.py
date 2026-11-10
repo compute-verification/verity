@@ -41,10 +41,10 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
-from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
-from verity.ml.circuits.ops import gemm as G
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.circuits.ops import gemm as G
 from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
@@ -134,7 +134,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)

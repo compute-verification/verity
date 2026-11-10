@@ -1,5 +1,5 @@
 """A read of a table the program brings (a word read as `verity.ml.definitions.registry.tables.table_read` makes one) lowers by its
-Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
+Boolean form's builder (`verity.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
 at every index and on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table
 past `BT.MAX_WORDS` has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every unit
 lowered and each unit equal to the reference on synthetic samples."""
@@ -9,12 +9,12 @@ import random
 
 import pytest
 
-from verity.ml.circuits.boolean import table as BT
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Value
-from verity.ml.circuits.ops.scalar import I32Add
+from verity.circuits.boolean import table as BT
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Value
+from verity.circuits.ops.scalar import I32Add
 
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

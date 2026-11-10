@@ -42,10 +42,10 @@ Registered functions (all `_v1`):
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ops.prims import ZERO32
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import ZERO32
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import sparse_mla_split as W
 from verity.ml.definitions.registry.b1 import ZERO16

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 
 _CANON: dict[str, tuple[Any, dict]] = {}  # specialization id -> (the canonical decoded object, its v0 encoding); the DEFAULT canon
 # the canon is the set of definitions ONE compose shares; a process composing several workloads (the
@@ -20,8 +20,8 @@ def canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
     encoded ONCE (v0, self-contained), compared with the canonical one under its id (fail-closed: a different body under the
     same id is `IdentityConflict`, never first-wins), and every reference to it (node callees, function-valued statics) is
     re-pointed to the canonical object. Primitives come from the registry and are already shared."""
-    from verity.ml.circuits.codec import _encode_definition
-    from verity.ml.circuits.defs import IdentityConflict, PrimitiveDefinition
+    from verity.circuits.codec import _encode_definition
+    from verity.circuits.defs import IdentityConflict, PrimitiveDefinition
 
     if canon is None:
         canon = _CANON
@@ -70,7 +70,7 @@ def repoint(fn, subst: dict[str, Any]) -> None:
 
 def _canonical(v, subst):
     """`v`'s substitute in `subst`, or `v` itself; refused (IdentityConflict) before it is applied when its id is not `v`'s."""
-    from verity.ml.circuits.defs import IdentityConflict
+    from verity.circuits.defs import IdentityConflict
     key = descriptor_id(v)
     c = subst.get(key, v)
     if c is not v and descriptor_id(c) != key:
@@ -79,7 +79,7 @@ def _canonical(v, subst):
 
 
 def _subst_static(v, subst):
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     if isinstance(v, SpecializedDefinition):
         return _canonical(v, subst)
     if isinstance(v, PrimitiveDefinition):

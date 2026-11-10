@@ -91,9 +91,9 @@ def test_the_filler_forgery_is_v_stars_algebra_alone(inner, tmp_path):
 def staged(tmp_path_factory):
     """A Gemm_v2{K=64} GemmCoordinate class staged in both layouts, 4 x 4 tiles (``tile``, `stage_tiled`) and one coordinate an
     instance (``unit``, `stage`): at 8 and at 5 instances unpadded, and padded to 8 with 5 real."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
 
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU

@@ -45,11 +45,11 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import Circuit, and_reduce
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import Circuit, and_reduce
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC, replay_chain as RC, served_rows as SR
 from verity.ml.protocols.certifier import served_tie as ST

@@ -86,12 +86,12 @@ import hashlib
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits.boolean import memcheck as MC
-from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
-from verity.ml.circuits.boolean.gf128 import mul_forms
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import memcheck as MC
+from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments.gates import block_key as BK
 from verity.core.protocols.certifier import cache_step as CST, compile_slice as CS
 from verity.ml.protocols.certifier import cache_step_v2 as C2, cache_step_v3 as V3S, compile_slice_v4 as V4

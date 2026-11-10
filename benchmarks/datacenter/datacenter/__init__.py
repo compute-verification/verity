@@ -1,6 +1,6 @@
 """A datacenter as Verity accounts for it.
 
-The logical layer (`logical`, `claims`) is where the cryptography happens: a `verity.ml.circuits` Program, the commitments
+The logical layer (`logical`, `claims`) is where the cryptography happens: a `verity.circuits` Program, the commitments
 to its registered inputs and its values, and `audit`, the claims a proof establishes about the developer's hardware. The
 physical layer (`physical`, `memory`, `account`) interprets those claims in light of the declared hardware, named
 assumptions and trusted devices. The bridge (`binding`) places the Program on the hardware and publishes the placement's

@@ -41,8 +41,8 @@ def _rows(rng, n, k, lo, hi):
 def test_one_design_across_schemes():
     """Both name the one scheme and the one fold, h1tile takes the s8 Boolean kinds the reference's arm serves, and the only
     difference is the receipt view (CP-W, two words a set, vs chains, eight a thread)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import s8 as OS8
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import s8 as OS8
 
     assert H.SCHEME == EPS.SCHEME == "eps1-sm120-h1fx1"
     assert H.FOLD == EPS.FOLD == "fx1"

@@ -28,12 +28,12 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
-from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.ml.circuits.constants import REGISTRATION
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
-from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
+from verity.circuits.codec import _spec_id, decode_program, encode_program, program_digest
+from verity.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
+from verity.circuits.constants import REGISTRATION
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
+from verity.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
 
@@ -139,7 +139,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
-    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ml.circuits.constants`: registration or run)
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.circuits.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
@@ -602,7 +602,7 @@ class WorkloadProgram:
         return {"schema": SCHEMA + "/address-map", "workload_digest": self.digest, "gates": body.gates, "input_gates": body.offsets[self._K],
                 "shared": {"group": self.shared_group, "root_nodes": [0, S], "gates": shared_gates, "n_batches": S,
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
-                "convention": "gate index in the canonical layout of the workload root (verity.ml.circuits.layout.Circuit); hierarchical path "
+                "convention": "gate index in the canonical layout of the workload root (verity.circuits.layout.Circuit); hierarchical path "
                               "root/node[k]/node[i]... for instances; Input gates first in root-parameter order (the shared group once, "
                               "then each request's own), then one call node per request in manifest order",
                 "inputs": inputs, "requests": reqs}

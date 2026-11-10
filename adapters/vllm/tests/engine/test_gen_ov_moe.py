@@ -17,10 +17,10 @@ from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS
 OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate_region
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.layout import resolve
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.quarantine.ov_moe import moe as Q

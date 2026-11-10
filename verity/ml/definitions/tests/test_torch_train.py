@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean import mufu as BMU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import mufu as BMU
 from verity.ml.definitions.numerics.moe_twins import nv_expf_bits
 from verity.ml.definitions.registry import torch_train as TT
 

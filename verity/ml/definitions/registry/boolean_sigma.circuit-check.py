@@ -16,8 +16,8 @@ def _boolean_roots() -> list[Any]:
     ones (`MoeAlignBefore_v2`, `ArgmaxStepF32_v2`, `InductorSiluMulElem_v2`, ...) are catalog roots already, and each binding
     here reaches the σ Definitions its body Calls (`Fa3AttentionHeadSplit_v2`, `MoeExpertCoordinate_v3`, the align steps, the
     norm's pair sums and in-order sums)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import boolean_attention as BA
     from verity.ml.definitions.registry import boolean_sigma as SG
 

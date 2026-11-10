@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import library
+from verity.circuits import library
 from verity_flock import circuit_types as CT
 from verity_flock import derive as D
 from verity_flock import layouts as LY

@@ -15,14 +15,14 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import evaluation as E
+from verity.circuits import partition_object as PO
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_dsv4_moe as BD
 from verity.ml.definitions.registry import dsv4_moe as D

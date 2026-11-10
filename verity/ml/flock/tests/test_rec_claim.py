@@ -16,8 +16,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits.ops.boolean import gf2k as G
-from verity.ml.circuits.ops.boolean.gf2k import kmul, mul
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean.gf2k import kmul, mul
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_sparse as RS

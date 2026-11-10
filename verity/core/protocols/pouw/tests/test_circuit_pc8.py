@@ -19,14 +19,14 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.ops.fp32 import F32FmaV2
-from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
-from verity.ml.circuits.ops.scalar import I32Le
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.circuits import boolean as BL
+from verity.circuits.evaluation import evaluate
+from verity.circuits import partition_object as PO
+from verity.circuits.program import Program
+from verity.circuits.ops.fp32 import F32FmaV2
+from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
+from verity.circuits.ops.scalar import I32Le
+from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.randomness import derive
 from verity.ml.protocols.pouw.circuit import pc8, plan

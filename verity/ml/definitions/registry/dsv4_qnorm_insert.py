@@ -46,13 +46,13 @@ by 448 and `__nv_log2f`), nor the DeepSeek-V4 indexer's MXFP4 path; `IndexerQFp8
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.ml.circuits.ops.mufu import RsqrtApprox
-from verity.ml.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, const
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.mufu import RsqrtApprox
+from verity.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, const
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import flashmla as F

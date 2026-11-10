@@ -13,7 +13,7 @@ untraced = ["tests/test_host.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
-          "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
+          "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the Lean verifier a session runs beside audit.AuditRun, and the difftest a replay serves: their Lake
           # packages
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",

@@ -56,7 +56,7 @@ nothing else runs when it fails (exit 3).
              probe at `DSV4_PROBE_M`, whose trees and FTZ model its multimem words.
   dispatch   per set of rank processes, the communicators vLLM made match its setting: the custom all-reduce on or off and, on,
              its cap (256 KiB beside symmetric memory, else 8 MiB); symmetric memory on or off, 64 MiB; FlashInfer's 0.5 MiB.
-  reference  per launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch
+  reference  per launch, the plain-integer reference (`verity.circuits.evaluation.evaluate`) of the word Definition the launch
              binds, on sampled tokens or elements, which the model must equal.
   bind       every Definition binds at GLM-5.3's statics (the multimem one at the probes' trees).
   timing     rank 0's median of `REPS` CUDA-event-timed calls, so the switch's cost is each M's time switched over served.
@@ -970,8 +970,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare_fused(job: dict[str, Any], rec: dict[str, Any], ops: dict[str, np.ndarray]) -> dict[str, Any]:
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     got = _rank_words(job, ("normed", "residual"))
     rec["rank_mismatch"] = sum(int((g[n] != got[0][n]).sum()) for g in got[1:] for n in ("normed", "residual"))
@@ -1023,8 +1023,8 @@ def reference_word(job: dict[str, Any], parts: np.ndarray, e: int) -> int | None
     tree no Definition states (bf16 adds off a chain)."""
     import bisect
 
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     size = parts.shape[1]
     if job["model"] == "mnnvl":
@@ -1103,8 +1103,8 @@ def jobs_of(cases_: list[dict[str, Any]], trees: list | None = None, ftz: bool |
 def bind_check(cases_: list[dict[str, Any]], trees: list | None, ftz: bool | None) -> dict[str, Any]:
     """Every Definition a launch of `cases_` binds binds at its statics, its operands at the served shapes; the multimem one at
     the probes' trees and FTZ (a chain and IEEE adds when they are not pinned, which states only the shape)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.batch import type_shape
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
 
     geoms = sorted({(c["shot"], c["cluster"]) for c in cases_ if c.get("path") == FUSED})
     targets = [(bind(T.AllReduceRmsNormMnnvl, WORLD=WORLD, N=HIDDEN, SHOT=s, CLUSTER=c, EPS=EPS, FMA=f),

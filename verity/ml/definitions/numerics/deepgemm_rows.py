@@ -72,7 +72,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds: two 128-groups, and a last weight block of 64 rows (N = 192)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import deepgemm as DG
     return {
         "DeepGemmFp8Linear_v1": [bind(DG.DeepGemmFp8Linear, K=256, N=n) for n in (128, 192)],

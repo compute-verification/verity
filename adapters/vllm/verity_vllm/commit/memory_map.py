@@ -33,12 +33,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.ml.circuits.census import census, step_ends
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Coll, runs
-from verity.ml.circuits.requirement import from_census
-from verity.ml.circuits.types import Array
+from verity.circuits.census import census, step_ends
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Coll, runs
+from verity.circuits.requirement import from_census
+from verity.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 #: an attention Call's cached K and V parameters

@@ -25,11 +25,11 @@ import hashlib
 import struct
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO, const_bits
-from verity.ml.circuits.boolean.gf128 import mul, mul_forms
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO, const_bits
+from verity.circuits.boolean.gf128 import mul, mul_forms
+from verity.circuits.types import Array, Tuple
 
 from .sha512 import IV, compress_gadget, pad_tail
 

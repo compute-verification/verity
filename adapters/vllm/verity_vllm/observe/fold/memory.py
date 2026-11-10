@@ -69,7 +69,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
+from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
@@ -141,7 +141,7 @@ def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strid
 def access_runs(refs: Refs | list | None) -> list | None:
     """An access journal entry's refs as `runs()` lists: the fold keeps the `Refs` it read (shared with the instances, where a
     transposed weight's runs would be one per element); a list is already runs."""
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
 
     return runs(refs) if isinstance(refs, Refs) else refs
 

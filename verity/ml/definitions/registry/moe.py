@@ -32,10 +32,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P

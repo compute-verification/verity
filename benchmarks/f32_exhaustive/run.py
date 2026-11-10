@@ -6,7 +6,7 @@
 ``log`` and ``exp`` run a correctly rounded evaluator (`f32_log_rn_bits`, `f32_exp_rn_bits`) against MPFR's correctly rounded
 result at 24 bits (gmpy2, emin -148, emax 128, subnormalized, nearest even), NaN canonical 0x7FC00000. ``boolean WORD`` runs the
 Boolean version of `ref_prims.WORD` (`verity.ml.definitions.boolean.boolean_version`), bit-sliced
-(`verity.ml.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
+(`verity.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
 and gives one.
 
 Writes DIR/exhaustive-<fn>.json (``exhaustive-boolean-WORD.json``): the inputs checked, the mismatches (up to 1000, each the
@@ -68,7 +68,7 @@ def _chunk(args: tuple[str, str | None, int, int]) -> tuple[int, int, list[tuple
     if fn == "boolean":
         import numpy as np
 
-        from verity.ml.circuits.evaluation.bits import evaluate_words
+        from verity.circuits.evaluation.bits import evaluate_words
 
         word, bits = _boolean(name)
         got = evaluate_words(bits, np.arange(lo, hi, dtype=np.uint64).reshape(-1, 1)).reshape(-1).tolist()

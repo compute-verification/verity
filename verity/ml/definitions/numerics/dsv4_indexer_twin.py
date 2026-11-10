@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.ml.definitions.registry import dsv4_indexer as I
@@ -41,7 +41,7 @@ class NumpyOps:
     """`dsv4_indexer.WORD`'s steps on numpy arrays of words, so the Definitions' bodies (`compress_column`, `norm_rope`, `k_quant`,
     `inv_rope`, `inv_rope_quant`) run vectorised over many instances: the f32 arithmetic of `F32AddV2_v1` .. `F32FmaFtzV2_v1` (numpy's
     IEEE single rounding, `derived_rows.fma_rn`'s exact FMA, each NaN 0x7FFFFFFF), MUFU and div.full through core's registered kernels
-    (`verity.ml.circuits.ops.mufu`, exact on every encoding), the rest on the encodings."""
+    (`verity.circuits.ops.mufu`, exact on every encoding), the rest on the encodings."""
 
     @staticmethod
     def word(bits: int):

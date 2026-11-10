@@ -22,13 +22,13 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.boundary import gate_width
-from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.parts import Part, n_members
-from verity.ml.circuits.program import is_input
-from verity.ml.circuits.query_ast import GateSet, evaluate, parse
-from verity.ml.circuits.refs import runs as ref_runs
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.boundary import gate_width
+from verity.circuits.ops import scalar as SC
+from verity.circuits.parts import Part, n_members
+from verity.circuits.program import is_input
+from verity.circuits.query_ast import GateSet, evaluate, parse
+from verity.circuits.refs import runs as ref_runs
 from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import cublas_bf16 as CB

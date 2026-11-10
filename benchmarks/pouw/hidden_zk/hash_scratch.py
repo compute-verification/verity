@@ -38,7 +38,7 @@ PIECES = {"PouwXor32_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
 
 
 def check(n: int = 512, seed: int = 20261003) -> dict:
-    from verity.ml.circuits.boolean.forms import const_bits
+    from verity.circuits.boolean.forms import const_bits
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
 

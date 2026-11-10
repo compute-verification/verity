@@ -31,8 +31,8 @@ from typing import Any
 import torch
 
 from tests.engine import fattn_oracle as O
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as A
 from verity.ml.definitions.registry import int8_exact as X
 

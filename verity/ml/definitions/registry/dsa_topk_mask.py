@@ -59,10 +59,10 @@ from __future__ import annotations
 import functools
 import heapq
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
+from verity.circuits.ops.prims import const
+from verity.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.registry.dsa_topk import M32, DsaWaksmanPick, DsaWaksmanSwap, Xor3x16, check_statics, topk_key, topk_set
 from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16
 

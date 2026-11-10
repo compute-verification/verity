@@ -115,7 +115,7 @@ class Promotion:
     `edits` (exact replacements, each of which must match) applied; otherwise its statements after its imports, but for its
     `SEMANTIC_ID` and `__all__`, go into `dst` before `dst`'s `__all__` (or at its end), and the `imports` `dst` lacks join its
     imports.  A merged module's `X.name`, for an alias `X` in `unqualify`, becomes `name`, which `dst` must bind (the sampling
-    family's split left `sampling` importing each primitive by name from `verity.ml.circuits.ops`, not through `registry.prims`)."""
+    family's split left `sampling` importing each primitive by name from `verity.circuits.ops`, not through `registry.prims`)."""
     src: str                                   # under QUARANTINE
     dst: str                                   # under REGISTRY_DIR
     edits: tuple[tuple[str, str], ...] = ()
@@ -128,7 +128,7 @@ class Promotion:
 PROMOTE: tuple[Promotion, ...] = (
     Promotion("ln/layer_norm_aten.py", "layer_norm.py", edits=(
         ("from verity_vllm.program.registry.quarantine.ln._common import BF16, F32, ZERO32, Array, P, f32c\n",
-         "from verity.ml.circuits.types import Array\nfrom verity_vllm.program.registry import prims as P\n"
+         "from verity.circuits.types import Array\nfrom verity_vllm.program.registry import prims as P\n"
          "from verity_vllm.program.registry.b1 import ZERO32, f32c\nfrom verity_vllm.program.registry.prims import BF16, F32\n"),
         ("The lane's difftest (`layer_norm_aten_difftest.py`) is the bit-exact check.",
          "Its difftest (`layer_norm_difftest.py`) is the bit-exact check."))),
@@ -509,7 +509,7 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          '["GeluErfBf16"]\n'
          '    assert layer_norm_aten.VEC == 4 and layer_norm_aten.NTHREADS == 128 and layer_norm_aten.MEAN_FMA_ORDER == "A"\n',
          "def test_layer_norm_and_gelu_erf_are_registry_definitions():\n"
-         "    from verity.ml.circuits.defs import REGISTRY\n"
+         "    from verity.circuits.defs import REGISTRY\n"
          "    fns = (layer_norm.LayerNormAten, layer_norm.LayerNormAtenV2, act.GeluErf, act.GeluErfBf16)\n"
          '    assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]\n'
          "    assert all(REGISTRY[f.id] is f for f in fns)\n"
@@ -1011,8 +1011,8 @@ def _rewrite_tree(root: Path, dest: str) -> list[str]:
 # --- snapshot and verify -----------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str:
-    from verity.ml.circuits.codec import canonical_json, definition_entry
-    from verity.ml.circuits.defs import FunctionDefinition
+    from verity.circuits.codec import canonical_json, definition_entry
+    from verity.circuits.defs import FunctionDefinition
     if not isinstance(fn, FunctionDefinition):
         return f"not a definition: {type(fn).__name__}"
     try:
@@ -1029,7 +1029,7 @@ def _import_tree(name: str) -> None:
 
 def snapshot() -> dict:
     from circuit_check import targets as T
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     suite = T.suite()
     _import_tree(QUARANTINE_MODULE)
     if importlib.util.find_spec(PACKAGE) is not None:

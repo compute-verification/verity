@@ -1,6 +1,6 @@
 """Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
-:func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluation.reference`` does, and maps each primitive to
+:func:`lower` walks the Definition's gates in canonical order, as ``verity.circuits.evaluation.reference`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
 all constant, are evaluated by the primitive's own evaluator and become constant wires. An activation of a Boolean
 Definition that the walk holds whole is lowered by the Definition's builder instead of its gates (:func:`lower_gates`).
@@ -21,9 +21,9 @@ from typing import Callable, Collection, Iterator, Sequence
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.trace import _flat_out
-from verity.ml.circuits.layout import Region, param_leaf, resolve
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.trace import _flat_out
+from verity.circuits.layout import Region, param_leaf, resolve
 
 from . import fp
 from . import tail_pieces
@@ -99,12 +99,12 @@ PIECES: dict[str, Callable] = {
     "RopeOutAdd_v1": _rope_out_add,
     "SiluMulBf16_v1": _silu_mul,
     "AmpereBF16TcDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:])),
-    # verity.ml.circuits.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
+    # verity.circuits.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
 PIECES.update(tail_pieces.PIECES)
-PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.ml.circuits.ops.prims) for the same total function
-# the Boolean core's gates (verity.ml.circuits.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
+PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.circuits.ops.prims) for the same total function
+# the Boolean core's gates (verity.circuits.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
 PIECES["Not_v1"] = lambda C, a: [a[0].inv()]
 GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C, [b[0] for b in x])],
                  r"Xor(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [reduce(lambda s, b: s ^ b[0], x[1:], x[0][0])]}
@@ -115,19 +115,19 @@ def _boolean_ops() -> None:
     import importlib
     import pkgutil
 
-    from verity.ml.circuits.ops import boolean as OB
+    from verity.circuits.ops import boolean as OB
 
     for m in pkgutil.iter_modules(OB.__path__):
         importlib.import_module(f"{OB.__name__}.{m.name}")
 
 
 def _boolean_build(key):
-    """The ``build`` of a registered Boolean Definition (``verity.ml.circuits.boolean.trace.definition``) whose ``word`` is the
+    """The ``build`` of a registered Boolean Definition (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. Every module of
-    `verity.ml.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
+    `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
     limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has no build."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     _boolean_ops()
     for d in list(REGISTRY.defs.values()):
@@ -208,10 +208,10 @@ def _value(word) -> int:
 
 def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None,
                 reads: Collection[int] = ()) -> dict[int, list]:
-    """Lower ``gates`` (``verity.ml.circuits.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
+    """Lower ``gates`` (``verity.circuits.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
     -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces.
 
-    An activation of a Boolean Definition (`verity.ml.circuits.boolean.trace.definition`'s, whose Definition carries its
+    An activation of a Boolean Definition (`verity.circuits.boolean.trace.definition`'s, whose Definition carries its
     ``build``) is lowered at its first gate by the builder, over its parameter leaves' wires and with an AND memo of its own,
     as its trace had: so C has the builder's commits (`forms.Circuit.commit`'s rows, which its gates drop) and its trace's
     ANDs, and only its returned gates get words. One that ``gates`` hold in part (a unit's split or cut, a dead gate dropped),
@@ -268,7 +268,7 @@ def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
     `verity.ml.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
-    (`verity.ml.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
+    (`verity.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
     chain holds is lowered by its own (``fold_build``)."""
     s = getattr(g, "scope", None)
     folded = None
@@ -318,15 +318,15 @@ def _lower_activation(C: Circuit, s, build: Callable, wires: dict[int, list], pi
 
 
 def standalone(target):
-    from verity.ml.circuits.evaluation.reference import resolve, standalone_call
+    from verity.circuits.evaluation.reference import resolve, standalone_call
 
     return standalone_call(resolve(target))
 
 
 def lower(C: Circuit, target, inputs: Sequence[list]) -> list[list]:
     """The output words of ``target`` (a primitive or a bound composite) on the input words ``inputs`` (one per input leaf)."""
-    from verity.ml.circuits.evaluation.reference import resolve
-    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.circuits.evaluation.reference import resolve
+    from verity.circuits.defs import PrimitiveDefinition
 
     t = resolve(target)
     if isinstance(t, PrimitiveDefinition):
@@ -351,7 +351,7 @@ def _piece_ands(prim) -> int:
         import inspect
         import re
 
-        from verity.ml.circuits.evaluation.reference import signature_of
+        from verity.circuits.evaluation.reference import signature_of
 
         ands = 0
         if prim.id in PIECES and (stated := getattr(inspect.unwrap(PIECES[prim.id]), "ands", None)) is not None:
@@ -378,8 +378,8 @@ def definition_ands(target) -> int:
     commits. Seconds where `lower` takes the unrolled unit (a 32 × 32 H1 tile at K = 2048: 613M And gates)."""
     import re
 
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.evaluation.reference import resolve
 
     memo: dict[int, int] = {}
 
@@ -599,10 +599,10 @@ def whole(target) -> Units:
                  [[("ret", p) for p in range(len(rets))]], sig, gates, args, rets)
 
 
-#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
-#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.ml.circuits.ops.prims): one measured total function.
+#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
+#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.circuits.ops.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
-#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.circuits.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
+#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity.circuits.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
 #: (a GEMM's FP8 coordinate is walked, not unit-lowered)
 TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139), "BlackwellE4m3QmmaDot32_v1": ((32,), 26, -133)}
 
@@ -664,7 +664,7 @@ def tc_units(target, prim: str | None = None) -> Units:
 
 
 def _leaf_width(target, pos: int) -> int:
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.evaluation.reference import signature_of
     params, _ = signature_of(target)
     widths = [w for pt in params for w in pt.leaf_widths()]
     return widths[pos]
@@ -885,7 +885,7 @@ def _decode_count(n: int) -> int:
 @lru_cache(maxsize=None)
 def _library_table(name: str) -> bool:
     """Whether the table ``name`` loads is on core's library list, by the SHA-512 of its raw little-endian words."""
-    from verity.ml.circuits import library
+    from verity.circuits import library
 
     from . import gf2
 
@@ -1022,7 +1022,7 @@ def digest(text: str) -> str:
 
 def _flat_ports(t) -> list[list[int]]:
     """``[leaves, bits]`` per port of a type: a Value or (nested) Array of Values is one port; a Tuple, one per field."""
-    from verity.ml.circuits.types import Array, Tuple, Value
+    from verity.circuits.types import Array, Tuple, Value
 
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in _flat_ports(f)]
@@ -1212,7 +1212,7 @@ def lowering(definition, name: str, cut: Callable | None = None, group: int = 1,
 def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     """``(n, len(cut))``: every instance's cut words by the IR reference evaluator (the verifier's own computation; the
     native tail's values included)."""
-    from verity.ml.circuits.evaluation.reference import evaluate_call
+    from verity.circuits.evaluation.reference import evaluate_call
 
     prog, call = standalone(low.definition)
     out = np.zeros((len(flat_inputs), len(low.units.cut)), dtype=np.uint64)

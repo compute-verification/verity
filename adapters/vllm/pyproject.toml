@@ -171,7 +171,7 @@ paths = ["adapters/vllm/verity_vllm/pipeline/tp"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/check/test_challenge_seeds.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/ml/circuits"]
+paths = ["adapters/vllm/verity_vllm", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -207,7 +207,7 @@ paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/core/protocols/remote_bandwidth", "verity/ml/circuits"]
+paths = ["adapters/vllm/verity_vllm", "verity/core/protocols/remote_bandwidth", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
@@ -292,7 +292,7 @@ tests = [
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
 ]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/predict/test_window_rows.py"]
@@ -316,7 +316,7 @@ paths = ["benchmarks/pous/p2_v1"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]
-paths = ["adapters/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
+paths = ["adapters/vllm/verity_vllm/pipeline", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]

@@ -17,16 +17,16 @@ word is constant bits and `-x` one NOT gate on x's sign bit.  No table or lookup
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.ops.boolean import cast as BC
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.refs import Coll, concat
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import dsv4_qnorm_insert as Q
 from verity.ml.definitions.registry.boolean_attention import _Bits

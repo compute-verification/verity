@@ -26,14 +26,14 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 import verity.ml.definitions.boolean as BB
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops import prims as MP
-from verity.ml.circuits.program import Program, input_id, is_input
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits import boolean as BL
+from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as MP
+from verity.circuits.program import Program, input_id, is_input
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.catalog import load as load_registry
 from verity.ml.definitions.replay import replayer
@@ -335,7 +335,7 @@ def _offsets_input(draw):
 
 
 def offsets_reference(x: dict) -> list[int]:
-    from verity.ml.circuits.codec import _type
+    from verity.circuits.codec import _type
     widths = _type(x["type"]).leaf_widths()
     return [sum(widths[:j]) for j in x["js"]]
 

@@ -28,7 +28,7 @@ import numpy as np
 
 import k32
 import probe as P
-from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
+from verity.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
 from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent

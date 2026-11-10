@@ -41,7 +41,7 @@ A phase that raises records its error and fails the verdict without stopping the
 Operands are random at the served statics (`weights`, `tokens`): bf16 streams and sublayer outputs over a spread of scales, a
 zero token and a token scaled by 2^20, post mixes in (0, 2), comb rows normalised, `fn` f32 with every low bit live (so the B
 operand's reading shows).  The reference: on the first and the last token of every case, the pieces through the evaluator
-(`verity.ml.circuits.evaluation`) at the served statics, each on the kernel's own words: `MhcFusedSplit_v1` per split,
+(`verity.circuits.evaluation`) at the served statics, each on the kernel's own words: `MhcFusedSplit_v1` per split,
 `MhcPost_v1`, `MhcPrenormTf32_v1`, `MhcPreBigFuse_v1` / `MhcPreBigFuseBroadcast_v1`, `HcHead_v1`.
 
 The TF32 step.  The A operand is bf16 widened to f32 (already exact in TF32, so its conversion mode is not observable here);
@@ -86,7 +86,7 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.ml.circuits.silicon.models import GroupSum
+from verity.circuits.silicon.models import GroupSum
 from verity.ml.definitions.numerics import mhc_twin as W
 from verity_vllm.properties.record import seal as seal_record
 
@@ -475,7 +475,7 @@ def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The tables and sweeps on this GPU (module docstring); the expf sweep's words go to comparison jobs."""
     import torch
 
-    from verity.ml.circuits.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.ml.definitions.numerics import derived_rows as DR
 
     x = mufu_inputs()
@@ -673,7 +673,7 @@ def compare_layer(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
     """The piece's Definition at the job's statics and its arguments on token ``job["token"]``, and the kernel's words it
     states."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import mhc as R
 
     S, NS, t, piece = job["statics"], job["NS"], job["token"], job["piece"]
@@ -704,7 +704,7 @@ def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
 
 def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One piece through the evaluator on one token's kernel words."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     d, args, want = reference_call(job, _load(job["paths"]))
     y = np.array(evaluate(d, *[np.asarray(v).reshape(-1).astype(np.int64).tolist() for v in args]), dtype=np.int64)
@@ -763,7 +763,7 @@ def sources(outdir: Path) -> dict[str, Any]:
 
 
 def served_bindings() -> dict[str, Any]:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import mhc as R
 
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}

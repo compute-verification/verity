@@ -21,8 +21,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits import bind
-from verity.ml.circuits.evaluation import evaluate_call
+from verity.circuits import bind
+from verity.circuits.evaluation import evaluate_call
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import hopper as H
 from verity.ml.definitions.registry import prims as P

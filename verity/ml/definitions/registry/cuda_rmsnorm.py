@@ -9,10 +9,10 @@ nodes at any N where v1 unrolls every square.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, array_of, coll_concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.prims import const
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, array_of, coll_concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.prims import const
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, F32

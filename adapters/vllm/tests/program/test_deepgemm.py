@@ -23,12 +23,12 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.numerics import deepgemm_twins as T
 from verity.ml.definitions.numerics import derived_rows as R
@@ -258,7 +258,7 @@ def test_replay_evaluates_the_linears_with_their_row_kernels() -> None:
     the plain-integer reference.  The middle row of each batch is one the GEMM twin does not reproduce (DeepGEMM: accumulators past
     the largest finite; FlashInfer: its all-subnormal group's NaN words; the einsum: a NaN e4m3 byte in one token): the row kernel
     declines it by name, and the reference evaluates it."""
-    from verity.ml.circuits.evaluation.reference import statics_of
+    from verity.circuits.evaluation.reference import statics_of
     from verity.ml.definitions.numerics import kernel_registry as KR
     from verity.ml.definitions.numerics import rows
 

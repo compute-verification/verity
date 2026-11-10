@@ -68,7 +68,7 @@ def _bf16_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 @functools.cache
 def _relations() -> dict[str, Relation]:
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
     from verity_numerical.bench import contract as C
 
     e4m3 = "synthetic (uniform finite E4M3 bytes, model-recorded accumulators)"
@@ -130,7 +130,7 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from verity.ml.circuits.silicon.models import tc_dot
+    from verity.circuits.silicon.models import tc_dot
     rel = _relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
     xs, ws, accs = [], [], []
@@ -233,7 +233,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their frame-v3 statement as a
     ``flock-pure-instances/v1`` file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest
     and names its own range. A spine input set is :func:`write_set`."""
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
 
     rel = _relation(name)
     pipe = PIPES[name]

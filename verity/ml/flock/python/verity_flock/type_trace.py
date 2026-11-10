@@ -14,7 +14,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
-from verity.ml.circuits import library
+from verity.circuits import library
 
 from . import circuit_types as CT
 from . import gf2

@@ -18,7 +18,7 @@ inputs = [
     "verity/errors.py",
     "verity/settings.py",
     "verity/ml/__init__.py",
-    "verity/ml/circuits",
+    "verity/circuits",
     "verity/ml/definitions",
     "verity/ml/kernels",
     "adapters/vllm/verity_vllm",

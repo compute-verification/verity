@@ -78,7 +78,7 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
-    from verity.ml.circuits.types import RecordType
+    from verity.circuits.types import RecordType
     from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
@@ -274,7 +274,7 @@ def write_workload(phi: Phi, comps: dict, out: str):
     own: `workload_program.json`, the Program's artifact (`WorkloadProgram.artifact`) with the `lag` block and
     `applicability.engine.async_scheduling` the declared target resolves, and `descriptor.json.gz`, from which GM-01's
     `check.match.declaration.from_gprog` recomputes the workload digest and the `lag` static the block claims."""
-    from verity.ml.circuits.codec import canonical_json, descriptor_size
+    from verity.circuits.codec import canonical_json, descriptor_size
     wl = S.workload_program(phi, comps)
     lag = phi.target_profile().async_scheduling_declaration()
     desc = wl.descriptor

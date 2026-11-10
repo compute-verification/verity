@@ -11,7 +11,7 @@ def _pouw_roots() -> list[Any]:
     the tile and its tally) at the same k, and a tile row's digests and sums at the deployed 64 columns (two chunks).  The
     per-row cap (v2): the one-word tile and its tally at ρr = 1/250 on sm_120, the call and check with one row a side, and
     the tally `cap.served` serves on `pearl-c-h100-v1-h3` at its census k = 256 (64 × 64 at n = 6,144, ρr = 4ρ)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.pouw.circuit import cap, pc8
     from verity.core.protocols.pouw.protocol import Shape
     from verity.ml.protocols.pouw.schemes import pearl_c as C

@@ -39,14 +39,14 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ml.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.defs import bind as ir_bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.refs import runs as _refs_runs
-from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.refs import runs as _refs_runs
+from verity.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity_vllm.program import inputs
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
@@ -109,7 +109,7 @@ class WeightLeaf:
 # ---------------------------------------------------------------------------------------------------------
 
 
-_runs = _refs_runs  # `verity.ml.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
+_runs = _refs_runs  # `verity.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
 
 
 def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, int, int]]) -> bool:
@@ -835,7 +835,7 @@ def _translate(ctx: Ctx) -> Coll:
 
 
 def _concat_refs(parts):
-    from verity.ml.circuits.refs import concat
+    from verity.circuits.refs import concat
     return concat(list(parts))
 
 

@@ -43,9 +43,9 @@ from __future__ import annotations
 import re
 from typing import Mapping, NamedTuple, Sequence
 
-from verity.ml.circuits.defs import Builder
-from verity.ml.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
-from verity.ml.circuits.types import Type, Value
+from verity.circuits.defs import Builder
+from verity.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
+from verity.circuits.types import Type, Value
 
 from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
                      select_token, served_class)

@@ -15,7 +15,7 @@ from dataclasses import fields, replace
 
 import pytest
 
-from verity.ml.circuits.types import Array, field_types
+from verity.circuits.types import Array, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
 from verity_vllm.program.predict.common import Unexpressible

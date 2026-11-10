@@ -62,10 +62,10 @@ import numpy as np
 
 from verity.core.protocols.spot.one_stage.draw import stratum_k
 from verity.ml import randomness
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import mufu as MU
 from verity.ml.kernels.tc import f2fp_bf16_batch
 
 np.seterr(all="ignore")
@@ -259,17 +259,17 @@ def _template(name: str) -> Callable[[Callable[..., Template]], Callable[..., Te
 
 def _quant_def(attr: str, **statics: Any) -> Callable[[], Any]:
     def get() -> Any:
-        from verity.ml.circuits.ops import quant  # circuits' quantizer Definitions, once on main
+        from verity.circuits.ops import quant  # circuits' quantizer Definitions, once on main
         return bind(getattr(quant, attr), **statics)
     return get
 
 
 def _circuits_def(attr: str, **statics: Any) -> Callable[[], Any]:
-    """A circuits Definition in `verity.ml.circuits.ops` once some module there exports ``attr``."""
+    """A circuits Definition in `verity.circuits.ops` once some module there exports ``attr``."""
     def get() -> Any:
         import importlib
-        for mod in ("verity.ml.circuits.ops.rmsnorm", "verity.ml.circuits.ops.softmax", "verity.ml.circuits.ops.argmax",
-                    "verity.ml.circuits.ops.embedding", "verity.ml.circuits.ops.gemm", "verity.ml.circuits.ops.quant"):
+        for mod in ("verity.circuits.ops.rmsnorm", "verity.circuits.ops.softmax", "verity.circuits.ops.argmax",
+                    "verity.circuits.ops.embedding", "verity.circuits.ops.gemm", "verity.circuits.ops.quant"):
             try:
                 m = importlib.import_module(mod)
             except ImportError:
@@ -413,7 +413,7 @@ def scaled_mm_s8_coordinate(K: int, DOT: Any = G.GEMM_SM90_S8["DOT"]) -> Templat
         acc = (_s8(x) * _s8(w)).sum(axis=1).astype(np.int32).astype(np.float32).view(np.uint32)
         return bf16(mul(mul(acc, sx), sw))
     return Template("ScaledMmS8Coordinate_v1", (("K", K), ("DOT", DOT)), (("x", 8, K), ("sx", 32, 0), ("wrow", 8, K), ("sw", 32, 0)),
-                    (16, 1), fn, "verity.ml.circuits.ops.gemm.ScaledMmS8Coordinate_v1",
+                    (16, 1), fn, "verity.circuits.ops.gemm.ScaledMmS8Coordinate_v1",
                     lambda: bind(G.ScaledMmS8Coordinate, K=K, DOT=DOT))
 
 
@@ -423,7 +423,7 @@ def scaled_mm_s8_coordinate(K: int, DOT: Any = G.GEMM_SM90_S8["DOT"]) -> Templat
 def gemm_coordinate(K: int, DOT: Any = G.GEMM_HOPPER["DOT"]) -> Template:
     t = bind(G.GemmCoordinate, K=K, DOT=DOT)
     return Template("GemmCoordinate_v2", (("K", K), ("DOT", DOT)), (("x", 16, K), ("wrow", 16, K)), (16, 1),
-                    lambda x, w: evaluate_batch(t, x, w), "verity.ml.circuits.ops.gemm.GemmCoordinate_v2", lambda: t)
+                    lambda x, w: evaluate_batch(t, x, w), "verity.circuits.ops.gemm.GemmCoordinate_v2", lambda: t)
 
 
 @_template("GemmCoordinatePad_v1")
@@ -488,10 +488,10 @@ def bf16_add(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 @_template("Bf16Add_v2")
 def bf16_add_t() -> Template:
     def get() -> Any:
-        from verity.ml.circuits.ops import fp32
+        from verity.circuits.ops import fp32
         return fp32.Bf16Add
     return Template("Bf16Add_v2", (), (("a", 16, 0), ("b", 16, 0)), (16, 1), bf16_add,
-                    "verity.ml.circuits.ops.boolean.elementwise.Bf16Add_v2, evaluated by its word view fp32.Bf16Add_v1", get)
+                    "verity.circuits.ops.boolean.elementwise.Bf16Add_v2, evaluated by its word view fp32.Bf16Add_v1", get)
 
 
 @_template("EmbeddingCoordinate_v1")

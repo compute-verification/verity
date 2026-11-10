@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.ml.definitions.numerics import deepgemm_twins as DT
 from verity.ml.definitions.registry import boolean_deepgemm as BDG
 from verity.ml.definitions.registry import boolean_fp8 as BF8

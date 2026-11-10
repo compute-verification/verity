@@ -21,7 +21,7 @@ The bit-exact `HOPPER_E4M3_K32` step and its basic facts.
   not a proof. `verity.ml.tc`'s `HOPPER_E4M3_K32` agrees with H100 silicon on two campaigns, with 0 mismatches, but
   their raw words are in neither the repository nor the store, so no H100 capture is included (R1 F2).
 * **`AdaCaptures`**: the same adder with two groups of 16 (`adaStep`) reproduces the 360 RTX 4090 captures of
-  `mma.sync.m16n8k32.e4m3` in `verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json`: real silicon words
+  `mma.sync.m16n8k32.e4m3` in `verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json`: real silicon words
   through the same `groupStepTotal`, `groupSum` and `packValue`.
 * **`CodeClasses`**: exactly `0x7F` and `0xFF` are NaN, exactly `0x00` and `0x80` decode to zero, and 254 codes are
   finite.

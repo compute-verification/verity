@@ -8,12 +8,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
 from verity.ml.definitions import boolean as SW
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules import vllm_dsa_dense

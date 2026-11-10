@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     128's narrowest (`active_topk_width` 128, a row of 256), as the twin's self-check binds it.  Ratio 128's widest row (8320)
     is not bound: each slot spells its own 32-bit literals, and each `Const32[...]_v1` a body reaches is a target of its own
     (8,333 there)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsv4_indices as X
 
     S = X.DSV4_INDICES

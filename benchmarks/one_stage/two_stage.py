@@ -47,8 +47,8 @@ from typing import Any
 
 from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
-from verity.ml.circuits.defs import SpecializedDefinition
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import SpecializedDefinition
+from verity.circuits.program import Program
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import boundary_rows as BR
 

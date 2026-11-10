@@ -8,10 +8,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import topp_standalone as TS

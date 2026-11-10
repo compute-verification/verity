@@ -372,7 +372,7 @@ def _bitlen(m: np.ndarray) -> np.ndarray:
 
 def _tc_dot16_pipeline(acc: np.ndarray, a: np.ndarray, b: np.ndarray, *, groups: tuple[int, ...], width: int,
                        floor: int) -> tuple[np.ndarray, np.ndarray]:
-    """One bf16 k16 tensor-core step under a `verity.ml.circuits.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
+    """One bf16 k16 tensor-core step under a `verity.circuits.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
     a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).  `groups` lists, in k order, how many products each grouped sum
     takes (the incoming accumulator joins the first group and each group's result joins the next); `width` is the adder's
     significand width and `floor` its exponent floor -- exactly `silicon.group_sum` / `silicon.tc_dot`, gate for gate.
@@ -458,7 +458,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # Hopper bf16 tensor-core k16 step, vectorised: ONE accumulator coordinate of
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
-# -133 (measured on the H100: 307,281,920 output words, 0 mismatches; `scale-d = 0` measured equal to acc = +0).  The registered scalar primitive is `verity.ml.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
+# -133 (measured on the H100: 307,281,920 output words, 0 mismatches; `scale-d = 0` measured equal to acc = +0).  The registered scalar primitive is `verity.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is

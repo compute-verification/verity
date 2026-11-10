@@ -18,13 +18,13 @@ import circuit_fixtures as CF
 import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import CallGraph
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Value
-from verity.ml.circuits.ops.scalar import BitAnd, SelectBf16
+from verity.circuits.evaluation import evaluate
+from verity.circuits import partition_object as PO
+from verity.circuits.cut import CallGraph
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.program import Program
+from verity.circuits.types import Value
+from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.ml.protocols.pouw.circuit import leaves as L
 from verity.ml.protocols.pouw.circuit import pc4, pc8, plan, rowk
 from verity.ml.protocols.pouw.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports

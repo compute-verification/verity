@@ -15,14 +15,14 @@ import cpu_step as S
 import replay as R
 from verity.ml.protocols.pouw.circuit import words as PW
 from verity.core.protocols.spot.one_stage.draw import strata_problem
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.reference import evaluate as reference
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops import scalar as SC
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.reference import evaluate as reference
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as SC
 
 ADD, MUL, DIV = W.F32AddV2.evaluate, W.F32MulV2.evaluate, W.F32DivV2.evaluate
 BF16, WIDE, I2F = P.F2fpBf16.evaluate, P.Bf16ToF32.evaluate, P.S32ToF32Rn.evaluate

@@ -52,7 +52,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     accelerators), and the concentrator at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaButterflyRoute_v1`
     and the tags' scan), with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9, and of 9
     padded to 16, a long row's shape (T >= K, N = 2K)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk_mask
 
     return [
