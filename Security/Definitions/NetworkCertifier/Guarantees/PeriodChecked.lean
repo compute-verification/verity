@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.Assumptions.RegisteredInputs
 public import Definitions.NetworkCertifier.Carried
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.PeriodChecked
@@ -57,14 +58,44 @@ meets its good event is recovered from one parameter and the windows' records, e
 accepts with a valid run. So the secrets number at most `#Θ` times the windows' count (`windowsCount`) with the
 registered and the checked inputs pinned; no factor counts the schedules or a connection's cells.
 
-**The registered inputs.** `reg` is as `PeriodLeakAccepted` has it. The good event (`WindowGoodChecked`) reads that the
-trace holds the registration's values there as the named premise `RegisteredInputsHeld`, open: the registration's
-openings discharge it under the commitment's binding. Where no input is registered it holds of every trace.
+**The registered inputs.** `reg` is as `PeriodLeakAccepted` has it. The good event (`WindowGoodChecked`, stated here:
+`WindowGood` with the leak relation at a valid run and the window's check the registration's) reads that the trace
+holds the registration's values there as the named premise `RegisteredInputsHeld`, open: the registration's openings
+discharge it under the commitment's binding. Where no input is registered it holds of every trace.
 
 The union of the windows' failures over the monitoring period's live coins is not stated here.
 -/
 
 @[expose] public section
+
+namespace NetTiming
+
+open Claims Claims.Sampling
+
+section Period
+
+open Claims.SamplingGeneric (Arg Compiled)
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+/-- **A window's good event with a valid run**: at the window's statement `x` and the audit's extracted witness `w`,
+the leak relation at the network certifier's rows holds with a valid run (the network certifier's openings `tops s`),
+`x` is in the audit's scope and registered as `s₀`, with `s₀`'s check, the trace holds `ρ` at the registered inputs
+(`RegisteredInputsHeld`), and the run's observations `o` have the horizon's length, jitter below `Dj` and every status
+complete. -/
+def WindowGoodChecked (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+    (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool)) (x : Msg) (w : Wit)
+    (o : List (Obs L K S)) : Prop :=
+  RLeakCertifierChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s))
+      valid Dj tops x w ∧
+    ScopeAcc D lay k x ∧
+    ∃ s, D.parse x = some s ∧ SameRegistration D lay k reg s₀ s ∧ valid s = valid s₀ ∧
+      RegisteredInputsHeld H D.commit (reg s) ρ s w ∧ Covered (k s) o ∧ o.length = k s ∧ ∀ y ∈ o, y.jitter < Dj
+
+end Period
+
+end NetTiming
 
 namespace NetTiming.Guarantees
 
