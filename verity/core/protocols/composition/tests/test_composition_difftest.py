@@ -861,12 +861,13 @@ class Trial(R.TiedSame):
 
 @pytest.mark.slow
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
-    """The difftest tells the composition's rule from the trial's: the case it shrinks to has a subprotocol that rejects and one that
-    is undecided, under a commitment that binds their digests."""
+    """The difftest tells the composition's rule from the trial's: the first case they differ on has a subprotocol that
+    rejects and one that is undecided, under a commitment that binds their digests. It is not shrunk: a case is
+    megabytes, and what is asserted of it holds as it was drawn."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=ONSITE_PACKAGE), examples=1000,
-              server=onsite_server)
+              server=onsite_server, shrink=False)
     assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
     parts = R.ONSITE.verdicts(e.value.input)
     assert R.REJECT in parts and R.UNDECIDED in parts, parts

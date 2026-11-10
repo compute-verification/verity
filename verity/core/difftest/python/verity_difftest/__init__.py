@@ -403,19 +403,22 @@ def _no_local_constants() -> Iterator[None]:
         providers.CONSTANTS_CACHE.cache.clear()
 
 
-def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
+def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None,
+        shrink: bool = True) -> Stats:
     """Sample `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
     count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
-    without it."""
-    from hypothesis import HealthCheck, given, settings
+    without it. Without `shrink` the `Mismatch` is of the first input the sides differ on, as it was drawn: for a run that
+    expects one, on inputs of megabytes that Hypothesis would compare many times more to shrink."""
+    from hypothesis import HealthCheck, Phase, given, settings
     from hypothesis import seed as use_seed
 
     seen: dict[str, int] = {}
 
     @use_seed(seed)
     @settings(derandomize=True, database=None, deadline=None, max_examples=examples, report_multiple_bugs=False,
-              suppress_health_check=[HealthCheck.too_slow])
+              suppress_health_check=[HealthCheck.too_slow],
+              phases=[p for p in settings.default.phases if shrink or p is not Phase.shrink])
     @given(port.inputs)
     def differential(value: Any) -> None:
         _compare(port, s, value, seen)
@@ -428,7 +431,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
             e.report = "\n".join([
                 f"difftest of {port.label!r} ({s.argv[0]}): "
                 + ("Python differs from the Lean, the verifier of record" if lean_of_record else "Lean and Python differ")
-                + "; the minimal input Hypothesis found:",
+                + f"; the {'minimal' if shrink else 'first'} input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
                 f"  lean:   {_show(e.lean)}" + ("  (of record)" if lean_of_record else ""),
                 f"  python: {_show(e.python)}",
