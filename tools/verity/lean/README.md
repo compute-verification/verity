@@ -229,7 +229,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the module (or a submodule) with named assumptions. `assumptions`: the named assumptions (with
+- `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`Security/Properties`
+  lists `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code); each must be
+  a module of the build or of a package it requires. `assumptions`: the named assumptions (with
   `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
   below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
   statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
