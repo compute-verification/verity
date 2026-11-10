@@ -2,7 +2,6 @@ module
 
 public import Definitions.NetworkCertifier.Checked
 public import Definitions.NetworkCertifier.Period
-public import Definitions.NetworkCertifier.RegisteredInputs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,10 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A monitoring period of sampled audits with checked inputs: the run the check is held to, and each window's good event
+# A monitoring period of sampled audits with checked inputs: the run the check is held to, and the leak relation there
 
-Definitions only. `Definitions.NetworkCertifier.Period`'s good event with each statement's checked inputs left out of
-the count (`Definitions.NetworkCertifier.Checked`): the leak relation at the network certifier's rows, with a valid run.
+Definitions only. `Definitions.NetworkCertifier.Period`'s leak relation with each statement's checked inputs left out
+of the count (`Definitions.NetworkCertifier.Checked`): the leak relation at the network certifier's rows, with a valid
+run. The window's good event with it (`WindowGoodChecked`) is stated with the guarantee
+(`Definitions.NetworkCertifier.Guarantees.PeriodChecked`), since it reads a named premise.
 
 **The run.** The relation at the network certifier's rows accepts the network certifier's records on the run that
 reads the trace's inputs, takes its ingress from the operator's moves on those records, and holds an incorrect proof
@@ -53,8 +54,6 @@ that reads a transfer gate inside an incorrect proof block can hold on one and f
   and the trace agrees with its openings wherever both open a gate. Elsewhere there is none: the relation at the
   network certifier's rows asks nothing where it registers no record, and a disagreement is a collision (`Btap`).
 * `RLeakCertifierChecked`: `RLeakCertifier` with the sequences `AccSeqsChecked` counts.
-* `WindowGoodChecked`: `WindowGood` with it, the window's check the registration's, and the registered inputs' values
-  read as the named premise `RegisteredInputsHeld`.
 -/
 
 @[expose] public section
@@ -91,28 +90,5 @@ def RLeakCertifierChecked (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse 
       CertifierRegisters H Cm (lay s) (k s) op s (tops s) o → Covered (k s) o → o.length = k s →
         (∀ y ∈ o, y.jitter < Dj) →
         o ∈ AccSeqsChecked s.prog P s.design (lay s) (k s) (As s (traceVal s.prog (w.val H Cm s))) (valid s) δ op Dj
-
-section Period
-
-open Claims.SamplingGeneric (Arg Compiled)
-
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-- **A window's good event with a valid run**: at the window's statement `x` and the audit's extracted witness `w`,
-the leak relation at the network certifier's rows holds with a valid run (the network certifier's openings `tops s`),
-`x` is in the audit's scope and registered as `s₀`, with `s₀`'s check, the trace holds `ρ` at the registered inputs
-(`RegisteredInputsHeld`), and the run's observations `o` have the horizon's length, jitter below `Dj` and every status
-complete. -/
-def WindowGoodChecked (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool)) (x : Msg) (w : Wit)
-    (o : List (Obs L K S)) : Prop :=
-  RLeakCertifierChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s))
-      valid Dj tops x w ∧
-    ScopeAcc D lay k x ∧
-    ∃ s, D.parse x = some s ∧ SameRegistration D lay k reg s₀ s ∧ valid s = valid s₀ ∧
-      RegisteredInputsHeld H D.commit (reg s) ρ s w ∧ Covered (k s) o ∧ o.length = k s ∧ ∀ y ∈ o, y.jitter < Dj
-
-end Period
 
 end NetTiming

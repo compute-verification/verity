@@ -79,13 +79,13 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: a period statement's conditions: WindowsPlaced,
                                a record read back under a registered parameter (RecordFormat.ReadsBy), the sender's
                                channel over those (PeriodChannelReg), the windows' count (windowsCount)
-../../Definitions/NetworkCertifier/RegisteredInputs.lean  trusted: the trace holds the registration's
+../../Definitions/NetworkCertifier/Assumptions/RegisteredInputs.lean  trusted: the trace holds the registration's
                                values at the registered inputs (RegisteredInputsHeld), an open premise
 ../../Definitions/NetworkCertifier/PeriodChecked.lean  trusted: the run at the network certifier's rows
-                               (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked), a
-                               window's good event with it (WindowGoodChecked)
-../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: the period's leak with checked inputs
-                               left out and the record read under a registered parameter (PeriodLeakChecked)
+                               (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked)
+../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: a window's good event with a valid run
+                               (WindowGoodChecked), the period's leak with checked inputs left out and the record
+                               read under a registered parameter (PeriodLeakChecked)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
                                (trivLay, notLay, certOps)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
