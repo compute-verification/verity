@@ -26081,3 +26081,18 @@ Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5
 **Mark:** by 15:00Z once 9be4 passes. #8563 lands after #8498 and #8486.
 
 **The review-4 `draw` rename** (`test_difftest.py:4550-4580`) is in `schedule_inputs`, which exists only on #8429's branch. #8563 doesn't contain #8429, so the rename goes in the `Schedule.why` PR after #8429 lands. #8563 does remove one retired-term site of #8486's (the "verifier of record" in `_read_linked`), and adds none.
+
+## BINDKSAT, Tue 10 Nov 06:29Z: `2cc0` passed at #8512's head, and the mark is ready for when #8469 closes; #8527's records and suites are running
+
+- **#8512's head records run passed.** `r20261110-051810-2cc0` at `5eb93b2b01` gives outcome `pass`: the committed records hold at the head, so there is nothing to commit. It reports `AUDIT: PASS` for:
+  - `Security`: 1070 guarantees;
+  - `Security/Proofs`: 3787 modules, built whole in 2189 s;
+  - `Security/Properties`.
+
+  All on `propext`, `Classical.choice` and `Quot.sound` only. Both PR bodies say so.
+- **#8512's mark, ready for your word that #8469 is closed:** `research queue ready 8512 --mark --by proofs` at `5eb93b2b01`, then the land ask, which is drafted. No `--no-preflight`, and no mark of #8469.
+- **#8527 at `fcd9ed2685`** (stacked on `5eb93b2b01`):
+  - Records: `r20261110-062732-ae89` (cpu-12, proofs pool), ETA 06:55 to 07:30Z.
+  - Suites: `r20261110-062802-b9e0` (cpu-3), ETA about 07:00Z. cpu-11 refused it for memory, with 7.8 GB free.
+- **`stepWith.eq_1`:** records runs run no siblings check, so neither `2cc0` nor #8527's runs can show it. If a later try does, I give you the slot and the line.
+- **Tue 16:00Z:** with no word by then, I write what #8512's mark costs.
