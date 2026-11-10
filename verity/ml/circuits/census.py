@@ -775,12 +775,7 @@ def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
     """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
     work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
     bit or input. A Definition shared by several is counted once."""
-<<<<<<< 99c8914848
     w = BooleanWork()
-||||||| merged common ancestors
-=======
-    w = _Work()
->>>>>>> 7af4d24fca3e
     out: list[int | str] = []
     for fn in fns:
         got = w.of(fn)
@@ -1197,13 +1192,5 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-<<<<<<< 99c8914848
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "BooleanWork",
            "NoBooleanWork", "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
-||||||| merged common ancestors
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
-=======
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
->>>>>>> 7af4d24fca3e

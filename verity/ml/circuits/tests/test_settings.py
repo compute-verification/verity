@@ -1,6 +1,6 @@
-"""`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
+"""`verity.settings`, the settings machinery (`EnvSettings`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
-a run of record, a program's startup check (`Registry.check`), the run's record of the value settings, and `direct_uses`,
+a run of record, a program's startup check (`EnvSettings.check`), the run's record of the value settings, and `direct_uses`,
 which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
 its direct reads are held at today's count, none."""
 from __future__ import annotations
@@ -107,8 +107,8 @@ def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.Monke
 
 
 def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
-    r = S.Registry("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
-                   S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
+    r = S.EnvSettings("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
+                      S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
     r.check({"X_TRACE": "/t"}, of_record=False)
     r.check({"X_TRACE": ""}, of_record=True)
     with pytest.raises(S.DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
