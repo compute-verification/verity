@@ -11,13 +11,7 @@ from math import ceil, log
 import pytest
 
 import h200 as H
-<<<<<<< 99c8914848
-||||||| merged common ancestors
-import transformer as X
-=======
-import transformer as X
 from inputs import observations
->>>>>>> 7af4d24fca3e
 
 M = H.Shape()
 

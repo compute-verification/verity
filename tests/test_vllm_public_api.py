@@ -46,12 +46,9 @@ PUBLIC = {
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
-<<<<<<< 99c8914848
     "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
                                                 "rule: its session Definition, gates by the gate table, fresh bits at the "
                                                 "verifier's pins, and a day's public judgment against n, no count (block-counts)",
-||||||| merged common ancestors
-=======
     "verity_vllm.engine.collectives.all_reduce": "I2: the CUDA communicator's one seam for its all-reduce (AllReduceSeam): "
                                                  "one replacement of the routes vLLM picks, which reaches them for the rest",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
@@ -72,7 +69,6 @@ PUBLIC = {
                                         "baselines kernels and compute accounting time against",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
->>>>>>> 7af4d24fca3e
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
@@ -83,18 +79,12 @@ PUBLIC = {
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
-<<<<<<< 99c8914848
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
-||||||| merged common ancestors
-=======
-    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
-                                                "tie (Tables)",
     "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
->>>>>>> 7af4d24fca3e
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
@@ -108,20 +98,8 @@ PUBLIC = {
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
-<<<<<<< 99c8914848
     "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
                                         "CONFIG) and where a serve dir holds each window's epoch (DIR)",
-    "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
-                                            "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
-    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
-                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
-                                                 "each weight's B rows at PoUW's weight root (b_entries, b_value), "
-                                                 "built at the version W states (version_of, VERSION), "
-                                                 "which verify_run.tie and the one-stage audit read, the audited "
-                                                 "window's values rebuilt as W's (reuse), and the served run's served.json "
-                                                 "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
-||||||| merged common ancestors
-=======
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -140,7 +118,13 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
->>>>>>> 7af4d24fca3e
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "each weight's B rows at PoUW's weight root (b_entries, b_value), "
+                                                 "built at the version W states (version_of, VERSION), "
+                                                 "which verify_run.tie and the one-stage audit read, the audited "
+                                                 "window's values rebuilt as W's (reuse), and the served run's served.json "
+                                                 "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "

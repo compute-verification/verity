@@ -33,22 +33,10 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
-<<<<<<< 99c8914848
-   lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane every hour, naming
-   the issues, and top with the counts by lane, until it holds; once a day after 15:00Z,
-   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
-   (`unread`), which the audit skips.
-||||||| merged common ancestors
-   lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane every hour, naming
-   the issues (a slip only once per new date), and top with the counts by lane, until it holds; once a day after 15:00Z,
-   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
-   (`unread`), which the audit skips.
-=======
    lists them (findings with no lane: top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
->>>>>>> 7af4d24fca3e
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
