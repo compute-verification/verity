@@ -34,6 +34,13 @@ def has(kind: str, name: str) -> bool:
     return name in HELD[kind]
 
 
+def _check():
+    spec = importlib.util.spec_from_file_location("lean_check_for_public_lock", Path(PL.__file__).with_name("check.py"))
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+    return check
+
+
 def record(**more) -> dict:
     return {"owner": "@lane", "signature": ["(x : Nat)"], "assumptions": [],
             "premises": {"assumptions": [], "domain": [], "open": [], "reads": []}, "type_hash": "00"} | more
@@ -184,6 +191,35 @@ def test_no_entry_carries_an_owner_an_issue_or_a_due_date():
     assert out["assumptions"] == {"Lib.A": {"digest": "01"}}
     assert out["domain"] == {"Lib.D": {"digest": "03", "why": "a range", "cites": "Lib.H"}}
     assert all("owner" not in r for r in out["guarantees"].values())
+
+
+def test_the_lean_check_reads_the_lock_the_export_ships_as_unowned():
+    """The export strips what the Lean check reads a lock's ownership from (`check.py`'s `unowned_lock`), and the two name
+    the same fields and sections, so the check holds the public lock to no owner rule; the lock as it stands is owned."""
+    check = _check()
+    assert (PL.LANE_FIELDS, PL.OWNED, PL.LANE_SECTIONS) == (check.LANE_FIELDS, check.LANE_ENTRIES, check.LANE_SECTIONS)
+    out, _ = PL.public(lock(), has)
+    assert check.unowned_lock(out) and not check.unowned_lock(lock())
+    assert {f"tests/fixtures/{f}" for f in check.CONTROLS.values()} == set(PL.CONTROLS)
+
+
+def test_a_controls_policy_loses_its_lane_fields_and_a_control_of_an_owner_rule_is_left_out():
+    controls = {"plain": {"replace": {"A.lean": ["a", "b"]}, "fails": "axiom: "},
+                "listed": {"policy": {"guarantees": {"Lib.G": {"owner": "@lane"}, "Lib.H": None},
+                                      "open": {"Lib.O": {"owner": "@lane", "issue": "X-1", "due": "2026-01-01", "digest": "d"}},
+                                      "default_owner": "@lane", "shape": {"frozen": {"Lib.G": "owner"}}},
+                           "fails": "open: Lib.O", "not": ["assumptions: Lib.O"]},
+                "ticket": {"policy": {"open": {"Lib.O": {"due": "soon"}}}, "fails": "open: Lib.O's entry", PL.NEEDS_OWNED: True}}
+    before = copy.deepcopy(controls)
+    out, gone = PL.public_controls(controls)
+    assert gone == ["ticket"] and controls == before
+    assert out == {"plain": controls["plain"],
+                   "listed": {"policy": {"guarantees": {"Lib.G": {}, "Lib.H": None}, "open": {"Lib.O": {"digest": "d"}},
+                                         "shape": {"frozen": {"Lib.G": "owner"}}},
+                              "fails": "open: Lib.O", "not": ["assumptions: Lib.O"]}}
+    for key, text in (("fails", 'open: writing "Lib.O": {"owner": "@lane", '), ("not", ['open: {"due": "x"'])):
+        with pytest.raises(ValueError, match="the controls spelled spells an owner, an issue or a due date"):
+            PL.public_controls({"spelled": {"fails": "open: ", key: text}})
 
 
 def test_a_lane_field_left_at_any_depth_is_named():

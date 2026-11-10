@@ -5,7 +5,8 @@
 # A file is public when a `public` glob covers it, when a `needed` glob covers it and a public file needs it (directly or
 # through other such files), or when a `when_closed` glob covers it and everything it needs is public. A `private` glob
 # wins over all three, and every other file stays private. A public file that needs a file that isn't public is an edge,
-# which `public_boundary.py` reports: what a file needs is its docstring's.
+# which `public_boundary.py` reports: what a file needs is its docstring's. An `[[optional]]` entry names an edge its
+# source runs without, which is not one.
 #
 # A glob is a path from the root, `*` within one segment, `**` across any number, `{a,b}` either; it covers the path it
 # names and everything under it.
