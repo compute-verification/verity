@@ -154,6 +154,22 @@ theorem hsplit (ls lh : HmNets.Laid) : (joinNl (lines ls lh)).splitOn "\n" = lin
 def lsJ : Lean.Json := match J.get metaJ "leaf_scheme" "" with | .ok j => j | .error _ => .null
 def pinJ : Lean.Json := tz.pinnedLeafScheme.getD .null
 
+/-- `isSha512Hex` through `toList`: the kernel does not run `String.all`, so the walk cannot decide it on META's two
+digests (`prog_hex`, `part_hex`) by itself. -/
+theorem sha512Hex_of (s : String)
+    (h : (s.toList.length == 128 && s.toList.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true) :
+    HmRow.isSha512Hex s = true := by
+  rw [HmRow.isSha512Hex, String.all_bool_eq, ← String.length_toList]
+  exact h
+
+theorem prog_hex : HmRow.isSha512Hex ((metaJ.getObjValAs? String "program_sha512").toOption.getD "") = true :=
+  sha512Hex_of _ (by decide +kernel)
+
+theorem part_hex {p : Lean.Json} (hp : p = (metaJ.getObjVal? "partition").toOption.getD Lean.Json.null) :
+    HmRow.isSha512Hex ((p.getObjValAs? String "digest").toOption.getD "") = true := by
+  subst hp
+  exact sha512Hex_of _ (by decide +kernel)
+
 fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
     (hcl : HmRow.classOf (bytesOf ls lh) "flock-circuit copy16" metaJ = .ok C)
@@ -164,7 +180,7 @@ fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
       HmNets.check c = .ok ()) :
     HmRow.parse tz (bytesOf ls lh) [] by
-  [hH, hcl, hutf ls lh, hsplit ls lh, lines_if _, getD_toArray, getElem!_toArray, lines1, trim_meta, starts_meta,
+  [hH, hcl, prog_hex, part_hex, hutf ls lh, hsplit ls lh, lines_if _, getD_toArray, getElem!_toArray, lines1, trim_meta, starts_meta,
     drop_meta, parse_meta, trim_of, size_lines ls lh hls hlh, line_unit ls lh hls hlh, line_sha ls lh hls hlh,
     line_hm ls lh hls hlh, tokens3, getD3, toNat?_toString, ext_unit ls lh hls hlh, ext_sha ls lh hls hlh,
     ext_hm ls lh hls hlh, parse_unit, hps, hph, forIn_yield, forIn_done, hc1, hc2, bne_self, hck, unit_eq, open_none,
