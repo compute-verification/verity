@@ -27,7 +27,7 @@ anything (ASK 4). `DRY=1 bash proofs-goals-fix.sh` prints the 25 commands. The t
   the history tables in review. PRF-494 (yours, Thu; "the three goals state the verdict a two-stage run gets ...
   and name the lock's open premises"): `spot-two-stage-e2e` states the refusal at the last step, and
   `spot-two-stage-sound` and `spot-post-ready` name the three premises open in the lock on `main`
-  (`CompiledTwo.Scope`, `SpotFlock.Embeds`, `SpotFlock.FrameIs`) [read 03:20Z]. None of my texts keeps the page's
+  (`CompiledTwo.Scope`, `SpotFlock.Embeds`, `SpotFlock.FrameIs`) [read 03:13Z]. None of my texts keeps the page's
   "proved for the Lean verifier with `Evaluates` and `Reveals` open". The wording that follows the page to Daniel
   stays yours.
 - `spot-two-stage-e2e` also carries vllm's step of 02:46Z: its Tue 16:00Z serve is the first to commit the schedule.
