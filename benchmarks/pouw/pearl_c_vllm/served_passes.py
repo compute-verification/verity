@@ -612,10 +612,11 @@ def window_class(text: str) -> tuple[int, int, int]:
     """``--class``'s SLOTS,PROMPT,OUTPUTS, each a positive integer (`verify_run.load_class`'s form)."""
     try:
         cls = tuple(int(x) for x in text.split(","))
+        if len(cls) != 3 or min(cls) < 1:
+            raise ValueError(text)
     except ValueError:
-        cls = ()
-    if len(cls) != 3 or min(cls) < 1:
-        raise argparse.ArgumentTypeError(f"a window class is SLOTS,PROMPT,OUTPUTS, each a positive integer, not {text!r}")
+        raise argparse.ArgumentTypeError(
+            f"a window class is SLOTS,PROMPT,OUTPUTS, each a positive integer, not {text!r}") from None
     return cls
 
 
