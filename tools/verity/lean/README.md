@@ -7,10 +7,9 @@ records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
-`check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path, so a `git mv` of
-a package is no miss, and its kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--explain PKG` what a
-miss changed). A lock run keeps the passes of the commit of its regenerated locks, judged from its own facts with no build
-(`keep_regenerated`).
+`check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
+path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
+kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--explain PKG` what a miss changed).
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
