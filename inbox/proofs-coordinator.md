@@ -28789,3 +28789,23 @@ Sourced: "No commitments beyond the replay-block boundaries: the inside of a rep
 **Not covered.** The draft's sub-pages ("SPOT security definitions", "Notes", "Old"). The Cursor account's usage. The decisions log itself.
 
 **For the ledger.** Rows S7 and S10 to S13 take these sources in today's claims pass.
+
+## HOUSEKEEP, Tue 10 Nov 16:25Z: top's 16:20Z ask (answer due 16:45Z): all three of our reds on staging C are cured by rows in the notes since 14:39Z; no new row. Text to paste below
+
+Read first: your 16:20Z brief, PRF-505, CI-489, and TOP-394 down to 15:57Z. **Two posts of top's are newer than your brief and change it** [read: TOP-394]:
+- **16:16Z:** the 16:05Z staging would have had three known reds, so it is staged once more, and that one is the cut; the layout is on `main` at about noon PST (20:00Z), not 11:15 AM; its three shards run about 17:00Z to 19:00Z. Our row on `served_composite.sh` stays; top allows the one new public-boundary edge with a row of its own.
+- **16:20Z:** C's second shard (run `r20261110-145335-de29` on `41d5514d7680`) is red on three tests of ours; say by 16:45Z whether a row in the notes cures each. "The cut's staging launches at 16:50Z from the notes at that minute."
+
+**To paste on TOP-394:**
+
+> @top proofs, to your 16:20Z. **All three are cured by rows that are in our hand file since 14:39Z (notes `026c5aae16`); no new row.**
+>
+> - `verity/spot/verifier`, `test_optimize.py::test_a_compression_costs_its_pin_which_is_the_gadgets_rows`: our rows #31 to #33, three lines of `test_optimize.py`.
+> - `verity-flock`, `test_class_statement.py::test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache`: our row #27.
+> - `benchmarks/one_stage`, `test_served_verdicts.py::test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict`: our rows #28 to #30 (`served_composite.sh:87` and the toy tree's two lines).
+> - **Shown on C's own head:** `41d5514d7680` with our rows applied by your `hand_lines.py` (a scratch commit, not pushed). Run `r20261110-150647-e087`, quick tier: 12 suites of 12 passed, `verity/spot/verifier` 825 and `benchmarks/one_stage` 492 among them. Run `r20261110-150732-3f59`: `test_class_statement.py`, 29 passed. Each of the three tests is in its suite's list of passed tests.
+> - **Applied on a staging of yours:** on `cursor/top-layout-staged-eb0b` at `d833bd4b05c3` the seven lines read as each row's `want`.
+
+How I know each line: the rows and their numbers [read: the notes' file now, 47 lines and 1 insert, last changed at the 15:15Z sync, which changed only its header comment]; the two runs [read: their `stdout.log` and per-test reports at 15:25Z to 15:33Z, as my 15:34Z entry records; my VM was restarted since, so I cannot reread them here]; `eb0b` [read now: `git show` of the four files at `d833bd4b05c3`]. [not checked: that the staging launched at 16:50Z applies them; `eb0b` is over `c3ae3eaaf0b7`, not over `034a1702664b`.]
+
+**State after the restart:** the notes clone and my tools are back from the notes; the scratch trees are gone. Next: the fixtures' digests and the stager's dry run on `034a1702664b`'s moved tree, then the rehearsal of the 25. No staging over `034a1702664b` is pushed yet [run: `git ls-remote`, 16:24Z: the newest `cursor/top-layout-staged-*` is `eb0b`].
