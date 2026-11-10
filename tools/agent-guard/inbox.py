@@ -148,14 +148,6 @@ def unpulled(repo: Path, agent: str) -> tuple[int, str | None]:
     return len(stamps), (stamps[0] if stamps else None)
 
 
-def age_s(stamp: str, now: float | None = None) -> float:
-    return (time.time() if now is None else now) - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%MZ"))
-
-
-def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
-    head = (f"{n} earlier message(s) uncollected since {oldest}: this agent's VM is not pulling" if earlier else
-            f"{n} message(s) on origin's inbox/{agent} are still unpulled, the oldest from {oldest}: its VM's shell hook isn't "
-            f"polling")
 #: seconds between `send --wait`'s looks at origin, and the longest it may wait: no tool call blocks more than 20 minutes
 WAIT_EVERY_S, WAIT_CAP_S = 5.0, 1200.0
 
@@ -182,6 +174,14 @@ def wait_taken(repo: Path, agent: str, ident: str, max_s: float, sleep=time.slee
         sleep(min(WAIT_EVERY_S, left))
 
 
+def age_s(stamp: str, now: float | None = None) -> float:
+    return (time.time() if now is None else now) - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%MZ"))
+
+
+def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
+    head = (f"{n} earlier message(s) uncollected since {oldest}: this agent's VM is not pulling" if earlier else
+            f"{n} message(s) on origin's inbox/{agent} are still unpulled, the oldest from {oldest}: its VM's shell hook isn't "
+            f"polling")
     return (head + " (its turn ended, FINISHED or IDLE, so it runs no shell command until resumed with Task; or its VM runs a "
             f"hook older than the inbox, or none). The agent reads them with `git fetch origin inbox/{agent} && git show "
             f"FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
@@ -286,6 +286,8 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
     g.add_argument("--text")
     g.add_argument("--file")
     s.add_argument("--local", action="store_true", help="this VM's inbox only, no push")
+    s.add_argument("--wait", type=float, metavar="S", help=f"then say whether a VM took it within S seconds (at most "
+                                                           f"{WAIT_CAP_S:g}); exit 1 when none did")
     s.add_argument("--repo", type=Path, default=Path("."), help="the checkout whose origin carries the message")
     p = sub.add_parser("pull")
     p.add_argument("agent")
@@ -318,6 +320,9 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
         if a.local:
             print(f"queued for {a.agent}: {send(a.agent, text)}")
             return 0
+        if a.wait is not None and not 0 < a.wait <= WAIT_CAP_S:
+            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_CAP_S:g} seconds (no tool call blocks more than "
+                             "20 minutes)")
         try:
             before = unpulled(a.repo, full_id(a.agent))
         except RuntimeError:
@@ -332,6 +337,17 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
         elif n and oldest:
             print(f"inbox: {n} earlier message(s) uncollected since {oldest}; unpulled past {STALE_S // 60} min means "
                   f"{a.agent}'s VM is not pulling (`inbox.py status {a.agent}`)", file=sys.stderr)
+        if a.wait is None:
+            return 0
+        waited = wait_taken(a.repo, a.agent, ident, a.wait, sleep, clock)
+        if waited is None:
+            print(f"inbox: NOT TAKEN in {a.wait:g} s: no VM pulled {ident} off origin's inbox/{a.agent}, so its hook is not "
+                  f"taking its messages now: {a.agent} is inside one long command or has ended its turn, or its VM runs no "
+                  f"shell hook (`inbox.py guard {a.agent}` on its VM says). It stays on the branch for a later pull; to "
+                  "stop its work now, cancel its runs yourself", file=sys.stderr)
+            return 1
+        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}, and its next shell command "
+              "delivers it. Taken is not acted on: its runs and its issue show that")
         return 0
     if a.cmd == "status":
         n, oldest = unpulled(a.repo, full_id(a.agent))
@@ -357,8 +373,6 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
                f"no poll for {a.agent} in {INBOX} within {every} s, so this VM's shell hook doesn't deliver its id")
         print(f"inbox: NOT POLLING: {why}" + (f" (last pull: {tail[0]})" if tail else "")
               + f". Read your messages with `git fetch origin inbox/{a.agent} && git show FETCH_HEAD:{FILE}`")
-    s.add_argument("--wait", type=float, metavar="S", help=f"then say whether a VM took it within S seconds (at most "
-                                                           f"{WAIT_CAP_S:g}); exit 1 when none did")
         return 1
     if a.cmd == "pull":
         print(f"inbox: {pull(a.agent, a.repo)} new message(s) for {a.agent}")
@@ -377,17 +391,3 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
 
 if __name__ == "__main__":
     sys.exit(main())
-        if a.wait is not None and not 0 < a.wait <= WAIT_CAP_S:
-            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_CAP_S:g} seconds (no tool call blocks more than "
-                             "20 minutes)")
-        if a.wait is None:
-            return 0
-        waited = wait_taken(a.repo, a.agent, ident, a.wait, sleep, clock)
-        if waited is None:
-            print(f"inbox: NOT TAKEN in {a.wait:g} s: no VM pulled {ident} off origin's inbox/{a.agent}, so its hook is not "
-                  f"taking its messages now: {a.agent} is inside one long command or has ended its turn, or its VM runs no "
-                  f"shell hook (`inbox.py guard {a.agent}` on its VM says). It stays on the branch for a later pull; to "
-                  "stop its work now, cancel its runs yourself", file=sys.stderr)
-            return 1
-        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}, and its next shell command "
-              "delivers it. Taken is not acted on: its runs and its issue show that")
