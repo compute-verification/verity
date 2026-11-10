@@ -787,6 +787,23 @@ theorem HE : Guarantees.HE := by
     sqrt_scaled hk2] at hs
   exact ⟨hN, hs⟩
 
+/-- `CountHE` is `HE` at the verdict's partition into `B ≤ n` blocks, whose read cap is `IsCK.reads`; both bounds grow
+with the number of blocks. -/
+theorem CountHE : Guarantees.CountHE := by
+  intro ι V _ _ _ d W val c k n βw βx b hw hx hb hval hshare hH hE hcomp
+  obtain ⟨B, hBn, P, hP⟩ := hcomp
+  obtain ⟨hN, hs⟩ := HE ι V d W val k B c P βw βx b hw hx hb hval hshare hH hE hP.reads
+  have hq : 0 < βw * βx := mul_pos hw hx
+  have hB : (B : ℝ) ≤ n := Nat.cast_le.2 hBn
+  have hα : 0 ≤ (k : ℝ) + alphaHE k (βw * βx) b := add_nonneg (Nat.cast_nonneg k) (alphaHE_nonneg k _ b)
+  refine ⟨hN.trans ?_, hs.trans ?_⟩
+  · unfold workHE
+    have hO : (B : ℝ) * W.O / (βw * βx) ≤ n * W.O / (βw * βx) :=
+      div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hB (Nat.cast_nonneg _)) hq.le
+    exact add_le_add (mul_le_mul_of_nonneg_right hB hα)
+      (mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt hO) (div_nonneg (Nat.cast_nonneg k) zero_le_two))
+  · exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hB (Nat.cast_nonneg c)) (Nat.cast_nonneg _)
+
 theorem HEShared : Guarantees.HEShared := by
   intro ι ρ V _ _ _ _ d W val k m c ω P G A e β q b hω hβ hq hb hA hval hqe hH hE hk
   have hω' : 1 ≤ ω := hω

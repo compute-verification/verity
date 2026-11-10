@@ -536,24 +536,26 @@ theorem oneWindow_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype
   linarith
 
 theorem DampenerRemote_honest : Guarantees.DampenerRemote_honest :=
-  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, compliesRate_D, theta_id D,
-    T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
+  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, Cut.SecurityProofs.toy_complies,
+    Cut.SecurityProofs.toy_values, Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2,
+    Cut.SecurityProofs.toy_exports 2, by show 2 ≤ 0 + 0 + Cut.Toy.W.N + 0; rw [Cut.SecurityProofs.toy_N],
     fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity]⟩
 
 theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
-  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, oneWindow_withinCompute, oneWindow_not_pouwSound,
+  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, by simp [Assumptions.WithinCompute], oneWindow_not_pouwSound,
     by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
     fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
     fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
-    by rw [size_D]; norm_num, by norm_num, by decide, by norm_num,
+    by norm_num, by norm_num, Cut.SecurityProofs.toy_complies, Cut.SecurityProofs.toy_values,
+    Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2, Cut.SecurityProofs.toy_exports 2,
+    by norm_num, by show 100 ≤ 0 + 100 + Cut.Toy.W.N + 0; omega, by norm_num,
     fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity], by norm_num, ?_⟩
   intro h
   rw [prob_of_forall_not] at h
   · norm_num at h
   · rintro - ⟨h1, -⟩
-    rw [bound_T0] at h1
-    norm_num [efficiency, unregisteredShare, residualShare, lagShare, declaredShare, rhoT] at h1
+    rw [Cut.SecurityProofs.toy_workHE] at h1
+    norm_num [efficiency, unregisteredShare, residualShare, lagShare] at h1
 
 end Nci.SecurityProofs
 
