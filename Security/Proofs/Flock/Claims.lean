@@ -356,6 +356,11 @@ public import Proofs.Flock.Claims.ZK.FrameRun
 public import Proofs.Flock.Claims.ZK.L0PinLoop
 public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.Tape
+public import Proofs.Flock.Claims.Bridge
+public import Proofs.Flock.Claims.KS
+public import Proofs.Flock.Claims.KS.ZkAccepts
+public import Proofs.Flock.Claims.Recursion
+public import Proofs.Flock.Claims.ZK
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

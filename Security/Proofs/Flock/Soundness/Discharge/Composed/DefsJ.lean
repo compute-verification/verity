@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Tables
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 
 /-!

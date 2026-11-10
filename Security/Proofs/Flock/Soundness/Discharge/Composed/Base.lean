@@ -21,6 +21,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
 public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+public import Proofs.Flock.Soundness.Discharge.ZkView
 
 /-!
 # A sample's `--zk` table: its coins and sizes
