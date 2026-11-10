@@ -11,8 +11,8 @@ The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`re
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
-`main` landed since, as `tools/move/restack.py` carries a branch: `Queue.mapped_change`, which the end of a tick works out,
-`--move-carry-jobs` heads at once for up to `MAPPED_BUDGET_S`), with a land verdict by a non-owner or under the low-risk
+`main` landed since, as `tools/move/restack.py` carries a branch: `Queue.mapped_change`, which the end of a tick starts working
+out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
 is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
@@ -198,10 +198,10 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
-#: the old heads mapped across `main`'s moves at once, at the end of a tick (`Queue.work_out_mapped`; `--move-carry-jobs`), and
-#: how long a tick goes on starting them: each runs every move's script on a whole tree, a layout's several minutes a head, so
-#: a tick after a layout lands maps some and leaves the rest to the next ones
-MAPPED_JOBS, MAPPED_BUDGET_S = 4, 600.0
+#: the old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and no tick waits on
+#: (`Queue.work_out_mapped`; `--move-carry-jobs`): each runs every move's script on a whole tree, so few, leaving the control
+#: pod's few cores room for the loop
+MAPPED_JOBS = 2
 
 
 def stamp(t: float) -> str:
@@ -1677,7 +1677,7 @@ class Loop:
             self.out(f"research queue vqueue: tick {t.n}: {len(past.bad)} line(s) of {self.log_path} read as none: {past.bad[0]}")
         self.keep(t)
         try:
-            self.world.q.work_out_mapped(MAPPED_BUDGET_S)
+            self.world.q.work_out_mapped()
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         return logged
@@ -2241,10 +2241,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
-                    help=f"old heads mapped across `main`'s moves at once at the end of a tick, each running every move's "
-                         f"script on a scratch worktree under --merged-root, so a mark or land verdict carries to a head whose "
-                         f"own change is theirs mapped (`Queue.mapped_change`); 0 carries none across a move "
-                         f"(default {MAPPED_JOBS})")
+                    help=f"old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and none "
+                         f"waits on, running every move's script on a scratch worktree under --merged-root, so a mark or land "
+                         f"verdict carries to a head whose own change is theirs mapped (`Queue.mapped_change`); those "
+                         f"`research queue map-moves` mapped elsewhere count once copied into mapped-changes.d/ beside the "
+                         f"log; 0 carries none across a move (default {MAPPED_JOBS})")
     ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",
                     help="where the worktrees a build checks out go (`queue.merged_worktree`, one a merge for `ported`'s "
                          "codemod) and those a move's script runs on for --move-carry-jobs (`queue.mapped_tree`), and where "

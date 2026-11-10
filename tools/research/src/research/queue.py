@@ -362,6 +362,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 import weakref
@@ -1740,17 +1741,22 @@ class Queue:
         self._own: dict[tuple[str, str], str | None] = {}
         self._kept: dict[str, str | None] | None = None
         self._kept_at = Path()
-        #: each (old head, new head)'s `mapped_change`; those worked out, kept by old head and `main` below the new one (at
-        #: `_mapped_at`, else the clone's git directory); why each that couldn't be couldn't, until a restart tries it again;
-        #: the moves between each (main, old head); and what `mapped_change` deferred to `work_out_mapped`
+        #: each (old head, new head)'s `mapped_change`; those worked out, kept by `mapped_key` (at `_mapped_at`, else the
+        #: clone's git directory); those `research queue map-moves` worked out elsewhere, read from the directory beside it
+        #: (`mapped-changes.d/`) as its files were when `_mapped_seen`; why each that couldn't be couldn't, until a restart
+        #: tries it again; the moves between each (main, old head); what `mapped_change` deferred to `work_out_mapped`; and
+        #: those mapping on a thread
         self._mapped: dict[tuple[str, str], str | None] = {}
         self._mapped_kept: dict[str, str] | None = None
         self._mapped_at: Path | None = None
+        self._mapped_elsewhere: dict[str, str] = {}
+        self._mapped_seen: tuple[tuple[str, int, int], ...] = ()
         self._mapped_failed: dict[str, str] = {}
         self._crossed: dict[tuple[str, str], list[tuple[str, list[str]]]] = {}
         self._mapped_wanted: dict[str, tuple[str, str, list[tuple[str, list[str]]]]] = {}
-        #: how many heads `work_out_mapped` maps across moves at once, deferring each `mapped_change` wants to it; 0 maps each
-        #: there and then
+        self._mapped_running: dict[str, concurrent.futures.Future] = {}
+        #: how many heads `work_out_mapped` maps across moves at once, each on a thread no tick waits on, deferring each
+        #: `mapped_change` wants to it; 0 maps each there and then
         self.mapped_jobs = 0
 
     # -- the clone and its state
@@ -1948,45 +1954,49 @@ class Queue:
         as `tools/move/restack.py` carries a branch (`mapped_change`, the function), or None: when there are none, when it can't
         (logged once, with why), and, with `mapped_jobs`, until `work_out_mapped` has worked it out.  What a mark or land
         verdict at ``old`` carries to ``new`` by besides `own_change` (`StoreLabels`): a restack across a move keeps them, and
-        one that changes anything besides doesn't.  The scripts run on whole trees, so each is kept as `own_change`s are."""
+        one that changes anything besides doesn't.  The scripts run on whole trees, so each is kept as `own_change`s are, by
+        old head and the moves it crosses (`mapped_key`), whatever else `main` holds: one worked out for an earlier new head,
+        or elsewhere by `research queue map-moves`, serves."""
         if (key := (old, new)) in self._mapped:
             return self._mapped[key]
         onto = _git(self.workdir, "merge-base", self.base, new, check=False).stdout.strip()
-        if not onto or (at := f"{old} {onto}") in self._mapped_failed or not (moves := self._moves_crossed(onto, old)):
+        if not onto or not (moves := self._moves_crossed(onto, old)) or (at := mapped_key(old, moves)) in self._mapped_failed:
             self._mapped[key] = None
             return None
-        if at not in self._kept_mapped():
+        if (got := self._mapped_got(at)) is None:
             if self.mapped_jobs:
                 self._mapped_wanted.setdefault(at, (old, onto, moves))
                 return None
-            with scratch() as d:
-                self._mapped_done(at, *self._mapped_one(old, onto, moves, self._restack_at(Path(d))))
-        self._mapped[key] = self._kept_mapped().get(at)
-        return self._mapped[key]
+            self._mapped_done(at, *self._mapped_one(old, onto, moves))
+            got = self._mapped_got(at)
+        self._mapped[key] = got
+        return got
 
-    def work_out_mapped(self, budget: float | None = None) -> int:
-        """Work out the heads `mapped_change` deferred since the last call, `mapped_jobs` at once, starting none once ``budget``
-        seconds have passed (None: no limit), and keep each; a later `mapped_change` wants those it didn't start again.  How
-        many it worked out."""
-        if not self._mapped_wanted:
-            return 0
-        wanted, self._mapped_wanted = iter(list(self._mapped_wanted.items())), {}
-        start, done, jobs = time.monotonic(), 0, max(1, self.mapped_jobs)
-        with scratch() as d, concurrent.futures.ThreadPoolExecutor(jobs) as pool:
-            restack, running = self._restack_at(Path(d)), {}
-            while True:
-                while len(running) < jobs and (budget is None or time.monotonic() - start < budget) \
-                        and (item := next(wanted, None)):
-                    at, (old, onto, moves) = item
-                    running[pool.submit(self._mapped_one, old, onto, moves, restack)] = at
-                if not running:
-                    break
-                finished, _ = concurrent.futures.wait(running, return_when=concurrent.futures.FIRST_COMPLETED)
-                for f in finished:
-                    self._mapped_done(running.pop(f), *f.result())
-                    done += 1
-        if left := sum(1 for _ in wanted):
-            self.log(f"research queue: {left} head(s) wait to be mapped across `main`'s moves: {budget:.0f} s went to {done}")
+    def work_out_mapped(self) -> int:
+        """Keep each mapping a thread has finished since the last call, read again what `research queue map-moves` left in
+        `mapped-changes.d/`, and start the heads `mapped_change` deferred since, each on a daemon thread of its own, while
+        fewer than `mapped_jobs` run: no tick waits on one, and a loop that stops leaves its threads (their scripts' scratch
+        directories are swept).  A later `mapped_change` finds each kept, and defers again those not started.  How many it
+        kept."""
+        done = 0
+        for at, f in list(self._mapped_running.items()):
+            if f.done():
+                del self._mapped_running[at]
+                self._mapped_done(at, *f.result())
+                done += 1
+        self._kept_mapped()
+        self._read_mapped_elsewhere()
+        wanted, self._mapped_wanted = self._mapped_wanted, {}
+        for at, (old, onto, moves) in wanted.items():
+            if len(self._mapped_running) >= self.mapped_jobs:
+                break
+            if at in self._mapped_running or self._mapped_got(at) is not None:
+                continue
+            self._mapped_running[at] = f = concurrent.futures.Future()
+            threading.Thread(target=self._mapped_thread, args=(f, old, onto, moves), name=f"mapped-{old[:8]}",
+                             daemon=True).start()
+            self.log(f"research queue: mapping {old[:8]} across the {len(moves)} move(s) `main` landed since, on a thread "
+                     f"({len(self._mapped_running)} of {self.mapped_jobs} running)")
         return done
 
     def _moves_crossed(self, onto: str, old: str) -> list[tuple[str, list[str]]]:
@@ -1999,25 +2009,42 @@ class Queue:
             if self._mapped_at is None:
                 self._mapped_at = self.workdir / _out(self.workdir, "rev-parse", "--git-common-dir") / "mapped-changes.json"
             self._mapped_kept = json.loads(self._mapped_at.read_text()) if self._mapped_at.is_file() else {}
+            self._read_mapped_elsewhere()
         return self._mapped_kept
 
-    def _restack_at(self, dest: Path) -> Path:
-        """The directory under ``dest`` holding the landing branch's `tools/move/restack.py`, which `mapped_tree` runs."""
-        return write_scripts(self.workdir, scripts_at(self.workdir, self.base, [RESTACK]), dest) / MOVE_DIR
+    def _read_mapped_elsewhere(self) -> None:
+        """Read the files in `mapped-changes.d/` beside `_mapped_at` again once one has changed: what `research queue map-moves`
+        worked out elsewhere, copied in by hand.  One that doesn't parse is logged, and read once it changes again."""
+        files = sorted(self._mapped_at.with_suffix(".d").glob("*.json"))
+        if (seen := tuple((p.name, (s := p.stat()).st_mtime_ns, s.st_size) for p in files)) == self._mapped_seen:
+            return
+        self._mapped_seen, got = seen, {}
+        for p in files:
+            try:
+                got.update(json.loads(p.read_text()))
+            except (OSError, ValueError, TypeError) as e:
+                self.log(f"research queue: {p} isn't read: {type(e).__name__}: {e}")
+        self._mapped_elsewhere = got
 
-    def _mapped_one(self, old: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
+    def _mapped_got(self, at: str) -> str | None:
+        return self._kept_mapped().get(at) or self._mapped_elsewhere.get(at)
+
+    def _mapped_one(self, old: str, onto: str, moves: list[tuple[str, list[str]]]) -> tuple[str | None, str]:
+        return map_one(self.workdir, old, onto, moves)
+
+    def _mapped_thread(self, f: concurrent.futures.Future, old: str, onto: str, moves: list[tuple[str, list[str]]]) -> None:
         try:
-            return mapped_change(self.workdir, old, onto, moves, restack)
-        except (QueueError, OSError, subprocess.SubprocessError) as e:
-            return None, f"{type(e).__name__}: {e}"
+            f.set_result(self._mapped_one(old, onto, moves))
+        except Exception as e:  # noqa: BLE001 -- a future never set would hold its job for good
+            f.set_result((None, f"{type(e).__name__}: {e}"))
 
     def _mapped_done(self, at: str, got: str | None, why: str) -> None:
-        """Keep what `_mapped_one` gave for ``at`` (old head and `main` below the new one): its patch-id, written whole as
-        `own_change`s are, or why it couldn't, logged."""
-        old, onto = at.split()
+        """Keep what `_mapped_one` gave for ``at`` (`mapped_key`): its patch-id, written whole as `own_change`s are, or why it
+        couldn't, logged."""
         if got is None:
             self._mapped_failed[at] = why or "it has no own change once mapped"
-            self.log(f"research queue: {old[:8]}'s own change isn't mapped across the moves {onto[:8]} has: {self._mapped_failed[at]}")
+            self.log(f"research queue: {at[:8]}'s own change isn't mapped across the moves `main` landed since: "
+                     f"{self._mapped_failed[at]}")
             return
         kept = self._kept_mapped()
         kept[at] = got
@@ -4020,6 +4047,33 @@ def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]
             commit, *parents = line.split()
             found.append((commit, parents))
     return found
+
+
+def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
+    """How ``head``'s own change mapped across ``moves`` (`mapped_change`) is kept: by the head and the SHA-512 of the moves'
+    commits in order, which fix it whatever else `main` holds."""
+    return f"{head} {hashlib.sha512(' '.join(m for m, _ in moves).encode()).hexdigest()}"
+
+
+def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]) -> tuple[str | None, str]:
+    """`mapped_change` with ``onto``'s `tools/move/restack.py` (`main` as the restack found it), written to a `scratch`
+    directory, or (None, why) for what it raised."""
+    try:
+        with scratch() as d:
+            restack = write_scripts(repo, scripts_at(repo, onto, [RESTACK]), Path(d)) / MOVE_DIR
+            return mapped_change(repo, head, onto, moves, restack)
+    except (QueueError, OSError, subprocess.SubprocessError) as e:
+        return None, f"{type(e).__name__}: {e}"
+
+
+def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int) -> dict[str, tuple[str, str | None, str]]:
+    """Each of ``heads``' own change mapped across the moves ``main`` has and it lacks, ``jobs`` heads at once, as the loop maps
+    an old head for a new one on ``main`` (`Queue.mapped_change`): by head, (its `mapped_key`, the patch-id or None, why not),
+    none for a head that crosses no move.  What `research queue map-moves` works out, for the loop to read."""
+    todo = {h: moves for h in heads if (moves := moves_between(repo, main, h))}
+    with concurrent.futures.ThreadPoolExecutor(max(1, jobs)) as pool:
+        got = {h: pool.submit(map_one, repo, h, main, moves) for h, moves in todo.items()}
+    return {h: (mapped_key(h, todo[h]), *f.result()) for h, f in got.items()}
 
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
@@ -6224,6 +6278,33 @@ def _checked_heads(a: argparse.Namespace) -> int:
     return 0
 
 
+def _map_moves(a: argparse.Namespace) -> int:
+    """`research queue map-moves HEAD...` (`map_moves`), in this checkout, fetching what it lacks: each old head's own change
+    mapped across the moves --tip has and it lacks, as JSON by `mapped_key`, which the loop reads once the file is copied into
+    `mapped-changes.d/` beside its `mapped-changes.json`; a line for each head on stderr.  The loop's threads map a head on
+    the control pod's few cores; this maps them on a node with many (`research run --on`)."""
+    top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+    heads = [h for h in (a.pr, *a.shard_run) if h]
+
+    def lacks(h: str) -> bool:
+        return bool(_git(top, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode)
+
+    _git(top, *STALL, "fetch", "-q", "origin", "main", check=False)
+    for h in filter(lacks, heads):
+        _git(top, *STALL, "fetch", "-q", "origin", h, check=False)
+    missing = set(filter(lacks, heads))
+    got = map_moves(top, heads, _out(top, "rev-parse", a.tip), a.jobs)
+    for h in heads:
+        _, own, why = got.get(h, ("", None, "no such commit here or on origin" if h in missing else "it crosses no move"))
+        print(f"research queue map-moves: {h[:12]}: {own or why}", file=sys.stderr)
+    text = json.dumps({key: own for key, own, _ in got.values() if own})
+    if a.out is not None:
+        a.out.write_text(text + "\n")
+    else:
+        print(text)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["vqueue"]:                  # the verified queue's loop, with options of its own (`vqueue_loop.main`)
         from .vqueue_loop import main as vqueue_main
@@ -6233,12 +6314,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "promote", "accept-checked",
                                             "drive-shard-add", "delegate",
-                                            "shadow-report", "vqueue"])
+                                            "shadow-report", "vqueue", "map-moves"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of `checked` ci knows is green, which `main` moves to; "
                     "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
-                    "delegate: the Cursor agent id to delegate --by's handle to")
-    ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
+                    "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head")
+    ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it; "
+                    "map-moves: the other old heads")
+    ap.add_argument("--jobs", type=int, default=1, metavar="N", help="map-moves: the heads mapped at once, each running a move's "
+                    "script on a whole tree in a worktree of its own under --preflight-root (default 1)")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one), which must cover every "
                     "step on the merge gate there")
@@ -6325,9 +6409,11 @@ def main(argv: list[str]) -> int:
                          "of the Goals page a label of the issue names (a warning on stderr when none does); or none:REASON, written as an "
                          "`Issue: none: REASON` line, for a PR with no issue; link (required): the KEY to link the open PR to")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
-    ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
+    ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line; map-moves: the landing branch "
+                    "whose moves the heads cross (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
-                    "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout")
+                    "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout; map-moves: "
+                    "write the JSON there instead")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--tips", type=int, default=10, metavar="N", help="shadow-report: the newest N `checked` tips drive compared "
@@ -6348,6 +6434,8 @@ def main(argv: list[str]) -> int:
         return _stats(a)
     if a.command == "checked-heads":
         return _checked_heads(a)
+    if a.command == "map-moves":
+        return _map_moves(a)
     if a.command == "shadow-report":
         from .executor import shadow_records, shadow_report
         from .store.local import LocalStore

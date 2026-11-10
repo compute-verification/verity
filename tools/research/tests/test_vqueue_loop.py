@@ -1125,19 +1125,19 @@ def test_a_freeze_reads_a_pr_s_own_change_above_the_old_paths_checked_not_the_la
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     """Each tick reads new labels, carrying a mark by own change, and by an old head's own change mapped across `main`'s moves
-    while the queue maps heads (`Queue.mapped_jobs`); each ends by mapping the old heads the labels wanted, for a budget."""
+    while the queue maps heads (`Queue.mapped_jobs`); each ends by starting to map the old heads the labels wanted."""
     made: list[Labels] = []
-    worked: list[float | None] = []
+    worked: list[int] = []
     loop = env.loop(lambda s: [])
     loop.world.labels_at = lambda: made.append(Labels(env.o.gh)) or made[-1]
-    loop.world.q.work_out_mapped = lambda budget=None: worked.append(budget) or 0
+    loop.world.q.work_out_mapped = lambda: worked.append(loop.last) or 0
     loop.tick()
     loop.world.q.mapped_jobs = 2
     loop.tick()
     w = loop.world
     assert len(made) == 2 and w.labels is made[-1] and w.q.ready == made[-1].ready and w.q.marked_at == made[-1].marked_at
     assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
-    assert made[0].moved is None and made[-1].moved == w.q.mapped_change and worked == [L.MAPPED_BUDGET_S] * 2
+    assert made[0].moved is None and made[-1].moved == w.q.mapped_change and worked == [loop.last - 1, loop.last]
 
 
 def test_a_tick_whose_mapping_of_old_heads_fails_says_so_and_returns_what_it_logged(env):
@@ -1147,7 +1147,7 @@ def test_a_tick_whose_mapping_of_old_heads_fails_says_so_and_returns_what_it_log
     loop = env.loop(policy)
     loop.out = out.append
 
-    def fails(budget=None):
+    def fails():
         raise Q.QueueError("git ls-tree: broken")
 
     loop.world.q.work_out_mapped = fails
