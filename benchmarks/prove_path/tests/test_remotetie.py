@@ -48,6 +48,7 @@ import importlib.util
 import io
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -426,18 +427,26 @@ def _serve(one, root: Path, v1: dict, W: dict, R: dict, period_exe: Path) -> Pat
 @pytest.fixture(scope="module")
 def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
     """The Lean verifiers, and the toy's cases as `served_cases.py --serve-dir` writes them from its serve dir under H1's
-    tie (α and Γ read off the division): its exit and its CASE and NOT_WRITTEN lines."""
+    tie, at the α and Γ of the toy's own division (the policy's check's profile at no budget: Γ the largest block's
+    gates, α the most fresh-input bits a gate of any block), given as a development run's: its exit and its CASE and
+    NOT_WRITTEN lines."""
     one = _one_stage()
     SC = one.SC
     exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
                            period=SC.build(ROOT / "verity/core/protocols/pouw/lean/check", "pouw-period"),
                            remote=SC.build(ROOT / "verity/core/protocols/remote", "remote"))
     W, R = toy.h1.W, written.R
-    serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)
+    v1 = _v1_case(one, toy, written, W, R)
+    serve = _serve(one, tmp_path_factory.mktemp("serve"), v1, W, R, exes.period)
+    at_none, _ = SC.lean_answer(exes.policy, SC.inference_only_case(v1, 2**64, 2**64, [W]),
+                                tmp_path_factory.mktemp("scratch"))
+    assert at_none["verdict"] == "accept", at_none
+    blocks = at_none["profile"]["blocks"]
+    alpha, gamma = max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        rc = SC.main(["--serve-dir", str(serve), "--private", str(serve / "private"), "--from-division",
-                      "--v1-exe", str(exes.v1), "--inference-only-exe", str(exes.policy)])
+        rc = SC.main(["--serve-dir", str(serve), "--private", str(serve / "private"), "--alpha", str(alpha),
+                      "--gamma", str(gamma), "--v1-exe", str(exes.v1), "--inference-only-exe", str(exes.policy)])
     lines = [(head, json.loads(body)) for head, _, body in (x.partition(" ") for x in out.getvalue().splitlines())
              if head in ("CASE", "NOT_WRITTEN")]
     return SimpleNamespace(one=one, exes=exes, private=serve / "private", rc=rc, lines=lines)
