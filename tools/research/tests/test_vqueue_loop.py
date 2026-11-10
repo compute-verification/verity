@@ -327,37 +327,67 @@ def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_th
     assert (told["action"], told["number"], told["sha"], len(env.posts)) == ("carried", 1, built["sha"], 1), told
 
 
-@pytest.mark.parametrize("shadow", [False, True])
-def test_a_ready_pr_a_candidate_holds_through_another_member_lands_with_it_and_its_owner_is_told_so_once(env, shadow):
+@pytest.mark.parametrize("how", ["posted", "cut", "shadow"])
+def test_a_ready_pr_a_candidate_holds_through_another_member_lands_with_it_and_its_owner_is_told_so_once(env, how):
     """A ready PR whose head a candidate on `main`'s chain holds though it is no member of it (one stacked on it, built while
     the priority file ranked it first) would merge nothing onto that candidate: no build takes it, so no skip tells its owner
     to merge `main` into it and no empty build is logged each tick.  Its owner is told once that it lands with the
-    candidate, as it does; a post that fails is told again, and with --shadow it is only logged."""
+    candidate, as it does: a post that fails is told again, one cut off before its record isn't, and with --shadow it is
+    only logged."""
     one = env.put(1, {"a.txt": "1\n"})
     env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one))
     (prio := env.tmp / "priority").write_text("2\n")
-    loop = env.loop(vqueue.decide, shadow=shadow)
+    loop = env.loop(vqueue.decide, shadow=how == "shadow")
     loop.world.priority_file = prio
     (built,) = loop.tick()
     sha = built["sha"]
     assert (built["members"], built["heads"]) == ([2], [two]), built
     prio.write_text("")                                             # #1 is ready on its own again, below #2's candidate
-    if not shadow:
+    text = (f"#1 at {one[:12]} is in the verified queue's candidate {sha[:12]}, whose member #2 holds its head: it lands "
+            "when that candidate does, so no build of its own takes it")
+    if how != "shadow":
         post, loop.world.post = loop.world.post, lambda text, to=(): False
         (failed,) = loop.tick()
         assert (failed["action"], failed["done"], failed["posted"]) == ("carried", False, False), failed
         loop.world.post = post
-    (told,) = loop.tick()
-    assert (told["action"], told["number"], told["heads"], told["sha"], told["done"], told["shadow"]) == (
-        "carried", 1, [one], sha, not shadow, shadow), told
-    assert told["text"] == (f"#1 at {one[:12]} is in the verified queue's candidate {sha[:12]}, whose member #2 holds its "
-                            "head: it lands when that candidate does, so no build of its own takes it")
-    assert env.posts == ([] if shadow else [f"{' '.join(told['to'])} vqueue: {told['text']}"])
+    if how == "cut":
+        def died(text: str, to=()) -> bool:
+            env.posts.append(text)
+            raise RuntimeError("the loop's process died")
+
+        loop.world.post = died
+        with pytest.raises(RuntimeError):
+            loop.tick()
+        assert _acts(env.lines())[-1] == "posting" and len(env.posts) == 1 and env.posts[0].endswith(f" vqueue: {text}")
+        loop.world.post = post
+    else:
+        (told,) = loop.tick()
+        assert (told["action"], told["number"], told["heads"], told["sha"], told["done"], told["shadow"], told["text"]) == (
+            "carried", 1, [one], sha, how == "posted", how == "shadow", text), told
+        assert env.posts == ([] if how == "shadow" else [f"{' '.join(told['to'])} vqueue: {text}"])
     assert loop.tick() == []                                        # told once, and no skip or empty build
-    if not shadow:
+    if how != "shadow":
         keys = env.listed(sha, {"pytest:b": ["b.txt"]})
         env.result(keys["pytest:b"], "pytest:b", "pass")
         assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == sha and loop.tick() == []
+
+
+def test_a_ready_pr_two_stacked_candidates_hold_is_told_it_lands_with_the_lower(env):
+    """The lowest candidate that holds its head lands it first, through a member of its own: that is the one its owner is
+    told of."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    (prio := env.tmp / "priority").write_text("2\n")
+    loop = env.loop(vqueue.decide)
+    loop.world.priority_file = prio
+    (low,) = loop.tick()
+    env.put(3, {"c.txt": "3\n"})
+    (high,) = loop.tick()
+    assert (low["members"], high["members"], high["base"]) == ([2], [3], low["sha"]), (low, high)
+    prio.write_text("")
+    (told,) = loop.tick()
+    assert (told["action"], told["number"], told["sha"]) == ("carried", 1, low["sha"]), told
+    assert f"candidate {low['sha'][:12]}, whose member #2 holds its head" in told["text"], told
 
 
 def _move(env: Env, n: int, files: dict[str, str | None], base: str = "origin/main") -> str:
