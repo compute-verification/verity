@@ -622,13 +622,12 @@ def packable(item: dict, key: str, idx: int) -> str | None:
         return f"batch {batch} (packing takes <= {PACK_MAX_BATCH})"
     if task_resources(item, tasks[idx], idx, len(tasks))[2] != 1:
         return "not a 1-GPU task"
-    tree = Path(item["tree"])
-    if not tree.is_dir():
-        return f"no {tree}"
-    # an older tree declares the stage Tools here (now research.store.vllm_tools), and has the replay only if it declares it
-    tools = tree / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
-    if tools.is_file() and "VLLM_REPLAY" not in tools.read_text():
-        return "the tree has no deferred replay"
+    tools = Path(item["tree"]) / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    try:
+        if "VLLM_REPLAY" not in tools.read_text():
+            return "the tree has no deferred replay"
+    except OSError:
+        return f"no {tools}"
     return None
 
 

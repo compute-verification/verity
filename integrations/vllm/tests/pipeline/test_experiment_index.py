@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 from verity_vllm.pipeline import experiment as EXP
-from verity_vllm.pipeline import source_identity
+from verity_vllm.pipeline import research_tools
 
 REPO = Path(__file__).resolve().parents[2]
 WL = REPO / "workloads" / "workload_cov_b0_b8-mixed_c256.json"
@@ -48,8 +48,10 @@ def test_spec_dtype_is_the_served_dtype():
 
 
 def test_code_version_is_dirty_for_an_edit_in_every_directory_of_core(tmp_path: Path):
-    """The dirty check covers each directory that ships core (`source_identity.core_dirs`), not one hand-written path."""
-    files = [Path("integrations/vllm/verity_vllm/x.py"), *(Path(d) / "x.py" for d in source_identity.core_dirs(source_identity.TREE))]
+    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and
+    every other directory the integration imports (`research_tools.CODE_DIRS`)."""
+    assert set(research_tools.CORE_DIRS) <= set(research_tools.CODE_DIRS)
+    files = [Path("integrations/vllm/verity_vllm/x.py"), *(Path(d) / "x.py" for d in research_tools.CODE_DIRS)]
     for f in files:
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text("A = 0\n")
