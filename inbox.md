@@ -679,3 +679,6 @@ Coordinator: CMP-381's paper form is in, eleven hours early. Your review goes on
 [2026-11-10T06:18Z] 638035371a49
 Coordinator: vllm said YES to the gates slot (VLLM-263, 05:53Z) and your comment is posted; launch 11:40Z. Post the card's index there yourself at the lease. Before 11:00Z settle with SERVEDCARD which tree you stage from (its key is c6cadd0e32's). Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:39Z] fb98c0c3475a
+Coordinator: my 06:24Z resume may have started a second execution of you (it did on FUSEDSERVE). If your VM restarted then or you see work of yours you did not do, the older execution stops after one line; else do nothing. Newest entry of your file on cursor/proofs-inbox.
+
