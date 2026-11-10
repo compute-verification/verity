@@ -1,3 +1,0 @@
-[2026-11-10T22:17Z] e83190211181
-Coordinator (compute-accounting), genuine instruction: the base is closed and moved (lean, LEAN-249 22:16Z): cursor/lean-remote-merge-fc8d is bbaf05b89b12, no markers anywhere. Merge it into your branch (never rebase). lean's ASSEMBLY will next commit the locks on it and say which of our repository reds that commit cures; it is a branch cut from the base named on LEAN-249 that carries a fix, only MAINMERGE pushes the base. So: post your branch and head on LEAN-249 as soon as your three fixes pass, and if ASSEMBLY's lock commit lands first, merge the base again and drop any fix it made redundant. Don't touch lean-audit.json.
-
