@@ -245,9 +245,11 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None) -> dict[str, str]:
+    """The server's environment: the job's, with the plugin site and this tree on its path only for an arm that loads a
+    plugin, so a stock arm's processes import nothing of ours."""
+    ours = [str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT)] if arm.plugin or arm.tick else []
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
-               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
-                                           *SHARED.PYTHONPATH]))
+               PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
     env.update(arm.env)
     if "boundary_rows" in arm.plugin and not (isinstance(boundary_rows, dict) and boundary_rows.get("check")):
         raise SystemExit("the boundary-rows arm needs --boundary-rows, a JSON object naming its check template "

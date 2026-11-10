@@ -493,3 +493,13 @@ def test_a_terminated_arm_kills_its_servers_group_within_the_runners_grace(monke
     assert S.stop(server, S.TERM_GRACE_S) == "killed"
     assert server.calls == [("signal", S.signal.SIGINT), ("wait", S.TERM_GRACE_S), ("kill",), ("wait", None)]
     assert groups == [(4242, S.signal.SIGKILL)] and S.TERM_GRACE_S < 20
+
+
+def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    rows = {"check": "t"}
+    paths = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path / "site", {"bucket_us": 1, "sat_us": 1, "free_us": 1}, 600.0, 600.0,
+                             boundary_rows=rows)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
+    for a, arm_ in S.ARMS.items():
+        ours = [p for p in paths[a] if p in (str(tmp_path / "site"), str(S.HERE), str(S.ROOT), str(S.ROOT / "integrations/vllm"))]
+        assert bool(ours) == bool(arm_.plugin or arm_.tick), a
