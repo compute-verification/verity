@@ -33837,3 +33837,29 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 **Lock** [read]. No record should move, so I ran no `--update --moved`. The `reads` group `Proofs.Flock.Claims.Recursion.VStarNets` keeps `fileLs`, `joinNl`, `netLs`, `rowsLs` and `secLs` in that module, and its digest is over those definitions' hashes (`check.py`'s `module_digest`), not over the file. `Fwd.lean` and `Walk.lean`, which `compile_time` lists by file digest, are untouched. [guess] The unread cap of `Proofs/Flock` (241 modules) rises only if `Text.lean` or `VStarNetsThree.lean` is wholly unread, and both hold lemmas the staged part's proofs use; a records run says.
 
 **Next.** I wake at about 23:15Z, read the run and post its result here. If it fails: the errors, and a fix or a revert of the second commit on the branch. If it passes: my brief said no PR, and your 21:51Z word, which is later, says a branch gets its PR once its checks pass, so I open it unmarked with `research queue open` and name its number here, unless my mailbox says otherwise by then.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 22:19Z: 6bdc stopped in setup_stX on the class digest's emptiness, a hypothesis that walk never had as a rule; fixed at 14f907a32e, Setup.lean now passes alone, r20261110-221715-aff2 (cpu-12) tries the chain, ETA about 23:00Z
+
+- **Head** `14f907a32e` on `cursor/proofs-twowitness-0d28`, pushed. Nothing landed, no file moved; the freeze check prints nothing [run].
+- **6bdc's verdict** (at `ff8c126681`; `Scope.lean`'s dependency build exit 1 after 1568 s) [run]:
+  - 97c4's tuple match now reduces: the walk got past it to `Stmt.setupHidden`'s `J.get pub.header "units"` (HmRow.lean:2393).
+  - It stopped there, in `Setup.lean`'s `setup_stX`, with "fwd: no value for" `(TreeMap.Raw.ofList (if C.isEmpty = true then … else …) compare).get? "indices"`. That is the public file's units header as `HmIn.drawn` builds it, branching on the free class digest `C`. The other two errors (`setupTables_X`, an unknown `setup_stX`) follow from it.
+  - `Nontrivial` passed (877 s; its 20 theorems on the three axioms only), so the walker's new step leaves Concrete's walks as they were.
+- **The same kind as 97c4** [read]: a term the walker never evaluated, here a free variable reaching a decision. `hCe : C.isEmpty = false` was a hypothesis of `setup_stX` but a rule only of `load_pubX`, so nothing rewrote `C.isEmpty` inside this value. It is the third stop of this kind (3020 on the class digest, 97c4 on the tuple, 6bdc on the class digest again).
+- **The fix**, `14f907a32e` [read]: `hCe`, and `rfl` rules for `cO`'s `g` and `upv` (both 1, from META), are now among `setup_stX`'s and `setupTables_X`'s rules, with every other hypothesis equation each of those walks takes (`hH`, `hcl`, `hls`, `hlh`, `hps`, `hph`, `hc1`, `hc2`, `hck`, `hu1`, `hu2`, `hd`). `InsSetup`'s `setup_X` and `Scope`'s `load_pubO` already listed all of theirs; `SetupAt` has no walk.
+- **The check before a full try, done first** [run]: `r20261110-214701-5adb`, a `--try` of `Setup.lean` alone on cpu-12, exited 0, with its 11 theorems on the three axioms only. So `setup_stX` and `setupTables_X` now walk to the end. It took 1640 s rather than minutes, because it landed on a build tree 110 files behind (build-0) and rebuilt Concrete's chain first.
+- **What catches such stops cheaply** [guess, from these three]:
+  1. A static rule, now applied in my files: a walk lists every hypothesis equation it takes among its own rules. All three stops came through that gap or its cousin, a projection of a walked value without its `rfl` rule.
+  2. A try of the one module whose walks changed, before the chain. When it fails it stops where the chain would, and it needs nothing downstream to build.
+  - Neither controls which build tree a try lands on: a cold one costs about 25 minutes whatever the target [run, 5adb and aff2].
+- **Running**: `r20261110-221715-aff2` on cpu-12, a `--try` of `InstanceStmt/Scope.lean`, whose dependencies are `SetupAt` and `InsSetup`. It landed on build-2, also 110 files behind, so Concrete's chain rebuilds first. ETA about 23:00Z [guess].
+- **cpu-12, not `--on auto`** [guess]: cpu-12's build trees hold this chain's dependencies at or near this commit; a node without one builds the whole Security chain cold, hours rather than half an hour.
+- **`main` not merged**:
+  - The chain does read `DrawOkJson.lean`: `Scope.lean`'s import closure (2006 modules) reaches it through `Discharge.ZkLink` [run].
+  - But #8411 only adds three theorems there (`ofJson_toJson_drawOf_work`, `drawFileZK_of_toJson_work`, `drawFileZK_of_toJson_law`) and edits docstrings and one `open private`; the chain uses none of them [read].
+  - My branch is 668 files from `origin/main`, so a merge would throw away every warm tree for this try [run].
+- **What (A) still needs, in order**:
+  1. `SetupAt`, `InsSetup`'s `setup_X` and `Scope`'s facts, each on its first run, on aff2;
+  2. drop `checkPartition_X`'s `trace`;
+  3. a records run and `--siblings`.
+- **Date** [guess]: counting this as one more round used, (A) still holds for Thu 12 Nov 18:00Z. All six of Setup's walks pass now, what's left has its first run going, and the date is about 43 hours away.
