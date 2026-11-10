@@ -15,11 +15,11 @@ public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Binding.RowSeg
 public import Proofs.Flock.Soundness.Binding.RowsX
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.SessionBatch
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.SessionLoop.Concrete.Inputs
-import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
