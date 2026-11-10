@@ -1,0 +1,219 @@
+# Trace and transcript, swapped back to the Glossary's words: what `tools/move/rename.py --map
+# tools/move/trace_transcript_map.toml` renames, in one move. Core's `Verity.Circuit.Transcript`, one run's value for
+# every gate, is a trace, so it becomes `Verity.Circuit.Trace`. The claims layer's `Claims.Trace`, a run's messages, each
+# party's oracle calls and the decision, is a transcript, so it becomes `Claims.Transcript`, and `Trace.seen`, its fields
+# and `Claims.Recursion.abortTrace` follow. `Flock.Transcript`, `Pouw.Transcript`, `Pouw.PearlC.Transcript`,
+# `FlockComplete.Trace` and `Accounting.Remote.Held.Trace` keep their names. Declarations keep their place in the locks'
+# records: `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+#
+# Each word is renamed only in the files where every `Transcript` or `Trace` outside comments resolves to that
+# declaration, as the build's `.ilean` references have it, apart from the two [keep] patterns:
+# - the dotted names in the two declaring modules, the vocabulary guard's keys, `ZkStep` (which also opens
+#   `Flock.Transcript`) and `Verity.Recursive` (which spells both in full);
+# - `Transcript` where it is `Verity.Circuit.Transcript` (`C.Transcript`, `Circuit.Transcript`, ...);
+# - `Trace` where it is `Claims.Trace`.
+# A module in a namespace under `Claims` that means another `Transcript` names it in full (`_root_.Flock.Transcript`),
+# since `Claims.Transcript` comes before an opened name there.
+[words]
+"abortTrace" = "abortTranscript"
+
+[[words_in]]
+files = [
+    "Security/Definitions/Core/Circuit.lean",
+    "Security/Definitions/Core/Interaction.lean",
+    "Security/Proofs/Flock/Claims/KS/ZkStep.lean",
+    "Security/Proofs/Properties/Verity/Recursive.lean",
+    "tests/test_lean_vocabulary.py",
+]
+words = { "Verity.Circuit.Transcript" = "Verity.Circuit.Trace", "Claims.Trace" = "Claims.Transcript" }
+
+[[words_in]]
+files = [
+    "Security/Definitions/Accounting/Actual.lean",
+    "Security/Definitions/Accounting/Confidence.lean",
+    "Security/Definitions/Accounting/JointLive.lean",
+    "Security/Definitions/Accounting/JointPeriod.lean",
+    "Security/Definitions/Accounting/ReadUnit.lean",
+    "Security/Definitions/Core/Blocks.lean",
+    "Security/Definitions/Core/Circuit.lean",
+    "Security/Definitions/Core/Expand.lean",
+    "Security/Definitions/Core/Formalism.lean",
+    "Security/Definitions/Core/Guarantees/Circuit.lean",
+    "Security/Definitions/Core/Guarantees/Expand.lean",
+    "Security/Definitions/Core/Guarantees/Formalism.lean",
+    "Security/Definitions/Core/Partition.lean",
+    "Security/Definitions/Core/Structure.lean",
+    "Security/Definitions/Nci/Assumptions/Capability/Information.lean",
+    "Security/Definitions/Nci/Assumptions/Fmt2.lean",
+    "Security/Definitions/Nci/Assumptions/Info.lean",
+    "Security/Definitions/Nci/Capability/Items.lean",
+    "Security/Definitions/Nci/Capability/Toy.lean",
+    "Security/Definitions/Nci/Formalism/Circuits.lean",
+    "Security/Definitions/Nci/Formalism/Runs.lean",
+    "Security/Definitions/Nci/Formalism/Training.lean",
+    "Security/Definitions/Nci/Guarantees/Capability/Budgets.lean",
+    "Security/Definitions/Nci/Guarantees/Fmt2.lean",
+    "Security/Definitions/Nci/Guarantees/Info.lean",
+    "Security/Definitions/Nci/Info.lean",
+    "Security/Definitions/Nci/Support.lean",
+    "Security/Definitions/Pouw/PearlC/TileCheck.lean",
+    "Security/Definitions/Spot/Partition.lean",
+    "Security/Proofs/Accounting/JointLive.lean",
+    "Security/Proofs/Accounting/Lemmas/JointLive.lean",
+    "Security/Proofs/Accounting/ReadUnit.lean",
+    "Security/Proofs/Accounting/ReadUnit/Deployed.lean",
+    "Security/Proofs/Accounting/ReadUnit/Tie.lean",
+    "Security/Proofs/Core/Boolean.lean",
+    "Security/Proofs/Core/Circuit.lean",
+    "Security/Proofs/Core/Expand.lean",
+    "Security/Proofs/Core/Formalism.lean",
+    "Security/Proofs/Core/Structure.lean",
+    "Security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "Security/Proofs/Flock/Bridge/UnitRows.lean",
+    "Security/Proofs/Flock/Claims/Scope/System.lean",
+    "Security/Proofs/Nci/Capability/Budgets.lean",
+    "Security/Proofs/Nci/Capability/Items.lean",
+    "Security/Proofs/Nci/Capability/Witnesses.lean",
+    "Security/Proofs/Nci/Fmt.lean",
+    "Security/Proofs/Nci/Fmt2.lean",
+    "Security/Proofs/Nci/Formalism/Reconstruction.lean",
+    "Security/Proofs/Nci/Info.lean",
+    "Security/Proofs/Nci/Support.lean",
+    "Security/Proofs/Pouw/PearlC/Block4Sem.lean",
+    "Security/Proofs/Pouw/PearlC/Row4Words.lean",
+    "Security/Proofs/Pouw/PearlC/RowCircuit.lean",
+    "Security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
+    "Security/Proofs/Pouw/PearlC/TileCheck4.lean",
+    "Security/Proofs/Pouw/PearlC/TileCheck4Words.lean",
+    "Security/Proofs/Pouw/PearlC/TileCheck8.lean",
+    "Security/Proofs/Pouw/PearlC/TileCheck8Words.lean",
+    "Security/Proofs/Pouw/PearlC/TileCircuit.lean",
+    "Security/Proofs/Pouw/PearlC/TileValues.lean",
+    "Security/Proofs/Pouw/PearlC/WholeCircuit.lean",
+    "Security/Proofs/Properties/Verity/Recursive/Audit.lean",
+    "Security/Proofs/Properties/Verity/Recursive/Target.lean",
+    "Security/Proofs/Properties/Verity/Sampled.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Unbound.lean",
+    "Security/Proofs/Spot/Instance.lean",
+    "Security/Properties/Verity/Game.lean",
+]
+words = { "Transcript" = "Trace" }
+
+[[words_in]]
+files = [
+    "Security/Definitions/Claims/Recursion.lean",
+    "Security/Definitions/Claims/Sampling.lean",
+    "Security/Definitions/Core/Interaction.lean",
+    "Security/Proofs/Flock/Claims/Bridge/Committed.lean",
+    "Security/Proofs/Flock/Claims/Bridge/CommittedNil.lean",
+    "Security/Proofs/Flock/Claims/Bridge/Hm96Tree.lean",
+    "Security/Proofs/Flock/Claims/Bridge/OfGame.lean",
+    "Security/Proofs/Flock/Claims/Complete/Run.lean",
+    "Security/Proofs/Flock/Claims/Complete/ZkTables/Ready.lean",
+    "Security/Proofs/Flock/Claims/DeployE.lean",
+    "Security/Proofs/Flock/Claims/ERep.lean",
+    "Security/Proofs/Flock/Claims/ERepCost.lean",
+    "Security/Proofs/Flock/Claims/Finder.lean",
+    "Security/Proofs/Flock/Claims/KS/ConflictRun.lean",
+    "Security/Proofs/Flock/Claims/KS/PlainLock.lean",
+    "Security/Proofs/Flock/Claims/KS/PlainRConflict.lean",
+    "Security/Proofs/Flock/Claims/KS/Range.lean",
+    "Security/Proofs/Flock/Claims/KS/Wait.lean",
+    "Security/Proofs/Flock/Claims/KS/Width.lean",
+    "Security/Proofs/Flock/Claims/KS/ZkAbortJR.lean",
+    "Security/Proofs/Flock/Claims/KS/ZkAbortR.lean",
+    "Security/Proofs/Flock/Claims/KS/ZkLock.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Abort.lean",
+    "Security/Proofs/Flock/Claims/Recursion/AbortFork.lean",
+    "Security/Proofs/Flock/Claims/Recursion/AbortWait.lean",
+    "Security/Proofs/Flock/Claims/Recursion/BoundBridge.lean",
+    "Security/Proofs/Flock/Claims/Recursion/BoundMerged.lean",
+    "Security/Proofs/Flock/Claims/Recursion/BoundRoute.lean",
+    "Security/Proofs/Flock/Claims/Recursion/BoundRouteCols.lean",
+    "Security/Proofs/Flock/Claims/Recursion/BoundRun.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Compose.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Cost.lean",
+    "Security/Proofs/Flock/Claims/Recursion/CostExp.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeployChecked.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeployFacts.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeployHonest.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeployPremises.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeployScopeRuns.lean",
+    "Security/Proofs/Flock/Claims/Recursion/DeploySessions.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Finders.lean",
+    "Security/Proofs/Flock/Claims/Recursion/FlockAbort.lean",
+    "Security/Proofs/Flock/Claims/Recursion/FlockKSAbort.lean",
+    "Security/Proofs/Flock/Claims/Recursion/FlockKSLin.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Gap.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Inner.lean",
+    "Security/Proofs/Flock/Claims/Recursion/InnerAbort.lean",
+    "Security/Proofs/Flock/Claims/Recursion/InnerAccepts.lean",
+    "Security/Proofs/Flock/Claims/Recursion/KS.lean",
+    "Security/Proofs/Flock/Claims/Recursion/OuterKS.lean",
+    "Security/Proofs/Flock/Claims/Recursion/PlainKSAbortFails.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Serve.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Transport.lean",
+    "Security/Proofs/Flock/Claims/Recursion/VStar.lean",
+    "Security/Proofs/Flock/Claims/Recursion/VStarCross.lean",
+    "Security/Proofs/Flock/Claims/Recursion/Wald.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Bext.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Cost.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Extract.lean",
+    "Security/Proofs/Flock/Claims/Sampling/KS.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Prefix.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Runs.lean",
+    "Security/Proofs/Flock/Claims/Sampling/RunsExp.lean",
+    "Security/Proofs/Flock/Claims/Sampling/SessionSteps.lean",
+    "Security/Proofs/Flock/Claims/Sampling/Wait.lean",
+    "Security/Proofs/Flock/Claims/Witnesses/Recursion.lean",
+    "Security/Proofs/Flock/Claims/Witnesses/Sampling.lean",
+    "Security/Proofs/Flock/Claims/Witnesses/SamplingGeneric.lean",
+    "Security/Proofs/Flock/Claims/Witnesses/SamplingGenericCost.lean",
+    "Security/Proofs/Flock/Claims/ZK/Compose.lean",
+    "Security/Proofs/Flock/Claims/ZK/Congr.lean",
+    "Security/Proofs/Flock/Claims/ZK/Interact.lean",
+    "Security/Proofs/Flock/Claims/ZK/NonVacuous.lean",
+    "Security/Proofs/Flock/Claims/ZK/Stop.lean",
+    "Security/Proofs/Flock/RecGeneric/AtFlockCompiledContract.lean",
+    "Security/Proofs/Flock/RecGeneric/AtFlockContract.lean",
+    "Security/Proofs/Flock/RecGeneric/AtFlockCounts.lean",
+    "Security/Proofs/Flock/RecGeneric/BadDev.lean",
+    "Security/Proofs/Flock/RecGeneric/CompiledCost.lean",
+    "Security/Proofs/Flock/RecGeneric/OuterProof.lean",
+    "Security/Proofs/Flock/RecGeneric/Plurality.lean",
+    "Security/Proofs/Flock/RecGeneric/ServerRun.lean",
+    "Security/Proofs/Flock/RecGeneric/ToyProof.lean",
+    "Security/Proofs/Flock/RecGeneric/Witnesses.lean",
+    "Security/Proofs/Flock/Recursive/KSNontrivial.lean",
+    "Security/Proofs/Flock/Recursive/LinksOuter.lean",
+    "Security/Proofs/Flock/SamplingGeneric/Assemble.lean",
+    "Security/Proofs/Flock/SamplingGeneric/Counter.lean",
+    "Security/Proofs/Flock/SamplingGeneric/Efficient.lean",
+    "Security/Proofs/Flock/SamplingGeneric/Fails.lean",
+    "Security/Proofs/Flock/SamplingGeneric/Two.lean",
+    "Security/Proofs/Flock/SessionLoop/SampledRelay.lean",
+    "Security/Proofs/Flock/SpotFlock/Accepting.lean",
+    "Security/Proofs/Flock/SpotFlock/Facts.lean",
+    "Security/Proofs/Flock/SpotFlock/Opens.lean",
+    "Security/Proofs/Properties/Verity/Recursive/ScheduleInner.lean",
+    "Security/Proofs/Properties/Verity/Recursive/ScheduleSession.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Record/Accepts.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Record/Opens.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+]
+words = { "Trace" = "Transcript" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# `(τ : Transcript)`: `Pouw.PearlC.Transcript` in `TileCheck`. `Exec.Transcript`: Flock's executed event log in
+# `Verity.Sampled`.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '\(τ : Transcript\)', 'Exec\.Transcript\b']
+strings = []
+
+[keep_in]

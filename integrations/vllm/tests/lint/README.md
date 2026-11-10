@@ -24,7 +24,7 @@ failure message carries its fix.
  - P15: no versioned twins;
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
- counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
+ counted per file, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
  domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
  a plain literal, which the rule skips.
@@ -42,6 +42,11 @@ failure message carries its fix.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
+- **Ruff with vLLM's rules** (`test_ruff_vllm.py`, config `ruff_vllm.toml`, allowlist `allowlists/ruff_vllm.json`): vLLM's
+ selection less the rules `ruff.toml` selects (so no finding is in both lists) and less line length, with `print` (T201)
+ flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
+ lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
+ as this lint's code. Once both lists are small, one config and one list replace the two.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
@@ -50,11 +55,12 @@ failure message carries its fix.
 exception or raises a recorded count: against the commit below it (in a candidate, its `Queue: #N` merge against the merge
 below; a branch, against its merge base with `main`, or the merge of its merge bases when a branch that merged both `main`
 and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A kind whose entries record counts (typed_records' or-empty per
-package, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
-at least as much, so a move from one package to another passes, but the kind's total may not grow. P10's count is a size,
+file, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
+at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
-extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
+extends and the root `dev` group's ruff pin (with vLLM's rules, `test_ruff_vllm.py` and `ruff_vllm.toml`), so the gate reruns
+it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of

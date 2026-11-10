@@ -75,7 +75,7 @@ follows.
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the verified queue's recorded check of a candidate, and its records run |
-| `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
@@ -90,7 +90,7 @@ Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checko
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py flock"            # one suite
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick"
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
 uv run tools/verity/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
 uv run tools/verity/check/suites.py --explain SUITE       # why a suite would run
@@ -195,10 +195,10 @@ PRs land through the verified queue (`research queue vqueue`): its flags are `dr
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
 `main` as a candidate, checks it with every job, those off the gate too (`train.sh --deferred`, in shards), and moves
 `main` only to a candidate whose check passed every step on the gate; `post_train.py` then runs the vLLM regression's
-rebuilds. A failure the candidate's base shares blames no PR; any other's suspects are the PRs whose change touches what
-it names: a lone one is ejected, several are bisected. A red job off the gate holds nothing. The team skill's "Landing" is
-the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its body) lands as any PR does, on a land verdict;
-`move_check.py` certifies a pure move (`verity check move BASE HEAD`).
+rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any other's suspects are the PRs
+whose change touches what it names: a lone one is ejected, several are bisected. A red job off the gate holds nothing. The
+team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its body) lands as any PR does,
+on a land verdict; `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
 
 ## The public boundary
 

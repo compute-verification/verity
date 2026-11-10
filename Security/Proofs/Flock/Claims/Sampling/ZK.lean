@@ -259,12 +259,8 @@ theorem zk_deploy_mask_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ)
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge from the models**: `sampling_deployed` at
 the record masked at `tapeOf` and `S_GK` given the leaf layer, its `hZK` from `zk_deploy_mask_of_models_gap`. -/
-theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
-    (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
-    (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
-    (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
+theorem sampling_deployed_models (H : Msg → Msg) (hslots : DrawSlots (deploy rel c))
+    (hprog : ProgramScope (deploy rel c)) (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
     (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
@@ -275,14 +271,12 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hS : ∀ lx, (L.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (L.proto lx).NonDegenerate (Mc lx))
     (hI : ∀ lx, (L.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) (hC : L.G.CoinCheck) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
-      KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      Complete H (deploy rel c) ∧
       ZK H ((deploy rel c).mask L.G.Nonce L.G.Rand tapeOf (L.simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
         fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals hComplete
-    tapeOf (L.simLeakE t (t * 3 ^ t)) _ _
+  sampling_deployed rel c H hslots hprog hComplete tapeOf (L.simLeakE t (t * 3 ^ t)) _ _
     (zk_deploy_mask_of_models_gap rel c H L t ht hK My cs tapeOf hP Mp Mc nL nB hnL hnB hL hS hN hI hC)
 
 end SamplingDeploy

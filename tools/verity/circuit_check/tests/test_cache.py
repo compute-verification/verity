@@ -394,8 +394,9 @@ def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeyp
     """`cache.declared` of SynTop's entry: the files of the modules it holds and of their import sites, its binding file and
     its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an
     unheld one by its name, through a move); each path the search for its modules asked about, so a module put where the
-    search would find it first is a change of what it declares; whether it read the registries (every reached Definition's
-    registrar).  SynOther's leaves out what only SynTop's build imported, and a code object's pseudo-file is no path."""
+    search would find it first is a change of what it declares (a package's ``__init__.py`` under no directory, by that path:
+    `cache.probed`); whether it read the registries (every reached Definition's registrar).  SynOther's leaves out what only
+    SynTop's build imported, and a code object's pseudo-file is no path."""
     from circuit_check import cache as CC
 
     root = _tree(tmp_path)
@@ -407,9 +408,27 @@ def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeyp
     assert {"syn/__init__.py", "syn/top.py", "syn/sub.py", "syn/shape.py", "syn/prims.py", "syn/check.py", "syn/h.py",
             "targets.py", _pin("SynTop_v1")} <= set(top["files"]), top["files"]
     assert "syn" in top["listed"] and "syn/idle.py" not in top["files"] and top["registry"], top
-    assert {"syn/top/__init__.py", "syn/sub/__init__.py"} <= set(top["probes"]), top["probes"]
+    assert {"syn/top", "syn/sub"} <= set(top["probes"]) and not any(p.startswith("syn/top/") for p in top["probes"]), top["probes"]
     assert not {"syn/top.py", "syn/sub.py", "syn/shape.py", _pin("SynTop_v1")} & set(other["files"]), other["files"]
     assert {"syn/other.py", _pin("SynOther_v1")} <= set(other["files"]), other["files"]
+
+
+def test_a_probe_under_a_path_that_is_no_directory_is_declared_as_that_path(tmp_path):
+    """`cache.probed`: nothing is under a path that is no directory, so a probe under one is declared as the first such path
+    (its kind holds theirs), and one whose every ancestor is a directory as itself.  In a checkout the directories are those
+    git has (`visible`), in a tree with no git the filesystem's; once a directory is there, the probes under it are their own."""
+    from circuit_check import cache as CC
+
+    probes = ["pins/digests/X_v1.json", "pins/digests/Y_v1.json", "pins/definitions/X_v1.json", "a.py/b", "ast/__init__.py",
+              "ast.py", "top"]
+    want = {"pins/digests", "pins/definitions/X_v1.json", "a.py", "ast", "ast.py", "top"}
+    plain = tmp_path / "plain"
+    (plain / "pins" / "definitions").mkdir(parents=True)
+    (plain / "a.py").write_text("")
+    assert CC.probed(plain, probes) == want
+    assert CC.probed(_tree(tmp_path / "git", {"pins/definitions/Z_v1.json": "{}"}), probes) == want
+    (plain / "pins" / "digests").mkdir()
+    assert CC.probed(plain, probes) == want - {"pins/digests"} | {"pins/digests/X_v1.json", "pins/digests/Y_v1.json"}
 
 
 def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tmp_path, monkeypatch):

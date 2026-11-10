@@ -39,8 +39,10 @@ def cutlass_scaled_mm(out: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale
     ``vllm._custom_ops`` registers), written into ``out`` ``[m, n]`` and returned. Unlike ``_custom_ops.cutlass_scaled_mm``
     it checks no shape and never falls back to Triton. ``a`` is ``[m, k]`` row-major and ``b`` ``[k, n]`` column-major,
     int8 or FP8, with per-tensor, per-row and per-column, or 128-block scales."""
+    import importlib
+
     import torch
-    from vllm import _custom_ops  # noqa: F401
+    importlib.import_module("vllm._custom_ops")
     torch.ops._C.cutlass_scaled_mm(out, a, b, scale_a, scale_b, bias)
     return out
 

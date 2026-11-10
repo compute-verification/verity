@@ -16,9 +16,8 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 `bandwidth-instantiation` for the stored words).
 
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
-  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
-* `RateHonest`: an honest device that reads every word once is accepted on every coin, with footprint and ingress
-  exactly `N·b`.
+  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
+  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
 * `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.
@@ -89,22 +88,6 @@ def RateAudit : Prop :=
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
-
-/-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
-`N`, `b`, `h` and `ρ` there is a device with no on-chip state and no free side sources, whose link carries exactly the
-certified stream (`L = ρ`) and which makes `N` oracle queries (a `Prover N b h ρ 0 ρ N`), that is accepted on every
-store, stream, oracle and sample, so with probability 1; its footprint and its ingress are exactly the store, `N·b`
-bits, and its compute is `N·c_tag`, with nothing rebuilt. It reads the stream, then reads every word once and queries
-the oracle at it under the stream. Against `RateAudit` at `S = 0`, `L = ρ` (so `c_free = 0`), `q = N` and
-`F = N·c_tag`, the honest `N·b` sits above the floor `k·b − λ − (N − k)·c_tag·b/c_enc` by the sample's slack
-`(N − k)·b`, about `ε_s·N·b`, plus `λ` and the tagging the sample's slack leaves unspent. Proof:
-`Accounting.SecurityProofs.RateHonest`.
-
-Frozen (completeness): the honest device's acceptance, which shows that `RateAudit`'s event is not vacuous. -/
-def RateHonest : Prop :=
-  ∀ N b h ρ : ℕ, ∃ A : Rate.Prover N b h ρ 0 ρ N,
-    ∀ (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
-      A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
 
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
 own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Devices`: window `i`'s device

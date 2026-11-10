@@ -24,8 +24,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'
-  research status RUN  # check back on a run; --wait only for one under 20 min
+  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
+  research status RUN  # check back on a run; research run --wait only under 20 min
   ~~~
 
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
@@ -130,7 +130,8 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   execution, `low` for trivial lookups.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
-  its shell hook delivers it within about a minute (`--local`: a subagent on your VM, at once).
+  its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
+  `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
