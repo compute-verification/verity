@@ -188,10 +188,10 @@ open Classical in
 `Assumptions.PackedActivationsIncompressible`. -/
 theorem iu_reads_packed {k : ℕ} (D : RegisteredCircuit) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
     (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (h : Assumptions.PackedActivationsIncompressible D c Γ K b_w b_a)
-    (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
+    (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (freshInput D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +
         b_a * (d * (univ.filter (c.Full R)).card + ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card) ≤
-      novelReads D R := by
+      freshInput D R := by
   refine le_trans ?_ (h R hR hΓ hK)
   gcongr
   have hdisj : Disjoint ((c.inputsUsed R).filter fun x => c.Full R x.2.1 ∧ ¬ c.LinkedWhole R x.1 x.2.1 x.2.2)
@@ -217,10 +217,10 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
     {dd emax : ℕ} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K)
     (hw : 0 < b_w) (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
     (hd : ∀ ℓ, dd ≤ ch.d ℓ) (he : ∀ ℓ, ch.e ℓ ≤ emax)
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-        b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤ ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
+        b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤ ∑ u, (freshInput d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
         (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
       (univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
@@ -228,14 +228,14 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
     α * d.D.size d.D.computed + (1 - μ) * B := by
   have hdpos : (0 : ℝ) < dd := by exact_mod_cast hdd
   have hcapP := piece_caps (M := M) hα hαK hP hB
-  have hr : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_piece hB u
+  have hr : ∀ u, (freshInput c (piece M P u) : ℝ) ≤ freshInput d (P.gates u) := fun u => by
+    exact_mod_cast freshInput_piece hB u
   have hiu := fun u => iu_reads_packed c ch Γ K b_w b_a dd hd ha.le hA (piece M P u) (piece_subset_computed u)
     (hcapP u).1 (hcapP u).2
   have h₁ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
       b_a * (dd * ((univ.filter (ch.Full (piece M P u))).card : ℝ) +
         ((ch.inputsUsed (piece M P u)).filter fun x => ¬ ch.Full (piece M P u) x.2.1).card)) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) :=
+      ∑ u, (freshInput d (P.gates u) : ℝ) :=
     sum_le_sum fun u _ => (hiu u).trans (hr u)
   have hW := mu_weighting_budget univ hμ₀ hμ₁ h₁ h₂
   have hM := max_mul_sum_le univ hw ha hdpos hK hμ₀ hμ₁ (le_max_left (emax : ℝ) (K / (4 * b_w * dd)))
@@ -243,8 +243,8 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
     (fun _ _ => by positivity) (fun _ _ => by positivity) (fun _ _ => by positivity)
     (fun u _ => (hiu u).trans (hcapP u).2) (fun u _ => card_products_le_packed ch (piece M P u))
     (fun u _ => by exact_mod_cast card_products_le_columns_packed ch (piece M P u) he) hW
-  have hrsum : ∑ u, (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size d.D.computed :=
-    calc ∑ u, (novelReads d (P.gates u) : ℝ) ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := sum_le_sum fun u _ => (hP u).2
+  have hrsum : ∑ u, (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size d.D.computed :=
+    calc ∑ u, (freshInput d (P.gates u) : ℝ) ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := sum_le_sum fun u _ => (hP u).2
       _ = α * d.D.size d.D.computed := by
           rw [← mul_sum]
           congr 1

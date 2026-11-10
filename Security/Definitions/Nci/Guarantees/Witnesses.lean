@@ -280,7 +280,7 @@ def IncompressibleContainedMatMulOn_nontrivial : Prop :=
           (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
         (univ.filter fun p : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ) × Fin (ch1.d ℓ) =>
           ch1.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ))
+      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (freshInput D {v} : ℝ))
 
 /-- **`IncompressibleContainedTrainingOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
 instance at coverage `κ = 1`. -/
@@ -299,7 +299,7 @@ def IncompressibleContainedTrainingOn_nontrivial : Prop :=
     ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
           (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
         (1 * D.D.size D.D.computed - 2 * Mθ.dark.card) ≤
-      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
+      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (freshInput D {v} : ℝ)))
 
 /-- **`IncompressibleThreadedThrottled`'s and `IncompressibleThreadedThrottledOn`'s premises hold together**:
 `ThreadedThrottled_honest`'s instance under `TrainingIncompressible` at the chain `ch1`. -/
@@ -340,7 +340,7 @@ def PackedIncompressibleContainedMatMulOn_nontrivial : Prop :=
           (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
         (univ.filter fun p : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ) ×
             Fin (ch1.toPacked.d ℓ) => ch1.toPacked.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ))
+      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (freshInput D {v} : ℝ))
 
 /-- **`PackedIncompressibleContainedTrainingOn`'s premises hold together**:
 `PackedIncompressibleContainedMatMulOn_honest`'s instance at coverage `κ = 1`. -/
@@ -360,7 +360,7 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
     ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
           (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
-      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
+      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (freshInput D {v} : ℝ)))
 
 /-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
 over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all

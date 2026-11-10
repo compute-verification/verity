@@ -44,7 +44,7 @@ make one run maps any piece by one affine map, whole members of any other batch 
 pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
 one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
 are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
-out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+out, and its novel reads the width of their union (`freshWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
 Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
@@ -57,7 +57,7 @@ What has no closed form here is walked one by one up to `WALK` and refused past 
 walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
 that aren't, a scan's ys read iteration by iteration, and chains longer than `WALK`. Still walked unbounded: the leaves
 of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
-same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks, at word level or on bits.
+same IU (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -931,7 +931,7 @@ structure Cl where
   res : Array (Nat × Nat × Nat)
   deriving Inhabited
 
-/-- One segment of `novelWidth`'s: none when it is no segment of copies or names no gate, its copies' intervals when
+/-- One segment of `freshWidth`'s: none when it is no segment of copies or names no gate, its copies' intervals when
 copies may overlap or go backwards, else one frame. -/
 def copiesStep (acc : Array (Nat × Nat × Nat) × Array Cl) (s : Seg) : Array (Nat × Nat × Nat) × Array Cl :=
   if s.reps ≤ 1 then acc else
@@ -952,7 +952,7 @@ def frameStep (frames : Array Cl) (x : Cl) : Array Cl :=
     else frames.push x
   | none => frames.push x
 
-/-- Item `j` of `novelWidth`'s sweep as gates: interval `j` of `ivs`, or frame `j - ivs.size`'s copies. -/
+/-- Item `j` of `freshWidth`'s sweep as gates: interval `j` of `ivs`, or frame `j - ivs.size`'s copies. -/
 def expandIn (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (j : Nat) : Array (Nat × Nat × Nat) :=
   if j < ivs.size then #[ivs[j]!]
   else
@@ -973,7 +973,7 @@ def sweepStep (width : Array Nat → Nat) (acc : Nat × Array Nat × Nat) (it : 
 
 /-- The total width of the distinct gates of `segs`. A segment of copies is copies of one frame; copies of one frame are
 counted as copies times one copy's width, alone in their span, and with what else meets their span as gates. -/
-def novelWidth (segs : Array Seg) : Nat :=
+def freshWidth (segs : Array Seg) : Nat :=
   let acc := segs.foldl copiesStep (gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)), #[])
   let ivs := acc.1
   let frames := (acc.2.toList.mergeSort fun x y =>
@@ -1124,7 +1124,7 @@ def evaluate (j : Json) : Except String Json := do
   if !(List.range n).all used.contains then throw "empty-iu"
   let size := sizes offs own n
   let into := intoOf offs own theta reads n
-  let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
+  let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
 /-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusalOf` writes it. -/
