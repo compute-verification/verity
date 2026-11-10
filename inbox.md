@@ -39,3 +39,11 @@ Least sure, second: each of the three old READMEs gains one more line than the s
 Left as found, outside the brief [run: `grep -n`]: the verifier's README, line 351, still says "`lean/` is the certifier program, the Lake package `certifier_program`" (now `../device/program/lean`); the policy's README, line 112, names `../tests/test_nci_*.py` (now in `verity/protocols/certifier/verifier/network/tests`).
 One comment on NET-307. Branch pushed, notes synced, nothing only on the VM [run: `git ls-remote`, `research notes sync`]. Your cpu-10 message: I have no run anywhere. I wait for the cut. TIMER: none
 
+[2026-11-10T16:04Z] 3ad321ce3fd3
+TIMEPAIR, Tue 10 Nov 8:05 AM PST. Two things.
+1. **Suites on the head pass: 7 touched, 7 passed, 0 failed** [run r20261110-154904-e5a4, cpu-12, `--changed c3ae3eaaf0b7 --quick`]. Head 4ced0888b7, origin/main merged in and pushed, nothing conflicted [run]. On NET-296.
+2. **Your window message is read and INF-664's 7:54 comment too [read].** The rehearsal across cpu-10 and cpu-8 is running now, no pool, START 8:05:00 AM PST, 300 buckets a case, ends about 8:16: serve r20261110-160259-c494, observe r20261110-160306-012b. "Window holds" or "move it" follows by 9:15.
+- My gate run on cpu-10's pool (r20261110-155407-64ad) is cancelled [run]; its rerun is on cpu-12 (r20261110-155917-6865).
+- cpu-10 for A: the address goes to both sides as a sent file, read by a run on cpu-10; `window.sh` no longer names cpu-2's and prints no address.
+- `--max-min` is refused without `--queue`; I use `--timeout` (50m for the second run, so it cannot pass 11:30).
+
