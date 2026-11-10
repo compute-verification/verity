@@ -423,7 +423,7 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
 
 def pous_check() -> Any:
     """`pous_check`'s `timed_audit.py`, which runs `pous-timed-audit` through `verity_difftest`, loaded by path: the Lean
-    check is a tree of its own (`tests/test_boundaries.py`'s `SEPARATE`)."""
+    check is a distribution of its own (`tests/import_order.toml`'s `distribution`)."""
     import importlib.util
 
     path = Path(__file__).resolve().parents[4] / "verity/protocols/pous/verifier/check/timed_audit.py"
