@@ -2,7 +2,8 @@
 """VLLM-289: the restack rehearsal's driver for many branches in one `research run --on auto --cwd source` job. Scratch: it
 lands nowhere.
 
-    drive.py --staged STAGED --move M [--move M ...] --main MAIN [--tool REF] [--workers N] [--pins auto|on|off] [--real] [--smoke] PR=HEAD...
+    drive.py --staged STAGED [--base BASE] [--move M ...] [--main MAIN] [--tool REF] [--workers N] [--pins auto|on|off]
+             [--real --ident-name NAME --ident-email EMAIL] [--smoke] PR=HEAD...
 
 It makes the job's own clone of the source root with the repository's merge drivers registered (`research.clone.make`, what
 `--cwd clone` calls: a source root has none, and a lock, a pyproject's test lists or a lint allowlist then merges as text),
@@ -14,15 +15,19 @@ In the clone, in order:
    its command and still end `pins-stale`, so with `--pins auto` the branches then run with `--no-pins`;
 2. `restack.check_generated` for each move, once: its result stays in `restack._GENERATED`, which the forked workers inherit,
    so the job pays for the check once and not once a branch;
-3. for each PR=HEAD, in N forked workers, `tools/move/restack.py HEAD --move-commit M... --onto STAGED --main MAIN --dry-run
-   --json` (the checkout's copy, called as `restack.main`), its JSON written to $OUT/results/pr-PR.json as soon as it ends,
-   with the minutes it took, the moves the command would cross with no `--move-commit` (`restack.moves_on`), each conflicted
-   file's merge attribute, and a bundle of the commits it made ($OUT/bundles/pr-PR.bundle: the result, or the last step
-   before a stop), so a stop can be read and mended on a VM without the script running again.
+3. for each PR=HEAD, in N forked workers: with `--base BASE`, `git merge BASE` in a scratch worktree at HEAD first, as the
+   owner runs it once the layout is on `main` (a conflict there is the branch's stop, at step `merge BASE`, and no script
+   runs); then `tools/move/restack.py TIP --onto STAGED --main MAIN --dry-run --json` on the merge (or on HEAD), called as
+   `restack.main`, with `--move-commit M...` only where `--move` names them: with none the tool finds the moves itself, as
+   it does on the day, and MAIN defaults to STAGED, which stands for the `main` the layout is on. Its JSON is written to
+   $OUT/results/pr-PR.json as soon as it ends, with the minutes it took, the moves the command crosses with no
+   `--move-commit` (`restack.moves_on`), each conflicted file's merge attribute, and a bundle of the commits made
+   ($OUT/bundles/pr-PR.bundle: the result, or the last step before a stop), so a stop can be read and mended, and a result
+   pushed, from a VM without the script running again.
 
 `--tool REF` runs REF's `tools/move/restack.py` instead of the checkout's (the staged tree's copy, which is `main`'s once
-the layout lands). `--real` only changes the commits' identity: the caller's GIT_AUTHOR_*/GIT_COMMITTER_* instead of the rehearsal's fixed
-one. Nothing here pushes.
+the layout lands). `--real` only changes the commits' identity: `--ident-name` and `--ident-email` at the hour it runs,
+instead of the rehearsal's fixed name and date. Nothing here pushes.
 """
 from __future__ import annotations
 
@@ -111,20 +116,50 @@ def bundle(pr: str, r: dict, staged: str) -> dict | None:
     return {"ref": ref, "commit": tip, "file": f"bundles/pr-{pr}.bundle", "bytes": os.path.getsize(path)}
 
 
+def merge_base(pr: str, head: str, base: str) -> dict:
+    """`git merge BASE` at ``head`` in a scratch worktree, as its owner runs it in the branch's checkout: the merge commit, or
+    the files that stop it."""
+    if RS.contains(base, head, None):
+        return {"status": "up-to-date", "commit": head}
+    with tempfile.TemporaryDirectory(prefix=f"restack289-merge-{pr}-", ignore_cleanup_errors=True) as tmp:
+        wt = os.path.join(tmp, "wt")
+        RS.add_worktree(wt, head, None)
+        try:
+            p = subprocess.run(["git", "merge", "--no-edit", "-m", f"Merge the layout's base {base[:12]} into #{pr}'s head {head[:12]}",
+                                base], cwd=wt, capture_output=True, text=True)
+            if p.returncode == 0:
+                return {"status": "clean", "commit": RS.out("rev-parse", "HEAD", cwd=wt)}
+            files = RS.out("diff", "--name-only", "--diff-filter=U", cwd=wt).splitlines()
+            return {"status": "conflicted" if files else "failed", "files": files, "rc": p.returncode,
+                    "output": (p.stdout + p.stderr).strip().splitlines()[-30:]}
+        finally:
+            RS.drop_worktree(wt, None)
+
+
 def one(job: tuple) -> dict:
-    """One branch through `restack.main`, as the command line runs it; never raises."""
+    """One branch as its owner carries it: `git merge BASE`, then `restack.main` as the command line runs it; never raises."""
     pr, head = job
     a, no_pins = A, NO_PINS
     t0 = time.time()
-    argv = [head, *(x for m in a.move for x in ("--move-commit", m)), "--onto", a.staged, "--main", a.main, "--dry-run",
-            "--json", *(["--no-pins"] if no_pins else [])]
-    rec: dict = {"pr": pr, "head": head, "argv": argv}
+    rec: dict = {"pr": pr, "head": head}
     buf = io.StringIO()
     try:
-        with contextlib.redirect_stdout(buf):
-            rc = RS.main(argv)
-        r = json.loads(buf.getvalue())[0]
-        rec.update(r, rc=rc)
+        head, tip = RS.rev(head, None), None
+        rec["head"] = tip = head
+        if a.base:
+            rec["merge_base"] = mb = merge_base(pr, head, a.base)
+            tip = mb.get("commit")
+            if not tip:
+                rec.update(status=mb["status"], step="merge BASE", files=mb.get("files", []))
+        if tip:
+            rec["tip"] = tip
+            rec["argv"] = argv = [tip, *(x for m in a.move for x in ("--move-commit", m)), "--onto", a.staged, "--main", a.main,
+                                  "--dry-run", "--json", *(["--no-pins"] if no_pins else [])]
+            with contextlib.redirect_stdout(buf):
+                rc = RS.main(argv)
+            r = json.loads(buf.getvalue())[0]
+            r.pop("head", None)
+            rec.update(r, rc=rc)
     except SystemExit as e:
         rec.update(status="refused", error=str(e))
     except Exception as e:  # noqa: BLE001
@@ -150,16 +185,25 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("branches", nargs="+", metavar="PR=HEAD")
     ap.add_argument("--staged", required=True)
-    ap.add_argument("--move", action="append", required=True)
-    ap.add_argument("--main", required=True)
+    ap.add_argument("--base", help="the layout's base: `git merge BASE` at each head first")
+    ap.add_argument("--move", action="append", default=[], help="a --move-commit (default: the moves the tool finds)")
+    ap.add_argument("--main", help="restack's --main (default: STAGED)")
     ap.add_argument("--tool", metavar="REF", help="run REF's tools/move/restack.py, not the checkout's")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--pins", choices=("auto", "on", "off"), default="auto")
     ap.add_argument("--real", action="store_true")
+    ap.add_argument("--ident-name")
+    ap.add_argument("--ident-email")
     ap.add_argument("--smoke", action="store_true", help="stop before the first script runs: the clone, the drivers, the pins")
     a = ap.parse_args()
-    if not a.real:
-        os.environ.update(IDENT)
+    if a.real and not (a.ident_name and a.ident_email):
+        ap.error("--real takes --ident-name and --ident-email")
+    os.environ.update({k: v for k, v in IDENT.items() if not (a.real and k.endswith("_DATE"))})
+    if a.real:
+        os.environ.update(GIT_AUTHOR_NAME=a.ident_name, GIT_COMMITTER_NAME=a.ident_name, GIT_AUTHOR_EMAIL=a.ident_email,
+                          GIT_COMMITTER_EMAIL=a.ident_email)
+        for k in ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"):
+            os.environ.pop(k, None)
     os.makedirs(OUT, exist_ok=True)
 
     sys.path.insert(0, os.path.join(SOURCE, "tools", "research", "src"))
@@ -181,13 +225,15 @@ def main() -> int:
         import restack
         RS, A = restack, a
 
-        a.staged, a.main = RS.rev(a.staged, None), RS.rev(a.main, None)
+        a.staged = RS.rev(a.staged, None)
+        a.main = RS.rev(a.main, None) if a.main else a.staged
+        a.base = RS.rev(a.base, None) if a.base else None
         a.move = [RS.rev(m, None) for m in a.move]
         env = {"python": sys.version.split()[0], "executable": sys.executable, "git": tool("git", "--version"),
                "uv": tool("uv", "--version"), "cpus": os.cpu_count(), "shipped": shipped, "source": SOURCE,
                "host": os.uname().nodename, "restack_blob": RS.out("rev-parse", blob), "tool": a.tool or "HEAD",
                "drivers": RS.out("config", "--local", "--get-regexp", r"^merge\..*\.name$").splitlines(),
-               "staged": a.staged, "moves": a.move, "main": a.main, "workers": a.workers}
+               "staged": a.staged, "base": a.base, "moves": a.move, "main": a.main, "workers": a.workers, "real": a.real}
         say("environment", json.dumps(env))
         summary: dict = {"environment": env, "results": []}
         save("summary.json", summary)
@@ -204,9 +250,11 @@ def main() -> int:
             say("smoke: stopping before the checks;", len(a.branches), "branches named")
             return 0
         summary["checks"] = []
-        for m in a.move:
+        found = a.move or [c for c, _s, _args in RS.moves_on(a.staged, a.base or a.main, None)]
+        default = (RS.SCRIPT, tuple(RS.SCRIPT_ARGS))
+        for m in found:
             t0 = time.time()
-            RS.SCRIPT, RS.SCRIPT_ARGS = RS.move_line(m, None) or (RS.SCRIPT, ())
+            RS.SCRIPT, RS.SCRIPT_ARGS = RS.move_line(m, None) or default
             RS.SCRIPT_ARGS = tuple(RS.SCRIPT_ARGS)
             base = RS.move_base(m, None)
             try:
@@ -222,6 +270,7 @@ def main() -> int:
             save("summary.json", summary)
             if rec["status"] != "generated":
                 return 2
+        RS.SCRIPT, RS.SCRIPT_ARGS = default
 
         jobs = [tuple(b.split("=", 1)) for b in a.branches]
         with multiprocessing.get_context("fork").Pool(a.workers) as pool:
