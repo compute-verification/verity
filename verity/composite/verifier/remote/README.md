@@ -46,7 +46,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
   Deployed, on an auditor host, that port is the far end of a coin link the auditor host opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
-  code running on the auditor host (`benchmarks/live_challenger/coin_link.py`). No coin path of remote's own, with no
+  code running on the auditor host (`verity/composite/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
@@ -69,7 +69,7 @@ as its Commit record (`windowRecords`, which `PouwCheck.Credit.commitOf?` reads)
 rejects remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
-`verity/core/protocols/composition/tests/test_composition_difftest.py`).
+`verity/composite/verifier/composition/tests/test_composition_difftest.py`).
 
 ## Lifecycle
 
@@ -93,7 +93,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
-4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
+4. **The verdict**, by the composition rule (`verity/composite/verifier/composition/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
@@ -574,7 +574,7 @@ development run:
 `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
-(`verity/core/protocols/composition/tests`).
+(`verity/composite/verifier/composition/tests`).
 
 ## Read next
 

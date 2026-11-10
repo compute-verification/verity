@@ -1,4 +1,4 @@
-"""The workload in the accounting layer's terms (`benchmarks/datacenter`, `import datacenter`): its `run`, `audit` and
+"""The workload in the accounting layer's terms (`verity/composite/datacenter`, `import datacenter`): its `run`, `audit` and
 `account` read the MLP's Program and verity_vllm's serving Program themselves, as they read any `verity.circuits`
 Program.
 

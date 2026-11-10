@@ -43,7 +43,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/hardware/protocols/record.py",
           "verity/difftest", "verity/spot/verifier/protocols/__init__.py", "verity/spot/verifier/protocols/profile.py",
           "verity/hardware/protocols/registration.py", "verity/hardware/site", "verity/configuration/wire",
-          "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/flock/verifier/interface",
+          "verity/composite/verifier/onsite", "verity/composite/verifier/remote", "verity/flock/verifier/interface",
           "verity/protocols/pouw/verifier", "verity/spot/verifier/python",
           "verity/protocols/certifier/verifier/network", "verity/protocols/certifier/verifier",
           "verity/protocols/pous/verifier", "verity/protocols/poub/verifier/remote_bandwidth",

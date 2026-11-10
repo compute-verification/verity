@@ -28,8 +28,8 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
           "verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "verity/protocols/certifier/device/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
-          "benchmarks/network_traces/site.json", "benchmarks/live_challenger/auditor.py",
-          "benchmarks/live_challenger/host.json"]
+          "benchmarks/network_traces/site.json", "verity/composite/device/live_challenger/auditor.py",
+          "verity/composite/device/live_challenger/host.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

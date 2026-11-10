@@ -65,7 +65,7 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
 
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
-    """The auditor host's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs `rehearse` on traffic the
+    """The auditor host's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the

@@ -15,7 +15,7 @@ from verity.spot.device import challenger as Ch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import window_salt as WS  # noqa: E402
 
-STUB = WS.TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = WS.TREE / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def group(program: str, seed: int, *names: str) -> dict:
@@ -35,7 +35,7 @@ def gate(tmp_path: Path, monkeypatch):
     """A local gate under `tmp_path`, pinned on this tree's commit, its serve.py under live_challenger's stub of the Lean
     verifier's coins, so the test builds no `sampled-proofs-verifier`."""
     AC = WS.a5_coins()
-    A = AC._module("a5_auditor", WS.TREE / "benchmarks" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", WS.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))

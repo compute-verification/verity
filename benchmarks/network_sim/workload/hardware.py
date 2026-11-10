@@ -14,7 +14,7 @@ leaf of the unit when `compute` is empty).
 `b<b>.gpu0`, whose uplink goes to the block's certifier `b<b>.cert`; each certifier's wire and the client's go to one
 switch. Every route between two blocks therefore crosses the source block's uplink and the destination block's uplink.
 
-`DeviceGraph.from_datacenter` reads a declaration of `benchmarks/datacenter` (a `datacenter.Datacenter`, as
+`DeviceGraph.from_datacenter` reads a declaration of `verity/composite/datacenter` (a `datacenter.Datacenter`, as
 `datacenter.examples` declares them and `mockdc.py` stands them up): its blocks are the units and its GPUs compute.
 """
 from __future__ import annotations

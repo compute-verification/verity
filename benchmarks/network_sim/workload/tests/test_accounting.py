@@ -1,10 +1,10 @@
-"""The accounting layer (`benchmarks/datacenter`) reads the MLP's Program and verity_vllm's serving Program themselves:
+"""The accounting layer (`verity/composite/datacenter`) reads the MLP's Program and verity_vllm's serving Program themselves:
 the same values, the same crossings, a sound account, and a covert frame refused."""
 from collections import Counter
 
 import pytest
 
-D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable")
+D = pytest.importorskip("datacenter", reason="verity/composite/datacenter isn't importable")
 
 from workload import accounting as A  # noqa: E402
 from workload.block import Context  # noqa: E402

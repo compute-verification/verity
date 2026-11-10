@@ -1,5 +1,5 @@
 [Unit]
-Description=the challenger's session %i, as auditor from the pinned tree (benchmarks/live_challenger/auditor.py run)
+Description=the challenger's session %i, as auditor from the pinned tree (verity/composite/device/live_challenger/auditor.py run)
 
 [Service]
 Type=exec

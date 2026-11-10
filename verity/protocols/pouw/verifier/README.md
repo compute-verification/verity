@@ -38,15 +38,15 @@ every product, is a reference, not an answer.
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
 one-stage audit, PoUW's credit period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
-inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
+inference-only policy's check (`Core.Remote.components` in `verity/composite/verifier/remote/CoreRemote.lean`, id
 `verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
 subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
 names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+(`Core.Composition.tiedSameB`, `verity/composite/verifier/composition/README.md`). In the remote demo, the vLLM demo
 (`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
-`verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
+`verity/composite/verifier/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/composite/verifier/onsite`).
 
 ## What runs
 
@@ -88,7 +88,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/protocols/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside sampled proofs'
-(`verity/core/protocols/composition/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+(`verity/composite/verifier/composition/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes

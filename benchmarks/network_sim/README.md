@@ -1,7 +1,7 @@
 # Network simulation
 
 The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier. Both read the
-accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
+accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`verity/composite/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
 one zone, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its zone's certifier, with hosts
 outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. A zone is a

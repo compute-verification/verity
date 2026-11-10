@@ -72,11 +72,11 @@ path = "../../verity/definitions/requirement"
 
 [[require]]
 name = "core_composition"
-path = "../../verity/core/protocols/composition"
+path = "../../verity/composite/verifier/composition"
 
 [[require]]
 name = "core_onsite"
-path = "../../verity/core/protocols/onsite"
+path = "../../verity/composite/verifier/onsite"
 
 [[require]]
 name = "flock_verifier"

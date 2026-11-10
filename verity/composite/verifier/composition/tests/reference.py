@@ -55,7 +55,7 @@ from verity.spot.device import challenger as CH
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
-CORE = Path(__file__).resolve().parents[3]
+CORE = (Path(__file__).resolve().parents[4] / "core")
 
 
 def module(name: str, path: Path) -> ModuleType:

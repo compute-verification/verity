@@ -1,5 +1,5 @@
 """The auditor host's gate on loopback, for M3's coin (`m3coin.coin`): the verbs it asks (``pins``, ``pubkey``, ``reserve``,
-``open``, ``status``, ``fetch``, ``ledger``) answered in this process as `benchmarks/live_challenger/auditor.py` answers
+``open``, ``status``, ``fetch``, ``ledger``) answered in this process as `verity/composite/device/live_challenger/auditor.py` answers
 them, each session's challenger serving on 127.0.0.1 (`remote.open_session`, `remote.serve`) and every ledger entry,
 record and close signed with this gate's own LMS key at its next leaf.
 

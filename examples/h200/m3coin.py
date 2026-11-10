@@ -1,4 +1,4 @@
-"""M3's live coin: one withheld session of the auditor host's challenger (`benchmarks/live_challenger/auditor.py`) under
+"""M3's live coin: one withheld session of the auditor host's challenger (`verity/composite/device/live_challenger/auditor.py`) under
 the lane's own gate key, reserved for this machine, opened at the registration's digest, and one coin opened after that
 root; the sampled proof blocks are a `subset:K` of the registered population derived from that coin alone.
 
