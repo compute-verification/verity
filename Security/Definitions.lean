@@ -59,7 +59,7 @@ public import Definitions.InferenceOnly.Guarantees.Threads
 public import Definitions.InferenceOnly.Guarantees.Layered
 public import Definitions.InferenceOnly.Guarantees.Fit
 public import Definitions.InferenceOnly.Guarantees.FitRate
-public import Definitions.InferenceOnly.Guarantees.Dampener
+public import Definitions.InferenceOnly.Guarantees.Slowdown
 public import Definitions.InferenceOnly.Guarantees.Remote
 public import Definitions.InferenceOnly.Guarantees.RemotePeriod
 public import Definitions.InferenceOnly.Assumptions.Capability

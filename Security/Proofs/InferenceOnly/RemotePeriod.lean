@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Audit.Periods
 /-!
 # Proof of the remote overhead bound over a monitoring period
 
-`DampenerRemotePeriod` is `DampenerRemote`'s argument with each protocol's leg read window by window. A per-window bound
+`SlowdownRemotePeriod` is `SlowdownRemote`'s argument with each protocol's leg read window by window. A per-window bound
 is a bound on the period's coins (`prob_le_of_update`: the run's average is, by `avg_update`, the average over the other
 windows of window `t`'s own). Three events carry the failure:
 
@@ -24,10 +24,10 @@ windows of window `t`'s own). Three events carry the failure:
 Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped work, and `remote_core` sums the
 sources.
 
-The witnesses, `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`, are at constructed instances of one
+The witnesses, `SlowdownRemotePeriod_honest` and `SlowdownRemotePeriod_nontrivial`, are at constructed instances of one
 window with no incorrect proof block, the first with one declared day (the toy `InferenceOnly.Cut.Toy`), the second with none,
 where each event holds on every run or on none. The `example` at
-the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
+the end applies `SlowdownRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
 
 @[expose] public section
@@ -36,7 +36,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace InferenceOnly.SecurityProofs
 
-open Verity InferenceOnly.Dampener FlockSoundness.Audit.Periods
+open Verity InferenceOnly.Slowdown FlockSoundness.Audit.Periods
 open FlockSoundness.Game (avg prCoin avg_mono avg_const prCoin_mono)
 open scoped ENNReal
 
@@ -156,7 +156,7 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
           Finset.sum_congr rfl fun t ht => by simp only [hlt t (Finset.mem_filter.1 ht).2, ↓reduceIte]
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
-/-- **The escape tail, one identity.** Under `DampenerRemotePeriod`'s sampled-proofs legs, the runs where no window
+/-- **The escape tail, one identity.** Under `SlowdownRemotePeriod`'s sampled-proofs legs, the runs where no window
 samples a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
 before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
 each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the
@@ -341,10 +341,10 @@ per-window bound, `prob_le_of_update`: at most `p/ε'`); some window samples a f
 over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` escaped blocks
 (`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the wrong windows hold at most `ε' C`,
 each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
-`(JΔ/H) C + J K B`, and the residual's hypothesis is `DampenerThreaded`'s at
+`(JΔ/H) C + J K B`, and the residual's hypothesis is `SlowdownThreaded`'s at
 `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; each day's verdict bounds its MACs by `CountHE`, summed over the days into
 `X`; `remote_core` gives both forms, at `ρ = C/X` (`declaredShare_div`). -/
-theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
+theorem SlowdownRemotePeriod : Guarantees.SlowdownRemotePeriod := by
   intro T Ω _ _ cap wrong p ε β ι _ bad drawn detected win I idW τw w ks K Φ Δ H q B εW κ C U χ mfu W M Mu Mr Mx R _
     d n c k γ V _ _ _ Wk val βw βx b hp hε hc hcC hpouw hS hq0 hq1 hId hH hΔ hTD hw hB0 hκ hC hU hmfu hmfu1 hβw hβx hb
     hcomp hval hshare hHard hExp hM0 hM hu hres hx
@@ -439,14 +439,14 @@ theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → P
   rw [prob_uniform_eq]
   exact ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using prCoin_le_one E)
 
-/-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something** (`DampenerRemotePeriod_honest`): one
+/-- **`SlowdownRemotePeriod`'s premises hold where its conclusion says something** (`SlowdownRemotePeriod_honest`): one
 window run by one identity, its certificate right (`wrong` empty) at capacity `C = 100`, all of the monitored compute
 certified (`W_cert = 100`), no incorrect proof block, unmonitored compute `U = 100` at `MFU₀ = 1/2`, `κ = 2`, and one
 declared day, the toy `InferenceOnly.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
 day's bound is `X = 2 (2 + 1) + √4 = 8`, its two MACs the run's counted multiplications; at `p = 3 · 2⁻⁴⁰`,
 `ε' = 2p/10⁻⁶`, `q = 1` and `K = 0`. Then `δ = 1/(2 · 10⁶)`, and the overhead bound on the hardware multiple is
 `1/(1/2 + ε' + 2/25)`, in `(1, 2]`, the run's own multiple being 50. -/
-theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := by
+theorem SlowdownRemotePeriod_honest : Guarantees.SlowdownRemotePeriod_honest := by
   refine ⟨1, fun _ => Bool, inferInstance, inferInstance, fun _ => 100, fun _ _ => False, 3 / 2 ^ 40,
     2 * (3 / 2 ^ 40) * 10 ^ 6, Empty, Unit, inferInstance, fun _ => ∅, fun _ => ∅, fun _ => ∅, fun b => b.elim,
     Finset.univ, fun _ => (), fun _ => 0, fun _ => 0, fun _ => 0, 0, 0, 0, 1, 1, 0, 0, 2, 100, 100, 0, 1 / 2,
@@ -471,16 +471,16 @@ theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := 
   · unfold Assumptions.IdentitySchedule
     exact ⟨fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, by norm_num, by simp,
       by simp⟩
-  · simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
+  · simp only [remoteSlowdown, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
       Fintype.univ_unit, Finset.sum_singleton, Cut.SecurityProofs.toy_workHE]
     norm_num
 
-/-- **`DampenerRemotePeriod` is false without PoUW's per-window bound** (`DampenerRemotePeriod_nontrivial`), at
+/-- **`SlowdownRemotePeriod` is false without PoUW's per-window bound** (`SlowdownRemotePeriod_nontrivial`), at
 `AcceptAll`: the window's certificate is wrong on every run, so PoUW's per-window probability is 1, above `p = 0`. The
 residual counts the wrong capacity, so the run's one counted multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute
 efficiency 1, above the bound `1/2`, and hardware multiple 1, below the overhead bound `2`, on every run, while
 `δ = 0`. -/
-theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontrivial := by
+theorem SlowdownRemotePeriod_nontrivial : Guarantees.SlowdownRemotePeriod_nontrivial := by
   refine ⟨fun _ => ⟨true⟩, le_rfl, by norm_num, fun _ => zero_le_one, by simp [Assumptions.WithinCompute], ?_,
     zero_le_one, le_rfl, ?_,
     one_pos, le_rfl, by simp [Assumptions.TerminalDetection], fun _ => le_rfl, le_rfl,
@@ -504,20 +504,20 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
     linarith
   · rw [prob_of_forall_not _ fun ξ hG => by
       have h2 := hG.2
-      simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
+      simp only [remoteSlowdown, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
         Finset.univ_eq_empty, Finset.sum_empty, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
       norm_num at h2]
     norm_num [Guarantees.AcceptAll.ks]
 
-/-! `DampenerRemotePeriod_nontrivial`'s conjuncts are `DampenerRemotePeriod`'s premises as it states them at
+/-! `SlowdownRemotePeriod_nontrivial`'s conjuncts are `SlowdownRemotePeriod`'s premises as it states them at
 `AcceptAll`: with PoUW's per-window bound they give the conclusion the last conjunct refutes. -/
 
 open Guarantees.AcceptAll in
 example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
     prob (PMF.uniformOfFintype Bool) (fun a => wrong t (Function.update ξ t a)) ≤ 0) : False := by
   obtain ⟨-, h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
-    h24, h25, h26, h27, h28, h29, h30, h31, h32, -, hnot⟩ := DampenerRemotePeriod_nontrivial
-  exact hnot (DampenerRemotePeriod 1 (fun _ => Bool) cap wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
+    h24, h25, h26, h27, h28, h29, h30, h31, h32, -, hnot⟩ := SlowdownRemotePeriod_nontrivial
+  exact hnot (SlowdownRemotePeriod 1 (fun _ => Bool) cap wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
     ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty d n 1 1 Unit Unit Wk val 1 1 1 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12
     h13 h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31 h32)
 

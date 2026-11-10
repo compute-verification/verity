@@ -14,7 +14,7 @@ theorems either.
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
 registered compiler, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Reported advice,
-Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
+Block and Period. Lean names keep some older names until they are renamed: `Slowdown*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
@@ -27,7 +27,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/spot/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `InferenceOnly.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
+- the overhead bound's remote regime, `InferenceOnly.Guarantees.SlowdownRemote` (the inference-only policy's Lean is still named
   `InferenceOnly`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
@@ -144,7 +144,7 @@ else is a theorem or a named gap.
 |---|---|---|---|
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
 | The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
-| The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
+| The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `SlowdownRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | Sampled proofs catch each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `InferenceOnly.Assumptions.SampledDetection`, `InferenceOnly.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
@@ -242,7 +242,7 @@ The time credit adds the data sheet's rates.
 fresh bits per gate, anything outside the registered information θ (`InferenceOnly.CompliesRate Γ α_f`); and θ is registered
 information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` takes `InferenceOnly.CompliesRate Γ α_f` of d.
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` takes `InferenceOnly.CompliesRate Γ α_f` of d.
 
 **How it is checked.**
 
@@ -278,7 +278,7 @@ part 6's premises say why that shape trains little.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
    `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `DampenerThreaded`
+   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `SlowdownThreaded`
    takes `CompliesRate Γ α_f d`, what this verdict gives: links 1 and 2 are open.
 4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `InferenceOnly.Guarantees.CompliesCK`, and through the
    bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
@@ -319,7 +319,7 @@ times the fleet-time the reference training algorithm takes with no protocol (fl
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds,
-`Verity.Guarantees.Counting` and `InferenceOnly.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different,
+`Verity.Guarantees.Counting` and `InferenceOnly.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
 older formula (below), and the Results table comes from a third route, the calculator's.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
@@ -392,11 +392,11 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`Security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The overhead over remote, per period | `InferenceOnly.Guarantees.DampenerRemote` (`Security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `InferenceOnly.Guarantees.DampenerRemotePeriod` (`Security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean`; proof `InferenceOnly.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/InferenceOnly/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The overhead over remote, per period | `InferenceOnly.Guarantees.SlowdownRemote` (`Security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `InferenceOnly.Guarantees.SlowdownRemotePeriod` (`Security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean`; proof `InferenceOnly.SecurityProofs.SlowdownRemotePeriod` in `Security/Proofs/InferenceOnly/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
-`DampenerRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`InferenceOnly.Dampener.remoteDampener`; MFU₀ divides only
+`SlowdownRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`InferenceOnly.Slowdown.remoteSlowdown`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`InferenceOnly.Assumptions.PouwSound` among them), with
 the declared work bounded by `CountHE`.
 
@@ -500,7 +500,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
   `H1J10RCheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
   is what backs the slowdown bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
-The slowdown, `DampenerRemote`:
+The slowdown, `SlowdownRemote`:
 
 - In `Security/Definitions/InferenceOnly/Assumptions/Remote.lean`, three:
   - `InferenceOnly.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
@@ -522,7 +522,7 @@ The local bounds (part 6):
 
 ## Results per monitoring period
 
-These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
+These figures come from a third route, neither part 6's displayed bound nor `SlowdownRemote`: the slowdown
 calculator, `benchmarks/rho` (`verity bench rho`).
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
@@ -534,7 +534,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 | the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 
 - **What the figures mean.** Each figure is the slowdown over the reference training algorithm at its MFU,
-  MFU₀ (`InferenceOnly.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
+  MFU₀ (`InferenceOnly.Slowdown.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
   `draft:E1-output-premise`. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
