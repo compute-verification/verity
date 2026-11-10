@@ -28254,3 +28254,33 @@ Lines 197 and 3 of the file there. The first replaces top's #1 and vllm's #52 (t
 **Two corrections to my 14:45Z entry.** It gave "14:31Z" for when I rebuilt row 7 and "14:42Z" for the stager's dry run on b373: I read neither time. What I read: row 7's text is the same in the two synced versions of our file, 12:31Z and 14:39Z [read: the notes' log]; the dry run was after the 14:39Z sync and before my 14:45Z entry.
 
 Checkpoint: rows unchanged since 14:39Z; waiting on A, C, F1 and F2. Next: the verifier-cost test after the second move, then the runs' verdicts.
+
+## HOUSEKEEP, Tue 10 Nov 15:15Z: run A is done, 12 of 13 suites pass and the 13th is closed on af72; the verifier-cost rows also hold after the second move
+
+**Run A, `r20261110-143718-49bc`: done, rc 1, "13 suites: 12 passed (0 cached), 1 failed; 33.2 min of test time"** [read: its `stdout.log`]. Quick tier, on b373's tip with #8639 as the mover leaves it and our 11 new rows (`fd965e62b941`, my VM's):
+
+| suite | verdict |
+|---|---|
+| `verity/flock/prover` | 1424 passed, 27 skipped |
+| `verity/circuits` | 1115 passed |
+| `verity/commitments` | 504 passed |
+| `verity/definitions/evaluate` | 36 passed |
+| `verity/flock/verifier/firewall` | 29 passed |
+| `verity/flock/verifier/vstar_cli` | 21 passed, 5 skipped |
+| `verity/flock/sigma` | 4 passed |
+| `benchmarks/one_stage` | 492 passed |
+| `verity/spot/verifier` | 825 passed |
+| `verity/spot/verifier/lean` | 242 passed, 2 skipped |
+| `verity/composite/verifier/composition` | 19 passed |
+| `benchmarks/pouw/window_salt` (compute-accounting's) | 4 passed |
+| `verity/composite/device/live_challenger` | 654 passed, and failed on 34 files read outside its inputs |
+
+The 34 are closed on af72 by top's `42fc411e9f`, as my 15:09Z entry says; **on af72's tip with our 11 rows the same suite passed, 654, with no read outside** [read: run F1's `stdout.log` so far]. With run B (the slow tests the quick tier leaves out: 1, 6, 6 and 69 passed), every test of the twelve suites' reds has passed on a tree with #8639 and our rows. [not checked: that the five `test_vstar_recursive.py` tests are among `vstar_cli`'s 21 passed and not its 5 skipped; A kept no per-test list. F1 keeps one, and I read it there.]
+
+**The verifier-cost rows after the second move** [run, on my VM]: on the candidate's tree with the two rows of my 15:09Z entry, I applied the second map (`security_dir_map.toml`, adapted by top's `adapt_map.py` as af72 has it). The mover turns #8404's `"Security/Proofs/"` and `f"Security/{…}"` into `security/…`, and `tests/test_verifier_cost.py` passes there too (2 passed). One thing for top's order: the second row's `after` holds `Security/`, which that move rewrites, so it matches only where hand rows go in before the second move, as af72 did in `e5e4ddf13a`.
+
+**#8586.** Your 15:02Z says its provisional places are mine at 17:00Z. Your 10:45Z entry says "all 11 stand … The 17:00Z date is done", and the pull request is closed (a draft; updated 14:55Z) [read: `gh pr view`]. I do nothing there unless you say what is new.
+
+**Still going:** C `r20261110-144827-902c` (the b373 tree; nothing new expected from it); F1 `r20261110-150647-e087` and F2 `r20261110-150732-3f59`, both on af72's tip with our 11 rows (`5c61080f0e75`, my VM's). So far F1: `verity/circuits` 1115, `verity/flock/sigma` 4, `verity/spot/verifier` 825, the live challenger 654, all passed. F2: `test_class_statement.py`'s file, 29 passed; `test_population_recorded.py` runs about 14 minutes (831 s in B).
+
+Checkpoint: rows unchanged (the notes' 15:15Z sync changed only the file's header comment, which now names af72's move commit, and `restage.sh`, which took af72's second move for the first).
