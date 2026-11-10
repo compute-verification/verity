@@ -6,11 +6,14 @@ interior registration over the sampled spans' proof blocks and the second stage 
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -18,8 +21,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import challenger as Ch, service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity_vllm.pipeline import boundary_rows as BR
+from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
+from verity.ml.commitments import history as HT
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -119,6 +123,61 @@ def test_the_second_stages_coins_follow_the_whole_first_stage():
     assert staged(1) == b"\x03"
     with pytest.raises(Ch.CoinError, match="no live coins"):
         staged.commit(b"\x00" * 64)
+
+
+def test_a_class_with_history_tables_declares_and_registers_them_beside_its_values():
+    """A class whose spans' history tables are committed (`Layout.layers`): its Spec declares each table a served value
+    of the history table's row schema after ``b.ingress`` and ``b.egress``, and its first stage registers their roots,
+    from ``commit.json`` alone, before the coins commit."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=8)
+    tables = {}
+    for t in layout.tables:
+        h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        h.append(np.zeros((6, BT.WORDS), dtype=np.uint16))
+        tables[t] = h.root
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
+    assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
+    assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
+    assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
+    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+
+
+def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
+    """A class whose spans' tables an interior's reads open: its Spec declares the replay block's parameters its rule
+    names (the reads' root and domain, which the verifier supplies, and their row, salt and path, which the replay gives)
+    registered interior values, its stream takes them a sampled span and sizes them by the sample, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
+    under the class record's root for it, each holding the class's C strings, so `history.roots_of` recomputes the served
+    root and domain from the strings the prover publishes."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=16)
+    c = BT.class_rows(layout.prompt, layout.outputs, layout.capacity)
+    hs = {}
+    for t in layout.tables:
+        hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        hs[t].append(BT.fill(np.ones((3, BT.WORDS), dtype=np.uint16), layout.prompt, layout.outputs, layout.capacity))
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
+    opening = tuple(IR.Operand("Read_v1", p, p, 2, (0, 1), w) for p, w in (("row", BT.WORDS), ("salt", 96), ("path", 128)))
+    rule = replace(RULE, span_values=(("root", 1, IR.DIGEST), ("domain", 1, IR.DIGEST), *IR.span_values(opening)))
+    assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
+    got = TS.first(pub, PAIR, rule, FC.Challenger("first"))
+    linked = [v for v in got.stream.spec.values if v.registered]
+    assert [(v.name, v.phase) for v in linked] == [(p, "interior") for p in ("root", "domain", "row", "salt", "path")]
+    assert got.stream.span_values == rule.span_values
+    for q in (1, 3):
+        sig = dict(got.stream.interior_program(q).fn.signature()[0])
+        assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
+        assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
+    assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
+    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
+    bodies = {"m0": b"the interior's public body"}
+    hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
+    assert [t["name"] for t in hist["tables"]] == names and c == 8
+    assert all(t["runs"] == [{"start": 0, "count": c, "held": IR.HELD, "row": 0}] for t in hist["tables"])
+    leaf = HT.leaf_layer({k: hashlib.sha512(b).hexdigest() for k, b in bodies.items()})
+    assert HT.roots_of(leaf, hist) == {n: (hs[n].root, hs[n].domain.domain_id) for n in names}
 
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():

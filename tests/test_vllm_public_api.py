@@ -56,6 +56,9 @@ PUBLIC = {
                                  "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
+                                          "across ranks and written as a token select's span, which benchmarks/serve_tax's "
+                                          "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "
@@ -72,6 +75,11 @@ PUBLIC = {
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
+    "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
+                                         "(request, layer), their switch, retention and roots (Histories), which "
+                                         "benchmarks/commitments times",
+    "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
+                                                "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
@@ -89,6 +97,15 @@ PUBLIC = {
                                           "b.ingress and b.egress rows by size class, committed as the engine core serves "
                                           "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
                                           "layout, record and files (Layout, record, reopen), which "
+                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
+                                            "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
+                                            "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
+                                            "which benchmarks/serve_tax's plugin installs",
+    "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
+                                          "(interior, register), the block parameters it registers as values, the "
+                                          "verifier's (Supply) and the replay's own (Operand), and the challenger's "
+                                          "copies of them (span_values, link_words, link_schemas, sources, history), which "
                                           "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
