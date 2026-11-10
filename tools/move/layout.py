@@ -24,7 +24,11 @@ A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the 
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
-no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
+no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
+unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
+its name alone between quotes or backticks is rewritten in every file but Rust and Lean. Where a key is made of another
+word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the file (`{glob = [directories]}`): there the
+name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
 it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
 moves recorded there.
 
@@ -65,6 +69,8 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: a distribution's directory as `uv.lock` writes it: a package's `source` and a `requires-dist` or manifest entry
+_LOCK_SOURCE = re.compile(r'\b(editable|virtual|directory) = "([^"\n]+)"')
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
 SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
                        r'(?P<rel>(?:/[\w.\-]+)+)')
@@ -73,6 +79,8 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
                      r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+#: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
+SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -118,6 +126,11 @@ class Layout:
         self.keep = rw.get("keep", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
+        #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
+        self.words = {w.rstrip("/") for w in rw.get("words", [])}
+        #: per file glob, moved directories whose name is ours there also as the last word of a double-quoted string
+        #: ([rewrite] word_ends: `"INLINE Security"`, a key made of another word and the package's path)
+        self.word_ends = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("word_ends", {}).items()}
         self.merged = set(data.get("distributions", {}).get("merged", []))
         self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
         self.drop = set(data.get("drop", {}).get("paths", []))
@@ -185,6 +198,10 @@ class Layout:
         pats = [*self.keep, *(q for g, qs in self.keep_in.items() if where and fnmatch.fnmatchcase(where, g) for q in qs)]
         return any(fnmatch.fnmatchcase(p, pat) for pat in pats)
 
+    def ends(self, word: str, where: str) -> bool:
+        """Whether file `where` is one in which `word`, a moved directory's name, is ours as a string's last word too."""
+        return any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.word_ends.items())
+
     def excluded(self, *paths: str) -> bool:
         def hit(pats, p):
             return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
@@ -208,6 +225,14 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
             return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
     parts = p.split("/")
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
+
+
+def braces(token: str) -> list[str]:
+    """Each path a brace list names: `a/{x,y/z}.py` is `a/x.py` and `a/y/z.py`; a token with no list is itself."""
+    m = re.search(r"\{([^{}]*)\}", token)
+    if not m:
+        return [token]
+    return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
 
 
 def derived_modules(layout: Layout) -> dict[str, str]:
@@ -503,15 +528,18 @@ class Run:
             pre, p, rest = m.group("pre") or "", m.group("p"), m.group("rest")
             start = m.start("p") if not pre else m.start()
             before = text[start - 1] if start > 0 else ""
-            if not pre and before and (before.isalnum() or before in "_.-/"):
+            if not pre and before and (before.isalnum() or before in "_.-/") and not SH_DEFAULT.search(text, 0, start):
                 return m.group(0)
             token = p + rest
             trail = ""
-            while token and token[-1] in ".,":
-                token, trail = token[:-1], token[-1] + trail
+            while token and (token[-1] in ".," or (token[-1] == "}" and token.count("}") > token.count("{"))):
+                token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
+                ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares
+                lone = before in ("\"'`" if ours else "\"'") and after == before
+                last = before == " " and after == '"' and self.L.ends(token, path)      # [rewrite] word_ends
+                if not last and (not lone or path.endswith((".rs", ".lean")) or path.endswith(".py") and not ours):
                     return m.group(0)                   # in code a lone quoted word is a name ("census": a key); joins are `_joins`'s
             new = self._map_token(token, path)
             if new is None or new == token:
@@ -590,6 +618,8 @@ class Run:
             if not head:
                 return None
             new, approx = self.L.path(head, True)
+            if "{" in tail and "*" not in t and (each := self._brace_list(t, tail, new, path)):
+                return each + ("/" if slash else "")
             if new is None:
                 if approx:
                     self.note("unmapped directory paths", f"{path}: {token}")
@@ -608,6 +638,21 @@ class Run:
         if approx:
             self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
+
+    def _brace_list(self, t: str, tail: str, new: str | None, path: str) -> str | None:
+        """Brace list `t` (`flock/{tool.py,verifier/tool.py}`) as a list of its paths, each mapped alone, where every one
+        is in the old tree and they don't all go where the directory before the list goes (`new`); else None, and that
+        directory's row carries the list as written: so does a pattern, one path of which names nothing. Each path is
+        written whole, so a later map still finds one that this map leaves where it is."""
+        olds = braces(t)
+        if not all(o in self.known_old or o in self.old_dirs for o in olds):
+            return None
+        news = [self._map_token(o, path) or o for o in olds]
+        if news == braces(f"{new}/{tail}" if new is not None else t):
+            return None
+        out = "{" + ",".join(news) + "}"
+        self.note("brace lists split", f"{path}: {t} -> {out}")
+        return out
 
     def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
         slash = token.endswith("/")
@@ -1235,6 +1280,21 @@ class Run:
             self.texts[path] = json.dumps(doc, indent=2) + "\n"
             self._count(path, "layout moves recorded")
 
+    def lock(self):
+        """Name each moved distribution by its new directory in `uv.lock`. `uv lock` doesn't: where a map moves a
+        distribution and no member's name changes, it reads the locked one's metadata at the old directory and fails
+        (`Distribution not found at`), and so does `uv sync` on the moved tree."""
+        if (text := self._read("uv.lock")) is None:
+            return
+        def moved(m: re.Match) -> str:
+            if (new := self.L.file(f"{m.group(2)}/pyproject.toml")) is None:
+                return m.group(0)
+            self._count("uv.lock", "distribution directories")
+            return f'{m.group(1)} = "{posixpath.dirname(new)}"'
+        new = _LOCK_SOURCE.sub(moved, text)
+        if new != text:
+            self.texts["uv.lock"] = new
+
     # ---------------------------------------------------------------------------------------------- writing
 
     def write(self):
@@ -1523,6 +1583,7 @@ def main(argv: list[str] | None = None) -> int:
                          + "".join(f"  {x}\n" for x in unacknowledged)
                          + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
+    run.lock()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
@@ -1552,6 +1613,10 @@ def main(argv: list[str] | None = None) -> int:
         a.report.write_text(json.dumps({"base": base, "changes": run.changes, "notes": run.notes,
                                         "files": {p: dict(c) for p, c in sorted(run.files_changed.items())},
                                         "moves": dict(moves)}, indent=1, sort_keys=True))
+    if "uv lock failed" in run.notes:
+        print("`uv lock` failed, so uv.lock doesn't match the moved tree and `uv sync` fails on it: fix what uv names "
+              "above and run the move again", file=sys.stderr)
+        return 1
     return 0
 
 
