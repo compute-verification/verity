@@ -54,7 +54,7 @@ import verity_difftest as DT
 from hypothesis import strategies as st
 from verity_difftest import settings
 
-from verity.ml.protocols.pouw.circuit import words as W
+from verity.protocols.pouw.prover.circuit import words as W
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits import partition_object as PO

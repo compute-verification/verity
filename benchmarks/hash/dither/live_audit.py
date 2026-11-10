@@ -120,8 +120,8 @@ def manifest_check(a: argparse.Namespace, p: dict, out: Path) -> dict:
 def core_check(a: argparse.Namespace) -> int:
     """Core's check from main's `verity` (this process's PYTHONPATH): see the module docstring."""
     import verity
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.pouw.verifier import window as Wd
     from verity.spot.device import challenger as Ch
     from verity.spot.device import remote as R
     src = Path(verity.__file__).resolve().parent

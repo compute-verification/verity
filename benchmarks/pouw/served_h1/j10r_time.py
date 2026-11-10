@@ -36,8 +36,8 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import producer as P  # noqa: E402
 
-from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 #: Llama-3.1-8B's linears (name, n, K)

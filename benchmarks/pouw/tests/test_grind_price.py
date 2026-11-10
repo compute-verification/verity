@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("pouw_grind_price", Path(__file__).parents[1] / "grind_price.py")
+spec = importlib.util.spec_from_file_location("pouw_grind_price", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "grind_price.py")
 G = importlib.util.module_from_spec(spec)
 sys.modules["pouw_grind_price"] = G
 spec.loader.exec_module(G)

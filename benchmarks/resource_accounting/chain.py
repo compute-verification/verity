@@ -376,9 +376,9 @@ class PearlC:
         import torch
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
-        from verity.core.protocols.pouw.audit import weights_root
-        from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.protocols.pouw.verifier.audit import weights_root
+        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.pouw.verifier.coins import Challenger
         self.PPD, self.W, self.act = PPD, W, act
         self.weights = dict(enumerate(W.bf16))
         bad = PPD.refusals(SCHEME, {w: tuple(t.shape) for w, t in self.weights.items()})

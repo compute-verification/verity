@@ -236,8 +236,8 @@ ALLOWED: dict[str, str] = {
 }
 
 PENDING: dict[str, str] = {
-    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
-    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
+    "verity/protocols/pouw/verifier/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
+    "verity/protocols/pouw/verifier/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
                                                             "renamed with the Lean",
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
                                                              "renamed with the Lean",

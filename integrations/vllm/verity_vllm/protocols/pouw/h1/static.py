@@ -1,5 +1,5 @@
 """A static H1 window's declaration and its u (`pouw_h1`'s static layout, the ``u`` of
-`benchmarks/pouw/period_cost.py`): each step's rows a function of the declaration alone, so its u is public."""
+`verity/protocols/pouw/period_cost.py`): each step's rows a function of the declaration alone, so its u is public."""
 from __future__ import annotations
 
 from dataclasses import dataclass

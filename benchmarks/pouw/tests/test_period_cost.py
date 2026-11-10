@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("pouw_period_cost", Path(__file__).parents[1] / "period_cost.py")
+spec = importlib.util.spec_from_file_location("pouw_period_cost", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "period_cost.py")
 PC = importlib.util.module_from_spec(spec)
 sys.modules["pouw_period_cost"] = PC
 spec.loader.exec_module(PC)

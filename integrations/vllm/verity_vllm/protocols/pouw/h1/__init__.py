@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.ml.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.ml.protocols.pouw.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.protocols.pouw.prover.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.protocols.pouw.prover.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -15,7 +15,7 @@ served int8 linear call as its own Program on bits, which `verity.ml.protocols.p
   off(w) the proof blocks of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
   positions comes from its tokens, batch or EOS. Gate-passed is the served rows of the calls the credit gate passes only;
   the padded work is shown beside it.
-* **u** (`H1Run.utilization`, the ``u`` of `benchmarks/pouw/period_cost.py`): the window's served rows over its
+* **u** (`H1Run.utilization`, the ``u`` of `verity/protocols/pouw/period_cost.py`): the window's served rows over its
   declared rows, Σ_s m_s / (S·T). A `Static` declaration (the static schedule's ``sampling.ignore_eos``: every request admitted at
   step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: 5 batched
   prompts (44 tokens) at cap 16 are 119/1152, and `FILL`'s 64 one-token prompts fill all 16 served steps, 16/18. A served
@@ -77,10 +77,10 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
-from verity.ml.protocols.pouw.circuit import compile as C, h1tile as H
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.credit import CREDIT
+from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
+from verity.protocols.pouw.prover.circuit import compile as C, h1tile as H
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier.credit import CREDIT
 from verity.spot.device.challenger import CoinError
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind

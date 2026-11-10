@@ -36,7 +36,7 @@ written isn't on it, so its sessions are refused as `coins` until infra writes t
 A bound run (`--model ROLE`, ROLE of `[A-Z0-9_]`, with `--arena-blocks A` and optionally `--engines E`, 1 to 8) binds
 the registered store to a pinned model, which `auditor_line.py`'s `bound` check needs. The gate adds verifier.py's
 `--checkpoint <models>/<ROLE>` and its `--pin`, core's pin in the pinned tree
-(`verity/core/protocols/pouw/lean/check/models.json`). It refuses the run before starting anything when the role has no
+(`verity/protocols/pouw/verifier/lean/check/models.json`). It refuses the run before starting anything when the role has no
 directory there, when the pinned tree has no `models.json`, or when `--model` comes without `--arena-blocks`.
 
 ## A bound role's checkpoint

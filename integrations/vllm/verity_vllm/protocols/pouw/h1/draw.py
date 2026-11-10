@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols.pouw import window as Wd
+from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as Ch
 from verity.spot.device import remote
 from verity.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,

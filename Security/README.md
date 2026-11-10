@@ -70,7 +70,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
-     (PoUW's: `verity/core/protocols/pouw/`).
+     (PoUW's: `verity/protocols/pouw/verifier/`).
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes

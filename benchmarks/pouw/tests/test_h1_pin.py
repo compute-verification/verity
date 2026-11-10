@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.protocols.pouw.verifier import core_check as CC
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "h1_prove"))
 import h1unit as U  # noqa: E402

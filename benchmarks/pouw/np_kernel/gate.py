@@ -102,7 +102,7 @@ def _ledger():
 def record(out: Path, run: str, root: Path = ROOT):
     """The lead's variant and its GateRecord from the run's out directory, its sources checked against the tree at
     `root`."""
-    from verity.core.protocols.pouw.serving import LEAD_CONFIG, GateRecord, lead_variant
+    from verity.protocols.pouw.verifier.serving import LEAD_CONFIG, GateRecord, lead_variant
 
     ledger = _ledger()
     files = sources(out, root)
@@ -127,7 +127,7 @@ def record(out: Path, run: str, root: Path = ROOT):
 def recorded(root: Path = ROOT, path: Path = RECORD):
     """The lead's variant as the tree at `root` names it, from the files `path`'s record lists, and the recorded
     GateRecord."""
-    from verity.core.protocols.pouw.serving import LEAD_CONFIG, GateRecord, lead_variant
+    from verity.protocols.pouw.verifier.serving import LEAD_CONFIG, GateRecord, lead_variant
 
     rec = json.loads(path.read_text())
     g = GateRecord(**{**rec["gate"], "shapes": tuple(tuple(s) for s in rec["gate"]["shapes"])})
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT, path: Path = RECORD) 
         ap.error("give OUT --run RUN [--write], or --recorded")
     from dataclasses import asdict
 
-    from verity.core.protocols.pouw.serving import POUW_V2, SERIAL, variant_refusals
+    from verity.protocols.pouw.verifier.serving import POUW_V2, SERIAL, variant_refusals
     try:
         v, g = recorded(root, path) if a.recorded else record(a.out, a.run, root)
     except (GateError, OSError, KeyError, ValueError, TypeError) as ex:

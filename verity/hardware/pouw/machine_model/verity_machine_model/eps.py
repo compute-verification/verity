@@ -46,7 +46,7 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
-- **ε_skip** is the ε_skip calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
+- **ε_skip** is the ε_skip calculator's number for the design's noise (verity/protocols/pouw/eps_budget.py, `design_skip`), which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof block's (data/adapt.toml, Theorem D): what steering instances in unproved regions gains

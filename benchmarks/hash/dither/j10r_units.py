@@ -31,8 +31,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import seeds as SD
 
 CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
 TILE = (RC.R, RC.C_)

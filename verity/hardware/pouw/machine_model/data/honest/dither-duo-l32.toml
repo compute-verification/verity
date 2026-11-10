@@ -3,7 +3,7 @@
 # kernel (e-l7qs.toml); this one stays for the tests' hand arithmetic.
 name = "dither-duo-l32"
 status = "provisional"
-source = "model.toml's [honest] (a 64x64 warp tile in a 128x128 block) plus the duo fold, 3 lane instructions a word (benchmarks/pouw/receipts)"
+source = "model.toml's [honest] (a 64x64 warp tile in a 128x128 block) plus the duo fold, 3 lane instructions a word (verity/protocols/pouw/receipts)"
 L = 32
 
 [mma]

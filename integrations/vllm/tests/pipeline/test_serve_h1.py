@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import torch
 
-from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.spot.device.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
@@ -188,7 +188,7 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
     opened without receipts registers none, which the combine's reader refuses. Slow: only the window Program's real tile
     unit (`h1window.tile_unit`, about half a minute to declare) has the receipt the combine reads, so the stand-in unit
     the other tests serve can't show it."""
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
 
     from tests.protocols import test_pouw_h1_receipts as TR
 
@@ -238,7 +238,7 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     import gzip
     import hashlib
 
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
     from verity.circuits.codec import program_digest
     from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -478,7 +478,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
     serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
     its sampling session, reserved withheld beside it) is the one reserved at startup."""
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
 

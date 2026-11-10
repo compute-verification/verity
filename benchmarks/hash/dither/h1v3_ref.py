@@ -19,9 +19,9 @@ import os
 import sys
 
 try:
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
 except ModuleNotFoundError:  # a pinned TREE (H1V3_SHA, J10R_SHA) from before the builders left core has h1tile there
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.protocols.pouw.verifier.circuit import h1tile as HT
 
 
 def main() -> int:

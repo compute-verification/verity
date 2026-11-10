@@ -12,7 +12,7 @@ import hashlib
 import json
 import sys
 
-from verity.ml.protocols.pouw.circuit import seeds
+from verity.protocols.pouw.prover.circuit import seeds
 from verity.commitments import hm96
 from verity.commitments.indexed import RangeU64Domain
 from verity.commitments.merkle import CommitmentDomain, tree_levels

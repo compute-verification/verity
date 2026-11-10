@@ -22,8 +22,8 @@ import itertools
 import math
 import random
 
-from verity.ml.protocols.pouw.circuit import compile as C, h1tile, segment as SG
-from verity.ml.protocols.pouw.circuit.h1tile import Layout, reference
+from verity.protocols.pouw.prover.circuit import compile as C, h1tile, segment as SG
+from verity.protocols.pouw.prover.circuit.h1tile import Layout, reference
 
 M32 = (1 << 32) - 1
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("pouw_budget", Path(__file__).parents[1] / "budget.py")
+spec = importlib.util.spec_from_file_location("pouw_budget", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "budget.py")
 B = importlib.util.module_from_spec(spec)
 sys.modules["pouw_budget"] = B
 spec.loader.exec_module(B)

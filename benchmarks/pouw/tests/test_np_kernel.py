@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.serving import (LEAD_FOLD_BOUND, POUW_V2, SERIAL, GateRecord, lead_variant,
+from verity.protocols.pouw.verifier.serving import (LEAD_FOLD_BOUND, POUW_V2, SERIAL, GateRecord, lead_variant,
                                                  variant_refusals)
 
 HERE = Path(__file__).resolve().parents[1] / "np_kernel"

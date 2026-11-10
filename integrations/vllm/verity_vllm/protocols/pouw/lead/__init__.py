@@ -31,7 +31,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from verity.core.protocols.pouw.serving import PassCommitment
+from verity.protocols.pouw.verifier.serving import PassCommitment
 
 from verity_vllm.protocols.pouw.lead import feed as F
 from verity_vllm.protocols.pouw.lead import record as R

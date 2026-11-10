@@ -41,7 +41,7 @@ build_own() {       # build_own DEST: DEST/verity/core/protocols/pouw/lean/check
 }
 OWN=:
 if [ -z "${H1L_J10R:-}" ]; then
-  OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
+  OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
   sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi

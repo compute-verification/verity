@@ -33,10 +33,10 @@ import json
 import time
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
 from verity.spot.device import remote
 from verity.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
 

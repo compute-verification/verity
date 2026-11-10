@@ -274,7 +274,7 @@ def test_a_suites_parts_are_a_whole_number_of_at_least_two(tmp_path, monkeypatch
 def test_the_planner_splits_a_suite_past_the_threshold_into_parts_priced_by_their_share():
     assert SH.split_m(None, 10) == SH.split_m(900, 10) == SH.split_m(5000, 1) == 1
     assert SH.split_m(901, 10) == 2 and SH.split_m(6608, 789) == 8 and SH.split_m(10875, 5) == 5
-    assert SH.suite_part("pytest:verity/core/protocols/pouw:2/3") == ("pytest", "verity/core/protocols/pouw", "2/3")
+    assert SH.suite_part("pytest:verity/protocols/pouw/verifier:2/3") == ("pytest", "verity/protocols/pouw/verifier", "2/3")
     assert SH.suite_part("pytest:a") == ("pytest", "a", None)
     names = SH.parts(["pytest", "lean-suites:f", "lean-build"], ["a", "b", "f"], ["f"], True, {"a": 3, "f": 2})
     assert names == ["pytest:a:1/3", "pytest:a:2/3", "pytest:a:3/3", "pytest:b", "lean-suites:f:1/2", "lean-suites:f:2/2",

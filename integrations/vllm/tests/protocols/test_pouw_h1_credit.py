@@ -10,9 +10,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
 
 from tests.protocols import pouw_h1_credit as PC  # noqa: E402
 

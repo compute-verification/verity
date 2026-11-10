@@ -143,7 +143,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
     """A pin in the registry's shape from the bytes of the file at `path`, its `checkpoint_sha512` held to its files:
     {name, checkpoint, checkpoint_sha512}. A registry line names its model `model`, which is read as `name`; a registry
     itself (`models.jsonl`, a line a registration) is read as its lines of `role`, which must pin one checkpoint; core's
-    pin (`verity/core/protocols/pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex},
+    pin (`verity/protocols/pouw/verifier/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex},
     ...}}) as its entry of `role`, named `role`, its `files` the checkpoint. `RemoteAudit.Store.pinOf` is its
     definition, refusals word for word (`lean/tests/test_binding.py`)."""
     try:

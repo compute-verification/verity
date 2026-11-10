@@ -145,7 +145,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.ml.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
@@ -162,8 +162,8 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
-    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
@@ -405,9 +405,9 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
                          "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.pouw.verifier.coins import Challenger
     from verity.spot.device.challenger import LiveRecord
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
@@ -1156,8 +1156,8 @@ def record_reason(record: dict[str, Any]) -> str | None:
     """`pouw_h1_challenger.manifest_reason` of a window's record, its Program salt read from in-process coins too: their
     coin commitment is `coins.CoinCommitment`'s rather than the live challenger's, and their salt coin opens after the
     weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
-    from verity.core.protocols.pouw.audit import salt_of
-    from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+    from verity.protocols.pouw.verifier.audit import salt_of
+    from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
     from verity_vllm.engine.hooks import patched
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -1179,7 +1179,7 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
     the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
     leaves a row past K = 4096). ``tied`` when none refuses."""
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
@@ -1350,7 +1350,7 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import served as SV
     t0 = time.monotonic()
     w = PC.of_run(h1, served)

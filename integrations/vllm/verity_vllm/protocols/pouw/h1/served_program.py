@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from verity.ml.protocols.pouw.circuit import h1device as HD
-from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1device as HD
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.circuits.program import Program
 

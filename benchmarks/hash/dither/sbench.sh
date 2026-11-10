@@ -43,7 +43,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # sources here, verity/definitions/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
-COINS_PKG=verity/core/protocols/pouw/lean/check
+COINS_PKG=verity/protocols/pouw/verifier/lean/check
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
 # the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
@@ -164,7 +164,7 @@ fi
 # the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+(cd verity/protocols/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);

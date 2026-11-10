@@ -120,7 +120,7 @@ class Placed:
     def public(self, plan: Plan, ticks: dict[str, float] | None = None, record: Mapping[str, Any] | None = None,
                query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
-        (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
+        (`verity/protocols/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
         at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is the sampled
         proofs' one-stage registration of the Program and `query` the verifier's copy of its partition query: each
         block's proof blocks are the units of that partition whose gates run there, and the record must name that query,
