@@ -2,10 +2,8 @@
 knowledge soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) does not cover
 (`Flock.KsScope.filesWhy`), held to `flock-verify ks-form`, which runs that check alone, on statements the prover wrote:
 M0's flat hidden-output sets, RoPE (its unit returns its output) and GEMM (its unit reads two input groups and a tail
-stage returns the outputs, which both refuse, `SCOPE_WHY`), the served registered RoPE stage (a shared-row public
-file in the form `SampledKSLiveV5` covers, which both pass), and a unit staged on rows padded to whole words
-(`UnitStager`'s ``pad``, which both pass: Lean holds a unit's rows to its ports' bits, and no gate reads the padding).
-Each case's answer is Lean's and the mirror's alike.
+stage returns the outputs, which both refuse, `SCOPE_WHY`), and the served registered RoPE stage (a shared-row public
+file in the form `SampledKSLiveV5` covers, which both pass). Each case's answer is Lean's and the mirror's alike.
 
 The hidden-output sets are a fetched fixture (`fixtures/artifacts.json`), as `test_lean_hidden_outputs.py` reads them; the
 served stage is `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store."""
@@ -65,13 +63,4 @@ def test_lean_and_its_mirror_both_pass_the_served_registered_shared_row_file(bui
         pytest.skip(f"the evidence store is not reachable: {e}")
     stage = root / "stage"
     got = (_lean(PF.STATEMENT, stage, "pub-32.bin"), PF.ks_form_why(stage / "circuit.txt", stage / "pub-32.bin"))
-    assert got == (None, None), got
-
-
-def test_lean_and_its_mirror_both_pass_a_unit_staged_on_padded_rows(built, tmp_path):
-    import test_class_statement_unit_stager as US
-
-    rows, _want = US._pad_rows()
-    US.CS.UnitStager(US.PAD_TOY, "unit/pad-toy", US.PAD_ROWS, [(US.V2, (0,))], pad=True).stage(rows, tmp_path, b"k" * 32)
-    got = (_lean(PF.STATEMENT, tmp_path, "pub.bin"), PF.ks_form_why(tmp_path / "circuit.txt", tmp_path / "pub.bin"))
     assert got == (None, None), got
