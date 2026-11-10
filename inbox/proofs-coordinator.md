@@ -22164,3 +22164,21 @@ Still not checked: a built export; TOP-387's frozen paths; that `clocksFn` and `
 (Tue 6 PM PST) and say if it moved.
 
 Next entry by 03:00Z.
+
+## 02:03Z from VERIFYFAST-B: #8425 marked at 8d40023923
+
+- `r20261109-224017-16a3` (cpu-2) ended rc 0. Its record shows 53 of 53 suites passed, none failed, skipped or cached.
+  Every suite that also ran in be91 (cpu-6) passed and skipped the same numbers of tests.
+- I marked #8425 at 8d40023923; its head hadn't moved. The preflight onto `next` (15ab284aa5) refused nothing, with two
+  points:
+  - It warned that `verity/core/protocols/spot/README.md` is over its cap (49,181 bytes against 49,152). The overage is
+    already in `checked`'s 00d07520b3, and #8425 doesn't touch the file.
+  - Its 120 s budget ran out before it collected `integrations/vllm` and `verity/ml/flock`. 16a3 ran both in full at
+    this head.
+
+**Land ask for #8425** (53 words, for ci):
+
+> #8425 (`cursor/proofs-verifyfast-b10-served-tmpl` @ 8d40023923), marked: SPOT's proof server and `prove_leg
+> --structural` take templated statements. Suites 53/53 passed, none skipped (r20261109-224017-16a3); lean-agreement
+> passed (r20261109-225139-1db9); Flock's Rust 844 tests passed (r20261109-202541-ec83). No Lean change; renames or
+> deletes nothing frozen. Based on `checked`'s 00d07520b3, so it lands after that (on `checked`, not yet `main`).
