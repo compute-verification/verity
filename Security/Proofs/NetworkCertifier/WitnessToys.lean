@@ -517,7 +517,7 @@ theorem fxRows_wf : fxRows.Wf := by
   rintro ⟨c, ⟨⟨⟩⟩ | _ | _⟩ <;> fin_cases c <;> rfl
 
 theorem fxQueue_bucket (c : Fin 3) (j : ℕ) (hj : j < fxQueueSched.cells c) : fxQueueSched.bucket c j < 10 := by
-  fin_cases c <;> simp [fxQueueSched, WardenSchedule.bucket] at hj ⊢ <;> omega
+  fin_cases c <;> simp [fxQueueSched, CertifierSchedule.bucket] at hj ⊢ <;> omega
 
 /-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, and no
 bucket holds more than four frames. -/

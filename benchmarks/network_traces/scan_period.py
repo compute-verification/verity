@@ -3,10 +3,10 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+* **The case** (`rows_case`) of link-window W: the parameters the certifier run's ``deployment.json`` (its key, session
+  and one schedule), the link `certifier_tcp_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
@@ -50,7 +50,7 @@ sys.path.insert(0, str(HERE))
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
+import certifier_tcp_serve as WS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -59,7 +59,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 def certificates(run: Path, w: int) -> list[dict]:
     """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
-    responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
+    responses, fails: `certifier_tcp_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
     out = []
@@ -73,7 +73,7 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    """The rows form's case (module docstring) of the certifier run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
@@ -140,7 +140,7 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-"""Regressions on the network certifier's bucket rows (`warden_rows`): replays of real network-certifier-signed roots
+"""Regressions on the network certifier's bucket rows (`certifier_rows`): replays of real network-certifier-signed roots
 and certificates across windows and directions, and a certificate the network certifier signed over another digest, stay
 refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
@@ -16,12 +16,12 @@ import dataclasses
 import pytest
 
 import signers
-from verity.core.protocols.certifier import warden_rows as W
+from verity.core.protocols.certifier import certifier_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, certificate_digest
 from verity.core.protocols.certifier.grid import BlockGrid, Status
-from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
-from verity.core.protocols.certifier.warden import cell
+from verity.core.protocols.certifier.tests.test_network_certifier import PARAMS
+from verity.core.protocols.certifier.certifier import cell
 
 SESSION = signers.SESSION
 T, R, S, B = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots, PARAMS.cell_bytes
@@ -89,7 +89,7 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
         W.check_registration(doc, key, SESSION, PARAMS, LINK, Direction.INGRESS, 0)
 
 
-def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
+def test_a_certifier_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
     """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the network
     certifier really signed over such a digest verifies on its own, but is refused here: `cert.digest` must be
     `head.digest()`."""
@@ -131,7 +131,7 @@ def test_the_layout_is_bound_by_the_signed_head(tmp_path):
         assert dataclasses.replace(head, **change).digest() != cert.digest
 
 
-def test_the_wiring_reads_are_tied_to_the_wardens_layout(tmp_path):
+def test_the_wiring_reads_are_tied_to_the_certifiers_layout(tmp_path):
     """Was `test_the_wiring_reads_are_unconstrained_prover_witness`, the main finding. A read is (connection, cell),
     and the verifier places it with the wiring the network certifier signed: the honest reads open A's cells at their
     row and slot; a duplicate, a read of a cell no connection sent (past B's cells, or of a connection that isn't there)
@@ -160,5 +160,5 @@ def test_the_wiring_reads_are_tied_to_the_wardens_layout(tmp_path):
     assert crossed.place(PARAMS, [(QB, R)]) == wiring.place(PARAMS, [(QA, R)])
     assert padded.place(PARAMS, [(2, 0)]) == [(1, R)] and c0.rows[1][R * B:(R + 1) * B] == bytes(B)
     for forged in (crossed, padded):
-        with pytest.raises(ValueError, match="isn't the one the warden signed"):
+        with pytest.raises(ValueError, match="isn't the one the certifier signed"):
             W.port(head, forged, PARAMS, [(QA, 0)])

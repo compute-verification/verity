@@ -25,10 +25,10 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import certifier_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.certifier import CertifierParams
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -126,7 +126,7 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
+    """A link-window missing one of its records' certificates, one the certifier left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
@@ -501,7 +501,7 @@ def test_an_audit_is_held_to_its_program(server):
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
-    """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
+    """The rows form's honest registrations are `certifier_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -590,7 +590,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2
     incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
     them."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, CertifierParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
     (scan,) = out["scans"]

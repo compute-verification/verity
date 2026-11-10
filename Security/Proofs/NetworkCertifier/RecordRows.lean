@@ -8,15 +8,15 @@ meta import Definitions.NetworkCertifier.RecordRows
 
 `Definitions.NetworkCertifier.RecordRows`. On a schedule that fits the rows format, the lanes read back from the record
 of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
-`TapRecord` (`RowsFormat.tapRecord`). A lane of `k` cells has cell `j` in bucket `t j` (`wardenLane_fst`); among the
+`TapRecord` (`RowsFormat.tapRecord`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
 bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
 (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
 
 The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
-`verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `params`: B = 64, r = 2, D = 3, two lanes,
+`verity/core/protocols/certifier/tests/test_network_certifier.py`, `params`: B = 64, r = 2, D = 3, two lanes,
 T = 24): three connections on two lanes, the third admitted when the second's END frees its lane (`fxQueue`, the
-traffic of `test_network_certifier_warden_rows.py`); a byte late at its cell (`fxLate`); and a server past
+traffic of `test_network_certifier_rows.py`); a byte late at its cell (`fxLate`); and a server past
 `egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's arrivals are its DATA cells'
 and its END's payloads (`true` for the END), every cell in time except a failed lane's next one.
 -/
@@ -27,24 +27,24 @@ namespace NetTiming
 
 variable {κ Cell : Type}
 
-theorem wardenLane_length (a : Arrivals Cell) (t : ℕ → ℕ) : ∀ j k, (wardenLane a t j k).length = k
+theorem certifierLane_length (a : Arrivals Cell) (t : ℕ → ℕ) : ∀ j k, (certifierLane a t j k).length = k
   | _, 0 => rfl
   | j, k + 1 => by
-    simp only [wardenLane]
-    split_ifs <;> simp [wardenLane_length a t (j + 1) k]
+    simp only [certifierLane]
+    split_ifs <;> simp [certifierLane_length a t (j + 1) k]
 
 /-- A lane's cell `i` is in bucket `t i`. -/
-theorem wardenLane_fst (a : Arrivals Cell) (t : ℕ → ℕ) :
-    ∀ j k, (wardenLane a t j k).map Prod.fst = (List.range' j k).map t
+theorem certifierLane_fst (a : Arrivals Cell) (t : ℕ → ℕ) :
+    ∀ j k, (certifierLane a t j k).map Prod.fst = (List.range' j k).map t
   | _, 0 => rfl
   | j, k + 1 => by
-    simp only [wardenLane]
-    split_ifs <;> simp [wardenLane_fst a t (j + 1) k, List.range'_succ, Function.comp_def]
+    simp only [certifierLane]
+    split_ifs <;> simp [certifierLane_fst a t (j + 1) k, List.range'_succ, Function.comp_def]
 
-theorem wardenCode_fst (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
-    (wardenCode s a c).map Prod.fst = (List.range (s.cells c)).map (s.bucket c) := by
+theorem certifierCode_fst (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
+    (certifierCode s a c).map Prod.fst = (List.range (s.cells c)).map (s.bucket c) := by
   rw [List.range_eq_range']
-  exact wardenLane_fst _ _ 0 _
+  exact certifierLane_fst _ _ 0 _
 
 /-- An element `j` that `p` keeps is the `n`-th that `p` keeps, `n` the number it keeps before `j`. -/
 theorem getElem?_filter_countP_take {α : Type} (p : α → Bool) :
@@ -87,7 +87,7 @@ theorem filterMap_flatMap_ite [DecidableEq κ] {β : Type} (X : List β) {c : κ
 
 /-- A connection's frames in a row are its own frames in the bucket. -/
 theorem filterMap_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns.Nodup) {c : κ} (hc : c ∈ conns)
-    (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (b : ℕ) :
+    (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (b : ℕ) :
     (bucketFrames conns s v b).filterMap (fun f => if f.1 = c then some f.2 else none) = laneFrames s v c b := by
   have : ∀ d, ((laneFrames s v d b).map (d, ·)).filterMap (fun f => if f.1 = c then some f.2 else none) =
       if d = c then laneFrames s v c b else [] := by
@@ -101,12 +101,12 @@ theorem filterMap_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns.N
 
 /-- **The lanes read back from the rows of the code's cells are the code's cells.** -/
 theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns.Nodup) (hall : ∀ c, c ∈ conns)
-    (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
-    lanesOfRows s (bucketFrames conns s (wardenCode s a)) c = wardenCode s a c := by
-  have hlen : (wardenCode s a c).length = s.cells c := wardenLane_length _ _ _ _
-  have hfst : ∀ j (hj : j < (wardenCode s a c).length), ((wardenCode s a c)[j]).1 = s.bucket c j := by
+    (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
+    lanesOfRows s (bucketFrames conns s (certifierCode s a)) c = certifierCode s a c := by
+  have hlen : (certifierCode s a c).length = s.cells c := certifierLane_length _ _ _ _
+  have hfst : ∀ j (hj : j < (certifierCode s a c).length), ((certifierCode s a c)[j]).1 = s.bucket c j := by
     intro j hj
-    have h := congrArg (fun l => l[j]?) (wardenCode_fst s a c)
+    have h := congrArg (fun l => l[j]?) (certifierCode_fst s a c)
     simp only [List.getElem?_map, List.getElem?_eq_getElem hj, List.getElem?_range (hlen ▸ hj),
       Option.map_some, Option.some.injEq] at h
     exact h
@@ -118,23 +118,23 @@ theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns
   have hpre : ¬(s.adm c ≤ s.bucket c j ∧ s.bucket c j < s.adm c + s.D) := fun h =>
     absurd h.2 (Nat.not_lt.2 (Nat.le_add_right _ _))
   simp only [laneFrames, hpre, ite_false, List.nil_append]
-  have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (wardenCode s a c) j h2
+  have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (certifierCode s a c) j h2
     (by simp [hfst j h2])
-  have hcount : ((wardenCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
-    have := congrArg (fun l => (l.take j).countP (· == s.bucket c j)) (wardenCode_fst s a c)
+  have hcount : ((certifierCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
+    have := congrArg (fun l => (l.take j).countP (· == s.bucket c j)) (certifierCode_fst s a c)
     simp only [← List.map_take, List.countP_map, List.take_range, Nat.min_eq_left hj.le] at this
     rw [show (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) = (· == s.bucket c j) ∘ Prod.fst from rfl, this,
       ← countP_range_div s.r j]
     congr 1
     funext i
-    simp [WardenSchedule.bucket]
+    simp [CertifierSchedule.bucket]
   rw [hcount] at key
   rw [List.getElem?_map, key]
   exact Prod.ext (hfst j h2).symm rfl
 
 /-- A row of the code's cells holds each connection's load in the bucket. -/
-theorem length_bucketFrames (conns : List κ) (s : WardenSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
-    (bucketFrames conns s (wardenCode s a) b).length = (conns.map fun c => laneLoad s c b).sum := by
+theorem length_bucketFrames (conns : List κ) (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
+    (bucketFrames conns s (certifierCode s a) b).length = (conns.map fun c => laneLoad s c b).sum := by
   simp only [bucketFrames, List.length_flatMap, List.length_map, laneFrames, List.length_append, laneLoad]
   congr 1
   refine List.map_congr_left fun c _ => ?_
@@ -142,7 +142,7 @@ theorem length_bucketFrames (conns : List κ) (s : WardenSchedule κ) (a : κ �
   · split_ifs <;> simp
   · rw [← List.countP_eq_length_filter, ← List.countP_eq_length_filter,
       show (fun x : ℕ × CellView Cell => x.1 == b) = (· == b) ∘ Prod.fst from rfl, ← List.countP_map,
-      wardenCode_fst, List.countP_map]
+      certifierCode_fst, List.countP_map]
     rfl
 
 theorem filterMap_range_getElem? {α : Type} (l : List α) :
@@ -165,7 +165,7 @@ variable {L K : ℕ}
 
 /-- **The record's slots hold a row's frames in order** at a bucket of the monitoring period whose frames fit. -/
 theorem frames_record (F : RowsFormat κ Cell L K) (hdec : ∀ x, F.dec (F.enc x) = some x) (S n : ℕ)
-    (s : WardenSchedule κ) (a : κ → Arrivals Cell) (v : κ → List (ℕ × CellView Cell)) {b : ℕ} (hb : b < n * F.T)
+    (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (v : κ → List (ℕ × CellView Cell)) {b : ℕ} (hb : b < n * F.T)
     (hS : (bucketFrames F.conns s v b).length ≤ S) :
     F.frames (F.record S n s a v) b = bucketFrames F.conns s v b := by
   have hT : 0 < F.T := Nat.pos_of_ne_zero fun h => by simp [h] at hb
@@ -180,12 +180,12 @@ theorem frames_record (F : RowsFormat κ Cell L K) (hdec : ∀ x, F.dec (F.enc x
   exact filterMap_finRange_getElem? _ hS
 
 /-- **The rows format reads back the code's cells** on every schedule that fits it. -/
-theorem read_record [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n : ℕ) (s : WardenSchedule κ)
+theorem read_record [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n : ℕ) (s : CertifierSchedule κ)
     (hs : F.Fits S n s) (a : κ → Arrivals Cell) :
-    F.read s (F.record S n s a (wardenCode s a)) = wardenCode s a := by
+    F.read s (F.record S n s a (certifierCode s a)) = certifierCode s a := by
   obtain ⟨hnd, hall, hdec⟩ := hF
   funext c
-  have : F.read s (F.record S n s a (wardenCode s a)) c = lanesOfRows s (bucketFrames F.conns s (wardenCode s a)) c := by
+  have : F.read s (F.record S n s a (certifierCode s a)) c = lanesOfRows s (bucketFrames F.conns s (certifierCode s a)) c := by
     simp only [read, lanesOfRows]
     refine List.map_congr_left fun j hj => ?_
     rw [frames_record F hdec S n s a _ (hs.1 c j (List.mem_range.1 hj))
@@ -229,16 +229,16 @@ def pyCell : ℕ × CellView (Bool × String) → ℕ × String × String
 
 /-- The rows format's frames of the code's cells are the record's, bucket by bucket; the lanes read back from the
 record's frames are the code's cells; and no bucket holds more than the `S = 4` slots. -/
-def fixtureAgrees {n : ℕ} (s : WardenSchedule (Fin n)) (arr : Fin n → Arrivals (Bool × String))
+def fixtureAgrees {n : ℕ} (s : CertifierSchedule (Fin n)) (arr : Fin n → Arrivals (Bool × String))
     (rows : List (List (ℕ × String × String))) : Bool :=
-  (List.range (rows.length + 8)).all (fun b => (bucketFrames (List.finRange n) s (wardenCode s arr) b).map pyFrame ==
+  (List.range (rows.length + 8)).all (fun b => (bucketFrames (List.finRange n) s (certifierCode s arr) b).map pyFrame ==
       rows.getD b []) &&
     (List.finRange n).all (fun c => (lanesOfRows s (fun b => (rows.getD b []).filterMap ofPyFrame) c).map pyCell ==
-      (wardenCode s arr c).map pyCell) &&
-    (List.range (rows.length + 8)).all fun b => (bucketFrames (List.finRange n) s (wardenCode s arr) b).length ≤ 4
+      (certifierCode s arr c).map pyCell) &&
+    (List.range (rows.length + 8)).all fun b => (bucketFrames (List.finRange n) s (certifierCode s arr) b).length ≤ 4
 
 /-- `fxQueue`: 3 connections; the Python network certifier's egress record, buckets 0 … 9 (every later bucket empty). -/
-def fxQueueSched : WardenSchedule (Fin 3) :=
+def fxQueueSched : CertifierSchedule (Fin 3) :=
   { r := 2, D := 3, adm := ![1, 2, 6], cells := ![6, 2, 2] }
 
 /-- `fxQueue`'s arrivals. -/
@@ -263,7 +263,7 @@ def fxQueueRows : List (List (ℕ × String × String)) := [
 #guard fixtureAgrees fxQueueSched fxQueueArr fxQueueRows
 
 /-- `fxLate`: 1 connections; the Python network certifier's egress record, buckets 0 … 5 (every later bucket empty). -/
-def fxLateSched : WardenSchedule (Fin 1) :=
+def fxLateSched : CertifierSchedule (Fin 1) :=
   { r := 2, D := 3, adm := ![1], cells := ![4] }
 
 /-- `fxLate`'s arrivals. -/
@@ -282,7 +282,7 @@ def fxLateRows : List (List (ℕ × String × String)) := [
 #guard fixtureAgrees fxLateSched fxLateArr fxLateRows
 
 /-- `fxLimit`: 1 connections; the Python network certifier's egress record, buckets 0 … 8 (every later bucket empty). -/
-def fxLimitSched : WardenSchedule (Fin 1) :=
+def fxLimitSched : CertifierSchedule (Fin 1) :=
   { r := 2, D := 3, adm := ![0], cells := ![12] }
 
 /-- `fxLimit`'s arrivals. -/

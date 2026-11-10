@@ -1,10 +1,10 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay that knows bytes
+"""certifier-tcp-serve: the active certifier (`verity.core.protocols.certifier.certifier`) on one host, a relay that knows bytes
 only, in front of any TCP server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
 connection to the server (`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on
-its schedule, in B-byte cells; the client speaks cells through the thin, workload-blind shim (`warden.cells` sending,
-`warden.Shim` reading):
+its schedule, in B-byte cells; the client speaks cells through the thin, workload-blind shim (`certifier.cells` sending,
+`certifier.Shim` reading):
 
     client ──cells──▶ network certifier ──bytes──▶ server ──bytes──▶ network certifier ──cells──▶ client
 
@@ -15,7 +15,7 @@ certifier's release order and the network certifier's run id (`release`), which 
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  gate's `certifier-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
@@ -27,41 +27,41 @@ certifier's release order and the network certifier's run id (`release`), which 
 **Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
-`--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
+`--top-p` put the same on every request instead (the gate's `certifier-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
 at the same sampling when given): network-certifier-form id requests (`active.id_request`, offset 0), each answered by
 the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
-at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
+at most `egress_cells` − 1 ids), what `scan_zk.py prove --certifier-run` proves; the gate's `certifier-rehearse --scan` sends
 it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
 `--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
 so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
-loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
+loop's period of requests a group, as the gate's `certifier-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
-    python warden_serve.py keys --dir KEYDIR [--height 10]
-    python warden_serve.py traffic --out TRAFFIC.json --model NAME [--requests 100] [--rate 0.5] [--seed 0]
+    python certifier_tcp_serve.py keys --dir KEYDIR [--height 10]
+    python certifier_tcp_serve.py traffic --out TRAFFIC.json --model NAME [--requests 100] [--rate 0.5] [--seed 0]
         [--temperature T] [--top-p P]
-    python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
-    python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
+    python certifier_tcp_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
+    python certifier_tcp_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [schedule]
-    python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
-    python warden_serve.py check --run DIR
-    python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
+    python certifier_tcp_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
+    python certifier_tcp_serve.py check --run DIR
+    python certifier_tcp_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
-  pacer `--paced-ms` after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes
-  `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
+  pacer `--paced-ms` after its boundary (`certifier`'s "The pacer"; 0: written on the network certifier's loop), and writes
+  `certifier.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
   windows, and each bucket's pacer report, `paced`). Each window's records go to `requests.records`,
   `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
   (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in
-  which the network certifier refused a connection, whose records and rows it certifies and signs none of (`warden`'s
+  which the network certifier refused a connection, whose records and rows it certifies and signs none of (`certifier`'s
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
-  (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
+  (`certifier_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
   ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
   wiring are read off). All of that is done by a spawned process (`PublisherProcess`), which alone holds the key and
   gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
@@ -70,7 +70,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   process ready for the run's growth (`prepare_process`: its descriptor table, its heap, its pages locked where
   permitted), and from it to the end a process of its own (`stall_probe`, unless `--no-stall-probe`) samples every
   thread of both processes each millisecond into `stalls.json`, every episode in uninterruptible sleep with the kernel
-  function it slept in; `warden.json` keeps what was prepared (`process`) and each thread's episodes and page faults
+  function it slept in; `certifier.json` keeps what was prepared (`process`) and each thread's episodes and page faults
   (`stalls`).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the network certifier's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and
@@ -80,7 +80,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   passed 256).
 - `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
-  their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
+  their salts (`check_cells`), the audit (`certifier.audit`) accepts the records, and every connection's client got
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
   egress record's; `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
@@ -129,11 +129,11 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
+from verity.core.protocols.certifier import io_tie as IT, certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
 from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Status, row_count
-from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
+from verity.core.protocols.certifier.certifier import END, FAIL, REFUSED, Shim, Certifier, CertifierParams, audit, cells
 
 HERE = Path(__file__).resolve().parent
 INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
@@ -147,15 +147,15 @@ RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
 #: the descriptors the network certifier holds beside its connections' (its listener, loop, pipes and the probe's)
 FD_MARGIN = 256
 #: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
-C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
+C_ALLOCATOR = "CERTIFIER_TCP_SERVE_C_ALLOCATOR"
 #: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the network
 #: certifier's heap grows tens of MB in a run
 LOCK_HEADROOM = 4 << 30
 M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
-#: the schedule's defaults here, where they differ from `WardenParams`'s: r·P = 494 bytes a bucket each way stays
+#: the schedule's defaults here, where they differ from `CertifierParams`'s: r·P = 494 bytes a bucket each way stays
 #: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s from admission covers
 #: the request's ingress and a queued prefill
-SCHEDULE = asdict(WardenParams()) | {"slots": 2, "delay": 30, "lanes": 8, "ingress_cells": 96, "ingress_buckets": 100}
+SCHEDULE = asdict(CertifierParams()) | {"slots": 2, "delay": 30, "lanes": 8, "ingress_cells": 96, "ingress_buckets": 100}
 QUESTIONS = ("Explain how a bloom filter works.", "Write a haiku about the sea.", "List three uses of copper.",
              "What is the capital of Australia? Answer in one word.", "Summarize the notes above in one sentence.",
              "Translate 'good morning' into French, Spanish and German.",
@@ -219,7 +219,7 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
     return out
 
 
-def group_windows(params: WardenParams, tokens: int) -> int:
+def group_windows(params: CertifierParams, tokens: int) -> int:
     """The execution phases a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
     first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
@@ -227,7 +227,7 @@ def group_windows(params: WardenParams, tokens: int) -> int:
     return -(-(params.delay + tokens // params.slots + 3) // params.window)
 
 
-def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
+def read_prompts(data: bytes, params: CertifierParams) -> list[list[int]]:
     """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
     scan's IDB), each prompt's id request (`active.id_request`, offset 0) within the schedule's ingress bound."""
     try:
@@ -247,7 +247,7 @@ def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
     return prompts
 
 
-def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: WardenParams, max_tokens: int,
+def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: CertifierParams, max_tokens: int,
                    rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
                    top_p: float | None = None, window_per_group: bool = False) -> list[dict]:
     """n network-certifier-form id requests (`id_traffic`'s items) of the given prompts, request j's
@@ -271,7 +271,7 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Ward
     return out
 
 
-def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
+def groups(n: int, per: int, params: CertifierParams, max_tokens: int) -> list[dict]:
     """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution
     phases."""
     G = group_windows(params, max_tokens)
@@ -378,7 +378,7 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
                         token_s: float = 0.02, id_payload: int | None = None) -> None:
     """A stand-in for vLLM's streamed `/v1/completions` for a rehearsal: it reads one request, answers its first token
     `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes. `GET /v1/models` lists its one
-    model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too. With
+    model, `fake`, so that a rehearsal that names no model (the gate's `certifier-rehearse`) runs against it too. With
     `id_payload` P it answers every request `first_s` after with its `fake_ids` as one id-form response
     (`id_response`), whole, and no HTTP head: the bytes the scan's egress reads."""
     try:
@@ -458,14 +458,14 @@ class Publisher:
     thread, or on any thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the
     issuer's refusals."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: CertifierParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
     def __call__(self, record: BlockGrid, grid: GridParams) -> None:
         self.keep(record, grid)
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
+        """The certifier's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
@@ -482,7 +482,7 @@ class Publisher:
             self.attest(record, link, direction, withheld)
 
     def attest(self, record: BlockGrid, link: str, direction: Direction, withheld: bool = False) -> None:
-        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
+        """The link-window's cells as rows and its wiring (`certifier_rows`), their head signed (never `withheld`'s): one
         line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost), the salts to
         `cells.salts` (witness)."""
         t0 = time.perf_counter()
@@ -533,7 +533,7 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
     return doc
 
 
-def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
+def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: CertifierParams, commit,
                     load_heads: Path | None = None) -> None:
     """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
     the load's heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its
@@ -561,7 +561,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
-                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the certifier closed")
             publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
@@ -585,12 +585,12 @@ class PublisherProcess:
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
     the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
-    def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
+    def __init__(self, out: Path, key: Path, session: bytes, params: CertifierParams, commit=None,
                  load_heads: Path | None = None) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
-        self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
+        self.process = ctx.Process(target=_publisher_main, name="certifier-publisher", daemon=True,
                                    args=(self.rows, results, out, key, session, params, commit, load_heads))
         self.process.start()
         results.close()
@@ -641,7 +641,7 @@ class PublisherProcess:
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
+        """The certifier's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
     def close(self) -> list:
@@ -660,7 +660,7 @@ def _quantiles(xs: list[float]) -> dict:
     return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
-def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
+def deployment_record(params: CertifierParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
                       listen: tuple[str, int], upstream: tuple[str, int], slack: float,
                       run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the network certifier's public key and session, the schedule's
@@ -704,7 +704,7 @@ def reserve_fds(n: int) -> int:
     return n
 
 
-def prepare_process(params: WardenParams) -> dict:
+def prepare_process(params: CertifierParams) -> dict:
     """The network certifier's process made ready before its origin, so that no tick waits in the kernel (state D) on
     what the run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
@@ -716,7 +716,7 @@ def prepare_process(params: WardenParams) -> dict:
       page is locked where that is permitted (`_memlock`). `serve`'s command runs on the C allocator
       (`PYTHONMALLOC=malloc`), so the interpreter's small objects come from that heap too and not from arenas it maps
       as it grows.
-    Returns what `warden.json` keeps of it; what it couldn't do is also printed, as a warning."""
+    Returns what `certifier.json` keeps of it; what it couldn't do is also printed, as a warning."""
     reserve = max(RESERVE_MIN, params.lanes * RESERVE_PER_LANE)
     libc = ctypes.CDLL(None, use_errno=True)
     report = {"allocator": "pymalloc" if sys.flags.ignore_environment else os.environ.get("PYTHONMALLOC", "pymalloc"),
@@ -737,18 +737,18 @@ def prepare_process(params: WardenParams) -> dict:
     report["mlock"] = _memlock(libc)
     for key, value in report.items():
         if (key == "allocator" and value != "malloc") or str(value).startswith("not"):
-            print(f"warden-serve: {key}: {value}", file=sys.stderr, flush=True)
+            print(f"certifier-tcp-serve: {key}: {value}", file=sys.stderr, flush=True)
     return report
 
 
-async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
+async def serve(params: CertifierParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
                 load_heads: Path | None = None, paced_ms: float = cs.PACED_MS) -> dict:
     """One run of the network certifier on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
     threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-    (`Warden(paced=…)`, which a warden on the host's clock must have). Returns what `warden.json` holds, with
+    (`Certifier(paced=…)`, which a certifier on the host's clock must have). Returns what `certifier.json` holds, with
     `process`, what `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
@@ -757,34 +757,34 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                                                                f"{context.get('exception')!r}"))
     publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
     origin = time.monotonic() + start_in
-    warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
+    certifier = Certifier(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
                     paced=paced_ms / 1000)
-    server = await asyncio.start_server(warden.handle, *listen)
+    server = await asyncio.start_server(certifier.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
-                                   upstream=upstream, slack=slack, run_id=warden.run_id)
+                                   upstream=upstream, slack=slack, run_id=certifier.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:
-        await warden.run()
+        await certifier.run()
     finally:
         server.close()
         refused = await loop.run_in_executor(None, publish.close)
         stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
-    lateness = [x * 1000 for x in warden.lateness]
-    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
-           "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
+    lateness = [x * 1000 for x in certifier.lateness]
+    log = {"connections": certifier.log, "ordinals": certifier.ordinals, "refused": certifier.refused,
+           "refused_windows": sorted(certifier.refused_windows), "ticks": certifier.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
            "ticks_ms": [round(x, 3) for x in lateness],
            "paced": {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
                      "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
-                                   round(r.end * 1000, 3), r.written] for r in warden.releases]}}
-    (out / "warden.json").write_text(json.dumps(log, indent=1))
+                                   round(r.end * 1000, 3), r.written] for r in certifier.releases]}}
+    (out / "certifier.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
 
@@ -810,7 +810,7 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its network-certifier-form id
     request (`active.id_request`, offset 0) and its response read as id-form."""
-    params = WardenParams(**deployment["params"])
+    params = CertifierParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
 
@@ -839,7 +839,7 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
 
 # The offline check.
 
-def read_records(run: Path, params: WardenParams) -> dict[str, list[BlockGrid]]:
+def read_records(run: Path, params: CertifierParams) -> dict[str, list[BlockGrid]]:
     return {name: [ar.unpack_record(b, params.cell_bytes) for b in ar.read_blobs(run / f"{name}.records")]
             for name in CERTIFIED}
 
@@ -861,7 +861,7 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
-    rows' salts and its wiring's (`warden_rows.read_witness`)."""
+    rows' salts and its wiring's (`certifier_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")
@@ -870,8 +870,8 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
-def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
-    """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
+def check_cells(run: Path, dep: dict, params: CertifierParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
+    """Every link-window of the wire's two records has a registration that `certifier_rows.check_registration` accepts
     under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
     per-window cost."""
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -904,7 +904,7 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
     return summary, problems
 
 
-def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
+def egress_cells(records: list[BlockGrid], params: CertifierParams) -> dict[int, list[tuple[int, int]]]:
     """Each connection's egress cells as (bucket, kind), in the records' order."""
     out: dict[int, list[tuple[int, int]]] = {}
     for record in sorted(records, key=lambda r: r.window):
@@ -943,7 +943,7 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
 def check(run: Path) -> dict:
     """The offline check of a served run (the module docstring's `check`)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = WardenParams(**dep["params"])
+    params = CertifierParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
@@ -996,7 +996,7 @@ def check(run: Path) -> dict:
             problems.append(f"connection {o}: { {k: row[k] for k in keys} }")
         if conn["outcome"] != "end" or not row["complete"] or (row["status"] != 200 and row.get("ids") is None):
             problems.append(f"connection {o}: {conn['outcome']}, HTTP {row['status']}, complete {row['complete']}")
-    warden_log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
+    certifier_log = json.loads((run / "certifier.json").read_text()) if (run / "certifier.json").exists() else {}
     served = [r for r in rows if "ordinal" in r]
     B = params.cell_bytes
     summary = {
@@ -1005,14 +1005,14 @@ def check(run: Path) -> dict:
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
         "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
-        "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
+        "withheld_windows": certifier_log.get("refused_windows", []), "cell_rows": cells_summary,
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
-        "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
-        "ticker_stalls": None if not warden_log.get("stalls") else
-        warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
+        "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": certifier_log.get("lateness_ms"),
+        "ticker_stalls": None if not certifier_log.get("stalls") else
+        certifier_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
         "prompt_tokens": [min((r.get("prompt_tokens") or 0 for r in served), default=None),
                           max((r.get("prompt_tokens") or 0 for r in served), default=None)],
@@ -1055,18 +1055,18 @@ def traffic_of(args, model: str) -> list[dict]:
                           temperature=args.temperature, top_p=args.top_p)
 
 
-def _params(args) -> WardenParams:
-    return WardenParams(**{f.name: getattr(args, f.name) for f in dataclasses.fields(WardenParams)})
+def _params(args) -> CertifierParams:
+    return CertifierParams(**{f.name: getattr(args, f.name) for f in dataclasses.fields(CertifierParams)})
 
 
 def _check_paced(args) -> None:
     if not args.slack < args.paced_ms / 1000 < args.bucket_ms / 1000:
-        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the warden always paces, each bucket released past the slack "
+        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the certifier always paces, each bucket released past the slack "
                          f"({args.slack * 1000:g} ms) and before the next boundary ({args.bucket_ms} ms)")
 
 
 def _flags(args) -> list[str]:
-    return [x for f in dataclasses.fields(WardenParams) for x in (f"--{f.name.replace('_', '-')}",
+    return [x for f in dataclasses.fields(CertifierParams) for x in (f"--{f.name.replace('_', '-')}",
                                                                  str(getattr(args, f.name)))]
 
 
@@ -1099,8 +1099,8 @@ def rehearse(args) -> int:
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
-    me = [sys.executable, str(HERE / "warden_serve.py")]
-    scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
+    me = [sys.executable, str(HERE / "certifier_tcp_serve.py")]
+    scratch = Path(tempfile.mkdtemp(prefix="certifier-tcp-serve-"))
     procs: list[subprocess.Popen] = []
     try:
         cs.load_key(scratch / "warden", args.height)
@@ -1161,7 +1161,7 @@ def rehearse(args) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="warden_serve.py", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="certifier_tcp_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
     t = sub.add_parser("traffic", help="write varied traffic")
@@ -1198,9 +1198,9 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network certifier is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
-                       help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
-                            "before the next boundary): the warden always paces")
-        for field in dataclasses.fields(WardenParams):
+                       help="when the certifier's pacer releases each bucket, ms after its boundary (past the slack, "
+                            "before the next boundary): the certifier always paces")
+        for field in dataclasses.fields(CertifierParams):
             q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
@@ -1227,7 +1227,7 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
     r.add_argument("--ids", action="store_true",
                    help="network-certifier-form id requests (id_traffic), answered id-form (the fake's --id-payload): "
-                        "the scan's traffic (scan_zk.py --warden-run)")
+                        "the scan's traffic (scan_zk.py --certifier-run)")
     r.add_argument("--prompts", type=Path,
                    help="with --ids: the requests' prompts, a JSON array of token-id arrays, request j's the (j mod n)-th "
                         "of the n, each with exactly --max-tokens (at most --egress-cells - 1)")

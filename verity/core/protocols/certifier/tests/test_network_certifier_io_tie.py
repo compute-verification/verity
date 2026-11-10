@@ -1,6 +1,6 @@
 """The I/O tie's prototype (`io_tie`) on the network certifier's own egress: variable-length responses on a link served
-through the network certifier's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a
-row a bucket, as `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
+through the network certifier's schedule (`certifier.Certifier._egress` cuts every cell, the certifier's grid lays them out a
+row a bucket, as `certifier_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
 map (through advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's
 heavy trace); and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs'
 steps as registered rows. The reference accepts every honest window and refuses every way the cells can differ from the
@@ -25,7 +25,7 @@ from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
-from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.certifier import head_check as HC, io_tie as IT, certifier as W, certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.grid import Certifier
@@ -43,9 +43,9 @@ def _h(label: bytes) -> bytes:
     return hashlib.sha512(label).digest()
 
 
-def wardens(shape: IT.Shape, slots: int, delay: int) -> W.WardenParams:
+def certifiers(shape: IT.Shape, slots: int, delay: int) -> W.CertifierParams:
     """The network certifier's schedule a shape reads: B, T and lanes·r = R."""
-    return W.WardenParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
+    return W.CertifierParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
 
 
 class Link(NamedTuple):
@@ -54,7 +54,7 @@ class Link(NamedTuple):
     bucket and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the network
     certifier's `fails` frames, and the egress records its grid closed, a window each."""
 
-    params: W.WardenParams
+    params: W.CertifierParams
     rows: list[list[bytes]]
     outputs: list[IT.Output]
     release: list[int]
@@ -65,17 +65,17 @@ class Link(NamedTuple):
     records: tuple = ()
 
 
-def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], responses: list[list[int]], buckets: int,
+def serve(shape: IT.Shape, params: W.CertifierParams, arrivals: list[int], responses: list[list[int]], buckets: int,
           engine: list[int] | None = None, late: frozenset[int] = frozenset()) -> Link:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids), and the network
-    certifier's own egress (`warden.Warden._egress`) serves it for `buckets` buckets: admitted at the first bucket with
+    certifier's own egress (`certifier.Certifier._egress`) serves it for `buckets` buckets: admitted at the first bucket with
     a free lane in arrival order, its server's bytes all there (its events of P bytes each, then `TRAILER`), but for a
     connection in `late`, whose last event never comes, so the network certifier fails it there. Advice request i is
     arrival engine[i] (the identity by default), its output j sampled at step r·s + (i mod 2) + j, in the batch row of
     its rank by i among the step's requests."""
     B, r, D, P = params.cell_bytes, params.slots, params.delay, params.payload
     fails: list[bytes] = []
-    warden = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))
+    certifier = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))
     conns = []
     for k, (a, xs) in enumerate(zip(arrivals, responses, strict=True)):
         c = W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
@@ -91,7 +91,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
             c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.Certifier._egress(certifier, c, t):
                 grid.enqueue(frame)
         active = [c for c in active if c.ended is None]
         rows.append([bytes(B) if f is None else f for f in grid.tick()])
@@ -145,13 +145,13 @@ def busy(seed: int, shape: IT.Shape = BIG, slots: int = 2, delay: int = 2, count
     rng = random.Random(seed)
     arrivals = sorted(rng.randrange(3 * shape.T) for _ in range(count))
     responses = [[rng.randrange(V) for _ in range(rng.randrange(longest + 1))] for _ in range(count)]
-    return serve(shape, wardens(shape, slots, delay), arrivals, responses, 6 * shape.T, **kw)
+    return serve(shape, certifiers(shape, slots, delay), arrivals, responses, 6 * shape.T, **kw)
 
 
 def small(**kw) -> Link:
     """Window 0 of SMALL's link: two connections admitted at once, one with an empty response that frees its lane, a
     third admitted into it, and a fourth after."""
-    return serve(SMALL, wardens(SMALL, 2, 1), [0, 0, 0, 0, 1], [[11, 12, 13], [], [14], [15, 16, 17, 18, 19], [20, 21]],
+    return serve(SMALL, certifiers(SMALL, 2, 1), [0, 0, 0, 0, 1], [[11, 12, 13], [], [14], [15, 16, 17, 18, 19], [20, 21]],
                  6, **kw)
 
 
@@ -174,7 +174,7 @@ def _marker(m: IT.MapEntry) -> bool:
     return m.e in (IT.EMPTY, IT.END_ENTRY)
 
 
-def test_a_cell_parses_to_its_one_reading_and_is_the_wardens():
+def test_a_cell_parses_to_its_one_reading_and_is_the_certifiers():
     P = 256 - HEADER.size
     for x, s in ((0, 0), (7, 3), (151_328, 999), ((1 << 32) - 1, (1 << 32) - 1)):
         cell = IT.data_cell(x, s, 256)
@@ -198,7 +198,7 @@ def test_a_cell_parses_to_its_one_reading_and_is_the_wardens():
         IT.pad_cell(IT.CELL_USED - 1)
 
 
-def test_the_map_is_the_wardens_slots():
+def test_the_map_is_the_certifiers_slots():
     """Window 0 of T = 3, two lanes of r = 2, D = 1: request 0 (stream 1) and request 1 (stream 2) are admitted at
     bucket 0, so each has two `PAD`s there; request 1's response is empty, so its `END` is its cell 0, at bucket 1,
     and its lane is free at bucket 2, where request 2 (stream 3) is admitted. Request 0's outputs 0 and 1 are at
@@ -219,7 +219,7 @@ def test_the_map_is_the_wardens_slots():
         IT.MapEntry(*m) for m in ((1, P), (1, P), (2, P), (2, P), (1, E), (1, P), (2, 0), (2, 4)))
     refused = {
         "permutation": dict(order=[0, 0, 2]),
-        "not the warden's": dict(release=[1, 1, 3, 3]),
+        "not the certifier's": dict(release=[1, 1, 3, 3]),
         "arrival order": dict(admitted=[2, 0, 2]),
         "more than R / r": dict(admitted=[0, 0, 0], release=[1, 1, 2, 1]),
         "more than S": dict(shape=IT.Shape(256, 3, 4, P=4, S=1, DS=3)),
@@ -260,7 +260,7 @@ def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
             assert opens(IT.SCHEMA, root, dom.domain_id, HC.hiding_value(rows[i - 1], salts[i - 1]), i, path) == 0
 
 
-def test_every_window_of_the_wardens_egress_is_accepted(link, big):
+def test_every_window_of_the_certifiers_egress_is_accepted(link, big):
     """Every window of the busy link, each cell the network certifier's own, is accepted, the idle ones too; so is
     SMALL's."""
     kinds = set()
@@ -275,8 +275,8 @@ def test_every_window_of_the_wardens_egress_is_accepted(link, big):
     assert IT.reference(commit(SMALL, small(), 0)) and IT.reference(commit(SMALL, small(), 1))
 
 
-def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The proof blocks read the network certifier's registration v2 (`warden_rows`): bucket t's row is row t of the
+def test_each_buckets_row_is_the_certifiers_registered_row(link):
+    """The proof blocks read the network certifier's registration v2 (`certifier_rows`): bucket t's row is row t of the
     record the grid closed (`window_rows`, its wiring read off it), it opens the network certifier's root at t, and the
     verifier's port (`bucket_port`) has proof block t read row t, an idle window's too."""
     p = link.params
@@ -394,7 +394,7 @@ def test_each_way_the_cells_differ_from_the_map_and_the_port_is_refused(big):
     assert IT.reference_parts(with_cells(big, other.cells))["content"] is False
 
 
-def test_a_connection_the_warden_failed_is_refused():
+def test_a_connection_the_certifier_failed_is_refused():
     """A server whose last event isn't there by its deadline: the network certifier sends its `FAIL` in that slot (and
     its reason to the `fails` record). The advice that claims the whole response is refused at that cell, and one that
     claims the cells the network certifier sent maps an `END` where the `FAIL` is."""
@@ -415,7 +415,7 @@ def test_a_connection_the_warden_failed_is_refused():
 
 def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
     """A statement's registered entry of port row s over the window's T bucket proof blocks (proof block t's s-th read
-    row at its step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket
+    row at its step, with its path) and each table row's b ‖ c, as `certifier_rows.Cells.statement` gives the bucket
     rows'."""
     T = inst.shape.T
     entry = {"value": IT.SAMPLED, "positions": [inst.steps[t][s] for t in range(T)],
@@ -424,7 +424,7 @@ def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
 
 
 def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str | None]:
-    """The Lean verifier's registered reads of the window's port rows (`warden_rows.refusal`) against the verifier's
+    """The Lean verifier's registered reads of the window's port rows (`certifier_rows.refusal`) against the verifier's
     own ports (`port_reads`), a port row at a time: None where they accept."""
     count = len(link.port)
     ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, inst.shape.P)
@@ -433,7 +433,7 @@ def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str
 
 
 def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
-    """`warden_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
+    """`certifier_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
     port's own `domain` and `leaves`, so a port naming another domain or leaf count (another Commit's, say) gets
     another verdict there: the host's read refuses to stand in for it rather than answer for the domain it was
     handed."""
@@ -507,7 +507,7 @@ def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
     rng = random.Random(21)
     arrivals = [0, 0, 1, 1, 2, 2]
     responses = [[rng.randrange(V) for _ in range(n)] for n in (5, 7, 3, 9, 4, 6)]
-    params = wardens(BIG, 2, 2)
+    params = certifiers(BIG, 2, 2)
     swap = [1, 0, 2, 3, 4, 5]
     straight, served = (serve(BIG, params, arrivals, responses, 24, engine) for engine in (None, swap))
     assert IT.reference(commit(BIG, straight, 0)) and IT.reference(commit(BIG, served, 0))
@@ -530,7 +530,7 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
     def token(i: int, k: int) -> int:
         return (1_000_003 * i + 7_919 * k) % V
 
-    params = W.WardenParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
+    params = W.CertifierParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
                             egress_cells=1 << 20)
     responses = [[token(i, k) for k in range(lens[i])] for i in arrival]
     end = max(a + delay + n for a, n in zip(admitted, lens)) + 1
@@ -540,13 +540,13 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
 
 
 def test_the_heavy_traces_honest_egress_is_accepted_through_its_order():
-    """The trace corpus's heavy trace (`fixtures/warden-heavy-order.json`, whose ``source`` names the trace): 1,000
+    """The trace corpus's heavy trace (`fixtures/certifier-heavy-order.json`, whose ``source`` names the trace): 1,000
     requests, 126,502 outputs over buckets 301 … 589, whose engine admits in the API server's body-read order, out of
     the network certifier's arrival order. Served through the network certifier's own egress, every egress window of T =
     16 buckets of 1,024 lanes is accepted through advice v1's order permutation, each request on its stream from
     admission. Without it (v0's identity) the map can't be built: the advice's admissions aren't in its numbering's
     order, which the network certifier's FIFO would need."""
-    trace = json.loads((Path(__file__).parent / "fixtures" / "warden-heavy-order.json").read_text())
+    trace = json.loads((Path(__file__).parent / "fixtures" / "certifier-heavy-order.json").read_text())
     sh = IT.Shape(256, 16, 1_024, P=1_024, S=2, DS=10)
     link, order = serve_trace(sh, trace)
     assert len(link.outputs) == 126_502 and order != list(range(1_000))

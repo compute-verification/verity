@@ -80,7 +80,7 @@ def test_a_missing_earlier_release_holds_every_later_one_until_it_comes():
     assert fwd == ["r0", "r1", "r2", "r3"]
 
 
-def test_a_release_the_warden_dropped_holds_the_rest_only_until_its_skip():
+def test_a_release_the_certifier_dropped_holds_the_rest_only_until_its_skip():
     g, fwd, _, timers = gate()
     arrive(g, 0)
     arrive(g, 2)

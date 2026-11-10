@@ -869,14 +869,14 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
             out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
-                       "advice and the given ids, not the warden's cells under its root and the endpoint's Commit "
+                       "advice and the given ids, not the certifier's cells under its root and the endpoint's Commit "
                        "proved in an IoTieWindow unit.")
     t = c.get("tie")
     if t is not None and t["ran"]:
         out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
-                   "frames held to their head and committed under fake salts in place of the warden's cells, the "
+                   "frames held to their head and committed under fake salts in place of the certifier's cells, the "
                    f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
-                   "Commit and the warden's cells in an IoTieWindow unit.")
+                   "Commit and the certifier's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "

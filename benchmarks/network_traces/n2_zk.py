@@ -9,15 +9,15 @@ comparison to each verdict, which decides nothing.
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
-    python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/n2_zk.py prove --certifier-run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--draw K]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active network certifier's run (`warden_serve.py`'s, or the gate's
-  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
-  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+  Or, with ``--certifier-run``, an active network certifier's run (`certifier_tcp_serve.py`'s, or the gate's
+  ``certifier-rehearse``'s), read by `certifier_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.CertifierProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
   head failing its signed digest alone.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
@@ -139,33 +139,33 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     return lw, plan
 
 
-def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
-    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+def certifier_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
+    """A network certifier run's link (`certifier_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
-    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    import warden_chain as WC
+    the signer's refusals. A certifier rehearsal's run is refused by name (`certifier_chain.PROXY`)."""
+    import certifier_chain as WC
 
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
-    return lw, {"windows": dep["windows"], "syncs": [], "warden_run": dep["run_id"]}, certified, refused
+    return lw, {"windows": dep["windows"], "syncs": [], "certifier_run": dep["run_id"]}, certified, refused
 
 
-def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> SimpleNamespace:
+def link_windows(run: Path, edit=None, clock=None, certifier: bool = False) -> SimpleNamespace:
     """Every execution phase of the run with both certified records, as the prover holds it before it registers: its
     opening (fresh salts), the root it commits (`LinkWindows.root`), the proof block's arguments under that root (None
     where the proof block takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and
     the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
     which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
     the certified ones. ``expect``: the verdict the verifier of record should reach on an honest proof of the opening.
-    With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
+    With ``certifier``, ``run`` is an active network certifier's run (`certifier_link`), its records and certificates the
     network certifier's own and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
     check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
     by `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
-    if warden:
-        lw, plan, certified, refused = warden_link(run)
+    if certifier:
+        lw, plan, certified, refused = certifier_link(run)
     else:
         lw, plan = link(run)
         certified, refused = cs.read_certified(run / "certified.jsonl")
@@ -183,7 +183,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
         insts = lw.head_checks(opening, root)
         args = lw.arguments(opening, root, syncs)
         word = lw.outputs(opening, root, syncs) if args is not None else None
-        others = lw.certified(w, certificates) and (lw.warden is not None
+        others = lw.certified(w, certificates) and (lw.certifier is not None
                                                     or (w < len(syncs) and syncs[w] in lw.sync_set))
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
@@ -228,7 +228,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
     exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
+    profile, whose egress counts no N2 unit holds, and on a certifier link, whose counts are its schedule's);
     extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
     faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
     `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
@@ -245,7 +245,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     if name in ("honest", OTHER):
         return all(x.expect for x in xs)
     if name == "tampered":
-        signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
+        signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.certifier is not None
         want = ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
     allowed = {"extra": ([], ["counts"])}[name]
@@ -603,29 +603,29 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    warden = a.warden_run is not None
-    run = Path(a.warden_run if warden else a.run)
+    certifier = a.certifier_run is not None
+    run = Path(a.certifier_run if certifier else a.run)
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
-    members = {"honest": link_windows(run, warden=warden),
-               "tampered": link_windows(run, edit=every_count if a.draw else one_count, warden=warden)}
+    members = {"honest": link_windows(run, certifier=certifier),
+               "tampered": link_windows(run, edit=every_count if a.draw else one_count, certifier=certifier)}
     members["tampered"].every = bool(a.draw)
     n = len(members["honest"].windows)
     if a.draw and not 1 <= a.draw <= n:
         raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
     if a.draw and a.draw < n:
-        members[OTHER] = link_windows(run, warden=warden)
+        members[OTHER] = link_windows(run, certifier=certifier)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": cs.DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
                   "verifier of record (sampled_proofs verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
-    if warden:
-        summary["warden_run"] = members["honest"].plan["warden_run"]
-        summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
+    if certifier:
+        summary["certifier_run"] = members["honest"].plan["certifier_run"]
+        summary["warden"] = {"syncs": "none: the certifier runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
+                             "counts": "the certifier's schedule's (service.CertifierProfile), not a profile's"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -719,8 +719,8 @@ def main(argv=None) -> int:
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
-                     "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
+    run.add_argument("--certifier-run", type=Path, help="an active network certifier's run (certifier_tcp_serve.py's, or the gate's "
+                     "certifier-rehearse's): its own certified records, no certifier rehearsal (certifier_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
@@ -746,8 +746,8 @@ def main(argv=None) -> int:
         return 0
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if a.warden_run is not None and (a.extra or a.late):
-        raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
+    if a.certifier_run is not None and (a.extra or a.late):
+        raise SystemExit("--extra and --late are certifier-serve's runs: a certifier run's members are honest and "
                          "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
