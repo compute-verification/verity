@@ -41,7 +41,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-import verity_difftest as D  # noqa: E402
+import verity_difftest as D
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus"

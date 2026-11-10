@@ -4,7 +4,7 @@ epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 draws on t
 
 The step runs the executable on the passes that run's document names, the epoch's coins, its draws, its coin record, the W
 ``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and writes the Lean's
-answer, W at ``tie``, only where the Lean's printout is the Python's on every field #7221's difftest holds (`LEAN_HELD`),
+answer, W at ``tie``, only where the Lean's printout is the Python's on every field the Lean's difftest holds (`LEAN_HELD`),
 its ``drawn`` the draws and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the

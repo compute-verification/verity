@@ -735,7 +735,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
-    ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
+    ``uncredited`` (the default) accepts it with its bound's reason and credits it nothing, the credit
     taking X_O, the draws that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
     (``over_cap``, and the profile's).  The run of record is ``uncredited`` over passes with no voluntary row, since one
     uncredits its whole band or block (`pearl_c_work.UnitRecord.credited`; ``served_passes.py verify``).

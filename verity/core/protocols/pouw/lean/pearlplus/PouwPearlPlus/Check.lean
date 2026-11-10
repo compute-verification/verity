@@ -39,7 +39,7 @@ namespace PouwCheck.PearlPlus
 open Lean PouwCommit Words
 
 /-- The rule on an opened tile over its inert-work bound (`verify_run`'s ``over_cap``, `served_passes.py verify
---over-cap`): `uncredited` credits it nothing and goes on (CMP-311 option A, the default); `reject` rejects the run. -/
+--over-cap`): `uncredited` credits it nothing and goes on (the default); `reject` rejects the run. -/
 inductive OverCap where
   | uncredited
   | reject

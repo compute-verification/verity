@@ -99,7 +99,7 @@ set, a draw session's on the auditor host opened on the run's commitment, `bench
 session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
-``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
+``--over-cap uncredited`` (the default; the credit takes the draws on such tiles, X_O) and rejects the run
 under ``--over-cap reject``; the verdict records which (``over_cap``).  Under ``--class`` the work an accept publishes
 is in the grid form (`verify_run.grid_work`: the class's structural credit less the give-up padded up to H1's window
 grid), and the exact credit is the profile's ``exact_work``.  The run of record takes ``--over-cap uncredited``

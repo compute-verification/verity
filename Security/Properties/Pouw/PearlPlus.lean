@@ -16,7 +16,7 @@ record per drawn tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most i
 SHA-512 break on the run's trees. These properties are the code's side of it:
 
 * `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`, or,
-  under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
+  under `over_cap` `uncredited` (the default), is over its inert-work bound with every other check
   passed and is credited nothing.
 * `PlanMeans`: the plan's passes are the loaded passes, all of one salt and, but on a test instance's input, of the served
   instance (`k_min` 1,024, 64 × 64 tiles), its commitment theirs, its source the coin record's when there is one (retention and give-up fixed before
