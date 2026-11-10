@@ -343,6 +343,18 @@ def test_an_observer_on_another_host_leaves_its_file_by_the_cases_name(tmp_path)
     assert bench._observed(case, seen) == seen / "write-spin" / "observer.json"
     (seen / "one.json").write_text("{}")
     assert bench._observed(case, seen / "one.json") == seen / "one.json"
+    # and the score names both hosts and both runs
+    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0, "observer": "spin",
+                 "host": "a", "run": "r-a"}
+    plan = parties.plan_of(cfg)
+    there = _case(case, cfg, lambda t, writes: plan.release(t) + 3e-4)
+    file = seen / "write-spin" / "observer.json"
+    file.write_text(json.dumps(json.loads((there / "observer.json").read_text()) | {"host": "b", "run": "r-b"}))
+    (there / "observer.json").unlink()
+    scored = bench.score(there, bench._observed(there, seen))
+    assert (scored["host"], scored["observer_host"], scored["run"], scored["observer_run"]) == ("a", "b", "r-a", "r-b")
+    row = bench._table([bench.result([scored])]).splitlines()[2].split(" | ")
+    assert row[:3] == ["| r-a and r-b", "a", "b"]
 
 
 def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):

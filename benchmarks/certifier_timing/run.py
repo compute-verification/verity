@@ -313,7 +313,8 @@ def score(case: Path, observed: Path | None = None) -> dict:
     problems += [f"the server's connection: {c['error']}" for c in server["connections"] if "error" in c]
     return {k: cfg.get(k) for k in KEEP} | {
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
-        "observer_host": observer.get("host", cfg.get("host")), "client": channel.measure(pairs), "sender": sender,
+        "observer_host": observer.get("host", cfg.get("host")), "observer_run": observer.get("run", cfg.get("run")),
+        "client": channel.measure(pairs), "sender": sender,
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
         "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],
@@ -409,7 +410,8 @@ def _table(docs: list[dict]) -> str:
             c = next(c for c in d["cases"] if (role(c), c["attack"], c["observer"]) == (r["role"], r["attack"],
                                                                                          r["observer"]))
             launch, sender = c.get("launch"), r["sender"].get("bits")
-            cells = [c.get("run") or d.get("run") or "-", c.get("host") or "-", c.get("observer_host") or "-",
+            runs = dict.fromkeys(filter(None, (c.get("run") or d.get("run"), c.get("observer_run"))))
+            cells = [" and ".join(runs) or "-", c.get("host") or "-", c.get("observer_host") or "-",
                      (c.get("certifier_commit") or "-")[:10], f"{c['paced_ms']:g}", "yes" if c["pin"] else "no",
                      c["gate_ms"] or "-", c.get("waker_ms") or "-", "yes" if c.get("awake") else "no",
                      f"{launch['mode']} {launch['after_ms']:g}+{launch['open_ms']:g}" if launch else "-",
@@ -517,7 +519,8 @@ def main(argv: list[str] | None = None) -> int:
         doc = parties.observer(SCHEDULE | {
             "observer": args.observer, "intervals": args.intervals, "interval_ms": args.interval_ms, "pin": False,
             "wait_s": args.wait_s, "connect": name, "port": int(port), "hello": hello, "chunk": chunk})
-        (args.out / "observer.json").write_text(json.dumps(doc | {"host": platform.node()}))
+        (args.out / "observer.json").write_text(json.dumps(doc | {
+            "host": platform.node(), "run": os.environ.get("RESEARCH_RUN_ID"), "commit": _commit()}))
         print(json.dumps({"observed": str(args.out / "observer.json"), "intervals": sum(map(len, doc["segments"]))}))
         return 0 if doc["segments"] else 2
     out = args.out or Path(os.environ.get("OUT") or tempfile.mkdtemp(prefix="certifier-timing-"))

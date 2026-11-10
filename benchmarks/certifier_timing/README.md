@@ -90,7 +90,9 @@ a second fall.
 
 ## The candidates
 
-Each is a flag beside the certifier, which this benchmark never changes:
+Each is a flag beside the certifier, which this benchmark never changes. The number is of the host it ran on and of
+what else that host was doing, so a candidate is compared with the certifier as is in one `research run` on one host,
+each `run` in turn and then again, and `score` pools each side's repeats. Two runs on two hosts compare the hosts.
 
 | Flag | What it does |
 | --- | --- |
@@ -134,7 +136,8 @@ alone, so a case that fails takes no other with it; `score A/out/* --observer B/
 
 `netns.sh OUT [serve's flags]` runs both sides on one host without root: a user namespace holds two network
 namespaces joined by a veth pair, the certifier's device `cert0`, which `--launch cert0,AFTER,OPEN[,MODE]` can
-gate.
+gate. Both namespaces are one kernel's, on one clock: a gate there is still the host's software releasing, and shows
+only that the schedule holds the certifier's bytes and what a software gate leaves.
 
 ## Why a directory of its own
 
