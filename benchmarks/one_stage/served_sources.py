@@ -191,12 +191,9 @@ class Withheld:
         self._names: dict[str, str] = {}
 
     def add(self, name: str, data: bytes) -> None:
-        try:
-            text = data.decode()
-            if S.public_doc(text) == text:
-                return
-        except UnicodeDecodeError:
-            pass
+        text = data.decode(errors="replace")
+        if text.encode() == data and S.public_doc(text) == text:
+            return
         for h in (hashlib.sha512, hashlib.sha256):
             self._names.setdefault(h(data).hexdigest()[:16], name)
 

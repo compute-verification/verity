@@ -500,7 +500,8 @@ def test_a_reason_leaves_as_its_kind(reason, kind):
 def test_a_hash_of_a_file_published_redacted_is_refused_before_anything_leaves(world, tmp_path):
     """`write` refuses a public file holding the SHA-512 or SHA-256 of a file whose redacted form is published (the coin
     as drawn; the private record itself; a gate's answer that names a window), whole or by its first 16 hex digits,
-    and writes nothing under what leaves; a file that is its own public form is not withheld."""
+    and writes nothing under what leaves; a file that is its own public form is not withheld, and one that isn't text
+    is."""
     d, _replay = world
     coin = d / "private" / "compose" / "pieces" / "pouw" / S.COIN_RECORD
     work = _row(world, tmp_path, Gate(), withheld=(held := SS.Withheld()))
@@ -509,6 +510,8 @@ def test_a_hash_of_a_file_published_redacted_is_refused_before_anything_leaves(w
     assert held.found(hashlib.sha512(_jsonl(LEDGER)).hexdigest()) == [] and held.found(hashlib.sha512(KEY).hexdigest()) == []
     held.add("the gate's answer to ledger", b'{"window": 3, "kind": "open"}\n')
     assert held.found(hashlib.sha512(b'{"window": 3, "kind": "open"}\n').hexdigest()[:16]) == ["the gate's answer to ledger"]
+    held.add("a session's tree", b"\xff\x8b not text")
+    assert held.found(hashlib.sha512(b"\xff\x8b not text").hexdigest()) == ["a session's tree"]
     policy = SS.inference_only(d / "private" / "compose" / "inference-only.json")
     rows = {"integrity": SS.integrity_row(d / "v3c-w3-4-32-4" / "audit"), "work": work}
     for n, leak in enumerate((SS.sha512(coin), SS.sha512(coin)[:16] + "...")):
