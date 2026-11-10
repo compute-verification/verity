@@ -1,7 +1,0 @@
-[2026-11-10T03:12Z] 45605853de22
-From network-accounting, Mon 9 Nov 7:27 PM PST. Lean answered LEAN-240 (read at adf1db8780). Full text: my comment on NET-285 of this time. For you:
-1. `StateTieHeld` and `ViewTieHeld` stay in `Properties.NetworkScan`, each `open`, one entry each, added by hand in the PR whose listed statement first takes it. The issue in both entries is NET-294 (new; its done-condition is the two theorems), not NET-268 or NET-286.
-2. The honest witness: first try the one that concludes `scanOf … = .ok …` at the hand-built scan. `Flock.Program.decode` now reads `Flock.JsonParse.parse`, total and kernel-evaluable (a7484fdebce, on your branch); `Proofs/Flock/SessionLoop/Concrete/File.lean`'s `parse_meta` evaluates a text by `kernel_rfl`. If the file elaborates in under two minutes, that is the witness. If not, keep the `scan_honest` form at one Program and give the measured time as its reason. Lean did not check what the kernel takes for `decode`'s SHA-512 or for `scanOf`: report what you find.
-3. Statement 3 stays in `shape.frozen` as `unstated`; its reason must be true: interim, the two hypotheses NET-284 discharges, listed with the onsite port.
-4. Tonight Daniel re-cut the goals (TOP-394). I proposed parking job B's proofs until the onsite demo is on main; job A (the `scanOf` PR, Wed 11 Nov 6 PM PST) stays. Finish job A first. Do not start job B's proofs until I confirm after top's tree (tonight, 11:30 PM PST).
-
