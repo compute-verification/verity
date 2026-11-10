@@ -2,8 +2,9 @@ import math
 
 from rho import operating
 from rho.params import Registry
-from rho.scenario import build, evaluate_named
+from rho.scenario import YEAR, build, evaluate_named
 
+from verity.core.protocols import reporting
 from verity.ml.circuits import partition_v2
 
 REG = Registry.load()
@@ -15,7 +16,9 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     # the training MFU, and the dark pool takes that over its share (0.1%)
     sync = REG["exfil.sparseloco-sync.bits"]
     alone = evaluate_named(REG.override({"regime.onsite.timing": 0.0}), "reference-onsite-h200")
-    assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / (365 * 86400), 4.31, rel_tol=0.01)
+    assert YEAR == REG["horizon.year.seconds"] == dict(reporting.PERIODS)["year"]
+    assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / YEAR, 4.31, rel_tol=0.01)
+    assert operating.human(YEAR) == "1 years" and operating.human(YEAR - 1).endswith("days")
     r = evaluate_named(REG, "reference-onsite-h200")
     both = REG["regime.onsite.timing"] + REG["regime.onsite.side"]
     assert math.isclose(operating.exfil(r.scenario, sync)["one location"], sync / both)

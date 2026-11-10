@@ -25,7 +25,7 @@ inputs = [
   "benchmarks/rho/rho/__init__.py",
   "benchmarks/rho/rho/theorem.py",
   # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
-  # core's monitoring periods
+  # core's monitoring periods and per-window delta and the census's reference datacenter and world
   "benchmarks/rho/rho/instances.py",
   "benchmarks/rho/rho/params.py",
   "benchmarks/rho/data",
@@ -34,4 +34,7 @@ inputs = [
   "verity/core/__init__.py",
   "verity/core/protocols/__init__.py",
   "verity/core/protocols/reporting.py",
+  "verity/core/protocols/profile.py",
+  "benchmarks/census/deployments.json",
+  "benchmarks/census/adversary.json",
 ]
