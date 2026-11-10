@@ -323,21 +323,28 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     assert decide(snap(c, ready=prs(3, 4), tree_ejects=True)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
 
 
-def test_infra_before_any_run_registered_is_retried_at_every_reading_never_bisected_or_set_aside():
-    """A check whose launch registered no run (`Failed.launch`) ran nothing of the tree, so however often that recurs its
-    candidate is enqueued again and infra is rung from `rings` readings on: no member is bisected out, set aside or rung."""
+def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handled_as_any_other_infra():
+    """A launch that outran its wait or that the pod lost (`Failed.launch`) points at the machines: its candidate is enqueued
+    again and infra is rung from `rings` readings on, no member bisected out, set aside or rung, until `launch_tries`
+    readings.  Then, as at once for a launcher that exited without a run (it ran the candidate's own check.py, so the tree may
+    be why), the members are suspects: a batch is bisected, and a lone member set aside behind the PRs waiting."""
     err = (Failed("the run beside its check registered no run: shard 2/3: no run launched in the wait", "c1:no run",
                   frozenset(), launch=True),)
+    exited = (replace(err[0], task="the run beside its check registered no run: shard 2/3: Traceback ... no run launched",
+                      launch=False),)
     infra = Ring("c1", "c1's check ended in infra errors: the run beside its check registered no run: shard 2/3: no run "
                        "launched in the wait")
     pair = Candidate("c1", MAIN, (1, 2), heads(1, 2), Verdict(INFRA, (), err))
     lone = Candidate("c1", MAIN, (3,), heads(3), Verdict(INFRA, (), err))
     assert decide(snap(pair, cand("c2", "c1", 4), ready=prs(1, 2, 4))) == [Retry("c1")]
-    for tries in (2, 5):
-        assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4))) == [Retry("c1"), infra]
-        assert decide(snap(replace(lone, tries=tries), ready=prs(3, 4))) == [Retry("c1"), infra, Build((4,), "c1", 1)]
-    ran = replace(pair, verdict=Verdict(INFRA, (), (replace(err[0], launch=False),)), tries=2)
-    assert kinds(decide(snap(ran, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build]
+    for tries, on in ((2, {}), (4, {"launch_tries": 5})):
+        assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4), **on)) == [Retry("c1"), infra]
+        assert decide(snap(replace(lone, tries=tries), ready=prs(3, 4), **on)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
+    for c in (replace(pair, tries=3), replace(pair, verdict=Verdict(INFRA, (), exited), tries=2)):
+        assert kinds(decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build], c
+    for c in (replace(lone, tries=3), replace(lone, verdict=Verdict(INFRA, (), exited), tries=2)):
+        acts = decide(snap(c, ready=prs(3, 4)))
+        assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA, (c, acts)
 
 
 def test_a_pr_set_aside_is_batched_after_every_other_and_alone():
