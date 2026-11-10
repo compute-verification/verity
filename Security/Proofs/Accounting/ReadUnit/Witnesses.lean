@@ -479,8 +479,9 @@ theorem drawnHashed₀ (ω : Unit) :
 noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 
-theorem out₀ (ω : finder₀.S) : finder₀.out ω = none :=
-  dif_neg (by rw [drawnHashed₀]; exact no_collision₀)
+theorem out₀ (ω : finder₀.S) : finder₀.out ω = none := by
+  have h := drawnHashed₀ ω
+  exact dif_neg (by rw [h]; exact no_collision₀)
 
 theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl
 
