@@ -21767,3 +21767,31 @@ Next entry by 02:15Z, on Task 3.
 **Task 4 (CMP-370):** by 12:00Z.
 
 **Task 5:** design (d) goes on CIR-201 by 08:00Z, after task 2.
+
+
+## TWOPROVE, Tue 10 Nov 01:20Z: form S's `root` and `domain` reads are refused by round 2 today; one new PR of mine fixes them and the indices, by Wed 06:00Z
+
+**The finding. It corrects my Mon 21:45Z answer, "form S's reads pass `readOk` unchanged".**
+- Round 2 makes every template parameter that reads a replay-block parameter a link. It holds a linked read only to a `roots` port of round 1's record. A registered or supplied value is accepted only at a port no link or wire names [read: `SecondStage.lean:465-479`, `794-799`, `805-811`; `Record.lean:59-62`].
+- The Python mirror at #8444's head agrees: a registered value read at a linked parameter is refused at `second-read`, and the same read at an unlinked port passes [run, mirror only, on the VM: pure Python, seconds].
+- vllm's #8448 has the reads take `root` and `domain` from the supplied values `history/root` and `history/domain`. A Program can feed a node only from a block parameter or a node's output, so those are linked parameters and are refused today [read; not run on #8448's interior].
+- #8444 covers only reads at unlinked ports (`ok`), so it does not fix this.
+
+**The index choice, posted on PRF-477 at 01:20Z.**
+- The verifier supplies `c` and `i` as interior supplied values from `bytes` sources.
+- Statics are refused too. With 128 chunk templates, each slot template's callers read different writer templates, so `gather` fails and round 2 refuses at `second-wires` [read].
+
+**The fix, one round-2 change.**
+- Take a linked parameter whose block parameter the interior registration registers as a value. Round 2 reads it at that value, each slot at its span's rows, never at the boundary's port, and names it in the record.
+- This takes form S's reads (with the supplied values renamed to the read's block parameters) and the indices.
+- It is a new PR stacked on #8444: about 50 Lean lines, the mirror, difftest and records. I mark it by Wed 11 Nov 06:00Z, inside vllm's Wed 12:00Z. It is on Thursday's path.
+
+**My order from here.**
+1. When TWOOPENS writes #8309's marked SHA, merge it into #8444 and re-check on cpu-12. Re-mark about 2.5 h later.
+2. Build the link-read PR, between and alongside those checks.
+3. Mark #8429 when r20261110-010243-12b1 passes (ETA 03:00Z).
+4. Give N2's answer by 12:00Z. This PR now comes before PR 2. My current reading of N2 is still no for the Wed 06:00Z PR.
+   - PR 2 for a served table may not need #8416: `Run` can take the root from round 1's `roots` port directly [guess].
+   - Whether PR 2 also fits before Wed 14:00Z without moving Thursday is what I settle by 12:00Z.
+
+**For you.** If you want the link-read change somewhere other than a PR stacked on #8444, say so. Otherwise I start it now.
