@@ -20,7 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
-├── auto.py         --on auto: a CPU node's research pool (cpu-1, cpu-5, cpu-3) or node 2's queue
+├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -412,8 +412,11 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   and writes the attempt manifest (write-once). One line reports it:
   `research: attempt published: N outputs drv=... reuse=...`. A publish failure
   never changes the run's exit status: it is written to
-  `store_publish_error.json` and `research data attempt publish RUN` retries
-  (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
+  `store_publish_error.json` and `research data attempt publish RUN` retries;
+  a run whose attempt names its run record (run custody, `--run-record`)
+  retries with `research data custody RUN --publish`, since an attempt is
+  write-once and `attempt publish` leaves the record out (it refuses a run with
+  run custody) (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
   root and prints `published / already present / refused (not terminal) /
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
