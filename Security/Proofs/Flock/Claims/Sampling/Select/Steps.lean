@@ -253,34 +253,36 @@ theorem deriveWork_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab 
       · exact absurd h (throw_bind_ne _ _ _)
       · exact (Except.ok.inj h).symm
 
-/-- `Slots.select`'s steps: the layout, and the checked proof blocks of the units `Select.select` proves. -/
-theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
+/-- `Slots.select`'s steps: the circuit file's layout, and the checked proof blocks of the units `Select.select`
+proves. -/
+theorem slots_select_ok (rule : Select.Rule) (cf : Flock.Circuit) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (l : Slots.Layout) (c : Array ℕ)
-    (h : Slots.select rule d query table cm src = .ok (l, c)) :
-    Slots.layout d query = .ok l ∧ ∃ draw proved read, Select.select rule d query table cm src = .ok (draw, proved, read) ∧
-      c = Slots.checked l proved := by
+    (h : Slots.select rule cf d query table cm src = .ok (l, c)) :
+    Slots.fileLayout cf d query = .ok l ∧
+      ∃ draw proved read, Select.select rule d query table cm src = .ok (draw, proved, read) ∧
+        c = Slots.checked l proved := by
   unfold Slots.select at h
   obtain ⟨l', hl, h⟩ := bind_eq_ok.1 h
   obtain ⟨⟨draw, proved, read⟩, hs, h⟩ := bind_eq_ok.1 h
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
   exact ⟨hl, draw, proved, read, hs, rfl⟩
 
-/-- The design under the `All` rule samples both classes `all`. -/
+/-- The design under the `All` rule samples the one class `all`. -/
 theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) :
-    Properties.Spot.slotDesign .all d query table = .ok ⟨[.all, .all]⟩ := by
+    Properties.Spot.slotDesign .all d query table = .ok ⟨[.all]⟩ := by
   unfold Properties.Spot.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   rfl
 
-/-- The design under a sampling design samples the population as the sampling design `Select.select` samples and the inputs `all`. -/
+/-- The design under a sampling design samples the population as the sampling design `Select.select` samples. -/
 theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ)
     (named : Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (hne : rule ≠ .all)
     (hn : Partition.units d query = .ok n) (hnamed : rule.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed) :
     Properties.Spot.slotDesign rule d query table =
-      .ok ⟨[Properties.Spot.oneStageOf (derived.getD parsed), .all]⟩ := by
+      .ok ⟨[Properties.Spot.oneStageOf (derived.getD parsed)]⟩ := by
   unfold Properties.Spot.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   split
@@ -288,5 +290,22 @@ theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table 
   · unfold lawObj at hp
     rw [hp, bind_ok]
     rfl
+
+/-- **`Slots.layout`'s partition** as the claims read it: one class, the units' proof blocks' gates in unit order, split
+into runs of the strata's sizes. -/
+theorem slotPartition_layout (f : FilePart.FilePart) (ns : Array ℕ) :
+    Properties.Spot.slotPartition (Slots.layout f ns) =
+      ⟨[ns.toList.splitLengths ((List.range f.n).map fun u =>
+        Properties.Spot.puGates (Slots.blockOf f u))]⟩ := by
+  obtain ⟨pop, hc, hp⟩ := layout_classes f ns
+  have key : pop.toList.map (fun s => s.toList.map Properties.Spot.puGates) =
+      ns.toList.splitLengths ((List.range f.n).map fun u =>
+        Properties.Spot.puGates (Slots.blockOf f u)) := by
+    have := congrArg (List.map (List.map Properties.Spot.puGates)) hp
+    rw [List.map_map, ← splitLengths_map, List.map_map] at this
+    exact this
+  unfold Properties.Spot.slotPartition
+  rw [hc]
+  simp [key]
 
 end Properties.Spot.SecurityProofs

@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Data.List.SplitLengths
 public import Spot.Slots
 public import Aesop.BuiltinRules
 public import Batteries.Data.List.Basic
@@ -322,53 +323,131 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
     (ranges.flatMap fun (r : ℕ × ℕ) => (Array.range (r.2 - r.1)).map (r.1 + ·)).toList = expand ranges.toList := by
   simp [expand, Array.toList_flatMap, List.range'_eq_map_range]
 
-/-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, a proof block
-each, or no stratum when there are none. -/
-def inputClass (d : Program) : Array (Array Slots.ProofBlock) :=
-  let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, gates := (g, g + 1) } : Slots.ProofBlock)
-  if inputs.isEmpty then #[] else #[inputs]
+/-- A `forIn` in `Option` whose every step yields keeps an invariant of the prefix it has read. -/
+theorem forIn_yield_inv_opt {α β : Type} (I : List α → β → Prop) (f : α → β → Option (ForInStep β))
+    (hf : ∀ pre a b, I pre b → ∀ s, f a b = some s → ∃ c, s = .yield c ∧ I (pre ++ [a]) c) :
+    ∀ (l pre : List α) (b : β), I pre b → ∀ b', forIn l b f = some b' → I (pre ++ l) b'
+  | [], pre, b, hb, b', h => by
+    simp only [List.forIn_nil] at h; obtain rfl := Option.some.inj h; simpa using hb
+  | a :: l, pre, b, hb, b', h => by
+    rw [List.forIn_cons] at h
+    cases hs : f a b with
+    | none => rw [hs] at h; exact absurd h (by simp)
+    | some s =>
+      rw [hs] at h
+      obtain ⟨c, rfl, hc⟩ := hf pre a b hb s hs
+      have := forIn_yield_inv_opt I f hf l (pre ++ [a]) c hc b' (by simpa using h)
+      simpa using this
 
-/-- A population stratum as `Slots.layout` lays it: its units in order, each one proof block. -/
-def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.ProofBlock) : Prop :=
-  s.toList.map (·.unit) = (expand p.2.toList).map some
+/-- **The registration's strata sizes** (`FilePart.sizes`): where they are given, the strata (`Partition.strata`), read
+stratum by stratum, are the units `0, 1, …, N − 1` in order, `N` the sizes' sum, and each size is its stratum's units. -/
+theorem sizes_ok (S : Array (String × Array (ℕ × ℕ))) (ns : Array ℕ) (h : FilePart.sizes S = some ns) :
+    (S.toList.flatMap fun s => expand s.2.toList) = List.range' 0 ns.toList.sum ∧
+      ns.toList = S.toList.map fun s => (expand s.2.toList).length := by
+  unfold FilePart.sizes at h
+  obtain ⟨st, hst, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain rfl := (Option.some.inj h).symm
+  rw [← Array.forIn_toList] at hst
+  have key := forIn_yield_inv_opt (fun pre (st : ℕ × Array ℕ) =>
+      (pre.flatMap fun p => expand p.2.toList) = List.range' 0 st.1 ∧
+        st.2.toList = pre.map fun p => (expand p.2.toList).length) _ ?_ S.toList [] (0, #[]) (by simp) st hst
+  · rw [List.nil_append] at key
+    obtain ⟨h1, h2⟩ := key
+    refine ⟨?_, h2⟩
+    have hlen := congrArg List.length h1
+    rw [List.length_range', List.length_flatMap] at hlen
+    rw [h1, h2, hlen]
+  · rintro pre ⟨t, rs⟩ ⟨at_, ns₀⟩ ⟨hI1, hI2⟩ s hs
+    dsimp only at hs hI1 hI2
+    obtain ⟨at', hin, hs⟩ := Option.bind_eq_some_iff.1 hs
+    obtain rfl := (Option.some.inj hs).symm
+    rw [← Array.forIn_toList] at hin
+    have inner := forIn_yield_inv_opt (fun pre (a : ℕ) => expand pre = List.range' at_ (a - at_) ∧ at_ ≤ a) _ ?_
+      rs.toList [] at_ (by simp [expand]) at' hin
+    · rw [List.nil_append] at inner
+      obtain ⟨hi1, hi2⟩ := inner
+      refine ⟨_, rfl, ?_, ?_⟩
+      · dsimp only
+        rw [List.flatMap_append, hI1, List.flatMap_singleton, hi1]
+        have := List.range'_append_1 (s := 0) (m := at_) (n := at' - at_)
+        rw [zero_add] at this
+        rw [this]
+        congr 1; omega
+      · dsimp only
+        rw [Array.toList_push, hI2, List.map_append, List.map_singleton, hi1, List.length_range']
+    · rintro pre ⟨a, b⟩ a₀ ⟨hJ1, hJ2⟩ s hs
+      dsimp only at hs
+      split at hs
+      · exact absurd hs (by simp)
+      · rename_i hc
+        simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq, not_or, not_not, not_lt] at hc
+        obtain ⟨rfl, hab⟩ := hc
+        obtain rfl := (Option.some.inj hs).symm
+        refine ⟨b, rfl, ?_, by omega⟩
+        rw [show expand (pre ++ [(a, b)]) = expand pre ++ List.range' a (b - a) by simp [expand], hJ1]
+        have := List.range'_append_1 (s := at_) (m := a - at_) (n := b - a)
+        rw [show at_ + (a - at_) = a by omega] at this
+        rw [this]
+        congr 1; omega
 
-/-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
-theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
-    (h : Slots.layout d query = .ok l) :
-    ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.ProofBlock),
-      l = { classes := #[pop, inputClass d] } ∧
-      List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList pop.toList := by
-  unfold Slots.layout at h
-  obtain ⟨rs, he, h⟩ := bind_eq_ok.1 h
-  obtain ⟨gs, _, h⟩ := bind_eq_ok.1 h
-  dsimp only at h
-  obtain ⟨pop, hp, h⟩ := bind_eq_ok.1 h
-  refine ⟨rs, he, pop, (Except.ok.inj h).symm, ?_⟩
-  refine (mapM_ok _ _ _ hp).imp fun p s hs => ?_
-  obtain ⟨t, ranges⟩ := p
-  dsimp only at hs
-  have hf := mapM_ok _ _ _ hs
-  rw [toList_expandArr] at hf
-  have key : ∀ (us : List ℕ) (bs : List Slots.ProofBlock), List.Forall₂ (fun u (b : Slots.ProofBlock) =>
-      (match gs[u]? with
-        | some g => pure { unit := some u, gates := g }
-        | _ => throw (toString "unit " ++ toString u ++ toString " has no gates") : Except String Slots.ProofBlock) =
-        .ok b) us bs → bs.map (·.unit) = us.map some := by
-    intro us bs hF
-    induction hF with
-    | nil => rfl
-    | cons hab _ ih =>
-      rename_i u b us' bs'
-      split at hab
-      · obtain rfl := (Except.ok.inj hab).symm
-        simp [ih]
-      · exact absurd hab (by simp [throw, throwThe, MonadExceptOf.throw])
-  exact key _ _ hf
+theorem foldl_add (l : List ℕ) (a : ℕ) : l.foldl (· + ·) a = a + l.sum := by
+  induction l generalizing a with
+  | nil => simp
+  | cons x l ih => simp only [List.foldl_cons, ih, List.sum_cons]; omega
 
-/-- **The slots `checked` lists**: `v` is one when slot `v` holds a proof block whose unit is proved (or none, an
-input). -/
+theorem splitLengths_map {α β : Type} (g : α → β) : ∀ (sz : List ℕ) (l : List α),
+    sz.splitLengths (l.map g) = (sz.splitLengths l).map (List.map g)
+  | [], _ => rfl
+  | n :: sz, l => by
+    rw [List.splitLengths_cons, List.splitLengths_cons, List.map_cons, ← List.map_drop, splitLengths_map g sz,
+      ← List.map_take]
+
+theorem fold_extract {α : Type} (bs : Array α) : ∀ (l : List ℕ) (acc : Array (Array α)) (o : ℕ),
+    (l.foldl (fun (acc : Array (Array α) × ℕ) k => (acc.1.push (bs.extract acc.2 (acc.2 + k)), acc.2 + k))
+      (acc, o)).1.toList.map Array.toList = acc.toList.map Array.toList ++ l.splitLengths (bs.toList.drop o)
+  | [], acc, o => by simp [List.splitLengths_nil]
+  | k :: l, acc, o => by
+    rw [List.foldl_cons, fold_extract bs l, List.splitLengths_cons]
+    simp [Array.toList_extract, List.extract, List.drop_drop]
+
+/-- **`Slots.layout`'s one class**: the units' proof blocks in unit order, each its unit at its positions in the circuit
+file (`Slots.blockOf`, `FilePart.block` as intervals), split into runs of the strata's sizes. -/
+theorem layout_classes (f : FilePart.FilePart) (ns : Array ℕ) :
+    ∃ pop : Array (Array Slots.ProofBlock), (Slots.layout f ns).classes = #[pop] ∧
+      pop.toList.map Array.toList = ns.toList.splitLengths ((List.range f.n).map (Slots.blockOf f)) := by
+  unfold Slots.layout
+  dsimp only
+  refine ⟨_, rfl, ?_⟩
+  rw [← Array.foldl_toList, fold_extract]
+  simp [Array.toList_range]
+
+/-- **`Slots.layout`'s proof blocks** are the units', in unit order, where its strata cover the units. -/
+theorem layout_blocks (f : FilePart.FilePart) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) :
+    (Slots.layout f ns).blocks.toList = (List.range f.n).map (Slots.blockOf f) := by
+  obtain ⟨pop, hc, hp⟩ := layout_classes f ns
+  have : (Slots.layout f ns).blocks.toList = (pop.toList.map Array.toList).flatten := by
+    simp [Slots.Layout.blocks, hc]
+  rw [this, hp, List.flatten_splitLengths]
+  simpa using h
+
+/-- **`Slots.fileLayout`'s steps**: the registration's strata (`Partition.strata`) and their sizes (`FilePart.sizes`),
+and `Slots.layout` of the circuit file's summary (`FilePart.ofCircuit`) at their sum. -/
+theorem fileLayout_ok (c : Flock.Circuit) (d : Program) (query : Lean.Json) (l : Slots.Layout)
+    (h : Slots.fileLayout c d query = .ok l) :
+    ∃ S ns, Partition.strata d query = .ok S ∧ FilePart.sizes S = some ns ∧
+      l = Slots.layout (FilePart.ofCircuit c ns.toList.sum) ns := by
+  unfold Slots.fileLayout at h
+  obtain ⟨S, hS, h⟩ := bind_eq_ok.1 h
+  cases hns : FilePart.sizes S with
+  | none => rw [hns] at h; exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+  | some ns =>
+    rw [hns] at h
+    refine ⟨S, ns, hS, hns, ?_⟩
+    rw [← (Except.ok.inj h), ← Array.foldl_toList, foldl_add, zero_add]
+
+/-- **The slots `checked` lists**: `v` is one when slot `v` holds a proof block whose unit is proved. -/
 theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
-    v ∈ Slots.checked l proved ↔ ∃ h : v < l.blocks.size, l.blocks[v].unit.all proved.contains = true := by
+    v ∈ Slots.checked l proved ↔ ∃ h : v < l.blocks.size, l.blocks[v].unit.any proved.contains = true := by
   unfold Slots.checked
   simp only [Array.mem_map, Array.mem_filter]
   constructor
@@ -380,5 +459,27 @@ theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
     exact ⟨hv, hu⟩
   · rintro ⟨hv, hu⟩
     exact ⟨(l.blocks[v], v), ⟨Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), hu⟩, rfl⟩
+
+/-- **The checked slots of `Slots.layout`** are the proved units, where its strata cover the units: slot `v` is unit
+`v`. -/
+theorem mem_checked_layout (f : FilePart.FilePart) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) (proved : Array ℕ)
+    (v : ℕ) : v ∈ Slots.checked (Slots.layout f ns) proved ↔ v < f.n ∧ v ∈ proved := by
+  have hb := layout_blocks f ns h
+  have hsize : (Slots.layout f ns).blocks.size = f.n := by
+    rw [← Array.length_toList, hb, List.length_map, List.length_range]
+  have hget : ∀ (hv : v < (Slots.layout f ns).blocks.size), (Slots.layout f ns).blocks[v] = Slots.blockOf f v := by
+    intro hv
+    have := List.getElem_of_eq hb (by rw [Array.length_toList]; exact hv)
+    rw [Array.getElem_toList, List.getElem_map, List.getElem_range] at this
+    exact this
+  rw [mem_checked]
+  constructor
+  · rintro ⟨hv, hu⟩
+    rw [hget hv] at hu
+    exact ⟨hsize ▸ hv, Array.contains_iff_mem.1 (by simpa [Slots.blockOf] using hu)⟩
+  · rintro ⟨hv, hp⟩
+    refine ⟨hsize ▸ hv, ?_⟩
+    rw [hget]
+    simpa [Slots.blockOf] using Array.contains_iff_mem.2 hp
 
 end Properties.Spot.SecurityProofs

@@ -30,11 +30,13 @@ open Lean (Json)
 
 /-- **A registration as the sample of record reads it**, what `Spot.Run.run` passes to `Select.select`: the
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
-rule and the challenger's closure map. -/
+rule and the challenger's closure map; and the circuit file, whose layout in the program's strata the sample's slots are
+(`Slots.fileLayout`). -/
 structure Reg where
   verifier : Spot.Registration.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
+  circuit : _root_.Flock.Circuit
 
 def Reg.program (g : Reg) : Spot.Program := g.verifier.program
 
@@ -42,16 +44,16 @@ def Reg.query (g : Reg) : Json := g.verifier.query
 
 def Reg.table (g : Reg) : Option Json := g.verifier.workTable
 
-/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
+/-- The registration's layout (`Slots.fileLayout`), empty where its query doesn't apply. -/
 def Reg.layout (g : Reg) : Spot.Slots.Layout :=
-  match Spot.Slots.layout g.program g.query with
+  match Spot.Slots.fileLayout g.circuit g.program g.query with
   | .ok l => l
   | .error _ => default
 
 /-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
 is refused (`drawChecked`). -/
 def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+  (drawChecked g.rule g.circuit g.program g.query g.table g.closure g.layout src).toList
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
 (`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of

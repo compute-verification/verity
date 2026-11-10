@@ -50,8 +50,8 @@ import VCVio.Prelude.Core
   it is refused (the run rejects), every slot.
 * `Partition.shape`: each class's strata sizes, in proof blocks; `P_a`, the slots and the design's well-formedness read
   only it (`Design.Pa_of_shape`, `Partition.blocks_length_of_shape`, `Design.wellFormed_of_shape`).
-* `DrawSlots`: the deployed sample is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
-  from uniform bytes of the coins.
+* `DrawSlots`: the deployed sample is `Slots.select`'s on a circuit file whose layout has the statement's partition's
+  shape and on its design, from uniform bytes of the coins.
 * `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
 -/
 
@@ -184,9 +184,9 @@ theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
 
 /-- **The slots the deployed sample checks** on the bytes `src`: `Slots.select`'s, and every slot of the layout `l` where
 it is refused, where the run rejects. -/
-def drawChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
+def drawChecked (rule : Select.Rule) (cf : _root_.Flock.Circuit) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (src : ByteArray) : Array ℕ :=
-  match Slots.select rule d query table cm src with
+  match Slots.select rule cf d query table cm src with
   | .ok (_, c) => c
   | .error _ => allSlots l
 
@@ -200,26 +200,26 @@ theorem index_of_mem {c : Array ℕ} {n : ℕ} (hc : c.size ≤ n) {u : ℕ} (hu
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **The deployed sample is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
-program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
-`l` has the statement's partition's shape
+program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, and a circuit
+file `cf` whose layout `l` in the program's strata (`Slots.fileLayout`) has the statement's partition's shape
 (`Partition.shape`: its strata's sizes in proof blocks, in their classes; the blocks' gates are the partition's) and
 whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the checked slots the sample's
 on them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
-  ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
+  ∃ (rule : Select.Rule) (cf : _root_.Flock.Circuit) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
-    Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧
-      slotDesign rule d query table = .ok s.design ∧
+    Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.fileLayout cf d query = .ok l ∧
+      Pt.shape = (slotPartition l).shape ∧ slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
-      ∀ c, D.checked x c = (drawChecked rule d query table cm l (bytesOf (bytes c))).toList
+      ∀ c, D.checked x c = (drawChecked rule cf d query table cm l (bytesOf (bytes c))).toList
 
 /-- **The sampling design from the deployed sample**: where the sample is `Slots.select`'s on uniform bytes (`DrawSlots`), its
 miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMisses`); a refused sample checks every slot,
 so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
 theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
   intro x s Pt hx hP hin B hB
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, cf, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).blocks.length := by
     simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
   rw [Partition.blocks_length_of_shape hshape] at hB
@@ -233,15 +233,15 @@ theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D :
   have hlen : (slotPartition l).blocks.length = l.blocks.size := by
     rw [slotPartition_blocks, List.length_map, Array.length_toList]
   let E : (Fin L → Fin 256) → Prop := fun src =>
-    (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
-      Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src)))
+    (Slots.select rule cf d query table cm (bytesOf src)).isOk = true ∧
+      Misses B (checkedOf (Slots.select rule cf d query table cm (bytesOf src)))
   refine ⟨fun r => Pr fun dd => E (bytes (forkOn (D.stage2 x) r dd)), fun r => Pr_nonneg _,
     fun r => Pr_mono fun dd hm => ?_, ?_⟩
   · rw [hch] at hm
     unfold drawChecked at hm
     split at hm
     · rename_i l' c hs
-      obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
+      obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ _ hs
       rw [hl] at hl'
       obtain rfl := Except.ok.inj hl'
       refine ⟨by rw [hs]; rfl, ?_⟩
@@ -259,7 +259,7 @@ theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D :
       rw [← Ex_resample (fun _ => D.stage2 x) (fun _ _ => rfl) fun c => if E (bytes c) then 1 else 0]
       exact congrArg Ex (funext fun r => (Ex_ind _).symm)
     rw [hav, hunif]
-    have hb := drawMisses rule d query table cm L B
+    have hb := drawMisses rule cf d query table cm L B
     simp only [missBound, hl, hds] at hb
     exact hb
 

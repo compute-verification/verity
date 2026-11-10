@@ -82,14 +82,14 @@ omit [Nonempty Coin] [Inhabited Coin] in
 refused sample checks each once (`size_checked_le`, `size_allSlots`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, cf, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).blocks.length := by
     simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
   rw [hch r, hnPU, Array.length_toList]
   unfold drawChecked
   split
   · rename_i c hs
-    obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
+    obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ _ hs
     rw [hl] at hl'
     obtain rfl := Except.ok.inj hl'
     exact size_checked_le l proved
