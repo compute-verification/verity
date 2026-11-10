@@ -1365,10 +1365,13 @@ class LakeArtifacts:
             return 0
         used: dict[str, float] = {}
         for e in (self.store / MK.INDEX).glob("*.json"):
+            at = e.stat().st_mtime
             try:
-                at, names = e.stat().st_mtime, json.loads(e.read_text()).get("digests")
-            except (OSError, ValueError, AttributeError):
+                doc = json.loads(e.read_text())
+            except ValueError:
+                e.unlink(missing_ok=True)               # damaged on disk, as `module_keys.entry` takes it
                 continue
+            names = doc.get("digests") if isinstance(doc, dict) else None
             for a in names if isinstance(names, dict) else ():
                 used[a] = max(used.get(a, 0.0), at)
         arts = [(max(s.st_mtime, used.get(f.name, 0.0)), s.st_size if s.st_nlink == 1 else 0, f) for f, s in found]
