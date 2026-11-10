@@ -32,7 +32,7 @@ public import Proofs.InferenceOnly.Formalism
 public import Proofs.InferenceOnly.Lemmas
 
 /-!
-# Proofs of NCI's guarantees
+# Proofs of the inference-only policy's guarantees
 
 The read bound intersects each inference block of the containing declaration with the reference circuit's gates
 (`pull`, `Proofs.InferenceOnly.Pull`), each piece reading no more fresh input bits than its block.

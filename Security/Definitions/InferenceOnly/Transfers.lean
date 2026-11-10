@@ -9,7 +9,7 @@ public import Definitions.InferenceOnly.Covering
 The whole computation, clients, the auditor's warden and the servers alike, is one circuit `C`, and a division of it
 into machines is a `Verity.Partition C n`: machine `m` computes the gates `R_m = P.gates m`, every computed gate on
 exactly one machine, and the input gates of `C` on none. A gate of `R_a` that a gate of `R_b` reads, for machines
-`a ≠ b`, is a **transfer gate** from `a` to `b` (`transfers`), in NCI's words a gate of `out(R_a) ∩ in(R_b)`: `a`
+`a ≠ b`, is a **transfer gate** from `a` to `b` (`transfers`), in the inference-only policy's words a gate of `out(R_a) ∩ in(R_b)`: `a`
 computes it and `b` takes it as an input. Everything else `R_b` reads from outside itself, the rest of `in(R_b)`, is an
 input gate of `C` (`inputsRead`), since a gate outside every machine is an input gate. So
 `in(R_b) = transfersInto b ∪ inputsRead b`, two disjoint sets: what reaches `b` over the wire, and the inputs it reads.
