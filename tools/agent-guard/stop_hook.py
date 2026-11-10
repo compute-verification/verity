@@ -26,7 +26,8 @@ NOTE = ("MESSAGE FROM YOUR COORDINATOR, delivered when your turn ended by the st
 def main() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
-    except ValueError:
+    except ValueError as e:                             # nothing to deliver to: the turn ends as it would
+        print(f"stop_hook: the event isn't JSON ({e}); nothing delivered", file=sys.stderr)
         event = {}
     event = event if isinstance(event, dict) else {}
     record_event("stop_hook.py", event)
@@ -44,7 +45,8 @@ def main() -> int:
             print(f"stop_hook: inbox pull failed: {type(e).__name__}: {e}", file=sys.stderr)
     try:
         message = shell_hook.delivery(conversation)
-    except OSError:
+    except OSError as e:                                # the shell hook's next command tries again
+        print(f"stop_hook: the inbox couldn't be read: {e}", file=sys.stderr)
         message = None
     print(json.dumps({"followup_message": NOTE + message} if message else {}))
     return 0
