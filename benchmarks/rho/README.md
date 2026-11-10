@@ -19,8 +19,8 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
-  at `a = 1/MFU₀` (peak) without it, Lean's `InferenceOnly.Dampener.remoteDampener` and, for a remote regime,
-  `InferenceOnly.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
+  at `a = 1/MFU₀` (peak) without it, Lean's `InferenceOnly.Slowdown.remoteSlowdown` and, for a remote regime,
+  `InferenceOnly.Guarantees.SlowdownRemote`'s `ρ`. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
   comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
@@ -59,7 +59,7 @@ step's design in place of the FLOP model, after a table of the step beside it (`
   citation's status.
 - `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
   algorithms and their traits), which the tests hold the data to; `Security/Definitions/InferenceOnly/Remote.lean`, whose
-  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
+  `remoteSlowdown` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
 
 ## The model
 
@@ -140,7 +140,7 @@ The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, 
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` and `slowdown` all name the
 slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's
-`InferenceOnly.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
+`InferenceOnly.Guarantees.SlowdownRemote` (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
 slowdown `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
 intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 

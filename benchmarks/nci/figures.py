@@ -100,7 +100,7 @@ BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (rho.theorem.mul
         f"kappa = {num(P['kappa'])}, the structural entry fee d = {num(P['d'])} (a run that trains its embedding reads "
         "Layered's lookup columns as updated weights; the Dot16 conjecture's (d, e) = "
         f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}) is conditional), e = {num(P['e'])}, a one-hour verdict lag "
-        f"and r = r̂ + eps_W W_cert/C + eps' (tiers.residual_share, the residual DampenerRemote bounds) with PoUW's "
+        f"and r = r̂ + eps_W W_cert/C + eps' (tiers.residual_share, the residual SlowdownRemote bounds) with PoUW's "
         f"deficit eps_W = {num(P['eps_w'])} and the aggregation slack eps' = {num(P['eps_agg'])} (r̂ = 1 - W_cert/C is "
         "tiers.audited_residual); the "
         f"memory rungs by the fit bound at central w_e = {num(W_E)} bits for a {TARGET.upper()}-class target "
