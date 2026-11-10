@@ -16,43 +16,43 @@
    "groups": "0-105,113-120,123,155-193,201-218,285-301,321-324",
    "registry": true
   },
-  "verity.core.protocols.certifier.arith_encode.circuit-check#_network_arith_encode_roots": {
+  "verity.protocols.certifier.verifier.arith_encode.circuit-check#_network_arith_encode_roots": {
    "groups": "0-63,97-103,106-107,113-114,124-127,155-170,194,201-206,219-237,325-358",
    "registry": true
   },
-  "verity.core.protocols.certifier.cache_step.circuit-check#_network_cache_roots": {
+  "verity.protocols.certifier.verifier.cache_step.circuit-check#_network_cache_roots": {
    "groups": "0-62,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359-361",
    "registry": true
   },
-  "verity.core.protocols.certifier.charge_chain.circuit-check#_network_charge_chain_roots": {
+  "verity.protocols.certifier.verifier.charge_chain.circuit-check#_network_charge_chain_roots": {
    "groups": "0-63,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,362-363",
    "registry": true
   },
-  "verity.core.protocols.certifier.compile_slice.circuit-check#_network_compile_slice_roots": {
+  "verity.protocols.certifier.verifier.compile_slice.circuit-check#_network_compile_slice_roots": {
    "groups": "0-62,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,364-365",
    "registry": true
   },
-  "verity.core.protocols.certifier.head_check.circuit-check#_network_roots": {
+  "verity.protocols.certifier.verifier.head_check.circuit-check#_network_roots": {
    "groups": "0-64,97-103,106-107,113-114,124-126,155-171,194,201-206,219-237,325-355,359,366-377",
    "registry": true
   },
-  "verity.core.protocols.certifier.io_request.circuit-check#_network_io_request_roots": {
+  "verity.protocols.certifier.verifier.io_request.circuit-check#_network_io_request_roots": {
    "groups": "0-59,63-65,97-103,106-107,113-114,124-127,155-169,171,194,201-206,219-237,325-356,366-367,378",
    "registry": true
   },
-  "verity.core.protocols.certifier.io_tie.circuit-check#_network_io_tie_roots": {
+  "verity.protocols.certifier.verifier.io_tie.circuit-check#_network_io_tie_roots": {
    "groups": "0-60,63,65-66,97-103,106-107,113-114,124-126,155-169,194,201-206,219-237,325-354,359,379-381",
    "registry": true
   },
-  "verity.core.protocols.certifier.replay_chain.circuit-check#_network_replay_chain_roots": {
+  "verity.protocols.certifier.verifier.replay_chain.circuit-check#_network_replay_chain_roots": {
    "groups": "0-63,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,382-383",
    "registry": true
   },
-  "verity.core.protocols.certifier.replay_step.circuit-check#_network_replay_roots": {
+  "verity.protocols.certifier.verifier.replay_step.circuit-check#_network_replay_roots": {
    "groups": "0-63,97-103,106-107,113-114,124-127,155-170,194,201-206,219-237,325-356,384-385",
    "registry": true
   },
-  "verity.core.protocols.certifier.served.circuit-check#_network_served_roots": {
+  "verity.protocols.certifier.verifier.served.circuit-check#_network_served_roots": {
    "groups": "0-61,63,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,386-387",
    "registry": true
   },
@@ -628,47 +628,47 @@
    "groups": "0-20,22-63,67-69,97-103,106-107,113-114,124-127,155-170,172-174,194,201-206,219-237,325-353,355-356,533,572",
    "registry": true
   },
-  "verity.ml.protocols.certifier.advice_check.circuit-check#_network_advice_roots": {
+  "verity.protocols.certifier.prover.advice_check.circuit-check#_network_advice_roots": {
    "groups": "0-19,21-63,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,516,573",
    "registry": true
   },
-  "verity.ml.protocols.certifier.cache_step_v2.circuit-check#_network_cache_pool_roots": {
+  "verity.protocols.certifier.prover.cache_step_v2.circuit-check#_network_cache_pool_roots": {
    "groups": "0-18,20-62,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,517,574",
    "registry": true
   },
-  "verity.ml.protocols.certifier.compile_slice_v2.circuit-check#_network_compile_slice_pool_roots": {
+  "verity.protocols.certifier.prover.compile_slice_v2.circuit-check#_network_compile_slice_pool_roots": {
    "groups": "0-18,20-49,52-62,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,429,521",
    "registry": true
   },
-  "verity.ml.protocols.certifier.compile_slice_v3.circuit-check#_network_compile_slice_v3_roots": {
+  "verity.protocols.certifier.prover.compile_slice_v3.circuit-check#_network_compile_slice_v3_roots": {
    "groups": "0-18,20-49,52-62,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,429,522",
    "registry": true
   },
-  "verity.ml.protocols.certifier.egress.circuit-check#_network_egress_roots": {
+  "verity.protocols.certifier.prover.egress.circuit-check#_network_egress_roots": {
    "groups": "0-60,63,65,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,523,575",
    "registry": true
   },
-  "verity.ml.protocols.certifier.ingress_scan.circuit-check#_network_ingress_scan_roots": {
+  "verity.protocols.certifier.prover.ingress_scan.circuit-check#_network_ingress_scan_roots": {
    "groups": "0-17,19-49,52-59,63,65,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,429,518,576",
    "registry": true
   },
-  "verity.ml.protocols.certifier.ingress_scan.circuit-check#_network_ingress_scan_w63k4_roots": {
+  "verity.protocols.certifier.prover.ingress_scan.circuit-check#_network_ingress_scan_w63k4_roots": {
    "groups": "0-16,19-28,31-49,53-54,58,63,65,97-103,106-107,113,124-127,155-169,194,201-206,219-237,325-351,354-356,429,518,576",
    "registry": true
   },
-  "verity.ml.protocols.certifier.io_ids.circuit-check#_network_io_ids_roots": {
+  "verity.protocols.certifier.prover.io_ids.circuit-check#_network_io_ids_roots": {
    "groups": "0-17,19-59,63,65-66,97-103,106-107,113-114,124-126,155-169,194,201-206,219-237,325-354,359,366,376,380,577",
    "registry": true
   },
-  "verity.ml.protocols.certifier.served_statics.circuit-check#_network_served_statics_roots": {
+  "verity.protocols.certifier.prover.served_statics.circuit-check#_network_served_statics_roots": {
    "groups": "0-14,17-29,31-60,65-66,97-103,106-107,113-114,124-126,155-169,194,201-206,219-237,325-354,359,524,578-579",
    "registry": true
   },
-  "verity.ml.protocols.certifier.served_tie.circuit-check#_network_served_tie_roots": {
+  "verity.protocols.certifier.prover.served_tie.circuit-check#_network_served_tie_roots": {
    "groups": "0-15,17-60,63,65-66,97-103,106-107,113-114,124-126,155-169,194,201-206,219-237,325-354,359,380,524-525,578,580",
    "registry": true
   },
-  "verity.ml.protocols.certifier.window_charge.circuit-check#_network_window_charge_roots": {
+  "verity.protocols.certifier.prover.window_charge.circuit-check#_network_window_charge_roots": {
    "groups": "0-63,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,526,581",
    "registry": true
   },
@@ -926,7 +926,7 @@
     "verity/flock/prover/python/verity_flock",
     "verity/definitions/private_circuits",
     "verity/ml/protocols",
-    "verity/ml/protocols/certifier",
+    "verity/protocols/certifier/prover",
     "verity/protocols/pous/prover",
     "verity/protocols/pouw/prover",
     "verity/protocols/pouw/prover/circuit"
@@ -1006,12 +1006,12 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/served_statics.py"
+    "verity/protocols/certifier/prover/served_statics.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/served_tie.py"
+    "verity/protocols/certifier/prover/served_tie.py"
    ]
   },
   {
@@ -1021,17 +1021,17 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/io_ids.py"
+    "verity/protocols/certifier/prover/io_ids.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/cache_step_v2.py"
+    "verity/protocols/certifier/prover/cache_step_v2.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/advice_check.py"
+    "verity/protocols/certifier/prover/advice_check.py"
    ]
   },
   {
@@ -1244,27 +1244,27 @@
   },
   {
    "probes": [
-    "verity/core/protocols/certifier/io_request.py"
+    "verity/protocols/certifier/verifier/io_request.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/certifier/io_tie.py"
+    "verity/protocols/certifier/verifier/io_tie.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/certifier/served.py"
+    "verity/protocols/certifier/verifier/served.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/certifier/cache_step.py"
+    "verity/protocols/certifier/verifier/cache_step.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/certifier/__init__.py"
+    "verity/protocols/certifier/prover/__init__.py"
    ]
   },
   {
@@ -1280,7 +1280,7 @@
   },
   {
    "probes": [
-    "verity/core/protocols/certifier/head_check.py"
+    "verity/protocols/certifier/verifier/head_check.py"
    ]
   },
   {
@@ -1938,24 +1938,24 @@
     "verity/core/difftest/python/warnings",
     "verity/core/difftest/python/warnings.py",
     "verity/core/difftest/python/warnings/__init__.py",
-    "verity/core/protocols/certifier/__init__.py",
-    "verity/core/protocols/certifier/active.py",
-    "verity/core/protocols/certifier/advice.py",
-    "verity/core/protocols/certifier/arith_encode.py",
-    "verity/core/protocols/certifier/audit.py",
-    "verity/core/protocols/certifier/certificate.py",
-    "verity/core/protocols/certifier/charge_chain.py",
-    "verity/core/protocols/certifier/commitment.py",
-    "verity/core/protocols/certifier/compile_slice.py",
-    "verity/core/protocols/certifier/grid.py",
-    "verity/core/protocols/certifier/online.py",
-    "verity/core/protocols/certifier/pacer.py",
-    "verity/core/protocols/certifier/release.py",
-    "verity/core/protocols/certifier/replay_chain.py",
-    "verity/core/protocols/certifier/replay_step.py",
-    "verity/core/protocols/certifier/schedule.py",
-    "verity/core/protocols/certifier/served_rows.py",
-    "verity/core/protocols/certifier/warden.py",
+    "verity/protocols/certifier/verifier/__init__.py",
+    "verity/protocols/certifier/verifier/active.py",
+    "verity/protocols/certifier/verifier/advice.py",
+    "verity/protocols/certifier/verifier/arith_encode.py",
+    "verity/protocols/certifier/verifier/audit.py",
+    "verity/protocols/certifier/verifier/certificate.py",
+    "verity/protocols/certifier/verifier/charge_chain.py",
+    "verity/protocols/certifier/verifier/commitment.py",
+    "verity/protocols/certifier/verifier/compile_slice.py",
+    "verity/protocols/certifier/verifier/grid.py",
+    "verity/protocols/certifier/verifier/online.py",
+    "verity/protocols/certifier/verifier/pacer.py",
+    "verity/protocols/certifier/verifier/release.py",
+    "verity/protocols/certifier/verifier/replay_chain.py",
+    "verity/protocols/certifier/verifier/replay_step.py",
+    "verity/protocols/certifier/verifier/schedule.py",
+    "verity/protocols/certifier/verifier/served_rows.py",
+    "verity/protocols/certifier/verifier/warden.py",
     "verity/protocols/pouw/verifier/leaf_lanes.py",
     "verity/protocols/pouw/verifier/live_reads.py",
     "verity/spot/verifier/one_stage/produced.py",
@@ -2006,11 +2006,11 @@
     "verity/flock/prover/python/warnings/__init__.py",
     "verity/definitions/kernels",
     "verity/definitions/private_circuits/__init__.py",
-    "verity/ml/protocols/certifier/compile_slice_v2.py",
-    "verity/ml/protocols/certifier/compile_slice_v3.py",
-    "verity/ml/protocols/certifier/egress.py",
-    "verity/ml/protocols/certifier/ingress_scan.py",
-    "verity/ml/protocols/certifier/window_charge.py",
+    "verity/protocols/certifier/prover/compile_slice_v2.py",
+    "verity/protocols/certifier/prover/compile_slice_v3.py",
+    "verity/protocols/certifier/prover/egress.py",
+    "verity/protocols/certifier/prover/ingress_scan.py",
+    "verity/protocols/certifier/prover/window_charge.py",
     "verity/protocols/pous/prover/__init__.py",
     "verity/protocols/pouw/prover/circuit/h1device.py",
     "verity/protocols/pouw/prover/schemes",
@@ -3636,12 +3636,12 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/arith_encode.circuit-check.py"
+    "verity/protocols/certifier/verifier/arith_encode.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/arith_encode.circuit-check.json"
+    "verity/protocols/certifier/verifier/arith_encode.circuit-check.json"
    ]
   },
   {
@@ -3651,12 +3651,12 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/cache_step.circuit-check.py"
+    "verity/protocols/certifier/verifier/cache_step.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/cache_step.circuit-check.json"
+    "verity/protocols/certifier/verifier/cache_step.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/CacheStepEnd_v1_N_8_U_16_TW_17_RW_10_L_64_-9dcd813a.json",
@@ -3667,28 +3667,28 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/charge_chain.circuit-check.py"
+    "verity/protocols/certifier/verifier/charge_chain.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/charge_chain.circuit-check.json"
+    "verity/protocols/certifier/verifier/charge_chain.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/compile_slice.circuit-check.py"
+    "verity/protocols/certifier/verifier/compile_slice.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/compile_slice.circuit-check.json"
+    "verity/protocols/certifier/verifier/compile_slice.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/io_request.circuit-check.py",
-    "verity/ml/protocols/certifier/io_ids.circuit-check.py"
+    "verity/protocols/certifier/verifier/io_request.circuit-check.py",
+    "verity/protocols/certifier/prover/io_ids.circuit-check.py"
    ]
   },
   {
@@ -3733,7 +3733,7 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/head_check.circuit-check.py"
+    "verity/protocols/certifier/verifier/head_check.circuit-check.py"
    ]
   },
   {
@@ -3743,22 +3743,22 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/head_check.circuit-check.json"
+    "verity/protocols/certifier/verifier/head_check.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/io_request.circuit-check.json"
+    "verity/protocols/certifier/verifier/io_request.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/io_tie.circuit-check.py"
+    "verity/protocols/certifier/verifier/io_tie.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/io_tie.circuit-check.json"
+    "verity/protocols/certifier/verifier/io_tie.circuit-check.json"
    ]
   },
   {
@@ -3770,32 +3770,32 @@
   },
   {
    "files": [
-    "verity/core/protocols/certifier/replay_chain.circuit-check.py"
+    "verity/protocols/certifier/verifier/replay_chain.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/replay_chain.circuit-check.json"
+    "verity/protocols/certifier/verifier/replay_chain.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/replay_step.circuit-check.py"
+    "verity/protocols/certifier/verifier/replay_step.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/replay_step.circuit-check.json"
+    "verity/protocols/certifier/verifier/replay_step.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/served.circuit-check.py"
+    "verity/protocols/certifier/verifier/served.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/core/protocols/certifier/served.circuit-check.json"
+    "verity/protocols/certifier/verifier/served.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/NetworkServedArrive_v1_T_12_FOUT_3_FIN_2_R_2_RIN_2_-0c7fa860.json",
@@ -4718,17 +4718,17 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/advice_check.circuit-check.py"
+    "verity/protocols/certifier/prover/advice_check.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py"
+    "verity/protocols/certifier/prover/cache_step_v2.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/ingress_scan.circuit-check.py"
+    "verity/protocols/certifier/prover/ingress_scan.circuit-check.py"
    ]
   },
   {
@@ -4743,32 +4743,32 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py"
+    "verity/protocols/certifier/prover/compile_slice_v2.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py"
+    "verity/protocols/certifier/prover/compile_slice_v3.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/egress.circuit-check.py"
+    "verity/protocols/certifier/prover/egress.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/served_statics.circuit-check.py"
+    "verity/protocols/certifier/prover/served_statics.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/served_tie.circuit-check.py"
+    "verity/protocols/certifier/prover/served_tie.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/window_charge.circuit-check.py"
+    "verity/protocols/certifier/prover/window_charge.circuit-check.py"
    ]
   },
   {
@@ -5074,7 +5074,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/advice_check.circuit-check.json"
+    "verity/protocols/certifier/prover/advice_check.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/AdviceParseEnd_v1_L_40_-e45f2e25.json",
@@ -5086,7 +5086,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json"
+    "verity/protocols/certifier/prover/cache_step_v2.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/CachePoolEnd_v1_N_8_U_16_TW_17_RW_10_L_64_R_4_D_1_NB_9_SW_8_-895c640d.json",
@@ -5101,17 +5101,17 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/egress.circuit-check.json"
+    "verity/protocols/certifier/prover/egress.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/ingress_scan.circuit-check.json"
+    "verity/protocols/certifier/prover/ingress_scan.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/io_ids.circuit-check.json"
+    "verity/protocols/certifier/prover/io_ids.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/IoTieIdsChain_v1_CB_6_D2_6_-87672e9a.json",
@@ -5143,7 +5143,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/served_statics.circuit-check.json"
+    "verity/protocols/certifier/prover/served_statics.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/ServedStaticsStep_v1_R_8_L_512_T_2048_-40dd9b17.json",
@@ -5152,7 +5152,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/served_tie.circuit-check.json"
+    "verity/protocols/certifier/prover/served_tie.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/IoTieRoute_v1_W_22_D_1_-c3f03e3e.json",
@@ -5167,7 +5167,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/certifier/window_charge.circuit-check.json"
+    "verity/protocols/certifier/prover/window_charge.circuit-check.json"
    ]
   },
   {

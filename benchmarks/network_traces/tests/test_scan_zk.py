@@ -35,7 +35,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def _load():

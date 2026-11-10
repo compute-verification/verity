@@ -436,8 +436,8 @@
       "owns": [
         "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
-        "verity/ml/protocols/certifier/",
-        "verity/core/devices/certifier/",
+        "verity/protocols/certifier/prover/",
+        "verity/protocols/certifier/device/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",

@@ -23,9 +23,9 @@ export PYTHONPATH=$SRC:$SRC/verity/flock/prover/python:$SRC/integrations/vllm:$S
 setup
 (cd verity/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-(cd verity/core/protocols/network/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
+(cd verity/protocols/certifier/verifier/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
   || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/certifier/verifier/lean/.lake/build/bin/network-records
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
   > "$OUT/build-firewall.log" 2>&1

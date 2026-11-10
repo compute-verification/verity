@@ -41,8 +41,8 @@ from verity.protocols.poub.verifier.remote_session import verifier_process as VP
 from verity.protocols.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
-from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
+from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.protocols.poub.verifier import coins  # noqa: E402
 from verity.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402

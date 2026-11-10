@@ -97,7 +97,7 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
 def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     store, out = Path("/var/lib/vy-challenger/store"), Path("/var/lib/vy-challenger/certifier/c1/out")
     assert A.weights_command({"shape": "h200"}, out, store, tree=Path("/opt/vy-challenger") / PIN) == [
-        sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/load_relay.py", "write", "--store",
+        sys.executable, f"/opt/vy-challenger/{PIN}/verity/protocols/certifier/device/network_traces/load_relay.py", "write", "--store",
         str(store), "--shape", "h200", "--workers", str(A.os.cpu_count() or 1), "--out", str(out / "store.json")]
     assert A.Host().store == store
 

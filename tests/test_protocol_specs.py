@@ -21,7 +21,7 @@ KEPT = {
 #: Specs of protocols whose verifier is already Lean, each to be deleted: {PROTOCOL.md: the Lean that covers it}. An entry
 #: only goes, in the PR that deletes its file.
 RETIRING = {
-    "verity/core/protocols/certifier/PROTOCOL.md": "verity/core/protocols/certifier/lean",
+    "verity/protocols/certifier/verifier/PROTOCOL.md": "verity/protocols/certifier/device/program/lean",
     "verity/protocols/pous/verifier/PROTOCOL.md": "verity/protocols/pous/lean",
     "verity/protocols/poub/verifier/PROTOCOL.md": "verity/protocols/poub/verifier/lean",
 }

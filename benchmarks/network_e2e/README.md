@@ -1,7 +1,7 @@
 # network_e2e
 
 Network certification end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
-network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
+network certifier in front of a served endpoint, `verity/protocols/certifier/device/network_traces/certifier_serve.py`), it takes:
 
 - N2's verdict of record on every execution phase, and the link's network verdict;
 - head checks proved with Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
@@ -130,7 +130,7 @@ It does not cover:
   prover, the ZK server and the verifier on one node.
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut.
 
-Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero knowledge: what N2's verdict reads, and
+Zero-knowledge gaps, from `verity/protocols/certifier/verifier/README.md` ("Zero knowledge: what N2's verdict reads, and
 what's open"):
 
 - N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),

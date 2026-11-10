@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as A
+from verity.protocols.certifier.verifier import advice as A
 from verity.spot.verifier.one_stage import registration as R
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW

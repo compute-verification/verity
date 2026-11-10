@@ -152,7 +152,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
 from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402

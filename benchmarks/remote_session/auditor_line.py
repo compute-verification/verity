@@ -152,9 +152,9 @@ from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: 
 from verity.protocols.poub.verifier.session import verifier as V  # noqa: E402
 from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.poub.verifier.session import wire  # noqa: E402
-from verity.core.protocols.certifier import audit as caudit  # noqa: E402
-from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
+from verity.protocols.certifier.verifier import audit as caudit  # noqa: E402
+from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
 from verity.protocols.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
 from verity.protocols.poub.verifier import store as rstore  # noqa: E402
 from verity.spot.device import challenger as Ch  # noqa: E402

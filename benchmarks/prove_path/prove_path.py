@@ -1428,7 +1428,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.core.protocols.certifier import warden_rows as WRW
+    from verity.protocols.certifier.verifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():

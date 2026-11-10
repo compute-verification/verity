@@ -11,7 +11,7 @@ The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model R
 taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
-`benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
+`verity/protocols/certifier/device/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
 ``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of ``--rate`` requests an
 engine step, and on top of it what that generator leaves at its defaults: a quarter at temperature 0.7 with top-p 0.9 and
 a quarter at temperature 1.0 with top-k 50, half of those with a client seed, a fifth with a stop string, a tenth with

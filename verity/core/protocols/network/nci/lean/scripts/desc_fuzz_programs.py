@@ -7,7 +7,7 @@ Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}
 (`agree`: how many instances of its own `NciCheck.DescFuzz.agrees` checks beside them).
 The Lean audit runs `NciCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`NciCheck.DescFuzz`'s docstring) and fails if one fails;
-`verity/core/protocols/network/tests/test_nci_desc_fuzz.py` checks that this script still writes it. The search itself,
+`verity/protocols/certifier/verifier/network/tests/test_nci_desc_fuzz.py` checks that this script still writes it. The search itself,
 at millions of Programs, is the lane's (`verity/core/protocols/network/nci/fuzz/`); this is a seeded sample of it at a size
 the audit runs on every change to the package.
 

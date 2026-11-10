@@ -24,11 +24,11 @@ import pytest
 import epoch_coins as E
 from verity.ml.commitments import hm96
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.active import Proxy
+from verity.protocols.certifier.verifier.certificate import LmsKey
+from verity.protocols.certifier.verifier.grid import GridParams
+from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import identifier as I
 from verity.protocols.pouw.verifier import salt as PS
