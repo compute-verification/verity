@@ -65,19 +65,22 @@ uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-on
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
   16 to 262,144 bits (`verity.ml.circuits.partition_v2`); the per-window δ (`verity.core.protocols.profile`), once
   for a window's coins and for SPOT's sample and twice for the window's cryptography; and the reporting δs
-  the incorrect-outputs row reports at. From `benchmarks/census`: the reference datacenter's machines
-  (`deployments.json`), the count of each reference fleet of 8-GPU servers, and the world's active parameters
-  (`adversary.json`). From `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
-  greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling `data/reference.toml` states,
-  and only its range is read (`params.ranges`). `data/scenarios*.toml` and
+  the incorrect-outputs row reports at. From `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with
+  the least and the greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
+  `data/reference.toml` states, and only its range is read (`params.ranges`). The census's numbers are the exception:
+  `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
+  machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
+  policy's `Γ` at the world's model, each naming the census entry it is, and the tests hold each equal to
+  `benchmarks/census`. `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
   `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
-- `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
-  algorithms and their traits), which the tests hold the data to; `Security/Definitions/Nci/Remote.lean`, whose
+- `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
+  terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
+  `Security/Definitions/Nci/Remote.lean`, whose
   `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
   min-cut bound's `alphaHE` and `shareF` and state its `HE` and `HEShared`, found through the lock, which
   `tests/test_min_cut.py` holds `min_cut.py` to.
@@ -161,7 +164,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, the census's reference datacenter and world, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |

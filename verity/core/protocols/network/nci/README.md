@@ -48,7 +48,9 @@ scenarios register a policy as if it were a subprotocol.
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
-  `Security/Definitions/Core/Formalism.lean`).
+  `Security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
+  (`Nci.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `DampenerRemote` and `DampenerRemotePeriod` take
+  it for each declared day.
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 
