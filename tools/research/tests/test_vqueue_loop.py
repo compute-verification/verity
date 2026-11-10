@@ -251,9 +251,12 @@ def test_a_failed_candidate_blames_a_member_its_owner_took_out_in_flight_by_its_
 
 def test_only_another_s_hold_or_eject_pulls_a_pr_and_a_pr_holding_a_pulled_pr_s_head_is_pulled_with_it(env):
     """`World.pulled`: a hold by its owner or its owner's eject leaves a candidate in flight to land; a reviewer's hold or a
-    red's eject (`EJECTOR`) takes the PR, and a PR whose head holds it with it, as it carries its change."""
+    red's eject (`EJECTOR`, even of a PR `EJECTOR` owns, whose own withdrawn mark doesn't pull it) takes the PR, and a PR whose
+    head holds it with it, as it carries its change."""
     one = env.put(1, {"a.txt": "1\n"})
     env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    by: dict[tuple[int, str], str] = {}
+    env.labels.marked_by = lambda n, h: by.get((n, h), f"lane-{n}")
     loop = env.loop(lambda s: [])
     w, main, reviews = loop.world, env.main(), env.labels.reviews
     loop.tick()
@@ -267,6 +270,13 @@ def test_only_another_s_hold_or_eject_pulls_a_pr_and_a_pr_holding_a_pulled_pr_s_
     assert 1 not in [r.number for r in w.ready(main)] and w.pulled == set()
     w.q.eject(1, "pytest:a failed", L.EJECTOR)
     assert w.ready(main) == [] and w.pulled == {1, 2}
+    env.o.gh.put(3, three := env.o.change({"c.txt": "3\n"}), body=f"Lane `{L.EJECTOR}`.")
+    by[(3, three)] = L.EJECTOR
+    env.o.gh.ready.discard((3, three))
+    assert w.fetch() == main and w.ready(main) == [] and w.left[3][1] == f"its ready mark was withdrawn by {L.EJECTOR}" and w.pulled == {1, 2}
+    env.o.gh.ready.add((3, three))
+    w.q.eject(3, "pytest:c failed", L.EJECTOR)
+    assert w.ready(main) == [] and w.pulled == {1, 2, 3}
 
 
 def test_an_ejection_for_a_failed_lean_lock_task_tells_its_owner_how_to_regenerate_the_package_s_records(env):
