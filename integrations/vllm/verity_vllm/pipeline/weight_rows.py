@@ -116,7 +116,7 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
             if v is None:
                 raise ValueError(f"{m.key} {p} reads {param!r}: give its committed value, or no values at all")
             at = np.asarray(positions, dtype=np.int64)[refs]
-            if v.words != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
+            if CS.value_words(v) != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
                 raise ValueError(f"{m.key} {p}: the rows its units {'wrote' if part == 'outs' else 'read'} aren't {param!r}'s "
                                  f"committed rows {at[:4].tolist()}...")
             if part == "outs":
