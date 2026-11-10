@@ -27,11 +27,11 @@ are the challenger's, the setup's salt and the session's:
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
-The two sides are parties of the deployment layer (`verity.core.deploy`), the challenger (`Challenger`) and the prover
+The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`Challenger`) and the prover
 (`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
 (`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, run on the deployment layer's byte-stream
-adapter (`verity.core.deploy.stream`) on the clock and coins it is given: it reads its clock once before each index it
+adapter (`verity.configuration.deploy.stream`) on the clock and coins it is given: it reads its clock once before each index it
 sends and once after each block it takes, those readings alone, so on the same coins and readings it signs the same
 bytes wherever it runs.
 
@@ -60,9 +60,9 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.core.deploy import stream
-from verity.core.deploy.party import Finish, Identity, Received, Send
-from verity.core.deploy.runtime import ProtocolDef
+from verity.configuration.deploy import stream
+from verity.configuration.deploy.party import Finish, Identity, Received, Send
+from verity.configuration.deploy.runtime import ProtocolDef
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
@@ -70,7 +70,7 @@ from verity.core.protocols.pous import setup as pous_setup
 from verity.core.protocols.pous.challenger_session import (CHALLENGER, MANIFEST, MODULE, PROVER, SETUPS, WARMUP_INDEX,
                                                            WARMUPS, Frames, Polled, Prover, coin_session_id, session_id,
                                                            setup_of)
-from verity.core.wire import Message, Phase, Refused
+from verity.configuration.wire import Message, Phase, Refused
 
 COIN_BYTES = 64
 """The session's coins, which the challenger draws first (`main`'s `secrets.token_bytes(64)`), before its coin tree's

@@ -10,8 +10,8 @@ import json
 import pytest
 from test_verifier_party import STORE, Entropy, dropping
 
-from verity.core.deploy import sources as S
-from verity.core.deploy.runtime import ProtocolDef, run
+from verity.configuration.deploy import sources as S
+from verity.configuration.deploy.runtime import ProtocolDef, run
 from verity.protocols.poub.verifier.remote_bandwidth import audit
 from verity.protocols.poub.verifier.remote_bandwidth import period as P
 from verity.protocols.poub.verifier.remote_bandwidth import session_parties as SP

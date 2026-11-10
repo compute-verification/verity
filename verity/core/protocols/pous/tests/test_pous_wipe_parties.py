@@ -16,16 +16,16 @@ import pytest
 
 import pous_test_signer as ts
 import settings
-from verity.core.deploy import sources as S
-from verity.core.deploy.party import Finish
-from verity.core.deploy.runtime import ProtocolDef, run
+from verity.configuration.deploy import sources as S
+from verity.configuration.deploy.party import Finish
+from verity.configuration.deploy.runtime import ProtocolDef, run
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_parties as WPS
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
 from verity.core.protocols.pous import wipe_store as WS
-from verity.core.wire import canonical
+from verity.configuration.wire import canonical
 from verity.ml.crypto import lms
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL

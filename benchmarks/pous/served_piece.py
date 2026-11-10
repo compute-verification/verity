@@ -80,7 +80,7 @@ from typing import Any
 
 import torch
 
-from verity.core.deploy.stream import Side
+from verity.configuration.deploy.stream import Side
 from verity.core.protocols.pous import challenger_session as CS
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
