@@ -136,3 +136,26 @@ PATHJOINS (NET-306), report on both pull requests. Marks: [run] I ran it, [read]
 8. **Least sure:** the same-path check evaluates expressions, not what a test substitutes at run time; line 711 showed that. No run is at a head merged with today's `main`, which moved 566 files since a337d86e48 (one is #8636's, `records_audit.py`, other lines). The 0 is under one map's bytes, and maps still move. [argued]
 9. **Still open with me:** `r20261110-112220-045a` to its end, and a moved-tree check of both heads on `main` at 751e472f11, running now in a scratch worktree; I send one line only if it lists a place of ours or a suite fails. Nothing is left only on the VM; notes are synced under `lanes/network-accounting`.
 
+[2026-11-10T13:48Z] bac2ead2e3cf
+SLICELIST to the network-accounting lead, NET-305: the ten suites again on the staging's new tip, feef59cde9c943. Written 5:48 AM PST, Tue 10 Nov. Follows my report of 5:33 AM PST; the note's first section holds both.
+
+RUNS on feef59cde9 (clean detached checkout, quick, fresh, `--continue-on-collection-errors`): F `r20261110-133157-2b01` (the six, `--cwd source`), G `r20261110-133157-6607` (the four, `--cwd clone`). Then, for the two suites where G differed: H1 `r20261110-134153-bacd` (`verity/protocols/certifier/verifier/network` alone, clone) and H2 `r20261110-134153-75bc` (`benchmarks/network_traces` alone, clone).
+
+SAME AS ON 07acba4f52 [run: F, G]: eight suites, number for number. `verity/protocols/certifier/verifier` 1,118 passed, 1 failed (`:407`), 1 skipped; `verity/composite/datacenter` 49; `benchmarks/network_e2e` 63 passed, 3 errors at setup, the refusal of `benchmarks/live_challenger`; `encodings` 442; `traces` 51; `network_sim` 21; `workload` 35; `benchmarks/prove_path` 137 passed, 1 error at collection.
+
+DIFFERENT IN G: 14 more reds, in two suites, one cause. Class: ENDS WITH #8648, its other half, the certifier's build lock [read and argued, see "least sure"].
+- `verity/protocols/certifier/verifier/network`: 69 passed, 1 error at setup, `tests/test_inference_only_protocol.py::test_the_inference_only_protocol_agrees_with_the_reference`: `lake build` of NciCheck failed, clang crashed with exit code 135 (a bus error) on `NciCheck.Desc:c.o` (`verity_difftest/__init__.py:137: BuildError`).
+- `benchmarks/network_traces`: 415 passed, 15 failed, 16 errors at setup, 4 at collection. The 13 extra are all in `tests/test_active_replay.py` (1 failed, 12 at setup through the fixture `runs`, `:70`): `FileNotFoundError: …/verity/protocols/certifier/verifier/lean/.lake/build/bin/network-records`, raised at `lean_audit.py` after its own `lake build network-records` returned 0.
+- Cause: on the moved tree `lean_audit.py:62` names `verity/protocols/difftest/lean/.lake/harness-build.lock` and `verity_difftest/__init__.py:122` names `verity/difftest/lean/.lake/harness-build.lock` [read, on feef59cde9]. Before the move they were one file. So a build through `lean_audit` no longer waits for one through the difftest harness, and G's four suites ran at once in one clone: two `lake build`s met in one `.lake` (the certifier's package requires NciCheck by path). A compiler reading a `.c` file that another build rewrites, and a binary missing just after a build that returned 0, are what that gives.
+- This is F1's third row. I predicted it as "no error; a lock of its own" and listed the meeting of two builds as not read (least sure, item 4 of the note). It is a red, and an intermittent one: B ran the same four suites the same way on 07acba4f52 and did not show it.
+- H1, H2 (each suite alone in its own clone): each suite alone in its own clone gives 07acba4f52's numbers again [run]: the network suite 70 passed, and `benchmarks/network_traces` 428 passed, 14 failed, 4 errors at setup, the refusal. So the 14 are not the new commit's lines; they came when four suites built at once in one clone.
+
+SO, PER CLASS, ON feef59cde9: ends with #8636: 26 (unchanged). Ends with #8648: 1 always (`:407`), and up to 14 more when builds overlap (G). Another lane's pull request: 0. Read-guard refusals: 2, one path (unchanged). New: 0. Rows proposed: still none; the lock's line is #8648's, and a hand row for it would stop top's applier once #8648 is staged. If #8648 is not under the staging at the cut, the row would be, in `verity/protocols/certifier/verifier/lean_audit.py`:
+  after = 'BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"'
+  want = 'BUILD_LOCK = Path(__file__).resolve().parents[3] / "difftest" / "lean" / ".lake" / "harness-build.lock"'
+(`parents[3]` of that file is `verity`, so the path is the harness's own lock [read; not run]). It is in `proposed-rows.toml`, commented out, beside the other fallback.
+
+FOR TOP'S LIST: the check on the staging runs many suites at once in one tree, so this race can show there in any suite that builds through `lean_audit` or the difftest harness, ours or another lane's, and it will not show every time.
+
+LEAST SURE: that the 14 are the lock and not the machine. I did not see the two builds overlap; I argue it from the two lock paths [read], the two symptoms, and that the same tree's other runs (B, D, E, H) do not show it. A bus error in clang can also come from a full disk or memory pressure on the node, which I did not measure.
+
