@@ -518,12 +518,32 @@ def test_a_file_of_imports_alone_declares_nothing(text: str, alone: bool) -> Non
     assert PE.imports_alone(text) is alone
 
 
+def _unsealed(read, files, here: str) -> list[str]:
+    """The modules of the package at ``here``, among ``files`` (texts by ``read``), that the Lean check would not seal:
+    under a root of its lock, not under its `exempt`, and reached from no root by the imports of ``files``."""
+    lock = json.loads(read(f"{here}/lean-audit.json"))
+    src = PE._norm(here, PE.tomllib.loads(read(f"{here}/lakefile.toml")).get("srcDir", "."))
+    prefix = f"{src}/" if src else ""
+    at = {f[len(prefix):].removesuffix(".lean").replace("/", "."): f for f in files
+          if f.endswith(".lean") and f.startswith(prefix)}
+
+    def under(names, m: str) -> bool:
+        return any(m == n or m.startswith(f"{n}.") for n in names)
+
+    reached, todo = set(), [r for r in lock["roots"] if r in at]
+    while todo:
+        if (m := todo.pop()) not in reached:
+            reached.add(m)
+            todo += [i for i in PE.PB.HEADERS.imports(read(at[m])) or [] if i in at]
+    return sorted(m for m in at if under(lock["roots"], m) and not under(lock.get("exempt", {}), m) and m not in reached)
+
+
 def test_no_generated_file_stands_under_the_name_of_a_file_that_declares_something() -> None:
     """The export writes a root's file under a tracked file's name only when that file is imports alone: a file of
     imports must not stand in for a module with content. A root of the lock alone whose tracked file declares something
-    is dropped, its modules still built by the root above, and a library's refuses the export, naming the file. The
-    module a lock names as its assumptions' is no root, so it is not written: the root above imports the modules under
-    it."""
+    is dropped, its modules still built by the root above, so the check seals every copied module as before, and a
+    library's refuses the export, naming the file. The module a lock names as its assumptions' is no root, so it is not
+    written: the root above imports the modules under it."""
     lakefile = 'name = "p"\n[[lean_lib]]\nname = "Lib"\n'
     files = {
         "p/lakefile.toml": lakefile,
@@ -551,6 +571,10 @@ def test_no_generated_file_stands_under_the_name_of_a_file_that_declares_somethi
                                    spare={"Lib.Table": ["Lib.Table.Part"]})
     assert json.loads(new)["roots"] == ["Lib"] and dropped == [("roots", "Lib.Table")]
     assert json.loads(new)["assumptions_module"] == "Lib.Assumptions"
+    wrote = {f: files[f] for f in copied} | PE.generated_roots(tree, copied) | {"p/lean-audit.json": new}
+    assert _unsealed(wrote.get, set(wrote), "p") == []
+    assert _unsealed((wrote | {"p/Lib.lean": "module\n\npublic import Lib.Defs\n"}).get, set(wrote), "p") == [
+        "Lib.Assumptions.Hash", "Lib.Table.Part"], "a root above that didn't import them would leave them unsealed"
     files["p/Lib.lean"] += "\ndef x := 1\n"
     with pytest.raises(ValueError, match=r"public_export: p/Lib\.lean: .* more than imports and comments"):
         PE.generated_roots(_Texts(files), copied)
@@ -1305,7 +1329,10 @@ def test_third_party_pins_are_read_without_fetching(tmp_path: Path) -> None:
 def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> None:
     """This tree's export, in a process of its own: each manifest it rewrites reads as the old one less the entries it
     drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day.
-    Each root file it writes under a tracked file's name replaces a file of imports alone."""
+    Each root file it writes under a tracked file's name replaces a file of imports alone. Where it drops a root of a
+    lock (the identity package's `Identity.Domains`, whose file is the other protocols' table and stays behind), the
+    check still seals every module it copies there: each is reached from a root the written lock keeps, the modules
+    `unreached` lists among them."""
     r = subprocess.run([sys.executable, str(EXPORT), str(tmp_path / "export"), "--report", str(tmp_path / "report.json")],
                        cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1314,6 +1341,11 @@ def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> 
     standing = [f for f in report["generated_roots"] if (ROOT / f).is_file()]
     assert standing, "this tree's export writes root files under tracked files' names; the next line holds each to the rule"
     assert [f for f in standing if not PE.imports_alone((ROOT / f).read_text(encoding="utf-8"))] == []
+    dest = tmp_path / "export"
+    copied = set(subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split())
+    assert "Identity.Domains" in report["spare_roots"]["verity/core/primitives/identity"]
+    for here in report["spare_roots"]:
+        assert _unsealed(lambda f: (dest / f).read_text(encoding="utf-8"), copied, here) == [], here
 
 
 def test_the_build_shares_one_set_of_dependencies_where_pins_agree(tmp_path: Path, monkeypatch) -> None:
