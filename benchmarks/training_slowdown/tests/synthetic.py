@@ -1,6 +1,6 @@
 """A tiny data and start, built in a test's directory in the layout a node holds them in: a byte-level tokenizer of 259
-tokens, a stream of three parts, a search pool of six full windows and a final set of two, and an lf start of one
-block."""
+tokens, a stream of three parts (six windows at the start's context), a search pool of six full windows and a final
+set of two, an lf start of one block, and a registry naming both (`tiny_registry`)."""
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +21,7 @@ SHAPE = {"family": "lf", "d_model": 16, "n_layer": 1, "n_head": 2, "d_ff": 32, "
          "parameters": 16 * 16 * 4 + 3 * 16 * 32 + 2 * 16 + (VOCAB + 1) * 16, "tokens": 0}
 #: each token's bytes: end-of-text none, a byte one, a merge its letters
 TOKEN_BYTES = np.array([0] + [1] * 256 + [len(m) for m in MERGES], dtype=np.int64)
-PARTS = (700, 500, 900)
+PARTS = (2100, 1100, 3100)
 SETS = {"search": 6 * 1024 + 300, "final": 2 * 1024 + 50}
 
 
@@ -93,3 +93,38 @@ def tiny_start(root: Path, name: str = "tiny") -> tuple[Start, dict[str, torch.T
     s = Start(name, "tiny", "art:" + "0" * 64, f"starts/{name}", sha256((d / "theta.safetensors").read_bytes()),
               sha256((d / "start.json").read_bytes()), digest, SHAPE, 12_345.0, 7.5)
     return s, theta
+
+
+def _toml(v) -> str:
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f'"{k}" = {_toml(x)}' for k, x in v.items()) + " }"
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(_toml(x) for x in v) + "]"
+    return json.dumps(str(v) if isinstance(v, Path) else v)
+
+
+def tiny_registry(root: Path) -> Path:
+    """`root/starts.toml`, naming the tiny data and start built under `root`."""
+    data = tiny_data(root / "data")
+    s, _ = tiny_start(root / "starts")
+    d = {"tokenizer": data.tokenizer, "vocab": data.vocab, "eot": data.eot, "train": data.train,
+         "manifest_sha256": data.manifest_sha256, "tokenizer_sha256": data.tokenizer_sha256,
+         "selection_sha256": data.selection_sha256}
+    d |= {split: data.sets[split] for split in data.sets} | {f"{k}_sha256": v for k, v in data.set_sha256.items()}
+    entry = {k: v for k, v in s.entry().items() if k != "name"}
+    lines = [f"installed = {_toml(root / 'starts')}", "", "[data.tiny]", *(f"{k} = {_toml(v)}" for k, v in d.items()),
+             "", f"[starts.{s.name}]", *(f"{k} = {_toml(v)}" for k, v in entry.items())]
+    (root / "starts.toml").write_text("\n".join(lines) + "\n")
+    return root / "starts.toml"
+
+
+def write_config(path: Path, **over) -> Path:
+    """An attack config of the tiny start: `over` replaces a top-level key (None drops it)."""
+    cfg = {"start": "tiny", "route": "subset", "target": {"gain": 1.1}, "budget": {"steps": 3, "batch": 2},
+           "seeds": {"search": [0], "final": []}, "policy": "console", "dials": {"trainable": "blocks.0.w_*", "lr": 1e-2}}
+    cfg |= over
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(f"{k} = {_toml(v)}\n" for k, v in cfg.items() if v is not None and k != "dials")
+                    + ("[dials]\n" + "".join(f"{k} = {_toml(v)}\n" for k, v in cfg["dials"].items())
+                       if cfg.get("dials") is not None else ""))
+    return path

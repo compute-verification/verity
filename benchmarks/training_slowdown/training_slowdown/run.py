@@ -1,36 +1,33 @@
-"""Run one submission inside the harness: the program trains from θ through a `Harness`, and everything it computes
-through torch is counted (flops.py).
+"""Run one job of an attack config inside the harness: the config's route trains its start from θ, and everything it
+computes through torch is counted (flops.py).
 
-    python -m training_slowdown.run --program train.py --start s-t20 [--split search|final] --tier 0 --seed 0 --out OUT \\
-        [--starts-root DIR] [--device cuda] [-- PROGRAM ARGS...]
+    python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
+        [--starts starts.toml] [--starts-root DIR] [--device cuda] [--tier 0]
 
-The program is a Python file defining `train(te)`; `te` is the `Harness`. It builds its model, loads θ and registers it
-(`te.load(model)`), declares its step count (`te.plan(n)`), wraps each training step in `with te.step():` and may
-name its output model (`te.output(fn)`, default: the registered model's weights) and write counterexample families
-(`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: with `--split`, the output
-model's bits per byte on that held-out split (`training_slowdown.evaluate`), uncounted. Tokens computed outside a step,
-or a run with no step, make the run invalid.
+The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
+into the model and registers it, and runs the budget's steps, each the route's `step` on the next batch of the start's
+data stream in the job's seed (`training_slowdown.data.Stream`), inside `with te.step():`. A checkpoint is taken after
+every 5% of the steps, uncounted: the output model's bits per byte on the job's split (`training_slowdown.evaluate`)
+and its E, the weights that differ from θ encoded by the route's plan (rebuilt from its spec, so only the codec
+library's code runs) and checked to rebuild them bit for bit. Tokens computed outside a step, or a run with no step,
+make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs per token (`block_c`), measured on
+the registered model.
 
-`--start` names a start in `starts.toml` (`training_slowdown.starts`), read from its installed copy under
-`--starts-root`; `--theta` gives an unregistered θ's file instead, scored by no split. c is `C_PER_FORWARD_TOKEN`
-times the start's forward MACs per token (`block_c`), measured on the registered model.
-
-Writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's digests), `OUT/families/*/` with each
-family's `verified.json` (checked here, after training, on the run's device, from a live coin) and, with
-`--keep-checkpoints` (tier 2), each checkpoint's weights. Torch compilation is disabled and CUDA graph replay refused:
-both run work the counter can't see. For the same reason a run is invalid when it uses an op the counter can't price
-(flops.py), reads token data out of torch, starts a thread or a process, or imports a module that names a route
-the screen refuses or that it wrote during the run (`Imports`). The screen (`screen`) refuses, in the program and in every
-module it imports outside the fixed side, the names that run code it never reads: `exec`, `eval` and `compile` (called
-or not), `runpy`, `importlib`, `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and
-`sys.meta_path`; while the program runs no bytecode cache is read, so what runs is the source that was screened.
+Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
+digest and the job's label) and the last checkpoint's weights (`--keep-checkpoints`, tier 2: every checkpoint's). Torch
+compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
+invalid when it uses an op the counter can't price (flops.py), reads token data out of torch, starts a thread or a
+process, or imports a module that names a way around the dispatcher or that was written during the run (`Imports`).
+The screen (`screen`) refuses, in the route and in every module it imports outside the fixed side, the names that run
+code it never reads: `exec`, `eval` and `compile` (called or not), `runpy`, `importlib`, `__import__`, `marshal`,
+pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the job runs no bytecode cache is read, so
+what runs is the source that was screened.
 """
 from __future__ import annotations
 
 import argparse
 import gc
 import hashlib
-import importlib.util
 import io
 import json
 import math
@@ -50,10 +47,10 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import VERSION, starts
-from .codecs import Plan
+from . import VERSION, config, starts
+from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
-from .data import SPLITS, Data
+from .data import SPLITS, Data, Stream
 from .evaluate import Evaluator
 from .flops import Counter, _tensors, digest, flags, forward_macs_per_token, guard_exits, leaked, plain
 
@@ -73,19 +70,15 @@ def block_c(forward_macs_per_token: float) -> float:
     return C_PER_FORWARD_TOKEN * forward_macs_per_token
 
 
-def theta_sha256(state: dict[str, torch.Tensor]) -> str:
+def state_sha256(digests: dict[str, str]) -> str:
     h = hashlib.sha256()
-    for k in sorted(state):
-        h.update(k.encode() + b"\0" + digest(state[k]).encode())
+    for k in sorted(digests):
+        h.update(k.encode() + b"\0" + digests[k].encode())
     return h.hexdigest()
 
 
-def load_theta(path: Path) -> tuple[dict[str, torch.Tensor], dict]:
-    if str(path).endswith(".safetensors"):
-        return starts.tensors(starts.read_file(path)), {}
-    obj = torch.load(path, map_location="cpu", weights_only=True)
-    state, meta = (obj["state"], obj.get("meta", {})) if "state" in obj else (obj, {})
-    return state, meta
+def theta_sha256(state: dict[str, torch.Tensor]) -> str:
+    return state_sha256({k: digest(v) for k, v in state.items()})
 
 
 def file_sha256(path: Path) -> str:
@@ -114,18 +107,20 @@ def git_commit() -> str:
 
 
 class Harness:
-    """What a program sees. Everything but `step`'s body and the program's own code runs uncounted."""
+    """What the code it counts runs inside. Everything but `step`'s body and the trained code itself runs uncounted."""
 
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
                  start: dict | None = None, evaluator=None, split: str = "", budget_s: float = 0.0,
-                 keep_checkpoints: bool = False, digests: bool = True, args: list[str] | None = None,
-                 clock=time.perf_counter, families: Path | None = None):
+                 keep_checkpoints: bool = False, digests: bool = True, clock=time.perf_counter,
+                 families: Path | None = None):
         self.theta, self.out = theta, Path(out)
         self.families_root = Path(families) if families else self.out / "families"
         self.seed, self.tier, self.device = seed, tier, device
         self.start = start or {}
         self.evaluator, self.split, self.budget_s, self.keep = evaluator, split, budget_s, keep_checkpoints
-        self.args = list(args or [])
+        self.encoding: Plan | None = None
+        self.theta_digests: dict[str, str] | None = None
+        self.problems: list[str] = []
         self.clock = clock
         self.counter = Counter(theta, digests=digests)
         self.bound = bool(theta)
@@ -151,9 +146,9 @@ class Harness:
     @contextmanager
     def uncounted(self):
         """The harness's own work (the fixed loader, decoder and evaluator): neither counted nor timed, and outside the
-        dispatch mode. None of the program's code runs in it: its torch function modes, global module hooks, trace and
+        dispatch mode. None of the route's code runs in it: its torch function modes, global module hooks, trace and
         profile functions are off, so is the cyclic collector (its finalizers), and modules import from the sys.path the
-        harness began with. It must not write the program's tensors, and it reads only plain values (`plain`)."""
+        harness began with. It must not write the route's tensors, and it reads only plain values (`plain`)."""
         hooks = {k: v for k, v in vars(nn_module).items() if k.startswith("_global_") and isinstance(v, dict)}
         trace, profile, collecting = sys.gettrace(), sys.getprofile(), gc.isenabled()
         path = list(sys.path)
@@ -200,7 +195,7 @@ class Harness:
         if self.budget_s and self.elapsed() > BUDGET_SLACK * self.budget_s:
             raise BudgetExceeded(f"{self.elapsed():.0f} s past the tier's {self.budget_s:.0f} s budget")
 
-    # -- the program's API
+    # -- what the counted code runs through
 
     def load(self, model: torch.nn.Module) -> torch.nn.Module:
         """Load θ into `model`, move it to the run's device and register it."""
@@ -233,6 +228,11 @@ class Harness:
         """`fn()` returns the output model's state dict (default: the registered model's)."""
         self.output_fn = fn
 
+    def encode_with(self, plan: Plan) -> None:
+        """Each checkpoint's E: the weights that differ from θ, encoded by `plan` as the codec library rebuilds it from
+        its spec."""
+        self.encoding = Plan.from_spec(plain(plan.spec()))
+
     def family(self, name: str, plan: Plan, uniform: bool = True) -> Family:
         fam = Family(self.families_root, name, plan, uniform)
         self.families.append(fam)
@@ -264,13 +264,36 @@ class Harness:
             state = plain(self._state())
         self.checkpoint_state(step, state, {"source": "output"})
 
+    def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> dict:
+        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros), by `encoding`, with its size,
+        digest and rebuild MACs, and a problem where it doesn't rebuild them bit for bit."""
+        if self.theta_digests is None:
+            self.theta_digests = {k: digest(v) for k, v in self.theta.items()}
+        changed = sorted(k for k in state if digests[k] != self.theta_digests.get(k))
+        bases = {k: self.theta[k] if k in self.theta else torch.zeros(state[k].shape, dtype=state[k].dtype)
+                 for k in changed}
+        try:
+            enc = self.encoding.encode({k: state[k] for k in changed}, bases)
+        except Unencodable as e:
+            self.problems.append(f"checkpoint {step}: the route's plan has no E of its output ({e})")
+            return {"e_bytes": None}
+        rebuilt = self.encoding.decode(enc, bases)
+        if wrong := [k for k in changed if digest(rebuilt[k]) != digests[k]]:
+            self.problems.append(f"checkpoint {step}: the route's E doesn't rebuild its output's {wrong[:3]}")
+        stored = all(isinstance(c, Identity) for _, c in self.encoding.rules)
+        return {"e_bytes": len(enc), "e_sha256": hashlib.sha256(enc).hexdigest(), "format": "full" if stored else "codecs",
+                "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}
+
     def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None) -> dict:
-        """Score `state` as the output model after step `step` (inclusive), uncounted."""
+        """Score `state` as the output model after step `step` (inclusive), and encode it, uncounted."""
         with self.uncounted(), torch.no_grad():
-            digest = theta_sha256(state)
-            score = self.evaluator(state, digest) if self.evaluator else None
+            digests = {k: digest(v) for k, v in state.items()}
+            out_sha256 = state_sha256(digests)
+            score = self.evaluator(state, out_sha256) if self.evaluator else None
             cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
-                  "elapsed_s": self.elapsed(), "output_sha256": digest} | (extra or {})
+                  "elapsed_s": self.elapsed(), "output_sha256": out_sha256} | (extra or {})
+            if self.encoding is not None:
+                cp |= self._encode(step, state, digests)
             if self.keep or (self.n_steps and step == max(self.cp_steps, default=-1)):
                 path = self.out / "checkpoints" / f"step{step:07d}-{len(self.checkpoints):02d}.pt"
                 path.parent.mkdir(exist_ok=True)
@@ -283,7 +306,7 @@ class Harness:
         """The run's record, with `problems` (what makes it invalid) and `notes` (flags) besides the counter's own."""
         self.counter.finish()
         rec = self.counter.record()
-        problems = list(problems or [])
+        problems = list(problems or []) + self.problems
         if not rec["steps"]:
             problems.append("no step")
         for where in ("setup", "tail"):
@@ -323,13 +346,13 @@ class Harness:
         return rec
 
 
-#: names a program may not contain: the harness's internals, dispatch-mode control, routes to GPU or host kernels the
+#: names a route may not contain: the harness's internals, dispatch-mode control, ways to GPU or host kernels the
 #: counter doesn't see, threads and processes, and code built from strings. `torch.compile` is allowed:
 #: TORCHDYNAMO_DISABLE, set before torch is imported, makes it return the eager module, and `_dynamo` (which could turn
-#: it back on) is refused. A screen of source text is a first filter only: the routes it names are caught as they run
+#: it back on) is refused. A screen of source text is a first filter only: the ways it names are caught as they run
 #: where they can be (flops.py).
-FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\btraining_slowdown\.(?!codecs\b)",
-             r"(?m)from\s+training_slowdown\s+import\s+(?!codecs\s*$)", r"\bAdapter\b", "_python_dispatch", "_pop_mode", "_disable_current_modes", "TorchDispatchMode",
+FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\btraining_slowdown\.(?!(codecs|model)\b)",
+             r"(?m)from\s+training_slowdown\s+import\s+(?!(codecs|model)\s*$)", r"\bAdapter\b", "_python_dispatch", "_pop_mode", "_disable_current_modes", "TorchDispatchMode",
              "_set_dispatch_mode", "CUDAGraph", r"cuda\.graph", "_dynamo", "TORCHDYNAMO", "triton", "ctypes", "cupy",
              "numba", "jax", r"torch\.utils\.cpp_extension", "load_inline", "subprocess", "multiprocessing",
              r"os\.system", r"os\.exec", r"os\.spawn", r"os\.posix_spawn", r"\bos\.fork", r"\bos\.popen\b", r"\bpty\b",
@@ -341,7 +364,7 @@ FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\btraining_slowdo
              r"(?m)^\s*(import|from)\s+datasets\b", r"\brunpy\b", r"\bmarshal\b", r"\b_?c?pickle\b", r"\bdill\b",
              r"\bshelve\b", r"\bzipimport\b", "FunctionType", "CodeType", "__code__", r"\bmeta_path\b",
              r"\bpath_hooks\b", r"weights_only\s*=\s*False")
-#: names that run source or code built at run time: refused wherever the program names them, called or not (`f = exec`),
+#: names that run source or code built at run time: refused wherever a route names them, called or not (`f = exec`),
 #: except as another object's attribute (`re.compile`, `torch.compile`, `model.eval`)
 FORBIDDEN_NAMES = frozenset({"exec", "eval", "compile", "execfile", "breakpoint"})
 
@@ -377,11 +400,11 @@ HERE = Path(__file__).resolve().parent
 
 
 class Imports:
-    """The modules first imported while a program runs, each screened like the program (a module beside it that names
-    a refused route), unless the fixed side holds it: Python's own paths or training_slowdown (not its tests), unchanged
-    since the run began. A module from a file written since the run began is refused:
-    its source when it ran may not be what is screened at exit. While the program runs, bytecode caches are neither read
-    nor written (`no_bytecode`), so what runs is the source that is screened."""
+    """The modules first imported while a job runs, each screened like its route (a module that names a refused way
+    around the dispatcher), unless the fixed side holds it: Python's own paths or training_slowdown (not its tests),
+    unchanged since the run began. A module from a file written since the run began is refused: its source when it ran
+    may not be what is screened at exit. While the job runs, bytecode caches are neither read nor written
+    (`no_bytecode`), so what runs is the source that is screened."""
 
     def __init__(self):
         self.before = set(sys.modules)
@@ -416,7 +439,7 @@ class Imports:
                 bad.append(f"{name} ({p}: its source is gone)")
             elif hits := screen(p.read_text(errors="replace")):
                 bad.append(f"{name} names {hits}")
-        return [f"modules the program imported break the program contract: {bad[:4]}"] if bad else []
+        return [f"modules the job imported break the route contract: {bad[:4]}"] if bad else []
 
 
 @contextmanager
@@ -433,78 +456,69 @@ def no_bytecode():
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, write
 
 
-def load_program(path: Path):
-    path = Path(path).resolve()
-    bad = screen(path.read_text())
-    if bad:
-        raise SystemExit(f"{path}: refused, it names {bad} (benchmarks/training_slowdown/README.md, the program contract)")
-    sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location("training_program", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    if not hasattr(mod, "train"):
-        raise SystemExit(f"{path}: defines no train(te)")
-    return mod
+def train(te: Harness, cfg: config.Config, route, stream: Stream) -> None:
+    """The route loop (module docstring)."""
+    model, optimizers = route.build(cfg.start.shape, cfg.dials)
+    te.load(model)
+    te.encode_with(route.plan(cfg.dials))
+    n, batch = cfg.budget["steps"], cfg.budget["batch"]
+    te.plan(n)
+    for t in range(n):
+        with te.step():
+            route.step(model, te.batch(stream.next(batch).to(te.device)), optimizers, cfg.dials, t, n)
 
 
 def parse(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--program", type=Path, required=True, help="a file defining train(te)")
+    ap.add_argument("--config", type=Path, required=True, help="an attack config (training_slowdown.config)")
+    ap.add_argument("--seed", type=int, required=True, help="the job's seed: torch's and the data stream's")
+    ap.add_argument("--split", choices=SPLITS, required=True, help="the held-out split each checkpoint is scored on")
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry (default starts.toml)")
+    ap.add_argument("--starts-root", type=Path, default=None,
+                    help="where the starts are installed, NAME/{theta.safetensors,start.json} (default the registry's)")
     ap.add_argument("--digests", choices=("on", "off"), default="on",
                     help="digest every updated weight value (flops.KeyedDigest, on the run's device; counterexample "
                          "checks need them)")
-    ap.add_argument("--start", default="", help="a start in starts.toml")
-    ap.add_argument("--starts-root", type=Path, default=None,
-                    help="where the starts are installed, NAME/{theta.safetensors,start.json} (default starts.toml's)")
-    ap.add_argument("--theta", type=Path, help="an unregistered θ's file, instead of --start")
-    ap.add_argument("--split", choices=SPLITS, default=None, help="the held-out split each checkpoint is scored on")
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tier", type=int, default=0, choices=(0, 1, 2))
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--budget-minutes", type=float, default=0.0)
     ap.add_argument("--keep-checkpoints", action="store_true")
     ap.add_argument("--families", type=Path, default=None,
                     help="where counterexample families are written (default OUT/families; their verdicts are in run.json)")
     ap.add_argument("--peak-macs-per-s", type=float, default=0.0, help="the device's peak, for the unexplained-GPU flag")
     ap.add_argument("--meta", default="{}", help="JSON merged into the record")
-    ap.add_argument("program_args", nargs=argparse.REMAINDER)
     return ap.parse_args(argv)
-
 
 
 def main(argv=None) -> int:
     a = parse(argv)
     torch.cuda.graphs.CUDAGraph.replay = lambda self: (_ for _ in ()).throw(
         RuntimeError("training_slowdown: CUDA graph replay runs work the counter can't see"))
-    args = a.program_args[1:] if a.program_args[:1] == ["--"] else a.program_args
-    evaluator = None
-    if a.theta:
-        if a.split:
-            raise SystemExit("run: --split scores a registered start (--start), not --theta")
-        start = {"name": a.start or a.theta.name, "path": str(a.theta)}
-        theta, _ = load_theta(a.theta)
-    else:
-        s = starts.start(a.start)
-        start = s.entry()
-        theta = starts.load(s, a.starts_root)
-        if a.split:
-            evaluator = Evaluator(Data.of(s.data), a.split, theta, s.shape, a.device)
-    torch.manual_seed(a.seed)
-    te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start, evaluator=evaluator,
-                 split=a.split or "", budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints,
-                 digests=a.digests != "off", args=args, families=a.families)
-    guard_exits()
+    reg = starts.registry(a.starts)
     imports = Imports()
     with no_bytecode():
-        program = load_program(a.program)
-    meta = json.loads(a.meta) | {"program": a.program.name, "program_sha256": file_sha256(a.program),
-                                 "commit": git_commit(), "hardware": torch.cuda.get_device_name() if
-                                 torch.cuda.is_available() else "cpu", "peak_macs_per_s": a.peak_macs_per_s}
+        cfg = config.load(a.config, reg)
+        route = config.route(cfg.route)
+    s = cfg.start
+    theta = starts.load(s, a.starts_root or Path(reg["installed"]))
+    data = Data.of(s.data, reg)
+    evaluator = Evaluator(data, a.split, theta, s.shape, a.device)
+    torch.manual_seed(a.seed)
+    te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=s.entry(), evaluator=evaluator,
+                 split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_checkpoints=a.keep_checkpoints,
+                 digests=a.digests != "off", families=a.families)
+    stream = Stream(data, a.seed, ctx=int(s.shape["ctx"]))
+    guard_exits()
+    meta = json.loads(a.meta) | {
+        "config": cfg.record(), "route": {"name": cfg.route, "version": cfg.route_version,
+                                          "sha256": file_sha256(route.__file__)},
+        "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
+        "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
+        "peak_macs_per_s": a.peak_macs_per_s}
     stopped = ""
     with no_bytecode(), te.counter:
         try:
-            program.train(te)
+            train(te, cfg, route, stream)
         except BudgetExceeded as e:
             stopped = str(e)
     if stopped:
@@ -514,7 +528,7 @@ def main(argv=None) -> int:
 
 def report(rec: dict) -> int:
     print(json.dumps({"macs": rec["totals"]["macs"], "steps": len(rec["steps"]), "checkpoints": [
-        {k: cp.get(k) for k in ("step", "macs", "bpb", "source")} for cp in rec["checkpoints"]],
+        {k: cp.get(k) for k in ("step", "macs", "bpb", "e_bytes", "source")} for cp in rec["checkpoints"]],
         "flags": rec["flags"], "invalid": rec["invalid"], "families": [
             {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]]}))
     return 1 if rec["invalid"] else 0
