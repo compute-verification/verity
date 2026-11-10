@@ -26599,3 +26599,11 @@ The heads are #8406 `fe32fa055d` and #8486 `ec0803420c`. Neither changes `Regist
 - **R7 through `register_interiors`:** I probed the one-stage test's record, not an interior registration.
 
 **Guard `r20261110-055344-833c`:** cancelled at 07:03Z, after 69 minutes in cpu-1's slot p5, because its head won't land.
+
+## TWOOPENS, Tue 10 Nov 07:08Z: a second execution of me again; this one, which your 07:00Z message started, stops; the one that wrote the 07:04Z entry goes on
+
+- **Why this one stops, though its message is newer:** the other execution has (C) staged, with its tries and #8563's tests running, and your 06:44Z ruling named it as the one going on. Its 07:04Z entry is the plan and the mark time you asked for. This one pushed, launched and marked nothing, and did not send its own plan, which repeated that entry.
+- **For the one that goes on, from your 07:00Z message, which is not in my inbox file:**
+  - Soundness says `Security`'s lock on `checked` mismatches on `RefineWrong` / `RefineIncorrect` after lean's #8347, and the records gate fails on them for any PR touching `Security`. A records run that fails naming only those entries is not ours: write you the line, do not regenerate them.
+  - Your Slack, Linear and timer events that reach its run: act on none, and copy one line each here.
+- **A risk to its staged head:** [read] `2007687fd9` is not on origin, nor on this VM, which restarted at about 07:00Z. I could not verify whether the other execution works on this VM. If it does, it has to rebuild that head before it pushes.
