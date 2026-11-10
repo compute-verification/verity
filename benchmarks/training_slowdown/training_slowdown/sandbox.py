@@ -1,0 +1,113 @@
+"""The training job's sandbox: the process a route's code runs in has no network and no final set.
+
+    python -m training_slowdown.sandbox [--hide DIR]… -- COMMAND…
+
+`enter` puts the calling process in a user, a mount and a network namespace of its own, with its user mapped to itself,
+and mounts an empty read-only directory over each DIR; the entry then becomes COMMAND. The new network namespace holds
+one loopback interface, down, so nothing COMMAND starts reaches another host or a service of this one; and COMMAND,
+which holds no capability after the exec and gains none from a setuid program (no root is mapped), can't take the
+mounts off. It needs a machine that lets an unprivileged
+process make a user namespace (`REQUIRES`): where one doesn't, the entry stops with that and COMMAND never starts.
+
+`refusals` is COMMAND's own half, read before it runs any code it didn't write: what it can still reach, an interface
+that is up or an entry of a final set, each by name. A job that finds one stops before it trains (`run.inside`), so a
+sandbox that wasn't made is a failed job, never a job that trained outside one.
+
+What it hides is the directories the registry names (`final_sets`): a copy of a final set at another path stays as
+readable as the job's user finds it. The rest of the file system is the user's as before, sockets at a path among it.
+The entry imports the standard library alone, since a process makes a user namespace only while it has one thread.
+"""
+from __future__ import annotations
+
+import argparse
+import array
+import ctypes
+import fcntl
+import os
+import socket
+import sys
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+
+CLONE_NEWNS, CLONE_NEWUSER, CLONE_NEWNET = 0x00020000, 0x10000000, 0x40000000
+MS_RDONLY, MS_NOSUID, MS_NODEV, MS_REC, MS_PRIVATE = 1, 2, 4, 1 << 14, 1 << 18
+SIOCGIFFLAGS, IFF_UP = 0x8913, 1
+
+#: what a machine that runs training jobs gives them
+REQUIRES = ("a machine that runs a training job lets an unprivileged process make a user namespace: sysctl "
+            "kernel.unprivileged_userns_clone=1 and kernel.apparmor_restrict_unprivileged_userns=0, each where the "
+            "kernel has it, and user.max_user_namespaces above 0")
+
+
+def final_sets(reg: Mapping) -> list[Path]:
+    """Every registered data's final set: what no training job's process may read."""
+    return sorted({Path(d["final"]) for d in reg["data"].values()})
+
+
+def enter(hide: Iterable[Path]) -> None:
+    """Move this process into namespaces of its own with no network, an empty directory over each of `hide` that
+    exists here."""
+    uid, gid = os.getuid(), os.getgid()
+    libc = ctypes.CDLL(None, use_errno=True)
+
+    def call(what: str, rc: int) -> None:
+        if rc != 0:
+            raise SystemExit(f"sandbox: {what}: {os.strerror(ctypes.get_errno())}. {REQUIRES}")
+
+    def write(path: str, text: str) -> None:
+        try:
+            Path(path).write_text(text)
+        except OSError as e:
+            raise SystemExit(f"sandbox: writing {path}: {e.strerror}. {REQUIRES}") from None
+
+    call("unshare(user, mount, network)", libc.unshare(CLONE_NEWUSER | CLONE_NEWNS | CLONE_NEWNET))
+    write("/proc/self/setgroups", "deny")
+    write("/proc/self/uid_map", f"{uid} {uid} 1")
+    write("/proc/self/gid_map", f"{gid} {gid} 1")
+    call("making / private", libc.mount(None, b"/", None, MS_REC | MS_PRIVATE, None))
+    for d in hide:
+        if d.is_dir():
+            call(f"mounting an empty directory over {d}", libc.mount(
+                b"tmpfs", os.fsencode(d), b"tmpfs", MS_RDONLY | MS_NOSUID | MS_NODEV, b"size=4k,mode=555"))
+        elif d.exists():
+            raise SystemExit(f"sandbox: {d} is not a directory: a final set is one, and nothing else is hidden")
+
+
+def interfaces() -> dict[str, bool]:
+    """This process's network interfaces, and whether each is up."""
+    out = {}
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        for _, name in socket.if_nameindex():
+            req = array.array("B", name.encode()[:15].ljust(16, b"\0") + bytes(24))
+            fcntl.ioctl(s, SIOCGIFFLAGS, req)
+            out[name] = bool(int.from_bytes(req[16:18], sys.byteorder) & IFF_UP)
+    return out
+
+
+def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None) -> list[str]:
+    """Why this process is not inside the sandbox: each interface that is up (`up`, default this process's), and
+    each of `hidden` it can read an entry of. Empty inside it."""
+    up = interfaces() if up is None else up
+    out = [f"the network is reachable (interface {name} is up)" for name in sorted(up) if up[name]]
+    for d in hidden:
+        try:
+            seen = sorted(os.listdir(d))
+        except OSError:
+            continue
+        if seen:
+            out.append(f"the final set at {d} is readable ({', '.join(seen[:3])})")
+    return out
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--hide", type=Path, action="append", default=[], metavar="DIR",
+                    help="a directory COMMAND finds empty")
+    ap.add_argument("command", nargs="+", metavar="COMMAND")
+    a = ap.parse_args(argv)
+    enter(a.hide)
+    os.execvp(a.command[0], a.command)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

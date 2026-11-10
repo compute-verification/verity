@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
 from training_slowdown import config, policy, run, starts
@@ -174,54 +174,63 @@ def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, mon
         config.route("sneaky")
 
 
-def job(tmp_path, *more: str, **over):
-    """A search job of the tiny start's config (`over` its keys) run here: its record, its config and the registry."""
-    reg = tiny_registry(tmp_path / "reg")
-    path = write_config(tmp_path / "a.toml", **over)
-    cfg = config.load(path, starts.registry(reg))
-    out = tmp_path / "out"
-    rc = run.main(["--config", str(path), "--seed", "0", "--split", "search", "--out", str(out), "--starts", str(reg),
-                   "--device", "cpu", *more])
-    rec = json.loads((out / "run.json").read_text())
-    assert rc == 0, rec["invalid"]
-    return rec, cfg, reg
+@pytest.fixture(scope="module")
+def ran(tmp_path_factory):
+    """One search job of the tiny start's config, as a node runs it."""
+    return run_job(tmp_path_factory.mktemp("job"))
 
 
-def test_the_route_loop_trains_scores_and_encodes_from_the_config(tmp_path):
-    rec, cfg, _ = job(tmp_path)
+def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
+    rec, cfg, _, _ = ran
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
+        assert cp["score"]["slice"]["weights_digest"] == cp["output_sha256"]
         assert (cp["format"], cp["changed"]) == ("full", 3) and cp["e_bytes"] > 0
 
 
-def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_asked(tmp_path, monkeypatch):
+def test_a_record_whose_checkpoints_arent_the_states_scored_is_invalid():
+    def unscored():
+        return {"invalid": [], "checkpoints": [{"step": t, "bpb": None, "score": None, "output_sha256": sha}
+                                               for t, sha in enumerate("ab")]}
+    rec = run.with_scores(unscored(), [("a", {"bpb": 1.5}), ("b", {"bpb": 1.25})])
+    assert rec["invalid"] == [] and [(cp["bpb"], cp["score"]) for cp in rec["checkpoints"]] == [
+        (1.5, {"bpb": 1.5}), (1.25, {"bpb": 1.25})]
+    for scores in ([("a", {"bpb": 1.5})], [("b", {"bpb": 1.25}), ("a", {"bpb": 1.5})]):
+        rec = run.with_scores(unscored(), scores)
+        assert all(cp["score"] is None for cp in rec["checkpoints"])
+        assert rec["invalid"] == [f"the {len(scores)} states the evaluator scored aren't the record's 2 checkpoints' "
+                                  f"outputs, one for one"]
+
+
+def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_asked(ran, tmp_path, theta, monkeypatch):
     """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
-    from θ bit for bit; an E at or over the size a job keeps leaves the record alone; `--keep-weights` adds the last
+    from θ bit for bit; an E at or over the size a job keeps stays out too; `--keep-weights` adds the last
     checkpoint's whole state."""
-    rec, cfg, reg = job(tmp_path)
-    out = tmp_path / "out"
+    rec, cfg, reg, out = ran
     *before, last = rec["checkpoints"]
     assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"] and [p.name for p in (out / "e").iterdir()] == [
         "step0000002.bin"] == [Path(last["e_path"]).name]
     assert not any("path" in cp or "e_path" in cp for cp in before) and "path" not in last
     enc = (out / last["e_path"]).read_bytes()
     assert (len(enc), hashlib.sha256(enc).hexdigest()) == (last["e_bytes"], last["e_sha256"])
-    theta = starts.load(cfg.start, reg.parent / "starts")
+    start = starts.load(cfg.start, reg.parent / "starts")
     plan = config.route(cfg.route).plan(cfg.dials)
-    rebuilt = theta | plan.decode(enc, {k: theta[k] for k in plan.keys(enc)})
-    assert run.theta_sha256(rebuilt) == last["output_sha256"] != run.theta_sha256(theta)
+    rebuilt = start | plan.decode(enc, {k: start[k] for k in plan.keys(enc)})
+    assert run.theta_sha256(rebuilt) == last["output_sha256"] != run.theta_sha256(start)
 
-    monkeypatch.setattr(run, "E_KEEP_BYTES", last["e_bytes"])
-    rec, _, _ = job(tmp_path / "large")
-    assert [p.name for p in (tmp_path / "large" / "out").iterdir()] == ["run.json"]
-    assert not any("path" in cp or "e_path" in cp for cp in rec["checkpoints"])
+    full = Plan([("w1.*", Identity())])
+    (cp,) = counted(tmp_path / "small", theta, one_step(full))["checkpoints"]
+    assert (tmp_path / "small" / "out" / cp["e_path"]).stat().st_size == cp["e_bytes"]
+    monkeypatch.setattr(run, "E_KEEP_BYTES", cp["e_bytes"])
+    (cp,) = counted(tmp_path / "large", theta, one_step(full))["checkpoints"]
+    assert "e_path" not in cp and [p.name for p in (tmp_path / "large" / "out").iterdir()] == ["run.json"]
 
-    rec, _, _ = job(tmp_path / "kept", "--keep-weights")
+    rec, _, _, out = run_job(tmp_path / "kept", "--keep-weights")
     last = rec["checkpoints"][-1]
-    state = torch.load(tmp_path / "kept" / "out" / last["path"], weights_only=True)
+    state = torch.load(out / last["path"], weights_only=True)
     assert last["path"] == "checkpoints/step0000002.pt" and run.theta_sha256(state) == last["output_sha256"]
     assert not any("path" in cp for cp in rec["checkpoints"][:-1])
 
@@ -229,12 +238,11 @@ def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_ask
 RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
 
 
-def test_the_job_traces_its_routes_step_and_a_retrace_writes_the_same_record(tmp_path):
+def test_the_job_traces_its_routes_step(ran):
     """The record's `trace` is the capture's measurement of the route's last step at the job's batch and the start's
     context, the tokens the counter counted a step, with the rows unpriced and nothing the formalism derives; the
-    rows price where they are read. `--retrace` takes a record's trace again and changes nothing else, and refuses a
-    record whose config this tree reads as another digest."""
-    rec, _, reg = job(tmp_path)
+    rows price where they are read."""
+    rec = ran[0]
     tr = rec["trace"]
     assert set(tr) == {"capture", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k", "p_match", "at",
                        "elementwise_products", "data_dependent", "carried_scalars"}
@@ -251,14 +259,21 @@ def test_the_job_traces_its_routes_step_and_a_retrace_writes_the_same_record(tmp
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
 
+
+def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
+    """`--retrace` takes a record's trace again and changes nothing else, and refuses a record whose config this tree
+    reads as another digest."""
+    rec, _, reg, _ = ran
     stale = tmp_path / "stale.json"
     stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
-    assert run.main(["--retrace", str(stale), "--out", str(tmp_path / "again"), "--starts", str(reg),
-                     "--device", "cpu"]) == 0
+    assert run.main(["--retrace", stale, "--out", tmp_path / "again", "--starts", reg, "--device", "cpu"]) == 0
+    assert [p.name for p in (tmp_path / "again").iterdir()] == ["run.json"]
     assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
     stale.write_text(json.dumps(rec | {"config": rec["config"] | {"digest": "0" * 64}}))
     with pytest.raises(SystemExit, match="retrace in a clone at the record's commit"):
-        run.main(["--retrace", str(stale), "--out", str(tmp_path / "other"), "--starts", str(reg)])
+        run.retrace(run.parse(["--retrace", str(stale), "--out", str(tmp_path / "other"), "--starts", str(reg),
+                               "--inside", str(tmp_path)]))
+    assert not (tmp_path / "other" / "run.json").exists()
 
 
 def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):

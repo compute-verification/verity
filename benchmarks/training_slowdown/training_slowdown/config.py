@@ -177,6 +177,14 @@ def load(path: Path, reg: dict | None = None) -> Config:
                   target=dict(raw["target"]), policy=raw["policy"], honest=raw.get("honest", ""))
 
 
+def start_of(path: Path, reg: dict | None = None) -> starts.Start:
+    """The start a config names, read without its route: all a process that runs no route's code may read of it."""
+    try:
+        return starts.start(tomllib.loads(Path(path).read_text())["start"], reg)
+    except (OSError, tomllib.TOMLDecodeError, KeyError) as e:
+        raise SystemExit(f"config {path}: no start to read ({type(e).__name__}: {e})") from None
+
+
 def honest(cfg: Config, reg: dict | None = None) -> Config | None:
     """The config's honest config, `<honest>.toml` beside it, refused at another start or gain."""
     if not cfg.honest:

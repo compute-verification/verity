@@ -1,6 +1,7 @@
 """A tiny data and start, built in a test's directory in the layout a node holds them in: a byte-level tokenizer of 259
 tokens, a stream of three parts (six windows at the start's context), a search pool of six full windows and a final
-set of two, an lf start of one block, and a registry naming both (`tiny_registry`)."""
+set of two, an lf start of one block, and a registry naming both (`tiny_registry`); and one job of a config of that
+start, run as a node runs it (`run_job`)."""
 from __future__ import annotations
 
 import hashlib
@@ -10,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from training_slowdown import config, run, starts
 from training_slowdown.data import Data, bytes_to_unicode
 from training_slowdown.model import LM
 from training_slowdown.starts import Start
@@ -128,3 +130,17 @@ def write_config(path: Path, **over) -> Path:
                     + ("[dials]\n" + "".join(f"{k} = {_toml(v)}\n" for k, v in cfg["dials"].items())
                        if cfg.get("dials") is not None else ""))
     return path
+
+
+def run_job(root: Path, *more: str, split: str = "search", **over):
+    """One job of the tiny start's config (`over` its keys) under `root`, through the job's own entry: its record, its
+    config, the registry and its output directory."""
+    reg = tiny_registry(root / "reg")
+    path = write_config(root / "a.toml", **over)
+    cfg = config.load(path, starts.registry(reg))
+    out = root / "out"
+    rc = run.main(["--config", path, "--seed", 0, "--split", split, "--out", out, "--starts", reg, "--device", "cpu",
+                   *more])
+    rec = json.loads((out / "run.json").read_text())
+    assert rc == 0, rec["invalid"]
+    return rec, cfg, reg, out
