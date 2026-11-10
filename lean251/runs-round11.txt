@@ -12,3 +12,5 @@ Results: 9662 clean with a pins commit (sha256sum only), 13.29 min; 2cb9 based-a
 Evidence: art:f49a7ed5b73f33072073a724f32a424ff8e992b2a88b8798dd2cc3eaead59804. Comments: LEAN-258 13:49Z, LEAN-251 13:49Z.
 Found 13:50Z: a --cwd source run has no merge drivers registered (lean-audit.json conflicts textually); --cwd clone registers them
 (research.clone.set_drivers). Counted with none registered: 81 of 265 open PRs stop at base, against 51 of 271 with them.
+r20261110-135310-7836 ended 14:06Z: the clone has the lock's driver; #8139 merged with the base crosses 48da clean in 13.2 min, pins commit by sha256sum.
+Evidence: art:5ac4c56fb9ed80dd224a30c09f9632be7821a25583e68db2368a9dccefda9852. Comments: LEAN-258 13:55Z, 14:10Z; LEAN-251 14:10Z. Note updated 14:11Z.
