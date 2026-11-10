@@ -20,6 +20,14 @@
    "and": 52,
    "type": "a5e385083664392fc72b565ced2278f80c20a6a31108b4e2dd5d443c6d04ae71b9695bb48b87c9af8cf0ede37ebf30d269faa083234fde872baab32b517b51bb"
   },
+  "DsaPositionsChunk_v1{K=4,W=2}": {
+   "and": 158,
+   "type": "e7f40205f8d712de275c89009e2509d571bc2b70773a80e699763dd656fe83ef1ae0e6d6fd8a27ca47e24f3e1eeb52c95ffa789cfa3e6c4167bae6ae96765b11"
+  },
+  "DsaPositionsChunk_v1{K=5,W=2}": {
+   "and": 255,
+   "type": "255548f395b63ddfa2db26fa1168e40491e516cd75155d0609369eab9ebf0c94a315a417ec50895ff9e7a15b3df4045f6f2bbc7d2b5a736c408b0023d9c70abe"
+  },
   "DsaPositionsMerge_v1{M=1,K=4}": {
    "and": 160,
    "type": "4ca32b729205f8a8d8f5ad7c458816e0966241caaf4a11f49f366fdc6f7362d5ef140df22d124d0ea9a86053ae45e1cc6da7a22803e61f5e69eeb809b5abd9aa"
@@ -31,6 +39,10 @@
   "DsaPositionsMerge_v1{M=3,K=4}": {
    "and": 1321,
    "type": "d54eb48fe30ababfdd41ab80556105c5124e64caa154a318d4cc456c71b614b01b75f05ecaa2fb25f214087008a7ebb809de3cc946aa0078d5f7ad56cf941cfe"
+  },
+  "DsaPositionsSlot_v1{K=16,N=131072}": {
+   "and": 554,
+   "type": "0e2543b6f130298f7c18f79dcf67168a05fdeb8d713bed4e2d25f4977b3c6a0009170ad209d04ea605e27c1b7f50973b443b9316097e7a8b3d8d21bdc7281bf5"
   },
   "DsaPositionsSlot_v1{K=4,N=20}": {
    "and": 187,
