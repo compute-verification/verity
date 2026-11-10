@@ -80,7 +80,6 @@ from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, produced, proofs as PF
 from verity.core.protocols.spot.one_stage import registered as G, registration as R
 from verity.core.protocols.spot.one_stage.verdict import Verdict
-from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS
 
 SPEC = "verity-network-certifier/egress-tie-spec/v1"
 STATEMENT = "verity-network-certifier/egress-tie-statement/v1"
@@ -117,11 +116,49 @@ def words(bits: Sequence[int]) -> list[int]:
     return [sum(int(b) << i for i, b in enumerate(bits[w:w + 16])) for w in range(0, len(bits), 16)]
 
 
-def templates(cls: IS.Class) -> dict[str, Any]:
-    """The execution phase's templates at `cls`: `IngressScanFirst`, `IngressScanBucket` and `EgressBucket` at its egress shape."""
-    st, sh = {k: getattr(cls, k) for k in IS.STATICS}, cls.egress
-    return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
-            "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}
+@dataclass(frozen=True)
+class Scan:
+    """The scan's class as its verifier takes it, every field public: its parameters by name, which the Spec's context
+    names, and its templates in `TEMPLATES`' order, the Definitions an execution phase's proof blocks are instances of
+    (`IngressScanFirst`, `IngressScanBucket` and `EgressBucket` at the class's egress shape). The scan's builders make
+    one of their class (`ingress_scan.verifier_scan`); the verifier reads the lanes and the rows' widths off the
+    templates' signatures and imports no builder."""
+
+    statics: tuple[tuple[str, int], ...]
+    templates: tuple[Any, Any, Any]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.statics, tuple) or not all(
+                isinstance(kv, tuple) and len(kv) == 2 and type(kv[0]) is str and type(kv[1]) is int
+                for kv in self.statics) or not isinstance(self.templates, tuple) or len(self.templates) != len(TEMPLATES):
+            raise ValueError("a scan is its class's parameters, each (name, value), and its first, ingress and egress "
+                             "templates")
+        if self.lanes < 1 or any(len(self._params(tp)) != FIXED[tp] + n
+                                 for tp, n in (("first", self.lanes), ("ingress", self.lanes), ("egress", 0))):
+            raise ValueError("a scan's ingress templates read one slot-entries row a lane, and its egress template none")
+
+    def _params(self, template: str) -> dict[str, Any]:
+        return dict(self.templates[TEMPLATES.index(template)].signature()[0])
+
+    @property
+    def lanes(self) -> int:
+        """Its lanes of slot entries: the first template's ``prog<j>`` parameters."""
+        return len(self._params("first")) - FIXED["first"]
+
+    @property
+    def state_bits(self) -> int:
+        """The state row's bits, an ingress block's ``sin``."""
+        return self._params("ingress")["sin"].leaves
+
+    @property
+    def view_bits(self) -> int:
+        """The egress view's bits, an egress block's ``state``."""
+        return self._params("egress")["state"].leaves
+
+    @property
+    def entry_bits(self) -> int:
+        """A slot entry's bits, an ingress block's ``prog<j>``."""
+        return self._params("first")["prog0"].leaves
 
 
 def scan_root(members: Sequence[tuple[Any, int, int]], nb: int, every: int) -> Program:
@@ -254,21 +291,24 @@ def _sha512(obj: Any) -> str:
 @dataclass(frozen=True)
 class EgressTie:
     """The egress tie on one link, every field public: the link, the network certifier's schedule
-    (`warden.WardenParams`, its buckets an execution phase T), the session that names its domains, the scan's class (which must
-    serve the schedule, `ingress_scan.Class.serves`) and the proof deadline in seconds."""
+    (`warden.WardenParams`, its buckets an execution phase T), the session that names its domains, the scan's class as
+    the verifier takes it (`Scan`, of a class that serves the schedule: `ingress_scan.verifier_scan`, whose lanes are
+    the schedule's) and the proof deadline in seconds."""
 
     link: str
     params: WardenParams
     session: bytes
-    cls: IS.Class
+    scan: Scan
     proof_deadline: float | None = None
 
     def __post_init__(self) -> None:
-        if type(self.params) is not WardenParams or type(self.cls) is not IS.Class or \
+        if type(self.params) is not WardenParams or type(self.scan) is not Scan or \
                 not (isinstance(self.link, str) and self.link) or type(self.session) is not bytes:
-            raise ValueError("an egress tie is on a named link, of a warden.WardenParams, an ingress_scan.Class and a "
+            raise ValueError("an egress tie is on a named link, of a warden.WardenParams, a scan_service.Scan and a "
                              "session")
-        self.cls.serves(self.params)
+        if self.scan.lanes != self.params.lanes:
+            raise ValueError(f"the scan's {self.scan.lanes} lanes of slot entries aren't the schedule's "
+                             f"{self.params.lanes}")
         if self.T < 3:
             raise ValueError(f"an execution phase of the scan is three or more buckets (first, ingress, last), not {self.T}")
 
@@ -282,12 +322,17 @@ class EgressTie:
         return 2 * self.T
 
     @property
+    def every(self) -> int:
+        """The buckets a slot boundary, the schedule's."""
+        return self.params.every
+
+    @property
     def nb(self) -> int:
-        return self.T // self.cls.EVERY
+        return self.T // self.every
 
     @cached_property
     def templates(self) -> dict[str, Any]:
-        return templates(self.cls)
+        return dict(zip(TEMPLATES, self.scan.templates))
 
     @property
     def units(self) -> list[Any]:
@@ -306,7 +351,7 @@ class EgressTie:
     @cached_property
     def _program(self) -> Program:
         counts = {"first": 1, "ingress": self.T - 1, "egress": self.T}
-        return scan_root([(self.templates[tp], counts[tp], FIXED[tp]) for tp in TEMPLATES], self.nb, self.cls.EVERY)
+        return scan_root([(self.templates[tp], counts[tp], FIXED[tp]) for tp in TEMPLATES], self.nb, self.every)
 
     @cached_property
     def counts(self) -> dict[str, int]:
@@ -328,7 +373,7 @@ class EgressTie:
 
     @property
     def lanes(self) -> range:
-        return range(self.cls.NR)
+        return range(self.scan.lanes)
 
     @cached_property
     def values(self) -> tuple[str, ...]:
@@ -360,7 +405,7 @@ class EgressTie:
     def spec(self) -> S.Spec:
         context = canonical_json({"format": SPEC, "link": self.link, "session": self.session.hex(),
                                   "params": self.params.digest.hex(),
-                                  "class": {k: getattr(self.cls, k) for k in IS.STATICS}})
+                                  "class": dict(self.scan.statics)})
         check = S.Check(tuple(P.program_sha512(Program(u)) for u in self.units), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         return S.Spec(tuple(S.Value(v, SCHEMA, "serve") for v in self.values), S.All(), check, self.public, context)
@@ -392,13 +437,13 @@ class EgressTie:
         return heads.ingress.window
 
     def _traced(self, trace: Trace) -> None:
-        if type(trace) is not Trace or trace.state.leaves != self.T or len(trace.progs) != self.cls.NR or \
+        if type(trace) is not Trace or trace.state.leaves != self.T or len(trace.progs) != self.scan.lanes or \
                 any(p.leaves != self.nb for p in trace.progs):
-            raise ValueError(f"the trace is a state tree of T = {self.T} leaves and {self.cls.NR} slot-entries trees of "
-                             f"nb = {self.nb}")
+            raise ValueError(f"the trace is a state tree of T = {self.T} leaves and {self.scan.lanes} slot-entries "
+                             f"trees of nb = {self.nb}")
 
     def _domain(self, heads: Heads, kind: str) -> CommitmentDomain:
-        bits, leaves = (IS.view_bits(self.cls), self.T) if kind == "view" else (IS.state_bits(self.cls), 1)
+        bits, leaves = (self.scan.view_bits, self.T) if kind == "view" else (self.scan.state_bits, 1)
         return G.domain(self._partition["program"], value(kind), bits // 16, leaves,
                         window=heads.ingress.root.hex())
 
@@ -412,14 +457,14 @@ class EgressTie:
                   ) -> G.Registered:
         """The prover's ``scan/view``: row t S_t's egress view (its bits), under fresh salts (or `salts`), in a tree
         whose domain binds the registered Program and the ingress root."""
-        if len(views) != self.T or any(len(v) != IS.view_bits(self.cls) for v in views):
-            raise ValueError(f"the views are T = {self.T} rows of {IS.view_bits(self.cls)} bits")
+        if len(views) != self.T or any(len(v) != self.scan.view_bits for v in views):
+            raise ValueError(f"the views are T = {self.T} rows of {self.scan.view_bits} bits")
         return self._commit(heads, "view", views, salts)
 
     def last_tree(self, heads: Heads, state: Sequence[int], salts: Sequence[bytes] | None = None) -> G.Registered:
         """The prover's ``scan/last``: S_{T−1}, the phase's last ingress block's o1, which no state leaf holds."""
-        if len(state) != IS.state_bits(self.cls):
-            raise ValueError(f"S_(T-1) is a row of {IS.state_bits(self.cls)} bits")
+        if len(state) != self.scan.state_bits:
+            raise ValueError(f"S_(T-1) is a row of {self.scan.state_bits} bits")
         return self._commit(heads, "last", [state], salts)
 
     def known_tree(self, heads: Heads) -> G.Registered:
@@ -491,7 +536,7 @@ class EgressTie:
         """Member `member`'s `--registered` file, the verifier's own, which names every port of its statement
         (Flock's `Registered.checkComplete`): the module docstring's reads, at the network certifier's roots of
         `heads`, the trace's, the prover's registered ``view`` and ``last`` roots and the known ``o0`` words."""
-        base, bs, every = member.base, list(member.buckets), self.cls.EVERY
+        base, bs, every = member.base, list(member.buckets), self.every
         layout, known = self._layout(heads, trace), self.known_tree(heads)
         at = {} if not base else {G.READS_FROM: base}
 
@@ -503,7 +548,7 @@ class EgressTie:
         def rows(head: WR.CellsHead) -> dict[str, Any]:
             return {**WR.bucket_port(head, self.params, base), "reads": bs}
 
-        sb, vb, eb = IS.state_bits(self.cls), IS.view_bits(self.cls), IS.entry_bits(self.cls)
+        sb, vb, eb = self.scan.state_bits, self.scan.view_bits, self.scan.entry_bits
         views = tree(VIEW, value("view"), view, vb, bs)
         o0 = produced.port(known.value, known.entry(), known.root.hex(), list(member.units), SCHEMA) | at | \
             {KNOWN_KEY: {"rows": [list(r) for r in known.rows], "salts": [s.hex() for s in known.salts]}}
@@ -628,5 +673,5 @@ class Scans:
 
 
 __all__ = ["Delivered", "EgressTie", "EgressTieVerdict", "FIXED", "Heads", "KNOWN_KEY", "LAST", "Member", "OUTPUTS",
-           "ROWS", "STATE", "Scans", "TEMPLATES", "Trace", "Tree", "VERIFIER", "VIEW", "prog", "scan_root", "templates",
+           "ROWS", "STATE", "Scan", "Scans", "TEMPLATES", "Trace", "Tree", "VERIFIER", "VIEW", "prog", "scan_root",
            "value", "words"]

@@ -46,7 +46,7 @@ PARAMS = W.WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, 
                         ingress_buckets=3, egress_cells=9, every=2)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 LINK, SESSION = "responses", signers.SESSION
-TIE = SC.EgressTie(LINK, PARAMS, SESSION, CLS, proof_deadline=60.0)
+TIE = SC.EgressTie(LINK, PARAMS, SESSION, IS.verifier_scan(CLS, PARAMS), proof_deadline=60.0)
 PROMPTS = ([1000, 1007, 1014], [2000 + 3 * k for k in range(60)], [131071 - k for k in range(100)])
 RESPONSES = ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43))
 #: the server sends request 1's second token one off the compute's
@@ -130,7 +130,7 @@ class Run:
         return self.drawn
 
     def prove(self, name: str, members=None, **kw) -> SC.Delivered:
-        return SC.Delivered({m.name: standin.prove_scan(self.tie, self.cells, self.state, self.progs, self.view,
+        return SC.Delivered({m.name: standin.prove_scan(self.tie, CLS, self.cells, self.state, self.progs, self.view,
                                                         self.last, m, self.tmp / name / m.name, **kw)
                              for m in members or self.tie.members})
 

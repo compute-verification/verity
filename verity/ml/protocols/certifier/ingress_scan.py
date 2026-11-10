@@ -139,15 +139,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from functools import cached_property
-from typing import Sequence
+from typing import Any, Sequence
 
 from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.ml.protocols.certifier import egress as EG
 from verity.core.protocols.certifier import head_check as HC
 from verity.ml.protocols.certifier import io_ids as II
 from verity.core.protocols.certifier import io_request as Q
+from verity.core.protocols.certifier import scan_service as SC
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, PAD
 from verity.core.protocols.certifier.warden import END, WardenParams
 
@@ -908,6 +910,22 @@ IngressScanFirst = _part(
 IngressScanFirst.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 
 
+def templates(cls: Class) -> dict[str, Any]:
+    """An execution phase's templates at `cls`, by `scan_service.TEMPLATES`' names: `IngressScanFirst`,
+    `IngressScanBucket` and `EgressBucket` at its egress shape."""
+    st, sh = {k: getattr(cls, k) for k in STATICS}, cls.egress
+    return {"first": bind(IngressScanFirst, **st), "ingress": bind(IngressScanBucket, **st),
+            "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}
+
+
+def verifier_scan(cls: Class, params: WardenParams) -> SC.Scan:
+    """`cls` as the egress tie's verifier takes it (`scan_service.Scan`: its parameters and its `templates`), for the
+    network certifier at `params`, which it must serve (`Class.serves`)."""
+    cls.serves(params)
+    ts = templates(cls)
+    return SC.Scan(tuple((k, getattr(cls, k)) for k in STATICS), tuple(ts[tp] for tp in SC.TEMPLATES))
+
+
 def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]] | tuple[bytes, Sequence[int]]]
               ) -> list[list]:
     """The arguments for (row, sin, prog) cases (`IngressScanBucket`) or (row, prog) cases (`IngressScanFirst`):
@@ -922,4 +940,5 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
 __all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanFirst", "NONE", "STATICS", "Slot", "State", "arguments",
            "decode", "due", "empty", "encode", "entry", "entry_bits", "entry_encode", "entry_layout", "held", "layout",
            "position", "prog_bits", "prog_decode", "prog_encode", "prog_rows", "programs", "reference", "scan",
-           "slot_row", "state_bits", "step", "token_row", "view", "view_bits", "view_encode", "window_state"]
+           "slot_row", "state_bits", "step", "templates", "token_row", "verifier_scan", "view", "view_bits", "view_encode",
+           "window_state"]

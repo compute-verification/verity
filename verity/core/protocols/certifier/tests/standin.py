@@ -139,18 +139,19 @@ def _bc_words(words: Sequence[int], salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, G.row_digest(words, G.WORD_BITS, SC.SCHEMA), salt)
 
 
-def prove_scan(tie: SC.EgressTie, cells: SC.Heads, state: G.Registered, progs: Sequence[G.Registered],
+def prove_scan(tie: SC.EgressTie, cls: IS.Class, cells: SC.Heads, state: G.Registered, progs: Sequence[G.Registered],
                view: G.Registered, last: G.Registered, member: SC.Member, out: Path, *, accepted: bool = True,
                program: str | None = None) -> PF.Proof:
-    """The delivered proof of `member` of an execution phase's egress tie (`scan_service.EgressTie`): each block's input
-    rows the registered rows it reads, `cells` the network certifier's openings of both links' rows (`warden_rows.Cells`, as
-    `Heads`), `state` and `progs` the committed trace's trees and `view` and `last` the prover's; its outputs by the
+    """The delivered proof of `member` of an execution phase's egress tie (`scan_service.EgressTie`, of the scan's
+    class `cls`): each block's input rows the registered rows it reads, `cells` the network certifier's openings of
+    both links' rows (`warden_rows.Cells`, as `Heads`), `state` and `progs` the committed trace's trees and `view` and
+    `last` the prover's; its outputs by the
     templates' references (`ingress_scan.reference`, `egress.outputs` on the view row read back), each committed under
     the salt of the registered row the verifier's read of it opens (an output the reference gives none of, where ok is 0,
     zero bytes, which open no leaf), and every ``o0`` under the known tree's public salts. The public file is a
     shared-row file as `verity_flock.circuit.write` lays one out: each port's table in the circuit's port order, port-major,
     a slot-entries port one row a boundary its units read (`registered.table`), then the instances' refs."""
-    cls, sh, every, bs = tie.cls, tie.cls.egress, tie.cls.EVERY, list(member.buckets)
+    sh, every, bs = cls.egress, cls.EVERY, list(member.buckets)
     heads = SC.Heads(cells.ingress.head, cells.egress.head)
     known = tie.known_tree(heads)
     DOMAINS.update({d.domain_id.hex(): d for d in (cells.ingress.domain, cells.egress.domain, state.domain, view.domain,
