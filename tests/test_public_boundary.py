@@ -1002,7 +1002,8 @@ def _exported(tmp_path_factory):
 
 def _update(change, failures: list[tuple[str, str]] = ()):
     """An exported check's update, as `records` runs one: it writes ``change`` of the lock and reports ``failures``."""
-    def run(dest: Path, out: Path, log: Path) -> dict:
+    def run(dest: Path, packages: list[str], out: Path, log: Path) -> dict:
+        assert packages == ["lean"]
         at = dest / "lean" / "lean-audit.json"
         lock = json.loads(at.read_text(encoding="utf-8"))
         change(lock)
@@ -1058,7 +1059,7 @@ def test_the_records_step_fails_closed_on_a_report_it_cannot_read(tmp_path_facto
     root, dest, f = _exported(tmp_path_factory)
     with pytest.raises(RuntimeError, match="wrote no .*audit.json"):
         PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
-                   lambda dest, out, log: {"exit": 2, "seconds": 0.0, "log": log.name})
+                   lambda dest, packages, out, log: {"exit": 2, "seconds": 0.0, "log": log.name})
     with pytest.raises(ValueError, match="names no statement"):
         PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
                    _update(lambda lock: None, [("shape.unstated", "a statement is unstated")]))

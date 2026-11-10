@@ -1104,21 +1104,24 @@ def upstream_licenses(upstream: list[dict], scratch: Path) -> list[dict]:
 UNSTATED = ("shape.unstated", re.compile(r"shape: (\S+) \("))
 
 
-def update_records(dest: Path, out: Path, log: Path) -> dict:
-    """The exported tree's own copy of the Lean check writing its locks' records from a build of that tree
-    (`check.py --all --update --build` in ``dest``, its reports under ``out``): a node's work. The check is standard
-    library alone, so it runs under this interpreter, with no environment of the source tree's."""
+def update_records(dest: Path, packages: list[str], out: Path, log: Path) -> dict:
+    """The exported tree's own copy of the Lean check writing the records of ``packages``' locks from a build of that
+    tree (`check.py --update --build` in ``dest``, its reports under ``out``): a node's work. The check is standard
+    library alone, so it runs under this interpreter with no environment of the source tree's, in one of the node's Lean
+    slots (`lean_slot.py`, which the export doesn't copy). The kernel replay and the runners are the Lean check's of
+    the exported tree, which reads these locks afterwards."""
     env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "VIRTUAL_ENV")}
     t0 = time.monotonic()
     with log.open("a", encoding="utf-8") as f:
-        code = subprocess.run([sys.executable, str(dest / "tools" / "verity" / "lean" / "check.py"), "--all", "--root", str(dest),
-                               "--update", "--build", "--no-controls", "--no-replay", "--no-runs", "--out", str(out)],
+        code = subprocess.run([sys.executable, str(PB.ROOT / "tools" / "verity" / "check" / "lean_slot.py"), "--",
+                               sys.executable, str(dest / "tools" / "verity" / "lean" / "check.py"), "--update", "--build",
+                               "--no-replay", "--no-runs", "--out", str(out), *packages],
                               cwd=dest, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
     return {"exit": code, "seconds": round(time.monotonic() - t0, 1), "log": log.name}
 
 
 def records(root: Path, dest: Path, logs: Path, locks: list[str],
-            update: Callable[[Path, Path, Path], dict] = update_records) -> dict:
+            update: Callable[[Path, list[str], Path, Path], dict] = update_records) -> dict:
     """The exported locks' records, written by the exported tree's own Lean check and held to the locks they come from.
 
     The export drops entries from a lock and leaves the records the kept ones carry of the whole tree: what each module
@@ -1133,8 +1136,10 @@ def records(root: Path, dest: Path, logs: Path, locks: list[str],
     The result: the update's exit and log, per lock the statements listed as unstated, and per package the codes of the
     failures the update left besides those, which the Lean check of the exported tree will still report."""
     logs.mkdir(parents=True, exist_ok=True)
+    controls = LEAN_CHECK.FIXTURES.relative_to(PB.ROOT).as_posix() + "/"
+    locks = [f for f in locks if not f.startswith(controls)]            # the check's controls are no package it audits
     out = logs / "lean-update"
-    ran = update(dest, out, logs / "lean-update.log")
+    ran = update(dest, [str(Path(f).parent) for f in locks], out, logs / "lean-update.log")
     audit = out / "audit.json"
     if not audit.is_file():
         raise RuntimeError(f"public_export: the exported tree's Lean check wrote no {audit} (exit {ran['exit']}; its log: "
@@ -1152,7 +1157,7 @@ def records(root: Path, dest: Path, logs: Path, locks: list[str],
     unstated: dict[str, list[str]] = {}
     left: dict[str, dict[str, int]] = {}
     for rep in json.loads(audit.read_text(encoding="utf-8")).get("packages", []):
-        f = _norm(os.path.relpath(rep["package"], dest), LOCK)
+        f = _norm(os.path.relpath(rep["package"], dest.resolve()), LOCK)
         fails = list(zip(rep.get("failure_codes") or [], rep.get("failures") or []))
         names = []
         for c, text in fails:
