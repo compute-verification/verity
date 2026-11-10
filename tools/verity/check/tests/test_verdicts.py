@@ -444,9 +444,10 @@ def test_a_pack_that_cant_be_fetched_isnt_the_one_listed_or_that_import_refuses_
 
 def test_a_fetch_the_store_answers_with_an_error_or_cuts_short_is_passed_over_without_its_url(tmp_path, monkeypatch, capsys):
     """urllib's errors carry the URL they were raised for, which grants a read until it expires: only the error's type and an
-    HTTP status are printed or recorded."""
+    HTTP status are printed or recorded.  Each fetch gives up on a store that stops answering, rather than holding the run's
+    start."""
     check = _load("check")
-    url = "https://store.invalid/objects/sha256/ab?X-Amz-Signature=signed"
+    url, timeouts = "https://store.invalid/objects/sha256/ab?X-Amz-Signature=signed", []
 
     class Cut:
         def __enter__(self):
@@ -459,6 +460,7 @@ def test_a_fetch_the_store_answers_with_an_error_or_cuts_short_is_passed_over_wi
             raise http.client.IncompleteRead(b"x", 9)
 
     def urlopen(u: str, timeout: float):
+        timeouts.append(timeout)
         if u.endswith("&403"):
             raise urllib.error.HTTPError(u, 403, "Forbidden", {}, None)
         return Cut()
@@ -471,6 +473,7 @@ def test_a_fetch_the_store_answers_with_an_error_or_cuts_short_is_passed_over_wi
     assert "skipping r-403's pack: it can't be fetched (HTTPError 403); its verdicts are recomputed" in out
     assert "skipping r-cut's pack: it can't be fetched (IncompleteRead); its verdicts are recomputed" in out
     assert "signed" not in out and "signed" not in json.dumps(got) and not V.entries()
+    assert len(timeouts) == 2 and all(isinstance(t, (int, float)) and 0 < t <= 600 for t in timeouts)
 
 
 def test_a_pack_that_would_take_a_checks_packs_past_their_byte_budget_is_passed_over_unfetched(tmp_path, monkeypatch, capsys):
@@ -536,6 +539,20 @@ def test_a_failed_or_cancelled_checks_pack_is_taken_and_a_running_ones_is_not(tm
     assert [p["run"] for p in check.verdict_packs(store)] == ["r-failed", "r-cancelled"]
 
 
+def test_an_attempt_the_store_holds_no_outputs_of_is_passed_over_and_the_rest_listed(tmp_path, monkeypatch):
+    """The index lists an attempt before its outputs reach the store (a run that ended without publishing, or one whose record
+    another machine hasn't synced): it has no pack to send, and the newer ones' absence never costs the older ones'."""
+    check = _load("check")
+    packs = _packs(tmp_path, monkeypatch, {"old": {"tests/old.json": "o"}})
+
+    class Bare(_Store):
+        def get_attempt(self, rid: str) -> dict | None:
+            return {"r-unknown": None, "r-bare": {}}.get(rid) if rid != "r-old" else super().get_attempt(rid)
+
+    store = Bare(tmp_path, {"r-unknown": None, "r-bare": None, "r-old": packs["old"]})
+    assert [p["run"] for p in check.verdict_packs(store)] == ["r-old"]
+
+
 def test_a_sigkilled_checks_pack_is_taken_from_its_run_record(tmp_path, monkeypatch):
     """A cancel's SIGKILL (rc 137) leaves no result.json, so the attempt has no run files listed from it, only the run record
     custody uploaded, which holds the pack `record` declares."""
@@ -563,7 +580,8 @@ def test_a_store_that_cant_be_read_or_signs_nothing_sends_no_urls_and_says_why(t
     assert "no verdict packs listed from the store (OSError: injected)" in capsys.readouterr().out
     packs = _packs(tmp_path, monkeypatch, {"here": {"tests/k.json": "k"}})
     assert check.verdict_url_file(tmp_path, _Store(tmp_path, {"r-here": packs["here"]})) is None
-    assert "no store remote here signs URLs, so the run imports no recorded check's pack" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "no store remote here signs URLs, so the run imports no recorded check's pack" in out and "listed" not in out
 
     class Local(_Store):
         def listing(self, art: str) -> list[dict]:

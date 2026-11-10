@@ -725,8 +725,7 @@ def take_verdict_urls(out: Path) -> list[dict]:
         print(f"check: verdicts: the packs' URLs sent can't be read ({type(e).__name__}); the run imports none", flush=True)
         doc = []
     finally:
-        if path == sent:
-            sent.unlink(missing_ok=True)
+        sent.unlink(missing_ok=True)
     return [p for p in doc if isinstance(p, dict) and all(isinstance(p.get(k), t) for k, t in VERDICT_URL_KEYS.items())] \
         if isinstance(doc, list) else []
 

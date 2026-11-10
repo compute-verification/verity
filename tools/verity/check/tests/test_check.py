@@ -197,9 +197,10 @@ def test_the_verdict_pack_urls_leave_the_run_directory_before_any_step(tmp_path,
     assert CHECK.take_verdict_urls(tmp_path) == []
     (tmp_path / "inputs").mkdir()
     pack = {"run": "r-new", "sha256": "a" * 64, "bytes": 3, "url": "https://r2/o?sig"}
-    (sent := tmp_path / "inputs" / CHECK.VERDICT_URLS).write_text(json.dumps([pack, {**pack, "bytes": "3"}, {"run": "r-x"}, "r-y"]))
+    unsigned = {k: v for k, v in pack.items() if k != "url"}
+    (sent := tmp_path / "inputs" / CHECK.VERDICT_URLS).write_text(json.dumps([pack, {**pack, "bytes": "3"}, unsigned, {"run": "r-x"}, "r-y"]))
     assert CHECK.take_verdict_urls(tmp_path) == [pack] and not sent.exists()
-    for garbled in ("[", json.dumps(pack)):
+    for garbled in ("[", json.dumps(pack), "3"):
         sent.write_text(garbled)
         assert CHECK.take_verdict_urls(tmp_path) == [] and not sent.exists()
     assert capsys.readouterr().out.count("check: verdicts: the packs' URLs sent can't be read (JSONDecodeError); the run imports none") == 1
