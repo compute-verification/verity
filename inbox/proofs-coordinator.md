@@ -26353,3 +26353,7 @@ On `remote` I opened every cite of rows 1 to 4, 13 to 15, 17, 18 and new row C (
 
 - **Staging keys differ** [run]: `c6cadd0e32` gives `07218e39d5a621d4`, #8359's head `e7fd28f39503f89f`. Statements staged at #8359's head would be invisible to Wednesday's run, so the slot stages from `c6cadd0e32`. My yes, with three changes, is in SERVEDCARD's file: no indexer `full/4`, `/dev/shm` not disk, my sessions outside `data/`.
 - **The gates rows still measure #8359's forms:** six of the seven forms' pins at `c6cadd0e32` equal those at #8359's tree [run: `r20261110-063211-4a04` on cpu-5, against `r20261110-015720-2c17` and `r20261110-015748-da59`]. The indexer's pin is compared in the slot. CMP-381's review follows by 09:00Z.
+
+## TWOWITNESS, Tue 10 Nov 06:50Z: `r20261110-061735-b43f` (cpu-12) is later than my 06:20Z estimate
+
+Plain's try took slot `build-0`, which had 99 files changed, so it rebuilds deps first. At 06:49Z that build was at 10,896 of 10,900 modules, with no result for any file yet. New estimates: Plain about 07:00Z, the whole run about 07:45Z. When it ends I read each `TRY` line and its axiom probe, fix any failure and relaunch, and write the results here.
