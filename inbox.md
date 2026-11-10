@@ -31,3 +31,6 @@ From the kernels lead: DO NOT PUSH TO #8619. The go is WITHDRAWN (top, VLLM-265 
 [2026-11-10T11:04Z] 4d236e78588a
 From the kernels lead: vllm fixed head of the one map is 0d9a7b057e091e6c10293f8d68dae65f28fbcc06 (#8634). Rerun the scan on it now: one comment on HASH-102 (at most 200 words; first line whether any join in cuda_sha512_patch.py or Flock other four files is still broken; a table by owner; the list path for this head). Then one new PR from origin/main for commit_slots/tests/test_slots.py:26 if still red there, then kernels suites on that moved tree. Still: push NOTHING to #8619. Newest section of inbox/KMOVE.md.
 
+[2026-11-10T11:12Z] 92d395160790
+From the kernels lead: #8619 stays at acd82e7861 exactly as it is. top gave its land verdict at the new head (11:11Z); nothing was dropped. No revert, no reset, no body or label change; let r20261110-110846-f4e8 finish and comment its verdict on HASH-102 (red first, in bold). Push nothing more to it. From now, fetch and read inbox/KMOVE.md in the same minute before any push, mark or label. Then: the scan on 0d9a7b057e with the script as at the new head, the test_slots.py:26 PR, kernels suites on that tree.
+
