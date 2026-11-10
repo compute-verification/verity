@@ -612,6 +612,11 @@ def wrap(prefix, text, width=118):
     return "\n".join(out)
 
 
+#: STAGING ONLY (top's inbox 26, for vllm to take): a file a move deletes, and the move that does. The machine model's
+#: contents row names the model by its old place and is superseded once the model is under `verity/hardware/`.
+DROP = {"benchmarks/pouw/contents/paths/machine_model.toml": "hardware"}
+
+
 def render(fname, v, before, one=False):
     rows = v["rows"]
     lines = [wrap("# ", f"The layout move of {v['what']}: what `tools/move/layout.py --map tools/move/{fname}` moves and "
@@ -640,7 +645,8 @@ def render(fname, v, before, one=False):
     if v["split"]:
         lines += ["", "[split]", "# references to a directory this move splits that stay right: \"old file: old directory\" = why"]
         lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["split"].items())]
-    lines += ["", "[retired]", "paths = []", "", "[drop]", "paths = []", "", "[rewrite]",
+    drop = sorted(p for p, name in DROP.items() if one or f"_{name}_map.toml" in fname)
+    lines += ["", "[retired]", "paths = []", "", "[drop]", "paths = [" + ", ".join(toml_str(p) for p in drop) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
               "# archive), and files whose bytes a digest pins.",
               "exclude = [" + ",\n           ".join(", ".join(toml_str(x) for x in EXCLUDE[i:i + 4]) for i in range(0, len(EXCLUDE), 4)) + "]",
