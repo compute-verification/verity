@@ -34,6 +34,10 @@
 # plan PLAN (`check.py --shard-plan --out PLAN`, made once for all N; drive's `after_landing_shards = "auto"`), sent as the run's
 # input.
 #
+# `--deselect FILE` (with --deferred; an absolute path): the run's pytest and lean-suites steps leave out the tests FILE names, one
+# node id a line (`check.py --record --deselect`: the vqueue loop's list); on a COMMIT whose check.py predates it, the run goes
+# without it.
+#
 # `--cc-records`: circuit-check's records step alone (`check.py --record --cc-records`), which drive's sharded after-landing run
 # runs first; `--cc-records-from ART@SHA256` (with `--shard`) gives a shard that step's artifact, so its circuit-check builds
 # no binding.
@@ -43,9 +47,9 @@
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep=
+pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -66,7 +70,9 @@ while [ $# -gt 0 ]; do
     --cc-records) records=1 ;;
     --cc-records-from) [[ $# -ge 2 && $2 =~ ^art:[0-9a-f]+@[0-9a-f]{64}$ ]] || { echo "train: --cc-records-from needs ART@SHA256" >&2; exit 2; }
       recfrom=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn and --cc-records[-from] alone" >&2; exit 2 ;;
+    --deselect) [[ $# -ge 2 && $2 == /* && -f $2 ]] || { echo "train: --deselect needs a list's absolute path" >&2; exit 2; }
+      deselect=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn, --deselect FILE and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -82,7 +88,9 @@ done
   || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
 [ -z "$rbelow" ] || [ -n "$deferred" ] \
   || { echo "train: --ratchet-base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
-[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom${pass[*]+x}" ] \
+[ -z "$deselect" ] || [ -n "$deferred" ] \
+  || { echo "train: --deselect refused without --deferred: a check that leaves tests out is no check a gate takes" >&2; exit 2; }
+[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom$deselect${pass[*]+x}" ] \
   || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
 [ -z "$recfrom" ] || [ -n "$shard" ] \
   || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
@@ -163,6 +171,10 @@ cd "$tree"
 if [ -n "$bookkeep" ]; then
   if grep -q -- "--bookkeeping-warn" tools/verity/check/check.py; then pass+=(--bookkeeping-warn)
   else echo "train: ${sha:0:12}'s check.py predates --bookkeeping-warn: its lock run fails on bookkeeping"; fi
+fi
+if [ -n "$deselect" ]; then
+  if grep -q DESELECT_FILE tools/verity/check/check.py; then pass+=(--deselect "$deselect")
+  else echo "train: ${sha:0:12}'s check.py predates --deselect: its run leaves no test out"; fi
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The
