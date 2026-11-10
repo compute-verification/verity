@@ -98,8 +98,7 @@ own, a script that failed, or pins or Lean locks to regenerate. Its first step m
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
 is what its script writes on its base, which takes as long as the script; a check that passed is kept in the check's cache
-(`$CHECK_CACHE`, default `~/.cache/verity-check`, under `restack-generated/`), so on one machine only the first restack
-across a move runs it. A word move that renames declarations a lock records leaves
+(under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints.
 

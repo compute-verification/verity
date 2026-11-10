@@ -26,9 +26,8 @@ same script rather than by rename detection:
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
-and the same for every branch. A check that passed is kept as a file in the check's cache (`$CHECK_CACHE`, default
-`~/.cache/verity-check`, under `restack-generated/`), so on one machine the first restack across a move pays for it and the
-rest read it. The file's key is everything that decides the check (`generated_key`); a file that is unreadable, malformed
+and the same for every branch. A check that passed is kept as a file under `~/.cache/verity-check/restack-generated/`, in
+the check's cache, so on one machine the first restack across a move pays for it and the rest read it. The file's key is everything that decides the check (`generated_key`); a file that is unreadable, malformed
 or of another key is not read, and the script runs.
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
@@ -76,8 +75,11 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
-#: the directory, in the check's cache, of the moves `check_generated` found generated: a file a key (`kept_path`)
-KEPT = "restack-generated"
+#: where `check_generated` keeps the moves it found generated, a file a key (`kept_path`): in the check's cache, at its
+#: default place (`tools/verity/check/common.cache_dir`; this file runs alone, and reads no setting). On a node that is the
+#: one directory every run shares: a run's clone, with its `.git`, is removed when the run ends, so a file kept there
+#: would never be read
+KEPT = "~/.cache/verity-check/restack-generated"
 #: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
 WORKTREES_LOCK = "research-worktrees.lock"
@@ -302,22 +304,26 @@ def generated_key(move: str, base: str, python: str, cwd: str | None) -> dict:
 
 
 def kept_path(key: dict) -> str:
-    """The file of the check under `key`, in the check's cache (`$CHECK_CACHE`, default `~/.cache/verity-check`, as
-    `tools/verity/check/common.cache_dir`): the one directory of a node that every run on it shares. A run's clone, with its
-    `.git`, is removed when the run ends, so a file kept there would never be read."""
-    name = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest() + ".json"
-    return os.path.join(os.environ.get("CHECK_CACHE") or os.path.expanduser("~/.cache/verity-check"), KEPT, name)
+    """The file of the check under `key`, in `KEPT`."""
+    return os.path.join(os.path.expanduser(KEPT), hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest() + ".json")
 
 
-def kept_generated(key: dict) -> str | None:
-    """The tree the kept check under `key` records, or None: a file that is missing, unreadable, malformed or of another key
-    says nothing, and the script runs."""
+def kept_generated(key: dict, tree: str) -> bool:
+    """Whether the kept check under `key` records `tree`. A file that is unreadable, malformed, of another key or of another
+    tree counts for nothing: it is named, and the script runs."""
+    path = kept_path(key)
+    if not os.path.lexists(path):
+        return False
     try:
-        with open(kept_path(key)) as f:
+        with open(path) as f:
             kept = json.load(f)
-    except (OSError, ValueError):
-        return None
-    return kept["tree"] if isinstance(kept, dict) and kept.get("key") == key and isinstance(kept.get("tree"), str) else None
+    except (OSError, ValueError) as e:
+        kept = f"unreadable: {e}"
+    if kept == {"key": key, "tree": tree}:
+        return True
+    print(f"restack.py: {path} isn't this check, kept ({kept if isinstance(kept, str) else 'another key or tree'}): "
+          "the script runs", file=sys.stderr)
+    return False
 
 
 def keep_generated(key: dict, tree: str) -> None:
@@ -346,7 +352,7 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
     key = (move, base, python, SCRIPT, SCRIPT_ARGS)
     if key not in _GENERATED:
         want, full = tree_of(move, cwd), generated_key(move, base, python, cwd)
-        if kept_generated(full) == want:
+        if kept_generated(full, want):
             print(f"restack.py: {move[:12]} is what {SCRIPT} writes on {base[:12]}, as checked before ({kept_path(full)})",
                   file=sys.stderr)
             _GENERATED[key] = want

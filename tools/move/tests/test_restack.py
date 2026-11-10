@@ -41,10 +41,10 @@ def _git_identity(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def cache(monkeypatch, tmp_path):
-    """Each test's own check cache, so that none reads or writes this machine's kept checks; and no check left in memory."""
-    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check-cache"))
+    """Each test's own directory of kept checks, so that none reads or writes this machine's; and no check left in memory."""
+    monkeypatch.setattr(RS, "KEPT", str(tmp_path / "kept"))
     monkeypatch.setattr(RS, "_GENERATED", {})
-    return tmp_path / "check-cache" / RS.KEPT
+    return tmp_path / "kept"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -294,13 +294,14 @@ def test_a_move_found_generated_is_kept_and_a_later_restack_does_not_run_the_scr
 def test_a_second_restack_py_finds_the_first_one_s_check(repo, cache):
     """The command an owner runs, twice: the second process reads the file the first one wrote, and gives the same tree."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    home = {**os.environ, "HOME": str(cache.parent)}
     runs = [subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--dry-run", "--json"],
-                           cwd=repo, capture_output=True, text=True) for _ in range(2)]
+                           cwd=repo, env=home, capture_output=True, text=True) for _ in range(2)]
     first, second = (json.loads(p.stdout)[0] for p in runs)
     assert first["status"] == second["status"] == "clean"
     assert RS.tree_of(first["result"], str(repo)) == RS.tree_of(second["result"], str(repo))
     assert "as checked before" not in runs[0].stderr and "as checked before" in runs[1].stderr
-    assert len(list(cache.iterdir())) == 1
+    assert len(list((cache.parent / ".cache" / "verity-check" / "restack-generated").iterdir())) == 1
 
 
 def _reports(path: Path, python: str, version: str) -> str:
@@ -322,7 +323,7 @@ def test_a_kept_check_is_read_only_under_everything_that_decides_it(repo, tmp_pa
     kept = RS.generated_key(move, base, python, str(repo))
     assert sorted(kept) == sorted(CHANGES)
     RS.keep_generated(kept, tree)
-    assert RS.kept_generated(RS.generated_key(move, base, python, str(repo))) == tree
+    assert RS.kept_generated(RS.generated_key(move, base, python, str(repo)), tree)
     if part == "move":
         move = commit(repo, "a hand fixup", {"app/core/util.py": edit(UTIL, "return 3", "return 31")})
     elif part == "base":
@@ -343,7 +344,7 @@ def test_a_kept_check_is_read_only_under_everything_that_decides_it(repo, tmp_pa
         monkeypatch.setattr(RS, "__file__", str(tmp_path / "restack.py"))
     now = RS.generated_key(move, base, python, str(repo))
     assert {k for k in kept if kept[k] != now[k]} == {part}
-    assert RS.kept_path(now) != RS.kept_path(kept) and RS.kept_generated(now) is None
+    assert RS.kept_path(now) != RS.kept_path(kept) and not RS.kept_generated(now, tree)
 
 
 def test_the_uv_in_a_kept_check_s_key_is_the_one_the_script_runs_under(repo, monkeypatch):
@@ -383,8 +384,9 @@ BAD = {"empty": lambda text: "", "cut short": lambda text: text[:len(text) // 2]
 
 
 @pytest.mark.parametrize("bad", BAD)
-def test_a_kept_file_that_is_unreadable_malformed_or_of_another_key_is_never_trusted(repo, cache, on_base, bad):
-    """Whatever stands at the kept check's path that isn't this key with the move's own tree: the script runs on the base."""
+def test_a_kept_file_that_is_unreadable_malformed_or_of_another_key_is_never_trusted(repo, cache, on_base, capsys, bad):
+    """Whatever stands at the kept check's path that isn't this key with the move's own tree: it is named, and the script runs
+    on the base."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     first = RS.restack("pr", "move", cwd=str(repo))
     [kept] = cache.iterdir()
@@ -396,7 +398,7 @@ def test_a_kept_file_that_is_unreadable_malformed_or_of_another_key_is_never_tru
         kept.write_bytes(BAD[bad](good).encode("latin-1"))
     on_base.again()
     again = RS.restack("pr", "move", cwd=str(repo))
-    assert on_base == [git(repo, "rev-parse", "base")]
+    assert on_base == [git(repo, "rev-parse", "base")] and f"{kept} isn't this check" in capsys.readouterr().err
     assert again["status"] == "clean" and RS.tree_of(again["result"], str(repo)) == RS.tree_of(first["result"], str(repo))
     if BAD[bad] is not None:
         assert kept.read_text() == good, "the pass is kept again, whole"
@@ -424,7 +426,7 @@ def test_a_move_the_script_did_not_write_is_never_kept_and_no_kept_file_passes_i
 def test_a_cache_that_cannot_be_written_keeps_nothing_and_fails_no_restack(repo, tmp_path, monkeypatch, on_base, capsys):
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     (tmp_path / "a-file").write_text("")
-    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "a-file"))
+    monkeypatch.setattr(RS, "KEPT", str(tmp_path / "a-file" / "kept"))
     for _ in range(2):
         on_base.again()
         assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and len(on_base) == 1
