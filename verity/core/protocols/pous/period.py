@@ -57,7 +57,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.deploy.stream import Side
-from verity.ml.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 
@@ -258,19 +257,13 @@ Period = Run
 @dataclass(frozen=True)
 class EncodedStore:
     """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
-    table of it, and the setup protocol's case. The store itself is `store`."""
+    table of it, and the setup protocol's case."""
 
     point: R.Point
     published: R.Setup
     blocks: tuple[bytes, ...]
     digests: bytes
     setup_case: dict[str, Any]
-
-    @property
-    def store(self) -> requirement.Store:
-        """PoUS's view of the store (`requirement.Store`): `C*`'s blocks registered from store index 0, none written or
-        freed after setup, and no payloads, since a block of `C*` holds `W`'s bytes only through decoding."""
-        return requirement.Store(len(self.blocks), {}, {}, {})
 
     def save(self, directory: str | os.PathLike) -> None:
         d = Path(directory)
