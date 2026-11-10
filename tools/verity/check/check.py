@@ -30,7 +30,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
-                                                            upstream build and inputs when the commit changes verity/ml/flock/
+                                                            upstream build and inputs when the commit changes verity/flock/prover/
                                                             against --base REF (default origin/main; also ratchet-gate's base
                                                             unless --ratchet-base REF is given), and presigned URLs for
                                                             the pinned Lean dependency bundles; with --on, in a free check slot of M
@@ -157,7 +157,7 @@ doesn't name:
     pytest          every test suite (`tools/verity/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
                     outcomes (`suites.json`) beside the run's result
-    circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
+    circuit-check   first flock-circuit-build, `verity/flock/prover/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
@@ -173,7 +173,7 @@ doesn't name:
     lean            `lake build` of the Lean verifier (`verity/flock/verifier`), then its partition check against
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/ml/flock/verifier/upstream.json`), when the run has
-                    it; skipped by name without it.  `research merge` requires it for a change under verity/ml/flock/ (`tool.py`)
+                    it; skipped by name without it.  `research merge` requires it for a change under verity/flock/prover/ (`tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -812,7 +812,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/flock/prover/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -821,7 +821,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/flock/prover/ or "
                                   "verity/flock/verifier/ requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
@@ -1596,7 +1596,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if held := circuit_shards(only):
         each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
         cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
-    build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
+    build = ["bash", str(ROOT / "verity" / "flock" / "prover" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
@@ -2144,14 +2144,14 @@ def agreement_key(e: dict[str, str]) -> str | None:
 def rust_tests_inputs(files: list[str]) -> list[str]:
     """What `check_build.sh test` reads of the tree: the script (which pins the Flock commit and the order the patches go on in),
     the patches, and the live crate it links in."""
-    pre = "verity/ml/flock/"
+    pre = "verity/flock/prover/"
     return [f for f in files if f == pre + "check_build.sh" or f.startswith(pre + "live/")
             or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
 
 
 def rust_toolchain() -> str | None:
     """The Rust toolchain `check_build.sh` pins: its `RUST_TOOLCHAIN` default (check passes no `RUST_TOOLCHAIN` of its own)."""
-    p = ROOT / "verity" / "ml" / "flock" / "check_build.sh"
+    p = ROOT / "verity" / "flock" / "prover" / "check_build.sh"
     m = re.search(r"^RUST_TOOLCHAIN=\$\{RUST_TOOLCHAIN:-([^}]+)\}$", p.read_text(), re.M) if p.is_file() else None
     return m and m.group(1)
 

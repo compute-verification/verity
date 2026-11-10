@@ -25,13 +25,13 @@ TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) /
 F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --features glue"
 # SHA-512 Merkle trees, leaves and nodes, every Ligerito level (64-byte digests): the Rust side on every build, the device side
 # after the circuit prover is generated (it widens both provers' trees)
-(cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/verity/ml/flock/flock-sha512-b684b12.patch \
-  && git apply $REPO/verity/ml/flock/flock-glue-b684b12.patch) || exit 1
+(cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/verity/flock/prover/flock-sha512-b684b12.patch \
+  && git apply $REPO/verity/flock/prover/flock-glue-b684b12.patch) || exit 1
 # Flock ZK: Ligerito level 0's hiding (flock-circuit --zk)
-(cd $F && git apply $REPO/verity/ml/flock/flock-zk-b684b12.patch) || exit 1
+(cd $F && git apply $REPO/verity/flock/prover/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
-(cd $F && git apply $REPO/verity/ml/flock/flock-vtime-b684b12.patch) || exit 1
-if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/ml/flock/cuda_circuit_patch.py && python3 $REPO/verity/ml/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
+(cd $F && git apply $REPO/verity/flock/prover/flock-vtime-b684b12.patch) || exit 1
+if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/flock/prover/cuda_circuit_patch.py && python3 $REPO/verity/flock/prover/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
 (cd $F && cargo build --release -p flock-live $FEAT --bin flock-circuit -j $TH) > $O/build-circuit.txt 2>&1 || { tail -40 $O/build-circuit.txt; exit 1; }
@@ -39,13 +39,13 @@ B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm
 # the challengers' Lean, built while the sets stage: bench's --zk sessions, and m0's under FC_COINS=tree, take their coin trees
 # from a challenger each (pod/challenger.sh)
 CH=0; [ "$MODE" = bench ] && { [ "$FC_COINS" = tree ] || [[ " ${MODES:-m0} " == *" zk"* ]]; } && CH=1
 if [ $CH = 1 ]; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=python3 CHALLENGER_WORK=$W/challengers/${RESEARCH_RUN_ID:-local-$$}
-  . verity/ml/flock/pod/challenger.sh; challenger_build
+  . verity/flock/prover/pod/challenger.sh; challenger_build
 fi
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 for tarf in $I/*.tar; do

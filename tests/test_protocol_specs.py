@@ -16,7 +16,7 @@ KEPT = {
     "verity/ml/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
     "verity/ml/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
     "verity/ml/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
-    "verity/ml/flock/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
+    "verity/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
 }
 #: Specs of protocols whose verifier is already Lean, each to be deleted: {PROTOCOL.md: the Lean that covers it}. An entry
 #: only goes, in the PR that deletes its file.

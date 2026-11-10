@@ -8,7 +8,7 @@ import re
 import tomllib
 from pathlib import Path
 
-TESTS = Path(__file__).resolve().parent
+TESTS = (Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")
 SUITE = TESTS.parent
 ROOT = SUITE.parents[2]
 SECURITY = ROOT / "Security"
@@ -100,7 +100,7 @@ def test_the_lean_the_tests_build_and_import_is_declared():
     assert "Proofs.Flock.Verifier" in start and not unheld, f"the tests name modules no Security package holds: {sorted(unheld)}"
     inputs = declared()
     missing = sorted(rel(f) for f in mods.values() if not under(rel(f), inputs))
-    assert not missing, f"add to [tool.verity.tests] inputs in verity/ml/flock/pyproject.toml: {missing}"
+    assert not missing, f"add to [tool.verity.tests] inputs in verity/flock/prover/pyproject.toml: {missing}"
 
 
 def test_the_packages_lake_loads_are_declared():
@@ -110,7 +110,7 @@ def test_the_packages_lake_loads_are_declared():
     pkgs, outside = packages()
     inputs = declared()
     missing = sorted(r for d in pkgs for f in PACKAGE_FILES if (d / f).is_file() and not under(r := rel(d / f), inputs))
-    assert not missing, f"add to [tool.verity.tests] inputs in verity/ml/flock/pyproject.toml: {missing}"
+    assert not missing, f"add to [tool.verity.tests] inputs in verity/flock/prover/pyproject.toml: {missing}"
     assert {SECURITY, SECURITY / "Properties"} <= pkgs.keys()
     unkeyed = sorted(rel(p) for p in outside if not under(rel(p), [*inputs, DEPENDENCY]))
     assert not unkeyed, f"security_proofs requires packages this suite's key leaves out: {unkeyed}"

@@ -49,7 +49,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 def stores():
     for d in (FIXTURE, BLOCKS):
         assert (d / "stage" / "circuit.txt").is_file(), (
-            f"{d} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/{d.name}`")
+            f"{d} is not fetched: `uv run research data fetch-fixtures verity/flock/prover/tests/fixtures/{d.name}`")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     return {"one-block": FIXTURE, "two-blocks": BLOCKS}
 

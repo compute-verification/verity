@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from verity_flock.record_text import session_text
 
-FLOCK = Path(__file__).resolve().parents[1]
+FLOCK = (Path(__file__).resolve().parents[3] / "flock" / "prover")
 LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (4 instances) with a seeded loopback session of a proving build (`seed`); the circuit is the session tables' fixture's

@@ -28,10 +28,10 @@ command -v cargo >/dev/null || [ -x $HOME/.cargo/bin/cargo ] || curl -sSf https:
 source $HOME/.cargo/env; rustc --version
 cd $W; [ -d flock ] || git clone -q https://github.com/succinctlabs/flock
 cd $F && git checkout -q b684b12 && git checkout -q -- . && rm -rf crates/flock-live cuda-ghash/prove_chunk.cuh
-git apply $SRC/verity/ml/flock/flock-link-b684b12.patch && git apply $SRC/verity/ml/flock/flock-gpu-link-b684b12.patch || exit 1
-cp -r $SRC/verity/ml/flock/live crates/flock-live
+git apply $SRC/verity/flock/prover/flock-link-b684b12.patch && git apply $SRC/verity/flock/prover/flock-gpu-link-b684b12.patch || exit 1
+cp -r $SRC/verity/flock/prover/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
-FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/verity/ml/flock/cuda_chunk_patch.py || exit 1; FEAT="--features gpu"; fi
+FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/verity/flock/prover/cuda_chunk_patch.py || exit 1; FEAT="--features gpu"; fi
 cargo build --release -p flock-live $FEAT --bin flock-gpu-link --bin flock-pure-gpu -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
 B=$F/target/release/flock-gpu-link; sha256sum $B $F/target/release/flock-pure-gpu | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0

@@ -21,14 +21,14 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/flock/prover/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A11's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
-  cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
+  cached flock "$(tree_key verity/flock/prover/live verity/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
   cached lean "$(tree_key verity/flock/verifier)" build_lean > "$W/lean.dir" &
   rc=0
   for d in "$IN"/*.json.gz; do

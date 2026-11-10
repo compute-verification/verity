@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 from test_rec_outer import BIN
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")
 C3 = HERE / "fixtures" / "rec-c3-inner"
 PLAIN = HERE / "fixtures" / "rec-coins" / "16-16-8-n64" / "inner-honest"
 

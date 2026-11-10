@@ -122,7 +122,7 @@ fi
 
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/flock/prover HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
@@ -149,7 +149,7 @@ done
 TG=(); TPL=()
 for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
 [ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then

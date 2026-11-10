@@ -24,7 +24,7 @@ if [ "${COMMIT_SCHEME:-rows-sha512}" != rows-sha512 ]; then
 fi
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/flock/prover HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
@@ -74,7 +74,7 @@ mkdir -p $O/window && cp $WIN/{registration,window,partition,index}.json $WIN/m*
 # the verifier's lowering: a synthetic input set of the template (its values are never read)
 $PY -m verity_numerical.bench.generate --subcircuit ${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16} --n 4 --seed 1 --out $W/sets > $O/sets.log 2>&1 || exit 9
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 $PY benchmarks/one_stage/a5.py --bundle $BUNDLE --row-dir $ROWD --partition $PART --window $WIN \
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000

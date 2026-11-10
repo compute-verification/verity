@@ -161,8 +161,8 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
   free -g | head -2; cat /proc/loadavg; nvidia-smi -L 2>/dev/null; } > $O/host-$STEP.txt 2>&1
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd verity/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
@@ -187,7 +187,7 @@ no_build() { [ -z "${PREBUILT:-}" ] || { echo "REFUSED: PREBUILT=$PREBUILT has n
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # the inner statement's prover, statement and replay: on the challenger's coin tree (rec_live --coin-tree's INNER_COIN_SPEC, the
 # prover's own streams then the inner phase's sparse and stacked ones); FC_COINS=tree is today's loopback M0's, on its
@@ -358,7 +358,7 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     TREE_FROM=local
     challenger_end $O/inner/challenger; echo "challenger exit $?"
     if [ $rc = 0 ]; then
-      python3 verity/ml/flock/pod/rec_inner.py tree-held --challenger $O/inner/challenger $DD/inner/s[0-9]* \
+      python3 verity/flock/prover/pod/rec_inner.py tree-held --challenger $O/inner/challenger $DD/inner/s[0-9]* \
         > $O/inner/tree-held.json || rc=1
       cat $O/inner/tree-held.json
     fi
@@ -575,14 +575,14 @@ stage_inner() {
   if [ "${REC_LINKS:-0}" = 1 ]; then
     rm -rf $DD/$1
     K=$K N=$N REC_LINKS=1 FLOCK_PLAIN_LEAVES=$2 /usr/bin/time -v -o $o/time-stage.txt \
-      python3 $REPO/verity/ml/flock/pod/rec_reprice.py stage-chain $DD/$1 > $o/stage.json 2> $o/stage.log
+      python3 $REPO/verity/flock/prover/pod/rec_reprice.py stage-chain $DD/$1 > $o/stage.json 2> $o/stage.log
     echo "stage $1 exit $?"; tail -5 $o/stage.log
     [ -f $DD/$1/inst-$N.bin ] && [ -f $DD/$1/links.json ] || { echo "no wired statement staged in $DD/$1"; return 1; }
     du -sb $DD/$1/* | tee $o/sizes.txt
     return 0
   fi
   K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= FLOCK_OWN_ROWS=1 /usr/bin/time -v -o $o/time-stage.txt \
-    python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
+    python3 -m verity_flock.class_statement --program-module $REPO/verity/flock/prover/pod/rec_reprice.py:program \
     --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
   echo "stage $1 exit $?"; tail -5 $o/stage.log
@@ -598,7 +598,7 @@ stage_inner() {
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
   [ -f $DD/stage/own-partition ] && return 0   # STAGE=0's caller wrote them
-  K=$K N=$N python3 $REPO/verity/ml/flock/pod/rec_reprice.py partition $DD/stage
+  K=$K N=$N python3 $REPO/verity/flock/prover/pod/rec_reprice.py partition $DD/stage
 }
 
 # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement, set up under
@@ -676,7 +676,7 @@ inner)
   cp $D/draw.json $O/inner/
   [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
   if [ "${TREE_FROM:-}" = local ]; then
-    . verity/ml/flock/pod/challenger.sh; challenger_build; challenger_built || exit 1
+    . verity/flock/prover/pod/challenger.sh; challenger_build; challenger_built || exit 1
   fi
   # RELEASE=1: the recursive session's parts, V*'s statements at the inner statement's shape in their order, and its
   # schedule, fixed and public before the inner session (rec_inner.py release-parts), and the release side's Lean loop
@@ -687,7 +687,7 @@ inner)
     $LEAN_BIN rec-inner --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json \
       > $O/inner/rec-inner.json 2> $O/inner/rec-inner.err || { tail -5 $O/inner/rec-inner.err; exit 1; }
     $LEAN_BIN rec-statements --rec-inner $O/inner/rec-inner.json > $O/inner/rec-statements.txt 2>&1 || { tail -5 $O/inner/rec-statements.txt; exit 1; }
-    python3 verity/ml/flock/pod/rec_inner.py release-parts --statements $O/inner/rec-statements.txt \
+    python3 verity/flock/prover/pod/rec_inner.py release-parts --statements $O/inner/rec-statements.txt \
       --windows-s "${RELEASE_WINDOWS_S:-lead=1500,L0=2800,L=900,alg=900,cap=120,other=900}" > $DD/release.json || exit 1
     cp $DD/release.json $O/inner/release.json; cat $O/inner/release.json
     export GPU_TRIES=1
@@ -785,7 +785,7 @@ EOF
   cat $O/icheck/tops.txt
   for w in top unsalted; do
     rm -rf $DD/neg-$w && mkdir -p $DD/neg-$w && cp -r $SESS/public.json $SESS/private.json $DD/neg-$w/ && ln -s $SESS/session $DD/neg-$w/session
-    python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
+    python3 verity/flock/prover/pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
     python3 -m verity_flock.rec_vstar $DD/neg-$w > $O/icheck/neg-$w.json 2> $O/icheck/neg-$w.err; echo "neg $w vstar exit $?"; cat $O/icheck/neg-$w.json
   done
   ;;
@@ -1099,7 +1099,7 @@ EOF
   # Lean loop decided it (its FIREWALL-TIMES line in the part's prove.err); every part released, or the step fails
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
-    python3 verity/ml/flock/pod/rec_inner.py release-report --state $FWS --session $SID \
+    python3 verity/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \
       --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-firewall/prove.err; done) > $O/oprove/release.json
     rr=$?; cat $O/oprove/release.json; [ $rr = 0 ] || { echo "release: the recursive session $SID did not release every part at its time"; exit 1; }
   fi
@@ -1161,7 +1161,7 @@ lean)
   done
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
-      && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
+      && python3 verity/flock/prover/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
     rec_coins $FI neg-$w || echo "rec-coins refused the forged inner $w: its verifies read the inner statement's files"
     NEGS="$NEGS $w"
   done

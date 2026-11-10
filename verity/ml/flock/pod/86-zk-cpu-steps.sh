@@ -41,8 +41,8 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
   free -g | head -2; cat /proc/loadavg; nvidia-smi -L 2>/dev/null; } > $O/host-$STEP.txt 2>&1
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BUILDS=${BUILDS:-$KEY}
 bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
 F=$FW/flock-gpu-link/flock
@@ -52,10 +52,10 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; [ -x $LEAN_FROM/lean-$LSHA/flock-verify ] &
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$FW/challengers/${RESEARCH_RUN_ID:-local-$$} CHALLENGER_PY=python3
-. verity/ml/flock/pod/challenger.sh
+. verity/flock/prover/pod/challenger.sh
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }

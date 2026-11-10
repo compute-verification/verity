@@ -52,13 +52,13 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
-. verity/ml/flock/pod/challenger.sh
+. verity/flock/prover/pod/challenger.sh
 challenger_build
 
 # the CPU prover, cached per pod under its sources' key (76-read-gadget.sh's)
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
@@ -74,7 +74,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 RESEARCH=$(command -v research || true)
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm
 
 D=$S/stage; N=32
 python3 verity/ml/flock/tests/plain_hidden.py --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }

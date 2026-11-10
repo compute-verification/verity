@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# flock-link: apply verity/ml/flock/flock-link-b684b12.patch to the flock b684b12 checkout from 00-setup-cpu.sh, drop
-# verity/ml/flock/live in as crates/flock-live, run the flock-link negatives (in-process verifier) and timed sessions
+# flock-link: apply verity/flock/prover/flock-link-b684b12.patch to the flock b684b12 checkout from 00-setup-cpu.sh, drop
+# verity/flock/prover/live in as crates/flock-live, run the flock-link negatives (in-process verifier) and timed sessions
 # against a verifier PROCESS (loopback, or VERIFIER=host:port for a verifier on another pod).
 # F2 (the pinned census-unit + BLAKE3 union verifier and the GPU unit-table verifier): verity_unit.rs goes into
 # flock-prover, the unit netlists are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
@@ -11,7 +11,7 @@ set -uxo pipefail
 W=/workspace/flock-link; F=$W/flock; O=$RESEARCH_RUN_DIR/out; mkdir -p $O
 source $HOME/.cargo/env
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
-REPO=$(pwd); SRC=$REPO/verity/ml/flock
+REPO=$(pwd); SRC=$REPO/verity/flock/prover
 cd $F
 git checkout -q -- crates/flock-core crates/flock-prover crates/flock-parallel && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
 rm -rf crates/flock-live && cp -r $SRC/live crates/flock-live
@@ -19,7 +19,7 @@ grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcri
 cp $SRC/verity_unit.rs crates/flock-prover/src/r1cs_hashes/verity_unit.rs
 grep -q 'pub mod verity_unit;' crates/flock-prover/src/r1cs_hashes.rs || printf '\npub mod verity_unit;\n' >> crates/flock-prover/src/r1cs_hashes.rs
 N=$W/net; mkdir -p $N
-for pipe in hopper_bf16 hopper_e4m3; do PYTHONPATH=$REPO:$REPO/verity/ml/flock/python python3 $SRC/pod/export_unit.py $pipe $N/net-$pipe.txt 64 | tail -1 | tee -a $O/export.txt; done
+for pipe in hopper_bf16 hopper_e4m3; do PYTHONPATH=$REPO:$REPO/verity/flock/prover/python python3 $SRC/pod/export_unit.py $pipe $N/net-$pipe.txt 64 | tail -1 | tee -a $O/export.txt; done
 sha256sum $N/net-*.txt | tee $O/netlists.sha256
 QUOTA=$(awk '$1 != "max" {print int($1 / $2)}' /sys/fs/cgroup/cpu.max 2>/dev/null); TH=${QUOTA:-$(nproc)}
 export RAYON_NUM_THREADS=$TH

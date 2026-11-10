@@ -1,6 +1,6 @@
 /-
 S0 (`Flock.RecordText`): `RecordText.printT` prints what `Json.compress` prints, on the writers' shared vectors
-(`verity/ml/flock/live/src/record_text_vectors.json`: escapes, key order, literals, integers, floats and a verdict), and
+(`verity/flock/prover/live/src/record_text_vectors.json`: escapes, key order, literals, integers, floats and a verdict), and
 `RecordText.check` accepts exactly the canonical text: reordered keys, whitespace, a number not in `JsonNumber.toString`'s
 form, a duplicate key and a text that isn't JSON are each refused.
 -/

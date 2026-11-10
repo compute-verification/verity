@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")))
 from test_lean_verifier import LEAN, _bit_row_toy  # noqa: E402
 
 from verity.circuits.codec import canonical_json

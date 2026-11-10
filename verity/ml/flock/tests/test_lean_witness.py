@@ -61,7 +61,7 @@ from verity_flock import rec_bindings as RB
 from verity_flock import rec_live as RL
 from verity_flock import rec_vstage as S
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")
 LEAN = HERE.parents[3] / "verity/flock/verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"

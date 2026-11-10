@@ -65,7 +65,7 @@ import numpy as np
 #: the tree a11.py comes from: this file's, else (sent alone into a run's inputs) the working directory's
 TREE = Path(__file__).resolve().parents[2] if (Path(__file__).resolve().parents[1] / "one_stage").is_dir() else Path.cwd()
 for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
-           "verity/ml/flock/python", "."):
+           "verity/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 sys.setrecursionlimit(100000)
 

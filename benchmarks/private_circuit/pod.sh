@@ -13,8 +13,8 @@ set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-flock}; mkdir -p $O $W/bin
 nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo "threads $(nproc)" | tee -a $O/host.txt
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 LKEY=$(cd verity/flock/verifier && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8
@@ -39,7 +39,7 @@ sha256sum $B $L | tee $O/binaries.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 ARGS=(); for c in ${CLS:-16,16,8 64,64,32}; do ARGS+=(--cls "$c"); done
 [ -n "${WIRED:-}" ] && ARGS+=(--wired)
 $W/py/bin/python benchmarks/private_circuit/universal.py "${ARGS[@]}" --n ${N:-64} --warm ${WARM:-1} --runs ${RUNS:-3} --seed ${SEED:-0} \

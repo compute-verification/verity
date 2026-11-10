@@ -25,7 +25,7 @@ export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
+export PYTHONPATH=$SRC:$SRC/verity/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
 RUN=$H/run.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 [ -n "${H1L_J10R:-}" ] && RUN=$H/j10r.py K=${H1L_K:-4608}

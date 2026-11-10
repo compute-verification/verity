@@ -55,7 +55,7 @@ _M32 = 0xFFFFFFFF
 
 def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
     """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): Flock's
-    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
+    ``chacha20_block`` (``verity/flock/prover/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
     s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
          counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
     x = list(s)
