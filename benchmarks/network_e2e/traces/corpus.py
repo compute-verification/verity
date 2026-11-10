@@ -598,7 +598,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),
-               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
+               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "adapters/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     arr = traffic.arrivals(requests, rate)
     ids = [request_id(r["i"]) for r in requests]

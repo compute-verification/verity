@@ -40,5 +40,5 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
           "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
-          "tools/research/src/research/pods/nebius/slot_only.py", "integrations/vllm/tools/ratchet_gate.py",
+          "tools/research/src/research/pods/nebius/slot_only.py", "adapters/vllm/tools/ratchet_gate.py",
           "tests/lint/test_repo_env_reads.py"]

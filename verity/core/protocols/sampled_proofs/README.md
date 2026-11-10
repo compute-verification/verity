@@ -302,7 +302,7 @@ challenger's `service.WindowCommitmentRecord` is a record it admitted, with its 
 stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
 docstring.
 
-Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
+Pinned by `tests/test_one_stage.py`, and the window domain also by `adapters/vllm/tests/commit/test_serving_rows.py`.
 
 ### Registered values
 

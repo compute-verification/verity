@@ -171,7 +171,7 @@ export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
 if [ -n "${SERVE:-}" ]; then
   VPY=${VLLM_PY:-/workspace/jobs/venv312/bin/python}
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-/workspace/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
   case $SERVE in
     tiny) RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC") ;;
     row)

@@ -171,7 +171,7 @@
      "packages/verity/src",
      "backends/sp1/python",
      "backends/numerical/python",
-     "integrations/vllm",
+     "adapters/vllm",
      "backends/flock/python"
     ],
     "missing": [],

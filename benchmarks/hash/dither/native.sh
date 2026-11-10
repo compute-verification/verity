@@ -17,7 +17,7 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 mkdir -p "$OUT"
 # the venv's bin holds ninja, which any JIT build vLLM or FlashInfer starts needs
 export PATH=$(dirname "$PY"):$PATH VLLM_USE_FLASHINFER_SAMPLER=0
-export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH} VLLM_ENABLE_V1_MULTIPROCESSING=0 HF_HOME=${HF_HOME:-/workspace/hf}
+export PYTHONPATH=$PWD/adapters/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH} VLLM_ENABLE_V1_MULTIPROCESSING=0 HF_HOME=${HF_HOME:-/workspace/hf}
 export VLLM_CACHE_ROOT=$(mktemp -d) TORCHINDUCTOR_CACHE_DIR=$(mktemp -d)
 if [ $# -gt 0 ]; then arms=("$@"); else
   arms=(vllm-int8)

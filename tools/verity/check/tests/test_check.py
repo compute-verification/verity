@@ -377,7 +377,7 @@ def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_
     import os
     import subprocess
 
-    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+    p01 = "adapters/vllm/tests/lint/allowlists/p01_core.json"
     repo = tmp_path / "repo"
     repo.mkdir()
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",

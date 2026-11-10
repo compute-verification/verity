@@ -222,7 +222,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
     as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
-    digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
+    digest over `source_identity.code_identity`, which covers `adapters/vllm` and `verity`), so the audit runs on a tree
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
@@ -269,5 +269,5 @@ reads after the seal:
 
 ~~~text
 python window_cost.py PROBE.json --target h200 --project 8,1024,64 [--measure-cpu SCRATCH] \
-    [--stream ../../integrations/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
+    [--stream ../../adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~

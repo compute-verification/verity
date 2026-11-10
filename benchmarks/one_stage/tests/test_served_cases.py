@@ -927,7 +927,7 @@ def test_a_usage_error_exits_64(capsys, argv):
 
 #: the H200's declared target (`pins/NVIDIA_H200.json`), at which V2 serves the 4,32,4 class
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
-#: `integrations/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
+#: `adapters/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256,
         "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}

@@ -58,7 +58,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified law for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }

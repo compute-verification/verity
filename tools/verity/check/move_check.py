@@ -316,7 +316,7 @@ def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
     """Each moved path as written below a directory its old and new paths share (`verity_vllm/program/predict` for
-    `integrations/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
+    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
     names a path of BASE's tree from the root."""
     out: dict[str, str] = {}
     bad: set[str] = set()

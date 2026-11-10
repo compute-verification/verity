@@ -754,7 +754,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
-                    "integrations/vllm/tests/pipeline/fixtures/admission/b16.json)")
+                    "adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None

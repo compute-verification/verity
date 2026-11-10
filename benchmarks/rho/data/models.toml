@@ -43,7 +43,7 @@ router = [["gate", 7168, 256, 58, 58]]
 head = [["head", 7168, 129280, 1, 1]]
 
 # DeepSeek-V4-Pro's sizes are in reference.toml. Its matrices, from
-# integrations/vllm/tests/check/fixtures/deepseek_v4/config.json: q_lora_rank 1536, one 512-wide kv head, 128 query heads
+# adapters/vllm/tests/check/fixtures/deepseek_v4/config.json: q_lora_rank 1536, one 512-wide kv head, 128 query heads
 # of 512, the output projected in 16 groups of 8 heads (o_lora_rank 1024), a 64 x 128 indexer query in the 30 CSA
 # layers; 384 routed experts of 3072, 6 active, 1 shared, in every layer. The compressors, the mHC mixing and the MTP
 # module are left out (under 2% of the parameters). reference.toml's legs (1536) and fanout (65536, wq_b's output) are

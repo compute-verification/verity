@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test_pearl_c_vllm's (`proved_pass`), which loads the sm_120 kernel's run and fixture, the simt twin, the hash-decode and
 # sm_90 prefill tests at import, the reference verifier and its give-up (pearl_c_vllm) over the clear audit, and
 # pearl_c_sm90 (the H100 kernel bench_arm names, the give-up's device path) with the run result and settings it reads.
-inputs = ["verity", "verity/core/protocols/pouw/lean/pearlplus/lakefile.toml", "integrations/vllm/verity_vllm",
+inputs = ["verity", "verity/core/protocols/pouw/lean/pearlplus/lakefile.toml", "adapters/vllm/verity_vllm",
           "tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
           "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",

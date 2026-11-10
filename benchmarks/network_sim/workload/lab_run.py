@@ -108,7 +108,7 @@ from .hardware import OUTSIDE, DeviceGraph
 
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 FABRIC_MS = 10  # the model's delay between a proxy and the client, each way
-PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "integrations" / "vllm")]
+PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "adapters" / "vllm")]
 TAMPERS = ("late", "extra")
 
 
