@@ -21432,7 +21432,7 @@ in a /tmp worktree. Next entry by 01:58Z.
 #8425's land ask follows when 16a3 passes and I mark it.
 
 
-## FUSEDSERVE, 01:50Z (CIR-185): land ask for #8454, and the fused row's forms
+## FUSEDSERVE, 01:13Z (CIR-185): land ask for #8454, and the fused row's forms
 
 - **PR.** https://github.com/compute-verification/verity/pull/8454, head `cursor/proofs-fusedserve-1ffe` at
   `283188b306e357abd9d38735762620aacbb5bdae`, marked ready. The queue has it admitted, landing on a land verdict. I opened
