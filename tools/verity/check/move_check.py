@@ -63,8 +63,9 @@ Every path git sees changed must be one of:
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
   follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
   `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
-  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. `--json` lists under
-  `rules` the paths each of these took (`tokens`, `prefixes`);
+  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. A file the map lists
+  under `[drop] paths` may be deleted. `--json` lists under `rules` the paths each of these took (`tokens`, `prefixes`,
+  `drop`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -1027,10 +1028,14 @@ class Rows:
     `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
     directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
     directory name it nowhere. It reads the directory itself (`verity/ml/flock/`, `verity/ml/flock/*.patch`) and a path
-    below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move."""
+    below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
+
+    `[drop] paths`: the files the move deletes."""
 
     def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree):
         self.pmap, self.base, self.tokens = pmap, base, {}
+        self.drop = {p for data in maps if isinstance(d := data.get("drop"), dict) and isinstance(ps := d.get("paths"), list)
+                     for p in ps if isinstance(p, str)}
         bad = set()
         for data in maps:
             rows = data.get("tokens")
@@ -1585,6 +1590,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             continue
         if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
             report["edits"].append({"path": new, "kind": "package level"})
+            continue
+        if st == "D" and old in rows.drop:
+            report["edits"].append({"path": old, "kind": "dropped"})
+            report["rules"].setdefault("drop", []).append(old)
             continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))

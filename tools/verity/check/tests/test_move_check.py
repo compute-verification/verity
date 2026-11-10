@@ -1553,3 +1553,22 @@ def test_a_moved_path_after_what_the_mover_reads_as_the_root_is_certified(tmp_pa
             [f] = r["refusals"]
             assert f["path"] == "run.sh" and f["hunk"].splitlines()[1:] == ["-" + miss.strip(), "+" + miss.strip().replace(
                 "protocols/pous", "security_proofs/pous")] and r["rules"] == {}, case
+
+
+def test_a_file_the_maps_drop_lists_may_be_deleted(tmp_path):
+    """The map the move's commit names lists the files the move deletes (`[drop] paths`); any other deleted file, and the
+    same one in a range whose commit names no map, is still refused."""
+    drop = "benchmarks/pouw/contents/filler/receipts.toml"
+    files = {**BASE_FILES, LAYOUT_MAP: f'[drop]\npaths = ["{drop}"]\n', drop: 'title = "receipts"\n',
+             "benchmarks/pouw/contents/paths/clear.toml": 'title = "clear"\n'}
+    for case, gone, message, refused in (("listed", [drop], LAYOUT_MSG, []),
+                                         ("unlisted", [drop, "benchmarks/pouw/contents/paths/clear.toml"], LAYOUT_MSG,
+                                          ["benchmarks/pouw/contents/paths/clear.toml"]),
+                                         ("no map", [drop], "move", [drop])):
+        repo, base = _repo(tmp_path / case, files)
+        _git(repo, "rm", "-q", *gone)
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        assert [(f["path"], f["reason"]) for f in r["refusals"]] == [(p, "deleted") for p in refused], case
+        assert r["rules"] == ({"drop": [drop]} if message == LAYOUT_MSG else {}), case
+        assert [e for e in r["edits"] if e["kind"] == "dropped"] == [{"path": p, "kind": "dropped"} for p in r["rules"].get("drop", [])]
