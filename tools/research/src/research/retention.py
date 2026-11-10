@@ -30,11 +30,11 @@ preserved path) is there so that gc never deletes the only copy of data somebody
 STORED. gc deletes on `verified` (the remote holds the artifact; with no remote to ask, as on a node, which holds no store key, the
 replica this store's catalog verified when custody pushed it), on `expired` (the remote holds its manifest and has dropped its blobs
 past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (every blob the remote lacks is under a `withdrawn` label,
-`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. It keeps the path on `uncovered` (the artifact doesn't hold every file now under the
-path at its size, so files custody trimmed never count as stored, whatever the remote says), on `mismatch` (the remote's copy is not
-the artifact's, or a blob is absent that neither rule explains), on `unknown` (the remote has no manifest for it: it never stored
-it) and on `unreachable` (the remote, or with none this store, could not be asked), and an `unreachable` fails the pass (exit 1).
-Every --apply reports how many of each it found.
+`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. It
+keeps the path on `uncovered` (the artifact doesn't hold every file now under the path at its size, so files custody trimmed never
+count as stored, whatever the remote says), on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
+rule explains), on `unknown` (the remote has no manifest for it: it never stored it) and on `unreachable` (the remote, or with none
+this store, could not be asked), and an `unreachable` fails the pass (exit 1). Every --apply reports how many of each it found.
 
 Neither command deletes a path that is, lies in or holds a Lean records tree (LEAN_RECORDS) whose `.lock` a run holds: it is
 refused, naming the run its `.who` names, to retry when that run ends. Each deletion holds those trees' locks while it runs, as
