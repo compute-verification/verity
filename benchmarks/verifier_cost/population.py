@@ -15,7 +15,7 @@ import functools
 import json
 from pathlib import Path
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits import codec
 from verity.ml.circuits.program import input_id
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind

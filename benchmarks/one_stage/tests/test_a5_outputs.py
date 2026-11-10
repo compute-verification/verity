@@ -107,17 +107,8 @@ def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(
         stream.select(reg, closure={u: OUTS for u in range(N)})
     assert e.value.verdict.codes == ("closure",)
     draw = stream.select(reg)
-<<<<<<< 99c8914848
-||||||| merged common ancestors
-    draw = stream.select(register(stream), closure=closure)
-    units, proved = draw.draw["units"], D.proved(draw.draw)
-    assert draw.draw["law"] == "work" and len(units) == K
-    assert set(OUTS) <= set(proved) and set(proved) == set(units) | set(OUTS)
-    assert sorted(draw.draw.get("closure", [])) == sorted(set(OUTS) - set(units))
-=======
     fresh = stream_of(FC.Challenger(f"a5-outputs/{seed}"))
     assert draw.draw == fresh.select(register(fresh)).draw
->>>>>>> 7af4d24fca3e
     units = draw.draw["units"]
     assert draw.draw["law"] == "work" and len(units) == K and "closure" not in draw.draw and D.proved(draw.draw) == units
     got, audit = outcome(stream, draw)

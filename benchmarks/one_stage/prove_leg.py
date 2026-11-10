@@ -51,16 +51,8 @@ Served Definitions (`served`, ``defs``): vLLM's served Definitions as the fronte
 template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values;
 and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
 (``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
-<<<<<<< 99c8914848
-(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
-(`m1_families.block`) is reported refused, not lowered.
-||||||| merged common ancestors
-(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
-(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
-=======
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes Flock's block
-(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
->>>>>>> 7af4d24fca3e
+(`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat or untyped staged; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
@@ -998,7 +990,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
     sample. A shape whose rows alone pass Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
+    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}

@@ -18776,6 +18776,12 @@
    "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185",
    "unfolded_hash": "6a970c9a31b96ac837e4336b2466428a1fa2ab2f0a081b86c8aa7d0e0f9ef6a9"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits"],
+   "assumptions": [],
+   "type_hash": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -19149,6 +19155,303 @@
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
    "unfolded_hash": "bc811676a8dd207405168a40cc7d0cd91d033931a68aa3e240eb3398c2c54a5f"
   },
+  "NetTiming.Witness.ConstantRatePerWindow_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.ConstantRatePerWindow_honest :",
+    "  And",
+    "    (Set.instMembership.mem",
+    "      (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.unitOp",
+    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2)) 1)",
+    "      ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit",
+    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
+    "    (Eq",
+    "      (List.take (instHMul.hMul 0 (instHMul.hMul 1 2))",
+    "        ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit",
+    "          (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
+    "      List.nil)"
+   ],
+   "assumptions": [],
+   "type_hash": "2f5a03c46ca58bbdd31a2238b994c5a51d837c780edfe781099ec58f706f80e4"
+  },
+  "NetTiming.Witness.ConstantRate_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.ConstantRate_honest :",
+    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.unitOp 4 1)",
+    "    ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit 4)"
+   ],
+   "assumptions": [],
+   "type_hash": "0368c72c64a93ece962ecbc50b337c8031d30e23900a83944a69fe53f2a77352"
+  },
+  "NetTiming.Witness.DecodableConstantRatePerWindow_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.DecodableConstantRatePerWindow_honest :",
+    "  And (Eq (NetTiming.Witness.fxHonestI.obsRun Unit.unit (instHMul.hMul 0 (instHMul.hMul 1 2))) List.nil)",
+    "    (And",
+    "      (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op",
+    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))",
+    "        (NetTiming.Witness.fxHonestI.obsRun Unit.unit (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
+    "      (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
+    "        (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1)))"
+   ],
+   "assumptions": [],
+   "type_hash": "03be871370784ad9578fe272a62bd93452e0debfd02d11c316cf70aeaaf0c943"
+  },
+  "NetTiming.Witness.DecodableConstantRate_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.DecodableConstantRate_honest :",
+    "  And",
+    "    (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op 4",
+    "      (NetTiming.Witness.fxHonestI.obsRun Unit.unit 4))",
+    "    (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
+    "      (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "a70c86606c900f4c67102e5d8481c8e1ecadd093008eefefd33dae06c507748b"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul 2 1)) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "8bc0fc94c22b4d8605808c7384a891db56b68a2eb10ddd817af8953ba6550d87"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun o =>",
+    "          And",
+    "            (Set.instMembership.mem",
+    "              (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll",
+    "                (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2)) 1)",
+    "              o)",
+    "            (Eq (List.take (instHMul.hMul 0 (instHMul.hMul 1 2)) o) List.nil)).encard",
+    "      (instHPow.hPow (instHMul.hMul (instHPow.hPow 2 1) (instHPow.hPow 1 (instHMul.hMul 1 2))) 2).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "d0d3108249c5bfc00a5003a390358ae12a1345d040cd4e06595f840b1043f513"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul (instMinNat.min 2 2) 1)) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "3a8dec14a1df8033ff9cf2e0f42a5d67f4039b25ed80a121bf5618ae16879af9"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul 2 1)) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "8bc0fc94c22b4d8605808c7384a891db56b68a2eb10ddd817af8953ba6550d87"
+  },
+  "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest :",
+    "  And (NetTiming.Witness.notLay.Fits NetTiming.Witness.sampProg 1)",
+    "    (And",
+    "      (instLEENat.le",
+    "        (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
+    "            Finset.instEmptyCollection.emptyCollection fun x => Bool.false).encard",
+    "        (instHPow.hPow 2 1).cast)",
+    "      (And",
+    "        (∀ (F : Finset Nat),",
+    "          SetLike.instMembership.mem",
+    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)) F →",
+    "            instLENat.le (NetTiming.faultyBits NetTiming.Witness.sampProg NetTiming.Witness.sampPart F) 3)",
+    "        (And",
+    "          (SetLike.instMembership.mem",
+    "            (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4))",
+    "            (Finset.instSingleton.singleton 0))",
+    "          (Set.instMembership.mem",
+    "            (NetTiming.AccSeqsSampled NetTiming.Witness.sampProg NetTiming.Witness.sampPart NetTiming.Witness.sampDesign",
+    "              NetTiming.Witness.notLay 1",
+    "              (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
+    "                Finset.instEmptyCollection.emptyCollection fun x => Bool.false)",
+    "              (1 / 4) (fun x x_1 => List.cons Bool.false List.nil) 1)",
+    "            (List.cons NetTiming.Witness.obs1 List.nil)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "be1c6294334e0ee9ef76a316a5bd397dc428c589fe029c33f16827bc649bb99a"
+  },
+  "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul",
+    "            (instHMul.hMul (instHPow.hPow 2 1)",
+    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)).card)",
+    "            (instHPow.hPow 2 3))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "d31975fa452b62cb6fa22da1c8e99b234f01907a1eac379e0237c4e33ca4ae5f"
+  },
+  "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (Eq (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 0 (instHMul.hMul 1 2))) List.nil)",
+    "            (And",
+    "              (NetTiming.Witness.acceptAll",
+    "                (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
+    "              (Eq",
+    "                (NetTiming.Witness.fxLeakDec",
+    "                  (NetTiming.Witness.fxLeakI.wireRun z (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
+    "                z))).encard",
+    "      (instHPow.hPow (instHMul.hMul (instHPow.hPow 2 1) (instHPow.hPow 1 (instHMul.hMul 1 2))) 2).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "24fc042f74c351ff00111d93f9fe589190866852b283566db6a1c9766bcb9df0"
+  },
+  "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul (instMinNat.min 2 2) 1)) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "f9927410607a6abb311d369eecff1ce4fe886d3f0a7319985f5e438a14762b17"
+  },
+  "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "30e109ae8259ca7d82a73dcd193752728ce1878ae671d355dda7f9589ea5ae14"
+  },
+  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "b95457a291b12d33f669614bccaf6dfe6214db96dd065740ee82410d83871691"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHPow.hPow",
+    "            (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2))",
+    "            2).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "e8473720806791eb3c1b3d6e5b74613ffd871cc6942e9d2f1c7c0350f5852e61"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "e9804570257e38245ab7abda1ff623ed8c62dc48cdae3a17112633c3b5b6c2b7"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
+    "      (instHPow.hPow",
+    "          (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2)) 2).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "6d89ee450eb36c97668699bef9f3405a3da163844d9b219f6c372da9b68c56bf"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "3eafe73f21390c2e120cb879038944495ab8c62d872d7928f2404a1207bbf828"
+  },
+  "NetTiming.Witness.Ingress_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.Ingress_honest :",
+    "  And (NetTiming.StatusComplete 4 (NetTiming.Witness.inI.obsRun Unit.unit 4))",
+    "    (And (NetTiming.Packed NetTiming.Witness.inI.certifier)",
+    "      (And (NetTiming.Allocated NetTiming.Witness.inI.certifier fun x => 1)",
+    "        (And (NetTiming.JitterBounded NetTiming.Witness.inI.certifier 1)",
+    "          (NetTiming.Regenerates NetTiming.Witness.inI.certifier fun x o => o))))"
+   ],
+   "assumptions": [],
+   "type_hash": "1983554e44d844245a8190d2baffabbee3dac123ce3bb9672a2ba41957a174a2"
+  },
   "NetTiming.Witness.PeriodLeakAccepted_honest": {
    "owner": "@network-accounting",
    "signature": [
@@ -19206,6 +19509,39 @@
     "reads": []
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakAccepted_honest :",
+    "  And",
+    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
+    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
+    "        (NetTiming.Witness.fxRows.tapRecord NetTiming.Witness.fxRows_wf 4 1).fits s)",
+    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
+    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
+    "        ∀ (c : Fin 3), instLENat.le (s.cells c) 6)"
+   ],
+   "assumptions": [],
+   "type_hash": "aa2705a63c06e827f3d2a4ec5ef63876b0a75393d352cc66b3fc007e665f8a48"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun x =>",
+    "        And (∀ (x : Fin 1), True)",
+    "          (Not",
+    "            (NetTiming.PooledGood (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => NetTiming.Witness.notStmt)",
+    "              (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) 1",
+    "              (fun x => Finset.instSingleton.singleton 0) fun x => List.cons NetTiming.Witness.obs0 List.nil)))",
+    "      (instHAdd.hAdd (instHAdd.hAdd (1 / 2) (Finset.univ.sum fun x => 0)) (Finset.univ.sum fun x => 0)))"
+   ],
+   "assumptions": [],
+   "type_hash": "8641b997c6ff27c256f4d0aa65fa66524438710f5d00cb88e2301262f03c3df0"
   },
   "NetTiming.Witness.PooledLeakCarried_nontrivial": {
    "owner": "@proofs",
@@ -26118,342 +26454,6 @@
    },
    "type_hash": "129a15e5ba38cbf426e8bf108ce5b819f0ed273352179a99b553e2155d002754",
    "unfolded_hash": "34781449a0a3c8f0ab53885fda423f5d6673b49c72fd1be9fc56713f08f055c2"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits"],
-   "assumptions": [],
-   "type_hash": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72"
-  },
-  "NetTiming.Witness.ConstantRatePerWindow_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.ConstantRatePerWindow_honest :",
-    "  And",
-    "    (Set.instMembership.mem",
-    "      (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.unitOp",
-    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2)) 1)",
-    "      ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit",
-    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
-    "    (Eq",
-    "      (List.take (instHMul.hMul 0 (instHMul.hMul 1 2))",
-    "        ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit",
-    "          (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
-    "      List.nil)"
-   ],
-   "assumptions": [],
-   "type_hash": "2f5a03c46ca58bbdd31a2238b994c5a51d837c780edfe781099ec58f706f80e4"
-  },
-  "NetTiming.Witness.ConstantRate_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.ConstantRate_honest :",
-    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.unitOp 4 1)",
-    "    ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit 4)"
-   ],
-   "assumptions": [],
-   "type_hash": "0368c72c64a93ece962ecbc50b337c8031d30e23900a83944a69fe53f2a77352"
-  },
-  "NetTiming.Witness.DecodableConstantRatePerWindow_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.DecodableConstantRatePerWindow_honest :",
-    "  And (Eq (NetTiming.Witness.fxHonestI.obsRun Unit.unit (instHMul.hMul 0 (instHMul.hMul 1 2))) List.nil)",
-    "    (And",
-    "      (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op",
-    "        (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))",
-    "        (NetTiming.Witness.fxHonestI.obsRun Unit.unit (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
-    "      (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
-    "        (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1)))"
-   ],
-   "assumptions": [],
-   "type_hash": "03be871370784ad9578fe272a62bd93452e0debfd02d11c316cf70aeaaf0c943"
-  },
-  "NetTiming.Witness.DecodableConstantRate_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.DecodableConstantRate_honest :",
-    "  And",
-    "    (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op 4",
-    "      (NetTiming.Witness.fxHonestI.obsRun Unit.unit 4))",
-    "    (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
-    "      (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1))"
-   ],
-   "assumptions": [],
-   "type_hash": "a70c86606c900f4c67102e5d8481c8e1ecadd093008eefefd33dae06c507748b"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul 2 1)) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "8bc0fc94c22b4d8605808c7384a891db56b68a2eb10ddd817af8953ba6550d87"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun o =>",
-    "          And",
-    "            (Set.instMembership.mem",
-    "              (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll",
-    "                (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2)) 1)",
-    "              o)",
-    "            (Eq (List.take (instHMul.hMul 0 (instHMul.hMul 1 2)) o) List.nil)).encard",
-    "      (instHPow.hPow (instHMul.hMul (instHPow.hPow 2 1) (instHPow.hPow 1 (instHMul.hMul 1 2))) 2).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "d0d3108249c5bfc00a5003a390358ae12a1345d040cd4e06595f840b1043f513"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul (instMinNat.min 2 2) 1)) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "3a8dec14a1df8033ff9cf2e0f42a5d67f4039b25ed80a121bf5618ae16879af9"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul 2 1)) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "8bc0fc94c22b4d8605808c7384a891db56b68a2eb10ddd817af8953ba6550d87"
-  },
-  "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsSampledLe_honest :",
-    "  And (NetTiming.Witness.notLay.Fits NetTiming.Witness.sampProg 1)",
-    "    (And",
-    "      (instLEENat.le",
-    "        (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
-    "            Finset.instEmptyCollection.emptyCollection fun x => Bool.false).encard",
-    "        (instHPow.hPow 2 1).cast)",
-    "      (And",
-    "        (∀ (F : Finset Nat),",
-    "          SetLike.instMembership.mem",
-    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)) F →",
-    "            instLENat.le (NetTiming.faultyBits NetTiming.Witness.sampProg NetTiming.Witness.sampPart F) 3)",
-    "        (And",
-    "          (SetLike.instMembership.mem",
-    "            (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4))",
-    "            (Finset.instSingleton.singleton 0))",
-    "          (Set.instMembership.mem",
-    "            (NetTiming.AccSeqsSampled NetTiming.Witness.sampProg NetTiming.Witness.sampPart NetTiming.Witness.sampDesign",
-    "              NetTiming.Witness.notLay 1",
-    "              (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
-    "                Finset.instEmptyCollection.emptyCollection fun x => Bool.false)",
-    "              (1 / 4) (fun x x_1 => List.cons Bool.false List.nil) 1)",
-    "            (List.cons NetTiming.Witness.obs1 List.nil)))))"
-   ],
-   "assumptions": [],
-   "type_hash": "be1c6294334e0ee9ef76a316a5bd397dc428c589fe029c33f16827bc649bb99a"
-  },
-  "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
-    "      (instHMul.hMul",
-    "          (instHMul.hMul",
-    "            (instHMul.hMul (instHPow.hPow 2 1)",
-    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)).card)",
-    "            (instHPow.hPow 2 3))",
-    "          (instHPow.hPow 1 1)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "d31975fa452b62cb6fa22da1c8e99b234f01907a1eac379e0237c4e33ca4ae5f"
-  },
-  "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (Eq (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 0 (instHMul.hMul 1 2))) List.nil)",
-    "            (And",
-    "              (NetTiming.Witness.acceptAll",
-    "                (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
-    "              (Eq",
-    "                (NetTiming.Witness.fxLeakDec",
-    "                  (NetTiming.Witness.fxLeakI.wireRun z (instHMul.hMul (instHAdd.hAdd 0 2) (instHMul.hMul 1 2))))",
-    "                z))).encard",
-    "      (instHPow.hPow (instHMul.hMul (instHPow.hPow 2 1) (instHPow.hPow 1 (instHMul.hMul 1 2))) 2).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "24fc042f74c351ff00111d93f9fe589190866852b283566db6a1c9766bcb9df0"
-  },
-  "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
-    "      (instHMul.hMul (instHPow.hPow 2 (instHMul.hMul (instMinNat.min 2 2) 1)) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "f9927410607a6abb311d369eecff1ce4fe886d3f0a7319985f5e438a14762b17"
-  },
-  "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
-    "      (instHMul.hMul",
-    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
-    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
-    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
-   ],
-   "assumptions": [],
-   "type_hash": "30e109ae8259ca7d82a73dcd193752728ce1878ae671d355dda7f9589ea5ae14"
-  },
-  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
-    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "b95457a291b12d33f669614bccaf6dfe6214db96dd065740ee82410d83871691"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
-    "      (instHMul.hMul",
-    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
-    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
-    "        (instHPow.hPow",
-    "            (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2))",
-    "            2).cast))"
-   ],
-   "assumptions": [],
-   "type_hash": "e8473720806791eb3c1b3d6e5b74613ffd871cc6942e9d2f1c7c0350f5852e61"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
-    "      (instHMul.hMul",
-    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
-    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
-    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
-   ],
-   "assumptions": [],
-   "type_hash": "e9804570257e38245ab7abda1ff623ed8c62dc48cdae3a17112633c3b5b6c2b7"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
-    "      (instHPow.hPow",
-    "          (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2)) 2).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "6d89ee450eb36c97668699bef9f3405a3da163844d9b219f6c372da9b68c56bf"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (Set.ofPred fun z =>",
-    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
-    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
-    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "3eafe73f21390c2e120cb879038944495ab8c62d872d7928f2404a1207bbf828"
-  },
-  "NetTiming.Witness.Ingress_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.Ingress_honest :",
-    "  And (NetTiming.StatusComplete 4 (NetTiming.Witness.inI.obsRun Unit.unit 4))",
-    "    (And (NetTiming.Packed NetTiming.Witness.inI.certifier)",
-    "      (And (NetTiming.Allocated NetTiming.Witness.inI.certifier fun x => 1)",
-    "        (And (NetTiming.JitterBounded NetTiming.Witness.inI.certifier 1)",
-    "          (NetTiming.Regenerates NetTiming.Witness.inI.certifier fun x o => o))))"
-   ],
-   "assumptions": [],
-   "type_hash": "1983554e44d844245a8190d2baffabbee3dac123ce3bb9672a2ba41957a174a2"
-  },
-  "NetTiming.Witness.PooledLeakAccepted_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.PooledLeakAccepted_honest :",
-    "  And",
-    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
-    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
-    "        (NetTiming.Witness.fxRows.tapRecord NetTiming.Witness.fxRows_wf 4 1).fits s)",
-    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
-    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
-    "        ∀ (c : Fin 3), instLENat.le (s.cells c) 6)"
-   ],
-   "assumptions": [],
-   "type_hash": "aa2705a63c06e827f3d2a4ec5ef63876b0a75393d352cc66b3fc007e665f8a48"
-  },
-  "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial :",
-    "  Not",
-    "    (Real.instLE.le",
-    "      (Claims.Pr fun x =>",
-    "        And (∀ (x : Fin 1), True)",
-    "          (Not",
-    "            (NetTiming.PooledGood (fun x => NetTiming.Witness.notLay) (fun x => 1)",
-    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => NetTiming.Witness.notStmt)",
-    "              (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) 1",
-    "              (fun x => Finset.instSingleton.singleton 0) fun x => List.cons NetTiming.Witness.obs0 List.nil)))",
-    "      (instHAdd.hAdd (instHAdd.hAdd (1 / 2) (Finset.univ.sum fun x => 0)) (Finset.univ.sum fun x => 0)))"
-   ],
-   "assumptions": [],
-   "type_hash": "8641b997c6ff27c256f4d0aa65fa66524438710f5d00cb88e2301262f03c3df0"
   }
  },
  "shape": {
@@ -54868,12 +54868,12 @@
    }
   },
   "Proofs.Flock.SpotFlock.FrameIsAt": {
-   "digest": "52a46e1bd6e59fd61f543921d4e5e85df65a78555610030fa5c37af62fd718dd",
+   "digest": "213d63e005d4183fefcdc1d793b08fb15403ffd6ca863986683e4552dabcfab4",
    "definitions": {
-    "SpotFlock.readKey": "70b32cdfb264f29efbd987e22776fcc9aae3ee592a10d6d8e4d6a1f1488cdf05",
+    "SpotFlock.readKey": "bbfd28f71fb2fe3a6fff364f0ad8b71ab2cfe2c857d9a65ff602ac19b66b5d71",
     "SpotFlock.readKeyAt": "3d56f974fe675daa231a7a410d59f058ac0107e6775c2b9bd0624f68df8e35cf",
     "SpotFlock.readRoots": "6a6ad67417da3c5cff920562be415492a2812df5f932c002e49aaca54a8d8a96",
-    "SpotFlock.readsInterior": "6ecac38e9d1811fb6d0bd5a02a91243cfddf13fb833c507cc17f28ba1f4c6907"
+    "SpotFlock.readsInterior": "ab04560bc4f8404ae016141b7a0e8ea4d4367d68613bc3e9df107a442e7fbd0a"
    }
   },
   "Proofs.Flock.SpotFlock.FrameIsBuilt": {
@@ -56979,7 +56979,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "47e70bba011fe9d5f0776cd32165ea64e989b10480e2d17b7b6802b71e5a577f",
+   "digest": "475195c6a08ddb4930ce0d503b4ae8e05ba3b695be2ee31ccb9828154fff97a9",
    "definitions": {
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
@@ -57060,7 +57060,7 @@
     "Spot.SecondStage.portOf": "c1967fc629b74c9ad002805342bb69242a252d54d37870319256adbcb02e5229",
     "Spot.SecondStage.posOf": "02385fb4fb2e0b22c1ed739e61259071d1b49d727dae0a74bfd4e916a152b907",
     "Spot.SecondStage.putAt": "323fb65624aa3d6eb14c574e83795fbb65c99eb62e128ffa94630b66c5a1761b",
-    "Spot.SecondStage.readOk": "10b6dfdbb6811991d775369dc841d26c22d8e5ff7df70cc319dfdbba2671c21c",
+    "Spot.SecondStage.readOk": "edc579139345ea815cb35618b10916bef22e5576defa22c1b1758b5da4b69a53",
     "Spot.SecondStage.refOf": "cd9a86dfcc668788774ec382d31696c4fe04f91aa0e8c22057e01ccab0bb9825",
     "Spot.SecondStage.refReadsOf": "184901e7d161373ea20732b6d2a62adfbe37ba3b0de114d7690306315106b81f",
     "Spot.SecondStage.refsOk": "b5433edee01d43b2ffad82171bdb9780c8682b7fb64b08e12ded8e43b295bc73",

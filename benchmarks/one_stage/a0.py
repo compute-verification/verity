@@ -286,21 +286,11 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = ()) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-<<<<<<< 99c8914848
     `hold_registered`) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds; `zk`, a `--zk`
     session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of
-    `verify`'s (a plain session's ``--coins os --stratified K``). ``st["archived"]``, a dict a run's members share: a
+    `verify`'s (a plain session's ``--coins tree --stratified K``). ``st["archived"]``, a dict a run's members share: a
     circuit file archived once, by its file's
-||||||| merged common ancestors
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
-=======
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
->>>>>>> 7af4d24fca3e
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
