@@ -1322,7 +1322,15 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     the ones `audit_from_facts` runs on the live lock too (the judge) and of `facts_config`, whose slice `build_inputs`
     holds.  The exceptions, each read by hand: `proved` takes `guarantees`, `shape` and `witnesses` and `listed_premises`
     the premise sections only to fill the lock slice it gives the prover's `facts_of` (`facts_config` again) and
-    `assign` (the names); it loads the prover's lock itself (`qpol`), whose `guarantees` it reads as empty or not."""
+    `assign` (the names); it loads the prover's lock itself (`qpol`), whose `guarantees` it reads as empty or not.
+
+    A lock loaded by its path is handed down by nobody, so that walk does not meet it.  Every call of `load` and every
+    use of `POLICY` in `check.py`, a mention in an f-string and a test that the file is there aside, is therefore in a
+    function listed here with the sections it reads of that lock, which the same walk finds from the load.  One that a
+    step before the judge runs (`before`) reads only what `build_inputs` compares; a new one fails until it is listed,
+    and as a handed-down read does when it reads more.  The others (`apart`) are the judge's, called only where
+    `audit_from_facts` calls them too, on the locks of the tree it is given, or no step of an audit.  The lock's file is
+    named by `POLICY` alone, and what `check.py` calls of the siblings it loads never names it."""
     judge = {"_finish", "judge", "inline_failures", "renamed_current", "audit.judged", "facts_config"}
     names = {"proved": {"guarantees", "shape", "witnesses"}, "listed_premises": {"assumptions", "domain", "open"}}
     funcs: dict[str, ast.FunctionDef] = {}
@@ -1331,50 +1339,63 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
         for n in ast.walk(top):
             if isinstance(n, ast.FunctionDef):
                 funcs[n.name if n is top else f"{top.name}.{n.name}"] = n
-    todo = [("audit", {"policy", "current"}), ("proved", {"policy", "qpol"}), ("replay_step", {"policy"})]
-    reads: dict[str, set[str]] = {}
-    odd, loose = set(), set()
-    while todo:
-        name, held = todo.pop(0)
-        if name in reads or name in judge:
-            continue
-        keys, used = reads.setdefault(name, set()), set()
-        for n in ast.walk(funcs[name]):
-            f = getattr(n, "func", None)
-            if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id in held \
-                    and isinstance(n.slice, ast.Constant):
-                keys.add(n.slice.value)
-                used.add(id(n.value))
-            elif isinstance(n, ast.Compare) and len(n.ops) == 1 and isinstance(n.ops[0], (ast.Is, ast.IsNot, ast.In, ast.NotIn)):
-                for side, other in ((n.left, n.comparators[0]), (n.comparators[0], n.left)):
-                    if isinstance(side, ast.Name) and side.id in held and (isinstance(n.ops[0], (ast.Is, ast.IsNot)) or (
-                            side is n.comparators[0] and isinstance(other, ast.Constant))):
-                        keys.update([other.value] if isinstance(n.ops[0], (ast.In, ast.NotIn)) else [])
-                        used.add(id(side))
-            elif isinstance(n, ast.Call) and isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) \
-                    and f.value.id in held and f.attr == "get" and n.args and isinstance(n.args[0], ast.Constant):
-                keys.add(n.args[0].value)
-                used.add(id(f.value))
-            elif isinstance(n, ast.Call):
-                args = list(n.args)
-                while args and isinstance(args[0], ast.Name) and (
-                        (isinstance(f, ast.Attribute) and f.attr == "submit") or (isinstance(f, ast.Name) and f.id == "timed")):
-                    f, args = args[0], args[1:]
-                given = [(i, a) for i, a in enumerate(args)] + [(k.arg, k.value) for k in n.keywords]
-                for at, a in given:
-                    if not (isinstance(a, ast.Name) and a.id in held):
-                        continue
-                    used.add(id(a))
-                    callee = f.id if isinstance(f, ast.Name) else None
-                    callee = next((c for c in (f"{name}.{callee}", f"{callee}.__init__", callee) if c in funcs), None)
-                    params = [p.arg for p in funcs[callee].args.args][callee.endswith(".__init__"):] if callee else []
-                    if isinstance(at, int) and at >= len(params):
-                        loose.add(f"{name} -> {ast.unparse(f)}")
-                    else:
-                        todo.append((callee, {params[at] if isinstance(at, int) else at}))
-        if any(isinstance(n, ast.Name) and n.id in held and isinstance(n.ctx, ast.Load) and id(n) not in used
-               for n in ast.walk(funcs[name])):
-            odd.add(name)
+
+    def called(n: ast.Call) -> tuple[ast.AST, list[ast.AST]]:
+        """(What ``n`` calls, its positional arguments), through `timed` and an executor's `submit`."""
+        f, args = n.func, list(n.args)
+        while args and isinstance(args[0], ast.Name) and (
+                (isinstance(f, ast.Attribute) and f.attr == "submit") or (isinstance(f, ast.Name) and f.id == "timed")):
+            f, args = args[0], args[1:]
+        return f, args
+
+    def walk(todo: list[tuple[str, set[str]]], short: set[str] = judge) -> tuple[dict[str, set[str]], set[str], set[str]]:
+        """({function: the sections it reads of the lock it holds}, the functions that use that lock in a way this does
+        not read, the calls that hand it past the callee's parameters) from ``todo``, each a function and the names it
+        holds the lock under, short of the functions in ``short``."""
+        reads: dict[str, set[str]] = {}
+        odd, loose = set(), set()
+        while todo:
+            name, held = todo.pop(0)
+            if name in reads or name in short:
+                continue
+            keys, used = reads.setdefault(name, set()), set()
+            for n in ast.walk(funcs[name]):
+                f = getattr(n, "func", None)
+                if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id in held \
+                        and isinstance(n.slice, ast.Constant):
+                    keys.add(n.slice.value)
+                    used.add(id(n.value))
+                elif isinstance(n, ast.Compare) and len(n.ops) == 1 \
+                        and isinstance(n.ops[0], (ast.Is, ast.IsNot, ast.In, ast.NotIn)):
+                    for side, other in ((n.left, n.comparators[0]), (n.comparators[0], n.left)):
+                        if isinstance(side, ast.Name) and side.id in held and (isinstance(n.ops[0], (ast.Is, ast.IsNot)) or (
+                                side is n.comparators[0] and isinstance(other, ast.Constant))):
+                            keys.update([other.value] if isinstance(n.ops[0], (ast.In, ast.NotIn)) else [])
+                            used.add(id(side))
+                elif isinstance(n, ast.Call) and isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) \
+                        and f.value.id in held and f.attr == "get" and n.args and isinstance(n.args[0], ast.Constant):
+                    keys.add(n.args[0].value)
+                    used.add(id(f.value))
+                elif isinstance(n, ast.Call):
+                    f, args = called(n)
+                    given = [(i, a) for i, a in enumerate(args)] + [(k.arg, k.value) for k in n.keywords]
+                    for at, a in given:
+                        if not (isinstance(a, ast.Name) and a.id in held):
+                            continue
+                        used.add(id(a))
+                        callee = f.id if isinstance(f, ast.Name) else None
+                        callee = next((c for c in (f"{name}.{callee}", f"{callee}.__init__", callee) if c in funcs), None)
+                        params = [p.arg for p in funcs[callee].args.args][callee.endswith(".__init__"):] if callee else []
+                        if isinstance(at, int) and at >= len(params):
+                            loose.add(f"{name} -> {ast.unparse(f)}")
+                        else:
+                            todo.append((callee, {params[at] if isinstance(at, int) else at}))
+            if any(isinstance(n, ast.Name) and n.id in held and isinstance(n.ctx, ast.Load) and id(n) not in used
+                   for n in ast.walk(funcs[name])):
+                odd.add(name)
+        return reads, odd, loose
+
+    reads, odd, loose = walk([("audit", {"policy", "current"}), ("proved", {"policy", "qpol"}), ("replay_step", {"policy"})])
     # `final_replay(*args)` is `replay_step(*args)`, walked from here; `Pipeline` keeps the lock, and only to hand it to
     # `replay_step`; `facts_key` reads `FINDINGS_SECTIONS` by a variable
     assert loose == {"audit -> final_replay"} and odd == {"Pipeline.__init__", "facts_key"}, (loose, odd)
@@ -1383,11 +1404,89 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     assert {"tests", "scans", "listings", "dependency_scans", "facts_of", "facts_key", "proved", "lift", "replay_step",
             "Pipeline.__init__", "run_paths"} <= set(reads), sorted(reads)
     assert not set(A.FINDINGS_SECTIONS) & A.JUDGED
+
+    parent = {id(c): p for p in ast.walk(module) for c in ast.iter_child_nodes(p)}
+    owner = {id(n): name for name, f in funcs.items() for n in ast.walk(f)}     # the innermost: a nested one is listed later
+
+    def sections(lock: ast.AST) -> set[str] | None:
+        """The sections read of the lock the expression ``lock`` gives: the one it is asked for there, or what the walk
+        finds from the name it is bound to or from the function it is handed to; None (all of it) when this can't tell."""
+        use, key = parent[id(lock)], None
+        if isinstance(use, ast.Attribute) and use.attr == "get" and isinstance(got := parent[id(use)], ast.Call) and got.args:
+            key = got.args[0]
+        elif isinstance(use, ast.Subscript) and use.value is lock:
+            key = use.slice
+        if isinstance(key, ast.Constant):
+            return {key.value}
+        if isinstance(use, ast.Assign) and len(use.targets) == 1 and isinstance(use.targets[0], ast.Name):
+            start = (owner[id(lock)], {use.targets[0].id})
+        elif isinstance(use, ast.Call) and lock in use.args and isinstance(use.func, ast.Name) and use.func.id in funcs:
+            start = (use.func.id, {funcs[use.func.id].args.args[use.args.index(lock)].arg})
+        else:
+            return None
+        found, unread, past = walk([start], set())
+        return None if unread or past else set().union(*found.values())
+
+    by_path: dict[str, set[str] | None] = {}
+    for n in ast.walk(module):
+        if not (isinstance(n, ast.Name) and n.id in ("load", "POLICY") and isinstance(n.ctx, ast.Load)):
+            continue
+        use, lock = parent[id(n)], None
+        if n.id == "load":
+            lock = use if isinstance(use, ast.Call) and use.func is n else None
+        else:
+            path = isinstance(use, ast.BinOp) and isinstance(use.op, ast.Div) and use.right is n
+            how = parent[id(use)] if path else use
+            if isinstance(how, ast.FormattedValue) or (path and isinstance(how, ast.Attribute) and how.attr in ("exists", "is_file")):
+                continue
+            # `json.loads((pkg / POLICY).read_text())` is the lock, as `load(pkg)` is
+            parsed = parent[id(parent[id(how)])] if path and isinstance(how, ast.Attribute) and how.attr == "read_text" else None
+            lock = parsed if isinstance(parsed, ast.Call) and ast.unparse(parsed.func) == "json.loads" else None
+        got, name = None if lock is None else sections(lock), owner.get(id(n), "")
+        by_path[name] = None if got is None or by_path.get(name, set()) is None else by_path.get(name, set()) | got
+    whole = None
+    before = {"memory_refusal": {"proved_in"}, "main": {"proved_in"},       # which packages a run audits, and on what machine
+              "proved": {"roots", "exempt", "guarantees", "compile_time"}}   # the prover's lock, `qpol` above
+    apart = {"_open": whole,                                                 # the lock the walk starts from: `policy` in `audit`
+             "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
+             "load": whole, "dump": whole,                                   # the reader and the writer themselves
+             "packages": whole,                                              # the file's name, among a directory's
+             "controls_of": whole}                                           # a control's copy of a fixture
+    for name, got in by_path.items():
+        if name not in apart:
+            reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
     for name, keys in sorted(reads.items()):
         assert not (bad := (keys & A.JUDGED) - names.get(name, set())), (
             f"`{name}` reads the lock's {', '.join(sorted(bad))} before the judge, so two locks that differ there no longer "
             f"give an audit the same build, facts, replay or tests: read it in the judge, or take the section out of `JUDGED` "
             f"(`build_inputs` then compares it, and a lock run that rewrites it keeps no pass for its lock commit)")
+    listed = before | apart
+    changed = {f: by_path.get(f, "no load") for f in sorted({*by_path, *listed}) if by_path.get(f, "") != listed.get(f, "")}
+    assert not changed, (
+        f"check.py's loads of a lock by its path changed ({changed}): list each function with the sections it reads of that "
+        f"lock, under `before` when a step of `audit` before the judge runs it, else under `apart` with why it is apart")
+
+    def callers(name: str) -> set[str]:
+        return {owner.get(id(n), "") for n in ast.walk(module) if isinstance(n, ast.Call) and getattr(called(n)[0], "id", None) == name}
+
+    both, judged = {"audit", "audit_from_facts"}, {"audit.judged", "audit_from_facts.judged"}
+    assert {f: callers(f) for f in ("_open", "_finish", "read_by_dependents", "tree_roles", "reads_home", "homes")} == {
+        "_open": both, "_finish": both, "read_by_dependents": both, "tree_roles": judged, "reads_home": judged,
+        "homes": {"reads_home"}}, "a load that is apart as the judge's is called only where `audit_from_facts` calls it too"
+    assert all("rep, policy, work = _open(pkg, out)" in ast.unparse(funcs[f]) for f in both), "the name the walk starts from"
+    assert [n.value for n in ast.walk(module) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and (n.value == A.POLICY or n.value.endswith("/" + A.POLICY))] == [A.POLICY], "a lock's path that `POLICY` does not name"
+    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
+    # `upstream.py`'s own command line, and check.py calls neither
+    siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
+    naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parent / f"{s}.py").read_text()).body
+              if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
+                     for n in ast.walk(top))}
+    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
+        f"of the siblings check.py loads ({', '.join(sorted(siblings))}), these name the lock's file: {sorted(naming)}; one that "
+        f"a step before the judge calls reads the lock by its path, where this walk does not follow it")
+    assert not {"policy_roots", "main"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
+        "check.py calls a sibling's function that reads the lock by its path"
 
 
 @pytest.mark.slow
