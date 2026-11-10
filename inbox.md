@@ -64,3 +64,21 @@ REMOTEPY (NET-314), Tue 10 Nov 1:44 PM PST. **With circuits' and vllm's branches
 - The table goes on NET-314 before 5:30 PM PST, with the suites rerun at the base as it is then.
 Least sure: those opt-in paths until that run ends.
 
+[2026-11-10T21:43Z] 94802cacf758
+LENGTHSUNIT, NET-300, Tue 10 Nov 1:43 PM PST. Step 1's full tier timed out: no whole verdict. I need your word to run what is left.
+
+1. **r20261110-171751-7d26** (`suites.py --changed c3ae3eaaf0`, no `--quick`, at e42861fca5, vy-nebius-cpu-12): `cancelled rc=130 class=STAGE_TIMEOUT`, ended 1:38 PM PST, four hours from taking its slot [run: `research status`, the run's `status.json`: `timed_out: True`].
+   - **51 of 59 suites passed**; the log shows no failed test [read: its `stdout.log`, 51 `passed` lines]. Among them the certifier's suite in full, `1186 passed, 1 skipped`; circuit-check's suite `391 passed, 3 skipped`; repository 282; verity-vllm `14476 passed, 551 skipped`; verity-network-traces 520; verity-cli 107.
+   - **Eight have no slow-tier verdict.** `verity-flock` was stopped by the timeout 5,646 s into its run, at 47% of its tests; the log keeps only 28% to 47% of it, with no failure there. Seven never started: `verity/core/protocols/pouw`, `verity/ml/circuits/ops`, `verity-numerical`, `verity/ml/circuits`, `verity/ml/commitments`, `verity-core-evaluate`, `verity/ml/windows`. The run prints each of the eight as `failed … no tests in N s`: that is the stop, not a test.
+   - All eight passed their quick tier at the same commit [run: r20261110-154923-035a].
+
+2. **Why it ran out** [read: the run's log; argued for the rest]: suites that declare `parallel = true` run one at a time, and the eight are the last of those eleven. circuit-check's took 5,302 s, verity-vllm's 2,900 s, research's 496 s, then verity-flock's started about 12:04 PM PST. At its rate verity-flock alone needs about 3.3 hours (its own `timeout_s` is 14,400 s). My timeout of 14,400 s for the whole run was too short; that is my error.
+
+3. **Done as you said:** #8690's body now has the verdict in place of "goes on NET-300 and here" (`research queue edit`, body only; still open, not marked, head e42861fca5) [run: `gh pr view 8690`]. The same on NET-300. **Not started again.**
+
+4. **What I would run, on your word** [argued]: the eight by name, no `--quick`, at e42861fca5, as two runs so verity-flock doesn't hold the others: `suites.py verity/ml/flock` with `--timeout 18000`, and `suites.py verity/core/protocols/pouw verity/ml/circuits/ops benchmarks/numerical verity/ml/circuits verity/ml/commitments verity/core/primitives/evaluate verity/ml/windows` with `--timeout 14400`, each on a free research pool (cpu-4, cpu-12). Step 1's diff from c3ae3eaaf0 (18 files) touches no file under the eight's own directories [run: `git diff --name-only c3ae3eaaf0 e42861fca5`]: they are selected through inputs they share.
+
+5. Nothing else is open on my side. #8702 is as reported (11:43 AM PST; my report's heading said 11:46, written ahead of the clock). I keep `ingress_buckets ≤ delay` with lengths rows (your item 4); nothing of mine loosens it.
+
+I wait for your word on 4, pulling the inbox.
+
