@@ -19,8 +19,8 @@ from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import b1_tp2
-from verity.ml.definitions.registry import prims as P
+from verity.definitions.registry import b1_tp2
+from verity.definitions.registry import prims as P
 from verity_vllm.program.quarantine import collective as QC
 from verity_vllm.program.quarantine.collective import allreduce as A
 

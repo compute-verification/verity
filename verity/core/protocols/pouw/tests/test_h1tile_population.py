@@ -8,7 +8,7 @@ import pytest
 from verity.ml.protocols.pouw.circuit import h1tile as Ht
 from verity.ml.circuits import ports as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.population import population_program
 from verity.ml.circuits.program import Program
 

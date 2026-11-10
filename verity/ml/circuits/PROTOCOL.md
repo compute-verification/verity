@@ -329,8 +329,8 @@ own bits, and a Program holds no data.
   primitive still holds. Outside an operation, a `registered` table is always listed, and a `library` one unless the library
   lists it.
 
-`verity.ml.circuits` names no operations and no library tables, so the guard is `verity.ml.circuits.operations.program_data`. It passes in the
-pinned list `verity/operations` v2 (`verity.ml.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
+`verity.ml.circuits` names no operations and no library tables, so the guard is `verity.definitions.circuits.operations.program_data`. It passes in the
+pinned list `verity/operations` v2 (`verity.definitions.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
 operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
 composites are no operations and their constants are listed.
 
@@ -458,7 +458,7 @@ parameters, so structure under `Q_word` v1 (§8), computed in no proof block.
 **Ids of the families.** A family member has one id, which the decoder materialises (§4.6) and nothing else does: the whole id
 matches its family's pattern, and the member it denotes carries exactly that id. `And<n>_v1` and `Xor<n>_v1` match
 `^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`. The constant of width w ≥ 1 and value v, 0 ≤ v < 2^w, is
-`Const<w>[0x<h>]_v1` (`verity.ml.circuits.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
+`Const<w>[0x<h>]_v1` (`verity.definitions.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
 v zero-padded to ⌊w/4⌋ digits, at least one (Python's `f"{v:0{w // 4}x}"`): `Const32[0x3f800000]_v1`, `Const16[0x3f80]_v1`,
 `Const5[0x5]_v1`, `Const5[0x1f]_v1`, `Const1[0x0]_v1`. So `And02_v1`, `And1_v1`, `And2_v1\n`, `Const32[0x0]_v1`,
 `Const32[0x03f800000]_v1`, `Const32[0x3F800000]_v1`, `Const5[0x05]_v1`, `Const032[0x3f800000]_v1`, `Const0[0x0]_v1` and

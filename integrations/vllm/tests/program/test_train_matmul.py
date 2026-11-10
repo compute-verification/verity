@@ -10,9 +10,9 @@ from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry import cublas_bf16 as CB
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules

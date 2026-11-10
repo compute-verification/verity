@@ -23,7 +23,7 @@ string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
-the probes are checked against: the rest of `verity.ml.circuits` (the tensor-core step in `verity.ml.circuits.silicon`
+the probes are checked against: the rest of `verity.ml.circuits` (the tensor-core step in `verity.definitions.silicon`
 among them).  `verity.ml.randomness` is exact stdlib arithmetic too.
 """
 
@@ -263,7 +263,7 @@ BENCHMARKS_IMPORTERS = {
                      "verity/core/protocols/pous/check/tests/test_timed_audit.py"),
                     "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
                     "responder (`benchmarks/pous/band_gpu/harness.py`)"),
-    "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
+    "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
                      "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
@@ -290,7 +290,7 @@ TEST_ONLY = {
 #: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
 #: import, an attribute or a string), each with the module and why a verifier must not read it.
 PROVER_ONLY = {
-    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+    "trace_cache": ("verity/definitions/ops/boolean/trace_cache.py",
                     "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
                     "entry for a Definition's gates"),
 }
@@ -403,7 +403,7 @@ def test_a_run_time_read_is_found() -> None:
     distribution; ``verity``'s own package data is not."""
     src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
            "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
-           'q = resources.files("verity.ml.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
+           'q = resources.files("verity.definitions.ops") / "tables"\nr = resources.files(__package__)\n')
     assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 

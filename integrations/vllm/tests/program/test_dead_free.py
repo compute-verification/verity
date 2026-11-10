@@ -16,7 +16,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.windows import interface as IF
 from verity_flock import circuit as FC, class_statement as CS, ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity.ml.definitions.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
+from verity.definitions.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1

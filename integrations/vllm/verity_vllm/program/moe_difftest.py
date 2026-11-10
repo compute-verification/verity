@@ -19,9 +19,9 @@ import struct
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
-from verity.ml.definitions.registry.prims import BF16, F32, I32
+from verity.definitions.registry import b1
+from verity.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
+from verity.definitions.registry.prims import BF16, F32, I32
 
 SEMANTIC_ID = "moe/MoeExpertGemm@v1"
 

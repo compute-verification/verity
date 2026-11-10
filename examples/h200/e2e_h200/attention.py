@@ -34,8 +34,8 @@ import torch
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import mufu as MU
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops import mufu as MU
 
 PAD_K = 32
 LOG2E = np.float32(1.4426950408889634)

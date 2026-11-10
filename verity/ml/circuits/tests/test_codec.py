@@ -220,7 +220,7 @@ def test_decode_refuses_a_record_its_registered_composite_refuses():
     """The decoder holds a binding record of a composite the registry holds to that composite's `refuse`, as `bind` holds a
     built one: the token feed at FIRST=1, its id, record and body otherwise well formed, is no Program's, so no reader that
     accepts by id meets it."""
-    from verity.ml.definitions.registry.io_shell import TokenFeed
+    from verity.definitions.registry.io_shell import TokenFeed
 
     feed = bind(TokenFeed, NP=2, FIRST=True)
     sig = feed.signature()
@@ -267,7 +267,7 @@ def test_a_self_compare_round_trips():
     """A batch whose two arguments are the same multi-part sequence (the top-p keep word's NaN test, `x == x`): its second argument
     is written out, not as an alias to its own node, which a reader cannot resolve (PROTOCOL.md §4.5)."""
     from verity.ml.circuits.refs import Affine, Coll, concat
-    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.definitions.ops.scalar import BIT, F32, F32Eq
 
     F2 = Array(2, F32)
 

@@ -35,7 +35,7 @@ from typing import Any
 
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
+from verity.definitions.registry.attention_vocab import fa2_masked_from
 from verity.ml.windows.interface import K_MAX
 
 FIRST = "AttnBlockFirst_v1"

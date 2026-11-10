@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits import library
+from verity.definitions.circuits import library
 
 from . import circuit_types as CT
 

@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
+"""`verity.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
 evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`.  CPU only; the `div.full` model
 (TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
 The GPU's recorded rows and probe are `test_sampling_rows_of_record`.
@@ -11,14 +11,14 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ml.definitions.registry import sampling as SP
-from verity.ml.definitions.registry import sampling_twins
-from verity.ml.definitions.registry import sampling_rows as SR
+from verity.definitions.registry import sampling as SP
+from verity.definitions.registry import sampling_twins
+from verity.definitions.registry import sampling_rows as SR
 
 
 def _tables_ok() -> bool:
     try:
-        from verity.ml.definitions.registry.prims import DivFullRcp
+        from verity.definitions.registry.prims import DivFullRcp
         DivFullRcp.evaluate(SP.f32_bits(0.8))
         return True
     except Exception:  # noqa: BLE001
@@ -245,7 +245,7 @@ PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x804
 
 def _gpu_paths(name: str) -> list:
     """The `_v2` logs: the scalar function and, for logf, the registered `NvLogf_v2`."""
-    from verity.ml.definitions.registry import topp_word_gates as TWG
+    from verity.definitions.registry import topp_word_gates as TWG
     return [getattr(SP, f"{name}_gpu")] + ([TWG.NvLogfV2.evaluate] if name == "nv_logf" else [])
 
 
@@ -336,7 +336,7 @@ def _cases(V: int, n: int, seed: int):
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
     from verity_vllm.properties.admission import evaluate_spec
-    from verity.ml.definitions.registry import sampling_topp_difftest as D
+    from verity.definitions.registry import sampling_topp_difftest as D
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),

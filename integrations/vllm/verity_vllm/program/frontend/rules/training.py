@@ -35,13 +35,13 @@ import numpy as np
 import torch
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import scalar as SC
+from verity.definitions.ops import scalar as SC
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import int8_exact as IE
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as R
-from verity.ml.definitions.registry import torch_embedding_f32 as TEF
+from verity.definitions.registry import int8_exact as IE
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
                                                               _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,

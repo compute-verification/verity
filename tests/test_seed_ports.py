@@ -52,22 +52,22 @@ UNITS = {
     "verity/ml/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
-    "verity/ml/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
+    "verity/definitions/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
     "verity/ml/circuits/tests/test_population_ports.py::Counted":
         "the population tests' stand-in key count: a position alone, whose population keeps it",
-    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
-    "verity/ml/definitions/registry/torch_attention.py::_POSITION":
+    "verity/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
-    "verity/ml/definitions/registry/torch_step.py::_POSITION":
+    "verity/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
     "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {
-    "verity/ml/circuits/ops/boolean/shared_row.py::WINDOW":
+    "verity/definitions/ops/boolean/shared_row.py::WINDOW":
         "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
 }
 TESTS = {

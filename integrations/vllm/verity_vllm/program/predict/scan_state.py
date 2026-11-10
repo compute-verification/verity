@@ -20,7 +20,7 @@ from typing import Any
 from verity.core.protocols.certifier import blocks as BK
 from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import boolean_io_shell as BIO
+from verity.definitions.registry import boolean_io_shell as BIO
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = BK.SCAN_STATE

@@ -22,7 +22,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.evaluation import evaluate as reference
 from verity.ml.circuits.evaluation.reference import signature_of
 from verity.ml.circuits.layout import WIDE_FAN_IN
-from verity.ml.circuits.ops.prims import const
+from verity.definitions.ops.prims import const
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
@@ -373,7 +373,7 @@ def test_the_non_constant_gates_are_the_ones_counted_gate_by_gate(monkeypatch):
     """Constants (a ``Const`` gate, a gate of no parameters, one whose operands are all constant) flow into calls, batches
     and scans, so a body's gates are constant in one activation and not in another; the counts, the estimate and the order
     each primitive first appears in are the gate-by-gate walk's."""
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     k5 = const(8, 5)
 

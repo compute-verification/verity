@@ -29,15 +29,15 @@ from verity.core.protocols.spot.one_stage import registered as G1
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.ml.commitments.gates import embedding as EMB
-from verity.ml.definitions.numerics import fp8_moe_rows as FR
-from verity.ml.definitions.registry import boolean_fp8_moe as BM
-from verity.ml.definitions.registry import boolean_moe as BMOE
-from verity.ml.definitions.registry import fp8_moe_experts as X
-from verity.ml.definitions.registry import moe as MOE
+from verity.definitions.numerics import fp8_moe_rows as FR
+from verity.definitions.registry import boolean_fp8_moe as BM
+from verity.definitions.registry import boolean_moe as BMOE
+from verity.definitions.registry import fp8_moe_experts as X
+from verity.definitions.registry import moe as MOE
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR

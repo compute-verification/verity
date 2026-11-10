@@ -44,7 +44,7 @@ from verity.core.protocols.spot.one_stage import draw as D, registered as REG, r
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
-from verity.ml.circuits.ops import gemm as G
+from verity.definitions.ops import gemm as G
 from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
@@ -126,7 +126,7 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
     """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
     tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
@@ -744,7 +744,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
     of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     fn = bind(BX.ScanSlotsV2, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)

@@ -555,7 +555,7 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
 
 
-#: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
+#: a reference two bindings bind at two statics (as `verity.definitions.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
 #: Definition `WORDMOD` registers as it is imported (as `ops.boolean`'s pieces are), which only SynVTop's body imports
@@ -883,7 +883,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 ON_DEMAND = """
 from circuit_check import targets as TG
 from verity.ml.circuits.defs import REGISTRY
-import verity.ml.definitions.boolean
+import verity.definitions.boolean
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",

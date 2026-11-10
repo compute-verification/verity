@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("verity.ml.definitions.registry")
+pytest.importorskip("verity.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
 from verity.ml.circuits import partition_object as PO  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -17,7 +17,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 @pytest.fixture(scope="module")
 def tiny():
     TG.load_registries()
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     return Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2))
 
@@ -47,7 +47,7 @@ def test_odd_partitions(rope, spec):
 def test_a_registered_input_is_an_input():
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.types import Value
-    from verity.ml.circuits.ops.scalar import I32Add
+    from verity.definitions.ops.scalar import I32Add
 
     I32 = Value(32)
     top = CompositeDefinition("PuRegistered", 1, (), lambda S: ((("x", I32), ("eps", I32)), I32),

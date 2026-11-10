@@ -20,7 +20,7 @@ def _pouw_roots() -> list[Any]:
     program over the pinned tile: each instance's salt a coin, its position a position and its receipt a sink."""
     from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
     from verity.ml.circuits.population import population
 
     if H.SG is None:

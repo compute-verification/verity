@@ -17,8 +17,8 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat, prefix_runs, runs
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry.dsa_topk_mask import DsaButterflyRows, DsaButterflyRowsPad, butterfly_switches
-from verity.ml.definitions.registry.prims import BIT
+from verity.definitions.registry.dsa_topk_mask import DsaButterflyRows, DsaButterflyRowsPad, butterfly_switches
+from verity.definitions.registry.prims import BIT
 
 V16 = Value(16)
 

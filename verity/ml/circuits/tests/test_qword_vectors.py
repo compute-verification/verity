@@ -23,8 +23,8 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.ops.prims import Bf16ToF32, F32ToBf16Rn, const
-from verity.ml.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
+from verity.definitions.ops.prims import Bf16ToF32, F32ToBf16Rn, const
+from verity.definitions.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
 
 PATH = Path(__file__).parent / "qword_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "

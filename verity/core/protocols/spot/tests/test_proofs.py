@@ -446,7 +446,7 @@ def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refus
     partition object."""
     from verity.core.protocols.spot.one_stage import partition as PA
     from verity.ml.circuits.codec import decode_program
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
 
     st = fx / "stage"
     part = {**json.loads((st / "partition.json").read_text()),

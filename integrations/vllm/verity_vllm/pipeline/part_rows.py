@@ -24,14 +24,14 @@ Row = tuple[str, Any, dict, dict]
 
 
 def _flashinfer_quant(x: np.ndarray) -> dict[str, np.ndarray]:
-    from verity.ml.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
+    from verity.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
 
     q, s = flashinfer_quant_1x128_row(x)
     return {"q": np.asarray(q, dtype=np.uint8), "s": np.asarray(s, dtype=np.uint32)}
 
 
 def _flashinfer_y(mid: dict[str, np.ndarray], w: np.ndarray, ws: np.ndarray, G: int) -> np.ndarray:
-    from verity.ml.definitions.numerics.derived_rows import scaled_mm_fp8_block_row
+    from verity.definitions.numerics.derived_rows import scaled_mm_fp8_block_row
 
     return scaled_mm_fp8_block_row(mid["q"], mid["s"], w, ws, G=G)[0]
 

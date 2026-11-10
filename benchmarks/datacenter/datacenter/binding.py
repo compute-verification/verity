@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.ml.circuits.census import NoBooleanWork
+from verity.definitions.circuits.census import NoBooleanWork
 from verity.ml.circuits.program import Program
 
 from . import logical as L

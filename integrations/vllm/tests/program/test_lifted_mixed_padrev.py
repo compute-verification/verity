@@ -24,9 +24,9 @@ from verity.ml.circuits import Program
 from verity.ml.circuits.defs import composite
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.refs import Coll, concat
-from verity.ml.definitions.registry import lifted as L
-from verity.ml.definitions.numerics import serve3_reference as ref
-from verity.ml.definitions.registry.b1 import weights_type
+from verity.definitions.registry import lifted as L
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity.ml.circuits.types import Array, Value
 

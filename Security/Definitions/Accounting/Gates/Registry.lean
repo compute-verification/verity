@@ -6,7 +6,7 @@ public import Definitions.Accounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the ruling closes the free
-set, 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+set, 262 ids: the 194 of `verity/definitions/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check

@@ -21,8 +21,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.units import PartitionUnits
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Add
+from verity.definitions.ops.prims import const
+from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Add
 
 from test_partition_object import _fan
 

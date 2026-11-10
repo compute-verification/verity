@@ -1,5 +1,5 @@
 """The Boolean re-verification of a deferred Commit: the Commit's own C2 replay from its sealed bundle (`pipeline.cpu_replay`), with
-every picked row evaluated by the Boolean version of its Definition (`verity.ml.definitions.boolean.boolean_version`, the switch's
+every picked row evaluated by the Boolean version of its Definition (`verity.definitions.boolean.boolean_version`, the switch's
 one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
     verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
@@ -41,7 +41,7 @@ from verity.ml.circuits.types import remove_axis
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
-from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.definitions.numerics.kernel_registry import Declined
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.query.program_view import ports_of_type
 
@@ -126,7 +126,7 @@ class BooleanRows:
         """The Boolean version of the Call ``nd``'s Definition, checked to keep its boundary; Declined by name otherwise (``nd``
         None: a spec already looked up)."""
         if spec not in self.sigma:
-            from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
+            from verity.definitions.boolean import NoBooleanVersion, boolean_version
             if nd is None:
                 raise Declined(f"{spec} is no row of the Program")
             try:
@@ -267,7 +267,7 @@ def _replay(o: Options, link: Path) -> dict[str, Any]:
 
 
 def run(o: Options) -> dict[str, Any]:
-    from verity.ml.definitions.boolean import load_program
+    from verity.definitions.boolean import load_program
 
     bundle, out = Path(o.bundle), Path(o.out)
     ctx = json.loads((bundle / "context.json").read_text())

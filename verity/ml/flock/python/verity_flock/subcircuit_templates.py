@@ -11,7 +11,7 @@ relation and ports.  :func:`identify` maps a set's ``relation`` back to its subc
 
 The templates of row 101 (Llama-3.2-1B) and their Definitions:
 
-  gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``verity.ml.circuits.ops.gemm``)
+  gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``verity.definitions.ops.gemm``)
   attention-head             AttentionHead_v3{T, D, BN}         q[D], k[T*D], v[T*D] -> out  (FA2; T varies per instance)
   rope-head                  RoPEHead_v1{D}                     x[D], cs[D] -> out
   rmsnorm-fused-cuda         RMSNormFusedCuda_v2{N, EPS}        in0 x, in1 res, in2 w -> out.0, out.1
@@ -33,7 +33,7 @@ MASKED_FROM}`` on ``attention-head``'s, evaluated as ``Attention_v18{NH=1, KVH=1
 whose MASKED_FROM is T's (``ceil(T/BN) - 1``).  ``TokenSelect_v4``'s two calls are ``token-select-chunk`` and
 ``token-select-combine``.
 
-All but ``gemm-coordinate`` are Definitions of the vLLM integration's registry (``verity.ml.definitions.registry``), imported
+All but ``gemm-coordinate`` are Definitions of the vLLM integration's registry (``verity.definitions.registry``), imported
 lazily: this module and the GEMM template need only ``verity``.  Two templates are evaluated through an equal Definition
 that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batch of that head) and ``RoPEHead_v1`` as
 ``RoPE_v1{NHEADS=1}``; ``test_templates`` checks both against the head's gate reference.  The captured GEMM sets name the
@@ -83,7 +83,7 @@ class Draw:
 
 
 class NotEvaluable(ValueError):
-    """The subcircuit has no IR Definition in this tree (its semantics are only a ``verity.ml.circuits.silicon`` model)."""
+    """The subcircuit has no IR Definition in this tree (its semantics are only a ``verity.definitions.silicon`` model)."""
 
 
 # --- word samplers ------------------------------------------------------------------------------------------------------------
@@ -266,8 +266,8 @@ class Subcircuit:
 
 
 #: The core sources a ``ScalarReference``'s function is defined by (its model, its total rules, the reference itself).
-REFERENCE_SOURCES = ("verity/ml/kernels/tc.py", "verity/ml/circuits/silicon/models.py", "verity/ml/circuits/silicon/total_fp8.py",
-                     "verity/ml/circuits/silicon/term.py")
+REFERENCE_SOURCES = ("verity/definitions/kernels/tc.py", "verity/definitions/silicon/models.py", "verity/definitions/silicon/total_fp8.py",
+                     "verity/definitions/silicon/term.py")
 
 
 def reference_digest(ref: Any) -> str:
@@ -309,7 +309,7 @@ class _GemmSemantics:
     dot: str                     # the one a synthetic set's relation names (the exporter's)
     definition: str              # the row family the exporter names
     set_slug: str
-    step: str                    # core step primitive attribute (verity.ml.circuits.ops.prims)
+    step: str                    # core step primitive attribute (verity.definitions.ops.prims)
 
 
 GEMM_SEMANTICS = {s.semantics: s for s in (
@@ -323,9 +323,9 @@ class _Fp8Semantics:
     semantics: str
     slug: str
     display: str
-    reference: str               # the ScalarReference in verity.ml.kernels.tc: K/32 E4M3 steps from +0
+    reference: str               # the ScalarReference in verity.definitions.kernels.tc: K/32 E4M3 steps from +0
     set_slug: str
-    model: str                   # its verity.ml.circuits.silicon.models GroupSum (what backends chain with)
+    model: str                   # its verity.definitions.silicon.models GroupSum (what backends chain with)
 
 
 #: FP8 lines: the output is the FP32 accumulator word itself (no epilogue), as the backends' fp8 relations take it.
@@ -336,13 +336,13 @@ GEMM_FP8 = {s.semantics: s for s in (
 )}
 FP8_DEFINITION = "GemmAccumulatorE4m3"
 FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) from +0 (no epilogue)"
-#: Census GEMM semantics with a ``verity.ml.circuits.silicon`` model but no IR target here: a subcircuit binds, it cannot be generated.
+#: Census GEMM semantics with a ``verity.definitions.silicon`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
     "sm120.mma.m16n8k32.e4m3": ("sm120-mma-e4m3", "sm120 mma · FP8 (E4M3)", "e4m3"),
 }
 #: NVFP4 on sm_120 (RTX 5090): E2M1 codes with UE4M3 scales per block of 16; y the FP32 accumulator of
-#: ``verity.ml.kernels.tc.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
+#: ``verity.definitions.kernels.tc.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
 NVFP4_SEMANTICS = "sm120.mma.m16n8k64.e2m1.nvf4"
 NVFP4_DEFINITION = "GemmAccumulatorNvfp4"
 NVFP4_BLOCK = 16
@@ -386,7 +386,7 @@ def _fp8_coordinate(K: int, s: _Fp8Semantics, tile: int) -> Subcircuit:
         raise ValueError(f"gemm-coordinate {s.semantics}: K = {K} is not a multiple of 32")
 
     def target(**_st: int) -> Any:
-        from verity.ml.kernels import tc as kernels
+        from verity.definitions.kernels import tc as kernels
 
         return getattr(kernels, s.reference).bind(K=K)
 
@@ -412,7 +412,7 @@ def _nvfp4_coordinate(K: int, tile: int) -> Subcircuit:
         raise ValueError(f"gemm-coordinate {NVFP4_SEMANTICS}: K = {K} is not a multiple of 64")
 
     def target(**_st: int) -> Any:
-        from verity.ml.kernels import tc as kernels
+        from verity.definitions.kernels import tc as kernels
 
         return kernels.SM120_NVF4_DOT.bind(K=K)
 
@@ -444,7 +444,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         slug, disp, dt = GEMM_MODEL_ONLY[semantics]
 
         def none(**_st: int) -> Any:
-            raise NotEvaluable(f"gemm-coordinate {semantics}: a verity.ml.circuits.silicon model, no IR Definition to evaluate or generate with")
+            raise NotEvaluable(f"gemm-coordinate {semantics}: a verity.definitions.silicon model, no IR Definition to evaluate or generate with")
 
         return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": dt, "semantics": semantics}, f"gemm-coordinate/k{K}/{slug}",
                           f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
@@ -457,7 +457,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
 
     def target(**_st: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.circuits.ops import gemm, prims
+        from verity.definitions.ops import gemm, prims
 
         return bind(gemm.GemmCoordinate, K=K, DOT=getattr(prims, s.step))
 
@@ -540,13 +540,13 @@ def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2
         raise ValueError(f"attention-head: T range {T!r}")
 
     def _v2() -> dict[str, Any]:
-        from verity.ml.definitions.registry import hopper
+        from verity.definitions.registry import hopper
 
         return {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 
     def target(T: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import b1
+        from verity.definitions.registry import b1
 
         if family == "Attention_v3":
             return bind(b1.AttentionV3, T=int(T), NH=1, KVH=1, D=D, BN=BN)
@@ -554,7 +554,7 @@ def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2
 
     def definition(T: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import b1
+        from verity.definitions.registry import b1
 
         if family == "Attention_v3":
             return bind(b1.AttentionHeadV3, T=int(T), D=D, BN=BN)
@@ -597,22 +597,22 @@ def attention_head_v18(D: int, BN: int, T: Any = "1:512", semantics: str = ATTN_
         raise ValueError(f"attention-head-v18: T range {T!r}")
 
     def statics(T: int) -> dict[str, Any]:
-        from verity.ml.definitions.registry import b1, hopper
-        from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
+        from verity.definitions.registry import b1, hopper
+        from verity.definitions.registry.attention_vocab import fa2_masked_from
 
         return {"T": int(T), "D": D, "BN": BN, "DOT": hopper.HopperBF16WgmmaDot16, "INV": b1.P.Fa2InvSum,
                 "MASKED_FROM": fa2_masked_from(int(T), 1, 0, BN, False)}
 
     def target(T: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import dead_free
+        from verity.definitions.registry import dead_free
 
-        import verity.ml.definitions.numerics.rows  # noqa: F401  (registers Attention_v18's self-checked row kernel)
+        import verity.definitions.numerics.rows  # noqa: F401  (registers Attention_v18's self-checked row kernel)
         return bind(dead_free.AttentionV18, NH=1, KVH=1, **statics(T))
 
     def definition(T: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import dead_free
+        from verity.definitions.registry import dead_free
 
         return bind(dead_free.AttentionHeadV18, **statics(T))
 
@@ -655,13 +655,13 @@ def rope_head(D: int) -> Subcircuit:
 
     def target(**_st: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import b1
+        from verity.definitions.registry import b1
 
         return bind(b1.RoPE, NHEADS=1, D=D)
 
     def definition(**_st: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import b1
+        from verity.definitions.registry import b1
 
         return bind(b1.RoPEHead, D=D)
 
@@ -716,7 +716,7 @@ def _row_subcircuit(row: _Row, **params: Any) -> Subcircuit:
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
 
-        import verity.ml.definitions.numerics.rows  # noqa: F401  (registers the self-checked row kernels with verity.ml.circuits.evaluation)
+        import verity.definitions.numerics.rows  # noqa: F401  (registers the self-checked row kernels with verity.ml.circuits.evaluation)
         return bind(_composite(row.registry), **st)
 
     enc = {k: encode_static(v) for k, v in st.items()}
@@ -806,7 +806,7 @@ def _all(outs: Mapping[str, Sequence[np.ndarray]]) -> np.ndarray:
 
 
 def _router(template: str, family: str, attr: str, what: str) -> _Row:
-    return _Row(template, family, f"verity.ml.definitions.registry.moe:{attr}", ("E", "TOPK", "VPT"),
+    return _Row(template, family, f"verity.definitions.registry.moe:{attr}", ("E", "TOPK", "VPT"),
                 lambda s: (Port("in0", "u16", s["E"]),), lambda s: (Port("out.router_w", "u32", s["TOPK"]), Port("out.router_ids", "u32", s["TOPK"])),
                 _one(ROUTER_LOGITS, "in0", lambda s: s["E"]), lambda s: f"e{s['E']}-topk{s['TOPK']}-vpt{s['VPT']}/bf16",
                 lambda s: f"{family}<E={s['E']}, TOPK={s['TOPK']}> · {what} · BF16 logits", {"in0 (logits)": ROUTER_LOGITS.describe()},
@@ -814,40 +814,40 @@ def _router(template: str, family: str, attr: str, what: str) -> _Row:
 
 
 ROWS: dict[str, _Row] = {r.template: r for r in (
-    _Row("rmsnorm-fused-cuda", "RMSNormFusedCuda_v2", "verity.ml.definitions.registry.b1:RMSNormFusedCuda", ("N", "EPS"),
+    _Row("rmsnorm-fused-cuda", "RMSNormFusedCuda_v2", "verity.definitions.registry.b1:RMSNormFusedCuda", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormFusedCuda_v2<{s['N']}> · eps {s['EPS']:g} · BF16",
          {"in0/in1 (x, res)": RMS_X.describe() + "; one h per draw for both", "in2 (w)": RMS_W.describe()},
          pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
-    _Row("rmsnorm-triton", "RMSNormTriton_v1", "verity.ml.definitions.registry.b1:RMSNormTriton", ("N", "EPS"),
+    _Row("rmsnorm-triton", "RMSNormTriton_v1", "verity.definitions.registry.b1:RMSNormTriton", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v1<{s['N']}> · eps {s['EPS']:g} · BF16",
          {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}, pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
-    _Row("rmsnorm-triton-v5", "RMSNormTriton_v5", "verity.ml.definitions.registry.dead_free:RMSNormTritonV5", ("N", "EPS"),
+    _Row("rmsnorm-triton-v5", "RMSNormTriton_v5", "verity.definitions.registry.dead_free:RMSNormTritonV5", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v5<{s['N']}> · eps {s['EPS']:g} · BF16",
          {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}, pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
-    _Row("silu-mul", "SiluMul_v1", "verity.ml.definitions.registry.b1:SiluMul", ("I",),
+    _Row("silu-mul", "SiluMul_v1", "verity.definitions.registry.b1:SiluMul", ("I",),
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
          lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v1<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
          pattern=r"i(?P<I>\d+)", example={"I": 8192}),
-    _Row("silu-mul-v2", "SiluMul_v2", "verity.ml.definitions.registry.act:SiluMul", ("I",),
+    _Row("silu-mul-v2", "SiluMul_v2", "verity.definitions.registry.act:SiluMul", ("I",),
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
          lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v2<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
          pattern=r"i(?P<I>\d+)", example={"I": 256}),
-    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8V1",
+    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8V1",
          ("N", "EPS", "BLOCK"), lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
          lambda s: f"n{s['N']}-b{s['BLOCK']}-eps{_slug_float(s['EPS'])}/bf16",
          lambda s: f"RMSNormFusedCudaVector8_v1<{s['N']}> · BLOCK {s['BLOCK']} · eps {s['EPS']:g} · BF16",
          {"in0/in1 (x, res)": RMS_X.describe() + "; one h per draw for both", "in2 (w)": RMS_W.describe()},
          pattern=r"n(?P<N>\d+)-b(?P<BLOCK>\d+)-eps(?P<EPS>.+)", example={"N": 6144, "EPS": 1e-5, "BLOCK": 1024}),
-    _Row("rmsnorm-cuda-vec8", "RMSNormCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormCudaVector8",
+    _Row("rmsnorm-cuda-vec8", "RMSNormCudaVector8_v1", "verity.definitions.registry.cuda_rmsnorm:RMSNormCudaVector8",
          ("N", "EPS", "BLOCK"), lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
          lambda s: f"n{s['N']}-b{s['BLOCK']}-eps{_slug_float(s['EPS'])}/bf16",
          lambda s: f"RMSNormCudaVector8_v1<{s['N']}> · BLOCK {s['BLOCK']} · eps {s['EPS']:g} · BF16",
          {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()},
          pattern=r"n(?P<N>\d+)-b(?P<BLOCK>\d+)-eps(?P<EPS>.+)", example={"N": 6144, "EPS": 1e-5, "BLOCK": 768}),
-    _Row("gumbel-top-p-token-select", "GumbelTopPTokenSelect_v1", "verity.ml.definitions.registry.sampling:GumbelTopPTokenSelect", ("V",),
+    _Row("gumbel-top-p-token-select", "GumbelTopPTokenSelect_v1", "verity.definitions.registry.sampling:GumbelTopPTokenSelect", ("V",),
          lambda s: (Port("in0", "u16", s["V"]), Port("in1", "u32", 1), Port("in2", "u64", 1), Port("in3", "u64", 1),
                     Port("in4", "u32", 1), Port("in5", "u32", 1)),
          lambda s: (Port("out.sampled_token_ids", "u64", 1),), _gumbel_sample,
@@ -855,22 +855,22 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
          {"in0 (logits)": LOGITS.describe(), "in1 (top_p)": "f32 of 0.05 + 0.95 u / 2^32", "in2 (seed)": "u64 stream word",
           "in3 (pos)": "key.uniform(2^20)", "in4 (temp)": "f32 of 0.3 + 1.7 u / 2^32", "in5 (splits)": "1 << key.uniform(4)"},
          admit=_all, pattern=r"v(?P<V>\d+)", example={"V": 128256}),
-    _Row("token-select-greedy", "TokenSelect_v1", "verity.ml.definitions.registry.b1:TokenSelect", ("V",),
+    _Row("token-select-greedy", "TokenSelect_v1", "verity.definitions.registry.b1:TokenSelect", ("V",),
          lambda s: (Port("in0", "u16", s["V"]),), lambda s: (Port("out.sampled_token_ids", "u64", 1),),
          _one(TOKEN_LOGITS, "in0", lambda s: s["V"]), lambda s: f"v{s['V']}/bf16", lambda s: f"TokenSelect_v1<{s['V']}> · greedy argmax · BF16",
          {"in0 (logits)": TOKEN_LOGITS.describe()}, admit=_all, pattern=r"v(?P<V>\d+)", example={"V": 151936}),
     _router("moe-router-topk", "MoeRouterTopK_v1", "MoeRouterTopK", "softmax top-k"),
     _router("moe-router-topk-norm", "MoeRouterTopKNorm_v1", "MoeRouterTopKNorm", "softmax top-k, renormalised"),
-    _Row("moe-sum", "MoeSum_v1", "verity.ml.definitions.registry.moe:MoeSum", ("TOPK", "H"),
+    _Row("moe-sum", "MoeSum_v1", "verity.definitions.registry.moe:MoeSum", ("TOPK", "H"),
          lambda s: (Port("in0", "u16", s["TOPK"] * s["H"]),), lambda s: (Port("out.sum", "u16", s["H"]),),
          _one(MOE_Y, "in0", lambda s: s["TOPK"] * s["H"]), lambda s: f"topk{s['TOPK']}-h{s['H']}/bf16",
          lambda s: f"MoeSum_v1<TOPK={s['TOPK']}, H={s['H']}> · BF16", {"in0 (the TOPK expert rows)": MOE_Y.describe()},
          pattern=r"topk(?P<TOPK>\d+)-h(?P<H>\d+)", example={"TOPK": 8, "H": 2048}),
-    _Row("bias-add", "BiasAdd_v1", "verity.ml.definitions.registry.b1:BiasAdd", ("N",),
+    _Row("bias-add", "BiasAdd_v1", "verity.definitions.registry.b1:BiasAdd", ("N",),
          lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.0"), _two(BIAS_Y, BIAS_B, lambda s: s["N"], lambda s: s["N"]),
          lambda s: f"n{s['N']}/bf16", lambda s: f"BiasAdd_v1<{s['N']}> · BF16", {"in0 (y)": BIAS_Y.describe(), "in1 (b)": BIAS_B.describe()},
          pattern=r"n(?P<N>\d+)", example={"N": 2048}),
-    _Row("bf16-mul-scalar", "Bf16MulScalarTensor_v1", "verity.ml.definitions.registry.b1:Bf16MulScalarTensor", ("N",),
+    _Row("bf16-mul-scalar", "Bf16MulScalarTensor_v1", "verity.definitions.registry.b1:Bf16MulScalarTensor", ("N",),
          lambda s: (Port("in0", "u16", s["N"]), Port("in1", "u16", 1)), lambda s: _u16(s["N"], "out.out"),
          _two(SCALAR_X, SCALAR_S, lambda s: s["N"], lambda s: 1), lambda s: f"n{s['N']}/bf16", lambda s: f"Bf16MulScalarTensor_v1<{s['N']}> · BF16",
          {"in0 (x)": SCALAR_X.describe(), "in1 (the scalar)": SCALAR_S.describe()}, pattern=r"n(?P<N>\d+)", example={"N": 2304}),
@@ -892,7 +892,7 @@ def _embedding_eval(sub: Subcircuit, arrays: list[np.ndarray], _st: Mapping[str,
     """``Embedding_v1{V, H}`` on each input: its registered row kernel (the one ``evaluate_batch`` dispatches) over a V x H table of
     +0 holding the input's row at ``tok``.  One instance at a time, so the table is materialised once rather than per instance
     (at V x H = 5.9e8 words the batch path runs out of memory)."""
-    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity.definitions.numerics import kernel_registry as KR
 
     V, H = sub.params["V"], sub.params["H"]
     fn = KR.instance(sub.target(), "rows")
@@ -912,9 +912,9 @@ def embedding_row(V: int, H: int) -> Subcircuit:
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import b1
+        from verity.definitions.registry import b1
 
-        import verity.ml.definitions.numerics.rows  # noqa: F401
+        import verity.definitions.numerics.rows  # noqa: F401
         return bind(b1.Embedding, V=V, H=H)
 
     rel = {"subcircuit": "Embedding_v1", "definition": "Embedding_v1", "statics": {"V": V, "H": H},
@@ -930,7 +930,7 @@ def _embedding_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
 
 
 def _ingress_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
-    from verity.ml.definitions.registry import io_shell as X
+    from verity.definitions.registry import io_shell as X
 
     MODEL, LP, V = sub.params["MODEL"], sub.params["LP"], sub.params["V"]
     ids = [key.uniform(V, ("id", j, k)) for k in range(LP)]
@@ -945,11 +945,11 @@ def ingress_prompt(MODEL: str, LP: int, V: int) -> Subcircuit:
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import io_shell as X
+        from verity.definitions.registry import io_shell as X
 
         return bind(X.IngressPrompt, MODEL=MODEL, LP=LP, V=V)
 
-    from verity.ml.definitions.registry import io_shell as X
+    from verity.definitions.registry import io_shell as X
 
     rel = {"subcircuit": "IngressPrompt_v1", "definition": "IngressPrompt_v1", "statics": {"MODEL": MODEL, "LP": LP, "V": V},
            "rule": "io_shell.reference: ok = the body is ingress v0's layout at (MODEL, LP, V); ids and max_tokens its fields' sums"}
@@ -979,7 +979,7 @@ def token_select_chunk(C: int) -> Subcircuit:
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import dead_free as DF
+        from verity.definitions.registry import dead_free as DF
 
         return bind(DF.TokenSelectChunkV2, C=C)
 
@@ -996,7 +996,7 @@ def _chunk_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
 
 
 def _combine_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     n, C = len(b1.chunks(sub.params["V"], sub.params["C"])), sub.params["C"]
     x0, h = TOKEN_LOGITS.words(key, ("x0", j), 1, ("x0", j))
@@ -1012,11 +1012,11 @@ def token_select_combine(V: int, C: int) -> Subcircuit:
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import dead_free as DF
+        from verity.definitions.registry import dead_free as DF
 
         return bind(DF.TokenSelectCombineV2, V=V, C=C)
 
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     n = len(b1.chunks(V, C))
     rel = {"subcircuit": "TokenSelectCombine_v2", "definition": "TokenSelectCombine_v2", "statics": {"V": V, "C": C},
@@ -1066,14 +1066,14 @@ def moe_expert_coordinate(E: int, K: int, weighted: bool = False, tile: int = 32
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import moe
+        from verity.definitions.registry import moe
 
-        import verity.ml.definitions.numerics.rows  # noqa: F401
+        import verity.definitions.numerics.rows  # noqa: F401
         return bind(getattr(moe, gemm), E=E, K=K, N=1)
 
     def definition(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import moe
+        from verity.definitions.registry import moe
 
         return bind(getattr(moe, coord), E=E, K=K)
 
@@ -1126,7 +1126,7 @@ def scaled_mm_fp8_block_coordinate(K: int, G: int = 128, semantics: str = "sm90.
 
     def target(**_s: int) -> Any:
         from verity.ml.circuits.defs import bind
-        from verity.ml.definitions.registry import fp8
+        from verity.definitions.registry import fp8
 
         return bind(fp8.ScaledMmFp8BlockCoordinate, K=K, G=G)
 
@@ -1182,7 +1182,7 @@ _add(Template("attention-head-v18", "AttentionHead_v18<T,D>",
 _add(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
               rope_head, _rope_identify, {"D": 64}))
 for _r in ROWS.values():
-    _add(Template(_r.template, _r.family, f"{_r.family} (verity.ml.definitions.registry), one row", {k: "static" for k in _r.statics},
+    _add(Template(_r.template, _r.family, f"{_r.family} (verity.definitions.registry), one row", {k: "static" for k in _r.statics},
                   (lambda r: lambda **p: _row_subcircuit(r, **p))(_r), _row_identify(_r), dict(_r.example)))
 _add(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
               "stores the id and the row it opens", {"V": "int, vocabulary", "H": "int, hidden size"}, embedding_row, _embedding_identify,

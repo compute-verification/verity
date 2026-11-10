@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-import verity.ml.circuits.ops.prims  # noqa: F401  (with verity.ml.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names)
-import verity.ml.circuits.ops.scalar  # noqa: F401
+import verity.definitions.ops.prims  # noqa: F401  (with verity.definitions.ops.scalar, the primitives partition_vectors.json's descriptor names)
+import verity.definitions.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.program import Program

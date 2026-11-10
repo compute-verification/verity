@@ -17,9 +17,9 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
-from verity.ml.definitions.registry import boolean_sigma as SG
-from verity.ml.definitions.registry import deepgemm as DG
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import tp_allreduce as TA
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}

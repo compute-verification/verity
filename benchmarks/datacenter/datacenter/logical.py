@@ -18,7 +18,7 @@ the same rows.
 
 A Program holds only gates. Its root body is its step structure: an input node for each parameter, bound per run or at
 registration (`program.bindings`), then its Calls. The accounting layer reads it at that grain, the census's
-(`verity.ml.circuits.census`):
+(`verity.definitions.circuits.census`):
 
 - a *node* is a root node, named by its parameter or by the `name` its Call was given (`names`);
 - a *value* (`Value`) is a census value: a run of one node's output leaves that the same Calls read, which is what moves
@@ -49,7 +49,7 @@ import numpy as np
 from verity.core.protocols import registration
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import types as T
-from verity.ml.circuits.census import PRECISION, PRODUCTS, census, family
+from verity.definitions.circuits.census import PRECISION, PRODUCTS, census, family
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import WIRING
 from verity.ml.circuits.defs import PrimitiveDefinition
@@ -114,7 +114,7 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity.ml.definitions.boolean import boolean_version
+        from verity.definitions.boolean import boolean_version
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

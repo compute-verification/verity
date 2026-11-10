@@ -12,8 +12,8 @@ import pytest
 
 from test_qcall_vectors import BOOLEAN_CALLS, WORD_CALLS, _c
 from verity.ml.circuits import cut, partition_object as PO, query_ast as G
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import I32Add
+from verity.definitions.ops.prims import const
+from verity.definitions.ops.scalar import I32Add
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.query import parse
 from verity.ml.circuits.query_ast import QueryError

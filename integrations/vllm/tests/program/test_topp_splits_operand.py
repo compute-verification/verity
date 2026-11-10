@@ -21,10 +21,10 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import sampling as SM
-from verity.ml.definitions.registry import sampling_topp_difftest as D
-from verity.ml.definitions.registry import topp_split as TS
-from verity.ml.definitions.registry import topp_geometry
+from verity.definitions.registry import sampling as SM
+from verity.definitions.registry import sampling_topp_difftest as D
+from verity.definitions.registry import topp_split as TS
+from verity.definitions.registry import topp_geometry
 
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
@@ -80,7 +80,7 @@ def test_topp_mask_operand_form_equals_topp_keep_row_at_every_s(S):
 
 @pytest.mark.parametrize("bad", [0, 3, 5, 31, 33, 64, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF0])
 def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
-    from verity.ml.definitions.registry import sampling_rows as SR
+    from verity.definitions.registry import sampling_rows as SR
     V = 64
     x = _row(V)
     word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])[0]

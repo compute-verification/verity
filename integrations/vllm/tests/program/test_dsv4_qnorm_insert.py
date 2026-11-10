@@ -29,13 +29,13 @@ from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.ops.mufu import RsqrtApprox
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as T
-from verity.ml.definitions.registry import boolean_dsv4_qnorm_insert as BQ
-from verity.ml.definitions.registry import dsa as D
-from verity.ml.definitions.registry import dsv4_qnorm_insert as Q
-from verity.ml.definitions.registry import flashmla as F
+from verity.definitions.ops.mufu import RsqrtApprox
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import dsv4_qnorm_insert_twin as T
+from verity.definitions.registry import boolean_dsv4_qnorm_insert as BQ
+from verity.definitions.registry import dsa as D
+from verity.definitions.registry import dsv4_qnorm_insert as Q
+from verity.definitions.registry import flashmla as F
 from tests.program.test_dsa import _bf16 as _bf16_words
 from tests.program.test_dsa import _butterfly, _ceil_ftz, _e4m3, _fadd, _fmax, _is_nan, _val
 from tests.program.test_fp8_moe import _bf16 as _rn_bf16

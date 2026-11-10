@@ -19,12 +19,12 @@ from verity_flock.class_statement import UnitStager
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch
-from verity.ml.definitions.numerics import deepgemm_twins as DT
-from verity.ml.definitions.registry import boolean_deepgemm as BDG
-from verity.ml.definitions.registry import boolean_fp8 as BF8
-from verity.ml.definitions.registry import deepgemm as DG
-from verity.ml.definitions.registry import fp8 as F8
-from verity.ml.definitions.registry.fp8 import FP8_BLOCK
+from verity.definitions.numerics import deepgemm_twins as DT
+from verity.definitions.registry import boolean_deepgemm as BDG
+from verity.definitions.registry import boolean_fp8 as BF8
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import fp8 as F8
+from verity.definitions.registry.fp8 import FP8_BLOCK
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity.ml.windows import wiring as WI

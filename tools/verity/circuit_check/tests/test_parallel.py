@@ -113,7 +113,7 @@ def test_a_task_s_size_is_its_built_body_s_gates_and_reading_it_builds_nothing(m
     body is not (reading it would build it in this process), a by-calls root, a template, and a task of several roots."""
     from verity.ml.circuits import Array, bind
     from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.definitions.ops.scalar import BIT, F32, F32Eq
 
     from circuit_check import targets as TG
 

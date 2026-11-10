@@ -9,8 +9,8 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Strided, concat
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import dense
-from verity.ml.definitions.replay import replayer
+from verity.definitions.registry import dense
+from verity.definitions.replay import replayer
 from verity_vllm.correspondence.runtime import SCHEMA, RuntimeCorrespondence
 from verity_vllm.program import prune as P
 from verity_vllm.program import tp_binding as TB

@@ -532,7 +532,7 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation.bits import compile as compile_bits
     from verity.ml.circuits.program import is_input
-    from verity.ml.definitions.boolean import boolean_version
+    from verity.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
@@ -574,10 +574,10 @@ def priced(cen: dict, prices: dict) -> dict:
 
 
 def circuit_size(program) -> dict:
-    """|C|: the step Program's census (`verity.ml.circuits.census`) at the Boolean prices of the primitives it calls
+    """|C|: the step Program's census (`verity.definitions.circuits.census`) at the Boolean prices of the primitives it calls
     (`boolean_prices`): its gates and ANDs by root callee class, and the word gates of the primitives with no Boolean
     version, which it leaves out."""
-    from verity.ml.circuits.census import census
+    from verity.definitions.circuits.census import census
     from verity_vllm.program.frontend.train_step import primitives
 
     return priced(census(program), boolean_prices(primitives(program)))

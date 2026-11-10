@@ -5,7 +5,7 @@ computes (`registered.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
-(`pouw_cuda/zy_commit.cu`, on `verity.ml.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
+(`pouw_cuda/zy_commit.cu`, on `verity.definitions.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
 each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
 `host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 
@@ -35,7 +35,7 @@ import numpy as np
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
                                            sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.ml.kernels import ROW_COMMIT, SHA512
+from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
 

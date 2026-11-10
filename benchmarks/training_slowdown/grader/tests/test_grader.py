@@ -23,7 +23,7 @@ import torch
 from conftest import CC, LF, STEP, STRUCTURE, dot_alone, k16_steps, route_factor
 
 import grader as G
-from verity.ml.circuits.census import census
+from verity.definitions.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import REGISTRATION, input_prim
 from verity_vllm.program.frontend.train_step import primitives

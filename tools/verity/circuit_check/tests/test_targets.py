@@ -99,7 +99,7 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     Definition among those the same way, in a tuple too, beside a bare id, a literal and a tuple of literals; without the
     catalog."""
     from verity.ml.circuits.defs import REGISTRY, bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
 
     TG.load_registries()
     _no_catalog(monkeypatch)
@@ -123,8 +123,8 @@ def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatc
     lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
     name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
     from verity.ml.circuits.defs import REGISTRY, bind
-    from verity.ml.definitions.registry import lifted as L
-    from verity.ml.definitions.registry import moe, ref_prims
+    from verity.definitions.registry import lifted as L
+    from verity.definitions.registry import moe, ref_prims
 
     from circuit_check import checks as CK
 
@@ -149,8 +149,8 @@ def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
     composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
     ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
     target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity.ml.definitions.registry import lifted as L
-    from verity.ml.definitions.registry import ref_prims
+    from verity.definitions.registry import lifted as L
+    from verity.definitions.registry import ref_prims
 
     from circuit_check import sidecars as SC
 

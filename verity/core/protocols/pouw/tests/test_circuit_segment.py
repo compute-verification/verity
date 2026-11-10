@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity.ml.protocols.pouw.circuit import segment as SG
-from verity.ml.circuits.census import COUNTERS, PRODUCTS, census
+from verity.definitions.circuits.census import COUNTERS, PRODUCTS, census
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.bits import evaluate_bits

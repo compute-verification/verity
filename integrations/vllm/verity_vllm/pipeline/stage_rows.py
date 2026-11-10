@@ -37,7 +37,7 @@ BITS = {"top_p": 32, "seed": 64, "pos": 64, "temp": 32, "splits": 32}
 @cache
 def _places(V: int) -> dict[str, tuple[int, ...]]:
     from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.definitions.registry.topp_stages import plan
+    from verity.definitions.registry.topp_stages import plan
 
     out: dict[str, list[int]] = {}
     for k, u in enumerate(plan(V)):
@@ -94,7 +94,7 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 
 def _twin(V: int, logits: np.ndarray, ops: dict[str, int]) -> tuple[int, dict]:
-    from verity.ml.definitions.numerics.topp_stage_twins import stage_rows
+    from verity.definitions.numerics.topp_stage_twins import stage_rows
 
     return stage_rows(V, logits, ops["top_p"], ops["seed"], ops["pos"], ops["temp"], ops["splits"])
 
@@ -105,7 +105,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
     `_operand` (what no constant or sampler input is, by ``slices``: `serving_rows._slices`) and every unit's outputs computed by
     the twin; one index entry per row.  ``twins`` (row -> the twin's token and outputs) keeps each row's twin for the window's
     other stage templates (`serving_rows.read_all`)."""
-    from verity.ml.definitions.registry.topp_stages import plan
+    from verity.definitions.registry.topp_stages import plan
 
     tp = template(m.template)
     names = [q for q, _ in m.rows + m.outs]
@@ -168,7 +168,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     """``ms`` with each stage member's wired parameters (`topp_stages.Unit.wires`) wired to the output rows of the units that
     write them (the same row's; each template's units in the module's order); refused when such a unit's template is not in
     the partition."""
-    from verity.ml.definitions.registry.topp_stages import plan
+    from verity.definitions.registry.topp_stages import plan
 
     of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "stage"}
     base = {t: min(m.base for m in ms if m.template == t) for t in of}

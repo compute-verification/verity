@@ -50,9 +50,9 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.numerics.rows import ROWS
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.b1 import NEG_INF_BF16
+from verity.definitions.numerics.rows import ROWS
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM

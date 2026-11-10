@@ -52,7 +52,7 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
     informational, as the census's are)."""
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.census import PRODUCTS, _rule, family
+    from verity.definitions.circuits.census import PRODUCTS, _rule, family
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.program import is_input
 

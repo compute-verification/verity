@@ -17,9 +17,9 @@ from verity.ml.circuits.cut import call_scope
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.ml.definitions.registry import fp8
-from verity.ml.definitions.registry import fp8_vocab
-from verity.ml.definitions import word as W
+from verity.definitions.registry import fp8
+from verity.definitions.registry import fp8_vocab
+from verity.definitions import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
 #: (K, N) of `ScaledMmFp8Block_v1`'s circuit-check targets, N = 192 ending mid-block

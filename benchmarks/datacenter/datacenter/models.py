@@ -17,7 +17,7 @@ from collections.abc import Callable
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_AMPERE, Gemm, GemmCoordinate
+from verity.definitions.ops.boolean.gemm import GEMM_AMPERE, Gemm, GemmCoordinate
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Type
 
@@ -69,7 +69,7 @@ X = words("x", K)
 def s8_grid(r: int = 4, c: int = 16, k: int = 64) -> Program:
     """A served s8 matmul on bits, the shape PoUW's sm_120 scheme (`eps1-sm120-h1fx1`) tiles: each of r rows of x against
     each of c rows of the registered w, a `GemmAccumulatorS8_v2` over the s8 IMMA step's Boolean form."""
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
     from verity.ml.circuits.refs import Coll, concat
 
     row = Array(k, word(8))

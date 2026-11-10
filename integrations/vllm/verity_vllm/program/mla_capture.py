@@ -213,11 +213,11 @@ def _mufu(op: str, x):
 
 
 def mufu_probe(out: Path, device: str) -> dict:
-    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity.ml.circuits.ops.mufu`): ex2 on [0, 1) at every 2^-23 step and
+    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity.definitions.ops.mufu`): ex2 on [0, 1) at every 2^-23 step and
     rcp on every mantissa of [1, 2), plus ex2 / lg2 (ftz and not) on a sweep of 2^20 words; the words are stored."""
     import torch
 
-    from verity.ml.circuits.ops import mufu as MU
+    from verity.definitions.ops import mufu as MU
 
     rep = {}
     j = np.arange(1 << 23, dtype=np.uint32)
@@ -329,7 +329,7 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
 
     from verity.ml.circuits.evaluation import bits as BS
     from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import mla as M
+    from verity.definitions.registry import mla as M
 
     G = M.GLM47_FLASH
     groups: dict = {}
@@ -484,7 +484,7 @@ def main(a: ProduceOptions | CheckOptions | CheckBitsOptions) -> int:
                          done_keys([Path(p) for p in a.skip]), a.fresh)
         print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
         return 0 if rep["mismatched_rows"] == 0 else 1
-    from verity.ml.definitions.registry import mla_check
+    from verity.definitions.registry import mla_check
 
     rep = mla_check.check(Path(a.dir), INPUTS)
     if a.out:

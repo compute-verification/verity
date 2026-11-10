@@ -30,7 +30,7 @@ from typing import Any
 
 from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.ml.circuits.constants import REGISTRATION
+from verity.definitions.circuits.constants import REGISTRATION
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
 from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
@@ -139,7 +139,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
-    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ml.circuits.constants`: registration or run)
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.definitions.circuits.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,

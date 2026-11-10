@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.definitions.registry.prims import I32
+from verity.definitions.registry.prims import I32
 from verity.ml.circuits.types import Array
 
 REPO = Path(__file__).resolve().parents[2]

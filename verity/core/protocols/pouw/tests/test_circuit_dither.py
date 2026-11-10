@@ -12,8 +12,8 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
-from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32
+from verity.definitions.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
+from verity.definitions.silicon.integer import HOPPER_SM90_S8_K32
 from verity.ml.protocols.pouw.circuit import dither as D
 from verity.ml.protocols.pouw.circuit import segment as SG
 

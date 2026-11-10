@@ -123,9 +123,9 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.ops.fp32 import F32AddV2, F32MulV2
-from verity.ml.circuits.ops.prims import F32ToE4m3Sat
-from verity.ml.circuits.ops.scalar import Bf16GtStrict, BitAnd, BitNot, BitOr, F32Fabs, F32IsFinite, I32Add, I32Eq, I32Le, SelectI32
+from verity.definitions.ops.fp32 import F32AddV2, F32MulV2
+from verity.definitions.ops.prims import F32ToE4m3Sat
+from verity.definitions.ops.scalar import Bf16GtStrict, BitAnd, BitNot, BitOr, F32Fabs, F32IsFinite, I32Add, I32Eq, I32Le, SelectI32
 
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from ..schemes import pearl_c as C

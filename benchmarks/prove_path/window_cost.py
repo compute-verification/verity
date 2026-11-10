@@ -57,7 +57,7 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 from verity.core.protocols import reporting
 from verity.core.protocols.spot.optimize import SHA512_ANDS
 from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import io_shell as IO
+from verity.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parent

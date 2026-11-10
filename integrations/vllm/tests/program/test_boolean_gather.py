@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers, embedding and bit selection agree with
+"""`verity.definitions.registry.boolean_gather`: the Boolean vocabulary gathers, embedding and bit selection agree with
 `GatherBf16x{V}_v1`, `GatherF32x{V}_v1`, `Embedding_v1` and `BitAtx{W}_v1` on edge and random tokens (negative, past the
 vocabulary, at every chunk boundary), are pinned by gate count and program digest, and cut under `Q_word_v1{X=16,W=32}` into one
 unit of 16 output bits per gather, with no gate two gathers compute. `GatherF32x{V}_v2` is one Definition, the word family's
@@ -22,12 +22,12 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.definitions import boolean as BB
-from verity.ml.definitions.registry import boolean_fp8_moe as BFM
-from verity.ml.definitions.registry import boolean_gather as BGA
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as RP
-from verity.ml.definitions import word as W
+from verity.definitions import boolean as BB
+from verity.definitions.registry import boolean_fp8_moe as BFM
+from verity.definitions.registry import boolean_gather as BGA
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions import word as W
 
 SERVED_VOCAB = 49152
 #: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)
