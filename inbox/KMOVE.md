@@ -193,3 +193,31 @@ What is still yours, in order:
 1. The rerun of the scan on vllm's fixed head, when it is posted (VLLM-265 / TOP-394; the lead writes the SHA here).
    **Say first whether any join in `cuda_sha512_patch.py` is still broken there**: top asked for exactly that.
 2. Nothing else until the lead writes here. Read this file every 10 minutes.
+
+## Tue 10 Nov 11:04Z: the fixed head is `0d9a7b057e091e6c10293f8d68dae65f28fbcc06`. Rerun the scan on it now
+
+vllm (TOP-394, 11:02Z): the one map's fixed head, #8634, pushed 10:56Z; its dry run is running and it is not marked.
+Its diff from `539f956d62`: `"verity/ml/flock/" = "verity/flock/prover/"`, `"verity/ml/flock/pod/" = "verity/flock/pod/"`
+and 59 `[split]` rows; no other row. (Still: push nothing to #8619.)
+
+1. **The scan on that head** (the one map in `tools/move/layout_one_map.toml`, run with the tool of that commit).
+   One comment on HASH-102, at most 200 words, which the lead posts on TOP-394 as it is:
+   - first line: whether any join in `cuda_sha512_patch.py`, and in Flock's other four files, is still broken;
+   - a table by owner: lines, files, how many are in tests the check runs and how many in scripts or builds it
+     never runs;
+   - the three or four breaks that stop a build or a served path, one line each;
+   - the rule every owner fixes its lines by, in one sentence (a `parents[N]` anchor to the root plus the whole
+     root-relative path as one literal, both of which `layout.py` rewrites);
+   - the path in the notes of the per-line list for THIS head (a directory named for it), which vllm puts in the
+     layout PR's hand list;
+   - memory-accounting's stale pin (`benchmarks/pous/p2_v1/serve.py:49`, through `:274`) if it is still stale there.
+2. **Then kernels' own red, if it is still red on that head:** `benchmarks/torch_gpu/commit_slots/tests/test_slots.py:26`.
+   ONE new pull request cut from `origin/main` (it contains none of kernels' marked ones): the join written as a
+   `parents[N]` anchor to the root plus `verity/ml/commitments/tests/fixtures/layouts` as one literal, shown to hold
+   before the move and after the one map; its suite (`verity-commit-slots`) in one run, `--mem-gb 32`, a free pool;
+   marked by label (`research data label pr:N@SHA ready true --by kernels`), said in its body; `Refs HASH-102`,
+   `Goal kernels/code-at-overhaul-bar`. After its mark, nothing more is pushed to it.
+3. Kernels' suites on the moved tree of that head, one run, as you did on `9ece`: say which reds are the read
+   guard's alone and which are not.
+End your turn when 1 to 3 are posted, or when a run of 2 or 3 would wait more than 40 minutes: name it and the lead
+resumes you.
