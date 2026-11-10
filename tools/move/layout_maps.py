@@ -72,7 +72,8 @@ A DIRECTORY NO ROW MOVES WHOLE is named in `[tokens]`, so a reference to the dir
 input, a boundary's glob) is rewritten and none is left naming a directory that is gone. In a map a move, the map that
 takes the directory's `pyproject.toml` (else its `__init__.py`, its `lakefile.toml`, else most of its files) speaks
 for it. Where one map empties a directory and its files part ways, a reference reads as the directory its files keep
-together in but for the archived ones and a file with a row of its own; else as the one new directory that holds all
+together in but for the archived ones, a file with a row of its own and, in a Lake package, a Lake package inside it
+with a row of its own (`EXCEPT`), which goes its own way; else as the one new directory that holds all
 of them but the archived, where that is narrower than a top-level directory; else, in the one map, as where the
 directory's package goes. A directory a move's map speaks for reads the same in the one map: a reference to it, and a
 bare `Path(__file__).parent` in a file under it, then follow the files of the move that holds most of it, as they do
@@ -160,9 +161,9 @@ EXCEPT = [
      "(`poub/verifier/remote_bandwidth/`)"),
     ("examples/README.md", "demos/README.md",
      "the demos' index: the rule gives `demos/dither_full_util/examples/README.md`, inside one demo"),
-    ("verity/core/service/vstar/", "verity/protocols/flock/verifier/vstar_cli/",
-     "V*'s command package: the rule gives `verity/protocols/flock/verifier/vstar/`, which differs only by case from "
-     "`VStar/`, the Flock verifier's own Lean sources, and a checkout that ignores case merges the two"),
+    ("verity/core/service/vstar/", "verity/protocols/recursion/verifier/vstar_cli/",
+     "V*'s command package: the rule gives `verity/protocols/recursion/verifier/vstar/`, the name V*'s own Lean has in "
+     "Flock's verifier (`VStar/`, which stays in that Lake package); `vstar_cli/` says this one is the command"),
     ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
      "the certifier program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake "
      "package goes (two lakefiles, manifests, locks and toolchains on one path)"),
@@ -217,8 +218,11 @@ DROP = {
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
-    "core:zk-server": "the ZK server's release side, which the developer trusts and the auditor doesn't: the layout puts it "
-                      "beside Flock's verifier, whose Lake package holds the ZK server's other half (`Flock.Firewall`)",
+    "core:zk-server": "the ZK server's half of Flock's Lake package (`Flock.Firewall`), which the developer trusts and the "
+                      "auditor doesn't: a Lake package moves whole",
+    "core:zk-server.release": "the ZK server's release side, which the developer trusts and the auditor doesn't. Its Lake "
+                              "package requires the core protocol interface, which requires Flock's verifier, so it does "
+                              "not go inside Flock's directory: the layout puts it with the recursion layer",
     "edge:tools.config": "the settings package (`verity_config`), which the layout puts with the Configuration it reads",
     "ml:windows": "Window, what an adapter hands Verity, which no verifier imports: the layout puts it under the "
                   "commitments its windows are committed in, as a package and a suite of its own (`windows/`)",
@@ -275,7 +279,8 @@ MOVES = [
     ("flock_prover", "Flock's prover, to `verity/protocols/flock/prover`"),
     ("flock", "Flock's tests, pod scripts and agreement with upstream, to `verity/protocols/flock`"),
     ("spot", "sampled proofs, to `verity/protocols/spot`"),
-    ("recursion", "sampled proofs' recursive audit, to `verity/protocols/recursion`"),
+    ("recursion", "V*'s command package, sampled proofs' recursive audit and the ZK server's release side, to "
+                  "`verity/protocols/recursion`"),
     ("pouw", "PoUW, to `verity/protocols/pouw`"),
     ("pous", "PoUS, to `verity/protocols/pous`"),
     ("poub", "PoUB, to `verity/protocols/poub`"),
@@ -684,11 +689,16 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
             # new directory that holds every file of the old one but the archived, where that is narrower than a
             # top-level directory;
             # else, in the one map, as where its package goes, each such reference acknowledged in `[split]`.
-            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None]
+            def inner(p, lake="lakefile.toml" in files):   # in a Lake package inside this one that has a row of its own
+                k = excepted(p)[0]
+                return (lake and k is not None and k.endswith("/") and k.startswith(d + "/") and k != d + "/"
+                        and "lakefile.toml" in tracked_dirs.get(k.rstrip("/"), ((),))[0])
+            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None and not inner(p)]
             whole = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in rest}
             common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in rest or mine])
             if len(whole) == 1 and (n := next(iter(whole))) is not None:
-                out[d + "/"] = n + "/"                 # all but the archived and a file with a row of its own keep together
+                # all but the archived, a file with a row of its own and a Lake package inside this one keep together
+                out[d + "/"] = n + "/"
             elif "/" in common:
                 out[d + "/"] = common + "/"
             elif one and name is not None and posixpath.basename(dest[f"{d}/{name}"][0]) == name:

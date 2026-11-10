@@ -44,9 +44,9 @@
 #   Lean verifier, one directory row: the rule names the protocol twice (`poub/verifier/remote_bandwidth/`).
 # - `examples/README.md` to `demos/README.md`: the demos' index: the rule gives
 #   `demos/dither_full_util/examples/README.md`, inside one demo.
-# - `verity/core/service/vstar/` to `verity/protocols/flock/verifier/vstar_cli/`: V*'s command package: the rule
-#   gives `verity/protocols/flock/verifier/vstar/`, which differs only by case from `VStar/`, the Flock verifier's
-#   own Lean sources, and a checkout that ignores case merges the two.
+# - `verity/core/service/vstar/` to `verity/protocols/recursion/verifier/vstar_cli/`: V*'s command package: the rule
+#   gives `verity/protocols/recursion/verifier/vstar/`, the name V*'s own Lean has in Flock's verifier (`VStar/`,
+#   which stays in that Lake package); `vstar_cli/` says this one is the command.
 # - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/lean/`: the certifier
 #   program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
 #   lakefiles, manifests, locks and toolchains on one path).
@@ -237,21 +237,21 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/core/protocols/spot/service.py" = "verity/protocols/spot/verifier/service.py"
 "verity/core/protocols/spot/tests/" = "verity/protocols/spot/verifier/tests/"
 "verity/core/protocols/tests/" = "verity/protocols/tests/"
-"verity/core/service/firewall/" = "verity/protocols/flock/verifier/firewall/"
+"verity/core/service/firewall/" = "verity/protocols/recursion/verifier/firewall/"
 "verity/core/service/flock/" = "verity/protocols/flock/verifier/"
 "verity/core/service/sigma/" = "verity/protocols/flock/sigma/"
 "verity/core/service/spot/" = "verity/protocols/spot/verifier/lean/"
-"verity/core/service/vstar/VStarDifftest.lean" = "verity/protocols/flock/verifier/vstar_cli/VStarDifftest.lean"
-"verity/core/service/vstar/VStarMain.lean" = "verity/protocols/flock/verifier/vstar_cli/VStarMain.lean"
-"verity/core/service/vstar/VStarTrace.lean" = "verity/protocols/flock/verifier/vstar_cli/VStarTrace.lean"
-"verity/core/service/vstar/VStarTraceCli.lean" = "verity/protocols/flock/verifier/vstar_cli/VStarTraceCli.lean"
-"verity/core/service/vstar/lake-manifest.json" = "verity/protocols/flock/verifier/vstar_cli/lake-manifest.json"
-"verity/core/service/vstar/lakefile.toml" = "verity/protocols/flock/verifier/vstar_cli/lakefile.toml"
-"verity/core/service/vstar/lean-audit.json" = "verity/protocols/flock/verifier/vstar_cli/lean-audit.json"
-"verity/core/service/vstar/lean-toolchain" = "verity/protocols/flock/verifier/vstar_cli/lean-toolchain"
-"verity/core/service/vstar/pyproject.toml" = "verity/protocols/flock/verifier/vstar_cli/pyproject.toml"
+"verity/core/service/vstar/VStarDifftest.lean" = "verity/protocols/recursion/verifier/vstar_cli/VStarDifftest.lean"
+"verity/core/service/vstar/VStarMain.lean" = "verity/protocols/recursion/verifier/vstar_cli/VStarMain.lean"
+"verity/core/service/vstar/VStarTrace.lean" = "verity/protocols/recursion/verifier/vstar_cli/VStarTrace.lean"
+"verity/core/service/vstar/VStarTraceCli.lean" = "verity/protocols/recursion/verifier/vstar_cli/VStarTraceCli.lean"
+"verity/core/service/vstar/lake-manifest.json" = "verity/protocols/recursion/verifier/vstar_cli/lake-manifest.json"
+"verity/core/service/vstar/lakefile.toml" = "verity/protocols/recursion/verifier/vstar_cli/lakefile.toml"
+"verity/core/service/vstar/lean-audit.json" = "verity/protocols/recursion/verifier/vstar_cli/lean-audit.json"
+"verity/core/service/vstar/lean-toolchain" = "verity/protocols/recursion/verifier/vstar_cli/lean-toolchain"
+"verity/core/service/vstar/pyproject.toml" = "verity/protocols/recursion/verifier/vstar_cli/pyproject.toml"
 "verity/core/service/vstar/recursive/" = "verity/protocols/recursion/verifier/recursive/"
-"verity/core/service/vstar/tests/" = "verity/protocols/flock/verifier/vstar_cli/tests/"
+"verity/core/service/vstar/tests/" = "verity/protocols/recursion/verifier/vstar_cli/tests/"
 "verity/core/site/" = "verity/hardware/site/"
 "verity/core/wire/" = "verity/configuration/wire/"
 "verity/ml/circuits/PROTOCOL.md" = "verity/circuits/PROTOCOL.md"
@@ -515,7 +515,7 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/core/protocols/pous/" = "verity/protocols/pous/"
 "verity/core/protocols/spot/" = "verity/protocols/spot/"
 "verity/core/service/" = "verity/protocols/"
-"verity/core/service/vstar/" = "verity/protocols/flock/verifier/vstar_cli/"
+"verity/core/service/vstar/" = "verity/protocols/recursion/verifier/vstar_cli/"
 "verity/ml/circuits/" = "verity/circuits/"
 "verity/ml/circuits/boolean/" = "verity/circuits/boolean/"
 "verity/ml/commitments/" = "verity/commitments/"
@@ -1293,12 +1293,12 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.spot.service" = "verity.protocols.spot.verifier.service"
 "verity.core.protocols.spot.tests" = "verity.protocols.spot.verifier.tests"
 "verity.core.protocols.tests" = "verity.protocols.tests"
-"verity.core.service.firewall" = "verity.protocols.flock.verifier.firewall"
+"verity.core.service.firewall" = "verity.protocols.recursion.verifier.firewall"
 "verity.core.service.flock" = "verity.protocols.flock.verifier"
 "verity.core.service.sigma" = "verity.protocols.flock.sigma"
 "verity.core.service.spot" = "verity.protocols.spot.verifier.lean"
 "verity.core.service.vstar.recursive" = "verity.protocols.recursion.verifier.recursive"
-"verity.core.service.vstar.tests" = "verity.protocols.flock.verifier.vstar_cli.tests"
+"verity.core.service.vstar.tests" = "verity.protocols.recursion.verifier.vstar_cli.tests"
 "verity.core.site" = "verity.hardware.site"
 "verity.core.wire" = "verity.configuration.wire"
 "verity.ml.circuits" = "verity.circuits"
