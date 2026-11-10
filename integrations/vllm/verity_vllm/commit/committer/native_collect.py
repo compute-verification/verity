@@ -159,6 +159,9 @@ class NativeCollectCommitter(NativeHostCommitter):
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
     ends_source_steps = True
+    #: set by the first sampling step that binds them (`install`'s `sample`)
+    splits_seen: dict[int, int]
+    seed_bound_steps: int
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,

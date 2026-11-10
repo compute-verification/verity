@@ -104,7 +104,7 @@ def prescribed_idle_splits(splits_for: Callable[[int, int], int], top_p_rows: An
 def batch_top_p(runner: Any, a: tuple, kw: dict) -> Any:
     """The step's per-row top_p as the served sampler reads it (`sampling_states.top_p.np[input_batch.idx_mapping_np]`), or None."""
     ib = a[1] if len(a) > 1 else kw.get("input_batch")
-    tp = getattr(getattr(getattr(runner, "sampler", None), "sampling_states", None), "top_p", None)
+    tp: Any = getattr(getattr(getattr(runner, "sampler", None), "sampling_states", None), "top_p", None)
     idx = getattr(ib, "idx_mapping_np", None)
     return tp.np[idx] if (idx is not None and hasattr(tp, "np")) else None
 

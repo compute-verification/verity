@@ -175,7 +175,7 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             by_shape[(int(r["LP"]), int(r["T"]))] = {"derived": int(nsm)} if nsm is not None else {"derived": None}
         elif sp is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = sp
-    out: dict[str, list[int] | int | None] = {}
+    out: dict[str, list[int] | int | dict | None] = {}
     for q in Workload.load(workload_file(workload)).requests:
         out[q.request_id] = by_shape.get((q.prompt_length or 0, q.max_tokens - 1))
     return out, unreadable

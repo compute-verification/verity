@@ -75,7 +75,8 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
     with torch.device("meta"):
         m = ex.StochasticServe(C, STEPS, constant_S=S, temperature=0.8, top_p=0.95)
-    inputs = (torch.empty(LP, dtype=torch.int32, device="meta"), torch.empty(1, dtype=torch.int64, device="meta"))
+    inputs: tuple[torch.Tensor, ...] = (torch.empty(LP, dtype=torch.int32, device="meta"),
+                                        torch.empty(1, dtype=torch.int64, device="meta"))
     if S is None:
         inputs += (torch.empty(STEPS + 1, dtype=torch.int32, device="meta"),)
     rep = derive_report(m, inputs, mode="profile", profile="b1-eager-v3", config=C, rules=rules, name="StochServe")

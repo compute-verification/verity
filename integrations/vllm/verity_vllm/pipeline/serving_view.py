@@ -163,7 +163,7 @@ def _step_of_calls(cols: Any, samplers: list[int]) -> tuple[np.ndarray, dict[str
 def load_request_program(rank: int, path: str, *, acc: PG._Acc, X: int, W: int, memo: dict) -> RequestProgram:
     hdr = _read_instance_header(path)
     P = from_instances(path)
-    cols = P.columns
+    cols: Any = P.columns
     n = cols.n
     ret = _returned_calls(path, n)
     if ret is not None:

@@ -421,7 +421,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     return out
 
 
-def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str]) -> dict:
+def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, ...], str]) -> dict:
     """A stochastic component whose sampler split count S is a per-EVENT schedule computed from
     the declared chronology (derive_step `sampling.geometry.request` = the arrival it was computed for, `sampling.splits` = [S_0..S_T]) is
     the Program of ONE request: compose must not reuse it for a request with the same shape (LP, T) but another arrival (its S-schedule
@@ -429,7 +429,7 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
     at the step the component declares; (b) a list schedule has T+1 entries; (c) the component's declared live counts are the manifest's
     (a component derived against another manifest of the same shape does not compose).  Refusal is named; greedy components and those
     at the registered S (an int, held to the registered split count by `sampler_geometry`) bind by shape."""
-    out = {"checked": {}, "refusal": None}
+    out: dict = {"checked": {}, "refusal": None}
     for s, d in shapes.items():
         samp = component_sampling(d)
         geom, splits = samp.get("geometry") or {}, samp.get("splits")

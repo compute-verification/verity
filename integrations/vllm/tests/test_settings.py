@@ -96,7 +96,7 @@ def test_the_narrow_parsers_and_a_kept_empty_read_as_their_readers_did() -> None
     assert S.get("MATCH_COMPACT", {}) is True and S.get("MATCH_COMPACT", {"MATCH_COMPACT": ""}) is True
     assert S.get("VERITY_SPARSE_MLA_NUM_SPLITS", {"VERITY_SPARSE_MLA_NUM_SPLITS": ""}) == ""
     for v in (None, "", "1", " no ", "false", "0", "off", "x"):
-        env = {} if v is None else {"VERITY_REPLAY_FORK_GC_FREEZE": v}
+        env: dict[str, str] = {} if v is None else {"VERITY_REPLAY_FORK_GC_FREEZE": v}
         assert S.get("VERITY_REPLAY_FORK_GC_FREEZE", env) is (env.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no"))
     for v in (None, "", "1", " 1", "true", "0"):
         env = {} if v is None else {"STOCH_DECLARED_CHRONOLOGY_S": v}
