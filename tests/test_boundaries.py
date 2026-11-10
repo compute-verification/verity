@@ -156,7 +156,9 @@ DEPENDENCIES = {"numpy"}
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
+SEPARATE = ("flock/agreement", "flock/pod", "flock/prover", "flock/tool.py", "difftest",
+            "protocols/pous/verifier/check", "configuration/config", "hardware/machine_model", "composite/datacenter",
+            "protocols/inference_only/rho", "protocols/inference_only/nci")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")

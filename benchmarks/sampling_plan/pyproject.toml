@@ -14,12 +14,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # commitments and randomness it imports); the reporting deltas and monitoring periods are core's reporting grid's
 # (`verity.protocols.reporting`); a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
 # (verity.windows.interface).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/hardware/record.py",
           "verity/spot/verifier/profile.py", "verity/spot", "verity/claims",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/window.py",
           "verity/core/periods/__init__.py", "verity/protocols/reporting.py",
-          "verity/protocols/pous", "verity/ml/__init__.py", "verity/windows",
+          "verity/protocols/pous", "verity/windows",
           "verity/configuration/deploy", "verity/configuration/wire",  # wipe_monitoring reads pous/wipe_party, which runs on deploy.stream.Side
           "verity/circuits", "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "benchmarks/census/hardware.json",
