@@ -13,6 +13,7 @@ import all Init.Data.Range.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # `DrawMisses` and `DesignWellFormed` say something: the sample of every unit accepts, and misses nothing
