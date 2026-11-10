@@ -114,7 +114,7 @@ def test_each_library_holds_its_layer():
     """`FlockZkServer` globs the ZK server's module and those under it, and `FlockRec` imports every module of the
     recursion under `Flock` and nothing else."""
     libs = {lib["name"]: lib for lib in tomllib.loads((LEAN / "lakefile.toml").read_text())["lean_lib"]}
-    assert (libs["FlockZkServer"].get("roots"), libs["FlockZkServer"].get("globs")) == ([ZK_ROOT], [ZK_ROOT + ".*"])
+    assert (libs["FlockZkServer"].get("roots"), libs["FlockZkServer"].get("globs")) == ([ZK_ROOT], [ZK_ROOT + ".+"])
     own = modules()
     want = sorted(m for m in own if m.startswith("Flock.") and layer(m) == REC)
     assert "FlockRec" in libs and sorted(imports(own["FlockRec"].read_text())) == want, (

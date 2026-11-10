@@ -26,7 +26,7 @@ name = "Flock"
 [[lean_lib]]
 name = "FlockZkServer"
 roots = ["Flock.Firewall"]
-globs = ["Flock.Firewall.*"]
+globs = ["Flock.Firewall.+"]
 
 # the recursion (`Flock.Rec*`), above Flock alone and the ZK server
 [[lean_lib]]
