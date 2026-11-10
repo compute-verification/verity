@@ -23086,3 +23086,54 @@ Notes for you, not for the paste:
 - The note is `lanes/proofs/20261110T0333Z-report-prf456-number`. It has every cell of both worlds, six rows by six
   scopes by both steps.
 - The wrapper (`headline_world.py`, its job script and its reader) is in the lane's notes tools.
+
+## LEDGER, Tue 10 Nov 03:53Z: PRF-492 is PR #8517, not marked yet; its pre-mark run is waiting for a slot
+
+From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece).
+
+**Where it is.**
+
+- PR [#8517](https://github.com/compute-verification/verity/pull/8517), head `69fea24aa5` on
+  `cursor/proofs-ledger-stamp-f1a6` (from `main` 7af4d24fca). `Lane proofs`, `Refs PRF-492`. It adds files only.
+- The pre-mark run is `r20261110-034832-4e4e` on vy-nebius-cpu-3 (`suites.py --changed <merge-base> --quick`:
+  benchmarks/spot_figures, repository, verity-graph). At 03:53Z it is waiting for a slot. It was launched at 03:48Z
+  with six jobs ahead of it; it has a 60 min limit once it starts. I mark the PR when it passes.
+- Locally: `tests/test_record.py`, 23 passed. Ledger note, section 11, has the readers and the reasoning.
+
+**What it prints on the two stored files** [run: `record.py stamp` on each `meta.json` fetched from the store].
+
+| Serve | At the post's value | Off |
+|---|---|---|
+| b00b | 1, 2, 4, 5, 7, 10 | 6, 8, 9, 11–17, 20 |
+| 1758 | 1, 2, 5 | 4, 6, 7, 8, 9, 10, 11–17, 20 |
+
+**b00b's list is section 3's. 1758's is not, and I changed the ledger rather than the tool.** You asked for a test that
+gets section 3's off lists. Section 3 had "4, 7, 9; no audit" for 1758, with 20 at the post's value. No one rule gives
+that list and b00b's from a `meta.json`:
+
+- 8 and 10 to 17: the old row left these to the words "no audit". 1758's harness records neither its decoding nor an
+  execution phase.
+- 6: section 2's row 6 already says no run is unmodified.
+- 20: I had read the certifier's own run (f61b). The serve's `meta.json` shows only that the tick was on. Its
+  `fake: false` means the server was vLLM, not that the certifier was real [read: the run's `inputs/ticksun.py`].
+
+Section 3's TICK row now says this. If you want the tool to read the certifier's record too, so 20 clears, say so and
+I add it as a second input.
+
+**Two choices you may want to overrule.**
+
+1. **Switches 6 and 20 are off on every stamp made from a `meta.json` alone, Thursday's included.** The stamp shows
+   the commit and the tick, and `post` asks for more than a `meta.json` holds (unmodified; the certifier real). The
+   other way for 6 was a reader that flags `--moe-backend triton`. It gives b00b's list for the wrong reason, since
+   the rewritten top-k is not in `meta.json`, and it could show a later serve clean while a rewrite is in.
+2. **Switch 5 compares the tensor-parallel degree only.** The machine is in the run's record, which the stamp does
+   not read. The ledger had 5 at the post's value for both runs, so I kept that.
+
+**Not verified.**
+
+- Switch 17's reader (the `boundary_rows` plugin) against a stored two-stage `meta.json`: those are private. I read
+  it from `serve_tax.py` on `main`.
+- The suites on a pod: the run above.
+
+**For you.** PRF-492 has no goal label, so `research queue open` warned twice. The body names
+`proofs/spot-claims-checked`. The label is yours to add.
