@@ -68,6 +68,14 @@ holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTimi
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
 neither and keeps its digest.
 
+**The lengths rows** (`WardenParams.lengths`, none by default; 1 is their form): a schedule may have its network
+certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
+outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride. Such a schedule has the
+id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt field
+(`io_request.layout`), at most 2^16 egress cells, and D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
+within a window of its admission; `WardenParams` takes no other. The form enters the parameters' digest; a schedule
+without lengths rows hashes nothing of it and keeps its digest, and its network certifier does nothing of this section.
+
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
 cap (limit), the server's connection failing (upstream), an egress cell out of the egress form (format), ingress past
@@ -166,6 +174,7 @@ class WardenParams:
     every: int = 1  # a slot stride's buckets: the Programs' boundaries are every `every` buckets of a window
     egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
+    lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1, or none
 
 
     def __post_init__(self) -> None:
@@ -189,6 +198,20 @@ class WardenParams:
             if self.payload < MAX_TOKENS_AT + ID_DIGITS:
                 raise ValueError(f"a {self.cell_bytes}-byte cell doesn't hold an id request's max_tokens: "
                                  f"under a response cap a cell is at least {HEADER.size + MAX_TOKENS_AT + ID_DIGITS} bytes")
+        if self.lengths is not None:
+            if type(self.lengths) is not int or self.lengths != 1:
+                raise ValueError(f"lengths is 1, the lengths rows' form, or unset, not {self.lengths!r}")
+            if self.egress != "id":
+                raise ValueError("the lengths rows count id events, so their egress form is id")
+            if self.ingress_buckets > self.delay:
+                raise ValueError(f"with lengths rows ingress_buckets ({self.ingress_buckets}) is at most the delay "
+                                 f"({self.delay}): a released connection holds its lane from its release")
+            last = self.delay + (self.egress_cells - 1) // self.slots
+            if last > self.window or self.egress_cells > 1 << 16:
+                raise ValueError(f"with lengths rows a connection ends within a window of its admission and its "
+                                 f"egress cells count in a u16: delay + (egress_cells − 1) // slots ({last}) is at "
+                                 f"most the window ({self.window}) and egress_cells at most {1 << 16}")
+            _request_form().layout(self.cell_bytes)
 
     @property
     def program_slots(self) -> int:
@@ -200,6 +223,15 @@ class WardenParams:
     def window_programs(self) -> int:
         """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
+
+    @property
+    def stride_releases(self) -> int:
+        """K: the most requests the network certifier releases in one slot stride with lengths rows, a lengths row's
+        slots. A released connection holds its lane from its release through its admission's bucket + D, at least
+        L = D + 2 − `ingress_buckets` buckets, so any L buckets hold at most `lanes` releases; and it holds it D + 1
+        buckets around its release, so a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets."""
+        E, D = self.every, self.delay
+        return self.lanes * min(-(-E // (D + 2 - self.ingress_buckets)), 1 + -(-(E - 1) // (D + 1)))
 
     @property
     def reasons(self) -> tuple[str, ...]:
@@ -224,15 +256,25 @@ class WardenParams:
     @cached_property
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
-        cap nor its reason in what it hashes, so its digest is the one it had before the cap was a parameter."""
-        values = {k: v for k, v in asdict(self).items() if k != "max_tokens_cap" or v is not None}
+        cap nor its reason in what it hashes, and one without lengths rows not their form, so its digest is the one
+        it had before either was a parameter."""
+        values = {k: v for k, v in asdict(self).items() if k not in OPTIONAL_FIELDS or v is not None}
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
                                                                             "reasons": list(self.reasons)}))
 
 
-#: `WardenParams`' integer fields, every one but `egress` and `max_tokens_cap`: the schedule the period check reads
-#: (`scheduleOf`), whose egress form is the id form and which has no response cap
-INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", "max_tokens_cap"))
+#: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
+OPTIONAL_FIELDS = ("max_tokens_cap", "lengths")
+#: `WardenParams`' integer fields, every one but `egress` and the optional ones: the schedule the period check reads
+#: (`scheduleOf`), whose egress form is the id form and which has no response cap and no lengths rows
+INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
+
+
+def _request_form():
+    """`io_request`, whose reading of a request cell (`io_request.read`) a schedule with lengths rows holds every
+    request to. Imported at its first use: `io_request` imports this module."""
+    from verity.core.protocols.certifier import io_request
+    return io_request
 
 
 def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
