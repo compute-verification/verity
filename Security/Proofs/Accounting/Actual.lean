@@ -3,7 +3,7 @@ import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
 import Proofs.Accounting.Actual.Threaded
-import Proofs.Accounting.Actual.Dampener
+import Proofs.Accounting.Actual.Slowdown
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
@@ -33,8 +33,8 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.
-* `Actual/Dampener.lean`: `DampenerWindowsCap`, the compute dampener's windows hypothesis
-  (`InferenceOnly.Guarantees.DampenerWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
+* `Actual/Slowdown.lean`: `SlowdownWindowsCap`, the compute dampener's windows hypothesis
+  (`InferenceOnly.Guarantees.SlowdownWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
   residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by

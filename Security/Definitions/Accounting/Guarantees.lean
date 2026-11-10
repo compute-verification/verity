@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.Actual
 import Definitions.Accounting.Guarantees.Actual.Threaded
-import Definitions.Accounting.Guarantees.Actual.Dampener
+import Definitions.Accounting.Guarantees.Actual.Slowdown
 import Definitions.Accounting.Guarantees.Additive
 import Definitions.Accounting.Guarantees.Bandwidth
 import Definitions.Accounting.Guarantees.Bandwidth.Causal
