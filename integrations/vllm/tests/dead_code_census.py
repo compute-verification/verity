@@ -17,10 +17,10 @@ STATIC REACHABILITY: an ast import graph over every `.py` under the integration 
 circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
-prefixes (`f"verity.ml.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
+prefixes (`f"verity.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/acquire/fa2_tap_src/build_ext.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/observe/fold/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
-`registry.catalog.load()` imports every module of `verity.ml.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
+`registry.catalog.load()` imports every module of `verity.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -61,15 +61,15 @@ KEEP_FILE = HERE / "dead_code_keep.json"
 
 PACKAGES = ("verity_vllm",)
 CENSUS_PACKAGES = PACKAGES
-#: the Definitions that moved from the package to `verity.ml.definitions` (circuits', held to the keep-list as it stood): in the
+#: the Definitions that moved from the package to `verity.definitions` (circuits', held to the keep-list as it stood): in the
 #: graph and the census, each file keyed by its repository path
-DEFINITIONS = REPO / "verity" / "ml" / "definitions"
+DEFINITIONS = REPO / "verity" / "definitions"
 #: what of `DEFINITIONS` moved from the package: the modules at its top and these packages of it; any other package there is core's
 MOVED_OUT = frozenset({"numerics", "registry", "tests"})
 _TOPS = "|".join(PACKAGES + ("tests",))
 _DEFINITIONS_MODULE = re.escape(".".join(DEFINITIONS.relative_to(REPO).parts))
 TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
-PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/ml/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
+PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
@@ -111,7 +111,7 @@ def py_files() -> list[Path]:
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
             if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
-                continue                                             # verity.ml.definitions' own __init__ is verity.ml's, not a Definition's
+                continue                                             # verity.definitions' own __init__ is verity.ml's, not a Definition's
             if top == DEFINITIONS and len(parts := p.relative_to(top).parts) > 1 and parts[0] not in MOVED_OUT:
                 continue                                             # core's package: neither in the graph nor in the census
             out.append(p)
@@ -128,7 +128,7 @@ def path_of(rel: str) -> Path:
 
 
 def in_census(rel: str) -> bool:
-    return rel.split("/")[0] in CENSUS_PACKAGES or rel.startswith("verity/ml/definitions/")
+    return rel.split("/")[0] in CENSUS_PACKAGES or rel.startswith("verity/definitions/")
 
 
 def modname(p: Path) -> str:
@@ -251,7 +251,7 @@ class Graph:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
                 continue
-            if pkg == "verity.ml.definitions.registry":                    # registry.catalog.load(): every module of it but quarantine
+            if pkg == "verity.definitions.registry":                    # registry.catalog.load(): every module of it but quarantine
                 for m in self.file_of:
                     if m.rsplit(".", 1)[0] == pkg and m != pkg + ".quarantine":
                         self.add(src_mod, m)

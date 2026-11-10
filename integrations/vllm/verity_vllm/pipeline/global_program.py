@@ -10,7 +10,7 @@ the shapes still to derive.  `LAG` (the declared scheduler's post-EOS rows, `Tar
 REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): the digest differs per value and GM-01 G6 consumes it.
 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
-Program's descriptor, decodable with verity.ml.circuits.codec), `address_map.json`, `chronology.json`.
+Program's descriptor, decodable with verity.circuits.codec), `address_map.json`, `chronology.json`.
 
 Layout 1.1 (`verity_vllm.pipeline.layout`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
 artifact carries a `layout` block with the same paths relative to the artifact root (`--artifact-root`, default the parent of
@@ -28,14 +28,14 @@ import sys
 import time
 from dataclasses import dataclass
 
-from verity.ml.circuits.codec import canonical_json, descriptor_size
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.codec import canonical_json, descriptor_size
+from verity.circuits.defs import REGISTRY
 from verity_vllm import settings
 from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
-from verity.ml.definitions.registry.catalog import load as _load_registry
+from verity.definitions.registry.catalog import load as _load_registry
 
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
@@ -407,13 +407,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
-           "source": "verity.ml.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
+           "source": "verity.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity.ml.definitions.registry.topp_geometry import registered_splits
+    from verity.definitions.registry.topp_geometry import registered_splits
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "

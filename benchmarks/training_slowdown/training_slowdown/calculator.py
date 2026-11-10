@@ -1,4 +1,4 @@
-"""The slowdown calculator (`benchmarks/rho`) as this package reads it: the one module here that names it.
+"""The slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: the one module here that names it.
 
 What the calculator states is read from it through its public functions, never restated here:
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[2] / "rho"
+CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"

@@ -8,15 +8,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import dead_free as DF
-from verity.ml.definitions.registry import sampling as SA
-from verity.ml.definitions.registry import topp_standalone as TS
-from verity.ml.definitions.registry import topp_standalone_words as TSW
-from verity.ml.definitions.registry.topp_keep_builder import Engine
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.program import Program
+from verity.definitions.registry import dead_free as DF
+from verity.definitions.registry import sampling as SA
+from verity.definitions.registry import topp_standalone as TS
+from verity.definitions.registry import topp_standalone_words as TSW
+from verity.definitions.registry.topp_keep_builder import Engine
 
 f32 = np.float32
 P = (0.95, 0.5, 0.9, 0.95, 0.8, 1.0, 0.3, 0.99)

@@ -44,16 +44,16 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.refs import runs
-from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.numerics.rows import ROWS
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.b1 import NEG_INF_BF16
-from verity.ml.windows import interface as IF
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.spot.verifier.one_stage import registered as G
+from verity.circuits.codec import descriptor_id
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.refs import runs
+from verity.commitments.gates import embedding as E
+from verity.definitions.numerics.rows import ROWS
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry.b1 import NEG_INF_BF16
+from verity.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 

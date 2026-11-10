@@ -60,7 +60,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, NamedTuple
 
-from verity.ml.protocols.certifier.window_charge import Window
+from verity.protocols.certifier.prover.window_charge import Window
 from verity_vllm.pipeline.advice_code import arith as C
 
 __all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "Decoder", "DEFAULT_CAPS",

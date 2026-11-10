@@ -9,15 +9,15 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits import Program, bind, decode_program, encode_program, program_digest  # noqa: E402
-from verity.ml.circuits.defs import REGISTRY  # noqa: E402
+from verity.circuits import Program, bind, decode_program, encode_program, program_digest  # noqa: E402
+from verity.circuits.defs import REGISTRY  # noqa: E402
 from verity_vllm.program.frontend import (Arr, DeadGateWarning, FrontendError, Ops, batch, check_identity, export,  # noqa: E402
                                 export_report, function, ops, scan)
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided  # noqa: E402
-from verity.ml.definitions.registry import b1  # noqa: E402
-from verity.ml.definitions.registry.prims import BF16, F32, I32  # noqa: E402
+from verity.circuits.refs import Affine, Concat, Explicit, Strided  # noqa: E402
+from verity.definitions.registry import b1  # noqa: E402
+from verity.definitions.registry.prims import BF16, F32, I32  # noqa: E402
 
 meta = lambda *shape, dtype=torch.bfloat16: torch.empty(shape, dtype=dtype, device="meta")  # noqa: E731
 
@@ -183,10 +183,10 @@ def test_r1_two_bodies_in_one_program_are_rejected():
         export(Both, (meta(4),), dead_gates="ignore")
     assert ei.value.code == "E_IDENTITY" and "two different bodies claim Leaf1_v1{K=4}" in ei.value.message
     # and the program-level check catches the same conflict on an already-built program (no first-wins on decode paths)
-    from verity.ml.circuits.defs import CompositeDefinition, Builder
-    from verity.ml.circuits.refs import Coll
-    from verity.ml.definitions.registry.prims import Bf16Add, Bf16AddF2fp
-    from verity.ml.circuits.types import Array
+    from verity.circuits.defs import CompositeDefinition, Builder
+    from verity.circuits.refs import Coll
+    from verity.definitions.registry.prims import Bf16Add, Bf16AddF2fp
+    from verity.circuits.types import Array
 
     def leaf(prim):
         return CompositeDefinition("Leaf1x", 1, ("K",), lambda S: ((("x", Array(S.K, BF16)),), Array(S.K, BF16)),
@@ -203,7 +203,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
 def test_r1_registry_version_in_provenance():
     rep = export_report(ex.Gemm, static={"K": 32, "N": 4}, dead_gates="ignore")
     reg = rep.provenance["registry"]
-    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity.ml.definitions.registry.prims" in reg["sources"]
+    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity.definitions.registry.prims" in reg["sources"]
     assert rep.provenance["torch"] == torch.__version__ and rep.provenance["mode"] == "authoring"
     assert rep.provenance["rules"] == []
 
@@ -369,5 +369,5 @@ def test_r5_authored_attention_head_corresponds_to_ta1_with_smaller_encoding():
     # authored and TA1 descriptors are byte-identical -- the stronger fact (descriptor-codec.md §6); before it the
     # authored one was smaller and corresponded through one same-references run.
     assert r.corresponds and r.digest_equal and not r.mismatches
-    from verity.ml.circuits.codec import descriptor_size
+    from verity.circuits.codec import descriptor_size
     assert descriptor_size(P_a) == descriptor_size(P_t)

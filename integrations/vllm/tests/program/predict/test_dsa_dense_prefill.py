@@ -14,7 +14,7 @@ from collections import Counter
 
 import pytest
 
-from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+from verity.definitions.registry.sparse_mla_split import launch_num_splits
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible, _Launch

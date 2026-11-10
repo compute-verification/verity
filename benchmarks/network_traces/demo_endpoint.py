@@ -23,7 +23,7 @@ Commit window and writes ``summary.json``.
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
-  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `e2e_h200.served_weights`'s
+  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `benchmarks.torch_gpu.p2_stage.served_weights`'s
   SHAPE, ``tiny`` or ``phase1``, through this module's own W8A8 forward on CPU, not the H200 loop's kernels), or
   ``MODULE:FACTORY``, a factory the serving loop provides, called with ``seed`` and returning an `Engine`.
 * **The records**, in serve-openai's formats under ``--out``: ``serve.json`` (the engine, its context as
@@ -34,7 +34,7 @@ Commit window and writes ``summary.json``.
   and the clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run
   id and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again
   or after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run
-  root is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``)
+  root is a hiding commitment (`verity.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``)
   of the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving
   loop's own Commit (its per-slot trees), which network certification doesn't read.
 """
@@ -58,7 +58,7 @@ from typing import Any, Callable, Protocol, Sequence
 
 import numpy as np
 
-from verity.ml.commitments import advice as AC
+from verity.commitments import advice as AC
 
 SCHEMA = "verity-vllm/step-trace/v1"  # verity_vllm.engine.step_trace.SCHEMA
 ROW_BITS = 128
@@ -92,14 +92,14 @@ def _bf16(words: np.ndarray) -> np.ndarray:
 
 
 class SeededDecoder:
-    """The seeded weights (`e2e_h200.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
+    """The seeded weights (`benchmarks.torch_gpu.p2_stage.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
     numpy: embeddings and positions added, per layer RMSNorm, the query, key and value projections (``kv_heads`` KV heads),
     causal softmax attention, the output projection and the residual, RMSNorm, the ReLU MLP and the residual, then the
     final norm and the head, greedy. A W8A8 linear quantizes its input row to s8 codes at max|x|/127 and scales the s8 dot by
     that and its output channel's scale. The whole sequence is recomputed each step (the context is at most 32)."""
 
     def __init__(self, shape: str, seed: int = 0) -> None:
-        from e2e_h200 import served_weights as W
+        from benchmarks.torch_gpu.p2_stage import served_weights as W
 
         self.shape = s = W.ALIASES.get(shape) or W.SHAPES[shape]
         self.vocab, self.context, self.name = s.vocab, s.context, f"demo-endpoint/seeded-{s.name}"
@@ -312,7 +312,7 @@ class Scheduler:
         (d / f"w{w}.json").write_text(json.dumps({"window": w, "rows": [list(r) for r in rows],
                                                   "salts": [s.hex() for s in reg.salts]}))
         rec = {"window": w, "run_id": run_id, "run_root": reg.root.hex(), "steps": self.window_steps_done,
-               "rows": len(rows), "scheme": "demo-endpoint/served-rows/v1 (verity.ml.commitments.advice, hm96-sha512)",
+               "rows": len(rows), "scheme": "demo-endpoint/served-rows/v1 (verity.commitments.advice, hm96-sha512)",
                "requests": [{"engine_id": q.rid, "user": q.user} for q in self.window_reqs.values()], "passed": True}
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")

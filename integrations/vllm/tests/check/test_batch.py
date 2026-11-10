@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.check.batch import (BATCH, SHARED, Fields, Rows, Template, check, held, invariant, own, report, separable,
                                      structure)
 
