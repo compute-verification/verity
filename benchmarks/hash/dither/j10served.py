@@ -66,7 +66,7 @@ def leader_rows(seed_l: bytes):
 
 
 def layout(win, s: int, g: int):
-    """For step s of the window's layout: lead(pos), the position of its unit's band leader, and cell(pos), the banded
+    """For step s of the execution phase's layout: lead(pos), the position of its unit's band leader, and cell(pos), the banded
     reference's (I, J, g, row_positions) for it."""
     offs = list(win.offs)
 

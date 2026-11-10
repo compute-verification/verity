@@ -761,7 +761,7 @@ def test_a_declared_interval_the_reference_leaves_is_named():
 
 
 def test_a_transfer_the_reference_leaves_is_named():
-    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
     intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.ports import Ports, as_reading

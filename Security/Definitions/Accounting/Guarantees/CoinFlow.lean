@@ -9,10 +9,10 @@ The statements, over `Definitions/Accounting/CoinFlow.lean`. The proofs are in `
 Each holds of every Program the Build admits (`Program.admits`), with no hypothesis on its nodes' operations.
 
 * `ViewIndependent`, from rule (b): a noise injection's fresh coins reach no value outside its forward cone. Every node
-  that doesn't read the injection's value, through any chain, has the same value under any two draws that differ only
+  that doesn't read the injection's value, through any chain, has the same value under any two samples that differ only
   on those coins.
 * `CoinsThroughNoise`, from rule (a) and sink confinement: a value that isn't a sink depends on the coins only through
-  the noise injections it reads. Two draws that agree on the fresh coins of every noise injection in its backward
+  the noise injections it reads. Two samples that agree on the fresh coins of every noise injection in its backward
   cone give it the same value.
 * `OneReader`, from rule (b): a noise injection's forward cone is the injection and its one reader's forward cone. So a
   view may hold every value except the noised operand and what reads its consumer.
@@ -33,7 +33,7 @@ namespace Accounting.Guarantees.CoinFlow
 
 open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity
 
-/-- **A noise injection's coins reach only its forward cone (rule (b)).** In a Program the Build admits, two coin draws
+/-- **A noise injection's coins reach only its forward cone (rule (b)).** In a Program the Build admits, two coin samples
 that agree off a noise injection's fresh coins give every node outside its forward cone the same value. -/
 def ViewIndependent : Prop :=
   ∀ (m : ℕ) (C V : Type) [DecidableEq C] [Inhabited V] (P : Program m C V), P.admits = true →
@@ -41,7 +41,7 @@ def ViewIndependent : Prop :=
       ∀ g, ¬P.Desc k g → P.eval σ g = P.eval σ' g
 
 /-- **A value that isn't a sink reads the coins only through noise injections (rule (a)).** In a Program the Build
-admits, two coin draws that agree on the fresh coins of every noise injection a non-fold node reads, through any chain,
+admits, two coin samples that agree on the fresh coins of every noise injection a non-fold node reads, through any chain,
 give it the same value. -/
 def CoinsThroughNoise : Prop :=
   ∀ (m : ℕ) (C V : Type) [DecidableEq C] [Inhabited V] (P : Program m C V), P.admits = true →

@@ -1,6 +1,6 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the
 Python reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
-core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
+core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
 never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `empty_draws`
@@ -77,7 +77,7 @@ def _sha(b: bytes) -> str:
 @functools.cache
 def _empty_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
     tree) drew no unit (a subset of none), so it names no session and no proved unit, and its params name the circuit
     and public files `BLOBS` hold. Made once each: a challenger's signed session is slow to make."""
     s, law = OS.SETUPS[i], {"k": 0, "law": "subset"}
@@ -97,8 +97,8 @@ def _empty_audit(i: int) -> tuple[dict, dict, dict]:
 
 @st.composite
 def empty_draws(draw) -> dict:
-    """A one-stage v2 audit whose draw drew nothing (`_empty_audit`) at a drawn δ: it names no session, which v2 refuses
-    at its challenger's coins before it reads a tree (`oneSession`: the drawn units are proved in one session)."""
+    """A one-stage v2 audit whose sample drew nothing (`_empty_audit`) at a sampled δ: it names no session, which v2 refuses
+    at its challenger's coins before it reads a tree (`oneSession`: the sampled proof blocks are proved in one session)."""
     params, rec, evidence = _empty_audit(draw(st.integers(0, len(OS.SETUPS) - 1)))
     params = {**params, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2"]))}
     return OS._json({"params": params, "record": rec, "evidence": evidence})
@@ -110,7 +110,7 @@ def _without(x: dict, *ks: str) -> dict:
 
 def _v1(a: dict) -> dict:
     """v2's audit `a` as one-stage v1's: its params without ``proofs``, its evidence with the verdicts of no session in
-    place of ``proofs``, on which v1 is undecided, for want of the verifier of record."""
+    place of ``proofs``, on which v1 is undecided, for want of the verifier."""
     return {**a, "params": _without(a["params"], "proofs"),
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
@@ -450,7 +450,7 @@ product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 @pytest.fixture(scope="module")
 def recorded(tmp_path_factory):
     """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp), and
-    the wipe's test signer's files under it too while the module's tests draw wipes."""
+    the wipe's test signer's files under it too while the module's tests sample wipes."""
     if not R.POUS.cases:
         periods.build(tmp_path_factory.mktemp("periods"))
     ts = R.WIPE_CASES.M.ts
@@ -491,11 +491,11 @@ def test_remote_agrees(remote_server):
 
 
 def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
-    """On drawn cases remote's verdict is its product's without the record checks (`Core.Composition.product`,
+    """On sampled cases remote's verdict is its product's without the record checks (`Core.Composition.product`,
     remote before them), except where its policy and integrity committed to two records, or a window of its PoUW period
     names another record than the policy's (`windows`), which it refuses: the checks change no other verdict. Python
-    only: the difftest holds the Lean to it. Drawn from a fixed seed, as `verity_difftest.run` draws, so the counts it
-    asks of the draw are the generator's, not a run's luck."""
+    only: the difftest holds the Lean to it. Sampled from a fixed seed, as `verity_difftest.run` samples, so the counts it
+    asks of the sample are the generator's, not a run's luck."""
     product = R.Product(R.REMOTE.id, R.REMOTE.components)
     seen = collections.Counter()
 
@@ -528,7 +528,7 @@ def remote_case(cases: list[dict]) -> dict:
 
 def test_sampled_proofs_refuses_one_stage_v1(remote_server):
     """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
-    empty draw at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
+    empty sample at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
     and v1's evidence under v2's params at the evidence. Remote, its policy and period aimed at acceptance on the
     audit's record, rejects with that refusal as sampled proofs' reason, in Lean as in Python."""
     want = {"v1": f"params: the parameters name no proofs: {R.V1_REFUSED}",
@@ -608,10 +608,10 @@ def test_onsites_bandwidth_is_p2():
 
 @pytest.mark.slow
 def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
-    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
+    """On sampled cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
     PoUB-P2 committed to two stores (PoUS's run on another store, `periods.OTHER_STORE`), which it refuses: the tie
-    changes no other verdict. Python only: the difftest holds the Lean to it. Drawn from a fixed seed, as
-    `verity_difftest.run` draws."""
+    changes no other verdict. Python only: the difftest holds the Lean to it. Sampled from a fixed seed, as
+    `verity_difftest.run` samples."""
     untied = dataclasses.replace(R.ONSITE, ties=())
     seen = collections.Counter()
 

@@ -73,7 +73,7 @@ theorem frameAdmits_of_unrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.Table
   fun ν t κ m₀ ρ₀ ops hl hlive hok hr => hT x _ fun hx => hU hx ν t κ m₀ ρ₀ ops hl hlive hok hr
 
 /-- **`FinalRoundEq` at the session loop's own frames** from the tables admitting unrefused coins, the frames refusing
-every fault and the firewall's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/
+every fault and the ZK server's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/
 theorem finalRoundEq_ofLoop (T : CoinLayer.TableData) (vs : (CoinLayer.session Loop.loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))

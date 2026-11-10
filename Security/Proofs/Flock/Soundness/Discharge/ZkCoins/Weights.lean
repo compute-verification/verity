@@ -5,8 +5,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 /-!
 # Product laws on committed rounds
 
-The hybrid of `Hybrid.lean` runs on `ω : I → Z` drawn from a product of per-round laws `μ j` (`W μ ω`, the weight of
-`ω`). `resample` redraws one coordinate `k` from its own law inside the sum, and `reweight` changes `k`'s law under a
+The hybrid of `Hybrid.lean` runs on `ω : I → Z` sampled from a product of per-round laws `μ j` (`W μ ω`, the weight of
+`ω`). `resample` resamples one coordinate `k` from its own sampling design inside the sum, and `reweight` changes `k`'s law under a
 function that does not read `ω k`.
 -/
 
@@ -97,7 +97,7 @@ theorem sum_fiber_update [DecidableEq Z] (μ : I → Z → ℝ≥0∞) (k : I) (
   refine Finset.sum_congr rfl fun ω _ => ?_
   rw [Wo_update]
 
-/-- **Redrawing coordinate `k` from its own law** leaves the sum unchanged. -/
+/-- **Redrawing coordinate `k` from its own sampling design** leaves the sum unchanged. -/
 theorem resample {μ : I → Z → ℝ≥0∞} {k : I} (hμ : ∑ z, μ k z = 1) (F : (I → Z) → ℝ≥0∞) :
     ∑ ω, W μ ω * F ω = ∑ ω, W μ ω * ∑ z, μ k z * F (update ω k z) := by
   classical

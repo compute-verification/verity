@@ -4,14 +4,14 @@ public import Proofs.Flock.Soundness.Binding.E2E
 public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
-# The headline: the program's rows, SHA-512 throughout, the live draw
+# The headline: the program's rows, SHA-512 throughout, the live sample
 
 `Prog.flock_headline` is the one end-to-end statement the others specialize into. It combines:
-* the circuit of the statement's rows (`p.circuit outs`, `Prog.circuit`), each drawn unit's place from its table's
+* the circuit of the statement's rows (`p.circuit outs`, `Prog.circuit`), each sampled proof block's place from its table's
   statement (`ProgPlaces`);
 * SHA-512 (`Refine.H512`, `Refine.enc512`) as the session's hash and the rows' commit hash, with the rows' value binding
   (`flock_e2e_count_hm96`);
-* the live draw (`Law.execOS`, `Flock.Draw.drawWith`'s stratified draw on a byte source), its count curve at most
+* the live sample (`Law.execOS`, `Flock.Draw.drawWith`'s stratified sample on a byte source), its count curve at most
   `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
 
 Its cryptographic hypotheses are instances of three assumptions, each for the finders built from the prover bounded:
@@ -26,10 +26,10 @@ The others are the named obligations `assumption-notes/e2e-checklist.md` lists: 
 their finders' real SHA-512 evaluations, `qF, qT ≥ 2t′ + 2v` and `qS ≥ t′ + v` for `t′` one session run's and `v` one
 opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 
-It bounds wrong units of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
+It bounds incorrect proof blocks of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
 certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
 
-Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
+Its proof coins are the model's: uniform, sampled each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
 states, and which covers the challenger's keyed coin tree: `verify` refuses a session on a committed seed's coins
 (`ProvedScope.servedForm`).
@@ -49,8 +49,8 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **The headline: the count curve on the statement's rows, under SHA-512, at the live draw.** Let the units be sampled
-with `Flock.Draw.drawWith`'s stratified law (strata `St`, matching `Law.stratified σs ks` by `hS`) on a byte source
+/-- **The headline: the count curve on the statement's rows, under SHA-512, at the live sample.** Let the units be sampled
+with `Flock.Draw.drawWith`'s stratified sampling design (strata `St`, matching `Law.stratified σs ks` by `hS`) on a byte source
 `src` that A3 makes uniform (`hA3`), the challenger's coins, and run the batched session with SHA-512 leaves, nodes and
 rows. If `execAccept` holds, the probability that at least `K` units of the program's rows circuit are wrong at the
 committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's openings elsewhere) is at most

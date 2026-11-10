@@ -22,13 +22,13 @@ set_option Elab.async false
 checks (`RecIns.setup`), with no premise:
 
 * A V\* session is one table (`RecSetup.oneFull`, `oneFull_staged`), so `setupTables` sets table 0 up at the session's
-  draw (`setupTables_okAny`), and the label check reads that draw (`RecVStar.tableDraw` at one table).
-* Without a draw the table's public file is the registered population's (`setupOne_pub`), whose labels `loadPublic`
+  sample (`setupTables_okAny`), and the label check reads that sample (`RecVStar.tableDraw` at one table).
+* Without a sample the table's public file is the registered population's (`setupOne_pub`), whose labels `loadPublic`
   refuses unless they ascend, one per instance (`loadPublic_asc`).
-* With a draw the table is the drawn units' (`HmRow.drawn`, `Layout.drawn_spec`: `n` is the proved units' count), and
+* With a sample the table is the sampled proof blocks' (`HmRow.drawn`, `Layout.drawn_spec`: `n` is the proved units' count), and
   the setup's label check (`RecVStar.checkLabels`, which runs under the verifier's inner shape, `insO_staged`) makes its
-  labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitDraw.ofJson` refuses drawn units, or a
-  closure, that are not ascending and distinct, or a closure holding a drawn unit (`ofJson_asc`), and with a closure
+  labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitDraw.ofJson` refuses sampled proof blocks, or a
+  closure, that are not ascending and distinct, or a closure holding a sampled proof block (`ofJson_asc`), and with a closure
   `proved` is their `qsort`, which sorts (`ReadsExact.qsort_sorted`) and permutes (`CoinPos.qsort_perm`) them.
 -/
 
@@ -54,7 +54,7 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
   exact h (Array.any_eq_true'.2 ⟨u, hu, Array.contains_iff_mem.2 hm⟩)
 
 set_option maxHeartbeats 2000000 in
-/-- **A draw's units ascend, and so does its closure, which holds no drawn unit**: `UnitDraw.ofJson` refuses any other. -/
+/-- **A sample's units ascend, and so does its closure, which holds no sampled proof block**: `UnitDraw.ofJson` refuses any other. -/
 theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
     (∀ j, 0 < j → j < D.units.size → D.units[j - 1]! < D.units[j]!) ∧
       (∀ j, 0 < j → j < D.closure.size → D.closure[j - 1]! < D.closure[j]!) ∧ ∀ u ∈ D.closure, u ∉ D.units := by
@@ -106,7 +106,7 @@ theorem asc_of_pairwise {a : Array ℕ} (h : a.toList.Pairwise (· < ·)) :
   rw [getElem!_pos a (j - 1) (by omega), getElem!_pos a j hj]
   exact this
 
-/-- **A draw's proved units ascend**: its drawn units without a closure (`ofJson_asc`), else their `qsort` with the
+/-- **A sample's proved units ascend**: its sampled proof blocks without a closure (`ofJson_asc`), else their `qsort` with the
 closure, sorted (`qsort_sorted`) and distinct, since it permutes distinct units (`qsort_perm`). -/
 theorem proved_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
     ∀ j, 0 < j → j < D.proved.size → D.proved[j - 1]! < D.proved[j]! := by
@@ -173,8 +173,8 @@ theorem setupH_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     subst h
     assumption
 
-/-- **A table's public file** (`setupOne`, either output mode): the registered population's without a draw, the drawn
-units' (`HmRow.drawn`) at one. -/
+/-- **A table's public file** (`setupOne`, either output mode): the registered population's without a sample, the sampled
+proof blocks' (`HmRow.drawn`) at one. -/
 theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -213,7 +213,7 @@ theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.c
 
 /-! ## At a staged table -/
 
-/-- **A staged table's labels ascend, one per instance**: its one table is set up at the session's draw; without one
+/-- **A staged table's labels ascend, one per instance**: its one table is set up at the session's sample; without one
 its labels are the registered population's (`loadPublic_asc`), with one the proved units (`checkLabel_idx`), which
 ascend (`proved_asc`) and are its instances (`drawn_spec`). -/
 theorem labels_staged {st : RecDeploy.Stage} {s : ℕ} {x xO : Msg} (hS : RecDeploy.StagedPart st s x xO) {i : RecIns}

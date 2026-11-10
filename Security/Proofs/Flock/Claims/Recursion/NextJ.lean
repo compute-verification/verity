@@ -10,7 +10,7 @@ success, that no V\* part computes and the statement does not fix: the record is
 hiding leaf, and `StmtFixes` asks a check to hold at the readers' messages of every witnesses. `nextJ` is the
 element-level step whose last message carries the record's parsed value: the layout's reader `rd` (the code side's, as
 `final` is) reads it as the statement, the parsed value and the proof files (`FinalJ`), and the decision runs the
-verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the draw check at the parsed value
+verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the sample check at the parsed value
 (`drawOfJ`). There is no parse in it, so parse success is no check of `IVStar`.
 
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
@@ -44,7 +44,7 @@ structure FinalJ where
   j : Json
   proofs : Array ByteArray
 
-/-- The record's draw at its parsed value, rebuilt (`recordDraw` after the parse). -/
+/-- The record's sample at its parsed value, rebuilt (`recordDraw` after the parse). -/
 def drawOfJ (j : Json) : Option Json :=
   match j.getObjVal? "unit_draw" with
   | .ok Json.null => none
@@ -57,7 +57,7 @@ theorem recordDraw_of_parse {record : String} {j : Json} (h : Flock.JsonParse.pa
   rw [h]
   rfl
 
-/-- The checks after the verdict at the parsed value: the statement, the draw at `f.j`, custody at `j'`. -/
+/-- The checks after the verdict at the parsed value: the statement, the sample at `f.j`, custody at `j'`. -/
 def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"

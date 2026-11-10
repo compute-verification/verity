@@ -7,12 +7,12 @@ public import Definitions.Pous.P2.Mutable
 # PoUS as an obligation over one audit window: the deployed check's acceptance certifies the snapshot's space
 
 Under PoUS as an obligation the device's memory holds the weights' P2 encoding while the prover serves, each block under
-the key pair of its tag, its coin drawn by the memory challenger, and a block re-encoded later under a fresh tag
+the key pair of its tag, its coin flipped by the memory challenger, and a block re-encoded later under a fresh tag
 (`Security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
 the window's start, so the window is `PeriodHeld`'s period with that snapshot as `C*`. The store's oracle is the ring's
 labeling and a key pair per tag. The window's capacity coins are the snapshot's primitive (`Mutable.snap`) and the
 memory challenger's coins. The key pairs of every other tag (`Mutable.rest`: earlier versions, pages outside the
-snapshot) were drawn before the window, like the other audits' coins, and setup's inputs and outputs, the payload and
+snapshot) were sampled before the window, like the other audits' coins, and setup's inputs and outputs, the payload and
 the server may depend on them.
 
 * `ObligationHeld`, **about the deployed code**: for every injective snapshot of the store's tags and every value of the
@@ -21,7 +21,7 @@ the server may depend on them.
   probability at most `δ + ε_max` (`1% + 2^-128`).
 
 It rests on `PeriodHeld`'s premises at the snapshot, for every prover strategy under the device model (`DeviceModel`) and
-the instantiation (`Instantiates`), with the other tags' keys read as part of the other coins. The weights are content fixed before the ring is drawn; content that depends on the ring itself (the
+the instantiation (`Instantiates`), with the other tags' keys read as part of the other coins. The weights are content fixed before the ring is sampled; content that depends on the ring itself (the
 labeling, or keys of blocks committed earlier) is outside it. `PeriodCapacity` gives the joint's capacity guarantee at
 each value of the other tags' keys as it stands.
 -/

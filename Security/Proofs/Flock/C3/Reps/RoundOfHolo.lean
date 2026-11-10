@@ -50,7 +50,7 @@ theorem roundOf_eq_skel : ∀ (σ : List Kind) (i : ℕ), FlockC3.Sparse.roundOf
   | .msg _ :: σ, i + 1 => roundOf_eq_skel σ i
   | .coin _ :: σ, i => congrArg (· + 1) (roundOf_eq_skel σ i)
 
-/-- A round's steps: its message, if it absorbs one, then its coins, as one step, if it draws any. -/
+/-- A round's steps: its message, if it absorbs one, then its coins, as one step, if it samples any. -/
 def rstep (q : SchedRound) : List Bool := (if q.2.2.2 then [true] else []) ++ (if q.1 = 0 then [] else [false])
 
 /-- A round list's steps in its order. -/
@@ -133,7 +133,7 @@ theorem roundOfB_rskel : ∀ (l : List SchedRound) (i : ℕ) (hi : i < (msgL l).
 /-! ## `holoRounds`' steps -/
 
 /-- `holoRounds`' head: `repHead` with z_partial's round split into one that absorbs it and one that absorbs h and
-draws `r′`. -/
+samples `r′`. -/
 def holoHead (m kLog claims : ℕ) : List SchedRound :=
   [(6, #[], 1, false), (m - 13, #[], 0, false), (1, #[], 0, true)] ++ List.replicate (m - 5) (1, #[], 0, true) ++
     [(1, #[], 0, false)] ++ List.replicate (kLog - 6) (1, #[], 0, true) ++ [(0, #[], 0, true), (1, #[], 0, true)] ++
@@ -185,7 +185,7 @@ theorem holoRounds_toList {m kLog claims : ℕ} {rs : Array SchedRound} (hk : 6 
 
 /-! ## `holoRepShape`'s steps -/
 
-/-- `n` rounds that absorb a message and draw a coin. -/
+/-- `n` rounds that absorb a message and flip a coin. -/
 def pairsB : ℕ → List Bool
   | 0 => []
   | n + 1 => true :: false :: pairsB n

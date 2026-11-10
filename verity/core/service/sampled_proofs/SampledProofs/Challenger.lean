@@ -1,11 +1,11 @@
 /-
 The proof system's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
 (`verity/core/protocols/sampled_proofs/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
-verifier of record).
+verifier).
 
 Coins are indexed by label and index and named by no protocol. A layout is a scheme, an epoch and its families
 `(label, count)` in order: coin `(label, i)` sits at its family's offset plus `i`, at most `MAX_COINS` coins. Before the
-epoch the challenger draws every coin and its hm96 salt and publishes the coin commitment:
+epoch the challenger flips every coin and its hm96 salt and publishes the coin commitment:
 
     x_p     = SHA-512(scheme ‖ 0x00 ‖ coin_p)                                       coin_p 64 bytes (`COIN_BYTES`)
     value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))           salt_p 192 bytes, the pinned key

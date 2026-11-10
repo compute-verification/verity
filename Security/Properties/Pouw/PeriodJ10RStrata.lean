@@ -7,27 +7,27 @@ public import Properties.Pouw.PeriodJ10R
 
 `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` over a finite set `S` of the sampling block's tile strata in place
 of its one stratum `s_T`. Each stratum `s ∈ S` is one contraction `K` of the window's layout (H1's served layout has
-two, 16,384 and 65,536), with its own population `N_s = |stratum σ s|` (`tileCount σ s`), its own draw `k s`, declared circuit
+two, 16,384 and 65,536), with its own population `N_s = |stratum σ s|` (`tileCount σ s`), its own sample `k s`, declared circuit
 `Cd s`, live share `ρ s` and rate `Λ_s = j10rRate (k s) (ρ s)`, so its own `ε_s(j)`. The conclusion sums the strata:
 except with probability `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s)))`, an accepted period's fixed words, summed over
 `S`, are at least the sum over `S` of each stratum's `(1 − ε_s(j))₊` of its live words in the windows before the first
 window `Credit.window` refuses.
 
-* `BlockDraw`, `Rest`, `StrataCoin`: the sampling block's stratified draw, one permutation of each of its strata, drawn
-  independently (`FlockSoundness.Audit.Law.stratified`'s coordinates; stratum `s`'s draw is its permutation's first
+* `BlockDraw`, `Rest`, `StrataCoin`: the sampling block's stratified sample, one permutation of each of its strata, sampled
+  independently (`FlockSoundness.Audit.Law.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
   `k s` images, `tileDraw`); the rest of it beside stratum `s`; and a window's coins, its rounds' coins and the block's
-  draw.
+  sample.
 * `atStratum`, `pathsCongr`, `pathsAt`, `pullAt`, `creditAt`: stratum `s`'s view. A window's coins split at `s`
   (`Equiv.piSplitAt`) are the one-stratum statement's `Coin` at `s_T = s` and `Ξ = Rest σ s`: the rounds' coins, the
-  stratum's permutation and the rest of the block's draw. The period's coins split window by window, and a period-wide
+  stratum's permutation and the rest of the block's sample. The period's coins split window by window, and a period-wide
   input (`Credit.window`'s inputs, the service's openings, a tile's place) is read on them.
 * `layerAt`, `runAt`, `relAt`, `rightAt`: `tileLayer`, `tileRun`, `pinnedAt` and `j10rAtCoin` at stratum `s`'s view.
-* `StrataDrawIsCoin`: on every accepted window, the proof blocks `Credit.window`'s draw demands (`creditDrawn`) are the window
-  proof blocks of the tile strata's coordinates of the block's draw, `k s` of stratum `s` for each `s ∈ S`.
+* `StrataDrawIsCoin`: on every accepted window, the proof blocks `Credit.window`'s sample demands (`creditDrawn`) are the window
+  proof blocks of the tile strata's coordinates of the block's sample, `k s` of stratum `s` for each `s ∈ S`.
 * `stratumLive`: stratum `s`'s live words in the windows before the first refusal.
 * `H1J10RCheckedCreditPeriodStrata`: the statement.
 
-*Period-wide and per stratum.* A window has one registration, one salt, one draw and one verdict, whatever its strata,
+*Period-wide and per stratum.* A window has one registration, one salt, one sample and one verdict, whatever its strata,
 so these are period-wide, stated once on the period's coins (`StrataCoin`):
 * `Credit.window`'s inputs (`ws`) and so the accepted prefix, which every stratum's credit reads;
 * `RegisteredBeforeDraw`, of `ws`;
@@ -40,25 +40,25 @@ so these are period-wide, stated once on the period's coins (`StrataCoin`):
 The rest is per stratum, the one-stratum statement's premise at stratum `s`'s view, for each `s ∈ S`: the data (`Cd s`,
 `Wp s`, `Pl s`, `folded s`, `place s`, `tile s`, `ρ s`, `δ_s(s)`, `δ_bind(s)`, `δ_ks(s)`), `Scope`, the live share
 and stage share bounds, H1's lucks, the play's game, `DeadConeDead`, `PrefixOf`, binding at `δ_bind(s)`,
-`TileServiceSound` at `δ_ks(s)` (C-Flock's soundness at the stratum's drawn proof blocks), `SharedNoiseLucks` (the stratum's
+`TileServiceSound` at `δ_ks(s)` (Flock's soundness at the stratum's sampled proof blocks), `SharedNoiseLucks` (the stratum's
 tile games) and `UnitFixed`.
 
-*Why the draw's premise is period-wide.* `TileDrawIsCoin` says the window's drawn proof blocks are exactly the `k s_T` of the
-tile stratum. A window over several strata draws `∑_{s ∈ S} k s` proof blocks, which no one stratum's coordinate covers, so
+*Why the sample's premise is period-wide.* `TileDrawIsCoin` says the window's sampled proof blocks are exactly the `k s_T` of the
+tile stratum. A window over several strata samples `∑_{s ∈ S} k s` proof blocks, which no one stratum's coordinate covers, so
 read per stratum it is false at every honest window with two non-empty strata, and a statement taking it per stratum
 would say nothing. `StrataDrawIsCoin` says they are exactly the union over `S` of the strata's coordinates; at one
-stratum it is `TileDrawIsCoin`'s body on the block's draw. A code fact once its code exists, as `TileDrawIsCoin` is:
-the verifier draws the tiles inside the sampling block's stratified draw, one stratum a `K`, and reads `k s`
-from it; `Credit.window` today draws by its own sampling design, one stratum a `K` template (`Credit.strata`). Where the draw's
+stratum it is `TileDrawIsCoin`'s body on the block's sample. A code fact once its code exists, as `TileDrawIsCoin` is:
+the verifier samples the tiles inside the sampling block's stratified sample, one stratum a `K`, and reads `k s`
+from it; `Credit.window` today samples by its own sampling design, one stratum a `K` template (`Credit.strata`). Where the sample's
 stream is expanded from the live coin by SHA-512, reading it as the uniform permutations uses SHA-512 as a random
 oracle (R-ACCEL-3).
 
 *The form it covers.* The verifier accepts this statement's form when each window of the period is an H1 window over
 J10-R's proof block on `PouwH1Tile_v5` whose proof blocks are at one or more `K`, each `K` one stratum of `S`, with the same strata
 (and so the same `N_s` and `k s`) in every window, as the period's open commits them; a window with another set of
-`K`s, or a `K` split over strata or strata merged, has a draw `StrataDrawIsCoin` doesn't describe.
+`K`s, or a `K` split over strata or strata merged, has a sample `StrataDrawIsCoin` doesn't describe.
 
-*The bound.* The strata's permutations are independent coordinates of the block's draw, but the bound doesn't use it:
+*The bound.* The strata's permutations are independent coordinates of the block's sample, but the bound doesn't use it:
 every stratum's game reads the window's one round coin and the prover adapts across strata, so the strata's failure
 events are not independent, and the union bound, `∑_{s ∈ S}` of the one-stratum bounds, is what holds.
 
@@ -74,21 +74,21 @@ namespace Properties.Pouw.PeriodJ10RStrata
 open Properties.Pouw.PeriodJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-! ## The sampling block's draw and stratum `s`'s view of it -/
+/-! ## The sampling block's sample and stratum `s`'s view of it -/
 
-/-- **The sampling block's draw**: a permutation of each stratum `s` of `σ`, independently; stratum `s`'s draw is the
+/-- **The sampling block's sample**: a permutation of each stratum `s` of `σ`, independently; stratum `s`'s sample is the
 proof blocks of its first `k s` images (`tileDraw`). -/
 abbrev BlockDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := (s : Fin mB) → Equiv.Perm (Fin (tileCount σ s))
 
-/-- **The rest of the block's draw beside stratum `s`**: the other strata's permutations. -/
+/-- **The rest of the block's sample beside stratum `s`**: the other strata's permutations. -/
 abbrev Rest {nB mB : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) : Type :=
   (j : {j : Fin mB // j ≠ s}) → Equiv.Perm (Fin (tileCount σ j.1))
 
-/-- **A window's coins over the block's strata**: its `m` rounds' coins and the block's draw. -/
+/-- **A window's coins over the block's strata**: its `m` rounds' coins and the block's sample. -/
 abbrev StrataCoin (C : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := Paths C m × BlockDraw σ
 
 /-- **Stratum `s`'s view of a window's coins**: the one-stratum statement's `Coin` at `s_T = s`, the rounds' coins (`r`
-of them, `r = m`), then the block's draw split at `s` into the stratum's permutation and the rest. -/
+of them, `r = m`), then the block's sample split at `s` into the stratum's permutation and the rest. -/
 def atStratum {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB) :
     StrataCoin C m σ ≃ Coin C (Rest σ s) r σ s :=
   (Equiv.cast (congrArg (Paths C) h.symm)).prodCongr (Equiv.piSplitAt s _)
@@ -152,15 +152,15 @@ noncomputable def layerAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds
   tileLayer Cd hr σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
     (rightAt hM hr σ s enc place tile)
 
-/-! ## The draw and the credit -/
+/-! ## The sample and the credit -/
 
-/-- **`Credit.window`'s draw is the block's draw at the tile strata**: on every path and every window `Credit.window`
-credits, the proof blocks its draw demands proofs of (`creditDrawn`) are the window proof blocks (`unitOf`) of the tile strata's
-coordinates of the block's draw at the window's coins, `tileDraw`'s `k s` proof blocks of stratum `s` for each `s ∈ S`, and
-no others. At one stratum it is `TileDrawIsCoin`'s body on the block's draw; read per stratum it would be false at a
-window over two non-empty strata. A code fact once its code exists. Code change: the verifier draws the tiles
-inside the sampling block's stratified draw, as one subcircuit of the integrity registration, one stratum a `K`, and
-reads `k s` from it; today `Credit.window` draws by its own sampling design, one stratum a `K` template. Where the draw's
+/-- **`Credit.window`'s sample is the block's sample at the tile strata**: on every path and every window `Credit.window`
+credits, the proof blocks its sample demands proofs of (`creditDrawn`) are the window proof blocks (`unitOf`) of the tile strata's
+coordinates of the block's sample at the window's coins, `tileDraw`'s `k s` proof blocks of stratum `s` for each `s ∈ S`, and
+no others. At one stratum it is `TileDrawIsCoin`'s body on the block's sample; read per stratum it would be false at a
+window over two non-empty strata. A code fact once its code exists. Code change: the verifier samples the tiles
+inside the sampling block's stratified sample, as one subcircuit of the integrity registration, one stratum a `K`, and
+reads `k s` from it; today `Credit.window` samples by its own sampling design, one stratum a `K` template. Where the sample's
 stream is expanded from the live coin by SHA-512, reading it as the uniform permutations uses SHA-512 as a random
 oracle (R-ACCEL-3). -/
 def StrataDrawIsCoin {C : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
@@ -183,7 +183,7 @@ noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι)
 /-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile proof block, over several tile strata.** For
 every scheme `Sc` and period of at most `n ≥ 1` windows, each window's `Credit.window` inputs any function of the
 period's coins (`ws`), over a finite set `S` of the sampling block's tile strata of `σ`, each `s ∈ S` with its own
-declared circuit `Cd s` (`(Cd s).units ≤ N_s = |stratum σ s|`, one round a window), draw `k s ≥ 1`, live share
+declared circuit `Cd s` (`(Cd s).units ≤ N_s = |stratum σ s|`, one round a window), sample `k s ≥ 1`, live share
 `0 < ρ s ≤ 1` and rate `Λ_s = j10rRate (k s) (ρ s)`: under the period-wide premises `RegisteredBeforeDraw`,
 `StrataDrawIsCoin` and `SaltIsLiveCoin`, and at each `s ∈ S` the premises `H1J10RCheckedCreditPeriod` takes at its one
 stratum, at stratum `s`'s view (`layerAt`, `runAt`, `relAt`), with `TileDrawIsCoin` replaced by `StrataDrawIsCoin`,

@@ -42,7 +42,7 @@ section Skel
 open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
 open _root_.Flock.Firewall.Finish (Asks squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 
-/-- Two recordings alike, both holding the rounds `pre` first: as many coins drawn. -/
+/-- Two recordings alike, both holding the rounds `pre` first: as many coins flipped. -/
 def RecPre (pre : List (ByteArray × ℕ)) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ pre <+: s.1.toList ∧ pre <+: s'.1.toList
 

@@ -70,7 +70,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`), and C-Flock's three joint-sample statements
+#: its one-block partition (`RegisteredCircuit.ofCircuit`), and Flock's three joint-sample statements
 #: (`JointSampledV5`, `JointShareV5`, `JointHorizonV5`), whose acceptance is flock-verify's as `SampledKSLiveV5`'s is,
 #: until they read a verifier record
 UNWITNESSED = {"Security": 605, "Security/Properties": 234, "verity/core/service/flock": 8}
@@ -88,7 +88,7 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
     updates the citation."""
     proofs = ROOT / "Security/Proofs"
@@ -189,7 +189,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"

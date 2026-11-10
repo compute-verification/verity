@@ -14,7 +14,7 @@ values `vv` that are `verifierRows`' `v` at the part's `V`. The last is check 5'
 stays a hypothesis, as in `ResTie`.
 
 The rest of `AlgebraHolds` is the shape's: S and its groups (`structureOf`, `groups`), the rep's coins in the rounds
-`verifierRows` draws (`roundSizes`, with none empty, row B's `noEmpty`) and `w`'s size S's `nw`. The extra claims number
+`verifierRows` samples (`roundSizes`, with none empty, row B's `noEmpty`) and `w`'s size S's `nw`. The extra claims number
 the shape's by definition (`shapeOf`), the comb has 64 elements (`combOf_size`), so `v` has S's `nv`
 (`verifierRows_v_size`) and the wire bits are in range (`structureOf_bitsOk`).
 -/
@@ -52,7 +52,7 @@ def PartsZero (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
       ∀ q (hq : q < S'.res.length), resVal (gfsOf S') (termVal E vv) (resOf S'.res[q]) = 0
 
 /-- **`verifierRows` returns at rep `r`** when S does, none of the rep's coin rounds is empty and they have the sizes
-the shape's schedule draws: the extra claims number the shape's by definition (`shapeOf`). -/
+the shape's schedule samples: the extra claims number the shape's by definition (`shapeOf`). -/
 theorem verifierRows_rep {S : RecAlgebra.GfS} (hS : structureOf (D.sh cls i) = .ok S)
     (hne : NoEmpty (D.rep cls acc i r).rounds)
     (hsz : (D.rep cls acc i r).rounds.toList.map Array.size = roundSizes (D.sh cls i)) :

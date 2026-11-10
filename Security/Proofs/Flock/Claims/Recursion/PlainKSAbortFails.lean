@@ -64,7 +64,7 @@ section Acc
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- At a statement with no witness, a prover that never aborts against a verifier that accepts at its first round
-fails `E^rep` at every draw. -/
+fails `E^rep` at every sample. -/
 theorem prBadAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) (hx : ∀ w, ¬ I.R x w) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A]
     (P : Prover Ω) :

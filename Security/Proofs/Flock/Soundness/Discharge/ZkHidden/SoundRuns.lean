@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 /-!
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`
 
-`runsZC_liveH`: `ZkExec.runsZC_live`'s proof under hidden outputs. `TablesAtZKHLive` puts the draw's table at
+`runsZC_liveH`: `ZkExec.runsZC_live`'s proof under hidden outputs. `TablesAtZKHLive` puts the sample's table at
 `tablesAtZKH` (`DrawSetupZKH.table`, at the executable's dimensions, pads and inner code: `table_seamH`, `table_layH`),
 the acceptance peels to the one table's two `verifyRep` successes (`setupTables_okH`, `zk_verify_ok`) and each rep's run
 (`zk_verifyRep_ok`), and `zk_rep_run_plays` and `zk_table_verdict`, which read the table only through those seams, make
@@ -30,12 +30,12 @@ section Table
 
 variable {n mPts : ℕ} {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- A hidden-output draw's `--zk` table is at the executable's dimensions. -/
+/-- A hidden-output sample's `--zk` table is at the executable's dimensions. -/
 theorem table_seamH (y : DrawSetupZKH I mPts S d) :
     ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- A hidden-output draw's `--zk` table has the executable's pads and inner code. -/
+/-- A hidden-output sample's `--zk` table has the executable's pads and inner code. -/
 theorem table_layH (y : DrawSetupZKH I mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 

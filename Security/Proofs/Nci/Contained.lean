@@ -7,12 +7,12 @@ public import Proofs.Nci.Support
 public import Proofs.Nci.Rate
 
 /-!
-# Proofs of the partial-sum law on a reference circuit
+# Proofs of the partial-sum rule on a reference circuit
 
 Support form gives the reference circuit's incompressibility in reads (`activationsIncompressible_of_support`,
 `partialSumsIncompressible_of_support`). Then pull a compliant division of the containing declaration back to `c`
 (`pull`): each piece has no more gates than its IU and reads no more novel information (`novelReads_pull`), so the
-pieces form a division of `c` into IUs of at most `Γ` gates reading at most `αΓ` each. The reads form of the law
+pieces form a division of `c` into IUs of at most `Γ` gates reading at most `αΓ` each. The reads form of the sampling design
 (`UpdatedMatMulReads`), applied to `c` with that division, bounds the pieces' total reads from below by `G · f(αΓ)`;
 the IUs read at least as much, and at most `α size(d)` in total.
 
@@ -45,7 +45,7 @@ theorem partialSumsIncompressible_of_support {D : RegisteredCircuit} {θv : D.D.
     exact_mod_cast support_le D θv (P.gates_subset_computed u) (subset_refl _)
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp ((hs u).trans hc)
 
-/-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
+/-- The partial-sum rule on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
     (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
@@ -262,7 +262,7 @@ theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d}
   linarith
 
 open Classical in
-/-- **The partial-sum law over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
+/-- **The partial-sum rule over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
 split-entry contributions are within the IUs' reads and `B`, then
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
 `ActivationsIncompressible` on the reference circuit. -/
@@ -313,7 +313,7 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Registere
   linarith
 
 open Classical in
-/-- **The partial-sum law with dark gates.** -/
+/-- **The partial-sum rule with dark gates.** -/
 theorem ContainedMatMulOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
       (M : PartialContainment c d),
@@ -360,7 +360,7 @@ theorem training_of_counts {m G X G' S κ R : ℝ} (hm : 0 ≤ m) (h : m * G ≤
     (hG : G' ≤ G + X) : m * (κ * S - 2 * X) ≤ 2 * R := by
   nlinarith [mul_le_mul_of_nonneg_left (show κ * S - 2 * X ≤ 2 * G by linarith) hm]
 
-/-- **Training is slowed, by the partial-sum law, with dark gates**: the chain's products off the books are dark gates
+/-- **Training is slowed, by the partial-sum rule, with dark gates**: the chain's products off the books are dark gates
 (`card_products_le_dark`). -/
 theorem ContainedTrainingOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)

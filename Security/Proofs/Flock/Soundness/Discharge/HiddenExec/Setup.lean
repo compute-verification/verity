@@ -59,7 +59,7 @@ theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partit
     StmtWF st ∧ RegionsWF st :=
   Hidden.setupHidden_wf h
 
-/-- `Spec.pub`, at a draw. -/
+/-- `Spec.pub`, at a sample. -/
 theorem setupHidden_drawn {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
     ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ HmOut.drawn st.c pop d = .ok st.pub := by
@@ -77,7 +77,7 @@ theorem setupHidden_c_of_parse {c : Circuit} (hc : HmOut.parse tags cf tables = 
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : st.c = c :=
   Except.ok.inj ((setupHidden_parseC (HmOut.parse_isTmpl hc) h).symm.trans hc)
 
-/-- `Spec.n`, `Spec.blocksReal`, `Spec.nbl`: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
+/-- `Spec.n`, `Spec.blocksReal`, `Spec.nbl`: `n` is the (sampled) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
 as setupH's (`Integrate.setupH_n`). -/
 theorem setupHidden_n (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.n = st.pub.n ∧ st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) := by

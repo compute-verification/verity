@@ -30,7 +30,7 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 /-- **`UnitFixed` from option A's fixed word.** On a word layer whose units of positive weight are fixed under the
 weights (option A: each multiplicative operand bound before the unit's coin, or written by a unit always proved or
 priced at its public fan-out, `WordLayer.Priced`), with nonnegative weights, if the modes are the run's (`ModesRun`)
-and the labelling counts fixed words as fixed (`CountsFixed`), then `UnitFixed` holds of its drawn layer, at the same
+and the labelling counts fixed words as fixed (`CountsFixed`), then `UnitFixed` holds of its sampled layer, at the same
 modes, weights and folded words. -/
 def UnitFixedOfWords : Prop :=
   ∀ {K T L U : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] {C B : Type} [Fintype C] [Fintype B]

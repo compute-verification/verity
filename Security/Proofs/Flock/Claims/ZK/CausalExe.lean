@@ -2722,7 +2722,7 @@ theorem repOk : RepOk := by
   · exact fun _ => ⟨(repSrcCut_tau x _ j r _).1.trans (repSrcCut_tau x _ j r _).1.symm,
       (repSrcCut_tau x _ j r _).2.trans (repSrcCut_tau x _ j r _).2.symm⟩
 
-/-- **Sent's `hc`**: every value the executable sends reads only the coins drawn before it. -/
+/-- **Sent's `hc`**: every value the executable sends reads only the coins flipped before it. -/
 theorem causalExe : CausalExe := causalExe_of_rep repOk
 
 end Claims.ZKMal.Masked

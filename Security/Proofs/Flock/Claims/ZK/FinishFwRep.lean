@@ -4,9 +4,9 @@ public import Proofs.Flock.Claims.ZK.FinishFwRows
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 
 /-!
-# A deployed rep's rows from the firewall's run
+# A deployed rep's rows from the ZK server's run
 
-`Composed.rowsAt_of_fw` decides table `j`'s rows at its base from what the firewall's run on each rep fixes. Here that
+`Composed.rowsAt_of_fw` decides table `j`'s rows at its base from what the ZK server's run on each rep fixes. Here that
 is read off the deployed rep: `repFwC` on table `j`'s rep `r`, answered by the opened coins (`ligCoin`) from the rep's
 base, on the packed table of the witness's trace (`ligTab`), at pads with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the
 layout's length.
@@ -37,7 +37,7 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's rows from the firewall's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
+/-- **A deployed rep's rows from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`), with as many extra claims `xs` as the
 statement's (`hxsz`), returns at pads `pads` with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the layout's length, the pads
 and the run's seven constraints are `rowsAt_of_fw`'s at rep `r`, at the clear values `v` and the tape's mask and level
@@ -235,7 +235,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the firewall's
+    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)

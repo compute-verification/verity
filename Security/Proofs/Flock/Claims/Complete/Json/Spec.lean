@@ -21,7 +21,7 @@ alike values (`Canon.lean`). The verifier reads no `Json` `==` (a `partial` defi
 flags by `matches`. Alike (`Same`), printable (`Good`) and well-formed (`Wf`) values are `Value.lean`'s. Here are the
 lemmas on alike values the proofs read: alike
 leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
-(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
+(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's sample check (`drawEq`)
 passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
 

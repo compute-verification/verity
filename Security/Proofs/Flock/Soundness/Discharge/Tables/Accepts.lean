@@ -6,10 +6,10 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 # flock-verify's tables at `count > 1`
 
 `Stmt.setupTables` at `count > 1`, under a tag without hidden outputs (`setupTables_parts`): the tag allows several
-tables and `count ≤ Tags.MAX_TABLES`; the draw, when there is one, is a subset or stratified draw (`Draw.tablesWhy`), and
+tables and `count ≤ Tags.MAX_TABLES`; the sample, when there is one, is a subset or stratified sample (`Draw.tablesWhy`), and
 the session's units are its
 units (without one, the population's every unit); they split into `count` nonempty equal parts; and table `j` is
-`setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of part `j`, the consecutive units
+`setupH`'s statement under `Tags.tableIdentity count j` at the subset sample of part `j`, the consecutive units
 `j·k … j·k + k − 1` with `k = units/count`.
 -/
 

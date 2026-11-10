@@ -23,7 +23,7 @@ Row G of the verdict's rows (`VerdictRows`), the facts about the setup:
   under the registry's plain SHA-512 scheme (`Hidden.setupHidden_plain`), a `Named` one, its fold's `k_log` is its
   own, and its `k_log` is at most its `m` (`Hidden.setupHidden_wf`).
 * `extras_shape`, `folds_ofCircuit`, `slotOk_of_hidden`: a hidden-output table's extra claims are of the claims' shapes,
-  and its fold returns 64 entries at every lincheck point `residualLins` draws (`fold_ok`, on the ranges `HmRow.check`
+  and its fold returns 64 entries at every lincheck point `residualLins` samples (`fold_ok`, on the ranges `HmRow.check`
   passed).
 * `dense_inner`: at a statement the reader reads at the dense form, Flock's plain verifier sets the inner statement up
   as one table at the files' tags, whose `m` has a `fast100` schedule (`innerSetup_files`, `repRounds_size`).

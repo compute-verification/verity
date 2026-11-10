@@ -210,7 +210,7 @@ def overlap_with_tensor(iv: list[tuple], a: int, b: int) -> dict[str, int]:
 
 def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, target: float, steady: bool = False,
             theta_mhz: float = SHEET_MHZ) -> dict:
-    """With `steady`, a step longer than 1.5 times the median step (a window's close or a learning pass) is dropped and
+    """With `steady`, a step longer than 1.5 times the median step (an execution phase's close or a learning pass) is dropped and
     listed in the summary's `dropped`.  `theta_mhz` is the SM clock `theta` is quoted at."""
     m = model(config)
     data = load(path)

@@ -55,7 +55,7 @@ abbrev POUW_PERIOD_SIDE_DOMAIN_B : String := "verity/pouw/window/side-domain-b/v
 abbrev POUW_ROUND_NOISE : String := "verity/pouw/round-noise/v1"
 abbrev POUW_PUBLIC_ROW_SALT : String := "verity/pouw/public-row-salt/v1"
 
--- PoUW: sampling (the bytes say draw)
+-- PoUW: sampling (the bytes say sample)
 abbrev POUW_AUDIT_KEY : String := "verity/pouw/audit/v1"
 abbrev POUW_PEARL_C_SAMPLING : String := "verity/pouw/pearl-c-draw/v1"
 abbrev POUW_PEARL_C_SAMPLING_AFTER : String := "verity/pouw/pearl-c/draw-after/v1"
@@ -167,7 +167,7 @@ abbrev RANDOMNESS_SHARD : String := "verity/randomness/shard/v2"
 abbrev RANDOMNESS_DERIVE_V1 : String := "verity/randomness/derive/v1"
 abbrev RANDOMNESS_STREAM_V1 : String := "verity/randomness/stream/v1"
 
--- Shared: sampled proofs' one-stage statement, registrations and partitions; C-Flock's public inputs and descriptors
+-- Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 abbrev ONE_STAGE_PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"
 abbrev ONE_STAGE_PROTOCOL_V2 : String := "verity/sampled-proofs/one-stage/v2"
 abbrev ONE_STAGE_SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
@@ -239,7 +239,7 @@ abbrev REGISTERED_READS_V1 : String := "verity/registered-reads/v1"
 abbrev REGISTRATION_RECEIPT : String := "verity/registration-receipt/v1"
 abbrev REGISTRATION_PRODUCED : String := "verity/registration/produced/v1"
 
--- Not yet read from here: C-Flock and the firewall
+-- Not yet read from here: Flock and the ZK server
 abbrev COIN_COMMIT_SHA256 : String := "coin-commit/sha256/v1"
 abbrev FIREWALL_RECORD : String := "firewall/v0"
 abbrev FLOCK_CIRCUIT_BLOCK_COVER : String := "flock-circuit/unit-cover/v0"

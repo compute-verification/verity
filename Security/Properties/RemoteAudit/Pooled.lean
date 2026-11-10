@@ -30,7 +30,7 @@ open RemoteAudit
 
 namespace Properties.RemoteAudit
 
-/-- Whenever `pooled` gives a bound for windows of sizes `U` drawing `d` at `δ`, its wrong receipts are at least the
+/-- Whenever `pooled` gives a bound for windows of sizes `U` sampling `d` at `δ`, its wrong receipts are at least the
 draw's pooled bound of the same windows (`Accounting.Remote.Draw.pooled`) at `δ`. -/
 def PooledCovers : Prop :=
   ∀ (n : ℕ) (U d : Fin n → ℕ) (δ : ℚ) (b : Pooled.Bound),

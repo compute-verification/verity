@@ -24,7 +24,7 @@ V*'s registered reads, and the family's obligations on them (`HCommits`, `HDecod
 follows where the public files hold the stages' `b ‖ c` (`PubCommits`), `HDecodes` by the masking, and `HFull` where
 every wire of a stage row is read (`RowsRead`). `RowsRead` fails at V*'s padded message rows; `VFullRead` and
 `VDecodesRead` restate `VFull` and `VDecodes` at the wires some unit reads, and hold without it (`vFullRead_of`, at
-V*'s full draw, and `vDecodesRead_of`).
+V*'s full sample, and `vDecodesRead_of`).
 -/
 
 @[expose] public section
@@ -228,10 +228,10 @@ theorem reads_of_skOf {own : Fin F.stmts.size → Array Flock.Registered.Port} {
 theorem hFull_of (hrd : F.RowsRead) : F.HFull := hrd
 
 /-- **`VFull` at the read wires**, the restatement of `VFull` that V*'s padded rows need (`RowsRead`): `VFullR` at the
-family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s law draws. -/
+family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s law samples. -/
 def VFullRead : Prop := VFullR (ℐ).r F.Sk
 
-/-- **`VFullRead` without `RowsRead`**: V*'s laws are the full draw, which draws every unit (`vFullR_of_read`). -/
+/-- **`VFullRead` without `RowsRead`**: V*'s laws are the full sample, which samples every unit (`vFullR_of_read`). -/
 theorem vFullRead_of : F.VFullRead := vFullR_of_read _ _
 
 end VStarFamily

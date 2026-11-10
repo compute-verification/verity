@@ -13,7 +13,7 @@ from `A`'s history, picks. `zkmalR_seqU` proves the composed protocol `ZKmalR` f
 (Goldreich–Oren's sequential composition, with the hybrids in Wee's order): the hybrid that changes `B` keeps `A` real,
 so `B`'s `Fork` is charged against a verifier whose tape is `A`'s real run, and the one that changes `A` runs `B`'s
 simulator after it, a function of `A`'s transcript and fresh coins. `zkmalR_seq` is its corollary for finitely many
-units and `B` one `ZKmalR` protocol, whose simulator draws coins for every unit.
+units and `B` one `ZKmalR` protocol, whose simulator flips coins for every unit.
 
 The composed tape is `forkTape a`: a guess `j < a + 1`, both nonces, and two rests for `A`, of which `A` reads the
 second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at `j = a`, so its collision is `B`'s at
@@ -369,7 +369,7 @@ theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] 
   simp only [Pr_fst p]
   exact Ex_const _
 
-/-- **One unit's coins among every unit's** have the law of that unit's. -/
+/-- **One unit's coins among every unit's** have the sampling design of that unit's. -/
 theorem Pr_pi_at {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
     [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p := by
   have e := Pr_equiv (Equiv.piSplitAt i β) fun q => p q.1

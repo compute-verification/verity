@@ -23,7 +23,7 @@ Lemma P2 over `Accounting.Filler`, each `def G : Prop` proved as `Accounting.Sec
 * `PinnedFillLuckAt`, `PinnedFillBudget`, `PinnedFillBlocksDeficit`: the same three window statements at `p = 0` for a
   filler whose check recomputes a pinned receipt from committed data and live coins (lfill's tile receipt, a lane chain
   absorbed into the fold's receipt, keyed rounds in the fold, an FFMA chain recomputed bit for bit). Nothing in such a
-  check is left to guess, so a wrong receipt fails whenever its tile is drawn; what a right receipt cost is FILL-OPT's
+  check is left to guess, so a wrong receipt fails whenever its tile is sampled; what a right receipt cost is FILL-OPT's
   (FOLD-OPT's for rounds in the fold).
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
@@ -101,7 +101,7 @@ def PinnedFillLuckAt : Prop :=
     FullPinnedFill F g → Accounting.Assumptions.TS.LuckAt 0 g
 
 /-- **A spot-checked window of pinned receipts meets Lemma C's budget at `p = 0`**: when every round recomputes one
-uniform tile's receipt, drawn after the receipts are committed, `Λ = 1` bounds the round's saving per unit of detection
+uniform tile's receipt, sampled after the receipts are committed, `Λ = 1` bounds the round's saving per unit of detection
 (`RoundGame.BudgetAt`), so the window's wrong share is Theorem S's `d̄ = ln(1/δ)/S`. -/
 def PinnedFillBudget : Prop :=
   ∀ {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) {S : ℕ} (g : RoundGame (C × τ) S),

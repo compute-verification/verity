@@ -36,7 +36,7 @@ structure SessionSpec where
   points : Nat := 2
   /-- the statement's challenger retains every round's bytes: each round must carry them (`Flock.Transcript`) -/
   retainRounds : Bool := false
-  /-- the session's unit draw (one table's: the public header's `unit_draw`, `Flock.Draw`; several tables': the draw they split, never
+  /-- the session's unit sample (one table's: the public header's `unit_draw`, `Flock.Draw`; several tables': the sample they split, never
   a table's part) and its instance count -/
   unitDraw : Option Json := none
   instances : Nat := 0
@@ -124,7 +124,7 @@ def decode (spec : SessionSpec) (text : String) : V RunRecord := do
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
-  -- U1–U3 (`Flock.Draw`): a null draw is no draw
+  -- U1–U3 (`Flock.Draw`): a null sample is no sample
   let recDraw := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d

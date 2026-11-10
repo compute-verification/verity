@@ -1,9 +1,9 @@
 """Each stratum's circuit file of a period's declared window Program, built with the auditor's own lowering, and the
 ``--circuit-files`` its period-open commits (core's `credit.committed_files`).
 
-A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
+A sampled proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
 `weights.chunks` (K) chunks past `weights.CHUNK_MAX`, `h1window._chunked`, as the Program declares it), one of the declared
-Program's ``TILES``. It is lowered by C-Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
+Program's ``TILES``. It is lowered by Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
 lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's
@@ -20,7 +20,7 @@ what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"
 window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_rows(T, PIECE_ROWS)` bound to
 `live.program_rows` (a V3 prefill round at T 8,192 is 128 pieces of 64 rows). It takes seconds.
 
-With ``--lanes K,...`` each listed K is committed in credit's lanes form (`credit.form_of`) instead of ``k<K>``: a drawn
+With ``--lanes K,...`` each listed K is committed in credit's lanes form (`credit.form_of`) instead of ``k<K>``: a sampled
 leaf at K is proved as its lanes and combine (`leaf_lanes.statements`), each statement on its own file, ``lane<K>`` and
 ``combine<K>``, the flat statement of `h1window.leaf_unit` of the declared window Program at K (rebuilt from the
 descriptor's layout, `rebuilt`, its templates held to the descriptor's) on `drawn.leaf_rows`, bound to that statement's

@@ -14,7 +14,7 @@ public import Mathlib.Tactic.Ring
   circuit's size (`CreditSizeLe`);
 * `Circuit.not_affine_of_and`: a gate that computes `p ∧ q` on the inputs that are `p` at `x`, `q` at `y` and `0`
   elsewhere is not affine: an affine function's values on those four inputs sum to `0`, AND's to `1`;
-* `ToCircuitAnd`: C-Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
+* `ToCircuitAnd`: Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
   differ are not.
 -/
 

@@ -5,10 +5,10 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
 
 /-!
-# The batched `--zk` session on C-Flock ZK's coin tree
+# The batched `--zk` session on Flock ZK's coin tree
 
 `session_coins_sound` (`SessionCoinsSound`) and `session_coins_hm96` (`SessionCoinsHm96`): `committed_le` (resp.
-`committed_le_hm96`) on `sessionZKC`, which opens each committed round at most once (`distinct_sessionZKC`) and, drawn
+`committed_le_hm96`) on `sessionZKC`, which opens each committed round at most once (`distinct_sessionZKC`) and, sampled
 live, has `sessionZK`'s value (`er_sessionZKC`, `value_erase`), which table `j`'s bound bounds (`value_sessionZK_le`,
 `sessionZK_sound`'s argument). The session has `1 + 2·J·R` committed rounds (`card_sessIdx`).
 -/

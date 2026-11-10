@@ -6,20 +6,20 @@ public import PouwCommit.Py
 public import Identity.Domains
 
 /-!
-# The epoch coins' check (`verity.core.protocols.pouw.coins`)
+# The execution phase's coins' check (`verity.core.protocols.pouw.coins`)
 
-The challenger commits to epoch `e`'s coins, one 32-byte coin per label of `LABELS`, before the epoch:
+The challenger commits to execution phase `e`'s coins, one 32-byte coin per label of `LABELS`, before the execution phase:
 
     x_l     = SHA-512("verity/pouw/epoch-coin/v1\0" ‖ coin_l)
     value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))           salt_l 192 bytes, the pinned key
     root    = the frame-v3-sha512 tree over (value_salt, value_draw) at positions 0, 1: binding
               tagged("verity/pouw/epoch-coins/v1", e), owner -1, leaf schema "verity/pouw/epoch-coins/v1"
 
-`coinReason` is `coin_reason`: why an opening is not epoch `e`'s `label` coin, opened after what the verifier recorded and
+`coinReason` is `coin_reason`: why an opening is not execution phase `e`'s `label` coin, opened after what the verifier recorded and
 opening against the root, in Python's order and words; `none` when it is. It throws where Python raises: a label not in
 `LABELS`, and an opening path holding an item of neither 32 nor 64 bytes (`Opening`'s constructor). The JSON forms are read
 as `CoinCommitment.from_json` and `CoinOpening.from_json` read them, refusing what they refuse. Lean also refuses, where
-Python would compare it, an opening whose epoch is not a JSON integer or whose label is not a string.
+Python would compare it, an opening whose execution phase is not a JSON integer or whose label is not a string.
 -/
 
 @[expose] public section
@@ -33,7 +33,7 @@ def COIN_TAG : ByteArray := "verity/pouw/epoch-coin/v1".toUTF8.push 0
 def LABELS : List String := ["salt", "draw"]
 def COIN_BYTES : Nat := 32
 
-/-- The epoch's coin tree: `CommitmentDomain(tagged(SCHEME, e), -1, RangeIndexedDomain(2), "sha512")`. -/
+/-- The execution phase's coin tree: `CommitmentDomain(tagged(SCHEME, e), -1, RangeIndexedDomain(2), "sha512")`. -/
 def coinDomain (epoch : Nat) : Domain :=
   ⟨.sha512, 2, frameHash .sha512 "domain"
     [tagged SCHEME [.int epoch], natBytes 1, rangeIdentity .sha512 2, natBytes 2]⟩

@@ -31,7 +31,7 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
 * **The induction** (`read_prints`, `read_run`): over what the device printed, `readLines` reads each release
   (`ReadOf`): its frame and the bytes it answered, and its coins where it read any, the device's, or, at a round opened,
   other bytes than the device's with their SHA-512 (`coinBytes`, `coinBytes_bits`).
-* **The openings without the draw's coins** (`opensRead`, `opens_read`): v2's read with none of the draw's coins
+* **The openings without the sample's coins** (`opensRead`, `opens_read`): v2's read with none of the sample's coins
   placed reads the same frames, bytes and openings' coins (`readLines_agree`), and verifies no signature. The first
   opening whose coins it reads other than the device's (`openCollision`) is a SHA-512 collision wherever v2's read of
   the device's log isn't the device's (`open_collision`).
@@ -772,7 +772,7 @@ theorem tree_lines {log : List String} {ts : Array LoggedTree} (h : coinTreesOf 
 
 /-- **`readLines` reads what the device printed** (`Prints`) as its releases (`ReadOf`): after the trees `ts` the device
 sampled, whose roots are distinct from each other and from the hello lines' to come and whose streams are distinct, on
-lines a round's coins are read against (`TreeLines`), with the coins the device released of the draw's family after its
+lines a round's coins are read against (`TreeLines`), with the coins the device released of the sample's family after its
 digest held in `ξ` (`Holds`). -/
 theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines : List String} {log : List Release},
     Prints ts lines log → ∀ {ξ : ByteArray} {out : List Release}, TreeLines recs lines →
@@ -913,14 +913,14 @@ theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {
     (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
-/-! ## The openings without the draw's coins -/
+/-! ## The openings without the sample's coins -/
 
-/-- **Two reads of one release agree but for the draw's coins**: the same frame and bytes answered, and at a round
+/-- **Two reads of one release agree but for the sample's coins**: the same frame and bytes answered, and at a round
 opened the same coins. -/
 def Agree (y y' : Release) : Prop :=
   y'.frame = y.frame ∧ y'.answers = y.answers ∧ (opening? y.frame = true → y'.coins = y.coins)
 
-/-- **`readLines` reads the same frames, bytes and openings' coins at any of the draw's coins.** -/
+/-- **`readLines` reads the same frames, bytes and openings' coins at any of the sample's coins.** -/
 theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.CoinTree.Spec)}
     {pending : Option String} {ξ : ByteArray} {out : List Release} (ξ' : ByteArray),
     readLines label after recs lines ts pending ξ = some out →
@@ -981,8 +981,8 @@ theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.
             rw [hrest']
             rfl
 
-/-- **The openings as v2's check reads them, without the draw's coins**: `Verity.Sampled.coinsRead`'s read with none
-of the draw's coins placed (`.empty`), so it verifies no signature of the draw; it hashes only the blobs it reads the
+/-- **The openings as v2's check reads them, without the sample's coins**: `Verity.Sampled.coinsRead`'s read with none
+of the sample's coins placed (`.empty`), so it verifies no signature of the sample; it hashes only the blobs it reads the
 records from. -/
 def opensRead (s : Sent) : Option (List Release) := do
   let (p, c, e) ← (caseOf s).toOption
@@ -990,7 +990,7 @@ def opensRead (s : Sent) : Option (List Release) := do
   let lines ← (linesOf e).toOption
   readLines label c.digest (← recordsOf s e) lines.tail [] none .empty
 
-/-- **Where v2's check reads a log, the read without the draw's coins agrees with it** (`Agree`). -/
+/-- **Where v2's check reads a log, the read without the sample's coins agrees with it** (`Agree`). -/
 theorem opens_read {s : Sent} {out : List Release} (h : coinsRead s = some out) :
     ∃ out', opensRead s = some out' ∧ List.Forall₂ Agree out out' := by
   unfold Verity.Sampled.coinsRead at h
@@ -1018,7 +1018,7 @@ def openCollision : List Release → List Release → Option (ByteArray × ByteA
   | _, _ => none
 
 /-- **Where v2 reads a log of the device's releases but for openings' coins of one SHA-512, and it isn't the device's,
-the first opening read without the draw's coins other than the device's is a SHA-512 collision.** -/
+the first opening read without the sample's coins other than the device's is a SHA-512 collision.** -/
 theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadOf out log →
     List.Forall₂ Agree out out' → ¬ List.Forall₂ (fun y x => y.coins ≠ [] → y.coins = x.coins) out log →
     ∃ u v, openCollision out' log = some (u, v) ∧ u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by

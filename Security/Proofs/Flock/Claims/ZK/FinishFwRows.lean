@@ -5,9 +5,9 @@ public import Proofs.Flock.Claims.ZK.FinishTau
 public import Proofs.Flock.Claims.ZK.FinishSwRows
 
 /-!
-# A worker's rows from the firewall's own run
+# A worker's rows from the ZK server's own run
 
-`FinishStopAt.rowsAt_of_cons` decides a table's rows at its own draw. Here they are decided at the firewall's run on a
+`FinishStopAt.rowsAt_of_cons` decides a table's rows at its own sample. Here they are decided at the ZK server's run on a
 rep's request (`repFwC`, answered by `asksCut`): where it goes on, its constraints are the first seven rows on its masked
 values `vals + h` (`tauFw_vals`) and none fails on the request's pads `h`, and where that holds at both reps, at masked
 values that are the worker's clear values plus `h`, the worker's rows hold (`rowsAt_of_fw`).
@@ -55,7 +55,7 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The firewall's seven rows, level 0 read off its proof**: `tauFw`'s, where, at the run's steps, level 0's record's
+/-- **The ZK server's seven rows, level 0 read off its proof**: `tauFw`'s, where, at the run's steps, level 0's record's
 target is the opening's `T` and its coins are the model's (`hrec`), and the returned proof's level 0 values are the
 view's (`LaneVals`) and its restart is `T'`. -/
 theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
@@ -185,7 +185,7 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
 
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **Where the firewall goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
+/-- **Where the ZK server goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
 on the layout's length are the first seven rows on the worker's clear values plus pads `h` of the layout's length (with
 `h_ab = h_a·h_b` and `h_w = h_x·h_y`), and none fails on `h`, the worker's rows hold at the mask slot `u` and level 0's
 hiding `V` (`noFail_iff_rows`, `rowsAt_of_rows`). -/

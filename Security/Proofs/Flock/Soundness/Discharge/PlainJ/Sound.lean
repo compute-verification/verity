@@ -9,17 +9,17 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Headline
 `plain_session_soundJ`: for any live prover `τ` of a public-output plain session of `J ≥ 1` tables
 (`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
 `Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
-partition, each read at its site in the table it is drawn into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
+partition, each read at its site in the table it is sampled into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
 (`rsPJ`), at the simulated prover `simAuditJ … τ` in the batched session of the `J` tables `planPJ`.
 
 It is `Integrate.flock_headline_exec` with the session's tables in place of its one, and two changes the tables force,
 as `Composed.zk_session_soundJ` makes them under `--zk`:
 
-* the law is the live subset draw `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
+* the sampling design is the live subset sample `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
   `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
-* the tags, the record and the draws are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
-  `DecodeZLJ.RecordsLiveJ` and `DrawOkPJ`, the coin server's draw setting each table up at its part.
+* the tags, the record and the samples are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
+  `DecodeZLJ.RecordsLiveJ` and `DrawOkPJ`, the challenger's live-coin part's sample setting each table up at its part.
 
 The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
 `ecr/sha-512` for the link finders (`hCR`), with A6 the live session itself.
@@ -49,12 +49,12 @@ theorem plain_session_soundJ
     {c : Flock.Circuit} (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

@@ -9,16 +9,16 @@ public import PouwCheck
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
 each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
-is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th drawn tile
+is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th sampled tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
 `PouwCheck.Period.protocol`) on the window's registration and the proof
-service's answer. The check gives no partial credit (`Properties.Pouw.Check.AcceptMeans`: it accepts only when one-stage
-accepted the window's every drawn unit), so its verdict is every drawn proof's (`checkedRun`). The period is credited up
+system's answer. The check gives no partial credit (`Properties.Pouw.Check.AcceptMeans`: it accepts only when one-stage
+accepted the window's every sampled proof block), so its verdict is every sampled proof's (`checkedRun`). The period is credited up
 to its first window the check refuses (`Executions.prefixLen`), on those windows' live words (`checkedLive`).
 
 It is parametric in the deployed unit and names no device: the scheme `Sc`, the declared circuit `Cd`, the population
-`N_p` and the draw size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
+`N_p` and the sample size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
 tile work), and the relation `rel` is the statement the service proves of each unit, whatever it is. An instance fixes
 them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
 
@@ -26,13 +26,13 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
 * `Executions`, `Executions.AcceptedUpTo`, `Executions.prefixLen`, `checkedLive`: each window's registration and the
   service's answer on the period's coins; it and every earlier window accepted; the number of such windows, the
   windows before the first refusal; their live tiles' words.
-* `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every drawn proof's acceptance, each
-  drawn tile's opening the service's opening of that unit; `Declared.periodLayer` at that run.
-* `DrawIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as drawn (`Public.drawn`) are
-  the model's draw at the window's draw coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
+* `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every sampled proof's acceptance, each
+  sampled tile's opening the service's opening of that unit; `Declared.periodLayer` at that run.
+* `DrawIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as sampled (`Public.drawn`) are
+  the model's sample at the window's sampling coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
   soundness against the check: a window is accepted with a published unit whose opening fails its relation with
   probability at most `δ_ks`.
-* `RegisteredBeforeDraw`: each window's registration is fixed before the window's draw coin.
+* `RegisteredBeforeDraw`: each window's registration is fixed before the window's sampling coin.
 * `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkPeriod`'s and `CircuitCreditPeriod`'s conclusions at the
   check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `DrawIsCoin` and
   `ServiceSound`, and with `RegisteredBeforeDraw`.
@@ -42,7 +42,7 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   `CheckedCreditPeriod` at the torch loop's counts with those two in place of `Pins`.
 
 *What the check discharges.* The accepted prefix (`Outcomes.Credited`, `prefixLen`) and the credited words are the
-check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's drawn
+check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's sampled
 tiles; the service proves the units the check publishes, so it follows from `ServiceSound` about those units and
 `DrawIsCoin`, which says they are the model's. Every other premise is `CircuitWorkPeriod`'s at the checked run, and the
 check doesn't discharge it:
@@ -54,24 +54,24 @@ check doesn't discharge it:
   `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
   feeds (`Properties.Served.SeededScheduleNotLive`, proved).
 * The game identity (`Pl.game = periodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
-  the drawn tiles' rightness, held by construction of the play.
+  the sampled tiles' rightness, held by construction of the play.
 * `MovedIn ≤ δ_bind` in each window: binding of the service's openings to the values committed before each position's
   cut, which the proof reads. It is SHA-512's binding at the trees' sizes (`Accounting.Guarantees.Compose.BindingOfECR`)
   only when the window's rows are committed by its registration, under roots the openings are checked against, and the
-  registration is fixed before the window's draw coin (`RegisteredBeforeDraw`, which states the order; the commitment
+  registration is fixed before the window's sampling coin (`RegisteredBeforeDraw`, which states the order; the commitment
   is the roots'). On today's path the registered roots are tags, not the rows' commitments (below): the loop's
-  registration has `anchors []` and `wires []`, so nothing commits the rows before the draw. Its discharge path is
+  registration has `anchors []` and `wires []`, so nothing commits the rows before the sample. Its discharge path is
   to commit the loop's `x`, `sx`, weight rows and `sw` as anchors (hm96 rows in frame-v3-sha512 trees) before the
-  window's draw coin, and to bind the H1 tiles' rows to those anchors.
+  window's sampling coin, and to bind the H1 tiles' rows to those anchors.
 * `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
-  digest (`Evidence.commitment`), not when the draw coin was released against it, so it doesn't discharge it.
-* `ServiceSound δks`: C-Flock's soundness at each drawn unit under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
+  digest (`Evidence.commitment`), not when the sampling coin was released against it, so it doesn't discharge it.
+* `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
   for one session) with one-stage's acceptance (`Properties.SampledProofs.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   leg: the window's staged statement, `stagedAt`).
-* `DrawIsCoin`: the service's `subset:K′` draw from the challenger's draw coin (`SampledProofs.Select.select`) read as
+* `DrawIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`SampledProofs.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
-  published draw `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
+  published sample `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
   a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
@@ -89,7 +89,7 @@ refusing the whole period on any refused window. A loop credited through it take
 two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
 tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
 halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
-words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them drawn at the leg's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
+words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them sampled at the leg's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
 Every tile's noise reads the window's one salt (its public row, `PouwCheck.publicBc`), so the window is one round
 (`Cd.rounds = 1`, `w_max = 1`): a coin a decode step would need a salt a step, which the pinned tile and the check don't
 take. At H1's lucks (`p = 7/8`, `p0 = ½`, the floors `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` claim), `a = b = 1`
@@ -102,8 +102,8 @@ at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11
 What H1's instance takes that the deployed path doesn't give, each a named premise:
 * `RegisteredBeforeDraw`, with the window's rows committed by its registration: the binding premise reads both. The
   tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
-  opening the service gives is bound to nothing fixed before the draw. Discharge path: the loop's anchors
-  committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
+  opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
+  committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
   its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
   `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
@@ -171,10 +171,10 @@ noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared �
 
 /-! ## The period's proofs under the check -/
 
-/-- **The period's proofs with the check's verdict**: window `w`'s proof of each drawn tile is accepted exactly when the
-check accepts window `w`, since it accepts only when every drawn unit's proof was (`Properties.Pouw.Check.AcceptMeans`,
-no partial credit); the `i`-th drawn tile's opening is the service's opening `opened x w u` of that tile's unit `u`
-(`drawOf` at the window's draw coin); the tiles' relations and rightness are the instance's. -/
+/-- **The period's proofs with the check's verdict**: window `w`'s proof of each sampled tile is accepted exactly when the
+check accepts window `w`, since it accepts only when every sampled proof block's proof was (`Properties.Pouw.Check.AcceptMeans`,
+no partial credit); the `i`-th sampled tile's opening is the service's opening `opened x w u` of that tile's unit `u`
+(`drawOf` at the window's sampling coin); the tiles' relations and rightness are the instance's. -/
 def checkedRun {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -193,10 +193,10 @@ def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 <
     DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V :=
   Cd.periodLayer hr hK (checkedRun hK p ws opened rel right)
 
-/-- **The check's draw is the period's draw coin**: on every path and every window the check accepts, the window's
-level has the population `N_p` and the draw size `K_d`, and the units it publishes as drawn (`Public.drawn`, the
-service's) are the units of the model's draw at the window's draw coin (`drawOf`). It holds when the model's
-permutation coin is read as the service's `subset:K′` draw from the challenger's draw coin
+/-- **The check's sample is the period's sampling coin**: on every path and every window the check accepts, the window's
+level has the population `N_p` and the sample size `K_d`, and the units it publishes as sampled (`Public.drawn`, the
+service's) are the units of the model's sample at the window's sampling coin (`drawOf`). It holds when the model's
+permutation coin is read as the service's `subset:K′` sample from the challenger's sampling coin
 (`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock: a
 protocol-code fact to prove. -/
 def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
@@ -207,9 +207,9 @@ def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
         ∀ u : ℕ, u ∈ pub.drawn.toList ↔ ∃ i : Fin Kd, (drawOf hK (coinAt x w).2 i).val = u
 
 /-- **The service is sound at `δ_ks` against the check**: in every window, the check accepts and some unit it
-publishes as drawn has an opening (`opened x w u`) that fails its relation (`rel`, the registered unit Program's) with
-probability at most `δ_ks` over the period's coins. C-Flock's soundness at each drawn unit, with one-stage's acceptance
-and the check's, is what it needs. A named assumption in the lock: standard crypto, C-Flock's soundness. -/
+publishes as sampled has an opening (`opened x w u`) that fails its relation (`rel`, the registered unit Program's) with
+probability at most `δ_ks` over the period's coins. Flock's soundness at each sampled proof block, with one-stage's acceptance
+and the check's, is what it needs. A named assumption in the lock: standard crypto, Flock's soundness. -/
 def ServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n : ℕ} (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -218,13 +218,13 @@ def ServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n : ℕ} (p : Pa
     protocol.check p (ws.reg x w) (ws.ev x w) = .accept pub prof ∧
       ∃ u : Fin Np, u.val ∈ pub.drawn.toList ∧ ¬ rel x w u (opened x w u.val)) ≤ δks
 
-/-- **Each window's registration is fixed before its draw coin**: on every path `x`, window `w`'s registration is the
-same on every continuation from `w`'s draw (`spliceAt w m`: `x`'s coins before window `w`'s draw coin, then any
+/-- **Each window's registration is fixed before its sampling coin**: on every path `x`, window `w`'s registration is the
+same on every continuation from `w`'s sample (`spliceAt w m`: `x`'s coins before window `w`'s sampling coin, then any
 others'). With the window's rows committed by its registration's roots, it is what makes `MovedIn ≤ δ_bind` the roots'
-binding: an opening other than the committed row then opens a root fixed before the draw named the unit. It states
+binding: an opening other than the committed row then opens a root fixed before the sample named the unit. It states
 the order only; the commitment is the roots', which on H1's path are tags (the loop's registration has `anchors []`
 and `wires []`). Its discharge path is to commit the loop's `x`, `sx`, weight rows and `sw` as
-anchors (hm96 rows in frame-v3-sha512 trees) before the window's draw coin, and to bind the H1 tiles' rows to them. A
+anchors (hm96 rows in frame-v3-sha512 trees) before the window's sampling coin, and to bind the H1 tiles' rows to them. A
 named assumption in the lock: a protocol-code fact to prove. -/
 def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x z : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
@@ -235,8 +235,8 @@ def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C 
 declared circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
 proof system's answer any function of the period's coins (`Executions`), with the check's parameters `prm`: under
 `CircuitWorkPeriod`'s premises at the period's proofs with the check's verdict (`checkedRun`, `checkedLayer`), its
-`JointSound` replaced by the check's draw being the period's draw coin (`DrawIsCoin`) and the service's soundness
-against the check (`ServiceSound`), with each registration fixed before its window's draw coin
+`JointSound` replaced by the check's sample being the period's sampling coin (`DrawIsCoin`) and the service's soundness
+against the check (`ServiceSound`), with each registration fixed before its window's sampling coin
 (`RegisteredBeforeDraw`), and at `K_d > 0`, an accepted period (`Pl.accepts`) has, over the windows before
 the check's first refusal (`Executions.prefixLen`, `j` of them), all but `(d_F + d₀)·N_w` of their live words
 (`checkedLive`) fixed right and all but `d₀·N_w` folded, with `a·d_F + b·d₀ < Λ·ln(1/δ_s) + j·min(a, b)·D₀`
@@ -309,7 +309,7 @@ def CheckedCreditPeriod : Prop :=
 
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
-every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
+every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
 round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
 in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
 coin mode, so the window is seeded. Its discharge path is ALLP-SALT; the per-epoch live salt is the
@@ -341,12 +341,12 @@ def flatAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
 /-- **(L)'s credit over the windows the deployed check accepts, at H1's tile unit on the torch loop.**
 `CheckedCreditPeriod` at the torch loop's window (module docstring): one round a window (`Cd.rounds = 1`,
 `w_max = 1`, every tile's noise reads the window's one salt), a population of `N_p = 144` of which `K_d = 24` are
-drawn, every tile's share of the words at most `1/128` (`ρ = 8/9`: 128 equal real tiles, the 16 fillers wordless),
+sampled, every tile's share of the words at most `1/128` (`ρ = 8/9`: 128 equal real tiles, the 16 fillers wordless),
 H1's lucks `p = 7/8`, `p0 = ½`, the word line `a = b = 1` and `SplitRateClosed`'s rate `Λ = 67/8`. The unit's relation
 is the staged statement at the window's salt (`stagedAt`), which `ServiceSound` is about, and its rightness the flat
 tile's at the window's coin (`flatAtCoin`); `Pins` is replaced by the window's salt being its live coin
 (`SaltIsLiveCoin`) and the staged statement pinning the flat tile (`StagedPins`), with each registration fixed before
-its window's draw coin (`RegisteredBeforeDraw`). Then, except with probability
+its window's sampling coin (`RegisteredBeforeDraw`). Then, except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the
 windows before the check's first refusal, `ε(j) = (67/8)·ln(1/δ_s)·N_w/N_live` (`creditPrefix`). -/
 def H1CheckedCreditPeriod : Prop :=

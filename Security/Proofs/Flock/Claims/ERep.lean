@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Prob
 /-!
 # `E^rep`: its reruns and its amplification
 
-`E^rep` replays the judged run and, if it accepted, makes `m` waits, each over `K` fresh coin draws and stopping at `k`
+`E^rep` replays the judged run and, if it accepted, makes `m` waits, each over `K` fresh coin samples and stopping at `k`
 accepted reruns; it returns the first assembled candidate that `check` accepts.
 
 * **Worst case** (`ERep_runs_le`): at most `1 + m·K` reruns, on every prover, tape and coin (the first half of
@@ -39,7 +39,7 @@ theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p :
     refine ⟨(ih _).1, ?_⟩
     rw [(ih _).2]; ring
 
-/-- A wait reruns the prover at most once per coin draw it holds. -/
+/-- A wait reruns the prover at most once per coin sample it holds. -/
 theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 ≤ rs.length := by
   intro rs
@@ -53,7 +53,7 @@ theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
     · simp only [RP.eval, List.length_cons]
       exact Nat.add_le_add_right (ih _) 1
 
-/-- The waits rerun the prover at most once per coin draw they hold. -/
+/-- The waits rerun the prover at most once per coin sample they hold. -/
 theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤ (rss.map List.length).sum := by
@@ -70,7 +70,7 @@ theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) 
       · exact ih
     · exact ih
 
-/-- What one wait over the coin draws `rs` yields: some candidate that `check` accepts. -/
+/-- What one wait over the coin samples `rs` yields: some candidate that `check` accepts. -/
 def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) : Prop :=
   ∃ w, assemble (((waitAcc k rs []).eval H run).1.flatMap opens) = some w ∧ check w = true
@@ -139,7 +139,7 @@ theorem ERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ)
 noncomputable def accPr (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : ℝ :=
   Claims.Pr fun r : Fin (V.k x) → Coin => (run H P V x ω r).out = .acc
 
-/-- `f_ω`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin draws, fails. -/
+/-- `f_ω`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin samples, fails. -/
 noncomputable def waitFail (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) : ℝ :=
   Claims.Pr fun ρ : Fin K → Fin (V.k x) → Coin =>

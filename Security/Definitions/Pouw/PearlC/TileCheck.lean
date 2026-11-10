@@ -7,9 +7,9 @@ public import Definitions.Core.Partition
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
 
 A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. Sampled
-proofs gives less: every drawn proof unit of the tile-check Program is correct in the witness `X`, and `X` holds the
+proofs gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
 registered values. L3 is the step between: the tile check computes the good-tile predicate. It is stated here over a
-**tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof units
+**tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof blocks
 by a `Verity.Partition`), with
 
 * `out sh rows cols`: the wires a tile is checked at, its words' C̃ and U (under hiding, its tile digest). The tile's
@@ -19,7 +19,7 @@ by a `Verity.Partition`), with
   the verifier derives from public seeds and so never reads from the prover. That the verifier's public inputs are
   these is L8, outside L3;
 * `anchorsOK H s U u act`: the verifier's own check of those anchors, before it reads the witness. `pc8`'s refuses a
-  noise line with a NaN code, as Python's verifier does (`fp8_to_f32` refuses one); the honest draw never makes one,
+  noise line with a NaN code, as Python's verifier does (`fp8_to_f32` refuses one); the honest sample never makes one,
   which is completeness, not L3;
 * `reg sh`, the registered wires, at `rowsOf U u c`: the values unit `u`'s commitment `c` gives them, its activation
   rows, its weight's rows and its tiles' checked words (under hiding, their digests). These are `valueAt`, the values
@@ -51,7 +51,7 @@ open Finset Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-- A tile check: the tile-check Program as a core circuit for each unit shape, its partition into proof units, the
+/-- A tile check: the tile-check Program as a core circuit for each unit shape, its partition into proof blocks, the
 wires a tile is checked at, the public wires with the anchors the verifier derives and its check of them, the registered
 wires with the values a commitment gives them, and the event outside which those values bind the circuit's words (see
 the module docstring). -/

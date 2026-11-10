@@ -8,7 +8,7 @@ issues is inside that regime on every input, by induction over its MMAs: each ac
 
 For each route as its kernel issues it (its planes; the MMAs one k32 slice chains into each accumulator; the slices a
 word chains; the words an accumulator carries before its restart; its start), the script computes the exact maximum
-of |c| + sum |t| at every MMA, over every input and every issue order. A slice's 32 lanes draw their operand pairs
+of |c| + sum |t| at every MMA, over every input and every issue order. A slice's 32 lanes sample their operand pairs
 independently, and so do the slices, while one instruction's lanes share its order. So for a sign s of c the maximum is
 
     s C + 32 ((carried slices) F_s + (other slices of the word) G_s + U_s)

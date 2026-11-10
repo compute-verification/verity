@@ -9,13 +9,13 @@ public import Proofs.Flock.Soundness.Game.Union
 
 The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`), at `StratifiedBlockMT`:
 
-* `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's wrong units `B` are in the confidence set, they are
+* `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's incorrect proof blocks `B` are in the confidence set, they are
   within the one budget (`StratifiedBlockMT.within_of_le`), so the event is empty. Otherwise an accepted sampling block
-  outside the budget has a drawn unit wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
-  its draw misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the wrong units
-  are not within the period's budget either has a sampling block accepted with a drawn unit wrong, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ`, at most
+  outside the budget has a sampled proof block wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
+  its sample misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
+* `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the incorrect proof blocks
+  are not within the period's budget either has a sampling block accepted with a sampled proof block wrong, at most
+  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every sample misses with the product of the escapes below `δ`, at most
   `δ` by `period_prod`.
 -/
 

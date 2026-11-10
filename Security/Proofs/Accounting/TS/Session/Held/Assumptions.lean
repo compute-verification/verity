@@ -3,7 +3,7 @@ module
 public import Proofs.Accounting.TS.Session.Held.Layer
 
 /-!
-# The premise that ties a checked unit's C-Flock circuit to its declared circuit
+# The premise that ties a checked unit's Flock circuit to its declared circuit
 
 `OkRealizes`: the session's key program computes, at each unit, the checks of one unit of the declared circuit `Cd`,
 so that its `ok` wires carrying the `ok` row means those checks hold. It belongs in
@@ -24,8 +24,8 @@ each carry the bit of a value that is the `ok` row at its position (`OkVal`, the
 declared circuit `Cd`'s unit `unitOf u` holds at `dec vals` (`Accounting.Served.Held`).
 
 It is a fact of one compiled circuit and one declared circuit, with `unitOf` and `dec` the map between them: that the
-key program of `PouwH1TileZy_v1`'s C-Flock circuit computes its `ok` word as the conjunction of the checks `Cd`
-declares of the unit (the Σ check and the dequant check), on the wires `dec` reads. Nothing in Lean derives a C-Flock
+key program of `PouwH1TileZy_v1`'s Flock circuit computes its `ok` word as the conjunction of the checks `Cd`
+declares of the unit (the Σ check and the dequant check), on the wires `dec` reads. Nothing in Lean derives a Flock
 circuit from a `Declared` one or checks one against the other; `circuit-check` binds the Definition to its Boolean
 lowering, not to `Cd`. It stays a premise until that binding is stated. -/
 def OkRealizes {ι : Type} (s : RowsSession) (ok : String) (Cd : Accounting.Compose.Declared ι)

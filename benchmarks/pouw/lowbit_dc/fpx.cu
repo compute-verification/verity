@@ -123,7 +123,7 @@ __host__ __device__ inline double real_val(const Cfg& c, int step, int side, int
   }
   return (double)v / c.s;
 }
-// emu8's int8 draws (fp8acc's classes plus Dither-shaped uniform).
+// emu8's int8 samples (fp8acc's classes plus Dither-shaped uniform).
 __host__ __device__ inline int emu_draw(const Cfg& c, int step, int side, int row, int k) {
   const uint32_t r = hsh(c.seed, step, side, row, k);
   switch (c.dist) {

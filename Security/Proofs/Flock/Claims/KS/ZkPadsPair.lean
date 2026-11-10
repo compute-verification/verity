@@ -97,7 +97,7 @@ theorem tiedColl_of_padsLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
   rw [e']
 
 /-- **An accepted masked rep logs its pads openings**: where a stream `y` has the coins of the live session's rep
-stream `2j + r` and rep `r`'s proof file decodes to pads openings drawn at the positions `y`'s last round's coins give
+stream `2j + r` and rep `r`'s proof file decodes to pads openings sampled at the positions `y`'s last round's coins give
 (`PadsRep`), the run's verifier opened each of those queries at that position (`zkVerifyRepWith_inner`,
 `verifyInner_logs`), so every input of each opening is in its log. -/
 theorem zk_padsLogged {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
@@ -589,7 +589,7 @@ def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Reada
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
+that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
 `r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=
@@ -609,7 +609,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
+that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
 `r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=

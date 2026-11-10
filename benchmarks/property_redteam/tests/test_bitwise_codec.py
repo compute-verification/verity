@@ -143,7 +143,7 @@ def test_bitwise_squaring_pays_its_partial_products():
 
 @pytest.mark.slow
 def test_codec_at_n16():
-    """The 16-bit rows and random draws at `⟨16, 17⟩`, three rounds, two words: the gadgets at a second field."""
+    """The 16-bit rows and random samples at `⟨16, 17⟩`, three rounds, two words: the gadgets at a second field."""
     n, c, k = 16, 17, 3
     p = (1 << n) - c
     rows = [r for r in CODEC_ROWS if r[0] == n and len(r[2]) == k]

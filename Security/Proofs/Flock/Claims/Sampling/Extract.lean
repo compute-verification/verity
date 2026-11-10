@@ -13,7 +13,7 @@ The sampled extractor (`Claims.Sampling.E`) reruns the judged run fresh on some 
   `Pr_acc_forkOn`: a judged run's acceptance against a weight that ignores `I` averages as the acceptance probability
   of the runs fresh on `I`.
 * `Ex_finsum`, `Ex_pi_eval`, `sum_map_eq_count`: averages over a list of units.
-* `waitsProg`, `waits_amortized`, `waits_runs_le`: Flock's `E^rep` waits, `m` of them over `K` draws each stopping at
+* `waitsProg`, `waits_amortized`, `waits_runs_le`: Flock's `E^rep` waits, `m` of them over `K` samples each stopping at
   `k` accepted runs, rerun at most `m·k/ε` times in expectation against a run accepting with probability `ε`, and at
   most `m·K` times.
 * `NoHash`, `calls_le_of_noHash`: a program without SHA-512 calls of its own calls at most `t` times per rerun.
@@ -127,7 +127,7 @@ theorem sum_count_eq_length {ι : Type} [Fintype ι] [DecidableEq ι] (l : List 
 
 /-! ## Flock's waits -/
 
-/-- `E^rep`'s waits: `m` waits, each over `K` draws `ρ a` and stopping at `k` accepted runs, returning the first
+/-- `E^rep`'s waits: `m` waits, each over `K` samples `ρ a` and stopping at `k` accepted runs, returning the first
 assembled candidate that `check` accepts. -/
 def waitsProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W)
     (check : W → Bool) (ρ : Fin m → Fin K → D) : RP D (Option W) :=
@@ -162,7 +162,7 @@ theorem waits_amortized {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Ms
         simp only [Nat.cast_zero, sub_zero] at h0
         exact mul_le_mul_of_nonneg_left h0 (Nat.cast_nonneg _)
 
-/-- The waits rerun at most once per draw they hold. -/
+/-- The waits rerun at most once per sample they hold. -/
 theorem waits_runs_le {D W Op : Type} (H : Msg → Msg) (run' : D → Trace) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (ρ : Fin m → Fin K → D) :
     ((waitsProg m k K opens assemble check ρ).eval H run').2.2 ≤ m * K := by

@@ -500,7 +500,7 @@ def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the masked sessions bound
+where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
 every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
 table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
 (`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per
@@ -537,7 +537,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
 end Gen
 
 /-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the masked sessions bound
+where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
 every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
 table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
 (`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per

@@ -709,7 +709,7 @@ theorem csz_spanX_pre_le [CharP F 2] (c : Fin D → ι → F) :
       _ = 2 ^ 2 ^ (T + 1) := by rw [← pow_mul, pow_succ]
 
 /-- **The joint chain over two free rows**: `Σ_r 1/(|π_i U_T|^α |π_j U_T|^β) ≤ |R|·Bc(T, α)·Bc(T, β)`, rows `i`
-and `j` drawing independently at every coordinate (`sum_mul_rows`) and each step bounded by `sum_row_le`. -/
+and `j` sampling independently at every coordinate (`sum_mul_rows`) and each step bounded by `sum_row_le`. -/
 theorem chain [CharP F 2] (fix : ι → Fin D → Option F) {i j : ι} (hij : i ≠ j)
     (hfi : ∀ t, fix i t = none) (hfj : ∀ t, fix j t = none) :
     ∀ T, T ≤ D → ∀ α β : ℕ,

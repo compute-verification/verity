@@ -79,7 +79,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
 
 def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     """The in-Commit hook (`serving_rows.readers`, its request as the row stage writes it) over the same Commit's members: the same
-    program, partition and domains, and the window ``served`` (serving's own commitment, before any draw) with no stand-in link."""
+    program, partition and domains, and the window ``served`` (serving's own commitment, before any sample) with no stand-in link."""
     c = _commit(tmp_path)
     hook = json.loads((SR.hook(c, tmp_path / "hook", run="r-hook") / "registration.json").read_text())
     DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "deferred", workers=1)

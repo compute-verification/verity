@@ -1,10 +1,10 @@
-"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
+"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier) against its Python mirror
 (`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`SampledProofs.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
 `trusted_reason`.
 
-The cases are a challenger's honest coins over drawn layouts (labels of several clients: PoUW's, vLLM's, memory's), then
+The cases are a challenger's honest coins over sampled layouts (labels of several clients: PoUW's, vLLM's, memory's), then
 one mutation each (`COMMITMENT`, `OPENING`, `REASON`, `ORDER`): a coin opened twice, one opened before its root was
 recorded, a foreign epoch's or challenger's, a tampered salt or path, a coin the layout doesn't hold, each malformed
 form. The record's (`KEY`, `RECORD`, `TRUSTED`) are a record the challenger signed with a small LMS key, then a missing
@@ -417,7 +417,7 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 
 
 def _signed(rng: random.Random) -> tuple[Ch.ChallengerKey, Ch.LiveChallenger, Ch.ChallengerRecord]:
-    """A challenger's record, signed at a drawn leaf of a small key, and the verifier's key for it."""
+    """A challenger's record, signed at a sampled leaf of a small key, and the verifier's key for it."""
     w, h = rng.choice(PARAMS)
     k = _key(w, h, 0)
     ch = _challenger(rng)
@@ -661,8 +661,8 @@ HELLOS = ['{"error":"a client\'s frames are hello","peer":"10.0.0.7"}', "x", "",
 
 
 class Session:
-    """A challenger's session as its host leaves it: a record signed at leaf q of a key (drawn, or `q`), a release log
-    over drawn roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed it),
+    """A challenger's session as its host leaves it: a record signed at leaf q of a key (sampled, or `q`), a release log
+    over sampled roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed it),
     under the key of `seed` at one of `params`, and the lines of the hellos it refused."""
 
     def __init__(self, rng: random.Random, ended: str | None = None, params=PARAMS, q: int | None = None,
@@ -736,9 +736,9 @@ class Ledger:
     """The auditor's ledger of session `s`'s window and up to two others' sessions, each opened, then ended, interleaved,
     sometimes after an older v1 session's, and sometimes (always when `period` is set: "open" or "closed") inside a
     period of `s`'s lane, its close when it has one listing its windows: `events` its entries' (kind, session, body),
-    `lines` them chained and signed at drawn increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
+    `lines` them chained and signed at sampled increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
-    `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
+    `two_step` (sampled when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
     open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
     withheld session (`withheld: true`).  The older v1 session is chosen at random unless `v1` says.  When `declare`, `s`'s lane
     declares its days (`declare_days`)."""
@@ -927,7 +927,7 @@ class Ledger:
 
 def _ledger_session(rng: random.Random, reserved: bool | None = None, params=LEDGER_PARAMS, seed: int = 0) -> Session:
     """A session under the key of `seed` at one of `params`, whose record's leaf leaves room on either side for a
-    ledger's entries, its id a reserved one (drawn, unless `reserved` says)."""
+    ledger's entries, its id a reserved one (sampled, unless `reserved` says)."""
     s = Session(rng, params=params, q=rng.randrange(20, 40), seed=seed)
     if reserved or reserved is None and rng.random() < 0.5:
         s.id = f"s20261019T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
@@ -1728,7 +1728,7 @@ class Drawn:
     """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
-    the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
+    the commitment (sampled, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
     default), their lines among the others.  Its key is the key of `seed` at one of `params`."""
@@ -2404,7 +2404,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
 def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
-    """Each piece agrees on drawn cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
+    """Each piece agrees on sampled cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
     refusal) and each mutation refused."""
     stats = D.run(port, examples=examples, server=pieces)
     outcomes = Counter()

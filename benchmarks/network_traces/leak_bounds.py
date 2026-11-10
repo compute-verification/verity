@@ -6,7 +6,7 @@ its share of one copy of the weights (`WEIGHTS`) and ε, the union of its scans'
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
-blocks, T buckets of τ seconds each way, every one proved as its own proof block, every proof block drawn, each sampling
+blocks, T buckets of τ seconds each way, every one proved as its own proof block, every proof block sampled, each sampling
 block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
 of the scan's statement:
 
@@ -24,7 +24,7 @@ A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over 
 scans' knowledge and collision errors. K takes one of two forms:
 
 * δ None, the per-period form: `NetTiming.Guarantees.PeriodLeakAccepted`'s count, which has no δ term with every proof
-  block drawn. Each sampling block's audit fails with at most its own error, which the statement leaves to the
+  block sampled. Each sampling block's audit fails with at most its own error, which the statement leaves to the
   caller's union bound (`NetTiming.periodLeak_le_sum`).
 * δ given, the pooled form: `NetTiming.Guarantees.PooledLeakAccepted`'s count at q = 1. It is the per-period count
   plus F·log2(N + 1) + b·F, where F = ⌈ln(1/δ)⌉ (`fmax`), N is the period's proof blocks and b = NS + NV, and it fails

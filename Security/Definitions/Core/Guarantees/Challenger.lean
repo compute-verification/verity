@@ -8,8 +8,8 @@ public import Definitions.Core.Assumptions.Challenger
 
 `SampleAfterRecorded`: under the challenger's premises (`Definitions.Core.Assumptions.Challenger`), the sample a
 verifier takes with a coin it read from the challenger's log misses a set of blocks fixed before that coin as often as a
-uniform draw of the law misses it, at most the law's `miss K` for a set of `K` blocks or more. It is the live-coin step of
-a sampled audit: the faulty proof blocks are fixed by the commitments the coin samples, which the challenger recorded
+uniform sample of the sampling design misses it, at most the sampling design's `miss K` for a set of `K` blocks or more. It is the live-coin step of
+a sampled audit: the incorrect proof blocks are fixed by the commitments the coin samples, which the challenger recorded
 before it flipped the coin, so the prover can't steer them away from the sample.
 -/
 
@@ -19,8 +19,8 @@ namespace Verity.Guarantees
 
 open Verity Verity.Assumptions Verity.Challenger
 
-/-- **The sample from a challenger's coin misses a set fixed before it at most as often as the law allows.** For every
-sample law `L` over blocks `U`, run of a challenger flipping `n` of the law's coins with log `log`, verifier's coins
+/-- **The sample from a challenger's coin misses a set fixed before it at most as often as the sampling design allows.** For every
+sample law `L` over blocks `U`, run of a challenger flipping `n` of the sampling design's coins with log `log`, verifier's coins
 `vc`, coin index `i`, set of blocks `bad` fixed by what the log holds before coin `i` (`Log.before`: the commitments
 that coin samples, and the earlier coins), and `K`: if the challenger logs its coins (`ChallengerLogsCoins`), flips
 each only after what its log holds before it is recorded (`FlipsAfterRecorded`), and the verifier reads its coins from

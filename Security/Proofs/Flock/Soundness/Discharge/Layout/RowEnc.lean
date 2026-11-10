@@ -19,7 +19,7 @@ injective `enc` recovers each port's words from its value:
   of every other value; `rowEnc_inj`;
 * `rowEnc_row`: at a row of `16 k` bits it is `rowPrefix k` and the row's `2 k` bytes;
 * `keyRow_enc`: at `keyProg`'s places, row port `q` of `16 · words` bits (`rowW q`) holds a value whose `rowEnc` is
-  `rowPrefix words` and the `2 · words` bytes the witness holds at the drawn unit's message columns, `port_commit`'s
+  `rowPrefix words` and the `2 · words` bytes the witness holds at the sampled proof block's message columns, `port_commit`'s
   row with the block's bits at the site;
 * `keyRowsEnc`: `rs` there (`keyRowsOut`) with `enc := rowEnc` and `bitCode` for the other commit strings.
 -/
@@ -273,7 +273,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {rowW : Fin c.ports.s
   (outs : Finset (Fin (keyN c hU n))) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
   (outBit : Reg → Fin (keyN c hU n) → Bool)
 
-/-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places**: at a drawn unit `u`'s site, the value a
+/-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places**: at a sampled proof block `u`'s site, the value a
 message holds at row port `q` of unit `u'`, `16 · words` bits (`rowW q`), has `rowEnc` the row prefix of `words` and the
 `2 · words` bytes the witness holds at the unit's VU's message columns (`Typed.msgCol`) in its block: [e2e-hm]'s
 `port_commit` row, with the block's bits at the site. -/

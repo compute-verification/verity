@@ -3,7 +3,7 @@
 measured beside the flat form, at any K and R × C tile. A leaf is proved as one of two units: ``tile``, the whole tile
 (`h1window.tile_unit`, the statement `pouw_h1_circuits` writes), or its ``lane`` (`h1zy.lane`, one circuit for every
 lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h1_lanes` stages, which
-`h1window.leaf_unit` derives at a K of whole lanes. Each must fit C-Flock's block (``k_log <= 27``).
+`h1window.leaf_unit` derives at a K of whole lanes. Each must fit Flock's block (``k_log <= 27``).
 
 * ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--bind leaf|zero]
   [--path FILE] [--program FILE]``: a tile through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body,
@@ -11,7 +11,7 @@ lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h
   rows, in this process, bound to its leaf Program's partition and digest as a served window's verifier derives them
   (`leaf_bind`, the default; its descriptor to ``--program``), or with ``--bind zero`` to `ZERO_BIND`; at ``fast`` (the
   default) `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows
-  C-Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
+  Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
   calls), its seconds and peak RSS before compose and at the end, the binding, and the file's bytes, SHA-512 and META
   block and binding fields; or the refusal, before lowering (`refusal`) or compose's (a block past ``K_MAX``, ``k_log``
   the block it needs) with the lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
@@ -50,7 +50,7 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 ZERO_BIND = {"partition": "0" * 128, "program": "0" * 128}
 #: a lane's or combine's binding: its leaf Program's (`leaf_bind`, the default), or `ZERO_BIND`
 BINDS = ("leaf", "zero")
-#: META's fields that say how the statement fills C-Flock's block
+#: META's fields that say how the statement fills Flock's block
 BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
 SEED = 20261028
 UNITS = ("tile", "lane", "combine")
@@ -194,7 +194,7 @@ def _keep_totals(CS, got: dict) -> None:
 
 
 def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict:
-    """The lowering's counts. ``rows``: the rows C-Flock proves below the root (a template's from ``struct``, its
+    """The lowering's counts. ``rows``: the rows Flock proves below the root (a template's from ``struct``, its
     `_Lowerer.total`; a flat unit's AND and table-read rows). ``commits``: those of them that commit a linear form rather
     than AND two (``A = form, B = 1``: `struct_lower`'s past ``support`` at a call boundary, `Circuit.commit`'s).
     ``ands``: a template's rows less its commits; a flat unit's layout count, its commits included, as the harness counts
@@ -253,7 +253,7 @@ def check(args) -> int:
     """`credit`'s lanes form on the lane file LANE and combine file COMBINE at K over the R × C tile, as a period that
     commits them as ``lane<K>`` and ``combine<K>`` reads them: the served window (`window`) within `lanes_shape`; each
     file's leaf Program, `h1window.leaf_program`'s descriptor, `leaf_of` the unit `leaf_unit_id` reads off the window's
-    descriptor; each file's META bound as the verifier of record holds it (``program_sha512`` that descriptor's SHA-512,
+    descriptor; each file's META bound as the verifier holds it (``program_sha512`` that descriptor's SHA-512,
     ``partition`` the digest of `leaf_partition_of`, the object credit hands the verifier, which is
     `partition.partition`'s of the leaf Program); and the circuit files with their leaf Programs in the lanes form
     (`lanes_files`, `form_of`)."""

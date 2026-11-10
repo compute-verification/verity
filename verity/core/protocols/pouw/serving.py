@@ -9,7 +9,7 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   ``pearl-c-{nvfp4|mxfp4}-{version}[-{hashing}]`` for Pearl-C4.  Every name in use parses and prints back unchanged.
 * `Schedule` (`SCHEDULES`): which step groups of a call leave the critical path, and at what priority; `schedule_refusals`
   says which placements a format forbids (A's tree stays on the main lane unless the format seeds forming per row).
-* `PassCommitment`: what one pass on one rank publishes before any draw; `MANIFEST_SCHEMA` names the retained pass the
+* `PassCommitment`: what one pass on one rank publishes before any sample; `MANIFEST_SCHEMA` names the retained pass the
   verifier reads.
 * `KernelVariant`, `StepIO`, `ShapeRule` and `GateRecord`: a kernel as content-addressed data, what each of its call steps
   reads and writes, the shapes it takes, and the device gate that admits it to serving (`variant_refusals`).  Loading a
@@ -182,7 +182,7 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
 #: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
-#: from a beacon, before epoch coins) only as a replay of a recorded pass
+#: from a beacon, before the execution phase's coins) only as a replay of a recorded pass
 MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 

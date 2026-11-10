@@ -11,21 +11,21 @@ The positive twin of a layer that commits a coin-keyed receipt as a leaf: a serv
 own, while the round's leaves, committed before σ_w, hold its operands. `keyedLayer n` is such a window over `n + 1`
 rounds, one proof a round: each proof accepted, opening its round's operand (`false`), its relation reading σ_w and the
 receipt the proof gives on the path (the operand keyed by σ_w). The receipt moves with σ_w (`keyedLayer_receipt_moves`),
-so as a leaf it would fork with every redraw of σ_w. Read by the relation instead, binding (both forms) and proof
+so as a leaf it would fork with every resample of σ_w. Read by the relation instead, binding (both forms) and proof
 soundness hold at `0` and the relations pin (`keyedLayer_meets_budget`), so the restated premises hold for an honest
 coin-dependent layer at the budget `S·(√δ_fork + n_π·δ_ZK) ≤ 2^-41`, `S = 48,000` (`keyedLayer_meets_budget_dc`).
 `keyedPlay n` is its honest play (every round passing at share `0`, `N_w = 1` fixed words), so `Of` and `RightFixed`,
 the premises that read the play, are met by an honest run too, and `ProofsSoundOfPinned` gives (I8) at `0`
 (`keyedPlay_proofsSound`).
 
-The sampled form needs no restatement: `DrawnLayer` binds each position at its own cut, a unit's outputs at the draw,
+The sampled form needs no restatement: `DrawnLayer` binds each position at its own cut, a unit's outputs at the sample,
 after the coins its noise reads. `keyedDrawn n` is the served shape over `n + 1` rounds, one coin before each round's
-draw (the salt) and one unit, whose slots are its operand (cut before the salt) and its receipt (cut at the draw), the
+sample (the salt) and one unit, whose slots are its operand (cut before the salt) and its receipt (cut at the sample), the
 operand keyed by the salt. Its receipt moves with the salt (`keyedDrawn_receipt_moves`), and it meets binding at every
 position's cut (both forms), joint soundness and pinning at `0`, within the budget (`keyedDrawn_meets_budget`).
 
 `guess_rel_last`: for a prover that guesses round `w`'s receipt (`true`) instead of keying its operand, the committed
-values satisfy every relation on one path and fail the last round's on its continuation that redraws the last coin, so
+values satisfy every relation on one path and fail the last round's on its continuation that flips the last coin again, so
 `ProofLayer.Of` no longer has the ideal game accept every last coin: the relation reads the coin the receipt is keyed
 by. `guessLayer`'s relation takes the operand as free witness, so it lacks `Pins` (`guessLayer_not_pins`) and
 `ProofsSoundOfPinned` says nothing about it.
@@ -150,7 +150,7 @@ def guessLayer (n : ℕ) : ProofLayer Bool (n + 1) 1 Bool where
   right _ c := ∀ w i, c w i = false
 
 /-- **The relation reads the last coin**: on the all-`true` path the guessing prover's committed values satisfy every
-relation, and on its continuation that redraws the last round's coin as `false` they fail the last round's. So `Of`'s
+relation, and on its continuation that resamples the last round's coin as `false` they fail the last round's. So `Of`'s
 tie to the ideal game reads the coin the receipt is keyed by, and a prover deficient in the last round is accepted by
 the ideal game on its lucky coins only (an earlier `Of` had it accepted on every last coin). -/
 theorem guess_rel_last (n : ℕ) :
@@ -207,7 +207,7 @@ theorem plural_eq {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X) (op
     exact ⟨z₀, Finset.mem_filter.2 ⟨Finset.mem_univ _, (hA z₀ (f x)).2 rfl⟩⟩
   omega
 
-/-- Round `w`'s salt on a path of rounds with one coin before the draw. -/
+/-- Round `w`'s salt on a path of rounds with one coin before the sample. -/
 def salt {n : ℕ} (x : Paths (Paths Bool 1 × Unit) n) (w : Fin n) : Bool := (coinAt x w).1.1
 
 /-- Round `w`'s honest values: its operand (`false`), and its receipt, the operand keyed by the salt. -/
@@ -218,9 +218,9 @@ theorem salt_spliceAt {n : ℕ} (w : Fin n) (x z : Paths (Paths Bool 1 × Unit) 
     salt (spliceAt (w : ℕ) 1 x z) w = salt x w :=
   congrArg (fun p => p.1.1) (coinAt_spliceAt w 1 x z)
 
-/-- **An honest coin-keyed sampled layer** over `n + 1` rounds, each with one coin before its draw (the salt) and one
+/-- **An honest coin-keyed sampled layer** over `n + 1` rounds, each with one coin before its sample (the salt) and one
 unit, whose slots are its operand (`false`, position `(w, false)`, cut before the salt) and its receipt (position
-`(w, true)`, cut at the draw, after the salt): every proof accepted, opening the honest values; the unit's relation and
+`(w, true)`, cut at the sample, after the salt): every proof accepted, opening the honest values; the unit's relation and
 rightness, that the receipt is the operand keyed by the salt. -/
 def keyedDrawn (n : ℕ) : DrawnLayer Bool Unit (n + 1) 1 1 Unit Bool (Fin (n + 1) × Bool) Bool where
   draw _ _ := ()

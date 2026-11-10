@@ -13,7 +13,7 @@ public import Proofs.Flock.C3.Reps.AtList
 # The level's `out` slot and RecCap's `top` slot carry one commit string (`OutCommitTie` at `layR`)
 
 `OutCommitTie` asks, at a level part's piece `q` (instance `N = rep · q_l + query`), that the level part's `out` slot
-at `N` and RecCap's `top` slot at `capIdx` carry one commit string. Both are rows of the coin server's
+at `N` and RecCap's `top` slot at `capIdx` carry one commit string. Both are rows of the challenger's live-coin part's
 `rec-top-L<l>`:
 
 * `outRow_bytes`: the level's check 5 runs `checkOpenTops` (`checkLink_open`), whose `out` reads `rec-top-L<l>` at

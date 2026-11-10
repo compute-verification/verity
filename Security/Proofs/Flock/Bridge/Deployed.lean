@@ -6,14 +6,14 @@ public import Proofs.Flock.Soundness.Binding.RowSeg
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
-# The deployed sampling commitment at a C-Flock session
+# The deployed sampling commitment at a Flock session
 
 `commitDep`: the deployed trace commitment (`SamplingDeploy.commit`'s form: hm96 leaves of rows under the verifier's
 own registered frame-v3-sha512 path check), each row in its port's own format, with every field of its layout a
 function of the session's files and the game's rows, none a free parameter:
 
 * `rows`: each wire's registered row (`RowAt`): its port, its leaf index there (the row's unit), the row's width and the
-  wire's bit in it. At a C-Flock session it is the game's own row map (`HiddenExec.rowOfH` at `portRowW`), read off the
+  wire's bit in it. At a Flock session it is the game's own row map (`HiddenExec.rowOfH` at `portRowW`), read off the
   circuit file.
 * `atOf`: a claims position's root and leaf index, its wire's row's port's root among the statement's roots and the
   row's unit; `none` at a position no row holds.
@@ -22,17 +22,17 @@ function of the session's files and the game's rows, none a free parameter:
   (`64 · log2ceil nl` bytes) and the row's bits, one byte each.
 * `rowDep`: an opening's row message, its row's bits (`SamplingDeploy.rowBits`) in its port's format (`rowMsg`):
   `sha512/row-seg/v1`'s outer message `Q(ℓ) ‖ d₀ ‖ …` at a segmented port, `sha512/row/v2`'s `P(ℓ) ‖ bytes` at a bit
-  row, `sha512/row/v1`'s `rowPrefix (ℓ / 16) ‖ bytes` otherwise, as C-Flock's hm96 slot hashes that port's rows.
+  row, `sha512/row/v1`'s `rowPrefix (ℓ / 16) ‖ bytes` otherwise, as Flock's hm96 slot hashes that port's rows.
 * `portsOf`: the circuit file's ports, each with its root among the statement's roots, `nl` leaves, its name as its
-  frame-v3 domain and its own leaf schema (`schemaOf`: `Registered.portSchema`, as C-Flock frames the port's rows).
+  frame-v3 domain and its own leaf schema (`schemaOf`: `Registered.portSchema`, as Flock frames the port's rows).
 
-`RowsOk c`: every port of `c` is a row the verifier of record reads: all `sha512/row/v1` rows, or each a `sha512/row/v2`
-or `sha512/row-seg/v1` row, `16 · words` bits each (`Layout.v1Ports`, `Layout.bitRows`; C-Flock's scope check
+`RowsOk c`: every port of `c` is a row the verifier reads: all `sha512/row/v1` rows, or each a `sha512/row/v2`
+or `sha512/row-seg/v1` row, `16 · words` bits each (`Layout.v1Ports`, `Layout.bitRows`; Flock's scope check
 `scopeOkH` implies it, `rowsOk_of_scopeOkH`). `RowsV2 c`: every port is an unsegmented row/v2 row, where `commitDep` is
 `SamplingDeploy.commit`'s, whose rows are row/v2 rows only (`LayoutIs`).
 
 `rootsOf c pub nl`: the frame-v3 roots of the registration's rows: per port, the root over the `nl` units' tree leaves of
-C-Flock's hm96 leaf of the public file's `b ‖ c` there (`Hm96.Default512.treeLeaf (pub.digest u q np)`, what the game's
+Flock's hm96 leaf of the public file's `b ‖ c` there (`Hm96.Default512.treeLeaf (pub.digest u q np)`, what the game's
 registered leaf is at a row), framed at the port's schema.
 
 `witDep`: the evaluation's values as claims openings, each with data its position passes under, where some does.
@@ -98,7 +98,7 @@ def bitsOf (d : ℕ) (data : Msg) (k : ℕ) : Bool := (data.drop (saltLen + 64 *
 /-- A port's frame-v3 domain: its name in the circuit file. -/
 def domOf (c : Flock.Circuit) (q : ℕ) : ByteArray := ((c.ports[q]?.map (·.name)).getD "").toUTF8
 
-/-- A port's leaf schema: `Registered.portSchema`'s, as C-Flock frames the port's rows (`HmRow.checkPublic`). -/
+/-- A port's leaf schema: `Registered.portSchema`'s, as Flock frames the port's rows (`HmRow.checkPublic`). -/
 def schemaOf (c : Flock.Circuit) (q : ℕ) : String :=
   (c.ports[q]?.map Flock.Registered.portSchema).getD Flock.HmRow.ROW_SCHEMA_V2
 
@@ -109,15 +109,15 @@ def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Regi
     { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := nl,
       words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := schemaOf c q }
 
-/-- **Every port of the circuit file is a row the verifier of record reads**: all unsegmented `sha512/row/v1` rows
+/-- **Every port of the circuit file is a row the verifier reads**: all unsegmented `sha512/row/v1` rows
 (`Layout.v1Ports`), or each an unsegmented `sha512/row/v2` row or a `sha512/row-seg/v1` row (`Layout.bitRows`), of
-`16 · words` bits each, as C-Flock's scope check accepts them (`rowsOk_of_scopeOkH`). -/
+`16 · words` bits each, as Flock's scope check accepts them (`rowsOk_of_scopeOkH`). -/
 @[reducible] def RowsOk (c : Flock.Circuit) : Prop :=
   (FlockSoundness.Discharge.Layout.v1Ports c || FlockSoundness.Discharge.Layout.bitRows c) = true
 
 instance instDecidableRowsOk (c : Flock.Circuit) : Decidable (RowsOk c) := inferInstanceAs (Decidable (_ = true))
 
-/-- **C-Flock's scope check implies `RowsOk`**: `scopeOkH`'s last conjunct is it. -/
+/-- **Flock's scope check implies `RowsOk`**: `scopeOkH`'s last conjunct is it. -/
 theorem rowsOk_of_scopeOkH {c : Flock.Circuit} (h : FlockSoundness.Discharge.Layout.scopeOkH c = true) : RowsOk c := by
   unfold FlockSoundness.Discharge.Layout.scopeOkH at h
   simp only [Bool.and_eq_true] at h
@@ -149,7 +149,7 @@ def rowDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) 
   | some p => rowMsg p (SamplingDeploy.rowBits place bits o)
   | none => SamplingDeploy.row place bits o
 
-/-- **The registered tree leaf of row `(u, q)`**: C-Flock's hm96 tree leaf of the public file's `b ‖ c` there. -/
+/-- **The registered tree leaf of row `(u, q)`**: Flock's hm96 tree leaf of the public file's `b ‖ c` there. -/
 def regLeafOf (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : ByteArray :=
   Flock.Hm96.Default512.treeLeaf (pub.digest u q c.ports.size)
 

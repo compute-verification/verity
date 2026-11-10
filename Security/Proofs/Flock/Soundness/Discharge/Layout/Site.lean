@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 set_option Elab.async false
 
 /-!
-# A drawn unit's site in its table's accepted statement
+# A sampled proof block's site in its table's accepted statement
 
 `Placed.Accepted T` is a run of `Stmt.setupH` that accepted, whose statement is `T`. At a template instance `g` of a
 block `o` of it:
@@ -33,7 +33,7 @@ the block). -/
 def siteAddr (a : Placed.Accepted T) (o : Fin (2 ^ T.nbl)) (x : ℕ) : Fin (2 ^ T.m) :=
   T.addr o (Fin.cast a.kLog_eq (inBlockOr a.st.c.kLog x))
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's**: in a satisfying witness of an accepted drawn statement
+/-- **The `b ‖ c` at a sampled proof block's site is the population's**: in a satisfying witness of an accepted sampled statement
 whose regions contain the executable's (`hregs`), at block `o`, template instance `g` (below `2^⌊log₂ c.g⌋`) and port `p`, the 128 bytes
 at the `hm96` slot's output are the `b ‖ c` the population's public file (`pop`, without shared rows) holds for the
 proved unit `u` at rank `o · c.g + g`. -/
@@ -68,7 +68,7 @@ theorem bc_siteS (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
   exact bc_drawnS h hpop hD hlt (setupH_layout ht h) regs hregs hz o hg hg2 hp hr
 
-/-- **What `bc_site` reads at a site**: block `o` and template instance `g` of an accepted statement whose draw `d` decodes to `D`, whose
+/-- **What `bc_site` reads at a site**: block `o` and template instance `g` of an accepted statement whose sample `d` decodes to `D`, whose
 proved units are in its population; whose model statement's regions contain the executable's; whose public file loads to
 `pop`, with or without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
 def BcSite (a : Placed.Accepted T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
@@ -91,7 +91,7 @@ theorem regionsOf_mem (st : Stmt) :
     ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ Refine.regionsOf st :=
   fun _ hr => List.mem_map_of_mem hr
 
-/-- **A drawn unit's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
+/-- **A sampled proof block's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
 block `o` and template instance `g`, the template instance's stacked unit input `x` whose Δ key is message bit `bit` of
 byte `byte` of row port `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the
 block. -/

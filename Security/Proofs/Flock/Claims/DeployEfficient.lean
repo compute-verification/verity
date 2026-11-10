@@ -26,7 +26,7 @@ A bound too small fails (`not_efficient_plain`, `not_efficient_zk`): on no colum
 the decoder still fills its words, so no `p` with `p(0) = 0`, `0` and `X` among them, bounds its count.
 
 At the deployed numbers (`erepRuns_plain`, `erepRuns_zk`), `E^rep` makes `Numbers.waits = 210` waits of at most
-`Numbers.cap = 2^256` draws, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
+`Numbers.cap = 2^256` samples, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
 expectation, `k = ⌈4·N₀/e⌉` with `N₀` the tables' level-0 codeword lengths summed (`2^d` at one table).
 -/
 

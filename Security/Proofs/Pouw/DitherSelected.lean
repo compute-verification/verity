@@ -15,7 +15,7 @@ half of SAK(matmul) for `noFoldRound`, whose check runs on every coin; this file
 * `detects_selected`: a cells' check that detects at `g` detects at `1 − π + π g` once selected;
 * `pointwise_selected`, `sakMatmul_of_residual_selected`: `SAKResidual` and a cells' check that detects at `g` give
   `SAKMatmul` on the selected block at a rate with `(1 − π + π g(1 − f)) e^{η f pub} ≤ 1`;
-* `sakMatmul_of_residual_bern`: with the block's `s ≥ 1` cells drawn independently and uniformly, `η · pub ≤ π`
+* `sakMatmul_of_residual_bern`: with the block's `s ≥ 1` cells sampled independently and uniformly, `η · pub ≤ π`
   suffices (`SakLb.rate_bern`);
 * `workSound_sakMatmul_selected`: `WorkSound`'s SAK(matmul) premise on every sampling block of a period of selected
   blocks, at `WorkSound`'s rate `η H_w / H_mm,w` against `pub_mm,w`, from the residual at `pub_mm,w + lam_w` and
@@ -151,7 +151,7 @@ theorem sakMatmul_of_residual_selected (G : Accel) (μ : G.Res → ℝ) (Reg : S
   exact pointwise_selected k Sel picked g hdet (pub a) (lam a) (η a) _ (hpub a ha) (hη a ha) (hrate a ha) a d _
     (hcost d hd)
 
-/-- **`SAKMatmul` on the selected block at its Bernoulli rate**: with the block's `s ≥ 1` cells drawn independently
+/-- **`SAKMatmul` on the selected block at its Bernoulli rate**: with the block's `s ≥ 1` cells sampled independently
 and uniformly, `η · pub ≤ π` suffices (`rate_bern`; past `−log(1 − π)` it fails, `selected_nontrivial`). -/
 theorem sakMatmul_of_residual_bern (G : Accel) (μ : G.Res → ℝ) (Reg : Set (noFoldRound k).Inst)
     (pub lam η : (noFoldRound k).Inst → ℝ) (κdeg : ℕ → ℝ) (hres : SAKResidual G k μ Reg pub lam κdeg)

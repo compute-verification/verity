@@ -106,7 +106,7 @@ class RetentionOptions:
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
-    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
+    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
     r = opts.retention
     return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
             "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}

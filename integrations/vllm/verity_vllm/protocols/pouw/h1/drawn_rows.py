@@ -1,4 +1,4 @@
-"""A drawn H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
+"""A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
 read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
 (`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
 (`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
@@ -52,7 +52,7 @@ def held(reg: G.Registered, entry: dict, what: str) -> G.Registered:
 
 
 def leaf_rows(kind: str, k: int, tile: Sequence[int]) -> list[tuple]:
-    """A drawn leaf's ``kind`` statement's input rows at K over the R × C ``tile``, ``(port, schema, bits, params)`` as
+    """A sampled leaf's ``kind`` statement's input rows at K over the R × C ``tile``, ``(port, schema, bits, params)`` as
     `UnitStager` takes them: a lane's ``a0`` .. ``a3`` and ``b0`` .. ``b7`` (its A and B rows, each K codes and a scale),
     ``admit`` (the leaf's R admit bits), ``zy`` (the leaf's record), ``partials`` (its row of the leaf's partials) and
     ``pub`` (`leaf_lanes.PUBLIC`); the combine's ``p0`` .. (each lane's partial) and ``receipt``. Its output row is
@@ -143,11 +143,11 @@ def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> 
 
 def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Registered], tree: G.Registered,
                    produced: dict[str, str], draw_root: str) -> tuple[dict, dict, dict, dict]:
-    """Drawn leaf u's statement `st` as `FileStager.stage` takes it, on credit's own ``--registered`` file
+    """Sampled leaf u's statement `st` as `FileStager.stage` takes it, on credit's own ``--registered`` file
     (`credit.leaf_registered_file`): each port's one row, salt and registered read (value, position, path), from the
     window's rebuilt values ``trees`` (each held to the file's root and domain), the leaf's partials ``tree`` (at the
     produced record's root ``produced``) or the known row (`leaf_lanes.known_rows`, committed under
-    `leaf_lanes.known_salt` of the draw root), ``o0`` among those; and the file. Refused when a row opens at no root of the
+    `leaf_lanes.known_salt` of the sample root), ``o0`` among those; and the file. Refused when a row opens at no root of the
     file, or the statement's ok (`leaf_ok`) is not 1."""
     lay, shape = win["layout"], win["shape"]
     kind, ln = st

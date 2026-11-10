@@ -48,7 +48,7 @@ another Definition. The offsets and the sum read only the token and the V-chunks
 V-chunks they add no fresh input, and only whole 32-bit words pass between blocks.
 
 `W_MAX` is the most words whose `GatherF32x{W}_v2`, with each of its three rows a ``hm96-sha512/row/v2`` row opened in the
-block, fits one C-Flock block of 2^27 bits (`verity_flock.circuit.compose`, `benchmarks/unit_block`). In slots of 2^18 the
+block, fits one Flock block of 2^27 bits (`verity_flock.circuit.compose`, `benchmarks/unit_block`). In slots of 2^18 the
 block holds 512: the gather's unit takes a range of 2^22 (16), the rows' four hm96 slots a range of 2^20 (4), the mask
 aligns the packed sha512x3 range up by one, and the column row's 4W bytes take ceil((4W + 17) / 128) - 1 compressions, three
 to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163.
@@ -85,7 +85,7 @@ I32 = Array(32, BIT)
 I32_FILL = 0xFFFFFFFF
 #: the word an index outside an f32 gather's column selects (`ref_prims.gather_f32`'s extension, a quiet NaN)
 F32_FILL = 0x7FC00000
-#: the most words a V-chunk of `GatherF32Chunked_v1` holds as one C-Flock block of 2^27 bits (the module's doc)
+#: the most words a V-chunk of `GatherF32Chunked_v1` holds as one Flock block of 2^27 bits (the module's doc)
 W_MAX = 47163
 
 _GATHERS: dict[Any, Any] = {}

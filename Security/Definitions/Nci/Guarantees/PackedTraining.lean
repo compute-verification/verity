@@ -4,7 +4,7 @@ public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Dark
 
 /-!
-# The inference-only policy's partial-sum law with dark gates, on a chain with several products to a gate
+# The inference-only policy's partial-sum rule with dark gates, on a chain with several products to a gate
 
 `IncompressibleContainedMatMulOn` and `IncompressibleContainedTrainingOn` for a `PackedChain`. The product bound counts
 products and does not read `k`. The training form converts products off the books into dark gates, at most `k` to a
@@ -17,7 +17,7 @@ namespace Nci.Guarantees
 
 open Verity
 
-/-- **The partial-sum law with dark gates, at most `k` products to a gate** (`IncompressibleContainedMatMulOn` on a
+/-- **The partial-sum rule with dark gates, at most `k` products to a gate** (`IncompressibleContainedMatMulOn` on a
 `PackedChain`): `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ (k / c) size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each
 `μ ∈ [0, 1]`, with `G_S` the chain's products whose gates are in `S`, whatever `k`. -/
 def PackedIncompressibleContainedMatMulOn : Prop :=
@@ -33,7 +33,7 @@ def PackedIncompressibleContainedMatMulOn : Prop :=
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
       (k / c : ℝ) * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ)
 
-/-- **Training is slowed, by the partial-sum law, with dark gates, at most `k` products to a gate**
+/-- **Training is slowed, by the partial-sum rule, with dark gates, at most `k` products to a gate**
 (`IncompressibleContainedTrainingOn` on a `PackedChain`): when the chain's products, at 2 flops each, are a fraction `κ`
 of the reference circuit's size, the products off the books lie in dark gates, at most `k` to a gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 k #dark) ≤ 2 ((k / c) size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/

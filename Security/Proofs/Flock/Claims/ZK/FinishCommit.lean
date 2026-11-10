@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.ZK.LinkRecheck
 public import Flock.Firewall.Finish
 
 /-!
-# The firewall's commitments are the masked prover's
+# The ZK server's commitments are the masked prover's
 
 `Flock.Firewall.Finish` commits a level ≥ 1 by `commitFw` (each lane's codeword by the additive FFT, `rowsFft`, where
 `cols < d ≤ 64`; else `encodeRows`) and level 0 by `commit0` (`Flock.Firewall.Link`'s rows, `Link.rows`), its leaves in

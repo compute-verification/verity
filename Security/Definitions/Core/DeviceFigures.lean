@@ -10,7 +10,7 @@ public import Mathlib.Data.Fintype.Defs
 
 **What is registered.** Each registered accelerator's leaf in the registration log carries the figures the developer
 states for it (`DeviceFigures`): its SKU, its tensor clock f̂, and for each operand class `c` of a tensor-core MAC
-(`OperandClass`: int8 operands drawn uniformly over a range of values) its peak rate R̂_c. Host CPUs carry no compute,
+(`OperandClass`: int8 operands sampled uniformly over a range of values) its peak rate R̂_c. Host CPUs carry no compute,
 so only accelerators state figures. The rate is per operand class because a tensor-core MAC's true peak rate differs
 with its operands' range.
 
@@ -39,7 +39,7 @@ namespace Verity
 
 open scoped NNRat
 
-/-- The operand class of a tensor-core MAC: int8 operands drawn uniformly over the range `[lo, hi]`. A MAC counts at its
+/-- The operand class of a tensor-core MAC: int8 operands sampled uniformly over the range `[lo, hi]`. A MAC counts at its
 class's rate only where the protocol fixes the operands' distribution; anywhere else it counts at the highest rate. -/
 inductive OperandClass
   /-- uniform over `[-128, 127]`, every int8 value -/

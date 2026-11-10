@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
 
 /-!
-# The inner proof's fields of a draw's `--zk` table
+# The inner proof's fields of a sample's `--zk` table
 
 `coinedOf`'s tables take the fields the inner proof's constraint `⟨λ, h⟩ = θ` reads (`Table.InnerHolds`) from `innerOf`:
 the level-0 lanes, the clear values, Ligerito's value lists and the verifier's replay `λ`, `θ`, at a coin vector
@@ -16,7 +16,7 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
   exposed values first and then `hab, tx, ty, tw`; `PadIdx`'s tail is `h_tx, h_ty, h_ab, h_tw` (`Table.hFull`).
 * **The replay** (`rowsOf`, `lamOf`, `thetaOf`): `Zk.verifyRep`'s ten constraints in its order, each an affine form in the
   pads: zerocheck c_eval, zerocheck final a·b and lincheck final (`Zk.replay`'s forms on the masked proof, restated in
-  `ZerocheckMasked` and `Lincheck`, at the drawn coins), ring switch ab and c (their values plus `Zk.claimCheck` on `ŝ`),
+  `ZerocheckMasked` and `Lincheck`, at the flipped coins), ring switch ab and c (their values plus `Zk.claimCheck` on `ŝ`),
   read in the field (`ofZk`); level 0's lane phase c0 and c1 (`Zk.ligeritoConstraints`, on the restart `T'` that `lig`
   carries, `execArith`'s forms); and the triple's three (`Zk.triple`). `λ`, `θ` are their batch at the coins `γ`
   (`Zk.verifyInner`: `⟨l.a, h⟩ = l.c`). The lincheck's circuit fold is the statement's (`modelFold`).
@@ -27,7 +27,7 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 * **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
 
 **Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
-(`oodPoint`, the drawn coin `RestZK.oodPt`) and levels ≥ 1's bytes (a `LigProver`'s). `InnerHolds` reads none of them.
+(`oodPoint`, the sampled coin `RestZK.oodPt`) and levels ≥ 1's bytes (a `LigProver`'s). `InnerHolds` reads none of them.
 -/
 
 @[expose] public section
@@ -86,7 +86,7 @@ def mk {nE : ℕ} (v : Fin nE → 𝔽) (k : ℕ) : LinF 𝔽 (nE + 4) := mskF (
 /-- A finite vector read by index (`0` past its end). -/
 def seqOf {α : Type} [Zero α] {n : ℕ} (f : Fin n → α) (j : ℕ) : α := if h : j < n then f ⟨j, h⟩ else 0
 
-/-- The draw's pads layout (`verifyRep`'s `PadLayout.new st.m st.kLog k₀`). -/
+/-- The sample's pads layout (`verifyRep`'s `PadLayout.new st.m st.kLog k₀`). -/
 abbrev layOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) : Zk.PadLayout := Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0
 
 /-- The triple's pads (`Zk.triple`'s `fa, fb, hab, tx, ty, tw`). -/
@@ -287,17 +287,17 @@ def oodPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestO
     fOf (c.rest.oodPt r ⟨i, h.1⟩ ⟨j.val, h.2⟩)
   else 0
 
-/-- **`oodPoint` is the drawn point**: coordinate `j` of out-of-domain sample `i` is the coin `z ← sampleVec (m − 7)`
-that `ZkLigerito.ligerito` draws, embedded by `fOf` (the refinement `Refine.vecOf` reads every executable point by). -/
+/-- **`oodPoint` is the sampled point**: coordinate `j` of out-of-domain sample `i` is the coin `z ← sampleVec (m − 7)`
+that `ZkLigerito.ligerito` samples, embedded by `fOf` (the refinement `Refine.vecOf` reads every executable point by). -/
 theorem oodPoint_eq {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
     (i : Fin (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0) (j : Fin (Tz.S.m - 7)) (hj : j.val < st.m - 7) :
     oodPoint Tz st c r i.val j = fOf (c.rest.oodPt r i ⟨j.val, hj⟩) := by
   simp only [oodPoint, dif_pos (And.intro i.isLt hj)]
 
 /-- **A prover of Ligerito's levels ≥ 1**: rep `r`'s bytes after `T'`, as a function of what the simulator holds (the
-draw's table and statement, the public coin vector `c`, whose level ≥ 1 coins `RestZK.ligZ`…`ligB` its sumcheck and
+sample's table and statement, the public coin vector `c`, whose level ≥ 1 coins `RestZK.ligZ`…`ligB` its sumcheck and
 query messages read, and the restart `y₁'`) and the fresh prover coins `Hi`, the salts of levels ≥ 1's salted Merkle
-trees, drawn independently of everything else. The zero-knowledge statements quantify over every such function.
+trees, sampled independently of everything else. The zero-knowledge statements quantify over every such function.
 
 Modelling claim (a trusted component, not proved here): the honest Ligerito prover's level-≥ 1 bytes are such a
 function. -/
@@ -315,7 +315,7 @@ def aT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((aVec Tz.S zw ⟨i, h⟩)
 def bT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((bVec Tz.S zw ⟨i, h⟩).val : 𝔽) else 0
 def cT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((zw ⟨i, h⟩).val : 𝔽) else 0
 
-/-- **The honest clear zerocheck** (`Zerocheck.honest` on the tables, at the drawn coins). -/
+/-- **The honest clear zerocheck** (`Zerocheck.honest` on the tables, at the flipped coins). -/
 def zcH : ZerocheckProof :=
   Zerocheck.honest (Tz.S.m - 6) (aT Tz zw) (bT Tz zw) (cT Tz zw) (rF Tz st c r) (rhoF Tz st c r) (zcF Tz st c r)
 
@@ -396,7 +396,7 @@ def honestAt {L : ℕ} (R : Fin 2 → Fin L → 𝔽) (k : ℕ) : 𝔽 :=
 
 end Honest
 
-/-- **The draw's inner-proof fields** at the coin vector `c`: the lanes of `z = (w, u)`, the clear values by layout
+/-- **The sample's inner-proof fields** at the coin vector `c`: the lanes of `z = (w, u)`, the clear values by layout
 index, levels ≥ 1 from the restart `T' = Σ_c y₁'(c)·b̄(c)`, and the replay's batch. -/
 def innerOf (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : CoinsZK (RestOf Tz st)) :
     InnerFields (Witness Tz.S.m) (HiOf Tz) VLOf z where

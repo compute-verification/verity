@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Game.Interleave
 Candidate 3's table runs its two reps concurrently and then each rep's sparse phase on that rep's outputs, rep 0's
 first. `value_interleave_bind_le` is `value_interleave_le` with those continuations: the probability that both
 continued interactions end in their events is at most the product of the two continued values, since each
-continuation reads only its own interaction's output and draws its own coins.
+continuation reads only its own interaction's output and flips its own coins.
 
 It goes through `valueF`, the value of a game whose outcome `a` pays `u a` (`value p` is `valueF` at `p`'s
 indicator): `value p (g.bind f)` is `valueF` at the continuations' values (`value_bind_valueF`), and the repetition

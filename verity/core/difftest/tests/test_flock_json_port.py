@@ -1,7 +1,7 @@
 """C-Flock's JSON parser (`Flock.JsonParse.parse`, `lean/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
 it reads as, against `parse`, their Python mirror: the same value, or the same refusal (`offset N: why`, at the same
 UTF-8 byte offset). Both Lean functions are held to the one mirror, so the run also shows the two agree on every text
-drawn. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
+sampled. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
 
 from __future__ import annotations
 
@@ -331,7 +331,7 @@ def test_reference_reads_examples():
 
 
 def test_cases_reach_both():
-    """The draws reach both of the parser's answers: some texts parse, some are refused."""
+    """The samples reach both of the parser's answers: some texts parse, some are refused."""
     for kind in ("ok", "error"):
         find(CASES, lambda c, kind=kind: parse(c["text"])[0] == kind, settings=settings(database=None, derandomize=True))
 
@@ -341,5 +341,5 @@ def test_parse(server):
 
 
 def test_parse_core(server):
-    """Lean core's parser on the same draws: the same answers as the mirror, so as `Flock.JsonParse.parse`."""
+    """Lean core's parser on the same samples: the same answers as the mirror, so as `Flock.JsonParse.parse`."""
     D.run(PARSE_CORE, examples=3000, server=server)

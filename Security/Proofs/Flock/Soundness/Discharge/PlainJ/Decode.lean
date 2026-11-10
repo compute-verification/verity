@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
 reads `1 < count` and `planJ`'s fallback tables; here one table is the session's statement, `Composed.drawJ`). At an
 outcome flock-verify accepts, at table `j`:
 
-* `RecordsLiveJ` gives the record's draw `dj S`, the proof files, the link points, and table `j`'s root and streams.
+* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `setupOf_tablePJ` sets table `j` up with setupH under `tagsAt` at `drawJ` (`setupTables_ok` at one table,
   `Tables.setupTables_parts` at several); `DrawOkPJ` gives its proved units and link points, so a `DrawSetup` exists, and
   `planPJ`'s table `j` is its table (`tablePJ_of`), `stmtOf` of setupH's statement (`table_stmtOf`).
@@ -30,7 +30,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **flock-verify sets table `j` up under its tags at its draw**, without `--zk`: at the record's draw `d`, `setupTables`
+/-- **flock-verify sets table `j` up under its tags at its sample**, without `--zk`: at the record's sample `d`, `setupTables`
 at `I` has `nTab I` tables, table `j` setupH's statement under `tagsAt` at `drawJ` (`Composed.setupOf_tableJ` at the
 plain inputs). -/
 theorem setupOf_tablePJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -73,7 +73,7 @@ variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.
 
 set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` tables** (R11b at `--plain-tables --session-tables J`): given the
-tags, `wr` the challenger's record and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ`
+tags, `wr` the challenger's record and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ`
 holds at `planPJ` with the decoder `decJ` on each table's two streams, single coins as field elements, no final
 messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnPJ`. -/
 theorem decodesOnPJ_exec (L : Law n)

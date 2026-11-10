@@ -626,7 +626,7 @@ def host_identity() -> dict:
 
 def families(rng, n_random, fmt: Format, M: int, K: int):
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
-    same draws in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
+    same samples in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
     def cast(x):
         return fmt.from_f32(x.astype(np.float32))
@@ -726,7 +726,7 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
         yield "zero_acc_tiny_cancellation", a, b, acc, None
 
     # 11-14: the accumulator / adder families of tc-probe-fp8, for every format (pin-bf16 extended them to BF16 with the
-    # format's own parameters; the FP8 draws are the same, in the same order, as before).
+    # format's own parameters; the FP8 samples are the same, in the same order, as before).
     yield from probe_families(rng, fmt, M, K)
 
     if fp8:
@@ -1486,7 +1486,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 C = np.zeros_like(C)
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
-                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
+                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling sample: --families leaves the others' tiles unchanged
                 continue
             t0 = time.time()
             D = probe.tiles(A, Bt, C)

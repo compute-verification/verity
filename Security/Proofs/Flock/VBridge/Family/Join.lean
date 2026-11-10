@@ -221,8 +221,8 @@ def FoldsOk (st : Setup) (sh : Shape) : Prop :=
     ∃ c, st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
       .ok c ∧ c.size = 64
 
-/-- **`verifierRows`' rounds are the ones `verifyRep` draws** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
-`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra
+/-- **`verifierRows`' rounds are the ones `verifyRep` samples** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
+`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` samples (`CoinsShaped`), for `n` extra
 claims and at least as many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs
 at the shape, as `ShapeIs` is. -/
 def CoinsAgree (st : Setup) (sh : Shape) (sch : Flock.Schedule) (n : ℕ) : Prop :=

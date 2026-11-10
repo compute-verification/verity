@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.ZK.FinishInner
 `Loop.FinRepOpen` asks that the run from the views and the session's rep open the pads at the same columns and salts.
 Both are answered by the opened coins (`asksCut`), so each opens its pads commitment at `padQs`, its last round's `Q`
 coins mod the commitment's size (`FlockComplete.repCut_padsAt`, `Finish.repFwC_padsAt`). Both end at rep `k + 1`'s
-first round (the views' by `Loop.FinRepRounds`, the session's as the firewall's run does, `Loop.finRepCut_size`), so the
+first round (the views' by `Loop.FinRepRounds`, the session's as the ZK server's run does, `Loop.finRepCut_size`), so the
 queried positions are one, and at each the two commitments agree:
 
 * the views' commitment holds the views' pads columns and salts (`FlockComplete.padsTreeCut_cols`). Where table `k / 2`'s
@@ -21,7 +21,7 @@ queried positions are one, and at each the two commitments agree:
   (`Masked.pads_frame_eq`), under the request's leaf salts, which are the tape's (`Loop.RepSrc.innerSalt`,
   `innerSalt_fit`).
 
-**`Loop.finRepOpen`**: at a live statement where the frame draws the tape's pads (`Loop.RepSrc`), `FinRepOpen` holds
+**`Loop.finRepOpen`**: at a live statement where the frame samples the tape's pads (`Loop.RepSrc`), `FinRepOpen` holds
 wherever every table's rows hold at its base (`Loop.FinRepRows`) and each rep stream's run from the views ends at the next
 one's first round (`Loop.FinRepRounds`).
 -/
@@ -58,7 +58,7 @@ end FlockComplete
 
 namespace Flock.Firewall.Finish
 
-/-- **The firewall's rep answered by `asksCut` opens its pads commitment at the queried positions**, as the session's
+/-- **The ZK server's rep answered by `asksCut` opens its pads commitment at the queried positions**, as the session's
 does (`FlockComplete.repPZk_padsAt`). -/
 theorem repFwC_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes FlockComplete.PS) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
@@ -227,7 +227,7 @@ def FinRepRows : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ j, FinRows vs x w ν t ops j
 
-/-- **The session's rep ends at the next rep's first round**: in the masked scope, where the firewall's rep on rep
+/-- **The session's rep ends at the next rep's first round**: in the masked scope, where the ZK server's rep on rep
 stream `k`'s table and request returns at its last coin, `repFwC` on the same inputs answered by the opened coins, from
 a history at the rep's first round, ends at rep `k + 1`'s (`repFwC_br`, at the rep's `repRounds` coins). -/
 theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
@@ -288,7 +288,7 @@ theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Fl
   rw [Masked.repBase_eq hsx (k + 1), FlockComplete.ZkTables.repStart_succ, ← Masked.repBase_eq hsx k]
   exact hb
 
-/-- **`FinRepOpen` holds where the rows hold**: at a live statement where the frame draws the tape's pads
+/-- **`FinRepOpen` holds where the rows hold**: at a live statement where the frame samples the tape's pads
 (`Loop.RepSrc`), wherever every table's rows hold at its base (`FinRepRows`) and each rep stream's run from the views
 ends at the next one's first round (`FinRepRounds`), the views and the session's rep open the pads at the queried
 positions (`repCut_padsAt`, `Finish.repFwC_padsAt`), one set since both runs end at rep `k + 1`'s first round

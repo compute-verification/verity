@@ -33,7 +33,7 @@ open RecDeploy.HonestHalf
 the reference prover `refP`'s run is accepted and satisfies V\*, no recorded calls collide, the inner prover's openings
 fit V\*'s levels and the reps' tops differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
 
-The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and C-Flock's CPU
+The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and Flock's CPU
 prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest`, with
 `vstar-trace --sat`. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)

@@ -153,7 +153,7 @@ def Owner.name : Owner → String
 
 def Owner.all : List Owner := [.prover, .auditor]
 
-/-- The operand class of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
+/-- The operand class of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands sampled uniformly
 over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value `0`. -/
 inductive OperandClass
   | uniformS8

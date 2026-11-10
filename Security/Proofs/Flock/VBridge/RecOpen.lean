@@ -17,7 +17,7 @@ the ports as forms and reads only `dirs[:32]`, so everything here holds for both
 
 `sound_recOpen`: whenever the rows hold, if the ports carry the bytes of the row's elements `r`, of `acc`'s first two
 elements `a` and the rest of `acc`, of the coefficients `c`, of 64-byte siblings, and the directions are the position's
-low bits, then `out` carries the verifier of record's climb of the row's SHA-512 leaf (`sound_climbRow`) and `acc_out`
+low bits, then `out` carries the verifier's climb of the row's SHA-512 leaf (`sound_climbRow`) and `acc_out`
 carries `a[k] + Σ_l c[k · LANES + l] · r[l]` for `k = 0, 1` (`rec_open.acc_ref`), then the rest of `acc`. Its byte layout
 is `MerkleScheme.rowBytes`, each element's 16 bytes `le64(lo) ‖ le64(hi)`, which puts bit `j` of element `i` at bit
 `128 i + j`, where `sound_residualForms` reads it (`bitL_rowBytes`).
@@ -230,7 +230,7 @@ theorem resVal_consStructure (LANES : ℕ) (r a c : Array F128) (hr : r.size = L
 
 /-! ## The opening -/
 
-/-- **V*'s opening computes the verifier of record's climb and the opening's consistency term.** For a Merkle scheme
+/-- **V*'s opening computes the verifier's climb and the opening's consistency term.** For a Merkle scheme
 `ms` whose node is `SHA-512(l ‖ r)` and `H ≤ 32` levels (`rec_open._check`), whenever the rows of
 `recOpen LANES H row aux acc coef dirs` hold under `z`: if `row` carries the bytes of the `LANES` elements `r`, `acc`
 those of two elements `a` and then `rest`, `coef` those of `c`, the `H` sibling forms of `aux` carry 64-byte siblings

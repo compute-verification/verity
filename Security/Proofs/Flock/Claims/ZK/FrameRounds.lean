@@ -810,7 +810,7 @@ theorem liveRoundEq_of_honest (S : RefSession) (vs : S.SwVals)
   liveRoundEq_of_frames S vs L H wk x w fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
     L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
 
-/-- **The stand-in frame rounds in frames**: at every stand-in frame round `FillRoundEq` reads, the firewall's scheduled
+/-- **The stand-in frame rounds in frames**: at every stand-in frame round `FillRoundEq` reads, the ZK server's scheduled
 round, at the values its transcript reports, and the session's switched message are a frame round in frames of a
 stopped rep (`RoundFrames`), whose masked values the frame releases as their pads alone. -/
 def FillFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))

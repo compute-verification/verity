@@ -147,7 +147,7 @@ else is a theorem or a named gap.
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
-| Enforcement | Sampled proofs catch each faulty proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
+| Enforcement | Sampled proofs catch each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Nci.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
@@ -190,7 +190,7 @@ commitments' hiding gap.
 
 **Establishes.** The challenger flips coins after the commitments are recorded, and they select the sample, the proof
 blocks that are proved. If every sampled block is proved, only the blocks the sample missed can hold faults:
-Pr[accept ∧ more faulty proof blocks than the sample allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
+Pr[accept ∧ more incorrect proof blocks than the sample allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
 links between proof blocks.
 
 **Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`, which `SampledKSLiveV3`
@@ -203,7 +203,7 @@ meet, V3 with those preconditions discharged by what `verify --zk` refuses, is n
 
 ### 3. The audit of each verification phase
 
-**Establishes.** Sampled proofs bound the faulty proof blocks. PoUW establishes that the phase's credited live work is
+**Establishes.** Sampled proofs bound the incorrect proof blocks. PoUW establishes that the phase's credited live work is
 at least (1 − ε) of the registered circuit's work, crediting only noised calls: an un-noised call has no live coin, so nothing forces
 its work. The composition accepts only if every subprotocol accepts and their commitments bind into one: any rejection rejects
 the whole, and nothing is retried.
@@ -212,7 +212,7 @@ the whole, and nothing is retried.
 
 - the proof system is sound against the window's check (`Properties.Pouw.PeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
-- the published sample is the tile stratum's draw at the coin (`TileDrawIsCoin`), and registration precedes the
+- the published sample is the tile stratum's sample at the coin (`TileDrawIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
 - the salt is a live coin (`SaltIsLiveCoin`), which the deployed path doesn't meet;
 - PoUW's per-step receipts bind (`SharedNoiseLucks`: H-μ⁺ with the receipts' and guesses' lucks at J10-R's shared
@@ -283,8 +283,8 @@ part 6's premises say why that shape trains little.
 4. *`CompliesRate` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
-5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
-   its structure depends on. Sampled proofs bound the faulty proof blocks and the advice's length is public, but no
+5. *A block's effective fresh input:* k plus k_F, the bits incorrect proof blocks inject into it, plus k_a, the advice bits
+   its structure depends on. Sampled proofs bound the incorrect proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
 6. *The displayed bound reading the result instead of assuming `Complies`:* **open** (part 6).
 
@@ -293,7 +293,7 @@ part 6's premises say why that shape trains little.
 **Establishes.** The verification phases' bounds pool over a monitoring period, even when the developer adapts each
 phase to the coins before it: the chance that some subprotocol of some phase accepts while its claim fails is at most the
 sum of their errors. For sampled proofs,
-Pr[every phase accepted ∧ faulty proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q_s the sample's coverage.
+Pr[every phase accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q_s the sample's coverage.
 PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/core/protocols/pouw/credit.py`'s `DELTA`), the sample's error alone. Its pooled
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
 proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
@@ -387,10 +387,10 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the draw missing `m` faulty blocks with probability at most `(1 − q)^m` and a drawn faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` faulty blocks with probability at most `(1 − q)^m` and a sampled faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 `DampenerRemote` is the older threaded slowdown bound, ρ = max(1, 1/(s + x/MFU₀)) over the thread structure
@@ -473,10 +473,10 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
 
 - `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
-  proof block, C-Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
+  proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
 - `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the proof blocks the check demands proofs of
-  are the tile stratum's draw at the window's coin. A protocol-code fact still to prove.
-- `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It
+  are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
+- `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the
   deployed path doesn't do yet.
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
@@ -553,7 +553,7 @@ development run:
 
 - `verity demo lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
-  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
+  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for Flock, and
   its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 

@@ -6,10 +6,10 @@ public import Proofs.Flock.Claims.Recursion.Wald
 # The composed extractor: the outer extractor, then the inner one
 
 A recursion's prover proves, in an outer session, that the inner verifier accepts its hidden inner transcript. Its
-extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` draws, each stopping at `k` accepted
+extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` samples, each stopping at `k` accepted
 reruns), and each rerun it makes is served by the outer extractor `E₂` at that rerun's coins, whose output (the outer
-witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its draws are the prover's run coins
-with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
+witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its samples are the prover's run coins
+with `E₂`'s coins; its judged sample is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
 
 * **Cost** (`servedERep_runs_le`, `servedERep_runs_exp`): `E₂`'s reruns times the inner stage's, `(1 + m·K)·N₂` in the
   worst case and `(1 + m·k)·N₂` in expectation, for `E₂` within `N₂` (`ExtractRunsLe`, `ExtractRunsExpLe`); with
@@ -111,14 +111,14 @@ section Served
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The outer stage at a draw**: `E₂` at the draw's run coins and its own coins, its output read by `dec` as what the
+/-- **The outer stage at a sample**: `E₂` at the sample's run coins and its own coins, its output read by `dec` as what the
 inner stage sees. -/
 def outerStage {V : Verifier Coin} (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen)
     (x : Msg) (d : (Fin (V.k x) → Coin) × E₂.C x) : RP (Fin (V.k x) → Coin) Seen :=
   (E₂.ext x d.1 d.2).bind fun w₂ => .ret (dec x d.1 w₂)
 
-/-- **The served `E^rep`, the composed extractor**: `E^rep` over draws of the run's coins and `E₂`'s coins, its judged
-draw the judged run's coins `r₀` with coins `c.1` of its own, each draw's rerun served by `E₂` there (`outerStage`). -/
+/-- **The served `E^rep`, the composed extractor**: `E^rep` over samples of the run's coins and `E₂`'s coins, its judged
+flip the judged run's coins `r₀` with coins `c.1` of its own, each sample's rerun served by `E₂` there (`outerStage`). -/
 def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) : Extractor Coin W V where

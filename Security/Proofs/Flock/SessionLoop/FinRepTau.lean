@@ -21,7 +21,7 @@ return proofs equal up to `eraseZ`, their `τ` agree. `eraseZ` forgets `τ`, so 
   them is the view's `τ` (`Masked.swTau_of_rows`; `Masked.fwTau_at`).
 
 **`Loop.finRepTau`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 and pads the
-source draws from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
+source samples from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
 base (`Loop.FinRepRows`).
 -/
 
@@ -64,7 +64,7 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's `τ` from the firewall's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
+/-- **A deployed rep's `τ` from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`), at the tape's pads (`hP`), returns, and
 below `zp 64` the passed values plus the pads are the switched source's masked values (`hmk`), its `τ` is the worker's
 view's at the clear values `v`, wherever table `j`'s rows hold at its base there (`hrows`). The inner proof's `τ` is
@@ -192,7 +192,7 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the firewall's
+    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
@@ -427,7 +427,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **`FinRepTau` where every table's rows hold at its base**: in the masked scope, with a witness, at a statement the
-loop serves (no coin fault at the opened coins, `frameUnrefused_ofLoop`) whose level 0 and pads the source draws from
+loop serves (no coin fault at the opened coins, `frameUnrefused_ofLoop`) whose level 0 and pads the source samples from
 the tape (`Level0Src`, `RepSrc`). The run from the views sends the views' `τ` (`FinRep.repCut_map_tau`), the worker's
 view's (`finSrc_tau`); the session's rep runs at the session's table, schedule and packed table (`finRepTab`,
 `schedsPZk_live`, `Level0Src.realOf`), at the tape's pads (`pads_frame_eq`), with the switched source's masked values

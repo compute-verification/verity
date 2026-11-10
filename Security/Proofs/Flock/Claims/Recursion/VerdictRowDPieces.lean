@@ -12,7 +12,7 @@ The `rec-open` pieces (`OpenPieces`) hold, each, where its query opens at the si
 * `DecAt.side`: rep `r` of table `i`'s side at the decision: the table's schedule, and the rep's cap and Ligerito proof.
 * `DecAt.rowD_of_pieces`: `RowD` from row G's `merkle` and `fast`, row C's `decode` and the pieces, where the pieces
   cover every query of every level of the rep (`hcover`), read the rep's side off the messages (`hside`) and, at the
-  verifier rows, the position the rows draw for their query off the coins (`hpos`, the coin tie).
+  verifier rows, the position the rows sample for their query off the coins (`hpos`, the coin tie).
 -/
 
 @[expose] public section
@@ -36,7 +36,7 @@ def side : OpenSide :=
 
 /-- **Row D from the `rec-open` pieces**: at table `i`'s plain scheme and `fast100` schedule and rep `r`'s decoded
 file, where every query `j` of every level `ℓ` is some piece's (`hcover`), the pieces of rep `r` read its side
-(`hside`) and, at the verifier rows, the position the rows draw for their query (`hpos`), and every piece holds,
+(`hside`) and, at the verifier rows, the position the rows sample for their query (`hpos`), and every piece holds,
 every level's queries pass (`rowD_of_queries`). -/
 theorem rowD_of_pieces
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")

@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Types.ProgramE2E
 /-!
 # `hZero` on the typed path (e2e, typed flat classes)
 
-On a typed flat-class statement, `Placed.UProg.progPlaces_of_classes` places each drawn unit of a program of units
+On a typed flat-class statement, `Placed.UProg.progPlaces_of_classes` places each sampled proof block of a program of units
 (`UProg`) at a slot of its table's class, for the program's rows circuit `p.toRows hk`.
 - `UProg.zeroCols_progPlaces_of_classes`: `hZero` there for a program input `zer` other than the constant, when each slot
   input that reads `zer` copies a forced-zero row of its class (`hzr`, as in `UProg.zeroCols_of_classes`).
@@ -96,7 +96,7 @@ theorem zeroCols_progPlaces_of_classes
       (o S R u h), Fin.val_cast, Fin.val_cast]
     exact (cls S R u h).zero _ (hzr S R u h c.val hc1 hs) z hsat (o S R u h)
 
-/-- **`hZero` at the typed path's places, from setupH's accepts**: each drawn unit at slot `slot` of block `o` of its
+/-- **`hZero` at the typed path's places, from setupH's accepts**: each sampled proof block at slot `slot` of block `o` of its
 table's accepted class (`Placed.UProg.progPlaces_of_setupH`), for a program input `zer` other than the constant, when each
 unit input that the program wires to `zer` is one whose slot offset reads the zero in its table's circuit (`hza`). -/
 theorem zeroCols_progPlaces_of_setupH

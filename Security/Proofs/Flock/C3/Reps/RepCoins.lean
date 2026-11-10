@@ -9,8 +9,8 @@ public import Proofs.Flock.Soundness.Assumptions.Inner
 
 `repCoins_repsOfVals`: `StageCoins`' two rep conjuncts at the tied source `tiedSrc (repsOfVals stp sh rep vals)`. Rep
 `i`'s coin steps are its consumed rounds' coins (`repIdx`, `UnitWoven`'s), so its `p`-th is round `repIdx p`'s
-(`unitCoins_eq`); the history's round `repStart c₀ i + p` draws it from the rep's stream (`RepsDrawn`), where custody's
-coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` drawing round `q` of `s` where `m.selC i s q`) holds
+(`unitCoins_eq`); the history's round `repStart c₀ i + p` samples it from the rep's stream (`RepsDrawn`), where custody's
+coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` sampling round `q` of `s` where `m.selC i s q`) holds
 what the map reads off the coins up to that round, the rep's rounds are the record's (`RepRoundsHeld`), and the map's
 coins are the round's coordinate (`CoinsEncoded`).
 `repRoundsHeld_of_rounds`: `RepRoundsHeld` by definition at reps whose rounds are the record's (`heldRounds`).
@@ -73,7 +73,7 @@ theorem coinsAt_of_idx {cs : List ((k : Fin r) → CT k)} {ts : List Step} {ks :
 /-- Where rep `i`'s coins start in the history: after the points' coin, rep 1's after rep 0's `c₀`. -/
 def repStart (c₀ : ℕ) (i : Fin 2) : ℕ := if (i : ℕ) = 0 then 1 else 1 + c₀
 
-/-- **Hypothesis: the map's coins are the rounds' coordinates** (the coin types' shape): where round `i` draws round
+/-- **Hypothesis: the map's coins are the rounds' coordinates** (the coin types' shape): where round `i` samples round
 `q` of stream `s` (`selC`), the coins the map reads there off the coins up to round `i` (`coin`), as a run's coin
 step, are coordinate `i` of round `i`'s coin. -/
 def CoinsEncoded (selC : ℕ → String → ℕ → Prop)
@@ -106,7 +106,7 @@ theorem cap_vals (b : ValsSrc) (sh : Flock.Shape) (d : RepData) : (b.vals sh d).
 variable {r : ℕ} {CT : Fin r → Type}
 
 /-- **One rep's coins are the history's from round `j` on**: its coin steps are its consumed rounds' coins (`hts`),
-the rounds are the record's (`hd`, `hv`), and the history's round `j + p` draws the `p`-th of them (`hdr`), which
+the rounds are the record's (`hd`, `hv`), and the history's round `j + p` samples the `p`-th of them (`hdr`), which
 custody holds. -/
 theorem coinsAt_rep {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step}
     {S : FlockSoundness.Model.Statement} {v : UnitVals} {d : RepData}
@@ -187,8 +187,8 @@ theorem repRoundsHeld_of_rounds (h : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
     RepRoundsHeld zs dg N k Rw sh rep wr held s fun _ q => q :=
   fun R ω t _ _ _ _ i _ _ q c hc => by rw [h, ← heldCoins_eq]; exact hc
 
-/-- **Hypothesis: the map draws the reps' consumed rounds** (`InnerRecordMap.selC`, `selC`): at every accepted outer proof
-whose rep `i` meets E's preconditions, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed rounds) draws
+/-- **Hypothesis: the map samples the reps' consumed rounds** (`InnerRecordMap.selC`, `selC`): at every accepted outer proof
+whose rep `i` meets E's preconditions, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed rounds) samples
 round `ix i q` of stream `s i`, `q` the `p`-th of rep `i`'s, and those rounds are below `r`. -/
 def RepsDrawn (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)

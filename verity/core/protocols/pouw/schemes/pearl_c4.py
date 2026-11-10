@@ -3,7 +3,7 @@
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
-inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
+inside one atom per element, one noisy cast forms the operand, Pearl's tickets are sampled on C̃, the BF16 clean-up U is
 checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which is
 stated and not proved.
 
@@ -55,7 +55,7 @@ NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
 its tile's debit passes the cap.  Items 3 and 4 charge the reference's witness alone,
 not every element of a screened block: F1′ charges a screened block's
-near-certain codes at their own p_t.  A drawn tile's debit is replayed over its credited words (`tile_debit`):
+near-certain codes at their own p_t.  A sampled tile's debit is replayed over its credited words (`tile_debit`):
 
 ~~~text
 1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
@@ -70,7 +70,7 @@ cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/4
 ~~~
 
 **F1′ and F2** (what makes ``tt-out/fp4-sm120``'s debit sound).
-F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving under the exact noise law given this salt's E
+F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving under the exact noise distribution given this salt's E
 lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale byte (`change_probabilities`); per window,
 min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass plus a CUDA-core patch of the excess, R_skip
 a skip or patch per k64 atom, at the cheater's best layout inside each block, and κ inside the expectation, A0's scale
@@ -79,13 +79,13 @@ corrections: one FFMA per word for each of the M_w blocks whose realised byte is
 per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its lower-bound add
 count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`). They are the rows
 `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
-int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
+int8 route's saving per sampled tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
 `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`clear_work.check_opened`),
 and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
-(`r1_rows`, through `clear_work.declare`) and checked on drawn tiles (`row_over_debit`, through
+(`r1_rows`, through `clear_work.declare`) and checked on sampled tiles (`row_over_debit`, through
 `clear_work.check_opened`); it is still formed, checked and hashed.
 
-A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
+A code is *salt-dead* unless two samples in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
 gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
 enforced: items 2 and 5 charge what it would exclude.  D-SB is enforced on every formed side before hashing
@@ -427,7 +427,7 @@ def scale_bytes_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
 def check_scale_bytes(fmt: Fmt, side: Formed) -> None:
     """D-SB on one formed side, before hashing: every block scale in `scale_bytes_ok`'s range and every a_E at most 0x7E
     (bit 7 clear, not NaN).  An a_E below 0x01 is left to D-NF, which excludes its row: a zero row (decode's filler, which
-    the work law requires to be zero) forms a_E = 0x00.  The committed words' finiteness is `parse_row`'s."""
+    the work sampling design requires to be zero) forms a_E = 0x00.  The committed words' finiteness is `parse_row`'s."""
     for row in side.scales:
         if not scale_bytes_ok(fmt, row):
             raise P.Reject("a formed scale byte is outside D-SB's range (bit 7 set, a zero scale or NaN)")
@@ -553,9 +553,9 @@ def _witness(ae: int, f: Sequence[int]) -> list[tuple[int, int, bool]]:
 
 
 def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
-    """Per element of one row: whether its E2M1 code may be the same at every noise draw (P3's saltDead, on codes).
+    """Per element of one row: whether its E2M1 code may be the same at every noise sample (P3's saltDead, on codes).
 
-    An element is salt-live when two draws in the support (every pair of 32-code E2M1 lines) give its code two values;
+    An element is salt-live when two samples in the support (every pair of 32-code E2M1 lines) give its code two values;
     every other element counts as salt-dead, the sound side.  The samples: E ≡ +6 on the row, the element's F_t ≡ +6, 0 or
     −6, and every other F_u of its block ≡ 0, so the block's other elements are the atom on α·x_u alone and its amax is
     theirs or the element's."""
@@ -611,7 +611,7 @@ def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]
 
 @lru_cache(maxsize=64)
 def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
-    """The law of the sum of m independent uniform draws of 2·F (F one E2M1 code), on the integers from its lowest value."""
+    """The sampling design of the sum of m independent uniform samples of 2·F (F one E2M1 code), on the integers from its lowest value."""
     if m == 0:
         return 0, (1.0,)
     if m == 1:
@@ -661,7 +661,7 @@ def _below(v: Sequence[float], cdf: Callable[[float], float], u: float) -> float
 
 
 def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigma: float) -> int:
-    """A block's most likely noisy scale byte under the law given E (salt-free given E): the byte whose amax interval
+    """A block's most likely noisy scale byte under the sampling design given E (salt-free given E): the byte whose amax interval
     [6·lower midpoint, 6·upper midpoint) holds the noisy amax most often.  Among the bytes the clean amax ± 6σ reaches."""
     top = max(abs(x) for x in v)
     lo_b = block_scale(fmt, P.f32_bits(max(top - 6 * sigma, 0.0)))[0]
@@ -761,7 +761,7 @@ def certified_modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], fl
 def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
                          dead: Sequence[bool], scales: Sequence[int]) -> tuple[list[float], list[int | None]]:
     """F1′'s p_t, C's evaluation, normative for prover and verifier alike, under
-    the exact noise law given this salt's E line (`noise_law`):
+    the exact noise distribution given this salt's E line (`noise_law`):
     - each block's modal byte certified around its realised byte (`certified_modal_byte`); a block left uncertified is
       charged on the safe side, p = 0 on its codes and no κ relief (its mode is None);
     - p_t from 4 lookups, a lower bound: the element's own cell and its two neighbours exactly, each tail beyond them
@@ -854,7 +854,7 @@ def split_saving(fmt: Fmt, p: Sequence[float], kappa: float = 0.0) -> float:
     """F1′'s per-MAC charge on one aligned 128-window, with A0's scale correction κ inside the expectation (a cheater who
     sees the salt routes each row after it):  min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where
     R_24 = max(0, ½ − c·X) is one 2:4 pass plus a CUDA-core patch of the excess X, and R_skip = Σ_h max(0, ½ − c·N_h)
-    skips or patches each aligned k64 atom.  The sum bounds E[max(0, max(R_24, R_skip) − κ)] on any law."""
+    skips or patches each aligned k64 atom.  The sum bounds E[max(0, max(R_24, R_skip) − κ)] on any sampling design."""
     c = FFMA_UNITS / SPAN_K
     gain = [max(0.0, 0.5 - c * x) for x in range(_EXCESS_MAX + 1)]
     d = [1.0] + [0.0] * _EXCESS_MAX
@@ -997,7 +997,7 @@ def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scal
 
 @dataclass(frozen=True)
 class Debit:
-    """A drawn tile's replayed debit over its credited words in FP4 units, by item (module docstring), and the counts
+    """A sampled tile's replayed debit over its credited words in FP4 units, by item (module docstring), and the counts
     behind it and behind the domain checks."""
 
     split: Fraction
@@ -1196,13 +1196,13 @@ class PearlC4:
         return (FORMING_CREDITED + FORMING_UNCREDITED) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
 
     def tickets(self, noise: C.Noise, checked: C.Checked) -> list[bytes]:
-        """Pearl's lottery tickets over C̃, as -h3 draws them at every hashing: `pearl_c.s512`'s H_"jackpot"(seed_A ‖
+        """Pearl's lottery tickets over C̃, as -h3 samples them at every hashing: `pearl_c.s512`'s H_"jackpot"(seed_A ‖
         fold) per 16 x 16 subtile, row-major (`pearl_c.tickets`)."""
         return C.tickets(noise.seed_a, checked, "h3")
 
     def noise(self, ctx: Context) -> C.Noise:
         """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
-        both sides itself from these seeds on every drawn tile, so a word derived from any other B̃ fails its checked
+        both sides itself from these seeds on every sampled tile, so a word derived from any other B̃ fails its checked
         values."""
         return C.Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b(ctx.salt, ctx.root_b))
 
@@ -1232,7 +1232,7 @@ class PearlC4:
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
     def _memo(self, ops: C.Ops) -> RowTerms:
-        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the debit (`tile_cap`), so a drawn tile's
+        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the debit (`tile_cap`), so a sampled tile's
         rows are evaluated once; a new tile or a new `f1` starts a new one."""
         if self._rows[0] is not ops or self._rows[1] is not self.f1:
             self._rows = (ops, self.f1, {})
@@ -1281,7 +1281,7 @@ class PearlC4:
         return side, e
 
     def encode(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> C.Ops | None:
-        """The tile's formed operands and peel factors; the last tile's are kept, since the work law encodes a drawn tile
+        """The tile's formed operands and peel factors; the last tile's are kept, since the work sampling design encodes a sampled tile
         twice (its digest, then its tile rule)."""
         key = (ctx, noise, tuple(a_rows), tuple(b_rows), tile)
         if self._encoded is not None and self._encoded[0] == key:

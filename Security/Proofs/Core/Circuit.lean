@@ -5,7 +5,7 @@ public import Definitions.Core.Guarantees.Circuit
 /-!
 # Lemmas about circuits and partitions
 
-Evaluation unfolds one gate at a time (`run_eq`), and the partition lemmas C-Flock's audit uses, for gates of any
+Evaluation unfolds one gate at a time (`run_eq`), and the partition lemmas Flock's audit uses, for gates of any
 width:
 
 * `compose`: if every unit is correct and the committed inputs are the anchors' values, every committed wire carries its

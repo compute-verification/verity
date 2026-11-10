@@ -145,7 +145,7 @@ def test_the_graphs_setting_is_positive_capture_sizes(bad):
 
 def test_core_credit_ties_the_slot_table_under_the_auditors_coins(periodic):
     """Under the auditor's challenger, core's credit (`credit.window`) passes the window's registration and a-link with
-    its live tables among its entries, and refuses it only for want of its drawn calls' proof files."""
+    its live tables among its entries, and refuses it only for want of its sampled calls' proof files."""
     auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None

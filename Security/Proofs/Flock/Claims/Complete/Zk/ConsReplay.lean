@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 
 `Zk.replay` hands `verifyInner` five message-dependent rows: its own three (`zerocheck c_eval`,
 `zerocheck final a·b`, `lincheck final`) and the opening's two (`ring switch ab`, `ring switch c`, `Zk.verify`'s
-`abValue + ⟨w_ab, ŝ_ab⟩` and `cValue + ⟨w_c, ŝ_c⟩`). Live coins make the masked run draw plain's coins at plain's
+`abValue + ⟨w_ab, ŝ_ab⟩` and `cValue + ⟨w_c, ŝ_c⟩`). Live coins make the masked run flip plain's coins at plain's
 sends, so each row is a plain check on the clear proof at the replay's coins, moved by the pads:
 
 * `replay_rows_zero`: on a proof that is the clear one masked by the pads (`ZerocheckMasked.Masks`, `LcMasks`) at

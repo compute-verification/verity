@@ -126,7 +126,7 @@ def achievability():
 
 
 def test_zero_statement_cost_gives_achievability_rates(achievability):
-    """`Achievability`: q_s = min(1, ln(1/delta) w_s / C) certifies C; the planner draws exactly those rates, rounded up."""
+    """`Achievability`: q_s = min(1, ln(1/delta) w_s / C) certifies C; the planner samples exactly those rates, rounded up."""
     cands, objective, plan = achievability
     lam = log(1 / objective.delta) / 400.0
     assert dict(plan.sizes) == {c.template: min(c.units, max(1, ceil(min(1.0, lam * c.work) * c.units))) for c in cands}
@@ -136,7 +136,7 @@ def test_zero_statement_cost_gives_achievability_rates(achievability):
 
 
 def _registered(plan, cands) -> dict[str, int]:
-    """What `work:1` over `work_law`'s table draws, as the verifier reads it."""
+    """What `work:1` over `work_law`'s table samples, as the verifier reads it."""
     table = work_table(work_law(plan, cands)["table"])
     chosen = [c for c in cands if c.template in table]
     total = sum(table[c.template][0] * c.units for c in chosen)
@@ -291,7 +291,7 @@ def test_derived_costs_read_the_features_and_perturb_scales_one_group():
 
 
 def test_replay_cost_is_the_expected_number_of_replay_blocks_met():
-    """Three replay blocks, A holding 2 proof blocks of each and B 1: every pair of draws enumerated."""
+    """Three replay blocks, A holding 2 proof blocks of each and B 1: every pair of samples enumerated."""
     a = Candidate("x", "A", 6, 1, 16, grain="layer", n_rho=2)
     b = Candidate("y", "B", 3, 1, 16, grain="layer", n_rho=1)
     costs = CostModel(per_and=1.0, replay={"layer": ReplayGrain(3, 5.0)})
@@ -331,7 +331,7 @@ def _noised_costs(sigma: float = 0.0, commit_per_bit: float = 0.0) -> CostModel:
 
 
 def _crossing(plans) -> tuple[int, int]:
-    """The covering's largest dot draw and the partition's smallest, checking the frontier switches once."""
+    """The covering's largest dot sample and the partition's smallest, checking the frontier switches once."""
     choices = [p.choice["dot"] for p in plans]
     assert choices == sorted(choices, key=lambda c: c == "form") and set(choices) == {"recompute", "form"}
     return (max(p.sizes["DotC"] for p in plans if p.choice["dot"] == "recompute"),
@@ -339,7 +339,7 @@ def _crossing(plans) -> tuple[int, int]:
 
 
 def test_covering_wins_sparse_and_partition_wins_once_its_form_units_saturate():
-    """Each form proof block's influence (its row's work) draws all R of them early; then k dots cost 4R + k as a partition and 2k
+    """Each form proof block's influence (its row's work) samples all R of them early; then k dots cost 4R + k as a partition and 2k
     as a covering at the same harm, so the switch is at k = 4R."""
     plans = frontier(_noised(), _noised_costs(), Objective(2.0 ** -20), grid=61)
     rec, form = _crossing(plans)
@@ -425,8 +425,8 @@ def _ladder(total: float, f: float, o: float, beta: float, ratio: float = 2 ** 0
 
 
 def test_proving_only_puts_the_optimum_at_the_finest_partition():
-    """`GranularityOptimum`: while s Λ <= C a law draws (ns/C) Λ proof blocks, whatever s, so proving only costs
-    c(s) (F/C) Λ and the finest partition is cheapest (`GranularityChoice`); past C/Λ every proof block is drawn."""
+    """`GranularityOptimum`: while s Λ <= C a sampling design samples (ns/C) Λ proof blocks, whatever s, so proving only costs
+    c(s) (F/C) Λ and the finest partition is cheapest (`GranularityChoice`); past C/Λ every proof block is sampled."""
     total, target, delta = 2.0 ** 40, 2.0 ** 34, 2.0 ** -40
     ladder = _ladder(total, 100.0, 0.01, 4.0)
     rows = grain_costs(ladder, delta, h=1e-3, weight=PROVING_ONLY, work=target)
@@ -461,7 +461,7 @@ def _loc_exact(n: int, k: int) -> float:
 
 def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one():
     """K is the most incorrect proof blocks the target allows under `loc_bits` (at least Lean's `locBits`, so b K +
-    locBits n K <= ℓ holds for it), and the law draws n Λ / (K + 1), at most n, none once every proof block may be
+    locBits n K <= ℓ holds for it), and the sampling design samples n Λ / (K + 1), at most n, none once every proof block may be
     incorrect."""
     delta = 2.0 ** -20
     for n, b, ell in ((50, 3, 40.0), (200, 16, 1000.0), (1000, 1, 300.0), (40, 8, 0.0), (64, 16, 5000.0)):
@@ -665,7 +665,7 @@ def test_overlaps_count_each_scale_and_price_committing_once():
 
 def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
     """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a proof block's.  At equal weights the
-    density draws every tile, but core's bound (a sample without replacement) certifies the target with 15: the tiles'
+    density samples every tile, but core's bound (a sample without replacement) certifies the target with 15: the tiles'
     weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
     cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
     costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
@@ -713,7 +713,7 @@ def test_miss_holds_its_digits_on_huge_populations():
 
 def test_shared_statements_hold_only_the_drawn_units():
     """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
-    sparse draw of a huge population touches one statement a sampled proof block."""
+    sparse sample of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
     costs = CostModel(per_and=1e-3, statement_fixed=5.0, statement_per_and=1e-2, staged_per_and=1e-4)
     cost, size, parts = template_cost(c, replace(costs, shared=True), 130)
@@ -724,7 +724,7 @@ def test_shared_statements_hold_only_the_drawn_units():
 
 
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_blocks():
-    """At 10^17 proof blocks the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
+    """At 10^17 proof blocks the miss probability of a single sample rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)
     assert touched(n, 1024, 30_000) == pytest.approx(30_000, rel=1e-6)

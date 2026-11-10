@@ -11,7 +11,7 @@ the registry).
   location at once. Remotely nothing bounds it (0 s).
 * **Incorrect outputs** (`incorrect.*`): a block the sampled proofs let go unchecked returns outputs the adversary
   chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
-  `q`, and a drawn one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
+  `q`, and a sampled one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
   carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
 
@@ -61,9 +61,9 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Incorrect:
-    """The incorrect-outputs channel: `identities` identities, each ended by its first drawn incorrect step."""
+    """The incorrect-outputs channel: `identities` identities, each ended by its first sampled incorrect step."""
 
-    #: the sampled proofs' draw rate per step (1 where every unit is proved)
+    #: the sampled proofs' sample rate per step (1 where every unit is proved)
     q: float
     delta: float
     #: the output bits an incorrect step chooses
@@ -96,7 +96,7 @@ class Row:
 
 def incorrect(registry: Registry, scenario: Scenario) -> Row:
     """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
-    regime draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
+    regime samples at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
     (`q = 1`); unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)

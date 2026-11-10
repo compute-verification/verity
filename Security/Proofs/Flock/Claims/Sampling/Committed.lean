@@ -5,8 +5,8 @@ public import Proofs.Flock.Claims.Sampling.ZK
 /-!
 # The sampled masked protocol, every coin committed at `Hello`
 
-The sampled verifier's coins are live: the challenger commits to all of them, the selection draw's and each checked
-unit's session's, under one hiding coin tree (`coin-tree/hm96-sha512/v2`, the tree C-Flock's masked sessions commit) in
+The sampled verifier's coins are live: the challenger commits to all of them, the selection sample's and each checked
+unit's session's, under one hiding coin tree (`coin-tree/hm96-sha512/v2`, the tree Flock's masked sessions commit) in
 its answer to the prover's `Hello`, and opens each at its round, after the prover's message of that round; the prover
 checks each opening against the root with the coin-tree walk before it reads the coin, and from the first that fails
 sends `abort`. `Sampled c` is that protocol's data at the code `c`, and `Sampled.leaky` the protocol, as a
@@ -15,7 +15,7 @@ sends `abort`. `Sampled c` is that protocol's data at the code `c`, and `Sampled
 * **Rounds**: `Hello`, then the sampled verifier's rounds after its first, each answered with the opening of that
   round's coin, the last with the decision. The sampled verifier's first round is the `Hello` round (`HelloRounds`), so
   the protocol's `K + 2` rounds are `c.V.k` (`Sampled.rounds`), and the coins it opens are `c.V`'s at rounds `1` to
-  `c.V.k − 2`, in the deployed order: the first stage's draw, then the rounds `c.stage2` holds, each checked unit's
+  `c.V.k − 2`, in the deployed order: the first stage's sample, then the rounds `c.stage2` holds, each checked unit's
   session's at its `c.rounds`.
 * **The opening check**: the coin-tree walk `treeChk` and the opening's coins as its coin (`decOf`), as ZKS's reference
   session's (`RefSession.refP`), so `CoinCheck` holds by definition (`Sampled.coinCheck`).

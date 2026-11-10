@@ -1,5 +1,5 @@
 """`pouw_h1_tables_device`: H1's call tables hashed by the Commit's row-table kernels, held bit for bit to
-`pouw_h1_requests.hiding_rows`, which the prover rebuilds a drawn call's tables with (`pouw_h1_prover.open_call`). Over A-table
+`pouw_h1_requests.hiding_rows`, which the prover rebuilds a sampled call's tables with (`pouw_h1_prover.open_call`). Over A-table
 rows (K s8 codes and an f32 scale) and z-table records (``ZY_BYTES``), one row to a few hundred, K from 2 to two segments and
 off an 8-byte boundary, at H1's table nonces: the root, and every opening of `hiding_rows`' tree verifies under it. The CPU
 twin (`host_roots`, the kernels' functions under g++) runs everywhere with a C++ compiler; `H1Run` on the twin commits the
@@ -117,7 +117,7 @@ def _window(tmp_path, mode, monkeypatch, device="cpu", tag=""):
 @needs_cxx
 def test_a_window_on_the_twin_commits_what_hiding_rows_commits_and_its_calls_reopen(tmp_path, monkeypatch):
     """`H1Run` hashing its call tables by the kernels' functions commits `hiding_rows`' A and z roots, so the same manifest,
-    calls_root and draw root; `open_call` rebuilds each call (served and empty) from the prover's directory under them."""
+    calls_root and sample root; `open_call` rebuilds each call (served and empty) from the prover's directory under them."""
     hashed, twin = [], TD.host_roots
     monkeypatch.setattr(TD, "host_roots", lambda tables, key: hashed.append(len(tables)) or twin(tables, key))
     got, prover = _window(tmp_path, "host", monkeypatch)

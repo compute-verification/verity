@@ -5,15 +5,15 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 public import Proofs.Flock.Claims.JsonNorm
 
 /-!
-# `hrest`'s base checks with the draw tied at several tables
+# `hrest`'s base checks with the sample tied at several tables
 
 `DrawTied` holds at every statement of several tables (`drawTied_of_one`): there the setup sets the session's
-`unitDraw` to the statement's draw (`FlockComplete.ZkTables.setupTables_spec`), which `Draw.UnitDraw.ofJson` reads, so
+`unitDraw` to the statement's sample (`FlockComplete.ZkTables.setupTables_spec`), which `Draw.UnitDraw.ofJson` reads, so
 it is not `null` (`FlockComplete.ZkTables.ofJson_obj`), and which the verifier rebuilt (`Raw.ins_read`), so rebuilding it
 again changes nothing (`norm_norm`). At one table the setup reads `unitDraw` back from the public
-file's parsed header, and the draw is tied only where that header carries the statement's draw (`DrawTiedOne`).
+file's parsed header, and the sample is tied only where that header carries the statement's sample (`DrawTiedOne`).
 
-`basesHold_of` is `basesHold` with custody proved (`custodyRecJ`) and the draw tied off one table.
+`basesHold_of` is `basesHold` with custody proved (`custodyRecJ`) and the sample tied off one table.
 -/
 
 @[expose] public section
@@ -25,12 +25,12 @@ open Lean (Json)
 open Claims (Msg)
 open FlockDeploy (FinalP setupOf drawEq)
 
-/-- **At one table, the session's draw is the statement's**: `DrawTied` at the statements of one table. -/
+/-- **At one table, the session's sample is the statement's**: `DrawTied` at the statements of one table. -/
 def DrawTiedOne : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
     s.read.check = .ok () → sts.size = 1 → drawEq (drawOfU spec.unitDraw) s.read.draw = true
 
-/-- **The session's draw is the statement's at several tables**, so `DrawTied` is `DrawTiedOne`. -/
+/-- **The session's sample is the statement's at several tables**, so `DrawTied` is `DrawTiedOne`. -/
 theorem drawTied_of_one (h1 : DrawTiedOne) : DrawTied := by
   intro x s spec sts hx hq
   have hs := (FlockDeploy.setupOf_some hx).2
@@ -63,7 +63,7 @@ theorem drawTied_of_one (h1 : DrawTiedOne) : DrawTied := by
   · exact h1 x s spec sts hx hq (by omega)
 
 /-- **The base checks hold** where the reading fixes the last message's statement and refuses unshaped proofs, and the
-session's draw is the statement's at one table. -/
+session's sample is the statement's at one table. -/
 theorem basesHold_of (rd : Msg → Option FinalP) (hstmt : DecStmt rd) (hsh : DecShaped rd) (h1 : DrawTiedOne) :
     BasesHold rd :=
   basesHold rd hstmt hsh (drawTied_of_one h1) (custodyRecJ rd)

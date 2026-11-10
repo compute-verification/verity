@@ -4,7 +4,7 @@ Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.
 verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
-  the inner statement's circuit file, its draw (`--rec-inner-draw`), its public file and the circuit registration
+  the inner statement's circuit file, its sample (`--rec-inner-draw`), its public file and the circuit registration
   (`--rec-inner-registration`, or null), and for each of V*'s statements at the inner shape, in `RecVStar.statements`'
   order, exactly `{"bindings", "circuit", "partition", "program", "registered"}`: the part's `--rec-bindings` object,
   its circuit's SHA-512, its partition object, its program's descriptor and its registered file (or null). The inner
@@ -13,27 +13,27 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"parts", "record", "rows",
   "transcript"}`: the SHA-512s of the inner session's record, of V*'s shared rows (`--rec-rows`, one file every part
-  reads: they register the prover's running sums, so the prover stages them, `RecDeploy.Stage.rows`) and of the coin
-  server's transcript of the inner session, and for each part `{"public", "record", "reps"}`: its staged public file's
+  reads: they register the prover's running sums, so the prover stages them, `RecDeploy.Stage.rows`) and of the challenger's
+  live-coin part's transcript of the inner session, and for each part `{"public", "record", "reps"}`: its staged public file's
   SHA-512, its `session.json`'s and `{file: SHA-512}` naming at least each rep file its session reads;
 * **blobs**: the files those digests name (`Core.Blobs`);
 * **inner coins** (`innerCoinsHeld`): v1's `challenger`, with its `window_root`, must be named
   (`OneStageZk.NO_CHALLENGER`), and the inner session's coins are the challenger's: the window's challenger session, as
   the evidence's `coins` show it under the challenger's key (`OneStageZk.treesOf`), logs exactly one coin tree, the inner
-  record's `coin_tree`, and opened every round of it the coin server's transcript lists, as it lists it, after the bytes
-  the coin server opens it after, and no other (`Challenger.innerTreesReason`); else the check refuses, before any part
+  record's `coin_tree`, and opened every round of it the challenger's live-coin part's transcript lists, as it lists it, after the bytes
+  the challenger's live-coin part opens it after, and no other (`Challenger.innerTreesReason`); else the check refuses, before any part
   is verified;
 * **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
-  rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its draw
+  rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its sample
   (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
   `--rec-inner-partition`, `--rec-inner-program`, `--rec-inner-statement verity/flock-circuit+plain-leaves
   --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
   `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
-  (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
+  (`partVerdict`, the Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
   v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
-  inner public file's units at the inner record's draw.
+  inner public file's units at the inner record's sample.
 
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
 inner circuits are public (no `--hide`), there is no RecSparse phase (no `--sparse`), and an inner circuit whose META
@@ -81,7 +81,7 @@ structure PartOwn where
   program : ByteArray
   registered : Option Json
 
-/-- The verifier's own inputs: the inner statement's circuit, public file, draw and registration digests, its program
+/-- The verifier's own inputs: the inner statement's circuit, public file, sample and registration digests, its program
 and partition, and the parts. -/
 structure Own where
   circuit : String
@@ -243,8 +243,8 @@ def registeredOf (j : Json) :
 /-- `pure ()` when `b`, else the refusal `why`. -/
 def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
-/-- The bound on a file every part's session encodes as one field (the staged public file, the inner record and the coin
-server's transcript), and on the whole statement the inputs name (`statementFits`): each field's length is one 8-byte
+/-- The bound on a file every part's session encodes as one field (the staged public file, the inner record and the challenger's
+live-coin part's transcript), and on the whole statement the inputs name (`statementFits`): each field's length is one 8-byte
 word, so the verifier refuses a file or statement of `2^56` bytes or more, under which every encoded field stays under
 `2^64`. -/
 def FIELD_MAX : Nat := 2 ^ 56
@@ -256,10 +256,10 @@ def fits (b : ByteArray) (what : String) : V Unit :=
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`): Flock's plain verifier sets the inner statement
 up as each part's setup is told to (`--statement verity/flock-circuit+plain-leaves` without `--coins`, as
 `RecDeploy`'s reading of the inner statement sets it up; each part checks the inner session's coins on the challenger's
-coin tree, `RecCoins`), the verifier's own partition and program, the inner statement's draw, `--stratified` at the population the verifier's partition object and
-program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full draw, `rec_live.full_draw`), no lookup
+coin tree, `RecCoins`), the verifier's own partition and program, the inner statement's sample, `--stratified` at the population the verifier's partition object and
+program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full sample, `rec_live.full_draw`), no lookup
 tables, registered reads or identifier: `verifyCmd`'s plain path), its scope check passes (`ProvedScope.check`), and it
-carries a draw. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
+carries a sample. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
 def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
   let coins := Flock.Coins.seed
@@ -283,12 +283,12 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   Flock.ProvedScope.check tags false circuitB pubB [] 1 false false
 
 /-- How each part's setup is told to set the inner statement up (`--rec-inner-statement`, `--rec-inner-draw`), which
-`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's draw `drawB`. -/
+`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's sample `drawB`. -/
 def innerForm (drawB : ByteArray) : Flock.RecCoins.InnerForm :=
   { statement := INNER_STATEMENT, tables := [], draw := some drawB }
 
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
-source), what the inner circuit's META binds, the coin server's transcript as `verify` holds it and its link points. -/
+source), what the inner circuit's META binds, the challenger's live-coin part's transcript as `verify` holds it and its link points. -/
 structure InnerHeld where
   shape : Flock.RecVStar.Inner
   src : Flock.RecCoins.Source
@@ -424,7 +424,7 @@ flags and format strings. -/
 def STMT_OVER : Nat := 1024
 
 /-- **Part `j`'s bytes in the statement the inputs name**: its statement's name, circuit, staged public file and program,
-and the canonical bytes of its partition, registered reads, draw (the one `partVerdict` reads off its record) and
+and the canonical bytes of its partition, registered reads, sample (the one `partVerdict` reads off its record) and
 bindings. -/
 def partSize (j : Nat) (p : PartOwn) (s : PartProof) (bs : Core.Blobs) : V Nat := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
@@ -449,7 +449,7 @@ def partsSize (bs : Core.Blobs) : Nat → List PartOwn → List PartProof → V 
   | _, _, _ => pure 0
 
 /-- **A bound on the bytes of the statement the inputs name** (`Names`): the inner statement's name, circuit, public file,
-draw and program and its partition's canonical bytes, the inner shape's canonical bytes, the registration and each
+sample and program and its partition's canonical bytes, the inner shape's canonical bytes, the registration and each
 part's (`partsSize`). -/
 def statementSize (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Nat := do
   let circuitB ← bs.get o.circuit "the inner circuit"
@@ -468,7 +468,7 @@ def statementFits (limit : Nat) (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Co
   let n ← statementSize h o pr bs
   need (n < limit) s!"the statement the inputs name is {n} bytes, {limit} or more"
 
-/-- Whether each parsed field's canonical bytes parse back to it (the draw up to `Flock.norm`, the inner shape through
+/-- Whether each parsed field's canonical bytes parse back to it (the sample up to `Flock.norm`, the inner shape through
 `Inner.ofJson`): that `Names`' canonical pins agree with its parsed ones at these inputs. The difftest's, at the honest
 session. -/
 def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Bool := do
@@ -574,7 +574,7 @@ private def jsonBlob (bs : Core.Blobs) (d what : String) : V Json := do
 /-- **The inner session's coins are the challenger's**: the coin trees the window's challenger session shows it sampled
 and opened (`OneStageZk.treesOf`: from the evidence's `coins` under the parameters' challenger, which must be named), and
 the inner session `session` held to them (`Challenger.innerTreesReason`): its record's `coin_tree` the one tree logged,
-the coin server's transcript's link points and every round it lists opened as it says, after the bytes the coin server
+the challenger's live-coin part's transcript's link points and every round it lists opened as it says, after the bytes the challenger's live-coin part
 opens it after (`rec_live.link_after`, `round_after`), and every opening the log shows one the transcript reads. Every
 part's check then holds the record's coins to the transcript's (`Flock.RecVStar.innerCommits`, `innerLink`), so the
 inner coins every part reads are the ones the challenger's signed release log shows. -/
@@ -660,7 +660,7 @@ def main (args : List String) : IO UInt32 := do
     return if r.toOption.isSome then 0 else 1
   | _ => protocol.main args
 
-/-- The inner session's full draw over `n` units (`rec_live.full_draw`): the stratified law at `K = n`, every unit drawn. -/
+/-- The inner session's full sample over `n` units (`rec_live.full_draw`): the stratified sampling design at `K = n`, every unit sampled. -/
 private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
   let s : Flock.Draw.Stratum := { template := "t", units := #[(0, n)], k := k }
   let d : Flock.Draw.UnitDraw := { law := .stratified k #[s], population := n, units := Array.range k }

@@ -7,9 +7,9 @@ public import Definitions.Accounting.TS.ProofLayer
 # The bridge's probability steps, over any family of sessions
 
 The proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`) is a probability over a window's paths (uniform on
-`Paths Ω S`, `Pouw.RelativeSecurity.prob`), per round `w` and proof `i`; C-Flock's bounds are probabilities over one
+`Paths Ω S`, `Pouw.RelativeSecurity.prob`), per round `w` and proof `i`; Flock's bounds are probabilities over one
 session's audit game played by its prover (`FlockSoundness.Game.prob`). This file joins the two for any family of
-sessions, with no C-Flock definition:
+sessions, with no Flock definition:
 
 * `game_prob_exists_le`: the union bound for a fixed strategy over a finite family of events;
 * `SessionLaw`: read through the session a path runs and its outcome there, the window's coins have the sessions' law;
@@ -89,7 +89,7 @@ def SessionLaw {Ω : Type} [Fintype Ω] {S : ℕ} {Sess : Type u} {Out : Sess �
       (∑ x, (Game.prob (E (sess x)) (G (sess x)) (τ (sess x))).toReal) / (Fintype.card (Paths Ω S) : ℝ)
 
 /-- **`SoundAt` from a family of sessions**: when proof `i` of round `w` runs the session `sess x w i` with outcome
-`out x w i`, the window's law at each `(w, i)` is the sessions' (`SessionLaw`), every unsound proof is off (`Off`, of
+`out x w i`, the window's sampling design at each `(w, i)` is the sessions' (`SessionLaw`), every unsound proof is off (`Off`, of
 probability at most `δo` at each `(w, i)`) or has its session's outcome in `Bad`, and `Bad` has probability at most
 `δ ≥ 0` in every session a path runs, then each proof is unsound with probability at most `δo + δ`. -/
 theorem soundAt_of_sessions {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)

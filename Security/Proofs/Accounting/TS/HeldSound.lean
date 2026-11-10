@@ -5,7 +5,7 @@ public import Proofs.Accounting.TS.CheckedSound
 public import Proofs.Pouw.RelativeSecurity
 
 /-!
-# A checked unit's proof layer with its served checks is sound through its C-Flock sessions (the proof)
+# A checked unit's proof layer with its served checks is sound through its Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and flock-verify's
 known-content check passes, and opens the same rows, so `AcceptedLive` is its acceptance's first half. Its unsound event
@@ -16,7 +16,7 @@ meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
   (`RowsSession.ServedRegistered`), which `checkKnownAll` accepted at the known rows; so its row bytes are the word
   `1`'s, or `knownColl` exhibits a SHA-512 collision (`FlockC3.RegLevels.knownColl_spec`, `tie_ok`);
 * (b) the checked relation's assignment is the opened rows at each such wire, so its `ok` wires carry the `ok` row,
-  and `Accounting.Assumptions.TS.OkRealizes` gives each drawn unit's checks of `Cd`.
+  and `Accounting.Assumptions.TS.OkRealizes` gives each sampled proof block's checks of `Cd`.
 -/
 
 @[expose] public section

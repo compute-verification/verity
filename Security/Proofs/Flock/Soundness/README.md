@@ -13,7 +13,7 @@ is the Lean package `verity/core/service/flock/` (outlined in `verity/ml/flock/v
 
 ### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
-Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
+Consider one table of a session, run as the verifier runs it: the `fast100` profile, run twice on one committed
 root, with live coins, for any statement of `Flock.Statement`. For every prover strategy, the probability of this event is
 at most `tableError(fast100 m, shape)`:
 
@@ -53,8 +53,8 @@ at most `tableError(fast100 m, shape)`:
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
-This is the protocol as run, in the adopted variant: SHA-512 Merkle caps, openings at the end of the proof, and the coin
-server keeping each round's bytes (`Model/Compiled.lean`: the openings are the table's last message, after both reps'
+This is the protocol as run, in the adopted variant: SHA-512 Merkle caps, openings at the end of the proof, and the challenger's
+live-coin part keeping each round's bytes (`Model/Compiled.lean`: the openings are the table's last message, after both reps'
 coins, and every path is checked against its level's cap). For every classical prover `P*`, whose committed table
 `T*(P*)` is its plurality table (`C0star`: at each level-0 position, the row `P*` opens there most often over the coins
 after its level-0 cap):
@@ -79,7 +79,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
 unit used. The audit bound defines an incorrect proof block through extracted values, so it pays the table's knowledge error and a
-link term per audit.
+binding error per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
   - It reruns the prover after its level-0 cap `K` times.
@@ -127,7 +127,7 @@ link term per audit.
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
   with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
-  `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
+  `ecr/sha-512`), platform (A3, and A6, the challenger's live-coin part's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
 - **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
   forms the proof covers (the verifier's `Flock.ProvedScope`; `FailClosed.scopeOk_eq`), so the executable's headlines
@@ -176,7 +176,7 @@ link term per audit.
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
-| Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
+| Session binding: the challenger's live-coin part keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`; the definitions in `Definitions/Flock/Compiled.lean` and `Definitions/Core/Game/Lock.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
@@ -363,7 +363,7 @@ term below 2^-170.
   - The *oracle layer* is where the statistical bound lives. There, a committed table is sent as a whole and the
     verifier reads the queried columns (§1.1).
   - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
-    the proof. The coin server keeps each round's bytes before flipping that round's coins, and the replay compares
+    the proof. The challenger's live-coin part keeps each round's bytes before flipping that round's coins, and the replay compares
     bytes, so no hash binds the rounds (§1.2).
   - **The compiled layer is the adopted variant, not yet the recorded sessions'.** The archived statement versions use SHA-256 trees
     (`Flock.Merkle`) and round digests (`Flock.Transcript`) for the sessions they record, following upstream, and SHA-512 trees as its target. The
@@ -376,7 +376,7 @@ term below 2^-170.
     each table's stream is a subtree and each repetition's coins are independent.
   - **Each round:** the verifier opens a table's coins, with their paths, only after that table's bytes for the round are
     recorded. Every prover machine checks each opening against the root before answering.
-  - **The coin server** runs one instance per datacenter, all opening the one commitment.
+  - **The challenger's live-coin part** runs one instance per datacenter, all opening the one commitment.
   - **Soundness per session** is the union bound over its tables, `Σ tableError`, since each table's bound holds for
     every prover strategy.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
@@ -480,7 +480,7 @@ The weights are committed once and every later proof opens that root. The analys
   - In a sampled audit only the first incorrect sampled proof block matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a proof block is incorrect only relative
-    to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
+    to extracted values. Each audit therefore also pays the table's knowledge error and a binding error (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`
     to `2^90.4`, with `N` counting audits.

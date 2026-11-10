@@ -23,7 +23,7 @@ public import Proofs.Flock.VBridge.Family.Encode
   record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes, printed by the
   total `printJ` (the bytes `Json.compress` prints).
 
-In deployment the coin server writes the record and draws the coin tree's key; here the prover writes what the server
+In deployment the challenger's live-coin part writes the record and flips the coin tree's key; here the prover writes what the server
 would, so the record is the honest server's.
 -/
 

@@ -20,7 +20,7 @@ run's own coins (`Run.recCoins`) and the honest prover's messages (`Run.recMsgs`
 
 * **The reading and the five checks** (`ReadOkR`, `holdsR` at every `VerdictR`): the setup, the shapes, the names
   (`honestSetup`, `honestShaped`, `honestNames`), the verdict (`honestVerdict`), the checks after it (`checksAtJ`:
-  the statement, the draw `honest_drawJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
+  the statement, the sample `honest_drawJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
 * **`nextR rdR` accepts** (`nextR_sound`).
 * **`IVStar` at `DeployedR.bdR` accepts the honest committed run** (`ivstar_honest_filesR`), at any salts `ys`.
 * **Row D's `hlev`** at every decision on the honest messages (`hlev_honest_deployed`), with the rep streams' names
@@ -35,7 +35,7 @@ What the run must fix and where it is fixed here:
   registered scheme's (`scheme_bounds`).
 * **As many coins as messages** (`honest_len`): round 0, the reps' rounds (`honestRounds_nAt`) and the last message,
   against `(V false).k x` coins (`repLens_sum`).
-* **The record's draw is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's draw
+* **The record's sample is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's sample
   (`stmtOk`), not `null` (`DrawOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
 -/
 
@@ -255,9 +255,9 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
   simp only [V, hx]
   omega
 
-/-! ## The record's draw -/
+/-! ## The record's sample -/
 
-/-- **The session's draw is the statement's** at a plain completeness run. -/
+/-- **The session's sample is the statement's** at a plain completeness run. -/
 theorem honest_drawTied (o : Run sha512 Readable.relation) :
     drawEq (RecDeploy.drawOfU o.spec.unitDraw) o.s.read.draw = true := by
   obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
@@ -285,7 +285,7 @@ theorem honest_drawTied (o : Run sha512 Readable.relation) :
     rw [e]
     exact drawEq_refl _
 
-/-- **The reader's record carries the statement's draw** at the honest decision. -/
+/-- **The reader's record carries the statement's sample** at the honest decision. -/
 theorem honest_drawJ (o : Run sha512 Readable.relation)
     (cs : List Coin) : drawEq (drawOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
   show drawEq (drawOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))

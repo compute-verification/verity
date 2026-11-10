@@ -15,7 +15,7 @@ The frozen statements of `Defs.lean`, one theorem each:
 * `hidden_delta`: its Δ, `HmRow.delta`'s then `outPairs`;
 * `hidden_layout`: an untyped one has the layout the placement reads, so its block R1CS is `Layout.model`;
 * `public_exposes`: it takes no output word from the public file, and its regions are every row's `b ‖ c`;
-* `outputs_committed`: in a satisfying witness, an output row's registered `b ‖ c` at a drawn unit is the commit
+* `outputs_committed`: in a satisfying witness, an output row's registered `b ‖ c` at a sampled proof block is the commit
   string of the row prefix and the output words its template instance computes;
 * `commitPair_spec`: the row commitment's extractor;
 * `outputs_binding`: two accepted statements that put one registered unit at two template instances, whose output words

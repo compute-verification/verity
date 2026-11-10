@@ -9,19 +9,19 @@ public import Proofs.Flock.Recursive.FirewallZK
 session's zero knowledge as an obligation on the view and simulator they range over (`Flock.Guarantees.OuterViewZK`,
 `Flock.Guarantees.OuterSessionsZK`). Here it is at V*'s outer `--zk` sessions as `Proofs.Flock.Recursive.Sessions`
 models them, run by the honest prover's code (`proverExe`, whatever a stopped run sends), with the commitments the
-firewall sends when every message is fixed by the auditor's tape before the first commitment (the committed-coin case).
+ZK server sends when every message is fixed by the auditor's tape before the first commitment (the committed-coin case).
 
 * `committed`, `firewallCommits_committed`: messages that read none of the commit strings before them, at which the
-  firewall's commitments are `firewallLeaf` of each message under its own salt.
+  ZK server's commitments are `firewallLeaf` of each message under its own salt.
 * `recursiveZK_of_sessionZK`: `OuterSessionsZK` at `Sessions.view` and `Sessions.sim`, with `ε_o` V*'s sessions' error
-  at the pinned key's hiding gap (`errAt`), from C-Flock's zero knowledge of one `--zk` table at every coin vector
+  at the pinned key's hiding gap (`errAt`), from Flock's zero knowledge of one `--zk` table at every coin vector
   (`ZkEveryCoin.coin_close_le`, through `OuterZK.vstar_outer_zk`), on V*'s staging, each a named obligation:
   `SessionsPublic` and `SessionsHonest` at `committed msgs`, and `SessionsCoined`. V*'s sizes are `Sessions`' fields
   `hz`, `hR`, `hS`. `outerViewZK_of_sessionZK` is `RecursiveZK`'s `OuterViewZK` at one honest witness and registration.
 
 What this does not cover: that the deployed outer sessions send `Sessions.view`, the honest prover's view at coins the
 auditor's tape fixes before each session (`Sessions.coin`). `Loop` gives `OuterSessionsZK` at V*'s statements run by the
-session loop's switched prover (`outerSessionsZK_loop`). C-Flock's session-loop bound (`SessionLoopZKAt`) is about the
+session loop's switched prover (`outerSessionsZK_loop`). Flock's session-loop bound (`SessionLoopZKAt`) is about the
 deployed loop against every `V*`, but it bounds the real view by twice the simulated one plus its error, so it doesn't
 give `OuterViewZK`'s additive form.
 -/
@@ -43,7 +43,7 @@ def committed {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
     Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray :=
   fun P w r a p i _ => msgs P w r a p i
 
-/-- **The committed-coin case of the firewall's commitments**: where no message reads the commit strings before it,
+/-- **The committed-coin case of the ZK server's commitments**: where no message reads the commit strings before it,
 commitment `i` is `firewallLeaf` of message `i` under its salt. -/
 theorem firewallCommits_committed {nh : ℕ} (m : Fin nh → ByteArray) (y : Fin nh → ZkView.Salt) :
     Flock.Guarantees.firewallCommits (fun i _ => m i) y = fun i => Flock.Guarantees.firewallLeaf (m i) (y i) := by
@@ -55,7 +55,7 @@ hm96 leaves of the private circuit's rows (`regLeaves rows pub`): the view is V*
 the honest prover's code at the honest context, the simulator V*'s (`Sessions.sim`) at the public context `pubS` reads,
 and `ε_o` V*'s sessions' error at the pinned key's hiding gap, `errAt (hidingGap My saltHash)`. It takes no premise;
 what it takes of V*'s staging, each an obligation: the simulator's public context is the honest one's
-(`SessionsPublic`), each session's table is one of `verify --zk`'s hidden-output tables at its data and a draw
+(`SessionsPublic`), each session's table is one of `verify --zk`'s hidden-output tables at its data and a sample
 (`SessionsCoined`), and the honest witnesses are valid with public registered values (`SessionsHonest`). -/
 theorem recursiveZK_of_sessionZK {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)

@@ -15,14 +15,14 @@ set_option Elab.async false
 the one-table hidden-output piece (`ZkHidden/Defs.lean`, `SoundBind.lean`, `SoundRuns.lean`) at table `j`:
 
 * `setupTables_partsH`: `Tables.setupTables_parts` under hidden outputs. At `count > 1`, table `j` is `setupHidden`'s
-  statement under `Tags.tableIdentity count j` at the subset draw of part `j`; `setupOf_tableJH` is `setupOf_tableJ`'s
+  statement under `Tags.tableIdentity count j` at the subset sample of part `j`; `setupOf_tableJH` is `setupOf_tableJ`'s
   counterpart.
 * `parseH_tagsAt`, `loadPublicH_tagsAt`: `HmOut.parse` (untyped) and `HmOut.loadPublic` read no identity.
 * `DrawSetupZHJ`, `tableZHJ`, `planZHJ`, `tabZHJ`: `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ` with a `DrawSetupH` at
   table `j`'s inputs (`inputsJ I j`), and the refused table of the reference setup `y₀ : DrawSetupZHJ` at table 0's
   inputs.
 * `tableShHJ`, `planShHJ`, `tabShHJ`, `sitesShHJ`: the public hidden-output tables (`HiddenExec.TableH`) at the same
-  draws, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
+  samples, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
 * `placeZHJ`, `layZHJ`, `rsZHJ`, `rsZHJ_computes`: `keyPlaceH`, `keyLayoutH` and `keyRowsH` at those sites, moved to the
   `--zk` tables (`SoundBind.lean`'s `placeZH`, `layZH`, `rsZH` at `J` tables).
 * `TagsOkZHJ`, `DrawOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `DrawOkZKJ` and `opnAtZJ` with
@@ -53,7 +53,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
 
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables`'s tables at `count > 1` under hidden outputs** (`Tables.setupTables_parts` with `hh = true`): the
-same split, and table `j` is `setupHidden`'s statement under `Tags.tableIdentity count j` at part `j`'s subset draw. -/
+same split, and table `j` is `setupHidden`'s statement under `Tags.tableIdentity count j` at part `j`'s subset sample. -/
 theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -113,8 +113,8 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
 
 end Parts
 
-/-- **`verify --zk` sets table `j` up under its tags at its draw, under hidden outputs** (`setupOf_tableJ` with
-`setupHidden`): at the record's draw `d`, `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's
+/-- **`verify --zk` sets table `j` up under its tags at its sample, under hidden outputs** (`setupOf_tableJ` with
+`setupHidden`): at the record's sample `d`, `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's
 statement under `tagsAt` at `drawJ` (`setupTables_okH` at one table, `setupTables_partsH` at several). -/
 theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d)
@@ -284,21 +284,21 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`, under hidden outputs** (`tableZJ` with `setupHidden`): the table `verify --zk` sets up at
-table `j`'s inputs and draw when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at
-table 0's inputs, which every session `verify --zk` accepts at a draw `DrawOkZKHJ` admits has: `setupZHJ_of_acceptsZK`). -/
+/-- **Table `j` at sample `S`, under hidden outputs** (`tableZJ` with `setupHidden`): the table `verify --zk` sets up at
+table `j`'s inputs and sample when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at
+table 0's inputs, which every session `verify --zk` accepts at a sample `DrawOkZKHJ` admits has: `setupZHJ_of_acceptsZK`). -/
 noncomputable def tableZHJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
   else y₀.refused
 
-/-- **The hidden-output plan of `J` tables**: at draw `S`, table `j` is `tableZHJ … S j`, for every registration. -/
+/-- **The hidden-output plan of `J` tables**: at sample `S`, table `j` is `tableZHJ … S j`, for every registration. -/
 noncomputable def planZHJ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S _ => List.ofFn (tableZHJ dj y₀ S)
 
 theorem planZHJ_length (S : Finset (Fin n)) (R : Reg) : (planZHJ (Reg := Reg) dj y₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabZHJ : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZHJ (Reg := Reg) dj y₀ S R).length :=
   fun S R u => Fin.cast (planZHJ_length dj y₀ S R).symm (partOf I (dj S) u.val)
 
@@ -310,7 +310,7 @@ theorem tabOfZHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
 /-! ## The public shadow, the sites, the layout and the rows -/
 
 open Classical in
-/-- **The public hidden-output table at table `j`'s draw**, with the inputs it is set up on: its `DrawSetupZHJ`'s
+/-- **The public hidden-output table at table `j`'s sample**, with the inputs it is set up on: its `DrawSetupZHJ`'s
 table at table `j`'s inputs, or `y₀`'s refused one at table 0's inputs. -/
 noncomputable def tableShHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableH I' mPts (partS I (dj S) S j) :=
@@ -342,7 +342,7 @@ theorem tableZHJ_S (S : Finset (Fin n)) (j : Fin (nTab I)) :
     rw [dite_eq_right_of_eq_false (eq_false h)]
     rfl
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable def planShHJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tableShHJ dj y₀ S j).2.T
 
@@ -395,7 +395,7 @@ def recastAccH {T T' : Model.Statement} {A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2
 
 variable (hscope : Layout.scopeOkH c = true)
 
-/-- **The public plan's sites**: each drawn unit's acceptance, VU and block are its table's public table's. -/
+/-- **The public plan's sites**: each sampled proof block's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
   A S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
     (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
@@ -484,7 +484,7 @@ theorem rsShHJ_computes : (rsShHJ dj y₀ ht hc hscope hU hpub hpt (Reg := Reg))
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
       (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table at `J` tables**: `keyPlaceH`'s place in the public
+/-- **Each sampled proof block's place in its hidden-output `--zk` table at `J` tables**: `keyPlaceH`'s place in the public
 table, along `planZHJ_S`. -/
 noncomputable def placeZHJ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProg c hU n).partition (Layout.outsOf c hU n))
@@ -522,15 +522,15 @@ theorem rsZHJ_computes : (rsZHJ dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).C
 
 end Shadow
 
-/-! ## The tags, the coin server's draws, and the openings -/
+/-! ## The tags, the challenger's live-coin part's samples, and the openings -/
 
 /-- **The verify command's tags at any number of tables, under hidden outputs** (`TagsOkZJ` with hidden outputs):
 hidden outputs, retained rounds, `hm96-sha512/v1` leaves. -/
 def TagsOkZHJ (I : Inputs) : Prop :=
   I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1"
 
-/-- **The coin server's draw at `S`, at `J` hidden-output tables** (`DrawOkZKJ` with `setupHidden` for `setupH`): each
-table's draw proves the drawn units it is given (`partS`), and setupHidden sets each table up at it with `mPts` link
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`DrawOkZKJ` with `setupHidden` for `setupH`): each
+table's sample proves the sampled proof blocks it is given (`partS`), and setupHidden sets each table up at it with `mPts` link
 points. -/
 def DrawOkZKHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
@@ -539,7 +539,7 @@ def DrawOkZKHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S 
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 
 /-- **The `--zk` openings at hidden-output table `j`** (`opnAtZJ` with `setupHidden`): `opnZ` at the statement
-setupHidden sets up under table `j`'s tags at its draw, and its `--zk` schedule, on proof files `2j` and `2j + 1`. -/
+setupHidden sets up under table `j`'s tags at its sample, and its `--zk` schedule, on proof files `2j` and `2j + 1`. -/
 noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (I : Inputs)
     (dj : Finset (Fin n) → Lean.Json) (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray)
     (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
@@ -553,12 +553,12 @@ noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 
 
 /-! ## The message half at the live hidden-output tables -/
 
-/-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables, at the law's draws**
+/-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables, at the sampling design's samples**
 (`runsZCJ_live` under hidden outputs): on untyped inputs under the tags `TagsOkZHJ` fixes, whose circuit file
-`HmOut.parse` accepts, with `wr` the coin server's record of the live session and each of the law's draws setting each
+`HmOut.parse` accepts, with `wr` the challenger's live-coin part's record of the live session and each of the sampling design's samples setting each
 table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZHJ` under `hm96-sha512/v1`, with the decoder
 `decAtZJ`, the openings `opnAtZHJ`, no tail and table `j`'s cap from `root_B[j]`. `runsZCJH_liveU` is it from the
-sessions alone: each table's draw setup reads only its own session's committed circuit (`drawSetupH_of_setupHiddenU`). -/
+sessions alone: each table's sample setup reads only its own session's committed circuit (`drawSetupH_of_setupHiddenU`). -/
 theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)

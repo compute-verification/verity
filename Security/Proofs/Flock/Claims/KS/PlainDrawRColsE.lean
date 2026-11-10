@@ -202,9 +202,9 @@ theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · simp only [Claims.Recursion.Bound.ansAt, hDk, show ¬ (n + 1 < (FlockDeploy.V false).k x) by omega, ↓reduceIte,
         hacc0]
 
-/-- **An accepted run of the deployment gives the verdict at the draw, at its deployed columns**: on a run `IVStar` of
+/-- **An accepted run of the deployment gives the verdict at the sample, at its deployed columns**: on a run `IVStar` of
 `bdR` accepts at SHA-512, at any prover, `nextR rd` decides on the opened messages at the run's coins, and wherever the
-decided statement carries the draw `d` and the deployed columns of the run look up no column off `C` at table 0,
+decided statement carries the sample `d` and the deployed columns of the run look up no column off `C` at table 0,
 `plainVerdictAtJK id` holds at the decision's live outcome (`deployCols_runR`, `plainVerdictAtJK_of_nextR_cols`). -/
 theorem plainVerdictAtJK_of_runIVR (mPts : ℕ) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)

@@ -21,7 +21,7 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   through the coin commitment (`recordCommitted`: holding commitment `c` its record at `ω` is `recs c ω`, and the
   session it plays that record's opening draw `recordDraw`, one draw for each of the session's `⌈W/g⌉` (`Node.draws`,
   a window each at g = 1), draw `c` with the receipts its windows have in the state the record's session reaches,
-  drawing `min(s, U_c)` at the session's `samples` s) and
+  sampling `min(s, U_c)` at the session's `samples` s) and
   the record of outcome `ω` the prover's holding the deployed commitment `com ω` (`played`), whose trace of record
   (`ofRecord`, the trace over the registration's blocks with the Lean verifier's verdict on the record as its own)
   meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`,
@@ -92,7 +92,7 @@ def LineChecked : Prop :=
       0 ≤ rates.linkBurstBytes ∧ 0 ≤ l.wrong
 
 /-- **The verifier refuses a line that isn't registered.** A line `line_record` computes off a record given bare,
-drawn `g` windows a coin (`lineOfRegistered`), is of a record of the registration given with it: the record names that
+sampled `g` windows a coin (`lineOfRegistered`), is of a record of the registration given with it: the record names that
 registration's digest, its registered blocks, which the line credits, are the registration's, and the line is the
 record's (`lineOfRecordOn`). -/
 def LineRegistered : Prop :=

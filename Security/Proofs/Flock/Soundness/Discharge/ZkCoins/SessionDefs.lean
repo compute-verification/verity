@@ -4,13 +4,13 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 
 /-!
-# The batched `--zk` session on committed coins (live/PROTOCOL.md §9, C-Flock ZK)
+# The batched `--zk` session on committed coins (live/PROTOCOL.md §9, Flock ZK)
 
-`sessionZKC` is `ZkSession.sessionZK` with its coins taken from C-Flock ZK's coin tree: the link points from the session
-stream's round 0 (index `none`), and the `t`-th coin draw of table `j`'s rep `r` from round `t` of stream
-`circuit/rep r` of table `j` (index `some (j, r, t)`), for `t < R` (C-Flock ZK: `R = 2^8` rounds a stream). A draw of
-type `C` reads its value off the round's block through the decoder `dc` gives for `C` (C-Flock ZK: the round's first `n`
-coins), which must be `Balanced`, i.e. uniform on uniform blocks. A draw past round `R`, or of a type `dc` has no
+`sessionZKC` is `ZkSession.sessionZK` with its coins taken from Flock ZK's coin tree: the link points from the session
+stream's round 0 (index `none`), and the `t`-th coin sample of table `j`'s rep `r` from round `t` of stream
+`circuit/rep r` of table `j` (index `some (j, r, t)`), for `t < R` (Flock ZK: `R = 2^8` rounds a stream). A sample of
+type `C` reads its value off the round's block through the decoder `dc` gives for `C` (Flock ZK: the round's first `n`
+coins), which must be `Balanced`, i.e. uniform on uniform blocks. A sample past round `R`, or of a type `dc` has no
 decoder for, is a live coin (`fresh`).
 
 The structure follows `sessionZK`: `TGame.interleave` and `TGame.batch` are `Game.interleave` and `Game.batch`, the two
@@ -73,20 +73,20 @@ open Classical in
 def Balanced {Blk C : Type} [Fintype Blk] [Fintype C] (d : Blk → C) : Prop :=
   ∀ c : C, Fintype.card C * (Finset.univ.filter fun b => d b = c).card = Fintype.card Blk
 
-/-- **How a committed round's block is read as a coin draw**: for each coin type, at most one balanced decoder. -/
+/-- **How a committed round's block is read as a coin sample**: for each coin type, at most one balanced decoder. -/
 structure Decoders (Blk : Type) [Fintype Blk] : Type 1 where
   dec : (C : Type) → [Fintype C] → [Nonempty C] → Option (Blk → C)
   balanced : ∀ (C : Type) [Fintype C] [Nonempty C] (d : Blk → C), dec C = some d → Balanced d
 
 variable {I Blk α : Type} [Fintype Blk]
 
-/-- A draw of type `C` from committed round `i` when `dc` decodes `C`, else a live coin. -/
+/-- A sample of type `C` from committed round `i` when `dc` decodes `C`, else a live coin. -/
 def coinAt (dc : Decoders Blk) (i : I) {C : Type} [Fintype C] [Nonempty C] (k : C → TGame I Blk α) : TGame I Blk α :=
   match dc.dec C with
   | some d => .coin i fun b => k (d b)
   | none => .fresh C k
 
-/-- **One stream's draws on committed rounds**: the `t`-th coin draw of `g` reads round `ix t` while `t < R`. -/
+/-- **One stream's samples on committed rounds**: the `t`-th coin sample of `g` reads round `ix t` while `t < R`. -/
 def tagRep (dc : Decoders Blk) {R : ℕ} (ix : Fin R → I) : ℕ → Game α → TGame I Blk α
   | _, .ret a => .ret a
   | t, .send M k => .send M fun m => tagRep dc ix t (k m)

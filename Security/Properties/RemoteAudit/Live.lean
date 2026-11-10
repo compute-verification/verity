@@ -14,7 +14,7 @@ verdict `checkWindowChunked`'s), and applies that verdict to the session as it s
 (`settle`, `Session.verifyBy`), other events between. The driver's transcript records each event as it came and each
 settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
 
-`Live` is that request loop on one session drawn `g` windows a coin, as a pure function: `step` is the process's
+`Live` is that request loop on one session sampled `g` windows a coin, as a pure function: `step` is the process's
 `event`, `verify` and `settle` on a running session, each giving its reply and the event the transcript records for it
 (none for a `verify`), and `run` takes a list of requests through it.
 
@@ -25,7 +25,7 @@ settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
   coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/remote_session/
   lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`RemoteAudit.Shared.run_one`).
 
-It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.RemoteAudit.Coins`: with none, an empty window drawn at its deadline
+It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.RemoteAudit.Coins`: with none, an empty window sampled at its deadline
 could take a root before its verdict is settled), which the process's `session` request checks (`Difftest.sessionOf`'s
 `positive`). The model is the process at two windows in flight, where `Verifier.eventOn`'s `Flight.step` is
 `Shared.step g` (`Flight.step_two`); a session at one in flight isn't in it, as no property covers one yet (`Flight`).
@@ -102,7 +102,7 @@ end Properties.RemoteAudit.Live
 
 namespace Properties.RemoteAudit
 
-/-- The process's run of a session from `State.init` drawn `g` windows a coin, on the coins it was sent, is
+/-- The process's run of a session from `State.init` sampled `g` windows a coin, on the coins it was sent, is
 `Shared.run g` on the events its transcript records, from `State.init` on coins `c` and append coins `a` that agree
 with them: the same results (each event's and settle's) and the same session, with `c` and `a`. -/
 def LiveIsRun : Prop :=

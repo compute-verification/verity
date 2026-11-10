@@ -11,8 +11,8 @@ public import Proofs.Properties.RemoteAudit.Frozen
 (`draw_keeps`). After it, `RecordKeptAfterDraw` keeps the record and the openable receipts on each side.
 
 The first event that draws window `t` on the first coins (`exists_first`) is the same on the second (`take_agree`, by
-induction with `ReleaseOrder`), and the second draws it there too: were it undrawn, `OpeningsUnreadUntilDrawn` back
-from the second coins would leave it undrawn on the first. Nor does the second draw it earlier, by the same lemma
+induction with `ReleaseOrder`), and the second draws it there too: were it unsampled, `OpeningsUnreadUntilDrawn` back
+from the second coins would leave it unsampled on the first. Nor does the second draw it earlier, by the same lemma
 from the first coins. Runs are taken over lists (`runL`), split by `runL_append`.
 -/
 

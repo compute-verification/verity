@@ -16,12 +16,12 @@ brings `b`:
 * part `s`'s circuit (`staged_circuit`) is table 0's, `v` and `out` where V\*'s rows put them, `v` an input row and `out`
   an output row, of `portWordsOf nv` and 128 words (`resSite_staged`, `checkPart_ns`);
 * check 5's rows are two of `portWordsOf nv` words (`resRows_dense`), so as wide as `v`'s port;
-* table 0 labels its instances `0..n-1` (`idx_of_dec`): setup checks the labels against the statement's draw
-  (`checkLabels`), and the decision's checks and last refusals make that draw every unit (`labels_full`). Setup alone
-  doesn't: without a draw `checkLabels` passes, and only the decision refuses that (`drawLaw`).
+* table 0 labels its instances `0..n-1` (`idx_of_dec`): setup checks the labels against the statement's sample
+  (`checkLabels`), and the decision's checks and last refusals make that sample every unit (`labels_full`). Setup alone
+  doesn't: without a sample `checkLabels` passes, and only the decision refuses that (`drawLaw`).
 
 The decision is part `s`'s, at its staged statement `xO`, not the inner statement's (`Rows.DecAt`, which reads the inner
-session `xI x` and says nothing of `xO`'s draw). An accepted run gives it at each part it stages (`partDec_run`).
+session `xI x` and says nothing of `xO`'s sample). An accepted run gives it at each part it stages (`partDec_run`).
 -/
 
 @[expose] public section

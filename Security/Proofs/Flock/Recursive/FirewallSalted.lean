@@ -4,7 +4,7 @@ public import Proofs.Flock.Recursive.FirewallZK
 public import Proofs.Flock.Soundness.ZK.HidingSalted
 
 /-!
-# The firewall's commitments when the worker reads the salts
+# The ZK server's commitments when the worker reads the salts
 
 The live firewall answers the worker each salt it drew, so a worker's later messages may read it: digest `i` reads the
 salts before `i` (`encSalted`). `FirewallZK.recursiveZK_salted` is `recursiveZK_enc` there, at the same

@@ -6,9 +6,9 @@ public import Proofs.Flock.VBridge.Residuals
 public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
-# The firewall's switched vectors at the packed table
+# The ZK server's switched vectors at the packed table
 
-`FinishSrc`'s `repCut_fw` asks its source's switched vectors to be the firewall's (`Finish.switchVec`), read off the
+`FinishSrc`'s `repCut_fw` asks its source's switched vectors to be the ZK server's (`Finish.switchVec`), read off the
 packed F-table `g` by the bits of its elements; the sources give the prover's (`FlockComplete.switchVec`), read off the
 trace's bits. At the packed table they agree, wherever the claim's point has the `m − 6` coordinates the PIOP's claims
 have (`switchVec_packed`): `eqTable` of its tail has `2^(m−7)` entries, each a word of `packed`, whose bit `v` is the
@@ -45,7 +45,7 @@ theorem packed_bit (tr : Trace) (m : ℕ) {y v : ℕ} (hy : y < 2 ^ (m - 7)) (hv
     exact foldl_ite_add (fun v => tr.z[128 * y + v]!) F128.monomial (List.range 128) 0
   rw [e, Flock.RecAlgebra.bit_eq_bitOf _ hv, FlockVBridge.bitOf_ofBits _ hv]
 
-/-- **The firewall's switched vector at the packed table is the prover's**, at a claim with `m − 6` coordinates. -/
+/-- **The ZK server's switched vector at the packed table is the prover's**, at a claim with `m − 6` coordinates. -/
 theorem switchVec_packed {m : ℕ} (hm : 7 ≤ m) (tr : Trace) (c : Claim) (hx : c.x.size = m - 6) :
     Flock.Firewall.Finish.switchVec (packed tr m) c = FlockComplete.switchVec tr c := by
   have hsz : (eqTable (c.x.extract 1 c.x.size)).size = 2 ^ (m - 7) := by

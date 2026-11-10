@@ -10,7 +10,7 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
-5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
+5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` samples t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
    Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
@@ -163,7 +163,7 @@ def tickets(scheme: PoUWScheme, workload: Workload, refs: Sequence[TileRef]) -> 
 
 @dataclass(frozen=True, slots=True)
 class Sampled:
-    """t independent work-weighted draws with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
+    """t independent work-weighted samples with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
 
     t: int
 
@@ -284,7 +284,7 @@ class Verifier:
 
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
-        """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
+        """Sample, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
         for the epoch's sampling coin after the transcript is recorded; on one without, the sample's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)

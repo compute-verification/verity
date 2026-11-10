@@ -240,7 +240,7 @@ theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive :=
 
 /-! ## A wipe's survivor bound and the survivor bound at a fraction -/
 
-/-- **The bits of foreign content a block keeps** on the draw `x = (z, ω, c)` of the wipe's game (foreign content, seed
+/-- **The bits of foreign content a block keeps** on the sample `x = (z, ω, c)` of the wipe's game (foreign content, seed
 and spot reads), when the device's state at the boundary holds `z` by `hold` and the block reads it back by `keep`: all
 `S_φ` bits when `keep` gives back `z`, none otherwise. -/
 def Live.kept {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ} {sched : Verity.Blocks D B} {b : Fin B}

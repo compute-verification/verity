@@ -7,7 +7,7 @@ import all Init.Data.Range.Basic
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
 
-The firewall's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
+The ZK server's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
 `Loop.schedSoFar`), stops at `ρ₀, ρ₁` dependent over F128, right after `ρ₁`'s squeeze. So a schedule that runs to its
 end on the stream's coins was answered independent `ρ₀, ρ₁`, at Ligerito's rounds `k₀ + 2` and `k₀ + 3`, past the ring
 switch's:

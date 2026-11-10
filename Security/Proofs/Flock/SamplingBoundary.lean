@@ -3,9 +3,9 @@ module
 public import Definitions.Claims.Sampling
 
 /-!
-# The sampling block's faulty set is the boundary form's
+# The sampling block's incorrect set is the boundary form's
 
-`Claims.Sampling.faultyBoundary : Claims.Sampling.FaultyBoundary`. A proof unit's check reads its interior values
+`Claims.Sampling.faultyBoundary : Claims.Sampling.FaultyBoundary`. A proof block's check reads its interior values
 nowhere: a value it reads from outside it is committed, and a gate of it computes from its own wires as it computes them
 and from an input's committed value, which is on its boundary (`runIn_refIn`). So it is correct under some interior
 exactly when it is correct on the committed values, under any interior (`core`).
@@ -70,7 +70,7 @@ theorem ref_input {u : List ℕ} {val : ℕ → Option Bool} {ι : ℕ → Bool}
     C.refIn u val ι i = val i :=
   ref_boundary C (boundary_input C h)
 
-/-- **A proof unit computes the same whatever its interior**: a gate of `u` reads a wire of `u` as `u` computes it, a
+/-- **A proof block computes the same whatever its interior**: a gate of `u` reads a wire of `u` as `u` computes it, a
 wire outside `u` as committed, and an input's own value, on `u`'s boundary, as committed. -/
 theorem runIn_refIn (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
     ∀ g, C.runIn (C.refIn u val ι) u g = C.runIn val u g := by
@@ -91,7 +91,7 @@ theorem runIn_refIn (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Boo
       · rw [if_neg hiu, if_neg hiu]
         exact read_congr C (ref_out C hiu)
 
-/-- **The core**: a proof unit is correct under an interior exactly when it is correct on the committed values. -/
+/-- **The core**: a proof block is correct under an interior exactly when it is correct on the committed values. -/
 theorem core (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
     C.Correct (C.refIn u val ι) u ↔ C.Correct val u := by
   unfold Prog.Correct
@@ -102,7 +102,7 @@ theorem core (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
 end Claims.Sampling.Boundary
 
 open Claims.Sampling.Boundary in
-/-- **The faulty set is the boundary form's** (`Claims.Sampling.FaultyBoundary`). -/
+/-- **The incorrect set is the boundary form's** (`Claims.Sampling.FaultyBoundary`). -/
 theorem Claims.Sampling.faultyBoundary : Claims.Sampling.FaultyBoundary := by
   intro H Cm s P w v u _ hu _ _
   simp only [Claims.Sampling.Faulty, Claims.Sampling.BoundaryFaulty, hu, Option.some.injEq, exists_eq_left']

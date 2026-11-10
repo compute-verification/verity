@@ -14,7 +14,7 @@ run's registered claim `i` (`ClaimRel`). `ClaimRel`'s sizes are `coinClaim`'s an
 the tie is two facts about the run's claims:
 
 * `PointTie`: claim `i`'s point is the one `coinClaim` builds it at, rep `i`'s sparse coins zero-padded to R's `m`
-  (`coinPt`). Those coins are the coin server's at the verifier's record, so this says the record's sparse coins are
+  (`coinPt`). Those coins are the challenger's live-coin part's at the verifier's record, so this says the record's sparse coins are
   the run's.
 * `ValueTie`: claim `i`'s value is the one w holds at `rec-claim`.
 

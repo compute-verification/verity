@@ -10,7 +10,7 @@ public import Proofs.Flock.SessionLoop.FinRepL0
 
 `finishIs_of_ret` takes three facts beyond `SessionLoopZKDeployed`'s premises: the ring switch's target
 (`Loop.finRepTarget`), the restart (`Loop.finRepRestart`) and level 0's openings (`Loop.finRepL0`). Each holds in the
-masked scope with a witness where the loop draws level 0 from the tape (`Loop.Src`'s level-0 half).
+masked scope with a witness where the loop samples level 0 from the tape (`Loop.Src`'s level-0 half).
 
 **`Loop.finishIsOn`**: `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis; `Loop.finishIs` is
 it at causal switched values.

@@ -13,7 +13,7 @@ public import Proofs.Accounting.Headline.Luck
   whole tile's at its guess bound; a tile of no credited kind is held to `1`.
 * **Two events**: `ServiceBudget` at `shareCone` and `budget_tail` at `t = ln(1/δ_s)` bound the accepted runs with
   `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s` (`S_F`, `S_0` the folded and whole shares at `shareCone`), and
-  `DrawnRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted drawn tile is right, so `Of`
+  `DrawnRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted sampled tile is right, so `Of`
   gives the play's ideal game's pass, which is the share game's.
 * **The words** (`work_of_bounds`): off both, `UnitFixed` and `ServiceCovers` give the good tiles' words at least
   `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped whole at

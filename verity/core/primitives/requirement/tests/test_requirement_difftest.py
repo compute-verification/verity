@@ -8,7 +8,7 @@ engine steps, its ingress and its credits. The reference is `requirement.py`'s: 
 `Execution`, its `live`, `reads` and bits, `Layout.blocks` and `bits_in`, `credited`, `credited_reads`,
 `Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and `credits`.
 
-Drawn instances are small wirings with executions that follow them and some that don't, under `pack`'s layout and store,
+Sampled instances are small wirings with executions that follow them and some that don't, under `pack`'s layout and store,
 `paged`'s (a KV pool's, whose blocks fill over several steps), `deferred`'s (either of those with each block's coin back
 late: memory-map/v1's deferred residency, credited from its first encoded read), a mutation of `pack`'s or a random
 one, placed on a few
@@ -188,7 +188,7 @@ def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits:
                         for X, m, lo, hi, s, length in windows]}
 
 
-# --- drawn instances ---------------------------------------------------------------------------------------------------
+# --- sampled instances ---------------------------------------------------------------------------------------------------
 
 WIDTHS = [0, 1, 3, 8, 16, 32]
 
@@ -428,7 +428,7 @@ def test_requirement_agrees(server):
 
 
 def test_the_drawn_links_both_hold_and_fail(server):
-    """The drawn instances reach both verdicts of each link and of `topological`, so the agreement on them says
+    """The sampled instances reach both verdicts of each link and of `topological`, so the agreement on them says
     something."""
     outs = [out for seed in range(300) if (out := _lean(drawn(seed), server)) is not None]
     seen = {(k, s[k]) for out in outs for s in out["steps"] for k in ("store_matches", "plan_matches")}
@@ -493,7 +493,7 @@ def _paced(ticks: list[list[int]], X, b: int) -> bool:
 
 
 def test_windows_bound_their_steps(server):
-    """`RequirementStepsInner` and `RequirementStepsOuter` on Lean's outputs, only the window's devices paced: a drawn
+    """`RequirementStepsInner` and `RequirementStepsOuter` on Lean's outputs, only the window's devices paced: a sampled
     window that begins no later than any of its devices begins step `start` and ends no earlier than any begins step
     `start + len` holds the gates of those steps, one that begins no earlier and ends no later is held by them, and the
     inclusions are often strict."""
@@ -518,7 +518,7 @@ def test_windows_bound_their_steps(server):
 
 def test_run_inputs_are_in_no_region(server):
     """A run input is an input gate wherever it is placed, so it is in no region and no window's gates of its steps,
-    though the drawn windows often hold one on a device of theirs at a tick of theirs, where a gate would be credited."""
+    though the sampled windows often hold one on a device of theirs at a tick of theirs, where a gate would be credited."""
     held = 0
     for seed in range(400):
         if (out := _lean(value := drawn(seed), server)) is None:

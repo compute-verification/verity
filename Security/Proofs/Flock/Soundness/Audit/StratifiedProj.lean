@@ -3,14 +3,14 @@ module
 public import Proofs.Flock.Soundness.Audit.HarmBound
 
 /-!
-# The stratified law, one stratum at a time
+# The stratified sampling design, one stratum at a time
 
-`Law.stratified σ k hk` draws an independent uniform `k s`-subset inside each stratum `s` of `σ`; its coin `ω` holds
+`Law.stratified σ k hk` samples an independent uniform `k s`-subset inside each stratum `s` of `σ`; its coin `ω` holds
 them, stratum `s`'s at `ω s`. With `n_s = |stratum σ s|` and `m_s = |B.filter (σ · = s)|`:
 
 * `stratified_proj_escape`: **the per-stratum projection**. Stratum `s`'s coordinate of the coin, `(ω s).1`, misses a
   set `B` with stratum `s`'s hypergeometric factor `C(n_s − m_s, k_s) / C(n_s, k_s)`, the factor of `s` in
-  `stratified_escape`. A consumer that draws one stratum by itself (PoUW's tile stratum) cites this for its coin.
+  `stratified_escape`. A consumer that samples one stratum by itself (PoUW's tile stratum) cites this for its coin.
 * `stratified_proj_escape_eq_exp`: the same factor is `exp(−stratumRisk σ k s m_s)` when `m_s + k_s ≤ n_s`: stratum
   `s`'s exact risk is minus the log of its coordinate's escape.
 * `stratified_escape_eq_exp`: so `B`'s escape is `exp(−∑ s stratumRisk σ k s m_s)`. The detection budget a set spends,
@@ -29,7 +29,7 @@ namespace Law
 
 variable {n m : ℕ}
 
-/-- **The per-stratum projection**: stratum `s`'s coordinate of the stratified law's coin misses `B` with stratum `s`'s
+/-- **The per-stratum projection**: stratum `s`'s coordinate of the stratified sampling design's coin misses `B` with stratum `s`'s
 hypergeometric factor, `C(n_s − m_s, k_s) / C(n_s, k_s)` with `n_s = |stratum σ s|` and `m_s = |B.filter (σ · = s)|`. -/
 theorem stratified_proj_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (B : Finset (Fin n)) :
