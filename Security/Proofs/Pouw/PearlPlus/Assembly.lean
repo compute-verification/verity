@@ -31,7 +31,7 @@ def TileOf (p : Pass) (tid : ℕ) (U : Pouw.PearlC.Workload) (g : ℕ) : Prop :=
     (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).m = p.records[pos]!.matmul.m ∧
     (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k = p.records[pos]!.matmul.k ∧
     (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).n = p.records[pos]!.matmul.n ∧
-    U.layout.wid ((auditTiling 64 64 U.layout).unit g) = p.records[pos]!.matmul.weight ∧
+    U.layout.fixedId ((auditTiling 64 64 U.layout).unit g) = p.records[pos]!.matmul.weight ∧
     (auditTiling 64 64 U.layout).rows g = rows.toFinset ∧ (auditTiling 64 64 U.layout).cols g = cols.toFinset
 
 /-- Commitment `c`'s ticket and useful words on a tile's rows and columns, row by row, as the check's `Checked`. -/
@@ -69,10 +69,10 @@ def commitHashed (p : Pass) (tid : ℕ) (c : Pouw.PearlC.Commit) : List ByteArra
 def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit) : Prop :=
   ∀ pos rows cols, p.tile? tid = some (pos, rows, cols) →
     o.a.map (fun x => openedValue x.value) = rows.map (rowBytesOf c.act (U.layout.shape u).k) ∧
-    o.b.map (fun x => openedValue x.value) = cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k) ∧
+    o.b.map (fun x => openedValue x.value) = cols.map (rowBytesOf (U.fixed (U.layout.fixedId u)) (U.layout.shape u).k) ∧
     openedValue o.leaf.value = Words.leaf (commitWords c rows cols) ∧
     (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, c.act i l < 2 ^ 32) ∧
-    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) ∧
+    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.fixed (U.layout.fixedId u) j l < 2 ^ 32) ∧
     ∀ i ∈ rows, ∀ j ∈ cols, c.ticket i j < 2 ^ 32 ∧ c.useful i j < 2 ^ 32
 
 /-- **(d) A passed tile's words are good**: a tile of a pass `load` gives, which is audit tile `g` of `U`, under the
@@ -86,11 +86,11 @@ def TilePassGivesTheWords : Prop :=
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
-    bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
-      rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)) →
+    bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
+      rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-      (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
-        (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
+      (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).fixedOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
+        (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨
       ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
@@ -654,7 +654,7 @@ theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) :
     have hx! := getElem!_pos rows x hx
     have hz! := getElem!_pos cols z hz
     have hWx := wordsAreTheSemantics saltOf rootOf ρ H s U ((auditTiling 64 64 U.layout).unit g) c.act p.salt
-      ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) wn' rows cols
+      ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) wn' rows cols
       ops ch hsalt hroot hK
       (fun i hi => Assembly.rows_lt (by rw [hrows]; exact List.mem_toFinset.2 hi))
       (fun j hj => Assembly.cols_lt (by rw [hcols]; exact List.mem_toFinset.2 hj))

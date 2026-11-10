@@ -72,15 +72,15 @@ def WordsAreTheSemantics : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops)
     (ch : Words.Checked),
-    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) → (U.layout.shape u).k ≤ 2 ^ 16 →
+    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.fixedId u) → (U.layout.shape u).k ≤ 2 ^ 16 →
     (∀ i ∈ rows, i < (U.layout.shape u).m) → (∀ j ∈ cols, j < (U.layout.shape u).n) →
     (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32) →
-    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) →
+    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.fixed (U.layout.fixedId u) j l < 2 ^ 32) →
     (∀ j ∈ cols, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).n (U.layout.shape u).k
-      (U.weight (U.layout.wid u)) j) →
+      (U.fixed (U.layout.fixedId u)) j) →
     Words.fixedNoise salt rootB (U.layout.shape u).k = .ok wn →
     Words.encode salt rootB wn u (U.layout.shape u).k rows (rows.map (rowBytesOf act (U.layout.shape u).k)) cols
-      (cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k)) = .ok ops →
+      (cols.map (rowBytesOf (U.fixed (U.layout.fixedId u)) (U.layout.shape u).k)) = .ok ops →
     Words.checked ops = .ok ch →
     ∀ x < rows.length, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act
         rows[x]! →

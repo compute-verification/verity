@@ -61,15 +61,15 @@ A′ and B̃ codes of a word whose row passes the rules is `word_debit` on the s
 def ReplayReadsTheCodes : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops),
-    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) → (U.layout.shape u).k ≤ 2 ^ 16 →
+    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.fixedId u) → (U.layout.shape u).k ≤ 2 ^ 16 →
     (∀ i ∈ rows, i < (U.layout.shape u).m) → (∀ j ∈ cols, j < (U.layout.shape u).n) →
     (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32) →
-    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) →
+    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.fixed (U.layout.fixedId u) j l < 2 ^ 32) →
     (∀ j ∈ cols, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).n (U.layout.shape u).k
-      (U.weight (U.layout.wid u)) j) →
+      (U.fixed (U.layout.fixedId u)) j) →
     Words.fixedNoise salt rootB (U.layout.shape u).k = .ok wn →
     Words.encode salt rootB wn u (U.layout.shape u).k rows (rows.map (rowBytesOf act (U.layout.shape u).k)) cols
-      (cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k)) = .ok ops →
+      (cols.map (rowBytesOf (U.fixed (U.layout.fixedId u)) (U.layout.shape u).k)) = .ok ops →
     ∀ (x z : ℕ) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n), rows[x]? = some i.val →
       cols[z]? = some j.val → (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
       Rule.wordDebit ops.a.codes[x]! ops.b.codes[z]! =
@@ -348,7 +348,7 @@ theorem liveRow_eq (x : Array ℕ) : Rule.liveRow x = decide (64 * (∑ l ∈ Fi
 
 /-- **`live_row` is `LiveRow`** at δ = 1 under `Stat.every8`, on a row of finite words. -/
 theorem liveRow_iff {x : Array ℕ} (hk : 0 < x.size) (hx : ∀ l < x.size, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome) :
-    Rule.liveRow x = true ↔ LiveRow Params.pi.δ (rowVals x.size x) Stat.every8 := by
+    Rule.liveRow x = true ↔ LiveRow Params.pi.σ (rowVals x.size x) Stat.every8 := by
   have hsq : ∀ l < x.size, (Rule.sq300 x[l]! : ℚ) = (wordQ x[l]!).getD 0 ^ 2 * 2 ^ 300 := by
     intro l hl
     obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 (hx l hl).2
@@ -390,7 +390,7 @@ theorem liveRow_iff {x : Array ℕ} (hk : 0 < x.size) (hx : ∀ l < x.size, x[l]
       _ = _ := (Finset.sum_mul _ _ _).symm
   have key : ∀ l (hl : l < x.size), (Rule.sq300 x[l]! * ((x.size + 7) / 8) ≥
       64 * ∑ j ∈ Finset.range ((x.size + 7) / 8), Rule.sq300 x[8 * j]!) ↔
-      64 * Params.pi.δ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x ⟨l, hl⟩ ^ 2 := by
+      64 * Params.pi.σ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x ⟨l, hl⟩ ^ 2 := by
     intro l hl
     have hcast : (Rule.sq300 x[l]! * ((x.size + 7) / 8) ≥
         64 * ∑ j ∈ Finset.range ((x.size + 7) / 8), Rule.sq300 x[8 * j]!) ↔
@@ -406,13 +406,13 @@ theorem liveRow_iff {x : Array ℕ} (hk : 0 < x.size) (hx : ∀ l < x.size, x[l]
     rw [one_pow, mul_one, ← mul_div_assoc, div_le_iff₀ hK, ← mul_assoc, mul_right_comm (Y ^ 2)]
     exact ⟨fun h => le_of_mul_le_mul_right h h300, fun h => mul_le_mul_of_nonneg_right h h300.le⟩
   have hcount : (Finset.univ.filter fun l : Fin x.size =>
-      64 * Params.pi.δ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x l ^ 2).card =
+      64 * Params.pi.σ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x l ^ 2).card =
       ∑ l ∈ Finset.range x.size, if Rule.sq300 x[l]! * ((x.size + 7) / 8) ≥
         64 * ∑ j ∈ Finset.range ((x.size + 7) / 8), Rule.sq300 x[8 * j]! then 1 else 0 := by
     rw [Finset.card_filter, ← Fin.sum_univ_eq_sum_range (fun l => if Rule.sq300 x[l]! * ((x.size + 7) / 8) ≥
         64 * ∑ j ∈ Finset.range ((x.size + 7) / 8), Rule.sq300 x[8 * j]! then 1 else 0) x.size]
     refine Finset.sum_congr rfl fun l _ => ?_
-    by_cases h : 64 * Params.pi.δ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x l ^ 2
+    by_cases h : 64 * Params.pi.σ ^ 2 * Stat.every8 x.size (rowVals x.size x) ≤ rowVals x.size x l ^ 2
     · rw [ite_eq_left h, ite_eq_left ((key l.val l.isLt).2 h)]
     · rw [ite_eq_right h, ite_eq_right fun h' => h ((key l.val l.isLt).1 h')]
   rw [liveRow_eq, decide_eq_true_iff, LiveRow, hcount]
@@ -470,7 +470,7 @@ theorem rowPasses_iff {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ →
     rw [floorOK_iff hρ32 hα32 hr haw hr0 ha0, ← floor_nonneg_iff hρ32 hα32 hr haw (mul_nonneg hr0 ha0) hbd
       (ra_gap hρ32 hα32 hr haw hr0 ha0)]
     constructor <;> intro h <;> linarith
-  have hL : Rule.liveRow x = true ↔ LiveRow Params.pi.δ (rowVals k x) Stat.every8 := by
+  have hL : Rule.liveRow x = true ↔ LiveRow Params.pi.σ (rowVals k x) Stat.every8 := by
     subst hxk; exact liveRow_iff hk hxw
   unfold PearlCSem.RowOK
   rw [Rule.rowPasses, Bool.and_eq_true]
