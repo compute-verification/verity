@@ -4479,7 +4479,10 @@
   },
   "NetTiming.SecurityProofs.PeriodLeakChecked": {
    "honest": ["NetTiming.Witness.PeriodLeakChecked_honest"],
-   "nontrivial": "NetTiming.Witness.PeriodLeakChecked_nontrivial"
+   "nontrivial": [
+    "NetTiming.Witness.PeriodLeakChecked_nontrivial",
+    "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion"
+   ]
   },
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
    "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
@@ -19189,6 +19192,9 @@
    "owner": "@network-accounting"
   },
   "NetTiming.Witness.PeriodLeakChecked_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion": {
    "owner": "@network-accounting"
   },
   "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
