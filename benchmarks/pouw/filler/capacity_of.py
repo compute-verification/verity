@@ -23,8 +23,7 @@ import json
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
 from verity_machine_model import capacity as C  # noqa: E402
 from verity_machine_model import eps as E  # noqa: E402
 
