@@ -31,7 +31,7 @@ _spec = importlib.util.spec_from_file_location(
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
-WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(32), bytes(range(64))
+WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(64), bytes(range(64))
 SHAPE = {"LP": 4, "T": 2}
 PHI = _phi(TINY, tp={"world": WORLD, "rank": 0})
 NODE = build_node_program(PHI, "request", **SHAPE)
