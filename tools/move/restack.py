@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... [--move-commit SHA... [--script S [--script-arg ARG]...]] [--onto REF] [--main REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... [--move-commit SHA... [--script S [--script-arg ARG]...]] [--onto REF] [--main REF] [--push-to NEWBRANCH] [--kept] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 With no `--move-commit`, the moves are every commit `--main` (default origin/main) has and the branch lacks whose message
@@ -26,9 +26,10 @@ same script rather than by rename detection:
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
-and the same for every branch. A check that passed is kept as a file under `~/.cache/verity-check/restack-generated/`, in
-the check's cache, so on one machine the first restack across a move pays for it and the rest read it. The file's key is everything that decides the check (`generated_key`); a file that is unreadable, malformed
-or of another key is not read, and the script runs.
+and the same for every branch. With `--kept`, a check that passed is kept as a file under
+`~/.cache/verity-check/restack-generated/`, in the check's cache, and one kept there is read: on one machine the first
+restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
+(`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
@@ -75,11 +76,14 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
-#: where `check_generated` keeps the moves it found generated, a file a key (`kept_path`): in the check's cache, at its
-#: default place (`tools/verity/check/common.cache_dir`; this file runs alone, and reads no setting). On a node that is the
-#: one directory every run shares: a run's clone, with its `.git`, is removed when the run ends, so a file kept there
-#: would never be read
-KEPT = "~/.cache/verity-check/restack-generated"
+#: where `--kept` keeps the moves `check_generated` found generated, a file a key (`kept_path`): in the check's cache, at its
+#: default place (`tools/verity/check/common.cache_dir`). On a node that is the one directory every run shares: a run's
+#: clone, with its `.git`, is removed when the run ends, so a file kept there would never be read
+KEPT_DIR = "~/.cache/verity-check/restack-generated"
+#: whether `check_generated` reads and writes `KEPT_DIR` (`--kept`). Off, as in drive's jobs and in every test that reaches
+#: this file, it reads nothing of the machine's and leaves nothing on it: the suites give each test a `$CHECK_CACHE` of its
+#: own, which this file doesn't read
+KEEP = False
 #: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
 WORKTREES_LOCK = "research-worktrees.lock"
@@ -304,8 +308,9 @@ def generated_key(move: str, base: str, python: str, cwd: str | None) -> dict:
 
 
 def kept_path(key: dict) -> str:
-    """The file of the check under `key`, in `KEPT`."""
-    return os.path.join(os.path.expanduser(KEPT), hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest() + ".json")
+    """The file of the check under `key`, in `KEPT_DIR`."""
+    name = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest() + ".json"
+    return os.path.join(os.path.expanduser(KEPT_DIR), name)
 
 
 def kept_generated(key: dict, tree: str) -> bool:
@@ -321,8 +326,8 @@ def kept_generated(key: dict, tree: str) -> bool:
         kept = f"unreadable: {e}"
     if kept == {"key": key, "tree": tree}:
         return True
-    print(f"restack.py: {path} isn't this check, kept ({kept if isinstance(kept, str) else 'another key or tree'}): "
-          "the script runs", file=sys.stderr)
+    why = kept if isinstance(kept, str) else "another key or tree"
+    print(f"restack.py: {path} is not this check's kept result ({why}): the script runs", file=sys.stderr)
     return False
 
 
@@ -346,13 +351,14 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
     fixups) taken as the move would make the third merge undo them, while every branch still reported clean.
 
-    A check that passed is kept (`kept_path`) under everything that decides it (`generated_key`), so a later restack of
-    another branch across the same move, in another process, doesn't run the script on the base again. Only a pass is kept,
-    and a kept file counts only when it records this very key and the move's own tree: anything else runs the script."""
+    With `KEEP`, a check that passed is kept (`kept_path`) under everything that decides it (`generated_key`), so a later
+    restack of another branch across the same move, in another process, doesn't run the script on the base again. Only a
+    pass is kept, and a kept file counts only when it records this very key and the move's own tree: anything else runs
+    the script."""
     key = (move, base, python, SCRIPT, SCRIPT_ARGS)
     if key not in _GENERATED:
-        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd)
-        if kept_generated(full, want):
+        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd) if KEEP else None
+        if full and kept_generated(full, want):
             print(f"restack.py: {move[:12]} is what {SCRIPT} writes on {base[:12]}, as checked before ({kept_path(full)})",
                   file=sys.stderr)
             _GENERATED[key] = want
@@ -361,7 +367,7 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                 _GENERATED[key] = run_script(base, base, python, cwd)[0]
             except ScriptFailed as e:
                 raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
-            if _GENERATED[key] == want:
+            if full and _GENERATED[key] == want:
                 keep_generated(full, want)
     if _GENERATED[key] != tree_of(move, cwd):
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
@@ -508,7 +514,7 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    global SCRIPT, SCRIPT_ARGS
+    global SCRIPT, SCRIPT_ARGS, KEEP
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA",
@@ -528,6 +534,9 @@ def main(argv: list[str] | None = None) -> int:
                          "(a rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
+    ap.add_argument("--kept", action="store_true",
+                    help=f"keep each move's check, once it passed, under {KEPT_DIR}/, and read one kept there: on one "
+                         "machine only the first restack across a move runs the script on the move's base")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
     ap.add_argument("--no-pins", action="store_true", help=f"don't run the result's {PINS} --regen")
     ap.add_argument("--json", action="store_true")
@@ -538,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--script, --script-arg and --base are one --move-commit's")
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
+    KEEP = a.kept
     named = [(m, a.script or SCRIPT, tuple(a.script_arg)) if a.script or a.script_arg
              else (m, *(move_line(m, None) or (SCRIPT, ()))) for m in a.move_commit]
     results = []

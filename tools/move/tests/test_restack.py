@@ -41,10 +41,17 @@ def _git_identity(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def cache(monkeypatch, tmp_path):
-    """Each test's own directory of kept checks, so that none reads or writes this machine's; and no check left in memory."""
-    monkeypatch.setattr(RS, "KEPT", str(tmp_path / "kept"))
+    """No check left in memory, and a directory of kept checks that is the test's own, whatever it turns on."""
+    monkeypatch.setattr(RS, "KEPT_DIR", str(tmp_path / "kept"))
     monkeypatch.setattr(RS, "_GENERATED", {})
     return tmp_path / "kept"
+
+
+@pytest.fixture
+def kept(monkeypatch, cache):
+    """`--kept`: checks are kept in the test's directory, and read from it."""
+    monkeypatch.setattr(RS, "KEEP", True)
+    return cache
 
 
 def git(repo: Path, *args: str) -> str:
@@ -271,7 +278,24 @@ def on_base(monkeypatch):
     return ran
 
 
-def test_a_move_found_generated_is_kept_and_a_later_restack_does_not_run_the_script_on_its_base(repo, cache, on_base, capsys):
+def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):
+    """As drive runs it, and every test that reaches this file: the script runs on the base in each process, nothing is left
+    on the machine, and a check another run kept there is not read."""
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    move, base = git(repo, "rev-parse", "move"), git(repo, "rev-parse", "base")
+    for _ in range(2):
+        on_base.again()
+        assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [base] and not cache.exists()
+    RS.keep_generated(RS.generated_key(move, base, sys.executable, str(repo)), git(repo, "rev-parse", "move^{tree}"))
+    on_base.again()
+    assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [base]
+    home = {**os.environ, "HOME": str(cache.parent)}
+    p = subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--dry-run", "--json"],
+                       cwd=repo, env=home, capture_output=True, text=True)
+    assert json.loads(p.stdout)[0]["status"] == "clean" and not (cache.parent / ".cache").exists()
+
+
+def test_a_move_found_generated_is_kept_and_a_later_restack_does_not_run_the_script_on_its_base(repo, kept, on_base, capsys):
     """Each branch at the cut crosses the same move in a process of its own: only the first runs the script on the base."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     git(repo, "branch", "other", "pr")
@@ -279,13 +303,14 @@ def test_a_move_found_generated_is_kept_and_a_later_restack_does_not_run_the_scr
     first = RS.restack("pr", "move", cwd=str(repo))
     move, base = git(repo, "rev-parse", "move"), git(repo, "rev-parse", "base")
     assert first["status"] == "clean" and on_base == [base]
-    [kept] = cache.iterdir()
+    [file] = kept.iterdir()
     key = RS.generated_key(move, base, sys.executable, str(repo))
-    assert kept == Path(RS.kept_path(key)) and json.loads(kept.read_text()) == {"key": key, "tree": git(repo, "rev-parse", "move^{tree}")}
+    assert file == Path(RS.kept_path(key))
+    assert json.loads(file.read_text()) == {"key": key, "tree": git(repo, "rev-parse", "move^{tree}")}
     assert "as checked before" not in capsys.readouterr().err
     on_base.again()
     again, other = RS.restack("pr", "move", cwd=str(repo)), RS.restack("other", "move", cwd=str(repo))
-    assert on_base == [] and f"as checked before ({kept})" in capsys.readouterr().err
+    assert on_base == [] and f"as checked before ({file})" in capsys.readouterr().err
     assert again["status"] == other["status"] == "clean"
     assert RS.tree_of(again["result"], str(repo)) == RS.tree_of(first["result"], str(repo))
     assert show(repo, other["result"], "app/extra.py") == "import app.core.util\n"
@@ -295,8 +320,8 @@ def test_a_second_restack_py_finds_the_first_one_s_check(repo, cache):
     """The command an owner runs, twice: the second process reads the file the first one wrote, and gives the same tree."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     home = {**os.environ, "HOME": str(cache.parent)}
-    runs = [subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--dry-run", "--json"],
-                           cwd=repo, env=home, capture_output=True, text=True) for _ in range(2)]
+    runs = [subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--kept", "--dry-run",
+                            "--json"], cwd=repo, env=home, capture_output=True, text=True) for _ in range(2)]
     first, second = (json.loads(p.stdout)[0] for p in runs)
     assert first["status"] == second["status"] == "clean"
     assert RS.tree_of(first["result"], str(repo)) == RS.tree_of(second["result"], str(repo))
@@ -356,7 +381,7 @@ def test_the_uv_in_a_kept_check_s_key_is_the_one_the_script_runs_under(repo, mon
         assert RS.generated_key(move, base, sys.executable, str(repo))["uv"] == want
 
 
-def test_a_changed_interpreter_at_the_same_path_runs_the_script_on_the_base_again(repo, tmp_path, on_base):
+def test_a_changed_interpreter_at_the_same_path_runs_the_script_on_the_base_again(repo, tmp_path, kept, on_base):
     """A machine's `python3` replaced by another version keeps its path: the kept check is the old interpreter's."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     python = _reports(tmp_path / "python", sys.executable, "3.12.3 (main)")
@@ -384,27 +409,28 @@ BAD = {"empty": lambda text: "", "cut short": lambda text: text[:len(text) // 2]
 
 
 @pytest.mark.parametrize("bad", BAD)
-def test_a_kept_file_that_is_unreadable_malformed_or_of_another_key_is_never_trusted(repo, cache, on_base, capsys, bad):
+def test_a_kept_file_that_is_unreadable_malformed_or_of_another_key_is_never_trusted(repo, kept, on_base, capsys, bad):
     """Whatever stands at the kept check's path that isn't this key with the move's own tree: it is named, and the script runs
     on the base."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     first = RS.restack("pr", "move", cwd=str(repo))
-    [kept] = cache.iterdir()
-    good = kept.read_text()
+    [file] = kept.iterdir()
+    good = file.read_text()
     if BAD[bad] is None:
-        kept.unlink()
-        kept.mkdir()             # unreadable to any user, root included
+        file.unlink()
+        file.mkdir()             # unreadable to any user, root included
     else:
-        kept.write_bytes(BAD[bad](good).encode("latin-1"))
+        file.write_bytes(BAD[bad](good).encode("latin-1"))
     on_base.again()
     again = RS.restack("pr", "move", cwd=str(repo))
-    assert on_base == [git(repo, "rev-parse", "base")] and f"{kept} isn't this check" in capsys.readouterr().err
+    assert on_base == [git(repo, "rev-parse", "base")]
+    assert f"{file} is not this check's kept result" in capsys.readouterr().err
     assert again["status"] == "clean" and RS.tree_of(again["result"], str(repo)) == RS.tree_of(first["result"], str(repo))
     if BAD[bad] is not None:
-        assert kept.read_text() == good, "the pass is kept again, whole"
+        assert file.read_text() == good, "the pass is kept again, whole"
 
 
-def test_a_move_the_script_did_not_write_is_never_kept_and_no_kept_file_passes_it(repo, cache, on_base):
+def test_a_move_the_script_did_not_write_is_never_kept_and_no_kept_file_passes_it(repo, kept, on_base):
     """Only a pass is kept. A file that records, under the hand-fixed commit's key, the tree the script does write is not that
     commit's tree, so the script runs and the commit is refused as before."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
@@ -415,7 +441,7 @@ def test_a_move_the_script_did_not_write_is_never_kept_and_no_kept_file_passes_i
         on_base.again()
         with pytest.raises(SystemExit, match="isn't what tools/move/layout.py writes"):
             RS.restack("pr", fixed, base="base", cwd=str(repo))
-        assert on_base == [base] and not cache.exists()
+        assert on_base == [base] and not kept.exists()
     RS.keep_generated(RS.generated_key(fixed, base, sys.executable, str(repo)), git(repo, "rev-parse", "move^{tree}"))
     on_base.again()
     with pytest.raises(SystemExit, match="isn't what tools/move/layout.py writes"):
@@ -423,10 +449,10 @@ def test_a_move_the_script_did_not_write_is_never_kept_and_no_kept_file_passes_i
     assert on_base == [base]
 
 
-def test_a_cache_that_cannot_be_written_keeps_nothing_and_fails_no_restack(repo, tmp_path, monkeypatch, on_base, capsys):
+def test_a_cache_that_cannot_be_written_keeps_nothing_and_fails_no_restack(repo, tmp_path, monkeypatch, kept, on_base, capsys):
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     (tmp_path / "a-file").write_text("")
-    monkeypatch.setattr(RS, "KEPT", str(tmp_path / "a-file" / "kept"))
+    monkeypatch.setattr(RS, "KEPT_DIR", str(tmp_path / "a-file" / "kept"))
     for _ in range(2):
         on_base.again()
         assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and len(on_base) == 1
