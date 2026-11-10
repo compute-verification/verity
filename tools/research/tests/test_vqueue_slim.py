@@ -21,7 +21,7 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
                                   step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
-from test_drive_policy import _policy
+from test_drive_policy import LIVE, TEST, _policy
 from test_drive_review import GATED_TREE, _main, _move_main
 from test_queue import World, _git
 from test_queue_drive import LINT_LOG, Harness
@@ -445,6 +445,60 @@ def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(
     gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-changed", "lean-agreement", "circuit-check", "ratchet-gate")]
     if red not in PREFLIGHTS:
         assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
+
+
+def test_the_check_that_gates_names_each_test_of_a_logs_short_summary_by_its_whole_id(world, monkeypatch, tmp_path):
+    """pytest's short summary prints a test's whole id, a parametrized one's spaces among it, then ` - ` and its error: the
+    failure names each test by all of it, so two cases of one test that differ past a space are two tests."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, preflight_lints="FAILED tests/test_x.py::test_y[a b] - KeyError: 'k'\nFAILED tests/test_x.py::test_y[a c]\n"
+                                       "ERROR tests/test_z.py - ImportError: no module named z\n")
+    (f,) = judge(h.d, rec).failed
+    assert (f.task, f.tests) == ("step preflight-lints", {"tests/test_x.py::test_y[a b]", "tests/test_x.py::test_y[a c]",
+                                                          "tests/test_z.py"})
+
+
+#: suite pkg's report row: one test failed, and nothing more
+PKG = {"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [TEST], "beyond_tests": False, "log": "/x/suites/pkg.log"}
+
+
+@pytest.mark.parametrize("at", ["base", "candidate", "unbased"])
+def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_covers(world, monkeypatch, tmp_path, at):
+    """An unexpired allowance of policy.toml at the base covers a suite's failure as drive's covers it on `checked`, but the
+    candidate's own (it adds the allowance) never covers its own failure: that fails it, on the suite's test.  A record
+    with no base reads the candidate's."""
+    allowing = {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=allowing if at == "base" else None,
+                               change=None if at == "base" else allowing)
+    rec = start(h.d, sha, base, shards=1)
+    if at == "unbased":
+        rec["base"] = None
+    (_slim(h, tmp_path, pytest="") / "suites.json").write_text(json.dumps([PKG]))
+    got = judge(h.d, rec)
+    if at == "candidate":
+        (f,) = got.failed
+        assert (got.state, f.task, f.tests) == (FAIL, "step pytest", {f"pkg::{TEST}"})
+        assert not h.d._only_allowed(rec, base) and h.d._only_allowed(rec)
+    else:
+        assert got == Verdict(PASS)
+
+
+@pytest.mark.parametrize("own", [False, True])
+def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infra(world, monkeypatch, tmp_path, own):
+    """A kill (a step's exit 137, on a suite that names no test) is the machine's fault unless an allowance at the base covers
+    every failure: then the check passes; covered only by the candidate's own allowance, it is infra, to run again."""
+    allowing = {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=None if own else allowing, change=allowing if own else None)
+    rec = start(h.d, sha, base, shards=1)
+    d = _slim(h, tmp_path, pytest="Killed\n")
+    _rewrite(d, pytest={"rc": 137})
+    (d / "suites.json").write_text(json.dumps([{**PKG, "failed_tests": []}]))
+    got = judge(h.d, rec)
+    if own:
+        assert got.state == INFRA and got.infra[0].task.endswith("was killed (done rc=1)"), got
+    else:
+        assert got == Verdict(PASS)
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():

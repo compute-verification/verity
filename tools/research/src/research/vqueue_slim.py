@@ -49,7 +49,7 @@ from pathlib import Path
 from .drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LEAN_AUDIT_RE, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS,
                     SUITE_STEPS, Driver, _step_log, implicated, killed, not_run, shard_machines, shard_passed, shard_steps,
                     step_paths, step_records, suite_paths, suite_rows)
-from .queue import CHECK_STEPS, _git
+from .queue import _SUMMARY_RE, CHECK_STEPS, _git
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
 
@@ -79,8 +79,6 @@ FIXTURES_CODE = "tools/research/src/research"
 KEY_TAG = "verity-vqueue-slim-step/v1"
 #: a record's ``gate`` when its run is the check that gates (`start` with ``shards``)
 CHECK = "check"
-#: pytest's failing tests and the modules it couldn't collect, in a step's log's short summary
-TEST_RE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
 #: lean-audit's own failures of no package, in its log
 AUDIT_FAIL_RE = re.compile(r"^lean-audit: FAIL: .*$", re.M)
 #: what the audit prints under a package's `AUDIT .../PKG: FAIL` that is no failure: counts and timings of its run
@@ -150,11 +148,12 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     read as the run's own is.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids,
     a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
-    every shard that holds it, `shard_passed`), fail with each of them it failed (a `Failed`: ``step NAME``, the step's
-    content key at the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at
-    ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests and paths its failure names,
-    `failing`), and infra when it failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict
-    but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
+    every shard that holds it, `shard_passed`), a step that failed only on what an unexpired allowance of policy.toml at
+    ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
+    (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths drive names that failure's culprit by,
+    `step_paths`, its content key at ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests
+    and paths its failure names, `failing`), and infra when it failed none but passed fewer (one skipped, or absent from its
+    steps.jsonl).  Each verdict but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
@@ -193,21 +192,22 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     if not lost and driver._never_ran(rec, states):
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
     base = rec.get("base")
+    allow = base or tip
     if check:
         gate = {*SLIM_JUDGED, *driver._gating(base or tip)} - {*driver._policy(base or tip).off_gate, *driver.warn_steps}
         judged = [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
         view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
-        passes = shard_passed(view, driver._allowed_steps(tip, [d for ds in driver._shards(rec) for d in ds]))
+        passes = shard_passed(view, driver._allowed_steps(allow, [d for ds in driver._shards(rec) for d in ds]))
         missed = [s for s in judged if s not in passes]
     else:
         off = driver._policy(tip).off_gate
         judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
-        missed = driver._unrun(ids, judged, tip)
+        missed = driver._unrun(ids, judged, allow)
     if not missed:
         return _keep(rec, Verdict(PASS), judged)
     dirs = [d for ds in driver._shards(rec) for d in ds]
     ok = driver._every_shard(rec, states, lambda rc: rc == 0) or (
-        driver._every_shard(rec, states, lambda rc: rc in (0, 1)) and driver._only_allowed(rec))
+        driver._every_shard(rec, states, lambda rc: rc in (0, 1)) and driver._only_allowed(rec, allow))
     if not ok and (lost or any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
                                    for _, rc, *_ in states.values())
                        or any(implicated(d) is None and killed(d, why) for d in dirs)):
@@ -220,7 +220,7 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
             if (s := st.get("step")) in missed and st.get("status") == "failed" and not not_run(st):
                 if s not in keys:
                     keys[s] = key(driver.repo, tip, s) or f"{tip}:{s}"
-                at, named = failing(driver, tip, d, st, unnamed(keys[s])) if check else (step_paths(d, st), {step_test(s)})
+                at, named = failing(driver, allow, d, st, unnamed(keys[s])) if check else (step_paths(d, st), {step_test(s)})
                 paths.setdefault(s, set()).update(at or ())
                 tests.setdefault(s, set()).update(named)
     passed = [s for s in judged if s not in missed]
@@ -238,22 +238,23 @@ def unnamed(key: str) -> str:
     return f"unnamed:{key}"
 
 
-def failing(driver: Driver, tip: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
+def failing(driver: Driver, at: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
     """What failed step ``st`` of the check that gates names in its run dir ``d``, as drive reads it: the paths its culprit
     is named by, and its failing tests.  A step that runs suites (`SUITE_STEPS`): of each suite of its that failed
-    (`suite_rows`) uncovered by ``tip``'s allowances, `suite_paths` and `SUITE::TEST` of each test it failed, and ``rest``
-    under the suite's name when it names none or failed for more than its tests (its row's `beyond_tests` isn't false).
-    Any other: `step_paths`, each `FAILED` and `ERROR` of its log's short summary, and of lean-audit each line under a
-    failed package's `AUDIT .../PKG: FAIL` (`audit_failures`).  ``rest`` (`unnamed`) alone when it names no test."""
+    (`suite_rows`) uncovered by ``at``'s allowances (its base's), `suite_paths` and `SUITE::TEST` of each test it failed,
+    and ``rest`` under the suite's name when it names none or failed for more than its tests (its row's `beyond_tests` isn't
+    false).  Any other: `step_paths`, the test id of each `FAILED` and `ERROR` line of its log's short summary (all of it
+    before ` - `, a parametrized id's spaces included), and of lean-audit each line under a failed package's
+    `AUDIT .../PKG: FAIL` (`audit_failures`).  ``rest`` (`unnamed`) alone when it names no test."""
     step = st.get("step")
     if step not in SUITE_STEPS:
         log = _step_log(d, st)
-        tests = set(TEST_RE.findall(log)) | (audit_failures(log, rest) if step == "lean-audit" else set())
+        tests = {m[1] for m in _SUMMARY_RE.finditer(log)} | (audit_failures(log, rest) if step == "lean-audit" else set())
         return step_paths(d, st) or set(), tests or {rest}
     paths: set[str] = set()
     tests = set()
     for name, row in suite_rows(d).items():
-        if row["status"] != "failed" or row["step"] != step or driver._allowed(tip, f"suite {name}", d, row).covered:
+        if row["status"] != "failed" or row["step"] != step or driver._allowed(at, f"suite {name}", d, row).covered:
             continue
         paths |= suite_paths(d, row) or set()
         tests |= {f"{name}::{t}" for t in row.get("failed_tests") or ()}
