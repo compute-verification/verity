@@ -11,6 +11,7 @@ import pytest
 
 import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain, hm96
+from verity.ml.commitments import history as HT
 from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.ml.circuits.codec import canonical_json
@@ -20,7 +21,8 @@ from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_conc
 from verity.ml.circuits.types import Array, Value
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registered as G, registration as R
+from verity.core.protocols.spot.one_stage import (audit, draw as D, partition as P, registered as G, registration as R,
+                                                 verifier as V)
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -855,6 +857,92 @@ def test_r7_refuses_a_supplied_value_it_cannot_fill():
     # the verifier's own bytes are a source like any root: the right ones pass
     x = {"pouw.roots": [[{"bytes": "ab" * 64}, {"value": "W"}], [{"value": "W"}, {"bytes": "ab" * 64}]]}
     assert R.check(rec, **{**check, "supplied": x}).ok
+
+
+def _history(body_flip: bool = False) -> tuple[dict, str, str]:
+    """A history table `k_hist` of writer `W`'s three `o` strings, its one member's public body under the leaf layer
+    of that body and a reader's, the window registering its root: the verifier's `history` parameter, the leaf layer
+    and the root (hex)."""
+    bcs = [hashlib.sha512(b"k_hist/%d" % i).digest() * 2 for i in range(3)]
+    body = bytearray(b"".join(bcs))
+    publics = {"W/0": bytes(body), "R/0": b"the reader's body"}
+    if body_flip:
+        body[-1] ^= 1
+    digests = {k: hashlib.sha512(b).hexdigest() for k, b in publics.items()}
+    root = HT.root(HT.domain("p", "k_hist", 64, 16), bcs, HT.placeholder(64)).hex()
+    table = {"name": "k_hist", "program": "p", "writer": "W", "out": "o", "words": 64, "capacity": 16, "first": 0,
+             "units": 3, "runs": [{"start": 0, "count": 3, "writer": "W", "out": "o", "radix": [3], "base": 0, "step": [1]}],
+             "members": [{"key": "W/0", "base": 0, "n": 3, "ports": ["o"], "body": bytes(body).hex()}]}
+    return ({"digests": digests, "tables": [table], "held": {}, "registered": {"k_hist": root}},
+            HT.leaf_layer(digests), root)
+
+
+def test_a_history_source_is_the_root_the_verifier_computes():
+    """A supplied value's source `{"history": "H/root"}` is the root the verifier computes for table H from its writer's
+    public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
+    root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
+    registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
+    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`."""
+    hist, leaf, root = _history()
+    rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
+    check = {**check, "leaf_layer": leaf}
+    sup = {"pouw.roots": [[{"history": "k_hist/root"}, {"value": "W"}], [{"value": "W"}, {"history": "k_hist/root"}]]}
+    assert R.check(rec, **check).ok
+    assert R.check(rec, **check, history=hist).ok
+    assert HT.resolve(HT.roots_of(leaf, hist), sup) == {
+        "pouw.roots": [[{"bytes": root}, {"value": "W"}], [{"value": "W"}, {"bytes": root}]]}
+    got = V.check(rec, **{**check, "supplied": sup}, history=hist)
+    assert got.ok and got.codes == ()
+    domain = HT.domain("p", "k_hist", 64, 16).domain_id.hex()
+    assert HT.resolve(HT.roots_of(leaf, hist), {"v": [[{"history": "k_hist/domain"}]]}) == {"v": [[{"bytes": domain}]]}
+
+    def lean(**change) -> dict:
+        args = {**check, "supplied": sup, "history": hist, **change}
+        params = V._params(args["program"], args["query"], args["law"], args["scheme"], args["ports"], args["leaf_layer"],
+                           (), [], None, None, args["registered"], args["supplied"], history=args["history"])
+        return V.lean("registration", {"params": params, "record": rec})
+
+    assert lean().get("codes") == []
+    tampered = _history(body_flip=True)[0]
+    for change in ({"history": tampered},
+                   {"history": {**hist, "registered": {"k_hist": "00" * 64}}},
+                   {"supplied": {"pouw.roots": [[{"history": "k/root"}, {"value": "W"}]] * 2}},
+                   {"supplied": {"pouw.roots": [[{"history": "k_hist/rows"}, {"value": "W"}]] * 2}},
+                   {"history": {**hist, "extra": 1}},
+                   {"leaf_layer": None}):
+        args = {**check, "supplied": sup, "history": hist, **change}
+        with pytest.raises(R.HistoryRefused):
+            R.check(rec, **args)
+        assert "refused" in lean(**change), change
+        got = V.check(rec, **args)
+        assert not got.ok and got.codes == (R.HISTORY,), (change, got)
+        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
+
+
+def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
+    """`run` hands the Lean's run (`Run.run`) the history tables of each registration it parses, the boundary's and,
+    under a two-stage design, the interior's, as the parameters `check` hands the Lean's registration, so a reader's
+    `{"history": ...}` source resolves in the run as it does at registration."""
+    hist, leaf, root = _history()
+    rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
+    other = {**hist, "registered": {"k_hist": "11" * 64}}
+    seen = []
+    monkeypatch.setattr(V, "lean", lambda piece, args: seen.append((piece, args)) or {"refused": "the spy's"})
+    p, q, law, ports = check["program"], check["query"], check["law"], check["ports"]
+    interior = {"program": p, "query": q, "law": law, "copies": (ports, leaf, (), [], None, None, None, None, None, None,
+                                                                 None),
+                "history": other, "replay": p, "values": [], "record": rec, "received": "r", "read": b"", "coins": None,
+                "proved_units": None, "instances": None, "served": None, "session_roots": None}
+    for it, want in ((None, None), (interior, other)):
+        got = V.run({}, rec, p, q, law, check["scheme"], ports, leaf, (), [], None, None, {}, [], [], "c", "r", b"", None,
+                    [], {}, [], {}, 0.5, history=hist, interior=it)
+        assert not got.ok and got.codes == (V.DISAGREE,)
+        [(piece, args)] = seen
+        seen.clear()
+        assert piece == "run" and args["params"]["history"] == hist
+        params = V._params(p, q, law, check["scheme"], ports, leaf, (), [], None, None, None, history=hist)
+        assert args["params"] == params
+        assert (args.get("interior") or {}).get("params", {}).get("history") == want
 
 
 def test_a_supplied_value_is_the_records_own_not_the_logs():
