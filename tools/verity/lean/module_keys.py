@@ -10,7 +10,8 @@ out and whichever package of the workspace is the build's root. It reads:
   whose options Lake compiles it with;
 - its inputs, each with its file's digest: its source; its package's lakefile as a key reads it (`settings`: everything it
   sets but `defaultTargets` and each library's `roots` and `globs`, which say which modules a build compiles and which
-  library owns one, never how one compiles); and every file the package's `[[input_file]]` and `[[input_dir]]` targets
+  library owns one, never how one compiles, and the `path` of each `require`, which says where a package is and
+  nothing of what a compile reads of it); and every file the package's `[[input_file]]` and `[[input_dir]]` targets
   name, which a module may read as it compiles (`include_str`);
 - its env: the root's `lean-toolchain` and what its `lake-manifest.json` pins (`pins`) of the packages the module's own
   package fetches (`fetches`: those its own manifest lists, its path dependencies' among them): each one's entry but
@@ -107,6 +108,9 @@ FETCHED = "fetched packages"
 #: build compiles and which library owns a module, and Lake's input hash of a module reads none of them
 #: (`Module.recFetchPreSetup`, `Lake/Build/Module.lean`); the owner is in the key by name (`Package.owner`)
 UNKEYED, UNKEYED_LIB = ("defaultTargets",), ("roots", "globs")
+#: and in each `[[require]]`: where a package required by path is. A compile reads of that package only its modules, which
+#: a key reads by their outputs' digests under paths from the package's own directory, as `pins` leaves a path entry out
+UNKEYED_REQUIRE = ("path",)
 #: what a key leaves out of the root's manifest (`pins`), at its top level and in a fetched package's entry: the root's
 #: name, where the fetched packages are checked out, and whether the root requires a package itself, which only `lake
 #: update` reads. The entries of the packages required by path are read by `workspace` instead
@@ -252,10 +256,12 @@ def input_files(d: Path, doc: dict) -> list[list[str]] | str:
 
 def settings(doc: dict) -> str:
     """The digest of a lakefile (``doc``, parsed) as a key reads it: everything it sets, in its own order, but `UNKEYED`
-    at its top level and `UNKEYED_LIB` in each library. A denylist, so a setting this reading has never met is in the key."""
+    at its top level, `UNKEYED_LIB` in each library and `UNKEYED_REQUIRE` in each `require`. A denylist, so a setting
+    this reading has never met is in the key."""
     kept = {k: v for k, v in doc.items() if k not in UNKEYED}
-    if isinstance(libs := kept.get("lean_lib"), list):
-        kept["lean_lib"] = [{k: v for k, v in t.items() if k not in UNKEYED_LIB} if isinstance(t, dict) else t for t in libs]
+    for table, unkeyed in (("lean_lib", UNKEYED_LIB), ("require", UNKEYED_REQUIRE)):
+        if isinstance(of := kept.get(table), list):
+            kept[table] = [{k: v for k, v in t.items() if k not in unkeyed} if isinstance(t, dict) else t for t in of]
     return C.digest(json.dumps(kept, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=repr).encode())
 
 
