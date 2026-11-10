@@ -1013,10 +1013,7 @@
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
-  "Properties.Flock.Nets",
-  "Definitions.Flock",
-  "Definitions.Assumptions.Flock",
-  "Properties.Challenger"
+  "Properties.Flock.Nets"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -2304,14 +2301,6 @@
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
- },
- "trees": {
-  "except": {
-   "Proofs.Properties.Verity.Sampled": "the deployed remote soundness theorem (remote_soundness_deployedReady) and its honest witness state SPOT's target at the deployed vocabulary (`Instance.vocab`) over the live session (`Live`, `Constructions`) and the deployment's inputs (`Instance.SessionsReady`, `RegisteredFiles`, `SessionRegistered`, `LogOpensRecorded`), defined in Proofs over Flock's V5 chain; excepted until that vocabulary moves to Definitions/Verity",
-   "Proofs.Properties.Verity.SampledCoins": "the live session's coins (`coinBytesEquiv`), which the deployed remote soundness theorem's session (`Live`) reads; excepted with `Proofs.Properties.Verity.Sampled`",
-   "Proofs.Flock": "the deployed remote soundness theorem's session (`Live`) is Flock's V5 session at the deployed device (its statement, bridge, leaf maps and decoders); Flock is excepted until its spec is extracted, as in Security's lock",
-   "Proofs.Core": "the deployed remote soundness theorem's session reads the game's tapes and two-run coins (`Verity.Game.Tape`, `TwoRun`, `InterleaveBridge`), still in Proofs; excepted until they move to Definitions/Core"
-  }
  },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
