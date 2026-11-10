@@ -1498,7 +1498,7 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
     (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
     batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
-    A wide PR fills its batch's cap."""
+    A wide PR fills its batch's cap, once the PR with no Lean change has gone in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"Security/Definitions/D.lean": "-- d\n"})
@@ -1511,10 +1511,12 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     loop.tick()
     assert [s.wide for s in seen] == [frozenset(), frozenset()]
     assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
-    assert vqueue.decide(seen[-1]) == [Build((1, 2, 3), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    leans = replace(seen[-1], ready=seen[-1].ready[:2])
+    assert vqueue.decide(leans) == [Build((1, 2), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n\n1\n")
     loop.tick()
-    assert seen[-1].wide == {1} and vqueue.decide(seen[-1]) == [Build((1, 3), seen[-1].main, L.DEPTH)]
+    assert seen[-1].wide == {1} and vqueue.decide(replace(leans, wide=seen[-1].wide)) == [Build((1,), leans.main, L.DEPTH)]
     wide.write_text("1\n#2\n")
     with pytest.raises(Q.QueueError) as e:
         loop.tick()
