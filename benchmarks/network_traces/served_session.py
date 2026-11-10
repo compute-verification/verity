@@ -148,8 +148,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
-sys.path.insert(0, str(HERE.parent / "live_challenger"))
+TREE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(TREE / "benchmarks/live_challenger"))
 import auditor as A  # noqa: E402
 
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
@@ -708,7 +708,8 @@ def chain(a: argparse.Namespace) -> int:
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
     if endpoint:
         env.update({"CR_ENDPOINT": endpoint, **({"CR_EOS_IDS": a.eos_ids} if a.eos_ids else {})})
-    return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
+    return subprocess.run(["bash", str(TREE / "benchmarks/network_traces/chain_record.sh")], cwd=TREE,
+                          env=env).returncode
 
 
 def parser() -> argparse.ArgumentParser:
