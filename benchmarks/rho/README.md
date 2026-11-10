@@ -48,7 +48,13 @@ range, its parts by kind and its premises ranked; each row says what it assumes 
 with proofs sampled at the registry's share stands beside the one where every unit is proved. The ranking shows a
 proof block's output bits over the public size classes as the size class's limit, not as a premise. `periods.py
 --measured CIRCUIT` evaluates them with a measured training step's design in place of the FLOP model, after a table of
-the step beside it (`circuits.py`).
+the step beside it (`circuits.py`). `periods.py --bounds CLASS` (repeatable) bounds each scenario by that class alone,
+and its header says what such a row's figure covers:
+
+~~~sh
+uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-onsite-h200 \
+    --scenario reference-remote-h200    # onsite and remote on the min-cut bound alone
+~~~
 
 ## Inputs
 
@@ -65,13 +71,16 @@ the step beside it (`circuits.py`).
   greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling `data/reference.toml` states,
   and only its range is read (`params.ranges`). `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
-  block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
+  block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
+  `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
 - `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
   algorithms and their traits), which the tests hold the data to; `Security/Definitions/Nci/Remote.lean`, whose
-  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
+  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; `Security/Definitions/Nci/Cut.lean` and
+  `Security/Definitions/Nci/Guarantees/Cut.lean`, whose `alphaHE`, `shareF`, `HE` and `HEShared`
+  `tests/test_min_cut.py` holds `min_cut.py` to.
 
 ## The model
 
@@ -116,6 +125,25 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
 
+**The min-cut bound.** `min_cut.py` is the one place that computes `Nci.Cut.Guarantees.HE` and `HEShared`, each
+function one side of a Lean inequality or that inequality solved for one term; it is standard library only, so another
+benchmark loads it by path. A work of `N` MACs with `O` output wires needs at least `m` blocks of at most `k` fresh
+input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`, under (H) at `q = β_w β_x` and (E) at
+`b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
+
+- `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output
+  wires and gates: the least blocks, the cap a block, the slowdown `m c / size` (at least 1) and what it rests on.
+  `N` and `O` are the caller's: it converts no count. Defaults: `β_w` and `b` a bf16 word's 16 bits, the most (H)
+  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)`, and no bound past their last
+  `k`; `F = 1` (`HE`: at most two of forward, input-gradient and weight-gradient products), `share(3)` for all
+  three (`HEShared`).
+- The class `min-cut` in `CLASSES` is that cap a block on the profile's own counted products, the trained weights'
+  forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most `b_a`, an
+  output at `b_a`, and `outputs_per_product` from the model's shape. It caps the declared inference blocks only, so
+  where they hold little of the rate a figure it sets is the uncertified routes' and the unregistered pool's
+  (`periods.py --bounds min-cut` says the share). That the work's MACs are disjoint, its values distinct words and
+  no two of its matmuls share both operands' values is assumed, not checked.
+
 ## Modules
 
 Each module is one interface with interchangeable implementations: a different assumption is a different
@@ -125,6 +153,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `cap`, `beta`; `bound(c, k, n, N, O, size) → Bound` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
