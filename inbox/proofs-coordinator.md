@@ -29489,3 +29489,35 @@ Text for PRF-456, a paste under the 16:39Z item 3:
 - network's 07:55Z question on PRF-456 (which served MACs a token give 1.78e16 requests a year), text in an entry by 00:00Z;
 - LEDGER's PRF-492 question (which file and keys of a planner run's `out/` hold δ, λ, the mix, S, the scope and the theft target's bits), by Wed 06:00Z;
 - reading r20261110-165156-0d56's verdict at about 18:20Z.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 17:01Z: review-1's failure reproduced at the test alone, and the pooled field's tests pass on a node; the suites for the fix, the field and the cross are running or queued, and a first draft for PRF-504 is below
+
+**Results [run]:**
+- `r20261110-160628-c555` (cpu-8) ran at `d10aeecd4c`, the test without the fix, and **failed as review-1 said it would**. The registration is let through and publishes `t`, but the outcome is a reject failing `run`: `{'checks': ['run'], ...}` at `test_service_window.py:206`. So Lean's `Run.run` refused the tied stream.
+- `r20261110-162832-16d3` (cpu-11) ran at `dd61f36688`, the pooled field, and passed: **12 passed** (the pooled-field test, the three new `ln_count` cases, the six two-stage point cases, the fan-out case and the form switch).
+- I cancelled `r20261110-160816-2002`, which waited 51 min for a slot on cpu-2 and never started. `r20261110-165842-cd03` (cpu-1) runs the same nine suites at `b3a5cc07e5` and started at about 17:01Z.
+
+**Still going:**
+
+| run | what | machine | ETA [guess] |
+|---|---|---|---|
+| `r20261110-165842-cd03` | nine suites at `b3a5cc07e5` (#8539's head, the fix) | cpu-1, running | about 17:35Z |
+| `r20261110-163609-4a2d` | nine suites at `dad8d911f9` (the scratch cross) | cpu-1, running | about 17:20Z |
+| `r20261110-162926-c46e` | nine suites at `dd61f36688` (the pooled field) | cpu-8, waiting | about 18:15Z |
+| `r20261110-163702-cb4b` | Lean tries at `dad8d911f9`: both Spot files in `Security`, and `Spot/Pieces.lean` | cpu-8, waiting | about 18:45Z |
+
+**review-1's line**, to post when `cd03` passes: "Passed `tied` through (`b3a5cc07e5`, test `d10aeecd4c`). The stream's run of record gives Lean's `Run.run` its check's tied values (`verifier.run(tied=)`), and a tied window runs to an accepted outcome on both verifiers. Named nothing, or the other parameter instead, both verifiers refuse it (`R8-shared-input`). Without the fix the same test fails on `run` (`r20261110-160628-c555`)."
+
+### PRF-504, a first draft (due Wed 16:00Z; read at `b3a5cc07e5`)
+
+> **Network's claim holds: a one-stage answer Lean computes never carries the tied names. It goes in #8539, which brings `tied`. One commit, by Wed 11 Nov 12:00Z on a branch off the cross, and to #8539's head only on your word after the layout. No guarantee's statement or premises move; only `Spot.OneStage`'s reads records do.**
+> - **What's true today** [read]: `Spot.OneStage.Public` is `{drawn, proved, bound, perTemplate}`, and `publicJson` writes only those. Only the registration piece (`Spot/Pieces.lean`) publishes `Registration.tiedThrough v`. Python's `scan_zk.window_answer(..., rests=)` adds `rests_on_period_check` to the scan answer's public, so NET-304's `need` sees the key only on Python's path.
+> - **What changes:**
+>   - `Public` gains `tied : Array String`, set to `Registration.tiedThrough v` at the params' verifier on acceptance.
+>   - `publicJson` writes `("rests_on_period_check", tied)` when it is non-empty.
+>   - The Python mirror of the answer's public writes the same key, so `Run.run` and the difftest still agree.
+>   - The difftest gains three cases: two tied Inputs (`t` and `u`), which both verifiers publish as `["t", "u"]`; one, published as `["t"]`; and none, with no key. NET-304's `need` (exactly `["prog"]`) then refuses a second tied Input on Lean's answer too.
+> - **Locks** [guess, until a records run]: no Spot statement names `Spot.OneStage.Public` (grep of `Security/Properties` and `Security/Definitions`). The reads record of `Spot.OneStage` moves in both Security locks: the digests of `Public` and `publicJson`, and a new `Public.tied`. That is the same kind of move as #8539's reads of `Spot.Registration`. If the records run moves any guarantee's statement hash or premises, I say so and it becomes a PR of its own.
+> - **Size:** about 10 Lean lines, 5 Python lines and 40 lines of tests, plus one records run.
+
+**Not changed:** network's 4 and 5 as at 16:15Z, and #8539's body. Daniel's "this is fine" line and the fix's runs go in together when `cd03` passes.
