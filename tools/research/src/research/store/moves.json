@@ -2536,6 +2536,14 @@
       "paths": {
         "verity/ml/definitions/numerics/cuda/": "benchmarks/definitions/numerics/cuda/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/demo_chain.sh": "archive/benchmarks/network_traces/demo_chain.sh",
+        "benchmarks/network_traces/demo_endpoint.py": "archive/benchmarks/network_traces/demo_endpoint.py",
+        "benchmarks/network_traces/tests/test_demo_endpoint.py": "archive/benchmarks/network_traces/tests/test_demo_endpoint.py",
+        "examples/h200/": "archive/examples/h200/"
+      }
     }
   ]
 }

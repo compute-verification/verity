@@ -287,7 +287,7 @@
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
-        "examples/h200/",
+        "archive/examples/h200/",
         "workloads/dither_full_util/"
       ],
       "branch_suffixes": [

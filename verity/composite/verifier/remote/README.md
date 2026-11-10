@@ -559,11 +559,11 @@ development run:
   its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
-- `verity demo h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
+- `verity demo h200` (`archive/examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
   are sampled by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
   refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
-  `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
+  `uv run python archive/examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity demo vllm` (`workloads/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the

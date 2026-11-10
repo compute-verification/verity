@@ -58,7 +58,7 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/flock/prover/python:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/flock/prover/python:$REPO/archive/examples/h200/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)

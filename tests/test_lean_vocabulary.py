@@ -746,10 +746,10 @@ KNOWN: dict[str, str] = {
     "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
     "demos/lifecycle/onsite.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
-    "examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
-    "examples/h200/e2e_h200/window.py::Window":
+    "archive/examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
+    "archive/examples/h200/e2e_h200/window.py::Window":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
-    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
+    "archive/examples/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
     "workloads/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (top)",
