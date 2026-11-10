@@ -158,7 +158,6 @@ LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_f
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
-MOVED = _module(ROOT / "tools" / "verity" / "lean" / "moved.py", "lean_moved_for_lean_changed")
 #: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
 FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
@@ -332,6 +331,18 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
     os.replace(tmp, tree / LINKS)
 
 
+_MOVED = None
+
+
+def _moved():
+    """`moved.py`, loaded by what carries a build and not with this file: `--inputs-key` reads no tree and no recorded
+    move, and whoever runs it from a commit's key code alone (research's records gate) needs no file for it."""
+    global _MOVED
+    if _MOVED is None:
+        _MOVED = _module(Path(__file__).resolve().parent / "moved.py", "lean_moved_for_lean_changed")
+    return _MOVED
+
+
 def carry_builds(tree: Path, log=print) -> None:
     """Under ``tree``'s lock, before anything reads `LINKS` or syncs a package: a build directory that a layout move left
     in ``tree`` at its package's former path moves to where this checkout has the package (`moved.carry`), with its entry
@@ -339,7 +350,8 @@ def carry_builds(tree: Path, log=print) -> None:
     would sync the package to its new path, find no build there and compile every module of it, the old build left beside
     it. It reads the tree, the checkout and the recorded moves, and starts no program. A tree that is the checkout itself
     keeps what else its former directory holds."""
-    moves = MOVED.recorded(ROOT)
+    moved = _moved()
+    moves = moved.recorded(ROOT)
     if not moves or not tree.is_dir():
         return
     built = []
@@ -347,9 +359,9 @@ def carry_builds(tree: Path, log=print) -> None:
         if ".lake" in dirs and Path(d) != tree:
             built.append(Path(d).relative_to(tree).as_posix())
         dirs[:] = [x for x in dirs if not x.startswith(".")]
-    pkgs = sorted({q for f in built if (q := MOVED.now(f, moves)) != f
-                   and any((ROOT / q / n).is_file() for n in MOVED.LAKEFILES)})
-    got = MOVED.carry(tree, pkgs, moves, log, prune=tree.resolve() != ROOT.resolve()) if pkgs else {}
+    pkgs = sorted({q for f in built if (q := moved.now(f, moves)) != f
+                   and any((ROOT / q / n).is_file() for n in moved.LAKEFILES)})
+    got = moved.carry(tree, pkgs, moves, log, prune=tree.resolve() != ROOT.resolve()) if pkgs else {}
     if not got:
         return
     links = read_links(tree)

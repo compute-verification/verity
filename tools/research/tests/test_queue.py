@@ -3488,8 +3488,7 @@ ROOT = Path(__file__).resolve().parents[3]
 #: inputs with that commit's own code (`lean_keys`)
 KEY_FILES = ("tools/verity/lean/lean_changed.py", "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py",
              "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "tools/verity/lean/siblings.py",
-             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/moved.py", "tools/verity/lean/settings.py",
-             "tools/verity/check/common.py",
+             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
              "tools/verity/check/slot.py", "tools/verity/check/lean_slot.py", "tools/verity/graph/verity_graph/contract.py")
 #: two Lake packages, `pkg` requiring `lib` by path, each with its toolchain
 LAKE = {"pkg/lakefile.toml": 'name = "pkg"\n', "pkg/lean-toolchain": "v1\n",
