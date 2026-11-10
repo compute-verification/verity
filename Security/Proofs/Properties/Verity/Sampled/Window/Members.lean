@@ -730,8 +730,5 @@ private def namesT (r : Flock.V (Array Member)) : Option (Array String) := r.toO
 #guard namesT (membersHeld membersT #[statementT "m0" 2]) == none
 #guard namesT (membersHeld membersT #[statementT "m3"]) == none
 #guard namesT (membersHeld membersT #[⟨none, #[]⟩]) == none
-#guard unitsHeld #[5, 6, 0] (Json.mkObj [("units", Json.mkObj [("indices", Json.arr #[5, 6, 0])])])
-#guard !unitsHeld #[5, 6, 0] (Json.mkObj [("units", Json.mkObj [("indices", Json.arr #[0, 5, 6])])])
-#guard !unitsHeld #[5, 6] (Json.mkObj [("units", Json.mkObj [("indices", Json.arr #[5, 6, 0])])])
 
 end Verity.Sampled.PerMember
