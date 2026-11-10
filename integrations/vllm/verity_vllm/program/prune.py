@@ -383,15 +383,10 @@ def batched_form(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]
     the caller hands `body` over, and its offsets are dropped and each of its nodes once batched, so no node is held twice; the
     memos are keyed as `without_dead_units`' are."""
     nodes, peers = body.nodes, frozenset(i for i, (name, _) in enumerate(body.params) if name.startswith(PEERS))
-<<<<<<< HEAD
-    at: list[tuple[int, int]] = []
-    out: list[BodyNode] = []
-=======
     if consume:
         body.offsets.clear()
     at: tuple[list[int], list[int]] = ([], [])   # node k of `body` is leaves at[1][k].. of node at[0][k] of the form
-    out: list[Node] = []
->>>>>>> 2b869ed35db5d0efdb844a5f684e6fecbe658114
+    out: list[BodyNode] = []
     sizes: list[int] = []
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
@@ -416,14 +411,9 @@ def batched_form(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]
                 shared = all(_same(r, rs[0]) for r in rs[1:])
                 args.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
                 axes.append(None if shared else 0)
-<<<<<<< HEAD
             out.append(BodyNode("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
-            at.extend((j, m * n.out.leaves) for m in range(hi - k))
-=======
-            out.append(Node("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
             at[0].extend([j] * (hi - k))
             at[1].extend(m * n.out.leaves for m in range(hi - k))
->>>>>>> 2b869ed35db5d0efdb844a5f684e6fecbe658114
         sizes.append(hi - k)
         if consume:
             nodes[k:hi] = [None] * (hi - k)
