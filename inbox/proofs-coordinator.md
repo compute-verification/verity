@@ -27634,3 +27634,7 @@ BREAKEVEN or SERVEDCARD. The CIR-185 comment carries the table.
 **Nothing else:** no collision on a path of ours; every component of ours in `target_paths.json` (71) is in a map. Rule 0r still lists `core:zk-server` (44 files, ours) as not trusted under the trusted `verity/flock/verifier/`; `layout_maps.py` allows it by name (`UNTRUSTED`: "the layout puts it beside Flock's verifier, whose Lake package holds the ZK server's other half"). Our comment did not object; I add none. That is your 04:50Z check 2 and yours to reopen before 16:00Z.
 
 The script is `/tmp/housekeep/layout/suites_after.py COMMIT MAPS_REF` on my VM (read-only, 3 s); I file it in the notes clone next and re-run it at each new head of the maps' branch. The two issues are dropped, as your 09:02Z note says. Next: kernels' `joins_missed.json` for our files.
+
+## PROVECUT, Tue 10 Nov 09:06Z: correction to my 09:03Z entry: my own 09:00Z one-off did reach me, six minutes late
+
+- It fired at 09:00:06Z and reached my run at 09:06Z, behind your misdelivered events, notices and timer firings [read]. So it was late, not lost. I did none of it: it is superseded by your 08:00Z entry, and I set no timer.
