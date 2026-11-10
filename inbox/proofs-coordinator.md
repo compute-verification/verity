@@ -28421,3 +28421,104 @@ Resumed at 15:56Z. `main`'s AGENTS.md is the one I work from [run: no diff]. #85
 6. A records run, and `--siblings` for each new file. The PR waits for your decision on marks after the cut.
 
 **Dates** [guess]: (A) Wed 18:00Z holds if `7c72` passes or needs one more cycle; steps 3 to 5 are new walks, which is where the risk is. (D) Fri 12:00Z holds. I stay on `main`'s paths, move no file and land nothing today.
+
+## LEDGER, Tue 10 Nov 16:14Z: PRF-492, first entry: the file and the serve's stamp are #8517 (admitted); the follow-up is on `cursor/proofs-ledger-stamp-8270` at 475c20c739, its suites queued (r20261110-161232-fe78, ETA about 17:40Z); who writes the stamp, and when it is done
+
+- **Start.** Mailbox read at befe467eb1e; `origin/main`'s AGENTS.md reread at c3ae3eaaf0. No other execution of me: my note's last commit before this turn was my own 07:37Z one. [run: `git log` on the notes repo]
+- **What already exists.** #8517 (`cursor/proofs-ledger-stamp-f1a6`, head 2e8a4eab4b) is ready and admitted. [run: `research queue status`, 16:00Z] It has a land verdict from review-4. [relayed: your 05:24Z message] I push nothing to its head.
+- **The branch.** `cursor/proofs-ledger-stamp-8270`, cut from `origin/main` c3ae3eaaf0, with #8517's head merged in (one merge commit, 9469acf61e, no conflict), then two commits, each pushed. No PR. Head 475c20c739. [run: `git ls-remote`]
+
+**1. The file's place and format** [read: the files at 475c20c739]
+
+- **The configuration:** `benchmarks/spot_figures/record.json`, schema `spot-record/v1`, beside `cards.py`, whose cards are to carry a stamp (PRF-493). One row a switch, 22 rows: `n`, `name`, `run` (`serve`: 1, 2, 4 to 17, 20; `proving`: 18, 19, 21; `planner`: 3, 22), `post` (the value the post claims), `read` (the reader's name, or null), `note`, and now `partial` where a reader compares less than the name says.
+- **The stamp:** `record.json` in the run's `out/`, written by `benchmarks/spot_figures/record.py stamp`:
+
+~~~text
+{"digest":   SHA-512 of the configuration file,
+ "observed": {"N": the run's value of switch N, ...},
+ "off":      [N, ...],
+ "with":     {"N": the record beside meta.json that switch N was read with, ...}}
+~~~
+
+- **The rule for `off`** is one comparison: a switch the run sets is off when its reader's value is not `post`. So another value, a value shown only in part, and a switch with no reader are all off. A stamp never clears what it cannot read.
+- **The digest changed** with this branch's two rows: `cb75719dcd069cd0…` here, `cb3775ec6f93a556…` at #8517's head. [run] Thursday's three stamps have one digest only if all are made from one tree.
+
+**2. What the two commits add** [run: 40 tests of `tests/test_record.py` pass locally in 0.1 s; ruff clean]
+
+- **858b803139, review-4's finding on #8517.** Switch 1 read `model`, which the serve tax writes as its pin for the model id whatever `--checkpoint DIR` serves (`benchmarks/serve_tax/serve_tax.py:571`, `:591-592` on `main`). [read] It now reads the `--model` path alone: the revision its last part names, else not shown, so off.
+- **475c20c739, your 03:59Z asks.**
+  - `stamp META.json --certifier CHECK.json DEPLOYMENT.json` reads the certifier's check of its own run and its `deployment.json`. Switch 20 is at the post's value when the serve's `meta.json` shows the tick, the check has `accepted: true` and its `summary.certificates` is at least 1.
+  - The stamp's `with` says which record cleared a switch (`{"20": "certifier"}`), and the command prints it.
+  - Switch 5 prints "tensor-parallel degree only".
+- **On the stored records** [run, 16:10Z: files fetched from the store]:
+
+~~~text
+$ record.py stamp r20261108-200706-1758/out/meta.json --certifier r20261108-203900-f61b/out/summary.json .../out/warden/deployment.json
+record cb75719dcd069cd0: a serve sets 17 of its 22 switches
+at the post's value: 1, 2, 5 (tensor-parallel degree only), 20 (with the certifier's record)
+off: 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+
+$ record.py stamp r20261108-195819-b00b/out/boundary/meta.json --certifier (the same two files)
+the certifier's record is not this serve's: its deployment's bucket is 250 ms and the serve's tick's is None µs; give the check and deployment.json of the certifier in front of this serve, or none
+~~~
+
+  - Without `--certifier` both serves stamp as on #8517: b00b off 6, 8, 9, 11 to 17, 20; 1758 off 4, 6 to 17, 20. [run]
+- **What a reviewer should know: the pair is held by the bucket alone.** Neither record names the other's run. The stamp refuses a certifier's record at another bucket or beside a serve under no tick, and beyond that it trusts whoever stamps. A record that names the serve it stood in front of would close this; it is network-accounting's record to change. [read: f61b's `deployment.json` holds a key, a session, `params` and `run_id`, its own]
+- **Switch 6 stays off on every stamp.** No record of "unmodified" exists for a reader to read (VLLM-254). [guess: I searched no vllm branch for one today]
+
+**3. Which runners write the stamp**
+
+| Run | Switches | Who writes the stamp | State |
+|---|---|---|---|
+| A serve by the serve tax (`benchmarks/serve_tax/run.sh`) | 1, 2, 4 to 17, 20 | Nobody changes the serve. The job's command ends with `record.py stamp "$OUT"/ARM/meta.json --out "$OUT"`, or anyone stamps the stored `meta.json` afterwards | Works on #8517 [run on b00b's and 1758's] |
+| The two-stage serve (`twostage_serve.sh`, vllm's, sent as a run input; not in the tree) | the same | The script itself. It keeps `meta.json` in its private directory and moves every other file out of `$OUT` (lines 102 to 106 of r20261109-220303-3352's copy) [run: the script fetched from the store], so only it can stamp, and it must let the stamp stay | **Needs two lines from vllm** (text below), for Wednesday 14:00Z's serve |
+| A serve behind the certifier | 20 | Whoever holds the serve's `meta.json` and the certifier's two public files, after both runs end: `--certifier` | On this branch |
+| The proving runs (SERVEDCARD's final card run by `benchmarks/served_units/window.py prove` [relayed: its 05:56Z checkpoint], and Thursday's round) | 18, 19, 21 | No reader yet. Its stamp today would list all three off | **Needs one answer** (below) |
+| The planner (BREAKEVEN's `total_cost.py`, its branch) | 3, 22 | No reader yet | **Needs one answer** (below) |
+
+**4. When it is done**
+
+- **Today:** the serve's side is complete on the branch once `r20261110-161232-fe78` ends rc 0 (the suites `benchmarks/spot_figures`, `repository` and `verity-graph` at 475c20c739, on vy-nebius-cpu-1's research pool; it waits about 50 minutes for a slot [run: the launch's own estimate], so about 17:40Z [guess: half an hour to run]).
+- **Wed 11 Nov 18:00Z:** readers for the proving run and the planner, if the two answers below reach me by Wed 06:00Z. Without them I write no reader: I will not guess a record's fields.
+- **Thu 12 Nov:** the issue's line "Thursday's serve, proving and planner runs each have a stamp in the store, with one digest" closes when those runs end. It needs #8517 and this branch in the tree the runs use, so your mark decisions after the cut, and vllm's two lines.
+- **Not in this piece:** `cards.py check` refusing a GLM-5.3 card with no stamp. It fails every card on `main` until the cards carry one (PRF-493).
+
+**5. Three texts to paste**
+
+For vllm, on VLLM-250:
+
+~~~text
+proofs (LEDGER), for Wednesday's two-stage serve. PRF-492 asks every run that feeds the post to publish a stamp of its configuration: the switches it has off, no request, count or time. Your `twostage_serve.sh` keeps `meta.json` private and moves every other file out of `$OUT`, so only the script can write it. Two lines, in the copy r20261109-220303-3352 ran:
+
+1. After the `BOUNDARY-COMMITS complete` line:
+   "$PY" benchmarks/spot_figures/record.py stamp "$PRIV/out/boundary-rows/meta.json" --out "$OUT" || echo "twostage-serve: no stamp"
+2. In the three `find` commands of the stray rule, one more exception: `! -path "$OUT/record.json"` in the first, `! -path ./record.json` in the other two.
+
+`record.py` and `record.json` are two files with no import outside the standard library (#8517, admitted, not on `main` yet). Until it lands, send both as run inputs and call the copy under `$D/inputs/`. The stamp is `{digest, observed, off, with}`; a test adds loads, rates, times, a host and a run id to a `meta.json` and finds none of them in it.
+
+Also for VLLM-254: nothing a serve records says the server is unmodified apart from the integration, so switch 6 is off on every stamp. One field in `meta.json` naming what was loaded into the server beyond the pinned vLLM would let a stamp read it. Which field would you write?
+~~~
+
+For SERVEDCARD (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379) and VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f):
+
+~~~text
+LEDGER, PRF-492. Thursday's proving run needs a stamp of three switches, read from a file the run already writes. For each, which file under the run's `out/` holds it, and under which key?
+- 18: that a session was proved with `--zk` (not plain).
+- 19: that the Lean verifier's statement was templated (not flat).
+- 21: how many provers ran on one GPU at once.
+If no file holds one of them, say so: that switch then stays off on the stamp until one does. By Wed 11 Nov 06:00Z.
+~~~
+
+For BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa):
+
+~~~text
+LEDGER, PRF-492. The planner's run needs a stamp of two switches, read from a file it already writes. Which file of a planner run's `out/`, and which keys, hold: δ, λ, the mix, S and the scope (switch 22: δ = 0.01; λ = 1; mix B128; S at the certified cap; a world year), and the theft target's bits (switch 3: an FP4 copy, 3.013e12 bits)? By Wed 11 Nov 06:00Z.
+~~~
+
+**What I did not check**
+
+- Whether Thursday's certifier writes the two files f61b wrote (`out/summary.json` with `accepted` and `summary.certificates`; `deployment.json` with `params.bucket_ms`). The form is the tree's own (`benchmarks/live_challenger/tests/test_auditor_warden.py:184`) [read], but Sunday's job script was a run input.
+- Whether `accepted` in the certifier's check implies that every link-window was certified. The reader asks for `accepted` and at least one certificate, and the docstring says only that.
+- The switch 17 reader against a stored two-stage `meta.json`: it is private. Unchanged from #8517.
+
+**Next:** PRF-496's comment (items 3 and 4 at their sources), then the claims pass for 20:00Z.
