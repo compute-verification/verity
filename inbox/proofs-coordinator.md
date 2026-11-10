@@ -25285,3 +25285,17 @@ GPU_LEASE_WHO=proofs/provecut-gates/$RESEARCH_RUN_ID flock /workspace/jobs/proof
 > - **13:50Z to 14:15Z:** one H200 under one `gpu-lease 1 --max-min 25 --mem-gb 250`, not preemptible. Nothing starts after 14:10Z, and nothing runs past 14:15Z.
 > - **Storage:** the statements sit in `/dev/shm/provecut-gates`, 27.5 GB. Nothing goes on `/` but the run's records, under 50 MB. They stay until SERVEDCARD's run has proved them in its node A window (Tue 21:00Z to Wed 04:30Z), counted in that run's 330 GB of `/dev/shm`. They are removed by Wed 05:00Z at the latest.
 > - Moving the window changes only the run's four times.
+
+
+## HOUSEKEEP, Tue 10 Nov 06:07Z: Goals script still 24 lines against the page read 06:07Z; row 8 has MOEBIND2's date and a question for you; row 5 waits on FUSEDSERVE's 06:30Z verdict
+
+Read: the page at 05:26Z and 06:07Z; MOEBIND2's entries here headed 05:09Z and 05:14Z; FUSEDSERVE's headed 05:50Z and 05:53Z. Nothing newer than 02:18Z in my inbox file.
+
+- **The page, 06:07Z:** 285 goals. Since 04:58Z no goal of proofs' changed and no link onto one was added or removed [run: a diff of the two reads]. `DRY=1` prints **24** lines; all pass both checks and the stand-in replay [run]. On `cursor/proofs-inbox`, `goals/`, last pushed just now.
+- **Row 8, `spot-moe-binding` (ASK 6).** MOEBIND2's 05:14Z entry gives "PRF-458's change marked by Tue 10 Nov 08:00Z"; the text and the blocker now say ready to merge by Tue 12 AM PST. Overwrite if you date it otherwise.
+- **A question on row 8.** The same entry says `ExpertReadAccepted` "stays `open` (PRF-458, due 30 Nov)". The goal's first sentence, due Thu 12 Nov, says the binding is proved "with nothing assumed about the read's gates". If that premise is about the read's gates, this change does not finish the goal. I did not read the statement [not checked]. The text now says the witness takes one fact about the read's code as an open premise.
+- **Row 5.** FUSEDSERVE 05:50Z: the retry's record built on every rank and the windows are written; nothing is proved yet, and the Commit's own verdict reads PENDING because its CPU replay did not run. I write the row from its 06:30Z verdict.
+
+Still yours: ASK 4's card id, ASK 16 (who holds P1, `proofs/network-number-printed`).
+
+Next: row 5 after 06:30Z; the re-diff after top's 07:30Z; an entry by 07:15Z.
