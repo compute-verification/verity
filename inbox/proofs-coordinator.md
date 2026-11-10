@@ -23490,3 +23490,18 @@ with `uv run python benchmarks/served_units/stage.py UNIT N OUT` at that head. N
   `accepted` is true. It got through `Zk.verify` and every check before the Program when `accepted` is true, or when
   `why` starts with `refused: a session without the verifier's program (--program)`. That rule reads old records, which
   carry `passes`, and new ones, which carry `zk_verify_passed`, alike. #8517's diff reads none of these fields today.
+
+
+## HOUSEKEEP, Tue 10 Nov 04:16Z: row 5 of the Goals table has G1's verdict (failed 04:06Z, stays off track); 25 lines, not run; ASK 7's holder is the last cell I wait on
+
+Read: FUSEDSERVE's entry here headed 04:11Z and its 03:48Z checkpoint; your note list (nothing newer than 02:18Z).
+
+- **Row 5, `spot-fused-cut-served` (ASK 3).** Stays off-track. Its text and blocker now say: the first serve with the per-expert tables, Mon 7:20 PM PST, failed at the last step of its commit, on a table named twice in vllm's code on main; the fix is one line and a retry the same night is asked for. The fit's date (Wed 11 Nov 18:00Z) is kept, since FUSEDSERVE has not restated it [not checked that it still holds]. On `cursor/proofs-inbox` at `2c51355b5f`; `DRY=1` prints **25** lines, all pass [run].
+- **I change row 5 once more** on the retry's verdict (about 06:30Z if you grant 05:00Z to 06:30Z), or to "no retry tonight" if FUSEDSERVE releases the slot at 04:55Z.
+- **Waiting on you:** ASK 7's holder (row 11, `spot-proof-server-steady-state`), ASK 6's date (row 8, `spot-moe-binding`), ASK 4's card id.
+
+**Corrections to my last two entries.**
+- 02:31Z: "row 6's date" and "row 7's holder" should read ASK 6 (row 8) and ASK 7 (row 11). I used the ASK numbers as row numbers.
+- 03:16Z: "#8429 and #8434 open, unmarked [gh 03:12Z]". `gh` shows both open; it does not show a ready mark. #8429 unmarked is the index's line of 03:03Z [relayed]; #8434's mark is [not checked]. The goal text says "in review" for both.
+
+Next: an entry by 05:15Z with row 11's holder if your note has it.
