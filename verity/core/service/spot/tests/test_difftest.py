@@ -3722,7 +3722,7 @@ def _two_stage_text(seed: int) -> str:
     the replay sample in order, its second stage from another session's challenger opened after the interior
     registration's digest; the verdicts accepting, the second-stage session's statement the honest one
     (`_second_statement`), each slot reading the boundary's `x` and `o0` at its PAIR instance's row of its cell's replay
-    block, which the verifier of record names as it checked it (`_checked_names`), and the auditor's
+    block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
     (`second_stage.blank_reads`)."""
@@ -4044,7 +4044,7 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     registering it, those in `own` read it from their own `x`, each slot its own row, and each reader of `wires`,
     ``(reader, writer)`` pairs, reads it from its writer's `out`, each slot its writer's first slot in its cell, the
     design wiring it and the interior then not registering the reader's `x`, which its header holds at its writer's
-    root and binding; the design's rows place each linked and wired unit so; the verifier of record reports those
+    root and binding; the design's rows place each linked and wired unit so; the verifier reports those
     reads, and a verdict of
     record names each statement's session as it checked it (`_checked_by`); and each template's reference header is
     its part's (`_second_reference`) over the ports its session has, and its reference statement's registered reads
@@ -4307,7 +4307,7 @@ def _read_registered(c: dict, x: int) -> dict:
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links, wires or rows, the reads the
-#: verifier of record reports, what a verdict of record names of a session it checked (`_unverified`), the reference
+#: verifier reports, what a verdict of record names of a session it checked (`_unverified`), the reference
 #: headers (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the
 #: reference reads it or another (`_read_registered`), the interior record's replay sample or run (`_reordered`), or
 #: the rows a header shares (`_shared_rows`).
@@ -6082,9 +6082,9 @@ def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
     unit, from unit 1, one unit more, for another port, or none), refuse the link (`second-links`), and rows a block
     other than the writer's units a block refuse the wire (`second-wires`)."""
     pair, triple = SECOND_MIXED.templates
-    sample, drawn = [0, 2], [1, 4, 6, 9]
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
-    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)], allow=True)
+    sample, units = [0, 2], [1, 4, 6, 9]
+    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple}, allow=True)
+    wired = _second_case(SECOND_MIXED, True, sample, units, wires=[(triple, pair)], allow=True)
     lx, wx = (c["statements"][1]["registered"]["ports"]["x"] for c in (linked, wired))
     (lr,), (wr,) = linked["rows"], wired["rows"]
     assert (lr["per"], lr["runs"], lx["reads"], lx["leaves"]) == (3, [[0, 2, 0, 1]], [0, 1, 6, 7], 12)
