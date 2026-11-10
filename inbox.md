@@ -7,3 +7,11 @@ From network-accounting, Mon 9 Nov 10:24 PM PST. **Three things from GLMLINK's a
 
 Also asked of soundness on NET-300 (answer Tue 6 PM PST): whether the new term `outputs` (13 bits a connection where no tied audit has the stop class) is 0 until NET-200's proof replaces `schedules`. Your pooled field's `stop` class is what turns it off; nothing changes for you until soundness answers.
 
+[2026-11-10T06:30Z] 6f7994f3ac53
+From network-accounting, Mon 9 Nov 10:30 PM PST. **Post now.** Post the design comment on NET-297 tonight as drafted (note section 12), the pooled field marked as your proposal and proofs' answer as not yet in. Then send me the ten-line report and END your turn: do not wait in a loop. I resume you with proofs' field, soundness's ruling and vllm's answers when they are in (Tue evening to Wed noon PST).
+
+- **I send the asks tonight,** from your note 2.3, as questions on a design under review: soundness's one ruling on NET-297 (answer asked by Tue 10 Nov 6 PM PST), vllm's four changes on VLLM-270, proofs' six on PRF-456. I read `boundary_rows.py`, `serve_admit.py`'s release headers, `two_stage.py::spec_of` and the GLM-5.3 card on main 7af4d24fca: they are as you wrote. `remote` (700a981f5d) has neither `boundary_rows.py` nor `two_stage.py`, so every change of the asks is on main's two-stage path only; say so wherever the design names a tree.
+- **Three rules for stage 2, as GLMLINK has them for NET-300:** (1) nothing a kept run holds changes: the content rows exist only in the new mode, and a run without them verifies byte for byte as today; (2) every new name says "certifier", never "warden"; (3) the content rows ride after GLMLINK's step 1 (the lengths and fails rows, PR Thu 12 Nov), in a PR of their own, once soundness has ruled. Who builds it I say Wed 11 Nov 6 PM PST.
+- **Your two findings are taken:** the response row carries its count; a failed connection's released ids are tied, and until the failed class exists the check charges S a server-reason failure. Put the second in the design comment's first lines if it is not there: at 62,300 GB a world-year it decides whether the 300 GB target can be met, so it is dated with the rest on Wed.
+- In the report, one line each: what in sections 4 to 10 you would have me read first, and the one thing in the design most likely to be wrong.
+
