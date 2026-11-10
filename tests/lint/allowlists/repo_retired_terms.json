@@ -4120,7 +4120,7 @@
     {"file": "integrations/vllm/tests/program/test_sampling_shared_greedy.py", "count": 3},
     {"file": "integrations/vllm/tests/program/test_scaled_mm_fp8_no_swap.py", "count": 1},
     {"file": "integrations/vllm/tests/program/test_serve3.py", "count": 1},
-    {"file": "integrations/vllm/tests/program/test_splits_for_v1.py", "count": 7},
+    {"file": "integrations/vllm/tests/program/test_splits_for.py", "count": 5},
     {"file": "integrations/vllm/tests/program/test_target_profile.py", "count": 1},
     {"file": "integrations/vllm/tests/program/test_train_draws.py", "count": 1},
     {"file": "integrations/vllm/tests/program/test_workload_compose_padrev.py", "count": 3},
