@@ -79,11 +79,10 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
   `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the census
   and the Boolean prices the grader reads with. From `integrations/vllm/verity_vllm`: the training-step frontend, which
   `capture.lower` lowers a traced step onto and the grader's steps are derived by. From the frontend's tests, by path:
-  the lf model. A run also reads what its caller names and the tree doesn't hold: the program, the starts registry,
-  each start's θ and an evaluator.
+  the lf model. A run also reads what the tree doesn't hold: the program it is given and the start's θ.
 - **Writes.** The run command writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's
   digests), `OUT/families/` with each counterexample family's `verified.json` and, with `--keep-checkpoints`, each
-  checkpoint's weights. `starts` prints a registry entry, and the other two commands only print.
+  checkpoint's weights. `capture.circuit` and `gates` only print.
 - **Loaded by.** Nothing outside this directory: `tests/test_boundaries.py` holds everything outside `benchmarks/` to
   that, and no other benchmark imports it. The grader loads the package from `--slowdown-code`, as a directory on
   `sys.path`, and refuses a second copy in one process.
