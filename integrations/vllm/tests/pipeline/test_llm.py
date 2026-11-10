@@ -420,6 +420,18 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
         B.build_engine(cps, case="M", engine_args=args, execution="eager", target=target)
 
 
+def test_a_tree_without_the_credited_reads_module_builds_and_refuses_its_variable_by_name(monkeypatch):
+    """The public release leaves out the int8 attention's credited read (`engine.int8_credited_env`): a build imports it by
+    name, and only when ``VERITY_INT8_CREDITED_READ`` asks for it, so a tree without it builds its engines and refuses the
+    variable by name."""
+    from verity_vllm.engine import build as B
+    monkeypatch.setitem(sys.modules, B.INT8_CREDITED_ENV, None)
+    assert B.credited_read(SimpleNamespace(), None) is None
+    with pytest.raises(Refused, match=r"VERITY_INT8_CREDITED_READ='copy:/scratch/paged\.so' refused: its module "
+                                      r"verity_vllm\.engine\.int8_credited_env is not on this tree"):
+        B.credited_read(SimpleNamespace(), "copy:/scratch/paged.so")
+
+
 def test_importing_the_package_loads_neither_torch_nor_vllm():
     code = "import sys, verity_vllm; assert not {'torch', 'vllm'} & set(sys.modules), sorted({'torch', 'vllm'} & set(sys.modules))"
     subprocess.run([sys.executable, "-c", code], check=True, cwd=config.ROOT)

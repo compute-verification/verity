@@ -45,7 +45,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
-from verity_vllm import config
+from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
 from verity_vllm.protocols.remote_bandwidth.interface import Stale
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
@@ -112,8 +112,8 @@ class InPlaceBackend(StoreBackend):
 
         super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
         session_module("prover")
-        self.dev = session_module("device", config.REMOTE_SESSION)
-        ipm = session_module("inplace", config.REMOTE_SESSION)
+        self.dev = session_module("device", remote.REMOTE_SESSION)
+        ipm = session_module("inplace", remote.REMOTE_SESSION)
         self.torch, self.codec, self.moved = torch, codec, moved
         self.calibration_passes, self.calibration_warm, self.warmup_ms = calibration_passes, calibration_warm, warmup_ms
         self.model, self.paged_lib, self.decoded, self.credited = model, paged_lib, None, None
