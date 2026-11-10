@@ -1,1 +1,1 @@
-No branch is in review yet: the proof's audit records failed twice on Mon 9 Nov over where the change put a premise, the fix is pushed and the records are running again. The change is due ready to merge by Tue 10 Nov 12 AM, with one fact about the served read's code still an open premise.
+In review since Mon 9 Nov 10 PM and due ready to merge by Tue 10 Nov 12 AM; then it needs main to move. One fact about the check's code, not the read's gates, stays an open premise that only the honest witness takes.

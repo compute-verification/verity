@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # proofs' Goals page fix for CON-12: one `research goals set` line a goal, 24 lines: proofs' 24 open goals and one
 # new goal. Written by HOUSEKEEP and NOT RUN. Read proofs-goals-table.md first.
-#   ASK_128K=<card id> bash proofs-goals-fix.sh    run every line; a refused line is reported and the rest still run
+#   ASK_128K=e9c0fbf9-c4f2-4858-97bb-6c1f135efb44 bash proofs-goals-fix.sh    run every line (the id is ASK-264's card);
+#                                                  a refused line is reported and the rest still run
 #   DRY=1 bash proofs-goals-fix.sh                 print the commands and send nothing
 # Every line passes --description, and --blockers or --no-blockers: the site checks a goal's whole text on any
 # write, and the texts on the page today predate its rules. `--wait` replaces a goal's whole list of links.
@@ -9,13 +10,13 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
-# ASK 4: the ask to Daniel on what the 128k result is called. Its card's id goes in ASK_128K, and the 128k goal
+# ASK 4: the ask to Daniel on what the post says of the 128k result (ASK-264). Its card's id goes in ASK_128K, and the 128k goal
 # waits on it. Without it the script stops before it writes anything; ASK_128K=none runs without the link.
 ASK_128K="${ASK_128K:-}"
 if [ -z "$ASK_128K" ]; then
   if [ -n "${DRY:-}" ]; then ASK_128K="THE-ASK-CARD-ID"; else
     echo "proofs-goals-fix: set ASK_128K to the id of the ask card on what the 128k result is called (ASK 4 of the" >&2
-    echo "table), as in ASK_128K=<id> bash proofs-goals-fix.sh; ASK_128K=none runs without that link" >&2; exit 2; fi
+    echo "table; ASK-264's is e9c0fbf9-c4f2-4858-97bb-6c1f135efb44), as in ASK_128K=<id> bash proofs-goals-fix.sh; ASK_128K=none runs without that link" >&2; exit 2; fi
 fi
 ask128=(); [ "$ASK_128K" = none ] || ask128=(--wait "ask:$ASK_128K")
 
@@ -39,11 +40,10 @@ g proofs/spot-checks-closed --title "Guarantee checks closed or scoped" --status
 g proofs/spot-numbers-lean-checked --status on-track --wait goal:ci/fine-grained-check --no-blockers \
   --description @desc/spot-numbers-lean-checked.md
 
-# ASK 3, the retry passed, and the status is your forecast: see the table.
-g proofs/spot-fused-cut-served --status on-track --no-wait --no-blockers \
+g proofs/spot-fused-cut-served --status off-track --no-wait --blockers @blockers/spot-fused-cut-served.md \
   --description @desc/spot-fused-cut-served.md
 
-# ASK 4, a gap you fill: see the table.
+# ASK 4, the card exists; the run command now carries its id: see the table.
 g proofs/spot-128k-attention-proved --status off-track --wait goal:vllm/served-128k-window-committed \
   --wait goal:circuits/glm-long-dsa-row --wait goal:circuits/glm-served-calls-fit-block \
   --wait goal:circuits/glm-sparse-attention-zk --wait goal:circuits/glm-top-p-zk ${ask128[@]+"${ask128[@]}"} \
@@ -52,7 +52,6 @@ g proofs/spot-128k-attention-proved --status off-track --wait goal:vllm/served-1
 g proofs/spot-advice-certified --status off-track --blockers @blockers/spot-advice-certified.md \
   --description @desc/spot-advice-certified.md
 
-# ASK 6, a date from MOEBIND2, and a question: see the table.
 g proofs/spot-moe-binding --status off-track --blockers @blockers/spot-moe-binding.md \
   --description @desc/spot-moe-binding.md
 
@@ -78,6 +77,7 @@ g proofs/spot-claims-checked --status on-track --tag proofs --no-blockers --desc
 
 g proofs/spot-output-accounting --status off-track --no-blockers --description @desc/spot-output-accounting.md
 
+# ASK 17, a text of mine that ASK-268 made false: see the table.
 g proofs/spot-post-ready --status off-track --wait goal:proofs/spot-ten-percent \
   --wait goal:proofs/spot-128k-attention-proved --wait goal:proofs/spot-two-stage-e2e \
   --wait goal:proofs/spot-bind-term --wait goal:proofs/weight-security-bridge \
