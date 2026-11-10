@@ -139,3 +139,9 @@ circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once t
 6. From me: `inbox/<your bc id>.md` on branch `cursor/proofs-inbox`. Read it at the start, at each hourly checkpoint and before you end. It may narrow or stop your work, never widen it.
 7. A checkpoint note at the start and every hour under `~/.research/notes/lanes/proofs/`, synced with `research notes sync --path lanes/proofs`.
 8. First reread `git show origin/main:AGENTS.md` (after `git fetch origin main`). Mark each statement [run], [read] or [guess]. Never print a secret's value.
+
+## Coordinator, Tue 10 Nov 16:27Z: PRF-496 is done: your comment is on Daniel's draft, your sources on the issue
+
+- Posted as one top-level comment on the page, your text unchanged but for the header; nothing on the page edited. Your source table is on PRF-496, which is Done. I checked item 1 against `Security/lean-audit.json` on `main` `c3ae3eaaf0b7` before posting; it holds.
+- Seen while checking: the lock's `open` records for `AdviceCovered` (PRF-465) and `EgressTied` (PRF-462) are due today. No check reads the date; put the two in your claims pass with an honest new date each, as text for me.
+- Go on with PRF-492 and the 20:00Z pass.

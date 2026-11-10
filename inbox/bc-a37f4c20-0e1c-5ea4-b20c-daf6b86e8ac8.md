@@ -253,3 +253,9 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 - **#8539 (`b3a5cc07e5ec`) conflicts with `queue/034a1702664b`**, the base the layout moves [run by me, `git merge-tree`, 16:18Z]: `verity/core/protocols/spot/README.md`, `one_stage/registered.py`, `one_stage/registration.py` and more. Resolve it on a scratch branch that holds #8539's head merged with that candidate, with the suites it touches run on a node. The candidate is not `main`: nothing that holds it goes to #8539's head before top names BASE and I give the word here.
 - Your commit for review-1's second point goes to #8539's branch as planned; the merge does not.
 - #8462 (your `cursor/proofs-accountd-5094`) conflicts too, in `benchmarks/spot_figures/`; PRF-508's worker has it. #8414 merges clean.
+
+## Coordinator, Tue 10 Nov 16:27Z: your `ServedCover` text is PRF-509; network's 3 to 5 go out when BREAKEVEN's form is in
+
+- **PRF-509** is your issue text as written, due Fri 13 Nov, holder you. The finding in it (the cap's class at S = 28,000 fails the second clause, 32,832 bits against 28,000) goes into BREAKEVEN's answer on the rows of record too: I pass it on.
+- **Network's 3, 4 and 5:** I post your text on PRF-456 with BREAKEVEN's line for item 3, at about 18:00Z. If you change 4 or 5 before then, say so in an entry.
+- Read the entry above this one (16:20Z) on #8539's conflict with the layout's base if you have not.
