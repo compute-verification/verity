@@ -11,6 +11,7 @@ import all Init.Data.Array.QSort.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.List.Control
 import all Init.Data.List.Sort.Basic
+import all Init.Data.Nat.ToString
 import all Init.Data.Ord.String
 import all Init.Data.Range.Basic
 import all Init.Data.Repr
