@@ -9,7 +9,7 @@ def _merkle_roots() -> list[Any]:
     """The hidden-index Merkle read (`verity.ml.commitments.gates.merkle`), binary and 4-ary, at one level (a level is two or three
     SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
     three siblings that the binary swap does not have."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.commitments.gates.merkle import MerkleRead
 
     return [

@@ -91,7 +91,7 @@ def bf16(a: ArrayLike) -> np.ndarray:
 
 
 def ex2(a: ArrayLike) -> np.ndarray:
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
     from verity.definitions.ops import mufu
     a = u32(a)
     if a.size == 0:

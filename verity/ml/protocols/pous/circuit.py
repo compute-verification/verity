@@ -49,12 +49,12 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO, L, maj
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Type
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO, L, maj
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Type
 
 __all__ = ["P2_C0", "P2_W", "SCHOOL", "TOOM", "PousAdd", "PousModFold", "PousModSquare", "PousSquare", "PousSquareJoin",
            "PousToom3Eval", "PousToom3Interp", "column_sum", "div3", "fold", "join", "school_square",

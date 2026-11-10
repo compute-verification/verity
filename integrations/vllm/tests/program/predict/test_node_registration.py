@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.commitments import hm96
 from verity_vllm.commit import registered_rows as RR
 from verity_vllm.commit import step_rows

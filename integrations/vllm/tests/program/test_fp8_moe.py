@@ -2,7 +2,7 @@
 BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s blockwise CUTLASS GEMM over a ragged N (GLM-5.3's
 `fused_qkv_a_proj`, N = 2624 over 21 weight-scale rows).
 
-* the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
+* the plain-integer reference (`verity.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
 * the step's pinned vectors (`verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
@@ -23,15 +23,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.batch import type_shape
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.boolean import trace as TR
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import bind
+from verity.circuits.boolean import trace as TR
 from verity.definitions.ops.prims import F32ToE4m3Sat
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions import boolean as SW

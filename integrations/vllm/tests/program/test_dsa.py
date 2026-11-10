@@ -24,8 +24,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import prims as P

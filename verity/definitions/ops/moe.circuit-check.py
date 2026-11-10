@@ -6,7 +6,7 @@ from typing import Any
 
 def _core_roots() -> list[Any]:
     """The select over 3 and 128 experts, the coordinates on both steps over 3 experts at K = 32, and the GEMMs at N = 3."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import moe as M
     from verity.definitions.ops import prims as P
 

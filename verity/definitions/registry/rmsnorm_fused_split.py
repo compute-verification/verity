@@ -7,8 +7,8 @@ and the tail emit v2's gates on the same operands in the same order (`verity/def
 holds them to v2 word for word and gate for gate)."""
 from __future__ import annotations
 
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import composite
+from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16

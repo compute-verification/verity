@@ -7,8 +7,8 @@ evaluator), which re-exports it from here.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import primitive
+from verity.circuits.types import Value
 from verity.definitions.silicon import fp32 as _fp32
 
 F32 = Value(32)

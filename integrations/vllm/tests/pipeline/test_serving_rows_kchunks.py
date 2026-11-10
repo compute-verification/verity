@@ -26,9 +26,9 @@ from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import fp8_moe_experts as X
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32
 

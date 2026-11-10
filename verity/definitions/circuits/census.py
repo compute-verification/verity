@@ -109,16 +109,16 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Iterable, Iterator
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import ports
-from verity.ml.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from verity.ml.circuits.defs import CompositeDefinition, Node, PrimitiveDefinition, bind
-from verity.ml.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.liveness import _MEMBER_LIMIT
-from verity.ml.circuits.program import input_id, is_input
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided, concat
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits import boolean as BL
+from verity.circuits import ports
+from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
+from verity.circuits.defs import CompositeDefinition, Node, PrimitiveDefinition, bind
+from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
+from verity.circuits.layout import resolve
+from verity.circuits.liveness import _MEMBER_LIMIT
+from verity.circuits.program import input_id, is_input
+from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided, concat
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
 
@@ -178,7 +178,7 @@ COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
 #: family `Name_vN` -> its counters per instance from its statics (a subset of `COUNTERS`; the rest stay bottom-up)
 FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
 
-#: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (`verity.ml.circuits` never imports a
+#: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (`verity.circuits` never imports a
 #: semantics package, and decoding a Program imports none)
 RULED: dict[str, str] = {"S8Dot_v1": "verity.definitions.ops.s8", "S8Matmul_v1": "verity.definitions.ops.s8",
                          "S8Dot_v2": "verity.definitions.ops.boolean.s8", "S8Matmul_v2": "verity.definitions.ops.boolean.s8",

@@ -55,12 +55,12 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import OR, const_bits, mux
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ports import In, Ports
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import OR, const_bits, mux
+from verity.circuits.defs import bind, composite
+from verity.circuits.ports import In, Ports
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 from .. import fp32 as W
 from . import gemm as BG
@@ -182,7 +182,7 @@ def qk_softmax_row_pad_reference(q, k, n: int, DOT) -> np.ndarray:
     """What `QkSoftmaxRowPad_v1{T, D, DOT}` computes at key count n, by its specification: `QkSoftmaxRow_v1{T=n, D, DOT}` of q
     and k's first n rows, then T - n words +0, for a batch (q ``(B, D)``, k ``(B, T, D)``, bf16 words). Refuses n outside
     1..T, for which the circuit's words (all +0 at n = 0, n = T's above T) are not this function's."""
-    from verity.ml.circuits.evaluation.bits import evaluate_words
+    from verity.circuits.evaluation.bits import evaluate_words
 
     q, k = np.asarray(q, dtype=np.uint16), np.asarray(k, dtype=np.uint16)
     T, D = k.shape[1], k.shape[2]

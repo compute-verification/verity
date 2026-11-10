@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_config.settings import of
 from verity_flock import circuit as FC
@@ -199,9 +199,9 @@ def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_p
     """`test_struct_lower`'s toy, whose unit reads a library table three times, as a structural statement (beside a row
     spanning SHA-512 blocks, as a composed circuit needs one): the flat statement's by `_structural_is_flat`, with the read's
     rows once in the template, in the table-reading primitive's one definition."""
-    from verity.ml.circuits.boolean import BIT
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.boolean import BIT
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
 
     unit = bind(CompositeDefinition("TmplToyReads", 1, (), lambda _S: ((("x", Value(8)), ("y", Value(8)), ("w", Array(2048, BIT))),
                                                                        Array(4, Value(8))),
@@ -260,11 +260,11 @@ class _Block(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, _Block())
 """
 WRITE = """
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 d = bind(definition("TmplNoTorch", 1, lambda C, a, b, w: add(C, a, b, width=16, carry_out=True) + [C.AND(w[0], w[2047])],
@@ -335,7 +335,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
     partition and partition check the flat statement's."""
     from verity.core.protocols.spot.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     args, rows, _kw = _toy(0)
     flags, kw, indices = [], {}, None

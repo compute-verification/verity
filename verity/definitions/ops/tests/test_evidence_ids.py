@@ -1,4 +1,4 @@
-"""Every ``*_evidence.json`` under ``verity/ml/circuits`` is keyed by what it describes and holds only well-formed ids.
+"""Every ``*_evidence.json`` under ``verity/circuits`` is keyed by what it describes and holds only well-formed ids.
 
 Each file maps a registered key (an instruction id, a model or pipeline name, a target name, a Definition id) to roles,
 and each role to an id, a list of ids or nested roles.  The prose the key carries (an instruction's ``evidence``, a model's
@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.definitions.ops import kv_cache, moe, prims
 from verity.definitions.silicon import instructions, integer, models, total_fp8
 from verity.definitions.circuits.targets import target
 
-CIRCUITS = (Path(instructions.__file__).resolve().parents[2] / "ml" / "circuits")
+CIRCUITS = (Path(instructions.__file__).resolve().parents[2] / "circuits")
 
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{8,64}")

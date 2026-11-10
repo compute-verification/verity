@@ -17,16 +17,16 @@ anywhere else is data the Program still holds, and `program_data` lists it by th
 * a constant inside a Definition is data unless an enclosing Definition is an operation, which the caller names (`operation`).
 
 A table a primitive reads by index is no gate, so the primitive declares it (`PrimitiveDefinition.tables`): a ``library``
-table is an operation's own definition, and a ``registered`` one is the program's, which the primitive still holds. `verity.ml.circuits`
+table is an operation's own definition, and a ``registered`` one is the program's, which the primitive still holds. `verity.circuits`
 names no operations and no library tables; the guard is `verity.definitions.circuits.operations.program_data`, which passes in both.
 """
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.layout import Circuit
-from verity.ml.circuits.program import REGISTRATION, RUN, is_input
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.layout import Circuit
+from verity.circuits.program import REGISTRATION, RUN, is_input
 
 BINDING_TIMES = (REGISTRATION, RUN)
 

@@ -22,7 +22,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, "benchmarks/verifier_cost")
 import run
-from verity.ml.circuits import partition_object as PO
+from verity.circuits import partition_object as PO
 cfg, d, o = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 prog = run.serve(cfg, "word")
 text = run.text_of(prog)

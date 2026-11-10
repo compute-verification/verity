@@ -156,7 +156,7 @@
    "groups": "0-51,53-54,60-63,66-69,93,97-103,106-107,113-117,124-125,127,155-169,172-174,194,201-206,219-226,285,303,325-350,356,406,425",
    "registry": true
   },
-  "verity.ml.circuits.population.circuit-check#_population_roots": {
+  "verity.circuits.population.circuit-check#_population_roots": {
    "groups": "0-48,50-63,66-70,97-103,106-107,113-114,124-127,155-170,172-174,194,201-206,219-237,325-353,356,430-431",
    "registry": true
   },
@@ -911,8 +911,8 @@
     "verity/core/protocols",
     "verity/core/protocols/certifier",
     "verity/ml",
-    "verity/ml/circuits",
-    "verity/ml/circuits/boolean",
+    "verity/circuits",
+    "verity/circuits/boolean",
     "verity/definitions/ops",
     "verity/ml/commitments",
     "verity/ml/commitments/gates",
@@ -1295,7 +1295,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/population.circuit-check.py"
+    "verity/circuits/population.circuit-check.py"
    ]
   },
   {
@@ -1959,9 +1959,9 @@
     "verity/core/protocols/pouw/leaf_lanes.py",
     "verity/core/protocols/pouw/live_reads.py",
     "verity/core/protocols/spot/one_stage/produced.py",
-    "verity/ml/circuits/evaluation",
+    "verity/circuits/evaluation",
     "verity/definitions/silicon",
-    "verity/ml/circuits/units.py",
+    "verity/circuits/units.py",
     "verity/ml/commitments/frame_v3",
     "verity/ml/commitments/gates/hm96.py",
     "verity/ml/commitments/hm96",
@@ -2276,7 +2276,7 @@
   },
   {
    "files": [
-    "verity/ml/circuits/boolean.circuit-check.json"
+    "verity/circuits/boolean.circuit-check.json"
    ]
   },
   {
@@ -2546,7 +2546,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/partition_object.py"
+    "verity/circuits/partition_object.py"
    ]
   },
   {
@@ -2620,7 +2620,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/partition_v2.py",
+    "verity/circuits/partition_v2.py",
     "verity/ml/commitments/gates/__init__.py",
     "verity/ml/commitments/gates/sha512.py"
    ]
@@ -2657,7 +2657,7 @@
   },
   {
    "probes": [
-    "verity/ml/circuits/population.py"
+    "verity/circuits/population.py"
    ]
   },
   {

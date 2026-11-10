@@ -17,7 +17,7 @@ A step is always an **engine step**: the engine's `s`-th step (a request's step 
 never a device tick. The ticks a step spans on each device are the placement's (`Placement.ticks`), and a window
 (`Window`) here is a run of engine steps (`Window.steps`), never of ticks.
 
-* **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/ml/circuits/PROTOCOL.md` §6), each a
+* **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/circuits/PROTOCOL.md` §6), each a
   `Value<w>` leaf of `width` bits. A value is registered (a `RegisteredInput`: the weights), a run input (an `Input` not
   bound by registration: a request's tokens, `inputs`) or a gate's output. A gate's operands are `ops` (`layout.Circuit.gate(i).operands`). The operands it
   uses when the circuit's values are `x` are `uses x`: all of `ops`, except that a gather uses its index and the one
@@ -33,7 +33,7 @@ never a device tick. The ticks a step spans on each device are the placement's (
   an input gate wherever it is placed: it arrives over a side channel, and is no device's work.
 * **Live.** A value is live when step `s` begins if it was produced before `s` (or registered) and is an operand of a
   gate the execution runs at step `s` or later: the boundary values `out(S_<s) ∩ in(S_≥s)` of
-  `verity/ml/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
+  `verity/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
   live: `liveness.py`'s dead gates, and a step's outputs that leave the device. Liveness is structural (`ops`): a later
   gather may select any word of its column, so the whole column stays live.
 * **Reads.** Step `s` reads the values produced before it that its gates use: `in(S_s)`, the boundary inputs of step

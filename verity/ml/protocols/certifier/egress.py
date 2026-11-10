@@ -45,8 +45,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import NamedTuple, Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, maj, or_reduce
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean.forms import ONE, OR, ZERO, add, maj, or_reduce
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.io_tie import (CELL_USED, EMPTY, END_ENTRY, HEADER, ID_AT, ID_DIGITS, _eq, _lt,

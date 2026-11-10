@@ -20,12 +20,12 @@ swapped as nvcc contracts that instantiation: ``RopeOutAdd_v2(y, x, s, c) = bf16
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind, composite
-from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind, composite
+from verity.circuits.refs import Coll, Explicit, concat, strided_view
+from verity.circuits.types import Array
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 from verity.definitions.evidence import EVIDENCE
 
 from . import b1

@@ -66,9 +66,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.ops.prims import F32ToE4m3Sat, const
 from verity.definitions.ops.scalar import (BitAnd, BitNot, BitOr, F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add, I32Le, SelectF32,
                                            SelectI32)

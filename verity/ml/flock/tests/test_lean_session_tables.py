@@ -166,8 +166,8 @@ def _program(path: Path, d: int) -> Path:
     """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
     from verity_flock import subcircuit_templates as TM
 
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.circuits.program import Program
 
     path.write_bytes(canonical_json(encode_program(Program(TM.rope_head(d).definition()))))
     return path

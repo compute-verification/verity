@@ -7,8 +7,8 @@ import random
 import pytest
 
 from verity.definitions.circuits.census import FAMILY_COUNTS
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import s8 as _boolean_s8  # noqa: F401  (registers S8Dot_v2's rule)
 from verity.definitions.ops import s8 as S8

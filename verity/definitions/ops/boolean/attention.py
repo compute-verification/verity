@@ -15,15 +15,15 @@ reciprocal, whose table read is a plain circuit. The QK dot is `gemm.DotBf16_v3`
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 
 from .. import fp32 as W
 from .. import mufu as M
 from . import mufu as MU
 from . import softmax as SM
-from verity.ml.circuits.boolean.forms import NOT, OR, const_bits, mux, or_reduce
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.forms import NOT, OR, const_bits, mux, or_reduce
+from verity.circuits.boolean.trace import definition
 
 __all__ = ["Fa2InvSum", "F32AddFtz", "F32AddFtzV4", "F32FmaFtz", "F32FmaFtzV4", "F32FmaSubFtz", "F32FmaSubFtzV4", "F32Max",
            "F32MulFtz", "F32MulFtzV4", "F32SubFtz", "F32SubFtzV4", "GuardNegInfZero"]

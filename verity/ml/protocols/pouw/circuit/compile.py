@@ -61,11 +61,11 @@ from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.program import REGISTRATION, Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, runs
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.program import REGISTRATION, Program, is_input
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, runs
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from verity.core.protocols.pouw import grind as GR
@@ -73,7 +73,7 @@ from verity.core.protocols.pouw.protocol import DomainError
 from . import seeds as SD
 
 try:
-    from verity.ml.circuits import ports as _ports
+    from verity.circuits import ports as _ports
 except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
     _ports = None
 
@@ -1080,7 +1080,7 @@ class Compiled:
 
     def query(self) -> dict:
         """`Q_template_instances` over the root's templates, first use first: the units', the rests' and the served ones'."""
-        from verity.ml.circuits.partition_object import template_instances_query
+        from verity.circuits.partition_object import template_instances_query
 
         seen: dict[str, Any] = {}
         for nd in self.program.root.body.nodes:
@@ -1126,7 +1126,7 @@ class Compiled:
 
     def check_gates(self) -> GateCheck:
         """The gate-level checks, on the flattened Program: for one small enough to flatten (a test's, a reduced layer)."""
-        from verity.ml.circuits.cut import CallGraph, boundary_widths, check_cut, fits
+        from verity.circuits.cut import CallGraph, boundary_widths, check_cut, fits
 
         fn = self.program.fn
         body = fn.body
@@ -1323,7 +1323,7 @@ def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
 
 
 def _check(c: Compiled) -> None:
-    from verity.ml.circuits.cut import fits
+    from verity.circuits.cut import fits
 
     fn, plan = c.program.fn, c.plan
     body = fn.body

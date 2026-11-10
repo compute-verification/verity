@@ -7,7 +7,7 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The bindings `ops.argmax`'s sidecar checks, on bits."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import argmax as BA
 
     return ([bind(BA.ArgmaxChunkBest, C=c) for c in (128, 8)] + [bind(BA.ArgmaxChunkIdx, C=c) for c in (128, 8)]

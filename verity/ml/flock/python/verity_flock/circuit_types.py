@@ -8,7 +8,7 @@ share this one object.
 - A type holds no dead item: dead code is removed only against its own outputs.
 - The prover lays a type out as rows at a placement. That's its layout, with a digest of its own; the type holds none of it.
 
-**Content**, hashed as canonical JSON (RFC 8785, `verity.ml.circuits.codec.canonical_json`)::
+**Content**, hashed as canonical JSON (RFC 8785, `verity.circuits.codec.canonical_json`)::
 
     {"format": "verity/circuit-type/v1", "label": "library" | "program",
      "in": [[count, width], ...], "out": [[count, width], ...],       ports: arrays of elements, in order
@@ -40,7 +40,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.definitions.circuits import library
 
 from .gf2 import L

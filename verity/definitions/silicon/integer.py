@@ -23,7 +23,7 @@ An H200 (sm_90a) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[
 m16n8k32.  Each of the eight forms of each instruction reproduces this module's step at its formats on every word, with the
 clamp at D.  `HOPPER_SM90_S8_K32` and `BLACKWELL_SM100_S8_K32` are that step under each architecture's name.
 
-`step_s8_bits` is the s8 x s8 step as a GF(2) circuit (`verity.ml.circuits.boolean.forms`), the builder of
+`step_s8_bits` is the s8 x s8 step as a GF(2) circuit (`verity.circuits.boolean.forms`), the builder of
 `verity.definitions.ops.boolean.gemm.BlackwellS8ImmaDot32_v2`.
 
 The store ids each model's ``validated`` string rests on are :data:`EVIDENCE_IDS` (``integer_evidence.json``), keyed by
@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from verity.ml.circuits.boolean.forms import NOT, ONE, compress_columns
+from verity.circuits.boolean.forms import NOT, ONE, compress_columns
 
 from .errors import InvalidArtifact
 from .term import FP32_SIGNIFICAND_WIDTH, Term

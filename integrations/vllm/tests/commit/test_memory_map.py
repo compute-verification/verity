@@ -21,11 +21,11 @@ from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-i
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
 from verity.definitions.circuits.census import step_of
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, concat
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Affine, Coll, concat
 from verity.definitions.circuits.requirement import from_census
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program import prune as P
 from verity_vllm.program.frontend.derive import derive_report

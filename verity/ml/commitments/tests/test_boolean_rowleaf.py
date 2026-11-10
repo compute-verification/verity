@@ -10,10 +10,10 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import compile as compile_bits
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import compile as compile_bits
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import rowleaf as R
 from verity.ml.commitments.frame_v3 import vectors_sha512 as FV
 from verity.ml.commitments.gates import rowleaf as G

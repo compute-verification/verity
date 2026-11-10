@@ -7,8 +7,8 @@ import json
 
 import numpy as np
 import pytest
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity.definitions.registry import moe
 from verity.definitions.numerics import moe_twins
 

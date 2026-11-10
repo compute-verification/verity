@@ -36,7 +36,7 @@ MODES = ("rows", "unit", "delta", "logical", "check")
 
 
 def _qwen3(name: str, **kw):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import prims as P
 
     if name.startswith("registry"):
@@ -51,7 +51,7 @@ def _qwen3(name: str, **kw):
 
 
 def _glm(form: str, **kw):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
     from verity.definitions.registry import fp8_moe_experts as X
 

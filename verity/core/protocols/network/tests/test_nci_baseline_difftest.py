@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import codec
+from verity.circuits import codec
 
 LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
 

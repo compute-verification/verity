@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from typing import Sequence, Union
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, array_of
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, array_of
+from verity.circuits.types import Array
 from verity.definitions.ops.prims import const
 
 from . import words as W

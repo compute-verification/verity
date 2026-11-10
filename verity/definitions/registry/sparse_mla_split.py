@@ -67,13 +67,13 @@ from importlib import resources
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
+from verity.circuits.defs import bind, composite, primitive
 from verity.definitions.ops import scalar as SC
 from verity.definitions.ops.boolean.mufu import Fit
 from verity.definitions.ops.mufu import DivFullRcp
 from verity.definitions.ops.prims import const
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import sparse_mla as M

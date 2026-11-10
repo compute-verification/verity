@@ -1,8 +1,8 @@
 """The served Program on bits: the Boolean version of each Definition a derived Program calls, and how far a Program is from
 pure bits.
 
-A Definition is Boolean (`verity.ml.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
-only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`: its
+A Definition is Boolean (`verity.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
+only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
 looked up among every module of `verity.definitions.ops.boolean` and of `verity.definitions.registry` (`registry.catalog`), and
@@ -43,11 +43,11 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
+from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
+from verity.circuits.types import Array, RecordType, Tuple, Type, Value
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
 #: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
@@ -64,7 +64,7 @@ def word_descriptor(d: str | Path) -> Path:
 def write_word(d: str | Path, program, word_digest: str) -> str:
     """Write a lifted Program's word Program into derive dir ``d`` (`WORD_DESCRIPTOR`) and return its digest, refused unless it is
     ``word_digest`` (the derive's ``ir.word_digest``)."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     desc = encode_program(program.word)
     digest = program_digest(desc)
@@ -206,7 +206,7 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     bindings = getattr(fn, "bindings", None) or {}
     notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
-        from verity.ml.circuits.boolean.trace import word_of
+        from verity.circuits.boolean.trace import word_of
         for d in by_name.get(fn.name, ()):
             # ``word_statics``: the statics its word has no counterpart for, as the word Definitions they compute, each bound to its
             # Boolean version (`RMSNormFusedCuda_v3`'s RSQRT computes `RsqrtApprox_v1`)
@@ -384,7 +384,7 @@ def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
 
 def _word_static(v: Any) -> Any:
     """A Boolean Definition's binding as its word's: a Boolean Definition as the word Definition it computes (`trace.word_of`)."""
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
     if isinstance(v, CompositeDefinition):
         v = bind(v)
     if isinstance(v, FunctionDefinition) and getattr(getattr(v, "defn", v), "word", None) is not None:
@@ -579,7 +579,7 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
     keys of those it can't price: no Boolean version, or one that reaches a primitive that is no gate. The one table a count
     of (c, k)-inference blocks reads (`NciCheck.Count`'s ``table``)."""
     from verity.definitions.circuits import census as CE
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
 
     prims: dict[str, Any] = {}
     seen: set[int] = set()
@@ -611,7 +611,7 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
 
 
 def load_program(path: Path):
-    from verity.ml.circuits.codec import decode_program, program_digest
+    from verity.circuits.codec import decode_program, program_digest
     from verity.definitions.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:

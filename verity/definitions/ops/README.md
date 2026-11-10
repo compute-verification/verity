@@ -2,7 +2,7 @@
 
 The primitive circuits' Definitions: the exact, hardware-faithful semantics of the operations ML kernels are built from,
 registered as Definitions that `verity.definitions` composes into the served kernels. Each module registers one family
-and its docstring lists what it registers. The terms and the front doors are [`verity.ml.circuits`](../../ml/circuits/README.md)'s.
+and its docstring lists what it registers. The terms and the front doors are [`verity.circuits`](../../circuits/README.md)'s.
 
 | Module | What it registers |
 | --- | --- |
@@ -21,13 +21,13 @@ and its docstring lists what it registers. The terms and the front doors are [`v
 | `kv_cache` | the BF16 -> E4M3 conversion of a KV-cache append |
 
 `ops.boolean` holds their Boolean versions: each module the next version of an `ops` module's word Definitions, the same
-function on bits. They are built with `verity.ml.circuits.boolean`'s `forms`, `gather` and `trace` and
+function on bits. They are built with `verity.circuits.boolean`'s `forms`, `gather` and `trace` and
 `verity.definitions.silicon`'s `fp`, `fp4` and `tc_step`, and `ops.boolean.trace_cache` lets a prover's or a developer's
 build reuse traced circuits across processes (a verifier never does).
 
 Beside the modules are each Definition module's binding file and pins (`<module>.circuit-check.py`,
 `<module>.circuit-check.json`), the store ids a module's conformance texts cite (`<module>_evidence.json`), and
-`metadata.json`, the names and formats of these Definitions' parts, outside every digest (`verity.ml.circuits.metadata`).
+`metadata.json`, the names and formats of these Definitions' parts, outside every digest (`verity.circuits.metadata`).
 
 ## Tests
 

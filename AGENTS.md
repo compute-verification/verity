@@ -8,7 +8,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 ## Map and commands
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
-  owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
+  owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
     package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
     PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its

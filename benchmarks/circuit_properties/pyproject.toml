@@ -3,7 +3,7 @@ name = "verity-circuit-properties"
 version = "0.1.0"
 description = "Structural properties of a circuit's counted operations, measured exactly: a_out, a_in, |J|, s_x, and which a partition computes whole."
 requires-python = ">=3.12"
-# The circuits are verity.ml.circuits' Programs; the reference layer is the served b1 registry's on bits.
+# The circuits are verity.circuits' Programs; the reference layer is the served b1 registry's on bits.
 dependencies = ["verity"]
 
 [build-system]

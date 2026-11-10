@@ -214,8 +214,8 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.definitions.numerics import derived_rows as DR
     from verity.definitions.registry import fp8 as F
 
@@ -258,8 +258,8 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.definitions.numerics import derived_rows as DR
     from verity.definitions.registry import fp8 as F
 

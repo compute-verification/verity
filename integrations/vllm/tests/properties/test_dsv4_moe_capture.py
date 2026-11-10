@@ -12,8 +12,8 @@ import json
 import numpy as np
 import pytest
 from verity.definitions.circuits import library
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.ops import mufu as MU
 from verity.definitions.numerics import dsv4_moe_twin as T
 from verity.definitions.registry import dsv4_moe as D

@@ -50,7 +50,7 @@ mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (
   one runtime word, not a column, so never a gather, whose constant index would cost nothing), LimbSplit's limb steps
   (the carries `IntGate.role` gives), and PoUW's integer helpers (H1's noise, digits and `PouwXinFinal` among them).
 * **inputs**, by family: `Input{n}_v1` ids are run inputs and `RegisteredInput{n}_v1` ids registered. A coin input is
-  an `Input` id whose port is kind coin (`verity/ml/circuits/ports.py`), so its binding is its port's, not its id's
+  an `Input` id whose port is kind coin (`verity/circuits/ports.py`), so its binding is its port's, not its id's
   (`Class.listed`).
 * **families** are full patterns, as property/v1's: a family's id is its prefix, a positive numeral with no leading `0`
   and `_v1` (`numbered`), and a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`.

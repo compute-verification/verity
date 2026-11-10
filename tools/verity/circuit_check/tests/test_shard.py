@@ -600,8 +600,8 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
 #: (`SynWide{n}`, `codec.register_lazy_family`); ``_minted_roots`` a composite its factory makes, which no id makes
 LATE = {
     "syn/wide.py": """
-from verity.ml.circuits.codec import register_lazy_family
-from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.circuits.codec import register_lazy_family
+from verity.circuits.defs import PrimitiveDefinition
 
 from syn.prims import V
 
@@ -618,7 +618,7 @@ register_lazy_family(r"^SynWide(\\d+)_v1$", lambda m: wide(int(m[1])))
 """,
     "syn/late/__init__.py": "",
     "syn/late/lz.py": """
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from syn.prims import V
 
@@ -628,7 +628,7 @@ def SynLz(a, b):
     return a & b
 """,
     "syn/fresh.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -647,7 +647,7 @@ def made():
 LATE_ROOTS = ("\ndef late():\n    from syn import wide\n    from syn.late import lz\n    return [lz.SynLz, wide.wide(7)]\n\n\n"
               "def minted():\n    from syn import fresh\n    return [bind(fresh.made())]\n\n")
 #: what the forked run's own process has registered of the tree's Definitions, in order, and imported of its modules
-HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.ml.circuits.defs", '
+HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.circuits.defs", '
              'fromlist=["REGISTRY"]).REGISTRY.defs) if f.startswith("Syn")], "modules": sorted(m for m in sys.modules '
              'if m.startswith("syn")),')
 

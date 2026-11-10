@@ -74,19 +74,19 @@ from __future__ import annotations
 
 from typing import Any, Callable, NamedTuple, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.boolean.trace import word_of
 from verity.definitions.circuits.census import silicon_step
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops import fp32 as F
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import cast as BCAST
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.circuits.refs import Coll, array_of, broadcast, concat
-from verity.ml.circuits.types import Array, Type
+from verity.circuits.refs import Coll, array_of, broadcast, concat
+from verity.circuits.types import Array, Type
 from verity.definitions.evidence import EVIDENCE
 
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmAligned",

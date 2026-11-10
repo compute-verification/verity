@@ -97,7 +97,7 @@ def CommitmentScheme.Binds {α : Type} (H : Msg → Msg) (Cm : CommitmentScheme 
 
 /-! ## The program and its partition -/
 
-/-- **A gate** of the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
+/-- **A gate** of the Boolean profile (`verity/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
 `RegisteredInput1_v1`, its value committed under the roots), a constant bit (`Const1`), `Not_v1` of a wire, or
 `And<n>_v1` or `Xor<n>_v1` of wires. -/
 inductive BGate where

@@ -24,7 +24,7 @@ import random
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 
-from verity.ml.circuits.program import Program, is_input
+from verity.circuits.program import Program, is_input
 
 from .model import CallInfo
 

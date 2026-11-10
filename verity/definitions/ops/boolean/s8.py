@@ -23,13 +23,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
-from verity.ml.circuits.boolean.trace import definition, word_of
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
+from verity.circuits.boolean.trace import definition, word_of
 from verity.definitions.circuits.census import FAMILY_COUNTS, silicon_step
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, broadcast
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, broadcast
+from verity.circuits.types import Array
 
 from .. import prims as P
 from .. import s8 as S8

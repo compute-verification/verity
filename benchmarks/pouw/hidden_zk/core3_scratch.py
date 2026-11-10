@@ -5,7 +5,7 @@ row units only, and every result staged with them is labelled 'core3 scratch'. E
 checked on 40k words)."""
 from verity.definitions.ops import prims as P
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, sub
+from verity.circuits.boolean.forms import NOT, const_bits, mux, sub
 from verity.definitions.silicon import cast
 
 E4M3_TABLE = [cast.e4m3_to_f32_word(b) for b in range(256)]

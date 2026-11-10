@@ -19,11 +19,11 @@ from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
 from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
 from verity_vllm.observe.fold.patterns.norms import eps_input
 from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Affine, Explicit, concat
+from verity.circuits.defs import bind
+from verity.circuits.refs import Affine, Explicit, concat
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Array, RecordType, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration

@@ -29,11 +29,11 @@ import json
 import random
 from pathlib import Path
 
-import verity.ml.circuits
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.types import Array, Value
+import verity.circuits
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program, is_input
+from verity.circuits.types import Array, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -250,13 +250,13 @@ def write(out: Path, count: int | None = None) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits reads the programs")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits reads the programs")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=None, help="the first N instances (default: all, `total()`)")
     a = ap.parse_args()
-    here = Path(verity.ml.circuits.__file__).resolve()
+    here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.ml.circuits comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

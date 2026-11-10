@@ -124,8 +124,8 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from verity.ml.commitments import history as HT
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from . import draw as D, partition as P, registered as G
 from .verdict import Verdict, _Collect

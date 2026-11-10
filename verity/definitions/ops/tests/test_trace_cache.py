@@ -8,10 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
 from verity.definitions.ops.boolean import trace_cache
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 W8 = Array(8, BL.BIT)
 
@@ -30,12 +30,12 @@ def build(directory: str) -> dict:
     `shared_operand`, built with the cache at ``directory`` ("" for none): its digest, gates, each traced circuit's hash and the
     cache's counts."""
     cache = trace_cache.use(directory or None)
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.codec import program_digest
+    from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions.ops.boolean import elementwise as EW, quant as BQ
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits.program import Program
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Tuple
 
     mask = EW.specialized("TraceCacheMask", 1, ("K",), _mask, lambda S: ((("a", W8),), W8), register=False)
     own, rest = EW.shared_operand(("TraceCachePairA", "TraceCachePair"), 1, _pair, (("a", W8), ("b", W8)), W8, 0, ("", ""),

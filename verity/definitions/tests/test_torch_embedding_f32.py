@@ -9,8 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.registry import torch_embedding as TE
 from verity.definitions.registry import torch_embedding_f32 as TF

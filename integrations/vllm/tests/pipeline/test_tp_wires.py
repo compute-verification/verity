@@ -24,11 +24,11 @@ from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Builder, bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, bind
 from verity.definitions.ops import gemm as GE
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array
 from verity.definitions.registry import moe, tp_allreduce as TA
 from verity.definitions.registry.prims import BF16
 from verity.ml.windows import interface as I, wiring as WI

@@ -28,12 +28,12 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
-from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
+from verity.circuits.codec import _spec_id, decode_program, encode_program, program_digest
+from verity.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
 from verity.definitions.circuits.constants import REGISTRATION
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
-from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
+from verity.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
 
@@ -602,7 +602,7 @@ class WorkloadProgram:
         return {"schema": SCHEMA + "/address-map", "workload_digest": self.digest, "gates": body.gates, "input_gates": body.offsets[self._K],
                 "shared": {"group": self.shared_group, "root_nodes": [0, S], "gates": shared_gates, "n_batches": S,
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
-                "convention": "gate index in the canonical layout of the workload root (verity.ml.circuits.layout.Circuit); hierarchical path "
+                "convention": "gate index in the canonical layout of the workload root (verity.circuits.layout.Circuit); hierarchical path "
                               "root/node[k]/node[i]... for instances; Input gates first in root-parameter order (the shared group once, "
                               "then each request's own), then one call node per request in manifest order",
                 "inputs": inputs, "requests": reqs}

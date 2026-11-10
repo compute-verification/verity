@@ -21,7 +21,7 @@ from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.predict.tp_steps import at_rank, compile_tp
 
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 from verity.ml.windows import interface as I
 
 ROOT = Path(__file__).resolve().parents[3]

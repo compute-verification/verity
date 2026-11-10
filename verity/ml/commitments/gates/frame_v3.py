@@ -63,13 +63,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import OR, ZERO, and_reduce, const_bits, or_reduce
-from verity.ml.circuits.boolean.trace import part as _part
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import OR, ZERO, and_reduce, const_bits, or_reduce
+from verity.circuits.boolean.trace import part as _part
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 
 from ..merkle import _FRAME, _LEAF, _NODE, frame_hash, _uint
 from .lms import LmsEqual

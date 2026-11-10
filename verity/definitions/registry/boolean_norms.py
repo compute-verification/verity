@@ -59,17 +59,17 @@ from typing import Callable
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind, composite
-from verity.ml.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.evaluation import evaluate
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind, composite
+from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ONE, ZERO
+from verity.circuits.boolean.trace import word_of
 from verity.definitions.ops.prims import const
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P

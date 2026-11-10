@@ -17,11 +17,11 @@ import pytest
 
 from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.definitions.ops import prims
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, coll_concat
+from verity.circuits.types import Array, Value
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

@@ -98,14 +98,14 @@ from fractions import Fraction
 from numbers import Integral, Rational
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
-from verity.ml.circuits import ports
+from verity.circuits import ports
 from .census import SCHEMA as CENSUS, step_of
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import Body, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.intervals import norm, ref_intervals
-from verity.ml.circuits.program import RUN, input_id, is_input
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided
-from verity.ml.circuits.types import Array, Tuple, Type
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import Body, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.intervals import norm, ref_intervals
+from verity.circuits.program import RUN, input_id, is_input
+from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided
+from verity.circuits.types import Array, Tuple, Type
 
 TAG = "verity/stacking-property"
 VERSION = 1

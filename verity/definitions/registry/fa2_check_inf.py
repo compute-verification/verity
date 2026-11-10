@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
 from verity.definitions.ops.prims import ZERO32, const
 from verity.definitions.registry import prims as P

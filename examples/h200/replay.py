@@ -62,8 +62,8 @@ import numpy as np
 
 from verity.core.protocols.spot.one_stage.draw import stratum_k
 from verity.ml import randomness
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import mufu as MU
 from verity.definitions.kernels.tc import f2fp_bf16_batch

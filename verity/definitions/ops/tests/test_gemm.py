@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.circuits.program import Program
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.program import Program
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as P
 from verity.definitions.silicon.cast import f32_to_bf16_hw_word
@@ -209,7 +209,7 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
     the two orders apart."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
 
     def bf16_rn(v):
         u = v.view(np.uint32).astype(np.uint64)
@@ -249,8 +249,8 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
     coordinate's are twice it."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+    from verity.circuits import evaluation as E
+    from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
     rng = np.random.default_rng(33)
     n, K = 400, 128
@@ -280,7 +280,7 @@ def test_the_residual_coordinate_is_the_unfused_coordinate_then_residual_add(K, 
     (signed zeros, subnormals, the largest finites, infinities, NaNs) and the coordinate's own word negated (the exact +0)."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
     from verity.definitions.ops import rows as RO
 
     rng = np.random.default_rng(35 + K + R)
@@ -310,7 +310,7 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
     K = 32 whatever k extent the kernel pads its masked keys to."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
     from verity.definitions.kernels import tc as KT
 
     coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
@@ -343,7 +343,7 @@ def test_the_pv_row_is_the_padded_coordinate_on_each_of_v_s_columns() -> None:
     111 bytes Flock needs of some row of a unit, and the output is one 1,024-bit row."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
     from verity.definitions.kernels import tc as KT
 
     n, D = 6, 64
@@ -373,7 +373,7 @@ def test_the_padded_pv_row_is_the_pv_row_at_its_key_count() -> None:
       on the reference and on its kernel."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
     from verity.definitions.kernels import tc as KT
 
     heads, D, T = 8, 64, 32
@@ -412,7 +412,7 @@ def test_the_padded_pv_row_keeps_the_keys_under_its_unsigned_count() -> None:
     0x8001 and 0xFFFF (words whose i32 widening `Bf16ToF32_v1` makes negative)."""
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
 
     T, D = 4, 2
     pad = bind(G.PvRowPad, T=T, K=32, D=D, **G.GEMM_HOPPER)
@@ -428,8 +428,8 @@ def test_the_padded_pv_row_keeps_the_keys_under_its_unsigned_count() -> None:
 def test_the_padded_pv_row_reads_its_key_count_as_a_position() -> None:
     """`PvRowPad`'s n is a position port (`KEY_COUNT`), so it is a run input declared kind position passed through untouched:
     a unit over it builds, and a Program that computes n, or passes an input it doesn't declare a position, is refused."""
-    from verity.ml.circuits.ports import PortError
-    from verity.ml.circuits.program import Program
+    from verity.circuits.ports import PortError
+    from verity.circuits.program import Program
 
     pad = bind(G.PvRowPad, T=2, K=32, D=64, **G.GEMM_HOPPER)
     assert G.PvRowPad.ports is G.KEY_COUNT and G.KEY_COUNT.params["n"].kind == "position"
@@ -563,7 +563,7 @@ def test_the_sm90_accumulator_is_hoppers_step_chain_bit_for_bit(K) -> None:
 
     import numpy as np
 
-    from verity.ml.circuits import evaluation as E
+    from verity.circuits import evaluation as E
     from verity.definitions.silicon.integer import HOPPER_SM90_S8_K32, s32_value
 
     rng = np.random.default_rng(K)

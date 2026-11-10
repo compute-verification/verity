@@ -40,11 +40,11 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
-from verity.ml.circuits.refs import tuple_of
+from verity.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.circuits.refs import tuple_of
 from verity.definitions.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity.definitions.registry import ref_prims as RP
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.ops.fp32 import F32AddFtz, F32Mul
 from verity.definitions.ops.mufu import DivFullRcp, DivFullScaleA
 from verity.definitions.ops.prims import Bf16ToF32, const

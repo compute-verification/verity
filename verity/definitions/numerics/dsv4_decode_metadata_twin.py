@@ -153,7 +153,7 @@ def _c128a_sample(rng, n, params, *, W, R, BS, NB):
 def _targets(defs: dict) -> list:
     """Each row at max_model_len 4096's statics and at small ones (odd widths, and the c128a row with a block of lanes past its
     row); the window also narrower than a block."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     swa = [dict(SW=128, BS=64, NB=64), dict(SW=8, BS=4, NB=8), dict(SW=5, BS=2, NB=3), dict(SW=3, BS=8, NB=4)]
     c128a = [dict(W=128, R=128, BS=2, NB=16), dict(W=16, R=4, BS=2, NB=8), dict(W=7, R=3, BS=1, NB=5),

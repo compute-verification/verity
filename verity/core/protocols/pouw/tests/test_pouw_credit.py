@@ -28,8 +28,8 @@ from verity.ml.protocols.pouw.circuit import plan
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
+from verity.circuits import codec
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.gemm import S8_K_LIMIT
 

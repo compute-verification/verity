@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity.definitions.numerics import fa3_model as FA3

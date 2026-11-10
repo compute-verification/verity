@@ -187,7 +187,7 @@ def test_the_m0_unit_computes_the_reference(H):
 @pytest.mark.parametrize("H", [0, 1, 17])
 def test_the_definition_computes_the_reference(H):
     """`RecOpen{8, H}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     cases = _cases(H)
     d = R.definition(8, H)

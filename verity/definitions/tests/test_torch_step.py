@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops.boolean import cast as CA
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean import gemm as BG

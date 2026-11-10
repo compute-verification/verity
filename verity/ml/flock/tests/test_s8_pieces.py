@@ -13,8 +13,8 @@ import sys
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import s8 as S8
 from verity.definitions.silicon.integer import S32_MAX, S32_MIN, decode_int8, s32_value

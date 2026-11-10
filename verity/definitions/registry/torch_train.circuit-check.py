@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     row), its weight's gradient at 64 tokens (the fewest it builds), SiLU forward at N = 8 and backward at N = 2 under both
     contractions (at N = 8 the two are past `targets.MAX_GATES`, so `select` would keep one), each with sm_120's MUFU.EX2 (the
     composites reach their In and Out parts)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import mufu as BMU
     from verity.definitions.registry import torch_train as TT
 

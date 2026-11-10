@@ -83,7 +83,7 @@ def _sample(rng, n, params, *, TOPK, RATIO, WINDOW, WIDTH):
 
 def _targets(defs: dict) -> list:
     """The served ratio-4 row, ratio 128's narrowest, and two small ones (one of odd widths)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     statics = [dict(TOPK=1024, RATIO=4, WINDOW=128, WIDTH=1152), dict(TOPK=128, RATIO=128, WINDOW=128, WIDTH=256),
                dict(TOPK=8, RATIO=4, WINDOW=4, WIDTH=16), dict(TOPK=5, RATIO=2, WINDOW=3, WIDTH=9)]

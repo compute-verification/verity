@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, const_bits, lzc, mux, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, const_bits, lzc, mux, sub
 
 _NAN_PTX = 0x7FFFFFFF
 

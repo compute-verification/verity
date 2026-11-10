@@ -6,11 +6,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import s8 as S8
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import s8 as BS8

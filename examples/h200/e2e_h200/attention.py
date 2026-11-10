@@ -32,8 +32,8 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import mufu as MU
 

@@ -59,8 +59,8 @@ from verity.core.protocols.spot.one_stage.draw import work_k, work_table  # noqa
 from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
-from verity.ml.circuits.codec import descriptor_id  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
+from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
 from verity.definitions.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
 #: core's reporting deltas (`reporting`), as floats

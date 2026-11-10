@@ -29,7 +29,7 @@ def _pouw_roots() -> list[Any]:
     leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
     `PouwAndBit` and `PouwMuxBit` are catalog roots (static-free)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.ml.protocols.pouw.circuit import h1zy as Z

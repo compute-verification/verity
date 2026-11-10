@@ -63,7 +63,7 @@ def _call(C, d, *words):
 
 def _lowering(name: str, C, n_in: int, out_widths: list, in_src: list, out_src: list, rows: list, out_words: int, cut: int = 0,
               rets: int = 0) -> IL.Lowering:
-    from verity.ml.circuits.types import Array, Tuple, Value
+    from verity.circuits.types import Array, Tuple, Value
 
     units = IL.Units(target=None, in_widths=[16] * n_in, out_widths=out_widths, in_src=in_src, out_src=out_src, signature=(name,),
                      gates=[], arg_gates=[], ret_gates=[], cut=list(range(cut)), tail_rets=list(range(rets)))
@@ -73,7 +73,7 @@ def _lowering(name: str, C, n_in: int, out_widths: list, in_src: list, out_src: 
 
 
 def _fp8_pieces():
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     from verity.definitions.ops.boolean import scalar as SC
 
@@ -201,8 +201,8 @@ def evaluate(split: Split, flat: np.ndarray) -> tuple[np.ndarray, bool]:
 
 
 def _sub(split: Split):
-    from verity.ml.circuits.codec import encode_program, program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import encode_program, program_digest
+    from verity.circuits.program import Program
 
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
     d = split.definition

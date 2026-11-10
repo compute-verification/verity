@@ -5,8 +5,8 @@ import random
 
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.ops.kv_cache import KvCacheAppendE4m3, kv_cache_append_e4m3_word
 
 

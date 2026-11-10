@@ -20,11 +20,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops.fp32 import F32AddFtz
 from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 from verity_flock import gf2

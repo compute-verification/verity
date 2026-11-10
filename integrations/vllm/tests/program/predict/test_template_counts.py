@@ -11,8 +11,8 @@ from collections import Counter
 
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.partition_object import TemplatePartition, calls, template_instances_query
+from verity.circuits.codec import descriptor_id
+from verity.circuits.partition_object import TemplatePartition, calls, template_instances_query
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program

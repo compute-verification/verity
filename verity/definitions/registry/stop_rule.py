@@ -33,11 +33,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import composite
+from verity.circuits.defs import composite
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BitAnd, BitNot, BitOr, I32Eq, I32Le, SelectI32
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.prims import I32

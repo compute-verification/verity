@@ -10,8 +10,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
 from verity.core.protocols.certifier import head_check as HC, served as SV
 from verity.core.protocols.certifier.active import Bucketer
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest

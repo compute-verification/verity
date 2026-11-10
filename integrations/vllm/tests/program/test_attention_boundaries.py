@@ -44,7 +44,7 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 
@@ -136,7 +136,7 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
-        "from verity.ml.circuits.defs import composite\n"
+        "from verity.circuits.defs import composite\n"
         "from verity.definitions.registry import prims as P, targets\n"
         "from verity.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"

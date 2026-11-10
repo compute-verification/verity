@@ -214,7 +214,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check.  A named by-calls
     root brings the targets its callees rely on (`by_calls.relied_targets`), each checked beside it, so the report holds their
     verdicts (`by_calls.joined`); ``--all``'s are its suite's."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     TG.load_registries()
     fresh = CC.tracing()
@@ -408,7 +408,7 @@ def _calls(specs: list[str]) -> None:
     """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
     from, so each takes the answer rather than working it out again.  A target that doesn't resolve, or that `is_call` can't
     decide without the catalog (`targets.Undecided`), is left to its own check, which fails on it by name."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     for s in specs:
         kind = TG.kind_of(s)

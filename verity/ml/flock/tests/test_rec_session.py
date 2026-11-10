@@ -22,10 +22,10 @@ from types import SimpleNamespace
 
 import pytest
 from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.definitions.ops.boolean import gf2k as G
 from verity.definitions.ops.boolean.gf2k import mul
-from verity.ml.circuits.types import Value
+from verity.circuits.types import Value
 from verity.ml.commitments import coin_tree as CT
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR

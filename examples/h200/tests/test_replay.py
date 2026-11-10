@@ -15,9 +15,9 @@ import cpu_step as S
 import replay as R
 from verity.ml.protocols.pouw.circuit import words as PW
 from verity.core.protocols.spot.one_stage.draw import strata_problem
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.reference import evaluate as reference
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.reference import evaluate as reference
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import mufu as MU

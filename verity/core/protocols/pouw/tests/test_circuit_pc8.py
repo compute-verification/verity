@@ -19,10 +19,10 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.program import Program
+from verity.circuits import boolean as BL
+from verity.circuits.evaluation import evaluate
+from verity.circuits import partition_object as PO
+from verity.circuits.program import Program
 from verity.definitions.ops.fp32 import F32FmaV2
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.definitions.ops.scalar import I32Le

@@ -1,7 +1,7 @@
 """The property red team's refusal suite: Programs a stacking property (property/v1, a closed free set with its family and
 limb rules) must refuse or fully budget, and the honest steps.py shapes it must pass.
 
-A check is any function from a `verity.ml.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
+A check is any function from a `verity.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
 {class: units}}`` over `CLASSES`: ``roundings`` (casts, special functions, FP arithmetic, integer floors, mods and wraps, carries
 and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers`` (in fresh runtime index bits), ``products``
 (products of two runtime values) and ``other``.
@@ -27,14 +27,14 @@ import struct
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.definitions.ops import prims
 from verity.definitions.ops import scalar  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, IntegerMma, S32_MAX, S32_MIN, s32_value,
                                                  s32_word)
-from verity.ml.circuits.types import Array, Tuple as TupleT, Value
+from verity.circuits.types import Array, Tuple as TupleT, Value
 
 import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401

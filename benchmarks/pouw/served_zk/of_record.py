@@ -32,7 +32,7 @@ import verity_difftest as D
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import verifier as V
-from verity.ml.circuits import codec
+from verity.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/core/protocols/pouw/lean/check"

@@ -137,9 +137,9 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
     from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.definitions.circuits.census import PRODUCTS, census
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
-    from verity.ml.circuits.program import Program
+    from verity.circuits.program import Program
 
     exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
     defn = {1: H.PouwH1Tile, 3: H.PouwH1Tile3}[version]

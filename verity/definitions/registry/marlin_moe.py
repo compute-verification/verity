@@ -78,11 +78,11 @@ MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cu
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
+from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.definitions.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
 from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.prims import BF16, F32, I32, Bf16MulBf16, F32Add
@@ -486,7 +486,7 @@ def MoeAlignBlocks(B, S, ids, rank, start):
     The kernel pads each expert's pairs to whole blocks in expert order; an expert outside [0, E) opens no block
     (`ignore_invalid_experts`).
 
-    Ranks and blocks are two Definitions, and each body's nodes read only its parameters (`verity.ml.circuits.cut.separable`), so the
+    Ranks and blocks are two Definitions, and each body's nodes read only its parameters (`verity.circuits.cut.separable`), so the
     word check cuts one pair's member, not a body over all P pairs (42.5M gates at P = 1536, over its gate limit)."""
     blk = B.batch(bind(MoeAlignBlockOf, P=S.P, BM=S.BM), ids, rank, ids, start, axes=(0, 0, None, None))
     return tuple_of(blk, B.call(bind(MoeAlignPar, P=S.P), start))

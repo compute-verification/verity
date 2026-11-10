@@ -155,8 +155,8 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
 | `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the demo |
 | `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/core/protocols/spot/one_stage/registered.py` over `verity.ml.commitments.hm96` |
-| `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.ml.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
-| `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.ml.circuits.evaluation.evaluate_words` |
+| `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
+| `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.circuits.evaluation.evaluate_words` |
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/spot/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
@@ -226,7 +226,7 @@ In a noun-based layout, each part of the demo goes where its noun is:
   `check_baseline`), B's registered descriptor and `grow`, and `placement`; `declare` and `check_declaration` too, as
   what is registered over time.
 - `verity/circuits`: the units, the execution blocks and the registered circuit as blocks chained by state wires, with a
-  digest of the chain (today's `verity.ml.circuits`).
+  digest of the chain (today's `verity.circuits`).
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
   `verity.ml.commitments` and the certifier's own).
 - `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the ZK server.

@@ -15,7 +15,7 @@ once.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import attention as BA
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import mufu as BM

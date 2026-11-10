@@ -12,10 +12,10 @@ comparison, and the forms stay flat.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, const_bits, mux
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, OR, ZERO, const_bits, mux
+from verity.circuits.defs import bind, composite
+from verity.circuits.types import Array
 
 from .. import rows as W
 from . import elementwise as EW

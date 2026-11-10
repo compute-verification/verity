@@ -39,13 +39,13 @@ ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048:
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.circuits.refs import Coll, broadcast, concat, strided_view
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.refs import Coll, broadcast, concat, strided_view
+from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa_topk_mask as M
 from verity.definitions.registry.boolean_dsa_topk import DsaWaksmanPickV2, DsaWaksmanSwapV2, key
 from verity.definitions.registry.dsa_topk import check_statics

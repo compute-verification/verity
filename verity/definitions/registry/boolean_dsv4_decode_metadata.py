@@ -29,12 +29,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, or_reduce, sub
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, or_reduce, sub
+from verity.circuits.boolean.gather import gather
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.registry import boolean_dsv4_indexer as BI
 from verity.definitions.registry import boolean_dsv4_indices as BX
 from verity.definitions.registry import dsv4_decode_metadata as X

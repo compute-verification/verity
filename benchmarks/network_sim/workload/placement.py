@@ -17,7 +17,7 @@ s · `step_ticks`.
 
 **Crossing edges** (`crossings`): a value v read by a gate whose leaf is in another unit, one edge per (v, reading unit),
 read at the earliest tick of a reader in that unit. A root output is also an edge, to `OUTSIDE`, read by the client at
-its step after the output's. Constants are an operation's own bits (`verity/ml/circuits/PROTOCOL.md` §11): every block has
+its step after the output's. Constants are an operation's own bits (`verity/circuits/PROTOCOL.md` §11): every block has
 them, so none crosses. These edges are the transfers: each happens between its value's tick and its read tick.
 
 `commit` registers the placement as hiding rows (`verity.ml.commitments.advice`, hm96-sha512 leaves in a frame-v3-sha512

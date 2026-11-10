@@ -82,10 +82,10 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compress_columns, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compress_columns, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.core.protocols.certifier import cache_step as V1
 from verity.core.protocols.certifier.cache_step import _bits, _eq, _lt, _size, _unit_bits, _unpack
 from verity.core.protocols.certifier.head_check import BIT, _coll, _Consts, _part, _refs, ands

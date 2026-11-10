@@ -57,15 +57,15 @@ every selection score but NaN, which `MoeRouterBiasScore_v1` never makes.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
+from verity.circuits.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
 from verity.definitions.ops.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import prims as P
 
@@ -118,7 +118,7 @@ def _moe_sum_chunks(B, S, y):
     columns [64j, 64j + 64) of the TOPK rows, and the last H mod 64 columns one `MoeSum_v2{TOPK,H mod 64}`. Each member reads a
     TOPK x 1024-bit row, past one SHA-512 block (Flock's circuit prover refuses a unit whose rows all fit in one, as the coordinate's
     TOPK x 16 bits do), and both nodes read only the parameter and are returned whole, so the cut takes each member on its own
-    (`verity.ml.circuits.cut.separable`)."""
+    (`verity.circuits.cut.separable`)."""
     n, r = divmod(S.H, SUM_CHUNK)
     outs = []
     if n:

@@ -31,15 +31,15 @@ import functools
 import operator
 from typing import Any, Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array, Type
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array, Type
 
 from .. import fp32 as W
 from .. import scalar as S
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import Traced, definition, emit, trace, word_of
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import Traced, definition, emit, trace, word_of
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddV4", "F32Div", "F32DivV4", "F32Fma", "F32FmaV4",
            "F32Mul", "F32MulV4", "I32Add", "on_bits", "shared_operand", "shared_specialized", "specialized"]

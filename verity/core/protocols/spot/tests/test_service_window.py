@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.types import Array, Tuple, Value as Bits
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, coll_concat
+from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 

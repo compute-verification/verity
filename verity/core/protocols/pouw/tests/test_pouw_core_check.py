@@ -445,7 +445,7 @@ def test_the_pinned_tiles_are_their_templates():
     from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.ml.protocols.pouw.circuit import pc8
     from verity.core.protocols.spot.one_stage import partition as PT
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     pairs = tuple((i, j) for i in range(4) for j in range(8))
     h1 = bind(H.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8, PAIRS=pairs)

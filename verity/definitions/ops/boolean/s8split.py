@@ -32,11 +32,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 from verity.definitions.silicon import fp
 from verity.definitions.silicon.integer import HOPPER_SM90_S8_K32, step_s8_bits
-from verity.ml.circuits.boolean.forms import add, const_bits
+from verity.circuits.boolean.forms import add, const_bits
 
 from .. import gemm as G
 from .elementwise import specialized

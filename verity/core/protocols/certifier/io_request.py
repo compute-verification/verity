@@ -58,10 +58,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_tie as IT

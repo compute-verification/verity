@@ -15,7 +15,7 @@ def _boolean_roots() -> list[Any]:
     a residual row, the residual's a and b, PV's p from the softmax row and the softmax's q from the q row, each inside its
     writer, and a quant chunk's amax word from its pooled amax rows (its codes and scale are its row's every word, the
     block's own output row, so it has no writer)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     from verity.definitions.ops.boolean import quant as BQ
     from verity.definitions.ops.boolean import rmsnorm as RN

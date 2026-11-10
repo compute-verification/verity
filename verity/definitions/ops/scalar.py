@@ -9,8 +9,8 @@ function it denoted there.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import primitive
+from verity.circuits.types import Value
 
 from verity.definitions.silicon.cast import bf16_is_nan, f32_is_nan
 

@@ -23,8 +23,8 @@ import math
 
 import numpy as np
 
-from verity.ml.circuits.defs import PrimitiveDefinition, primitive
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import PrimitiveDefinition, primitive
+from verity.circuits.types import Array, Value
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
 from verity.definitions.ops.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,

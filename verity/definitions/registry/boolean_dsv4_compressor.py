@@ -19,13 +19,13 @@ from __future__ import annotations
 from functools import partial
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import OR, ZERO, add, const_bits, mux, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import OR, ZERO, add, const_bits, mux, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.silicon import fp as FP
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.registry import boolean_dsv4_indexer as BI
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry.boolean_attention import _Bits

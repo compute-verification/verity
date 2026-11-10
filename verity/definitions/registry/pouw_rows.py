@@ -20,9 +20,9 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 from verity.definitions.ops import fp32 as F
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import scalar as SC

@@ -82,11 +82,11 @@ from types import SimpleNamespace
 from typing import NamedTuple, Sequence
 
 from verity.definitions.circuits.boolean import memcheck as MC
-from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, or_reduce
-from verity.ml.circuits.boolean.gf128 import mul_forms
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, or_reduce
+from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments import rowleaf as RL
 from verity.definitions.commitments.gates import block_key as BK
 from verity.ml.commitments.gates import rowleaf as RG

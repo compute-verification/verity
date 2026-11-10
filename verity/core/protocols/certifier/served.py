@@ -70,12 +70,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compress_columns, const_bits, multiply, mux, \
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compress_columns, const_bits, multiply, mux, \
     or_reduce, sub
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Consts, _part, _refs, ands, gate_of,
                                                         pinned_digest)
 from verity.core.protocols.certifier.grid import released

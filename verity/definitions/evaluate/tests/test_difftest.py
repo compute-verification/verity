@@ -1,5 +1,5 @@
 """The Lean evaluator (`verity-evaluate`, `Evaluate.evaluateFn`) against the Python reference, output for output and refusal
-for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
+for refusal, on Programs encoded as descriptor v1 (`verity/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis sampling deterministically).
 
 The reference is `python_answer`: `codec.decode_program`, then `reference.evaluate_region` over each of the root's nodes that
@@ -55,12 +55,12 @@ from hypothesis import strategies as st
 from verity_difftest import settings
 
 from verity.ml.protocols.pouw.circuit import words as W
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation import reference
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import partition_object as PO
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import reference
 from verity.definitions.ops import fp32 as FP
 from verity.definitions.ops import mufu as MU
 from verity.definitions.ops import prims as P
@@ -68,9 +68,9 @@ from verity.definitions.ops import scalar as SC
 from verity.definitions.ops.boolean import cast as BC
 from verity.definitions.ops.boolean import elementwise as BE
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.circuits.program import REGISTRATION, Program, input_id
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, type_from_json
+from verity.circuits.program import REGISTRATION, Program, input_id
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple, type_from_json
 from verity.definitions.registry import act as ACT
 from verity.definitions.registry import dense as DENSE
 from verity.definitions.registry import dsa as DSA

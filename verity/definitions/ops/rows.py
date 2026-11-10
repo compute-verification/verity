@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from typing import Callable, Sequence
 
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import composite
+from verity.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P

@@ -13,7 +13,7 @@ public import Mathlib.Data.Rat.Init
 
 One model of what a declared circuit `W` computes, for the lower bounds every resource audit proves over it: the
 stacking property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and
-fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
+fan-in floor. It follows the IR (`verity/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
 (`verity/definitions/circuits/census.py`, `stacking.py`) can be held to it by difftest.
 
 * **Values.** Every value is an integer (`ℤ`): a `Value<w>` leaf read as the integer its Definition gives it, two's
@@ -35,7 +35,7 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
   `2·K/32` of them, `256` at `K = 4096`, each checkpoint's two halves (`Place.parts`), never its `z` or a lane's own
   value.
 * **Inputs.** An input gate reads slot `i` of the input assignment `x : ι → ℤ`, by its binding time (circuits' input
-  origins, `verity/ml/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
+  origins, `verity/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
   parameters) is bound before the audit's coins; a `coin` input is a live verifier coin (a noise or fold key), passed
   through untouched; a `run` input (a request's tokens, anything the prover sends a running circuit) is bound after
   the coins it follows. Compose's live commit order (`LayerCommitted`, a premise today's coins don't meet) puts it

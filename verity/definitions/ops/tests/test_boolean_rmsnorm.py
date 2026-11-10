@@ -12,10 +12,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import evaluation as E
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops.boolean import rmsnorm as R
 

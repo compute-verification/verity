@@ -12,7 +12,7 @@ same words under that SHA-512.  `mufu_tanh_sm89.{json,xzblocks}` is MUFU.TANH's 
 MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.  A Triton capture
 measured the same rcp and sqrt words.
 
-Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.ml.circuits.evaluation` (domain: every encoding).
+Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.circuits.evaluation` (domain: every encoding).
 
 Provenance.  These are the definitions the vLLM integration registered in `verity.definitions.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
@@ -29,9 +29,9 @@ from importlib import resources
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import register_kernel
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.evaluation import register_kernel
+from verity.circuits.defs import primitive
+from verity.circuits.types import Value
 
 from verity.definitions.circuits import library
 from .fp32 import bits_of, f32_is_nan, f32_of

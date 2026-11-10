@@ -1,6 +1,6 @@
 """The annotation check's port (`verity_difftest.annot`, `annot-difftest`) on small Programs built here:
 
-* `annot.sets` gives, set for set, the gate intervals `verity.ml.circuits.query_ast` evaluates for the same query, on the
+* `annot.sets` gives, set for set, the gate intervals `verity.circuits.query_ast` evaluates for the same query, on the
   terms both evaluate, `table`, `group` (every key part) and `label` (affine or by a table) among them, with the same
   tables, and `annot.term` writes `query_codec`'s document back as `query_codec` does;
 * `annot.check`, at the size of the description, gives `annot.reference`'s result, the meaning decided gate by gate, on
@@ -21,14 +21,14 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from verity.ml.circuits import query_ast as G
-from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.query import parse
-from verity.ml.circuits.query_codec import from_json, to_json
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits import query_ast as G
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.query import parse
+from verity.circuits.query_codec import from_json, to_json
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity_difftest import annot
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

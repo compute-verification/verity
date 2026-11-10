@@ -56,8 +56,8 @@ reviewed change: drive and the quick tier take that failure as not red until it 
 
 ## Where a test goes
 
-- **In the tests/ of the package it tests**, mirroring its modules (`verity/ml/circuits/tests/` tests
-  `verity.ml.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
+- **In the tests/ of the package it tests**, mirroring its modules (`verity/circuits/tests/` tests
+  `verity.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with its siblings' pytest
   table; a directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like
   `tools/verity/check`. A test file no suite runs fails `tests/test_repository.py`.

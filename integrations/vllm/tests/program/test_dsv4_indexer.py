@@ -21,8 +21,8 @@ import math
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import prims as P

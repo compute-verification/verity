@@ -14,10 +14,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import ports as PT
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits import ports as PT
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import moe as BM
@@ -27,8 +27,8 @@ from verity.definitions.ops.boolean import rows as BRW
 from verity.definitions.ops.boolean import rowwise as BR
 from verity.definitions.ops.boolean import shared_row as SR
 from verity.definitions.ops.boolean import softmax_row as SM
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array
+from verity.circuits.program import Program
+from verity.circuits.types import Array
 
 J = np.arange(1 << 16, dtype=np.uint16)
 U16 = SR.U16

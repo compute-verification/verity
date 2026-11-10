@@ -1,5 +1,5 @@
 """The registry's scalar primitives (`registry.prims`, `registry.moe`, `registry.ref_prims`) as Boolean Definitions: the next
-version of each word primitive, the same function on bits (`verity.ml.circuits.boolean.trace`).
+version of each word primitive, the same function on bits (`verity.circuits.boolean.trace`).
 
     DivFullScaleA_v4   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: DivFullScaleA_v2
     F32Sub_v3          (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: F32Sub_v2
@@ -27,15 +27,15 @@ t's low word when bits 31 to 63 are all equal (t fits in an i32), else gives 0x8
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, or_reduce
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.trace import definition
 from verity.definitions.ops.boolean import mufu as BM
 from verity.definitions.ops.boolean import softmax as SM
 from verity.definitions.ops.boolean.scalar import f32_key, gt_u
 from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 from . import moe as M
 from . import prims as P

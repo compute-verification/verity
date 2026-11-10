@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as OG
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.windows import rows as CS

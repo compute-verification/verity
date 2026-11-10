@@ -18,7 +18,7 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Lo_v1
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
 
-Each is traced from a builder over core's `forms` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are the builder's
+Each is traced from a builder over core's `forms` (`verity.circuits.boolean.trace.definition`), so its And gates are the builder's
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); Flock's lowering runs the
 builder itself (``.build``), for the word primitive's piece and for an activation of the Definition, so it keeps the commits.
 
@@ -50,15 +50,15 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 from verity.definitions.silicon import fp
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import scalar as BS
 from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn, isqrt
-from verity.ml.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
+from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 
 from . import words as W
 

@@ -28,13 +28,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import b1
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import prims as P

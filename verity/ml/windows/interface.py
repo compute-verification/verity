@@ -105,11 +105,11 @@ from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
-from verity.ml.circuits import boolean as B, partition_object as PO
-from verity.ml.circuits.codec import canonical_json, descriptor_id
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as B, partition_object as PO
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.types import Array
 from verity.ml.commitments import advice as AC, history as HT
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 

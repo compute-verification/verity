@@ -51,12 +51,12 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.population import population
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.population import population
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain

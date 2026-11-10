@@ -10,15 +10,15 @@ import numpy as np
 import pytest
 
 from test_census import programs, request
-from verity.ml.circuits import boundary
+from verity.circuits import boundary
 from verity.definitions.circuits import requirement as R
 from verity.definitions.circuits.census import census, step_ends
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.definitions.ops import fp32
-from verity.ml.circuits.parts import Part, n_members
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.parts import Part, n_members
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 
 S, D, V = 3, 2, 4
 F32 = I32 = Value(32)

@@ -16,8 +16,8 @@ as the Lean verifier's `F256.mul` computes it. `mul`, `kmul` and `inv` are the r
 
 Bit i of a port's 128-bit element is the coefficient of x^i, and a K port is (c0, c1).
 
-**Gf128Mul** is `verity.ml.circuits.boolean.gf128`'s product, Karatsuba down to single bits and the reduction, 2,187 ANDs
-(F's arithmetic is there, below this unit, so that every unit that may import `verity.ml.circuits` reaches it; `clmul`,
+**Gf128Mul** is `verity.circuits.boolean.gf128`'s product, Karatsuba down to single bits and the reduction, 2,187 ANDs
+(F's arithmetic is there, below this unit, so that every unit that may import `verity.circuits` reaches it; `clmul`,
 `reduce`, `mul`, `karatsuba`, `reduce_forms` and `mul_forms` are its). **Gf256Mul** is three of them and the product by the
 constant x^-1 (linear), 6,561 ANDs.
 **GfScale{L}** multiplies one element into each of L (L Gf128Mul circuits).
@@ -40,13 +40,13 @@ from __future__ import annotations
 import struct
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.gf128 import MASK, clmul, karatsuba, mul, mul_forms, reduce, reduce_forms
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.gf128 import MASK, clmul, karatsuba, mul, mul_forms, reduce, reduce_forms
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 
-from verity.ml.circuits.boolean import trace as TR
+from verity.circuits.boolean import trace as TR
 
 __all__ = ["F", "Gf128Mul", "Gf256Mul", "GfResiduals", "GfScale", "K", "MASK", "XINV", "check_structure", "clmul", "from_bytes",
            "hex128", "inv", "karatsuba", "kmul", "kmul_forms", "mul", "mul_forms", "of_hex", "phi8", "reduce", "reduce_forms",
