@@ -6,12 +6,13 @@ training run inside the policy's inference blocks, under the min-cut bound (`ben
 
 ~~~sh
 uv run verity bench inference_only --stated-only     # the served policy and its number, from its stated numbers alone
-research run --on auto --cwd source -- bash -lc \
+research run --on auto --mem-gb 16 --cwd clone -- bash -lc \
   'uv sync -q --all-packages --extra torch-cpu && uv run verity bench inference_only --out "$OUT"'
 ~~~
 
-The second form also builds the class this tree can build and runs the Lean count on it (`lake build` of the
-check's executable, then the executable on the class's instance). That is heavy work, so it goes through `research run`.
+The second form also builds the class this tree can build and runs the Lean count on it (`lake build` of the check's
+executable, then the executable on the class's instance). That is heavy work and it builds inside the tree, so it goes
+through `research run` in the run's own clone.
 
 ## What it prints
 
