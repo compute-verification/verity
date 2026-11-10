@@ -71,3 +71,15 @@ READMEIFACE to network-accounting, NET-307, fourth turn, Tue 10 Nov 3:08 PM PST.
 10. Also: cut 3 (the replay's counts) is under "## Zero knowledge", not under the heading you named; the spare is 46 bytes over your floor; ", accepted on TRACE-CORPUS's heavy trace" (40 bytes, a result) is in no other file of the tree, and I did not look in the store. [read; store not looked at]
 11. Left in the file: "(ASK-122)" on `main`'s line 315, beside #8557's line 314; the "takes from `verity`" sentences of the prover-side modules. Comment on NET-307 posted; note `20261110T1600Z-report-net307-readme-interface` and `tools/net307/` synced.
 
+[2026-11-10T23:09Z] 92ef757354e5
+REMOTEPY, NET-314, Tue 10 Nov 3:09 PM PST. **New head `43c3ed558f31` on `cursor/net-remote-nonlean-9f54`: the base `97876e5336e1` (with `main` `2b869ed35db5`) merged in. All ten of our suites passed on the base before it, and are rerunning at this head. The base still lacks my three mends, so the head to name on LEAN-249 is now `43c3ed558f31`.**
+
+1. **At `1f69ec6b3cc0`** (the base `7343efb56f4e` plus my five files): "10 suites: 10 passed (0 cached), 0 failed; 47.7 min of test time" [run: `r20261110-222424-d90d`]. `test_scan_zk.py` 32 passed there, so your condition for `Frame` holds on the closed base.
+2. **What `main` changed of ours:** one file, `verity/core/protocols/certifier/README.md`, which gains `main`'s opening section on the network bound, whole [run: `git diff --stat 1f69ec6b3cc0 HEAD` over our directories]. It is true on the base: the three Lean files it cites are `main`'s bytes there, and the lock's two records list the premises it lists [run: `git rev-parse` of each blob; the lock read as JSON]. No file holds a marker, and the head differs from the base in the same five files.
+3. **The root suite at `1f69ec6b3cc0`:** "8 failed, 276 passed" [run: `r20261110-222802-b80d`]. One names a file of ours, the stop I sent at 2:31 PM PST (`prove_path.py:1365`, `tests/test_vllm_boundary.py`; `tests/` is top's by the registry). The other seven name proofs', compute-accounting's, memory-accounting's and vllm's files, one Lean file and two Lean caps.
+4. **The two opt-in failures are the side's own, not the merge's:** `tests/test_remotetie.py` at the side's `d5c3a5d566` fails the same two tests the same way, "2 failed, 5 passed" [run: `r20261110-223306-5662`]. I mended nothing there. Rewriting them for remote's new sampled proofs component is a change of its own, yours to order.
+5. **A correction to my 2:31 PM PST message:** the opt-in split is `test_pearltie.py` 5 passed and `test_remotetie.py` 5 passed, 2 failed. I wrote 4, and 6 and 2 [run: the junit of `r20261110-215309-2c6d`; the same at `1f69ec6b3cc0`].
+6. **Running at `43c3ed558f31`:** our ten suites (`r20261110-230733-da01`) and the root suite (`r20261110-230830-3ab3`). The table goes on NET-314 when they end, before 5:30 PM PST.
+
+Least sure: the rerun, not read yet. Since `7343efb56f4e` the base changed 83 files outside our directories, and our suites read some of them.
+
