@@ -29,7 +29,8 @@ def no_store(monkeypatch):
     monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
 
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
-#: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
+#: open logged; reports under `--out` as `--no-replay` leaves them (no replay time), with what `AUDIT_SAID` adds; `--update`
+#: writing a record
 FAKE_AUDIT = """\
 import json, os, sys
 held = []
@@ -44,7 +45,8 @@ with open(os.environ["AUDIT_LOG"], "a") as f:
                         **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
 out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
 rc = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
-rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc else []}
+rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc else [],
+       **json.loads(os.environ.get("AUDIT_SAID", "{}"))}
 os.makedirs(os.path.join(out, "audit-x"), exist_ok=True)
 with open(os.path.join(out, "audit-x", "report.json"), "w") as f:
     json.dump(rep, f)
@@ -82,7 +84,7 @@ def repo(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
     for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT",
-              "AUDIT_RC", "AUDIT_FAILS"):
+              "AUDIT_RC", "AUDIT_FAILS", "AUDIT_SAID"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "no-lean-slots")
     monkeypatch.setattr(LC, "reused", lambda *a, **k: {})
@@ -163,8 +165,9 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     assert LC.audit_records("p", tmp_path / "deps", tree) == 0
-    assert _calls(tmp_path)[0]["argv"][5:11] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()),
-                                                 "--facts-cache", str(LC.facts_dir()), "--out", str(run / "lean-audit")]
+    assert _calls(tmp_path)[0]["argv"][5:13] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()),
+                                                 "--bundle", str(run / "lean-audit"), "--facts-cache", str(LC.facts_dir()),
+                                                 "--out", str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
     assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
@@ -182,39 +185,33 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
-def test_in_a_run_what_its_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
-                                                                                                 monkeypatch):
-    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does after every build,
-    passed or failed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no
-    bundle."""
-    import tarfile
-
-    entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
-
-    def put(self, reports, since=None, log=print):
-        for name in (entry, f"artifacts/{art}"):
-            (self.store / name).parent.mkdir(parents=True, exist_ok=True)
-            (self.store / name).write_text(name)
-        self.added.append((entry, [art]))
-        return 1
-
-    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", put)
+def test_in_a_run_check_py_bundles_what_each_build_published_and_the_records_step_puts_only_the_rest(repo, tmp_path,
+                                                                                                   monkeypatch):
+    """In a run, check.py is told to write what each of its builds publishes, once the build and its sample passed, into
+    the run's reports (`--bundle`), at the path `shared_bundles` lists; outside a run it is not, since no one would take
+    it. The records step bundles nothing itself: whatever the run's exit, it puts into this node's cache alone what
+    check.py says it built in the sandbox and did not publish."""
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "bundle", lambda *a, **k: pytest.fail("the records step bundles nothing"))
+    put_with: list = []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
+                        lambda self, reports, since=None, log=print: put_with.append(sorted(reports)) or 0)
     tree = tmp_path / "cache" / "lean-records" / "tree"
-    for i, rc in enumerate(["0", "1"]):
+    for i, (rc, said) in enumerate([("0", {"sandbox": True}), ("1", {"sandbox": True}),
+                                    ("0", {"sandbox": True, "published": 1})]):
         run = tmp_path / f"run-{i}"
         run.mkdir()
         monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
         monkeypatch.setenv("AUDIT_RC", rc)
+        monkeypatch.setenv("AUDIT_SAID", json.dumps(said))
         assert LC.audit_records("a", tmp_path / "deps", tree) == int(rc)
-        got = sorted(str(f.relative_to(run)) for f in run.rglob("lean-artifacts*"))
-        assert got == ["lean-audit/lean-artifacts.tar.gz"] and LC.LA.BUNDLE_FILE.fullmatch(got[0])
-        with tarfile.open(run / got[0]) as t:
-            assert t.getnames() == [entry, f"artifacts/{art}"] and all(LC.LA.MEMBER.fullmatch(n) for n in t.getnames())
+        argv = _calls(tmp_path)[0]["argv"]
+        assert argv[argv.index("--bundle") + 1] == str(run / "lean-audit")
+        assert put_with[-1] == ([] if "published" in said else [tree / "a"]), said
 
     monkeypatch.delenv("RESEARCH_RUN_DIR")
     monkeypatch.delenv("AUDIT_RC")
     assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 0
-    assert not list((tmp_path / "reports").rglob("lean-artifacts*")), "outside a run no one would take it"
+    assert "--bundle" not in _calls(tmp_path)[0]["argv"], "outside a run no one would take it"
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
