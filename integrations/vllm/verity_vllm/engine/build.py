@@ -9,6 +9,7 @@ from the engine's `vllm_config` and checked against the declaration.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import time
@@ -19,9 +20,12 @@ from typing import Any
 import torch
 
 from verity_vllm.engine import env as engine_env, handle, served
+from verity_vllm.errors import Refused
 
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
+#: The module that installs the int8 attention's credited read, which `credited_read` imports by name
+INT8_CREDITED_ENV = "verity_vllm.engine.int8_credited_env"
 
 
 def case_of(workload: dict | None, case: str | None = None) -> str:
@@ -248,11 +252,25 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
-    from verity_vllm.engine import int8_credited_env
-    eng.credited_read = int8_credited_env.install(eng, engine_env.int8_credited_read())
+    eng.credited_read = credited_read(eng, engine_env.int8_credited_read())
     if eng.credited_read is not None:
-        print(f"[engine] {int8_credited_env.ENV}: {json.dumps(eng.credited_read)}", flush=True)
+        print(f"[engine] {engine_env.INT8_CREDITED_READ}: {json.dumps(eng.credited_read)}", flush=True)
     return eng
+
+
+def credited_read(eng: Engine, value: str | None) -> dict | None:
+    """The record of the int8 attention's credited read that ``value`` (`engine_env.int8_credited_read`) asks for, installed on
+    ``eng`` by `INT8_CREDITED_ENV`; None when unset.  That module is imported only then, so a tree without it builds its
+    engines and refuses the variable by name."""
+    if value is None:
+        return None
+    try:
+        module = importlib.import_module(INT8_CREDITED_ENV)
+    except ModuleNotFoundError as e:
+        if e.name != INT8_CREDITED_ENV:
+            raise
+        raise Refused(f"its module {e.name} is not on this tree", f"{engine_env.INT8_CREDITED_READ}={value!r}") from e
+    return module.install(eng, value)
 
 
 def vllm_has_flashinfer() -> bool | None:

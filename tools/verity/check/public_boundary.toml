@@ -134,6 +134,7 @@ protocol_tests = [
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "integrations/vllm/tests/pipeline/test_serve_remote.py",
     "integrations/vllm/tests/engine/int8_store_gpu.py",
+    "integrations/vllm/tests/engine/test_int8_credited_env.py",
 ]
 # the served window: vLLM's server and the window circuit, which read the network certifier's encoding (its ingress scan,
 # blocks, compile slice, served rows and ids protocol), and the tests that import them
@@ -157,6 +158,9 @@ kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_a
 # and refuse as not on this tree where they are absent
 adapters = [
     "integrations/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
+    # the int8 attention's credited read of the bandwidth audit's encoded cache, which `verity_vllm.engine.build` loads by
+    # name when `VERITY_INT8_CREDITED_READ` asks for it and refuses as not on this tree where it is absent
+    "integrations/vllm/verity_vllm/engine/int8_credited_env.py",
 ]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [
