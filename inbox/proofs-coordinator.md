@@ -32313,3 +32313,98 @@ With `setupOf_x` (InsSetup; D's `setup` field follows from it) and `hiddenOf_x` 
 - [run] Checkpoint note `20261110T2010Z-checkpoint-weightsec` is synced.
 
 I end my turn here. Resume me to read `r20261110-200136-61e5` and `r20261110-200227-9ef2`.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 20:14Z: head `0ab9be91a6b0` holds the base at `b5718e205aad`; 27 files and 62 places closed, none left; `7757` ended with four reds in the spot service suite: two were mine and are mended, two are vllm's `interface.py`, which lacks `main`'s history tables
+
+**State.** Branch `cursor/proofs-remote-core-cf05` at `0ab9be91a6b0`, pushed [run: `git rev-parse` of the local and the remote ref]. It differs from the base `b5718e205aad` in two files: `verity/core/protocols/composition/tests/test_composition_difftest.py` and `verity/core/service/spot/tests/test_difftest.py`. No `.lean` file, lakefile, manifest or lock [run: `git diff --stat` against the base]. No file of my list holds a marker; `pins.py --stale` prints nothing [run]. Tree-wide 54 files hold markers [run: `git grep -l`], none mine.
+
+**Run `r20261110-192813-7757` ended** [run; vy-nebius-cpu-11, at `2c448b8986e7`]. Its `summary.txt`, whole:
+
+```text
+fetch-fixtures rc=0 :: fetch-fixtures: 34 entries: 25 fetched, 9 tracked
+spot-protocols rc=0 secs=293 :: 849 passed in 291.76s (0:04:51)
+flock-fixture-tests rc=0 secs=8 :: 19 passed in 7.42s
+pins rc=0 secs=4 :: 4 passed in 3.74s
+composition rc=1 secs=12 :: 4 passed, 2 errors in 11.90s
+circuits rc=0 secs=1226 :: 1120 passed in 1224.99s (0:20:24)
+spot-service rc=1 secs=444 :: 4 failed, 251 passed, 2 skipped in 442.95s (0:07:22)
+```
+
+| step | verdict | what it says |
+|---|---|---|
+| `verity/core/protocols/spot/tests` | 849 passed | My files' own suite is green |
+| flock's two fixture tests | 19 passed | The regenerated `randomness_lean.json` is read and agrees |
+| `tests/test_pins.py` | 4 passed | |
+| `verity/core/protocols/composition/tests` (not slow) | 4 passed, 2 files could not collect | compute-accounting's `pouw/core_check.py` was marked then. It is closed in the base since `c6e4c1a3840b`: at my head both files collect, 19 and 8 tests [run, local, `--collect-only`] |
+| `verity/ml/circuits` | 1120 passed | |
+| `verity/core/service/spot/tests` | **4 failed**, 251 passed, 2 skipped | Below |
+
+**The four reds, by cause**
+
+1. `test_difftest.py::test_a_work_draws_design_is_cores` and `::test_the_slots_of_a_population_of_nested_templates` (my file; mended in `5f791630feed`).
+   - Both are the side's, added after the merge base, with the fixed counts `work:4` and `subset:16` as a `Law` rule. `main`'s `b18fb3df81` refuses a fixed count there, in `service.Law` and in `Spot/Select.lean` (`Select.FIXED`), and moved its own tests to rates. Git merged the side's two with no marker, so both stopped at the rule: `Reject: a law is rate:NUM/DEN ... not 'work:4'` [read: the run's log, `b18fb3df81`, `Select.lean:103`].
+   - What I changed: the law text of each, to the rate that gives the same count on its population. `work-rate:2/5` over the 10 units gives K = 4 and `TRIPLE`'s floor 2; `rate:1/125` over the 2,000 gives K = 16. No assertion changed or dropped. This is your rule for a test that asserts one line's old constant.
+   - Checked: the Python half of each holds at the new laws (design `work`, k = 4, floor 2; draw `subset`, k = 16) [run, local, no Lean]. The Lean half is run `r20261110-200651-6068`, below.
+   - Neither line's verifier accepts or refuses anything new: the refusal of fixed counts is `main`'s, in the Lean at the head.
+2. `test_history_difftest.py::test_roots_of_a_windows_history_table` and `::test_a_wrong_root_of_a_windows_history_table_is_refused` (proofs' file, `main`'s, unchanged; **the cause is vllm's file, and I changed nothing**).
+   - `AttributeError: module 'verity.ml.windows.interface' has no attribute 'History'` [run `7757`].
+   - `verity/ml/windows/interface.py` on the base is vllm's close (`9181ce73cf`). It lacks `main`'s two landings after `7af4d24fca3`: `fff33e8dd3` and `be9ce601ec`, the history tables. Of the 18 names `main` added to the file between `7af4d24fca3` and `e7b03e4a6c89`, the base has none: `History` and its fields, `Registered.histories`, `Registered.readable`, `Window._written`, `_history_ok`, `seg_rows` [run: AST of the file at `7af4d24fca3`, `e7b03e4a6c89` and the head; `git merge-file` of `main`'s later diff onto the head's file stops in 19 places].
+   - `verity/ml/windows/tests/test_interface.py`, same close, lacks `main`'s four history tests and their helpers `history_window` and `latent` [run: AST].
+   - `verity/ml/windows/history.py` and `wiring.py` do hold `main`'s later text [run], so `history.py` reads an `I.History` that is not there.
+   - By grep, not run: `benchmarks/one_stage/tests/test_a5_history.py:55` and `benchmarks/prove_path/tests/test_records_audit.py:1165` build an `I.History` too, so they fail the same way until vllm's file has it.
+   - vllm's other 37 files of that close: 36 were not changed by `main` after `7af4d24fca3`, and `integrations/vllm/tests/tools/test_ratchet_gate.py` holds `main`'s later change [run].
+
+**Runs in flight** (both wait for a check slot on their node; launched 20:06Z and 20:10Z)
+
+- `r20261110-200651-6068`, at `5f791630feed`: `verity/core/service/spot/tests`, whole, with the Lean built. Expected: the two mended tests pass, the two history tests fail until vllm's file is carried. About 10 minutes once it has its slot [guess, from `7757`'s 444 s].
+- `r20261110-201014-7cdc`, at `2d833ee3dd0c`: `suites.py --quick verity-core-composition verity/core/protocols/spot`, through the runner, now that it is closed on the base. It builds the onsite and remote packages, so I can't say how long [guess].
+- No input of either suite differs between those heads and `0ab9be91a6b0`: the two merges since brought `tests/test_lean_vocabulary.py` alone into my tree beyond what `2d833ee3dd0c` holds [run: `git diff --stat`].
+
+**The table** (every `.py` row: `python -m py_compile` and `ruff check FILE` pass, ruff's findings equal to `main`'s for the file; "= e7b" means `diff` against `git show e7b03e4a6c89:FILE` shows only what the row names)
+
+| file | places | taken at each | why | checked beyond compile and ruff |
+|---|---|---|---|---|
+| `spot/service.py` | 13 | `main`'s text, with the side's two edits carried in: `Sequential` deleted, `Session` is `ProofRun`. One unmarked line read the side's "draw"; it reads "sample" | The side's own changes to the file are those two (`c5dc2a9614`, `a1cdc7ae64`); `Spot.Select.Rule` is all, law or two-stage [read] | = e7b plus the two edits; `main`'s later landings carried by `git merge-file`; imports [run] |
+| `spot/tests/test_service.py` | 1 | `main`'s docstring line; the `Sequential` assertion the side deleted stays deleted | Both lines dropped the closure clause | Passed in the suite run [run `7757`] |
+| `spot/one_stage/registration.py` | 4 | Both: the side's `members` and its `link-points` step, `main`'s `seed_salt` and `pool`. The Declared-day paragraph is the side's later text (`79813d182a`) under `main`'s names | The step sits after R7's pool chain, the order of `Spot.Registration.check` [read] | = e7b plus those; no caller passes `members` but the difftest's `_registration` [run: AST scan] |
+| `spot/one_stage/verifier.py` | 1 | `main`'s call (`day`, `declarations`, `seed_salt`, `pool`) | Every other side edit is already in `main`'s text | Identical to e7b [run] |
+| `spot/one_stage/registered.py` | 1 | Both: the side's `bind_ports`, `BOUND`; `main`'s `DIGEST`, `bit_words`, `digest_leaves`, `digests` | Different additions | = e7b plus `bind_ports`; `tests/test_registered.py` 78 passed, 182 s [run, local] |
+| `spot/one_stage/proofs.py` | 3 | `main`'s text; the side's `units_exactly` and `statements_v2` stay, their docstrings saying v2 refuses the per-member form at parse (`OneStageZk.proofsOf`) | Row 7 | = e7b plus the two functions and one sentence |
+| `protocols/registration.py` | 10 | `main`'s whole | Lean's rule 3: one landed change, the side's the earlier head. `Core.Registration` reads `previous` as `hex64` [read] | Identical to e7b [run] |
+| `protocols/profile.py` | 3 | `main`'s wording with the side's `Work` named; `Work`, `WorkStratum`, `work_k`, `SamplingDesign` stay | `Core.SamplingDesign` has `work` [read] | = e7b plus the work design; imports [run] |
+| `spot/coins.py` | 2 | Both: the side's public `law_problem`, `RAN_OUT`, `ran_out`; `main`'s refusal of a subset of no unit, placed before the population check | `Spot.Draw.flockLaw` refuses in that order [read] | `tests/test_coins.py` passed in the suite run [run `7757`] |
+| `spot/optimize.py` | 2 | `main`'s (`ReplayGrain`, the two-stage design) with the side's `TensorCommit` | The rename is the side's only (`cf28ba13e7`) | `tests/test_optimize.py` 50 passed [run, local] |
+| `spot/remote.py` | 2 | `main`'s release frames with the side's `ChallengePhase` | The rename is the side's only | = e7b plus the rename |
+| `verity/core/service/spot/tests/test_difftest.py` | 2 | Both lines' imports and `PIECE_RUNS` (the side's `RAN_OUT`, `DESIGN`, `POP_ORDER`, `PUBLIC_UNITS`, `LINK_POINTS`; `main`'s `TABLES_HELD`, `SECOND_INTERIOR_READS`, `SECOND_SCHEDULE`). The base's merge of `main` `5482988e3496` then put #8486's lines on top with no marker. **Two of the side's tests changed to what the merged code does** (`5f791630feed`): `test_a_work_draws_design_is_cores` samples at `work-rate:2/5`, not `work:4`; `test_the_slots_of_a_population_of_nested_templates` at `rate:1/125`, not `subset:16` | Each piece is one of `Spot/Pieces.lean` at the head [read]. `main`'s `b18fb3df81` refuses a fixed count as a `Law` rule in `service.Law` and in `Spot/Select.lean` (`Select.FIXED`), and moved its own tests to rates; the side's two came later and git merged them with no marker [read] | Run `7757`: 251 passed, these two failed at the rule. After the change the Python half of each holds: design `work`, k = 4, `TRIPLE`'s floor 2; draw `subset`, k = 16 [run, local, no Lean]. The Lean half: run `r20261110-200651-6068`, waiting for a slot |
+| `verity/ml/circuits/census.py` | 2 | `main`'s `boolean_gates` over the side's `BooleanWork`; the side's `__all__`, which holds both | Side-only rename (`33e93b6380`) | Imports [run] |
+| `verity/ml/circuits/defs.py` | 1 | `__all__` with the side's `DefinitionTable`, `BodyNode` and `main`'s `CONFORMANCE`, `conformance_label` | Different additions | Imports [run] |
+| `verity/ml/circuits/layout.py` | 1 | The side's `BodyNode` and `main`'s `res` parameter | Different additions | Imports [run] |
+| `verity/ml/circuits/query_codec.py` | 1 | `main`'s sentence | Rule 3: one change, `main`'s the later head | Identical to e7b [run] |
+| `verity/ml/circuits/requirement.py` | 1 | The side's "store packing (`Store.Packing`)" | The class is `Store.Packing` at the head | = e7b plus the side's rename |
+| `verity/ml/circuits/requirement_units.py` | 1 | `main`'s "Flock's" | `main` only renamed | Identical to e7b [run] |
+| `verity/ml/circuits/tests/test_part_log.py` | 1 | `main`'s imports with `DefinitionTable`; `main`'s newer test built `Registry()`, now `DefinitionTable()` | The side's rename under `main`'s additions | 68 passed with `test_population_values.py` [run, local] |
+| `verity/ml/flock/python/verity_flock/firewall_transcript.py` | 1 | `main`'s "a challenger" and the side's `InnerRun.handle` | The file's class is `InnerRun` (side-only rename) | = e7b plus the rename |
+| `verity/ml/flock/verifier/README.md` | 1 | `main`'s `verify` and `agree` lines with the side's `[--registered F [--interface F]]` | `FlockVerify.lean`'s usage has `--interface`, `--coins tree` and `agree` [read] | = e7b plus `--interface` |
+| `verity/settings.py` | 1 | Both lines' settings (`VERITY_COMPOSITION_SERVED`; `VERITY_ML_DEFINITIONS_SLOW`, `VERITY_ML_FLOCK_CUDA_GHASH`). The module text's `Registry.check` reads `EnvSettings.check` | Different additions; the class is `EnvSettings` (side-only rename) | `tests/test_settings.py` 12 passed [run, local] |
+| `verity/README.md` | 2 | `main`'s rows; the side's "its proof and inference blocks" in the windows row and its `verity.core.periods` row | The window interface states no server blocks at the head (`5171c0dfe3`) [read] | = e7b plus those two |
+| `integrations/vllm/verity_vllm/protocols/spot.py` | 1 | "SPOT runs in the Commit stage: a row's (...) or serve-openai's Commit windows" | `main`'s name, the side's wider stage | vllm's lead: the close stands [read: LEAN-249, 18:48Z] |
+| `spot/tests/fixtures/exfiltration_lean.json` | 1 | Regenerated by `bash verity/core/protocols/spot/tests/lean/generate.sh` | Rule 4. The place was in the `inputs` table only | Every vector equals `main`'s at e7b; one pin moved, `Security/Proofs/lake-manifest.json` (the merged manifest's sha256, which I recomputed) [run]; `tests/test_consumers.py` 10 passed [run, local] |
+| `verity/ml/flock/tests/fixtures/randomness_lean.json` | 1 | Regenerated by `bash verity/ml/flock/tests/lean/generate.sh` | Rule 4. As above | As above; `tests/test_randomness_spec.py` 4 passed [run, local] |
+| `spot/README.md` (the stale copy's edits; 21 places against the live file) | 21 | `main`'s text at all 21; the side's five edits carried in. **Line 262, "the selection rules `All`, `Law` and `TwoStage`", is the one sentence that is neither line's** (`main`: "`All`, `Law` and `Sequential`"; the side: "`All` and `Law`") | Lean's rule 3 at the 21. Line 262: `service.Selection` is `All | Law | TwoStage` at the head, and you said keep it (19:01Z) | Every name the five edits cite exists at the head [run: `grep`]. 50,367 bytes, 1,215 over the Markdown cap |
+| `verity/core/protocols/composition/tests/test_composition_difftest.py` (new stop, from the base's merge of `main`) | 2 | The side's text under `main`'s names: `PRODUCT` stays onsite-only with the side's comment, built with `ONSITE_PACKAGE`; the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` and `test_product_names_only_the_composites` read `ONSITE_PACKAGE`. Line 874, outside the markers, builds `remote-v1` from `REMOTE_PACKAGE` | Lean's rule 2: `main`'s `335bb1affc` only renamed (each Lake package named from the repository's root, `port()`'s `package` positional) | Against the file before the merge of `main` the diff is `335bb1affc`'s change alone [run]. Not run: it cannot collect, see below |
+
+**What I ask you to look at** (new since 19:44Z)
+
+1. The two changed tests, item 1 above: named here as tests changed to what the merged code does.
+2. The README follow-up, as one line so it isn't lost: `verity/core/protocols/spot/README.md` is 50,367 bytes, 1,215 over the 48 KiB cap, which warns; after the merge is on `main`, cut its two added paragraphs (the two modes, the bound ports) to a sentence each.
+
+**Questions**
+
+1. Who carries `main`'s history tables into `interface.py`? I recommend vllm, on its closing branch, before lean calls the base closed: the file is vllm's by the registry, the side renamed what `main`'s lines sit beside (`Opening` is `TableOpening`, `rows_k_log` is `proof_block_k_log`), and it is 200 lines in 19 places, not a line or two. Until then two of our tests and two of the bench's are red for that reason alone.
+
+**Text for other lanes**
+
+- For vllm, on LEAN-249: "`verity/ml/windows/interface.py` and `verity/ml/windows/tests/test_interface.py`, as closed in `9181ce73cf`, hold `main` only as of `7af4d24fca3`. `main`'s `fff33e8dd3` and `be9ce601ec` (history tables: `History`, `Registered.histories` and `readable`, `Window._written`, `_history_ok`, `seg_rows`, and four tests with `history_window` and `latent`) are not in them, while `history.py` and `wiring.py` beside them are `main`'s later text. So `I.History` is undefined: `verity/core/service/spot/tests/test_history_difftest.py` fails two tests (run `r20261110-192813-7757`), and `benchmarks/one_stage/tests/test_a5_history.py` and `benchmarks/prove_path/tests/test_records_audit.py` name it too. Please carry both commits into the two files under the side's names, on your closing branch."
+- For lean, on LEAN-249: "proofs' core branch `cursor/proofs-remote-core-cf05` is at `0ab9be91a6b0`, with the base `b5718e205aad` merged in. It closes `verity/core/protocols/composition/tests/test_composition_difftest.py`, the one file under `verity/` in proofs' 12 of your 20:07Z list, and changes one more, `verity/core/service/spot/tests/test_difftest.py` (two tests' law texts). No marker in either; no `.lean` file, lakefile, manifest or lock."
+
+**Left:** the two runs' verdicts. The close is done once `6068` shows the two mended tests green; I say so in the next entry, and start nothing of PRF-371 before your brief. Next entry when `6068` ends, or by 21:10Z.
