@@ -1016,7 +1016,7 @@ theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → 
           ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) act ∧
       ((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).2 =
         WholeCircuit.quant8B RowCircuit.coreOps hopperE4m3K32
-          ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) (U.weight (U.layout.wid u)) :=
+          ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) (U.fixed (U.layout.fixedId u)) :=
   ⟨rfl, rfl⟩
 
 /-- **A word's codes**: over a noise `z` whose lines and bases are the check's (`hEA`, `hEB`, `hFA`, `hFB`), where the
@@ -1108,10 +1108,10 @@ theorem replayReadsTheCodes : ReplayReadsTheCodes := by
   obtain ⟨hy, hyj'⟩ := List.getElem?_eq_some_iff.1 hyj
   have hWj := hW _ (List.mem_of_getElem? hyj)
   obtain ⟨hseed, -, -, hF⟩ := fixedNoiseIsTheSpec salt rootB _ wn hwn
-  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.wid u)) := by
+  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.fixedId u)) := by
     rw [hseed, hsalt, hroot]
   obtain ⟨hAS, -, hAB⟩ := encode_codes (z := (semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act)
-    (wt := U.weight (U.layout.wid u)) hk hact hwt
+    (wt := U.fixed (U.layout.fixedId u)) hk hact hwt
     (fun l hl t => by rw [(hF l hl t).1, hsd]; rfl) (fun l hl t => by rw [(hF l hl t).2, hsd]; rfl)
     (fun i e he => by
       obtain ⟨h1, h2⟩ := lineIsTheSpec _ 0 0 0 Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
