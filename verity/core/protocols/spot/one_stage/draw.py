@@ -50,9 +50,16 @@ as the prover pads the N it registers.
 **Several tables** (`--session-tables J`) prove one sample split into J equal consecutive parts, so the sample's count must be
 fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sample's k, or a stratified sample's sum of
 k_s. A stratified sample is held to the verifier's sampling design once, for the whole session, before the split.
+
+**Several sessions** (`split`, `check_split`) prove one sample cut into consecutive parts of at most `session_units` proof
+blocks, one session a part, in order. The rule is `_parts`, which both read and nothing else states. With no
+`session_units`, or a sample that proves no more proof blocks than it, there is one part, the whole sample, and
+`check_split` accepts exactly the proof blocks `check_proved` does. No audit calls them: the one-stage audit proves its
+sample in one session.
 """
 from __future__ import annotations
 
+from collections import Counter
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
@@ -426,6 +433,77 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_design", "parse_rate",
-           "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
-           "work_table"]
+def session_units_problem(session_units: Any) -> str | None:
+    """Why `session_units`, the most proof blocks one session proves, isn't that, or None: it is None (no bound, so the
+    sample is proved in one session) or an integer of at least one."""
+    if session_units is None or (_int(session_units) and session_units >= 1):
+        return None
+    return f"session_units is the most proof blocks one session proves, an integer of at least one, not {session_units!r}"
+
+
+def _parts(sample: Mapping[str, Any], session_units: int | None) -> list[list[int]]:
+    """The rule for which session proves which proof block of a sample, stated here and nowhere else: the proof blocks
+    the sample proves (`proved`), ascending, cut into consecutive runs of `session_units`, the last run the rest; one
+    part, all of them, when `session_units` is None or the sample proves no more than that. It reads the sample and
+    `session_units` (None or at least one, `session_units_problem`) and nothing else, so the parts' number and sizes follow
+    from how many proof blocks the sample proves, which a sampling design of fixed count fixes (`fixed_count`)."""
+    units = proved(sample)
+    if session_units is None or len(units) <= session_units:
+        return [units]
+    return [units[at:at + session_units] for at in range(0, len(units), session_units)]
+
+
+def split(sample: Mapping[str, Any], session_units: int | None = None) -> list[list[int]]:
+    """The parts of `sample`, one a session in order, each a session's proof blocks, ascending (`_parts`). Without
+    `session_units`, or where the sample proves no more proof blocks than it, the one part is `proved(sample)`. Raises
+    `ValueError` for a `session_units` that is no bound (`session_units_problem`)."""
+    if (why := session_units_problem(session_units)) is not None:
+        raise ValueError(why)
+    return _parts(sample, session_units)
+
+
+def _blocks(s: Any) -> bool:
+    return isinstance(s, (list, tuple)) and all(_int(u) for u in s)
+
+
+def check_split(sample: Mapping[str, Any], sessions: Sequence[Sequence[int]], session_units: int | None = None) -> Verdict:
+    """The sessions proved `sample` part by part: `sessions`, the proof blocks each session proved, in the evidence's
+    order of sessions, are exactly the parts `_parts` cuts, in order. The verifier cuts the parts itself from its own
+    sample and takes none from the prover; that sample is one this module's own check has held to the registration and
+    the sampling design, each stratum's count among them.
+
+    Codes: ``session-units`` (`session_units_problem`) and ``not-sessions`` (a session's proof blocks are not a list of
+    integers), after either of which nothing else is checked; ``sessions`` (the sessions are not as many as the parts);
+    ``dropped`` (proof blocks of the sample that no session proved); ``doubled`` (proof blocks proved more than once);
+    ``order`` (the sessions proved the parts, each whole, in another order: the part each session proved, by number);
+    else ``parts`` (the first session whose proof blocks are not its part: its number, what it proved and the part)."""
+    c = _Collect()
+    if (why := session_units_problem(session_units)) is not None:
+        c.fail("session-units", why)
+        return c.verdict()
+    if not (isinstance(sessions, (list, tuple)) and all(_blocks(s) for s in sessions)):
+        c.fail("not-sessions", "the sessions are a list, each session's proof blocks a list of integers")
+        return c.verdict()
+    want, got = _parts(sample, session_units), [list(s) for s in sessions]
+    if len(got) != len(want):
+        c.fail("sessions", {"sessions": len(got), "parts": len(want)})
+    times = Counter(u for s in got for u in s)
+    dropped = [u for part in want for u in part if u not in times]
+    if dropped:
+        c.fail("dropped", dropped[:16])
+    doubled = sorted(u for u, n in times.items() if n > 1)
+    if doubled:
+        c.fail("doubled", doubled[:16])
+    if got != want and sorted(got) == sorted(want):
+        c.fail("order", [want.index(s) for s in got[:16]])
+    else:
+        for j, (s, part) in enumerate(zip(got, want)):
+            if s != part:
+                c.fail("parts", {"session": j, "proved": s[:16], "part": part[:16]})
+                break
+    return c.verdict()
+
+
+__all__ = ["TABLES_LAW", "check_draw", "check_proved", "check_split", "derive", "digits", "fixed_count", "law_of",
+           "parse_design", "parse_rate", "proved", "rate_count", "same_design", "session_units_problem", "split",
+           "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k", "work_table"]
