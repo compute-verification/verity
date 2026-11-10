@@ -2179,6 +2179,7 @@ def _locked(path: Path):
 
 
 def main(argv: list[str]) -> int:
+    from . import queue
     from .queue import GitHub, credential_args, remote_and_repo
     from .store.local import LocalStore
 
@@ -2227,7 +2228,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
+    ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",
+                    help="where the worktrees a build checks out go (`queue.merged_worktree`, one a merge for `ported`'s "
+                         "codemod), and where one a killed tick left is swept (default the temporary directory; the control "
+                         "pod's TMPDIR is a network volume, where each worktree add and remove takes minutes)")
     a = ap.parse_args(argv)
+    queue.MERGED_ROOT = a.merged_root or queue.MERGED_ROOT
     if a.no_slim and not (a.shadow or a.dry_run):
         print("research queue vqueue: --no-slim moves `main` past lean-agreement and the preflights unchecked: it runs only "
               "with --shadow or --dry-run", file=sys.stderr)
