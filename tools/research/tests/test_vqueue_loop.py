@@ -2561,7 +2561,7 @@ def test_under_the_statuses_gate_closing_the_landed_prs_is_retried_until_done_an
     hub.put(1, {"a.txt": "1\n"})
     gh.put(2, hub.o.change({"b.txt": "2\n"}), ready=False)
     gh.put(3, main, ready=False)                                # `main` itself, as a PR into another branch: never landed
-    gh.prs[3] = replace(gh.prs[3], branch="main", base="production")
+    gh.prs[3] = replace(gh.prs[3], branch="main", base="release")
     loop = _gated(hub)
     sha = loop.tick()[0]["sha"]
     gh.status(sha, WEB, "success")
