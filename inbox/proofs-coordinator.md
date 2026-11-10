@@ -34582,3 +34582,48 @@ The nightly, every test: 5,016 s at `main`, 2,885 s here. No thousand comes unde
   2. SPOT's audit never reaches such a statement: the verifier builds its registered reads from its own program, and that builder refuses a program that names a parameter twice.
   3. The fix, on a branch whose checks are running, makes Flock's decoder, the Python decoder and the Python builders refuse any Definition that names a parameter twice, so the statement can no longer be made.
 - **Runs out:** `r20261110-231042-538f` (step 3's quick suites and the Lean try) and `r20261110-231041-32e8` (the records for Flock and its requirers), both on vy-nebius-cpu-8, done about 01:30Z [guess].
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 23:51Z: every served registration I read on `main` passes R8 as built today, with or without `--theta-registered`: serving rows (Commit, TP, deferred bundle), `a5.py` and PoUW's served windows each register a template population program, which gives every unit its own leaves. The workload Program the flag changes is registered only by the edge window, which only tests call. No default change in #8539 and no flag needed on Wednesday. `b343` passed 69 of 69 at `1b4df5a62a51`; records `9f3b` building on cpu-3, ETA about 01:15Z; the TP check `4535` is queued on cpu-2
+
+**Step 1: what R8 has been run on so far.** No served registration has been run end to end on a real Commit, GPU or CPU, and neither has `a5.py` on a served window. Everything below is CPU tests over small programs.
+- [run] Spot's own tests (`verity/core/protocols/spot`, 832 passed in `b343`): R8 on reader and registered toy programs, the tied values, and the difftest against the Lean.
+- [run] `main`'s toy edge windows (`test_edge_history.py`): refused at `980eb64b36` (`2209`); all four pass at `1b4df5a62a` (`b343`).
+- [run] Serving-rows windows built by the real code (`serving_rows.write`, `verity.ml.windows.rows`) over small CPU templates, checked with R8 in force. Each passed by name in `2209`, and their suites passed whole in `b343`:
+  - `integrations/vllm/tests/commit/test_serving_rows.py`: `test_the_registration_is_cores_v1_record_over_served_domains` asserts `v.ok`, and `R4-leaf-layer` alone for a flipped body. `test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template` also passed.
+  - `benchmarks/prove_path`: `test_a_served_windows_negatives_are_each_refused_by_name` and `test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds`.
+  - `a5.py`'s registration check (`V.check`) in `test_a5_history.py` (1 test), `test_a5_memo.py` (3), `test_a5_tp_gates.py` (1) and `test_a5_warden.py` (1).
+- [run] PoUW's served windows: `test_served_zk.py`'s R1–R8 test (`a1c1`, `2453`), and `benchmarks/pouw` whole in `b343`.
+- [run] Network traces: `scan_zk`'s honest round with `prog` tied, and the rest of `benchmarks/network_traces` (517 passed in `b343`).
+- Not yet run: `prove_path`'s two slow tests, which register each TP rank's window. They are in `4535` (step 3).
+
+**Step 2: each served path, read on #8539's head `1b4df5a62a`.**
+- [read] **`pipeline/serving_rows.py` passes.** This covers the Commit's `--serving-rows`, `tp-commit --serving-rows` and a deferred bundle's `serving-rows`.
+  - The window's program is `CS.population_program` over its templates: `serving_rows.population`, line 436, and the TP ranks through it at `tp/serving_rows.py:271`.
+  - Every parameter of that program is an array over instances that its batch maps on axis 0 (`verity/ml/circuits/population.py:76`–`86`), so each unit reads its own leaves. A window's registered `values` are parameters read by no node.
+  - A unit's weight slice is its own rows, committed by reference to the registered weights.
+  - [run] On `test_serving_rows`' two-template window (`Q_template_instances`, 9 and 4 units): 3 run Input nodes, `shared_inputs` is `[]`, F = 1.
+- [read] **`benchmarks/one_stage/a5.py` passes.** It checks `mine.program, mine.query` from the same `CS.Binding` (`a5.py:673`, `766`), so the same population program.
+- [read] **`global_program.build` is not a registration.**
+  - Its workload Program goes to the comparator (`check/match/global_match.py`) and to NCI's registration log, which has no template query, so R8 doesn't apply there (`registration_log.py`'s docstring).
+  - No served one-stage registration checks it. On `main`, the only one-stage registration of a workload Program is the edge window (`pipeline/edge.py`'s `commit`, `out_ports`, `history`), and only tests call that. `prove_path.py` imports `edge.carried` alone.
+- [read] So `theta_registered` changes no served R8 verdict today, on or off.
+- [read] PoUW's served windows (`served_commit.py:741`) also register a population program, `population(params["k"], …)`.
+- [run, not read one by one] The other benches that register windows (`benchmarks/one_stage` a0–a11, `prove_leg`, the network traces) pass in their suites at `1b4df5a62a`.
+
+**Step 3: reading decides it, and no GPU run is needed.**
+- [run] To turn the TP path from read into run, I launched `r20261110-234727-4535` (vy-nebius-cpu-2, `--cwd source`, at `1b4df5a62a`): `suites.py benchmarks/prove_path -- -m slow -k "each_ranks_window or forged_unit"`, with CPU torch.
+- Those tests register both ranks' windows of a stand-in TP Commit and check them. The run is queued behind one check.
+
+**Step 4: recommendation. Neither, for Wednesday: no default change in #8539, and vllm's serve needs no flag for R8.**
+- [read] By the design, the weights are registered in every served run. `window_weights.py` commits them once per model and key, before the first window's coins, and the verifier pins them. AGENTS.md counts weights as registered information.
+- So wherever a one-stage registration checks a Program that reads the weights as an Input, they must be bound at registration (`theta_registered=True`) or named in the verifier's `registered`. R8 enforces exactly that. Today the only such registration is the edge window.
+- [read] Flipping `global_program.build`'s default is vllm's file, and by its docstring it moves every workload digest and what NCI reads as θ. That makes it vllm's change, not #8539's.
+- [guess] vllm should make it in the change that wires the edge window's registration into serving (NET-302), not before Wednesday's serve.
+- [not run] I have not checked what passing `--theta-registered` on Wednesday would do to the serve beyond R8.
+
+**Step 5: #8539.**
+- [run] #8539 is unmarked (`waiting` at `1b4df5a62a`). #8708 is after it.
+- [run] `b343` passed at `1b4df5a62a511ec77ea8c9fa03989010191382b9`, which holds `main` `2b869ed35db5`: 69 of 69 suites, 0 cached, `verity-vllm` 13,851 passed.
+- [run] `9f3b` holds slot b0 on cpu-3 (since 22:53Z), still building the Proofs package for the records.
+- [guess] ETA about 01:15Z, from `2f1a`'s 101 minutes of checking after its build.
+- Then: the lock-only commit, the suites that read the two locks, "ready to mark #8539 at <sha>", and the records compared with `41a78d81cf` and `bec1e5cdaa18`. #8539's final head is the lock-only commit, which doesn't exist yet.
