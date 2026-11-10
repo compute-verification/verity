@@ -1,0 +1,233 @@
+# The period family in the Glossary's words in lean's areas (security/{Definitions,Proofs}/{Core,Hash,Accounting} and
+# security/{Properties,Proofs/Properties}/Accounting): the entries of network-accounting's draft of the period map that
+# rename a declaration or module declared there, as `tools/move/rename.py --map tools/move/period_map.toml` renames them
+# in one move; `period_map_2.toml` is its second stage. The draft's other entries rename what other areas declare and
+# are theirs to move. Each renamed declaration keeps the rest of its name; the word
+# becomes the Glossary's for what it denotes:
+# - "window" for an execution phase (PoUW's, the network certifier's link-window) -> "execution phase"
+#   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
+#   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
+#   actual circuit's `Windows`/`WindowsAt`) -> "server block". PoUB's window, the span one challenge covers, serves
+#   nothing and keeps the word, as does a numeric, bit, index or concurrency window.
+# - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
+#   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
+# - "session" for PoUB's run over its windows and the memory challenger's -> "run"; for the live challenger's
+#   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
+#   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
+# - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
+#   `Compiler.run`) keep it.
+# Format constants (`WINDOW_*`, `*_SESSION`, the `Domains` tags) and the code's record fields keep the word until a
+# format version. Duplicates are merged by a refactor, not by this move: `Accounting.Window` becomes a use of
+# `Verity.TickSpan`, `NetTiming.WindowCharge`'s `Window` and `Carry` uses of `NetworkCertifier.WindowCharge`'s, and
+# `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`; `Accounting.Compose.PeriodRun` is deleted.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+# --moved` takes.
+
+[words]
+# Module paths and namespaces named for the word alone, longest first.
+"RegisteredCircuit/Session" = "RegisteredCircuit/Run"
+"RegisteredCircuit.Session" = "RegisteredCircuit.Run"
+"Accounting/Remote/Session" = "Accounting/Remote/Run"
+"Accounting.Remote.Session" = "Accounting.Remote.Run"
+"RateAudit/Session" = "RateAudit/Run"
+"RateAudit.Session" = "RateAudit.Run"
+"Actual/Windows" = "Actual/ServerBlocks"
+"Actual.Windows" = "Actual.ServerBlocks"
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it).
+"RemoteSessionConservationSketchDeployedProduct" = "RemoteRunConservationSketchDeployedProduct"
+"WorkOfH1CheckedCreditPeriodH200_nontrivial" = "WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial"
+"StackedSessionConservationSketchDeployed" = "StackedRunConservationSketchDeployed"
+"RemoteSessionConservationSketchDeployed" = "RemoteRunConservationSketchDeployed"
+"WorkOfH1CheckedCreditPeriodH200_honest" = "WorkOfH1CheckedCreditMonitoringPeriodH200_honest"
+"RealizesIntegrityOfIntegrityPeriod" = "RealizesIntegrityOfIntegrityMonitoringPeriod"
+"RemoteSessionConservationSketchSum" = "RemoteRunConservationSketchSum"
+"PeriodBindingPerProver_nontrivial" = "MonitoringPeriodBindingPerProver_nontrivial"
+"RemoteSessionConservationDeployed" = "RemoteRunConservationDeployed"
+"RemoteSessionRunConservationRelay" = "RemoteMonitoringPeriodConservationRelay"
+"RealizesCommOfPeriodLeakAccepted" = "RealizesCommOfMonitoringPeriodLeakAccepted"
+"workOfH1CheckedCreditPeriodAt_of" = "workOfH1CheckedCreditMonitoringPeriodAt_of"
+"RemoteSessionConservationSketch" = "RemoteRunConservationSketch"
+"StackedSessionConservationRelay" = "StackedRunConservationRelay"
+"WorkOfH1CheckedCreditPeriodH200" = "WorkOfH1CheckedCreditMonitoringPeriodH200"
+"RemoteSessionConservationRelay" = "RemoteRunConservationRelay"
+"PeriodBindingPerProver_honest" = "MonitoringPeriodBindingPerProver_honest"
+"WorkOfH1CheckedCreditPeriodAt" = "WorkOfH1CheckedCreditMonitoringPeriodAt"
+"circuitCreditPeriod_of_covers" = "circuitCreditMonitoringPeriod_of_covers"
+"RemoteSessionRunConservation" = "RemoteMonitoringPeriodConservation"
+"WorkOfH1CheckedCreditPeriod" = "WorkOfH1CheckedCreditMonitoringPeriod"
+"IntegrityOfIntegrityPeriod" = "IntegrityOfIntegrityMonitoringPeriod"
+"RateSessionSampledNamedRO" = "RateRunSampledNamedRO"
+"RemoteSessionConservation" = "RemoteRunConservation"
+"deficiencyUpTo_periodGame" = "deficiencyUpTo_monitoringPeriodGame"
+"CommOfPeriodLeakAccepted" = "CommOfMonitoringPeriodLeakAccepted"
+"SlowdownWindowsCapSlots" = "SlowdownServerBlocksCapSlots"
+"periodLayer_writerReads" = "monitoringPeriodLayer_writerReads"
+"session_relay_of_unpaid" = "run_relay_of_unpaid"
+"PeriodBindingPerProver" = "MonitoringPeriodBindingPerProver"
+"acceptsUpTo_periodGame" = "acceptsUpTo_monitoringPeriodGame"
+"SessionSamplesRecords" = "RunSamplesRecords"
+"SketchDeployedSession" = "SketchDeployedRun"
+"sessionSamplesRecords" = "runSamplesRecords"
+"SketchSummarySession" = "SketchSummaryRun"
+"CircuitCreditPeriod" = "CircuitCreditMonitoringPeriod"
+"PooledCoversSession" = "PooledCoversRun"
+"RemoteSessionRoutes" = "RemoteRunRoutes"
+"acceptsUpTo_periodR" = "acceptsUpTo_monitoringPeriodR"
+"ksLin_of_periodLeak" = "ksLin_of_monitoringPeriodLeak"
+"periodR_perLiveTile" = "monitoringPeriodR_perLiveTile"
+"pooledCoversSession" = "pooledCoversRun"
+"SketchBoundSession" = "SketchBoundRun"
+"SlowdownWindowsCap" = "SlowdownServerBlocksCap"
+"comm_of_periodLeak" = "comm_of_monitoringPeriodLeak"
+"prover_cost_window" = "prover_cost_serverBlock"
+"LineCoversSession" = "LineCoversRun"
+"RateSessionSample" = "RateRunSample"
+"cutWindow_eq_some" = "cutServerBlock_eq_some"
+"lineCoversSession" = "lineCoversRun"
+"PeriodCoversStmt" = "MonitoringPeriodCoversStmt"
+"periodLayer_cone" = "monitoringPeriodLayer_cone"
+"window_responder" = "period_responder"
+"LiWindowUnbound" = "LiExecutionPhaseUnbound"
+"periodLayer_src" = "monitoringPeriodLayer_src"
+"periodPositions" = "monitoringPeriodPositions"
+"B2WindowP2Ring" = "B2PeriodP2Ring"
+"credit_session" = "credit_run"
+"everyWindow_at" = "everyExecutionPhase_at"
+"B2WindowAudit" = "B2PeriodAudit"
+"PeriodTailMax" = "MonitoringPeriodTailMax"
+"SampledWindow" = "SampledExecutionPhase"
+"WindowDesigns" = "ExecutionPhaseDesigns"
+"budget_period" = "budget_monitoringPeriod"
+"budget_window" = "budget_executionPhase"
+"credit_window" = "credit_executionPhase"
+"periodR_every" = "monitoringPeriodR_every"
+"pr_session_le" = "pr_run_le"
+"windowUnbound" = "executionPhaseUnbound"
+"windows_small" = "serverBlocks_small"
+"PeriodBudget" = "MonitoringPeriodBudget"
+"WindowDesign" = "ExecutionPhaseDesign"
+"periodCovers" = "monitoringPeriodCovers"
+"window_fixed" = "executionPhase_fixed"
+"StageWindow" = "StageExecutionPhase"
+"cost_window" = "cost_serverBlock"
+"periodLayer" = "monitoringPeriodLayer"
+"windowTicks" = "executionPhaseTicks"
+"window_fold" = "executionPhase_fold"
+"WindowPlay" = "ExecutionPhasePlay"
+"periodGame" = "monitoringPeriodGame"
+"periodMode" = "monitoringPeriodMode"
+"sameWindow" = "sameExecutionPhase"
+"windowCoin" = "executionPhaseCoin"
+"windowMode" = "executionPhaseMode"
+"window_pos" = "executionPhase_pos"
+"WindowsAt" = "ServerBlocksAt"
+"cutWindow" = "cutServerBlock"
+"B2Window" = "B2Period"
+"periodR" = "monitoringPeriodR"
+
+[[words_in]]
+# `Windows` names another sense in other files (its own group there), so it is renamed only in the guarantee's
+# files and the one whose prose names it. A file the move renames is named by a pattern that matches it before
+# and after the move (`Windows.lean`, `ServerBlocks.lean`), so the move runs again on its own commit.
+files = [
+    "security/Definitions/Accounting/Guarantees/Actual.lean",
+    "security/Definitions/Accounting/Guarantees/Actual/Threaded.lean",
+    "security/Proofs/Accounting/Actual/[WS][ie][nr][dv]*.lean",
+]
+words = { "Windows" = "ServerBlocks" }
+
+[[words_in]]
+# `onePeriod` is also Core's `Family.onePeriod`, so it is renamed only in its own file and those that read it.
+files = [
+    "security/Definitions/Accounting/Guarantees/PeriodBinding.lean",
+    "security/Definitions/Accounting/PeriodBinding.lean",
+    "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+]
+words = { "onePeriod" = "oneMonitoringPeriod" }
+
+[[words_in]]
+# `Session` is also Spot's, the certifier's, the challenger's and the remote audit's code's (`RemoteAudit.Session`), so
+# Accounting's three (`Rate.Session`, `Remote.Draw.Session`, `Remote.Sketch.Session`, with the lemmas under them) are
+# renamed only in their files and those that spell a reference to them (the build's `.ilean` references). `RateAudit/Session.lean`,
+# which the move renames `Run.lean`, is named by a pattern that matches it under both names.
+files = [
+    "security/Definitions/Accounting/Assumptions/RemoteDraw.lean",
+    "security/Definitions/Accounting/Assumptions/RemoteSketch.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteBinding.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteDraw.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteSketch.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteSketchP2.lean",
+    "security/Definitions/Accounting/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Definitions/Accounting/Remote/Fork.lean",
+    "security/Definitions/Accounting/Remote/Sketch.lean",
+    "security/Proofs/Accounting/Lemmas/RemoteBinding.lean",
+    "security/Proofs/Accounting/RateAudit/[SR][eu][sn]*.lean",
+    "security/Proofs/Accounting/RemoteHeld/Binding.lean",
+    "security/Proofs/Accounting/RemoteHeld/Draw.lean",
+    "security/Proofs/Accounting/RemoteHeld/DrawMeets.lean",
+    "security/Proofs/Accounting/RemoteHeld/Outside.lean",
+    "security/Proofs/Accounting/RemoteHeld/Sketch.lean",
+]
+words = { "Session" = "Run" }
+
+[[words_in]]
+# The remote audit's record and its pooled bound read `Accounting.Remote.Draw.Session` beside the code's
+# `RemoteAudit.Session`, which keeps its name, so there only the dotted name is renamed.
+files = [
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Properties/Accounting/Remote/Line/Record.lean",
+    "security/Properties/Accounting/Remote/Pooled.lean",
+]
+words = { "Draw.Session" = "Draw.Run" }
+
+[[words_in]]
+# `honestSession` is also a private definition of `Properties/Pous/Component.lean`, and `honestRun` is Pouw's
+# name elsewhere, so it is renamed only where it is declared and read.
+files = [
+    "security/Proofs/Accounting/RegisteredCircuit/Witness.lean",
+    "security/Proofs/Accounting/RegisteredCircuit/WitnessPrefill.lean",
+]
+words = { "honestSession" = "honestRun" }
+
+[rewrite]
+    # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+    # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+    exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+               "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+    [keep]
+    # Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+    # version ("window", "session", "period" as JSON keys and tag strings).
+    patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+                '"(?:window|windows|session|sessions|period|periods)"',
+                # the remote audit's Python `Session`, which Accounting's prose names beside its own
+                'audit\.Session\.disclose', 'Session\.close']
+    # The new names that hold their old word after a lowercase letter, where it would match again: kept, so that running
+    # the map again on its move changes nothing (`stage.py`'s rerun).
+    strings = ["MonitoringPeriodBindingPerProver", "MonitoringPeriodCoversStmt", "MonitoringPeriodTailMax",
+               "MonitoringPeriodBudget"]
+    
+
+# For the review: these words also reach code outside Lean (a Python mirror, a benchmark, a test), which this move
+# renames with them:
+# - `Accounting/Remote/Session`: tests/lint/allowlists/repo_retired_terms.json
+# - `Actual.Windows`: verity/protocols/inference_only/rho/rho/envelopes.py, verity/protocols/inference_only/rho/tests/test_envelopes.py
+# - `Actual/Windows`: tests/lint/allowlists/repo_retired_terms.json
+# - `CommOfPeriodLeakAccepted`: tests/lint/allowlists/repo_retired_terms.json, tools/verity/lean/tests/fixtures/merge/accounting-retired-import-onto-next.json
+# - `IntegrityOfIntegrityPeriod`: tests/lint/allowlists/repo_retired_terms.json
+# - `RateAudit/Session`: tests/lint/allowlists/repo_retired_terms.json
+# - `RateSessionSample`: verity/protocols/poub/verifier/audit.py, verity/protocols/poub/verifier/tests/test_remote_bandwidth.py
+# - `RegisteredCircuit/Session`: tests/lint/allowlists/repo_retired_terms.json
+# - `SketchBoundSession`: verity/protocols/poub/verifier/p2.py
+# - `WindowsAt`: verity/protocols/inference_only/rho/rho/envelopes.py
+# - `WorkOfH1CheckedCreditPeriod`: security/Properties/lakefile.toml, tests/lint/allowlists/repo_retired_terms.json, tools/verity/lean/tests/fixtures/merge/accounting-retired-import-onto-next.json, tools/verity/lean/tests/test_merge.py
+# Held, not renamed by this move:
+# - `period`, `sessions`: bare lowercase words that prose shares; they wait for the build's references
+# - `session`, `window`, `windows`: two senses each, in shared files
+# - `Rate.DeployedSession` (to `Rate.DeployedRun`): `RateAudit.DeployedRun` is a module whose name its readers
+#   import, and `move_check.py` certifies no rename to a name the base already spells; it waits for a reviewed
+#   rename or another name
