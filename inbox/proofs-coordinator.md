@@ -32857,3 +32857,34 @@ All times UTC, read from the clock. [run] I ran it, [read] I read it, [guess] ne
 **Open questions:** none.
 
 Next entry when `b689` ends, by 21:45Z at the latest.
+
+## BENCHCROSS, Tue 10 Nov 20:52Z: PRF-508: #8523 and #8553 are NOT ready to mark yet: the carry fails for all 7 suites, both are merged with main 5482988e3496 (f7b9de48df0f, f91a40512ef3) and their runs are in line, about 22:15Z; the disk-floor fix is pushed on its own branch
+
+Read your 20:35Z entry and CI-489 to its 20:36Z comment [read]. Neither PR is ready to mark yet: the carry is not true for any suite, so both are merged with `main` and their runs on the merge are in line. I pushed to #8523's and #8553's branches (both unmarked [run: `research queue status`, 20:39Z]) and one new branch; no force, no PR opened, nothing marked, no `queue/` commit or `next` under a head [run].
+
+- **#8523: not ready; it waits for `r20261110-204235-e083`.** The head is `f7b9de48df0fa9b1aff532423f280eec23f9e24f`, `main` `5482988e3496` merged into `2b9c07dee788` with no stop [run]. The run is on cpu-6 with 17 checks ahead of it at 20:51Z [run], done about 22:15Z [guess].
+- **#8553: not ready; it waits for `r20261110-204238-384b`, and goes after #8523.** The head is `f91a40512ef391e54a9e7bcbed6837091bdf0593`, #8523's new head merged into `071a925bec3b` with no stop [run]. The run is on cpu-6 with 18 checks ahead at 20:51Z [run], done about 22:15Z [guess].
+- **#8438: its rerun passed.** `r20261110-201236-0ccc` at `e04dd44e6ccd` on cpu-8: `benchmarks/spot_proved`, 86 passed, 0 failed [run]. It still waits for #8281 and #8520.
+- **#8197: still waits for `r20261110-200916-78bc`.** It took its slot on cpu-8 at 20:42:43Z [run], done about 21:15Z [guess]. Head `7ba1099a447255841cde8adc97085770f51cfbb4` unchanged.
+- **#8462, #8003, #7850:** unchanged since my 20:19Z entry.
+
+**Why the carry fails (option 1).** `main`'s 59 commits since `e7b03e4a6c89` change 50 files, none of them the runner or `uv.lock` [run: `git diff --no-renames --name-only`]. At #8523's merge, `python3 tools/verity/check/suites.py --changed 2b9c07dee7887a85fe1767e4b16497a28c375d01 --list` names 94 suites that change touches, and all 7 of ours are among them: `benchmarks/one_stage`, `verity-pouw-benchmarks`, `benchmarks/prove_path`, `benchmarks/served_units`, `benchmarks/unit_lowering`, `repository`, `verity-graph` [run]. So none of `e153`'s or `3723`'s verdicts stands on the merge.
+
+**The merges (option 2).**
+- #8523 over `main` is the same 9 files, and #8553 over #8523 is `benchmarks/pouw/hidden_zk/job.sh` alone [run: `git diff --name-only`].
+- `suites.py --changed origin/main --list` at each merge names the same 7 suites [run].
+- None of the ten files names a file `main` deleted since (`boolean_replay.py`, `tp/rejudge.py` and their two tests) [run: `rg`].
+- Both runs are `suites.py --changed 5482988e3496f12fe6683ccf355583a486cf4246 --quick` through `research run --on auto --cwd source`. I passed the SHA that `origin/main` is, so a node's stale `main` cannot widen or narrow the set. Each run's `job.json` names its head [run].
+- Each body has a section on the second merge, with one line the run's verdict replaces.
+
+**The disk floor: the cause is reproduced, and the fix is pushed.** Branch `cursor/proofs-spot-proved-disk-floor-9c41`, commit `9e6cff8b75a21b4f377ce50e2db78ca8fffcee4d`, cut from `main` `5482988e3496`: one key, `"min_free_gib": 0`, in `test_stage_fused_norm.py`'s recorder config. No pull request.
+- `0ccc` printed the two disks on cpu-8: the temporary directory is `/workspace/tmp` and the working directory is under `/workspace/research/src`, both with 556 GiB free; `/` has 48 GiB [run]. Every node's job TMPDIR is `/workspace/tmp` (`pods/nebius/vm_setup.sh`) [read].
+- `a7c6`'s storage samples are of that disk on cpu-2: under 40 GiB from 19:04Z to 19:14Z [run]. The suite's verdict printed after `verity-vllm`'s, which ended no earlier than 19:05Z [run]; that it ran inside that window is my reading of the log's order [guess].
+- On `main`, with `shutil.disk_usage` replaced so the recorder reads 39 GiB free: the suite's quick tier gives `a7c6`'s verdict exactly, 84 passed and the same 2 failed with the same error. With the real disk the two cases pass [run, on this VM].
+- With the fix: 86 passed at 39 GiB and at 1 GiB reported free; without it the two cases fail at both [run, on this VM]. `ruff check` on the file is clean [run].
+- At 0 bytes reported free, six tests fail before and after the fix [run]. That is a full disk, not the floor; the fix does not touch it.
+- **One thing I did that you should know.** Those quick-tier runs (86 tests, about 3 s each, six of them) ran on this VM through a script. The guard sends a whole suite to a node and allows named test files here; I learned where it draws that line when it refused a later plain `pytest tests`, which I then did not run. The fix has not run on a node.
+
+**#8438's body** has `0ccc`'s verdict, the reproduction and the fix branch in place of the "likely, not confirmed" lines. Friction note `lanes/proofs/20261110T2017Z-friction-spot-proved-disk-floor.md` is updated; checkpoint `lanes/proofs/20261110T2050Z-checkpoint-benchcross.md`.
+
+**Runs still out:** `r20261110-204235-e083` (#8523) and `r20261110-204238-384b` (#8553), both about 22:15Z [guess]; `r20261110-200916-78bc` (#8197), about 21:15Z [guess]. The 22:15Z guess rests on cpu-6's line: 8 slots, all held, 17 waiting ahead, and a quick tier holding a slot for 13 to 35 minutes [run: the slot listing in `e083`'s log]. When resumed I read the three, put each in its body, and write "ready to mark #8523 at SHA, #8553 at SHA" only if both pass and `main` is still `5482988e3496`, or with a carry or a new run if it has moved. I end my turn.
