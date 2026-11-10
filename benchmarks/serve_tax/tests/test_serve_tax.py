@@ -978,15 +978,18 @@ def cost_arms() -> list[dict]:
             both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93])]
 
 
-#: an arm with every change the model's target has a part for: the launch line with the tick and the edge snapshot
+#: an arm with every change the model's target has a part for and no other: stock with the tick, the canonical top-k
+#: and the edge snapshot
 WHOLE = "whole"
 
 
 @pytest.fixture
 def whole(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
-    """`cost_arms` with the measured arm's passes under an arm that has every part of the target on."""
-    monkeypatch.setitem(S.ARMS, WHOLE, replace(S.ARMS["two-stage"], tick=True, edges=True))
-    return [a | {"arm": WHOLE} if a["arm"] == "two-stage" else a for a in cost_arms()]
+    """`cost_arms` with the measured arm's passes under an arm that has every part of the target on and no change the
+    target has no part for."""
+    monkeypatch.setitem(S.ARMS, WHOLE, replace(S.ARMS["compiled"], parent="compiled", what="every part of the target",
+                                               env={"VERITY_DSA_TOPK": "canonical"}, tick=True, edges=True))
+    return [a | {"arm": WHOLE, "parent": "compiled"} if a["arm"] == "two-stage" else a for a in cost_arms()]
 
 
 def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have_on():
@@ -994,7 +997,7 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
     assert [(p.name, p.points, p.changes, p.basis) for p in glm.target_parts] == [
         ("the certified tick", 1.63, ("admission on the certified tick",), "modelled"),
         ("the tie order", 0.25, ("the canonical top-k",), "modelled"),
-        ("the snapshot bundle", 0.17, ("the edge snapshot", "prefix caching off"), "modelled")]
+        ("the snapshot bundle", 0.17, ("the edge snapshot",), "modelled")]
     assert glm.target == 2.05 and all(not m.target_parts for m in S.MODELS.values() if m.target is None)
     with pytest.raises(ValueError, match="the target's parts sum to 1.88, and the target is 2.05"):
         replace(glm, target_parts=glm.target_parts[:2])
@@ -1002,42 +1005,63 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
         replace(glm, target_parts=(S.Part("all", 2.05, ("the tick",)),))
     # an arm's changes are read from its data, and an arm this file doesn't define has none
     assert S.changes_of("compiled") == S.changes_of("compiled-again") == S.changes_of("no such arm") == []
-    assert S.changes_of("two-stage") == ["the step record", "prefix caching off", "the boundary commitment",
+    assert S.changes_of("two-stage") == ["the step record", "prefix caching off", "the two-stage boundary commitment",
                                          "the history tables", "the canonical top-k"]
     assert S.changes_of("tick") == ["the step record", "admission on the certified tick"]
     assert S.changes_of("boundary")[-1] == "the edge snapshot"
-    # the launch line leaves the tick off, and half of the snapshot bundle
+    # the launch line leaves off the tick and the edge snapshot, which the snapshot bundle is of
     assert [(p["name"], p["points"], p["off"]) for p in S.target_parts(glm, "two-stage")] == [
         ("the certified tick", 1.63, ["admission on the certified tick"]), ("the tie order", 0.25, []),
         ("the snapshot bundle", 0.17, ["the edge snapshot"])]
     assert all(p["off"] == list(p["changes"]) for p in S.target_parts(glm, "no such arm"))
+    # and it turns on four changes the target has no part for: the cost model keeps the prefix cache on
+    assert S.not_in_target(glm, "two-stage") == ["the step record", "prefix caching off",
+                                                 "the two-stage boundary commitment", "the history tables"]
+    assert S.not_in_target(glm, "no-prefix-cache") == ["prefix caching off"]
+    assert S.not_in_target(glm, "canonical-topk") == S.not_in_target(glm, "compiled") == []
 
 
-def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_has_every_part_on(whole: list[dict]):
-    """The target counts changes the launch line leaves off, so its cost neither meets nor misses it: the verdict is
-    a fourth value, which is not the "cannot tell" of an interval that straddles the target."""
+def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_is_of_the_targets_changes(
+        whole: list[dict], monkeypatch: pytest.MonkeyPatch):
+    """The target counts changes the launch line leaves off and has no part for changes it turns on, so its cost
+    neither meets nor misses it: the verdict is a fourth value, which is not the "cannot tell" of an interval that
+    straddles the target."""
     r = S.cost_report(cost_arms())
     assert r["verdict"] == S.NOT_COMPARABLE == "not comparable" and (r["target"], r["target_basis"]) == (2.05, "modelled")
     assert [c["verdict"] for c in r["loads"]] == ["not comparable", "not comparable"]
     assert [(p["name"], p["off"]) for p in r["target_parts"] if p["off"]] == [
         ("the certified tick", ["admission on the certified tick"]), ("the snapshot bundle", ["the edge snapshot"])]
+    assert r["not_in_target"] == ["the step record", "prefix caching off", "the two-stage boundary commitment",
+                                  "the history tables"]
     text = S.cost_text(r)
     assert text.splitlines()[0].endswith("target ≤ 2.05% (modelled)   verdict: not comparable")
     assert ("  the target is the sum of its parts: the certified tick 1.63% (modelled), the tie order 0.25% (modelled), "
-            "the snapshot bundle 0.17% (modelled; the edge snapshot, the prefix-cache hits lost and page hashing)\n"
+            "the snapshot bundle 0.17% (modelled; the pause to copy and hash the cache at each edge and the carried "
+            "pages' hash, with the prefix cache on)\n"
             "  not comparable: two-stage leaves off admission on the certified tick (the certified tick, 1.63%) and "
-            "the edge snapshot (in the snapshot bundle, 0.17%), which the target counts, so no cost of it meets or "
-            "misses the target\n") in text
+            "the edge snapshot (the snapshot bundle, 0.17%), which the target counts, and turns on the step record, "
+            "prefix caching off, the two-stage boundary commitment and the history tables, which the target has no "
+            "part for, so no cost of it meets or misses the target\n") in text
     # no target is made of the parts that are on
     assert "0.42" not in text and "0.25%)" not in text.split("\n\n")[0].replace("0.25% (modelled)", "")
     # one load alone is not comparable either, and neither is a result's entry
     alone = S.cost_report([a for a in cost_arms() if a["arm"] in ("compiled", "two-stage")])
     assert alone["verdict"] == "not comparable" and {m["verdict"] for m in S.result_of(r)[3]} == {"not comparable"}
-    # an arm with every part on has one of the three, the largest load's: here it misses
+    # an arm with every part on and nothing else has one of the three, the largest load's: here it misses
     r = S.cost_report(whole, arm=WHOLE)
-    assert not any(p["off"] for p in r["target_parts"]) and "not comparable" not in S.cost_text(r)
+    assert not any(p["off"] for p in r["target_parts"]) and r["not_in_target"] == []
+    assert "not comparable" not in S.cost_text(r)
     assert [c["verdict"] for c in r["loads"]] == ["cannot tell", "misses"] and r["verdict"] == "misses"
     assert "the target is the sum of its parts: the certified tick 1.63% (modelled)" in S.cost_text(r)
+    # every part on is not enough: the launch line with the tick and the edge snapshot still has four changes on that
+    # the target has no part for
+    monkeypatch.setitem(S.ARMS, "wider", replace(S.ARMS["two-stage"], tick=True, edges=True))
+    wider = S.cost_report([a | {"arm": "wider"} if a["arm"] == "two-stage" else a for a in cost_arms()], arm="wider")
+    assert not any(p["off"] for p in wider["target_parts"]) and len(wider["not_in_target"]) == 4
+    assert wider["verdict"] == "not comparable" and {c["verdict"] for c in wider["loads"]} == {"not comparable"}
+    assert ("  not comparable: wider turns on the step record, prefix caching off, the two-stage boundary commitment "
+            "and the history tables, which the target has no part for, so no cost of it meets or misses the target\n"
+            ) in S.cost_text(wider)
     # a target that is given has no parts: the cost is compared with it as it is
     given = S.cost_report(cost_arms(), target=10.0)
     assert (given["verdict"], given["target_parts"]) == ("meets", []) and "sum of its parts" not in S.cost_text(given)
@@ -1050,11 +1074,12 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     # the tie order alone is one part, whole: its points are beside the step that measures it
     assert rows["canonical-topk"] == [{"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25,
                                        "whole": True}]
-    # the cost model has no part for the step record, the boundary commitment or the history tables
+    # the cost model has no part for the step record, prefix caching off, the two-stage boundary commitment or the
+    # history tables
     assert rows["record"] == [{"changes": ["the step record"], "part": None, "points": None, "whole": False}]
-    assert rows["boundary-rows"] == [
-        {"changes": ["prefix caching off"], "part": "the snapshot bundle", "points": 0.17, "whole": False},
-        {"changes": ["the boundary commitment"], "part": None, "points": None, "whole": False}]
+    assert rows["no-prefix-cache"] == [{"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
+    assert rows["boundary-rows"] == [{"changes": ["prefix caching off", "the two-stage boundary commitment"],
+                                      "part": None, "points": None, "whole": False}]
     assert rows["two-stage"] == [
         {"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25, "whole": True},
         {"changes": ["the history tables"], "part": None, "points": None, "whole": False}]
@@ -1063,10 +1088,10 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
             "the target's part for it |\n|---|---:|---|---:|---:|---|\n"
             "| record | 1.52% [1.01%, 2.04%] | compiled | 1.52% [1.01%, 2.04%] | 22% | the step record: not in the "
             "model |\n"
-            "| no-prefix-cache | 0.00% [0.00%, 1.01%] | compiled | 0.00% [0.00%, 1.01%] | — | prefix caching off: part "
-            "of the snapshot bundle, 0.17% |\n") in text
-    assert "| 3.14% [3.12%, 3.16%] | 45% | prefix caching off: part of the snapshot bundle, 0.17%; the boundary " \
-           "commitment: not in the model |\n" in text
+            "| no-prefix-cache | 0.00% [0.00%, 1.01%] | compiled | 0.00% [0.00%, 1.01%] | — | prefix caching off: not "
+            "in the model |\n") in text
+    assert "| 3.14% [3.12%, 3.16%] | 45% | prefix caching off, the two-stage boundary commitment: not in the model " \
+           "|\n" in text
     assert "| canonical-topk | 2.56% [2.04%, 3.09%] | compiled | 2.56% [2.04%, 3.09%] | — | the canonical top-k: the " \
            "tie order, 0.25% |\n" in text
     assert "| 31% | the canonical top-k: the tie order, 0.25%; the history tables: not in the model |\n" in text
@@ -1100,16 +1125,24 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     assert [c["noise_floor"] for c in r["loads"]] == [0.0, 0.0]
     rows = {x["arm"]: x for x in r["arms"]}
     assert list(rows) == ["record", "no-prefix-cache", "boundary-rows", "canonical-topk", WHOLE]
-    assert [rows[a]["over"] for a in rows] == ["compiled", "compiled", "record", "compiled", "boundary-rows"]
+    assert [rows[a]["over"] for a in rows] == ["compiled", "compiled", "record", "compiled", "compiled"]
     assert rows["record"]["value"] == rows["record"]["step"]["value"] == 1.52
     assert rows["boundary-rows"]["value"] == 4.71 and rows["boundary-rows"]["step"]["value"] == 3.14
-    assert rows[WHOLE]["value"] == 6.95 and rows[WHOLE]["step"]["value"] == 2.14
-    # the arms from the measured one up to stock split the whole: the record's step, the boundary commitment's and the
-    # launch line's last; prefix caching off and the canonical top-k alone are beside that chain
-    assert [rows[a]["share"] for a in rows] == [pytest.approx(0.219, abs=1e-3), None, pytest.approx(0.452, abs=1e-3), None,
-                                                pytest.approx(0.308, abs=1e-3)]
+    # this arm is over stock itself, so it is the whole of its cost and no other arm is a step of it
+    assert rows[WHOLE]["value"] == rows[WHOLE]["step"]["value"] == 6.95
+    assert [rows[a]["share"] for a in rows] == [None, None, None, None, 1.0]
     assert rows["canonical-topk"]["value"] == rows["canonical-topk"]["step"]["value"] == 2.56
     assert r["no_arm"] == list(S.NO_ARM) and r["commitment"] is None and json.loads(json.dumps(r)) == r
+    # the launch line's arms from the measured one up to stock split the whole: the record's step, the boundary
+    # commitment's and the launch line's last; prefix caching off and the canonical top-k alone are beside that chain
+    ours = S.cost_report(cost_arms())
+    steps = {x["arm"]: x for x in ours["arms"]}
+    assert [steps[a]["over"] for a in steps] == ["compiled", "compiled", "record", "compiled", "boundary-rows"]
+    assert steps["two-stage"]["value"] == 6.95 and steps["two-stage"]["step"]["value"] == 2.14
+    assert [steps[a]["share"] for a in steps] == [pytest.approx(0.219, abs=1e-3), None, pytest.approx(0.452, abs=1e-3),
+                                                  None, pytest.approx(0.308, abs=1e-3)]
+    table = S.cost_text(ours)
+    assert "| two-stage | 6.95% " in table and "| boundary-rows | 2.14% " in table and "| record | 3.14% " in table
     lines = S.cost_text(r).splitlines()
     assert lines[:3] == [
         "serving cost, glm-5.3, whole over compiled: 6.95% [6.38%, 7.53%]   target ≤ 2.05% (modelled)   verdict: misses",
@@ -1132,7 +1165,7 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
             "above): compiled 150.0 output and 256.0 prompt tokens/s, ") in text
     assert "    within the latency target (TPOT ≤ 80 ms), which no target or verdict is of: 6.95% [6.38%, 7.53%]" in text
     assert "noise floor (compiled-again over compiled, two server lifetimes of one engine, load long): 0.00%" in text
-    assert "| whole | 6.95% " in text and "| boundary-rows | 2.14% " in text and "| record | 3.14% " in text
+    assert "| whole | 6.95% [6.38%, 7.53%] | compiled | 6.95% [6.38%, 7.53%] | 100% |" in text
     assert "changes with no arm" in text and "'s boundary commitment" not in text
     # a target given replaces the model's, and without stock again the output says the floor was not measured
     arms = cost_arms()
@@ -1237,7 +1270,8 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
         2.05, "modelled", "not comparable", "not comparable")
     assert r["target_parts"] == [] and [p["name"] for p in saved["target_parts"] if p["off"]] == [
         "the certified tick", "the snapshot bundle"]
-    of_target = ("target", "target_basis", "target_parts", "verdict", "loads", "arms")
+    assert r["not_in_target"] == [] and len(saved["not_in_target"]) == 4
+    of_target = ("target", "target_basis", "target_parts", "not_in_target", "verdict", "loads", "arms")
     assert {k: v for k, v in saved.items() if k not in of_target} == {k: v for k, v in r.items() if k not in of_target}
     assert saved["loads"][0] | {"verdict": "meets"} == r["loads"][0]
 
@@ -1266,6 +1300,8 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     ours = S.result_of(S.cost_report(cost_arms()))
     assert ours[0] and {m["verdict"] for m in ours[3]} == {"not comparable"}
     assert [p["off"] for p in ours[3][-1]["target_parts"]] == [["admission on the certified tick"], [], ["the edge snapshot"]]
+    assert ours[3][-1]["not_in_target"] == ["the step record", "prefix caching off", "the two-stage boundary commitment",
+                                            "the history tables"] and number["not_in_target"] == []
     # one load alone: its cost, and no entry under the metric's id
     alone = S.cost_report([cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0] * 3), ("two-stage", [1.95, 1.96, 1.97]))])
     assert [m["name"] for m in S.result_of(alone)[3]] == ["chat"] and S.result_of(alone)[0]

@@ -88,14 +88,15 @@ a token, its tax where the reference is saturated: the reference's output tokens
 both at the rung of a load where the reference's are highest (`serving_cost`, the benchmark kit's paired ratio over
 reps: `kit`). Every arm serves the same prompts decoded to the same lengths, so the ratio is of GPU time at equal
 tokens, and no SLO enters it. Each load's line says whether the reference's own rungs show it saturated at that rung
-(`peak`: it served a rung above, and no more tokens a second at any). One cost a load, the largest the number, with its 95% interval over reps, its verdict
-against ``--target`` or the model's target, and every other arm's cost beside it, as text and as one JSON object whose
-first keys are value, unit, commit and run. The model's target is the sum of its parts, each of some of our changes
-(`Part`, `CHANGES`): an arm that leaves one of those off has no verdict against it but "not comparable"
-(`NOT_COMPARABLE`), and each arm's row names the target's part for what its step turns on (`in_target`). Under each
-load's cost are both sides' output and prompt tokens a second, the tokens a request
-and the engine's GPUs, and the load's cost within the SLO (`within_slo`: the reference's best goodput over the arm's,
-less one, each at the rung where its own is largest), which is the cost only where both sides meet the SLO for every
+(`peak`: it served a rung above, and no more tokens a second at any). One cost a load, the largest the number, with
+its 95% interval over reps, its verdict against ``--target`` or the model's target, and every other arm's cost beside
+it, as text and as one JSON object whose first keys are value, unit, commit and run. The model's target is the sum of
+its parts, each of some of our changes (`Part`, `CHANGES`): an arm that leaves one of those off, or has a change on
+that no part counts (`not_in_target`), has no verdict against it but "not comparable" (`NOT_COMPARABLE`), and each
+arm's row names the target's part for what its step turns on (`in_target`). Under each load's cost are both sides'
+output and prompt tokens a second, the tokens a request and the engine's GPUs, and the load's cost within the SLO
+(`within_slo`: the reference's best goodput over the arm's, less one, each at the rung where its own is largest),
+which is the cost only where both sides meet the SLO for every
 request and which no target or verdict is of. The loads are chat and long context (`LOADS`): where one of them has not
 run, the first line names the one that has and the number isn't said to meet its target. Directories of one arm from
 two jobs, each a load of its own, are one arm (`joined`), so a load served later joins the number. ``--result`` writes
@@ -231,7 +232,7 @@ ARMS = {
 CHANGES: dict[str, Callable[[Arm], bool]] = {
     "the step record": lambda a: "record" in a.plugin,
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
-    "the boundary commitment": lambda a: "boundary_rows" in a.plugin,
+    "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
     "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
     "admission on the certified tick": lambda a: a.tick,
@@ -276,7 +277,7 @@ class Model:
     #: the most serving it with our changes may cost over stock, in percent of stock's serving compute (`cost_report`),
     #: what that figure rests on: modelled (a cost model's share, not a measurement) or measured, and the parts it is
     #: the sum of, each of some of our changes: a cost is compared with the target only where its arm has every part's
-    #: changes on (`target_parts`)
+    #: changes on (`target_parts`) and no change on that no part counts (`not_in_target`)
     target: float | None = None
     target_basis: str | None = None
     target_parts: tuple[Part, ...] = ()
@@ -313,14 +314,17 @@ MODELS = {
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
                        ("--dtype", "bfloat16"), (2.0, 0.08)),
     # glm53's target is the cost model's share for serving: extra GPU time at equal tokens, which reads no SLO, for a
-    # server that does not cut its cache at a phase edge. Its parts are the model's, none of them measured here.
+    # server that does not cut its cache at a phase edge and keeps vLLM's prefix cache on. Its parts are the model's,
+    # none of them measured here. It has none for the step record, the two-stage boundary commitment, the history
+    # tables or prefix caching off.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
                    ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.05, target_basis="modelled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",)),
                        Part("the tie order", 0.25, ("the canonical top-k",)),
-                       Part("the snapshot bundle", 0.17, ("the edge snapshot", "prefix caching off"),
-                            "the edge snapshot, the prefix-cache hits lost and page hashing")),
+                       Part("the snapshot bundle", 0.17, ("the edge snapshot",),
+                            "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
+                            "the prefix cache on")),
                    metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}"),
 }
 
@@ -1585,9 +1589,9 @@ def verdict(cost: dict, target: float | None, floor: float = 0.0) -> str | None:
     return "meets" if hi + floor <= target else "misses" if lo - floor > target else "cannot tell"
 
 
-#: a cost's verdict where its arm leaves off a change the target counts: the cost and the target are of different
-#: changes, so the cost neither meets nor misses it. Not `verdict`'s "cannot tell", which is of an interval that
-#: straddles a target it is comparable with.
+#: a cost's verdict where its arm leaves off a change the target counts, or has a change on that the target has no
+#: part for: the cost and the target are of different changes, so the cost neither meets nor misses it. Not
+#: `verdict`'s "cannot tell", which is of an interval that straddles a target it is comparable with.
 NOT_COMPARABLE = "not comparable"
 
 
@@ -1598,6 +1602,12 @@ def target_parts(model: Model, arm: str) -> list[dict]:
     on = changes_of(arm)
     return [{"name": p.name, "points": p.points, "basis": p.basis, "what": p.what, "changes": list(p.changes),
              "off": [c for c in p.changes if c not in on]} for p in model.target_parts]
+
+
+def not_in_target(model: Model, arm: str) -> list[str]:
+    """The changes an arm has on (`changes_of`) that no part of a model's target counts: the cost model does not price
+    them, so a cost that holds them is not comparable with the target."""
+    return [c for c in changes_of(arm) if not any(c in p.changes for p in model.target_parts)]
 
 
 def in_target(model: Model, arm: str, over: str) -> list[dict]:
@@ -1673,10 +1683,10 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     that starts the reference's engine (`same_engine`: two server lifetimes of one engine). The number's verdict
     follows from them, since it is the largest: it misses where a load misses, meets where every load of `LOADS` has
     run and meets, and else cannot be told (``not_run`` names the loads that have not run). The model's target is the
-    sum of its parts (``target_parts``, `target_parts`), and where ``arm`` leaves off a change one of them counts
-    every verdict is `NOT_COMPARABLE` instead: the cost is not of what the target is of. A target that is given has
-    no parts. Each load's ``within`` is its cost within the SLO (`within_slo`), which no target or verdict is of, and
-    its ``saturated`` whether the reference's rungs show it saturated at the load's rung (`peak`), which no verdict
+    sum of its parts (``target_parts``, `target_parts`), and where ``arm`` leaves off a change one of them counts, or
+    has a change on that none of them counts (``not_in_target``, `not_in_target`), every verdict is `NOT_COMPARABLE`
+    instead: the cost is not of what the target is of. A target that is given has no parts. Each load's ``within`` is
+    its cost within the SLO (`within_slo`), which no target or verdict is of, and its ``saturated`` whether the reference's rungs show it saturated at the load's rung (`peak`), which no verdict
     reads. Beside them: the GPUs an engine serves on, what the arm's boundary commitment did (`commitment`), and every other
     arm's cost at the number's load and rung, over the reference and over the nearest arm above it that ran (its
     parent, its parent's parent...), which for the arms from ``arm`` up to the reference is its step of the whole,
@@ -1693,8 +1703,9 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
                          f"both with --client {BENCH} and the same --loads")
     model = MODELS[ours["model_id"]]
     parts = target_parts(model, arm) if target is None and model.target is not None else []
+    outside = not_in_target(model, arm) if parts else []
     target, basis = (model.target, model.target_basis) if target is None else (target, "given")
-    comparable = not any(p["off"] for p in parts)
+    comparable = not any(p["off"] for p in parts) and not outside
     twin = next((x for x in by.values() if x["arm"] != reference and same_engine(x["arm"], reference)), None)
     for c in per:
         c["noise"] = serving_cost(ref, twin, c["load"], c["rung"]) if twin else None
@@ -1743,7 +1754,8 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     return {"value": _pct(worst["value"]), "unit": UNIT, "commit": at["commit"],
             "run": at["run"], "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
             "target_basis": basis if target is not None else None, "ci95": _cost(worst)["ci95"], "verdict": overall,
-            "target_parts": parts, "model": model.served, "arm": arm, "reference": reference, "load": load, "not_run": not_run,
+            "target_parts": parts, "not_in_target": outside, "model": model.served, "arm": arm, "reference": reference,
+            "load": load, "not_run": not_run,
             "vllm": ours.get("vllm"), "gpus": tp_size(model), "reference_commit": at["reference_commit"],
             "reference_run": at["reference_run"],
             "noise_floor": {"arm": noise["arm"]["arm"], **_cost(noise)} if noise else None,
@@ -1813,12 +1825,17 @@ def cost_text(r: dict) -> str:
     if parts:
         lines.append("  the target is the sum of its parts: " + ", ".join(
             f"{p['name']} {p['points']:.2f}% ({p['basis']}{'; ' + p['what'] if p['what'] else ''})" for p in parts))
-    off = [p for p in parts if p["off"]]
-    if off:
-        lines.append(f"  {NOT_COMPARABLE}: {r['arm']} leaves off " + " and ".join(
-            f"{' and '.join(p['off'])} ({'in ' if len(p['off']) < len(p['changes']) else ''}{p['name']}, "
-            f"{p['points']:.2f}%)" for p in off) + ", which the target counts, so no cost of it meets or misses the "
-            "target")
+    off, outside = [p for p in parts if p["off"]], r["not_in_target"]
+    if off or outside:
+        why = []
+        if off:
+            why.append("leaves off " + " and ".join(
+                f"{' and '.join(p['off'])} ({'in ' if len(p['off']) < len(p['changes']) else ''}{p['name']}, "
+                f"{p['points']:.2f}%)" for p in off) + ", which the target counts")
+        if outside:
+            why.append(f"turns on {', '.join(outside[:-1])}{' and ' if len(outside) > 1 else ''}{outside[-1]}, which "
+                       "the target has no part for")
+        lines.append(f"  {NOT_COMPARABLE}: {r['arm']} {', and '.join(why)}, so no cost of it meets or misses the target")
     for c in r["loads"]:
         a, b = c["reference"], c["arm"]
         each = ("" if a["prompt_tokens_per_request"] is None or a["output_tokens_per_request"] is None else
@@ -1878,9 +1895,9 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     request), its first line, what ran, and its measurements. Each load's cost is a measurement under the load's name,
     with its rung and whether the reference is shown saturated there.
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
-    its target, what the target rests on, the target's parts with the changes the arm left off, its verdict (one of
-    `verdict`'s three, or `NOT_COMPARABLE`) and each load's cost beside it; it names the loads as its inputs. Where a
-    load has not run there is no such entry: one load's cost is not the number."""
+    its target, what the target rests on, the target's parts with the changes the arm left off, the arm's changes no
+    part counts, its verdict (one of `verdict`'s three, or `NOT_COMPARABLE`) and each load's cost beside it; it names
+    the loads as its inputs. Where a load has not run there is no such entry: one load's cost is not the number."""
     k = r["commitment"]
     ok = all(c["value"] is not None for c in r["loads"]) and not (k and (k["failed"] or k["committed"] < k["finished"]))
     about = {"unit": r["unit"], "target": r["target"], "target_basis": r["target_basis"], "better": r["better"]}
@@ -1895,7 +1912,7 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
         beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "rung", "saturated", "commit", "run")}
                   for c in r["loads"]]
         out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]],
-                         target_parts=r["target_parts"]))
+                         target_parts=r["target_parts"], not_in_target=r["not_in_target"]))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
             "loads": [c["load"] for c in r["loads"]], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out
