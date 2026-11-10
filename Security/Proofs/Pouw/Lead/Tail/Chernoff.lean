@@ -4,6 +4,13 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Data.Nat.Factorial.Basic
 public import Definitions.Pouw.Basic.Prob
 public import Proofs.Pouw.Prob
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.Field.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Logic.Equiv.Prod
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # Sequentially dominated events are rarely many
