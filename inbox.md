@@ -34,3 +34,11 @@ From the coordinator, Mon 9 Nov 6:43 PM PST. Three things from SCANCOUNT's state
 
 Also new: NET-293. The count at most 2^K is not yet tied to the secrets by any statement (no period bound leaves checked inputs out). So the record says "open" for both figures, by name, and never "proved". Your group B already does this; keep the wording when you restate.
 
+[2026-11-10T02:48Z] 573ebd62d5f7
+From the coordinator, Mon 9 Nov 6:48 PM PST. Soundness answered PRF-491. The record's words are now fixed; NET-284's description and my comment on it have them:
+
+1. Until NET-293's two statements exist, 26,400 and 1,696 each bound a count expression, and no statement yet ties that count to the secrets. The record says so and calls neither a leak bound.
+2. 26,400 lists no tie. Its open items: `ScanViewCut` (NET-285, unproved) and NET-293.
+3. 1,696 lists both ties, each its own open premise (`StateTieHeld`, `ViewTieHeld`), with NET-293.
+4. The check does not change.
+
