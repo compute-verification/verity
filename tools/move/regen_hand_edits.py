@@ -21,8 +21,9 @@ EDITS = {
     "inference_only_map.toml": [
         # the check's directory after the layout: verity/protocols/inference_only/verifier/nci/
         ('"network/nci" = "network/inference_only"', '"verifier/nci" = "verifier/inference_only"', 1),
-        # benchmarks/nci's path, kept where it is and under its name
-        (r"'\bbenchmarks/nci\b'", r"'\binference_only/nci\b'", 1),
+        # the policy's data, kept under its name where the layout puts it; the old path's keep stays for what the
+        # layout leaves spelling it (a file it archives)
+        (r"'\bbenchmarks/nci\b'", r"'\bbenchmarks/nci\b', '\binference_only/nci\b'", 1),
     ],
     "inference_only_ids_map.toml": [
         ('files = ["verity/core/protocols/network/inference_only/lean/lean-audit.json"]',

@@ -10,7 +10,7 @@ REF (the rehearsal's renames, new -> old), for a glob that names such a path.
 For each path entry of each map (a scoped table's `files`, `[keep_in]`, `[keep_paths]`, and the `[rewrite]` globs that
 name a moved place) it finds the files the entry matches on REF, moves them, and writes the entry with its literal
 directory moved the same way. The rewrite stands only when the new entry matches, among REF's moved files, exactly
-those. A scoped table's glob whose files leave more than one way is split into the globs of the places where the
+those. A file the move puts where the map's own `[rewrite] exclude` leaves it alone (`archive/**`) is not counted. A scoped table's glob whose files leave more than one way is split into the globs of the places where the
 files that spell the table's words go (`split`). Otherwise the entry is reported as `by hand`, with the files it would
 gain or lose, and left as it was.
 Each map is written to DIR with only those strings changed; the maps given are not touched. It also lists the comment
@@ -69,24 +69,24 @@ def rewrite(glob: str, old: list[str], move) -> str | None:
     return None
 
 
-def split(glob: str, old: list[str], words: list[str], spells, moved: dict, moved_files: list[str], rows) -> list[str] | None:
+def split(glob: str, old: list[str], words: list[str], spells, moved: dict, live: list[str], rows) -> list[str] | None:
     """A scoped table's `glob` whose files leave more than one way, as the globs of the places its words' files go.
 
     Only a file that spells one of the table's words matters to it. The glob stays if such a file stays under it, and
-    each directory row that takes such a file out adds its destination. None unless the new globs reach every such
-    file and no file from outside the old glob that spells a word.
+    each such file a move takes out adds its directory row's destination, or the directory it lands in where a row moves
+    it alone. None unless the new globs reach every such file and no file from outside the old glob that spells a word.
+    `old` and `live` hold only the files the map rewrites once they have moved, at their old and new paths.
     """
     dirs = sorted(((o, n) for o, n in rows if o.endswith("/")), key=lambda r: -len(r[0]))
     said = spells(words)
     new = []
     for p in sorted(said & set(old)):
-        g = glob if fnmatch.fnmatchcase(moved[p], glob) else next((n + "**" for o, n in dirs if p.startswith(o) and moved[p].startswith(n)), None)
-        if g is None:
-            return None
+        g = glob if fnmatch.fnmatchcase(moved[p], glob) else next(
+            (n + "**" for o, n in dirs if p.startswith(o) and moved[p].startswith(n)), moved[p].rsplit("/", 1)[0] + "/**")
         if g not in new:
             new.append(g)
     old_of = {v: k for k, v in moved.items()}
-    got = {old_of[p] for p in moved_files if any(fnmatch.fnmatchcase(p, g) for g in new)}
+    got = {old_of[p] for p in live if any(fnmatch.fnmatchcase(p, g) for g in new)}
     if not new or (said & set(old)) - got or (got - set(old)) & said:
         return None
     return new
@@ -129,11 +129,22 @@ def main() -> None:
         text = path.read_text()
         data = tomllib.loads(text)
         seen = set()
+        # where the map rewrites nothing once the files have moved, by the exclude that says so
+        left = {g: {q for q in moved_files if fnmatch.fnmatchcase(q, g)} for g in data.get("rewrite", {}).get("exclude", [])}
         for sec, glob in entries(data):
             if (sec.split("[")[0], glob) in seen:
                 continue
             seen.add((sec.split("[")[0], glob))
-            old = [p for p in tracked if fnmatch.fnmatchcase(p, glob)]
+            every = [p for p in tracked if fnmatch.fnmatchcase(p, glob)]
+            # a file the map leaves alone where the move puts it (`archive/**`) is none of a glob's business there
+            dead = set().union(*(s for g, s in left.items() if g != glob))
+            old = [p for p in every if moved[p] not in dead]
+            gone = [p for p in every if moved[p] in dead and moved[p] != p]
+            less = f"; {len(gone)} that the move puts where the map rewrites nothing ({moved[gone[0]]}) not counted" if gone else ""
+            if every and not old:
+                if not sec.startswith("rewrite."):
+                    report.append((path.name, sec, glob, glob, "stands: the map rewrites none of its files", len(every)))
+                continue
             via = ""
             if not old and after:
                 old = sorted({after[p] for p in after if fnmatch.fnmatchcase(p, glob)})
@@ -143,19 +154,20 @@ def main() -> None:
                 if not sec.startswith("rewrite."):
                     report.append((path.name, sec, glob, "", "matches nothing on REF", 0))
                 continue
-            same = {p for p in moved_files if fnmatch.fnmatchcase(p, glob)}
+            same = {p for p in moved_files if fnmatch.fnmatchcase(p, glob)} - dead
             if same == image and not via:
                 if not sec.startswith("rewrite."):
                     report.append((path.name, sec, glob, glob, "stands", len(old)))
                 continue
             new = None if via else rewrite(glob, old, move)
-            got = {p for p in moved_files if fnmatch.fnmatchcase(p, new)} if new else set()
+            got = {p for p in moved_files if fnmatch.fnmatchcase(p, new)} - dead if new else set()
             if new and got == image:
                 text, n = re.subn(r'(?<=")' + re.escape(glob) + r'(?=")', new.replace("\\", r"\\"), text)
-                report.append((path.name, sec, glob, new, f"rewritten ({n} place{'s' if n != 1 else ''})", len(old)))
+                report.append((path.name, sec, glob, new, f"rewritten ({n} place{'s' if n != 1 else ''}){less}", len(old)))
                 continue
             its_words = sorted({w for t in data.get("words_in", []) if glob in t["files"] for w in t["words"]})
-            parts = split(glob, old, its_words, spells, moved, moved_files, rows) if sec.startswith("words_in") and not via else None
+            live = [q for q in moved_files if q not in dead]
+            parts = split(glob, old, its_words, spells, moved, live, rows) if sec.startswith("words_in") and not via else None
             if parts:
                 text, n = re.subn(r'(?<=")' + re.escape(glob) + r'(?=")', '", "'.join(parts).replace("\\", r"\\"), text)
                 report.append((path.name, sec, glob, ", ".join(parts), f"split ({n} place{'s' if n != 1 else ''}) "
