@@ -6,6 +6,7 @@ word map that moves `old_proto/` to `new_proto/` and rewrites the word, and the 
 whose second parent is the move."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import subprocess
@@ -65,7 +66,7 @@ def _move(world: World, path: str = MAP, on: str = "origin/main") -> str:
 
 def _land(world: World, move: str) -> str:
     """``move`` landed as the loop lands a PR, after another PR moved `main`: `main` merges it as its second parent."""
-    _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
+    _push_main(world, other := world.change({"c.txt": f"c landed beside {move[:8]}\n"}))
     tree = _git(world.dev, "merge-tree", "--write-tree", other, move)
     _push_main(world, landed := _git(world.dev, "commit-tree", tree, "-p", other, "-p", move, "-m", "Queue: #9 the move"))
     return landed
@@ -101,11 +102,14 @@ def test_a_restack_across_a_move_keeps_the_mark_and_verdict_and_one_more_edit_or
     """#1 edits the file the map moves and adds a line with the map's word; restacked across the landed move by `restack.py`, its
     own change is no longer its old head's (the file moved, the word changed), but it is that change with the map applied, so
     the new head takes the old head's mark and verdict, and the log says so.  The same restack with one more line edited takes
-    neither, and so does a plain merge of `main`, which leaves the old word in the line #1 added."""
+    neither, and so does a plain merge of `main`, which leaves the old word in the line #1 added.  A commit whose line only
+    looks like a move's is no move, to either; and labels the store's authentication refuses carry to no head."""
     world.gh.put(1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3"),
                                          "b.py": B + "Y = old_proto.a.g()\n"}), ready=False)
     _mark(world, 1, old)
     _land(world, _move(world))
+    _push_main(world, _git(world.dev, "commit-tree", "origin/main^{tree}", "-p", "origin/main", "-m",
+                           f"Notes\n\nMove: {MAP} ran here\n"))
     world.gh.put(1, new := _restack(world, old), ready=False)
     q = _queue(world)
     assert _git(q.workdir, "show", f"{new}:b.py").endswith("Y = new_proto.a.g()")
@@ -118,6 +122,14 @@ def test_a_restack_across_a_move_keeps_the_mark_and_verdict_and_one_more_edit_or
         f"theirs across the moves `main` landed since, as a restack carries it (patch-id {q.own_change(new)[:12]})"
         for key in (vocab.READY, vocab.REVIEWED)]
     assert not any(Path(world.tmp, "scratch").iterdir())                 # each script's scratch worktree is gone
+
+    class Unsigned:
+        def why(self, lab, beside):
+            return "unsigned"
+
+    said: list[str] = []
+    refused = StoreLabels(world.store, log=said.append, verify=Unsigned(), change=q.own_change, moved=q.mapped_change)
+    assert _kept(refused, 1, new) == (False, []) and not [s for s in said if "takes the" in s]
 
     extra = world.change({"new_proto/a.py": _git(world.dev, "show", f"{new}:new_proto/a.py").replace("return 1", "return 11")},
                          base=new)
@@ -170,6 +182,20 @@ def test_a_pr_based_before_main_moved_on_keeps_both_across_two_moves_landed_as_o
     assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
 
 
+def test_a_pr_based_after_one_move_landed_crosses_only_the_next_and_keeps_both(world):
+    """Moves that landed one at a time, as drive's did: #1 is based on `main` after the first landed, so it crosses only the
+    second, and keeps both labels across it."""
+    _land(world, _move(world))
+    world.gh.put(1, old := world.change({"new_proto/a.py": A.replace("return 2", "return 3")}), ready=False)
+    _mark(world, 1, old)
+    onto = _land(world, second := _move(world, LIB))
+    world.gh.put(1, new := _restack(world, old), ready=False)
+    q = _queue(world)
+    assert [m for m, _ in Q.moves_between(q.workdir, onto, old)] == [second]
+    assert _git(q.workdir, "show", f"{new}:lib/new_proto/a.py").endswith("return 3")
+    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
+
+
 def test_a_pr_whose_merge_of_the_moves_base_changes_its_own_change_keeps_neither(world):
     """`main` changed a line beside #1's since its base, so merging the move's base changes #1's own change, as a plain merge
     of `main` would, which keeps no label either: the restack is clean, but `mapped_change` maps #1 to nothing, and says why."""
@@ -212,6 +238,14 @@ def test_with_mapped_jobs_a_head_waits_until_work_out_mapped_has_mapped_it_and_t
     world.gh.put(1, new := _restack(world, old), ready=False)
     q = _queue(world)
     q.mapped_jobs = 2
+    pools: list[int] = []
+
+    class Pool(concurrent.futures.ThreadPoolExecutor):
+        def __init__(self, workers):
+            pools.append(workers)
+            super().__init__(workers)
+
+    monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor", Pool)
     labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change)
     assert _kept(labels, 1, new) == (False, [])
     assert q.work_out_mapped(budget=0.0) == 0 and q.work_out_mapped() == 0     # a used-up budget drops the wanted heads
@@ -219,8 +253,11 @@ def test_with_mapped_jobs_a_head_waits_until_work_out_mapped_has_mapped_it_and_t
     assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (False, [])
     assert q.work_out_mapped() == 1 and q.work_out_mapped() == 0
     assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
+    assert pools == [2, 2]                                                     # `mapped_jobs` at once
     kept = json.loads((Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "mapped-changes.json").read_text())
     assert kept == {f"{old} {onto}": q.own_change(new)}
+    q._mapped_kept = {}
+    assert q.mapped_change(old, new) == q.own_change(new)                     # each (old, new) is answered once
 
     monkeypatch.setattr(Q, "mapped_tree", lambda *a, **k: pytest.fail("a script ran"))
     again = _queue(world)
@@ -240,6 +277,9 @@ def test_an_old_head_that_doesnt_merge_with_the_moves_base_or_whose_script_fails
     world.gh.put(1, new := world.change({"c.txt": "c merged\n"}), ready=False)
     q = _queue(world)
     assert q.mapped_change(old, new) is None
+    world.gh.put(3, again := world.change({"c.txt": "c merged again\n"}), ready=False)
+    q.fetch(world.gh.open_prs())
+    assert q.mapped_change(old, again) is None                                # the same old head on the same `main`: not again
     assert [s for s in world.logs if "isn't mapped" in s] == [
         f"research queue: {old[:8]}'s own change isn't mapped across the moves {_git(q.workdir, 'merge-base', q.base, new)[:8]} "
         f"has: it doesn't merge with {_git(q.workdir, 'rev-parse', f'{move}^')[:12]}, the base of the move {move[:12]}: c.txt"]
@@ -270,6 +310,8 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     monkeypatch.setattr(Q, "_MAPPED", "import os, sys; sys.exit(os.environ['TMPDIR'])")
     tree, why = Q.mapped_tree(q.workdir, head, head, Path("unused"))
     assert tree is None and why.startswith(f"exit 1: {scratch}/{Q.MERGED_PREFIX}{os.getpid()}-")
+    monkeypatch.setattr(Q, "_MAPPED", "print('mapped ' + 'a' * 40); raise SystemExit(3)")
+    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, f"exit 3: mapped {'a' * 40}")
 
     def killed(argv, cwd, left, env=None):
         _git(cwd, "worktree", "add", "-q", "--detach", str(Path(env["TMPDIR"], "restack-x", "tree")), head)
