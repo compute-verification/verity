@@ -23,7 +23,7 @@ for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of
 
 The first refusal is the reason (`Refused`), word for word the Lean's.  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
-acceptance establishes is `RunCheckAccepts` (`Security/Properties/Pous/EndToEnd.lean`), proved."""
+acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.lean`), proved."""
 
 from __future__ import annotations
 
