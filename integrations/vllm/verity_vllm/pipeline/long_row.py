@@ -28,13 +28,22 @@ statics (`SERVED`, `served`: N = 2^17 keys, TOPK 2,048, blocks of 16,384, `Embed
 
 It stands in for the request Definition that will hold the row: its operands (the row's index scores, n and the table's
 openings) are whatever the replay gives it, and nothing here ties them to the committed prompt or the served history.
+
+**The interior** of a class registered inline over it, from the check and the class's instances a replay block alone: `window`,
+its templates' members and their units a block, as `interior_rows.interior_window` takes them, and `links`, the block's
+parameters the interior registers as values (`interior_links`): the scores, n and the reads' rows, salts and paths the replay
+gives, and the table's root and domain and the index rows the verifier supplies (`supplied`). `links` states them in closed
+form, since round 2's derivation (`interior_links.links`) reads the block's Program, which at the served statics builds every
+unit's body; the tests hold the two to each other at small statics.
 """
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from typing import Any
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
@@ -139,3 +148,75 @@ def layout(run: str, check: SpecializedDefinition | None = None, spans: int = 1)
     """The window's class registered over ``check`` (`served` when None) inline: per_prompt 0 and per_output 1 at (`PROMPT`,
     `OUTPUTS`), so n_rho = 2, instance i the row at decode step i."""
     return BR.Layout(served() if check is None else check, 0, 1, PROMPT, OUTPUTS, spans, run, inline=True)
+
+
+def window(check: SpecializedDefinition, n_rho: int) -> tuple[tuple[Any, ...], tuple[int, ...]]:
+    """The interior window of a class whose replay block is ``n_rho`` instances of ``check`` inlined, as
+    `interior_rows.interior_window` takes it: the templates ``check``'s body calls, in the order of their first call
+    (`boundary_rows.Layout.templates`), each its unit member on bit rows named after its parameters (`chunk_rows.unit_member`,
+    `interior_rows.named`), and each one's units a block, its calls an instance times ``n_rho``."""
+    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+
+    calls = Counter(descriptor_id(d) for _, d in units(check))
+    cells = tuple(n * n_rho for n in calls.values())
+    return tuple(IR.named(CR.unit_member(SRW.template(t), n)) for t, n in zip(calls, cells, strict=True)), cells
+
+
+def supplied(check: SpecializedDefinition, n_rho: int) -> dict[str, tuple[int, ...] | None]:
+    """The block's parameters the verifier supplies (`interior_links.Supply`), by name: the table's ``root`` and ``domain``,
+    each sampled span's the table round 1 served for it (None), and the index rows ``c`` and ``i``, a block's rows instance
+    by instance, each instance's `index_values`."""
+    index = index_values(check.bindings["TOPK"])
+    return {"root": None, "domain": None, **{p: tuple(v) * n_rho for p, v in index.items()}}
+
+
+def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tuple[Any, ...]:
+    """The links of the replay block of ``n_rho`` instances of ``check`` inlined, as the interior registers their values and
+    in round 2's order (`interior_links.links` on the block, which this is held to): each template's port that reads a
+    parameter of the block, the value named as round 2 names it, the parameter's name, or ``<block>/<parameter>`` where
+    round 1's record names a port with a ``/`` (``tables``: the class has history tables, `boundary_rows.Layout.layers`).
+
+    * a unit of the mask's cut that reads scores: its block of them, row b of an instance's blocks, and the instance's n
+      (`Operand`: the replay's);
+    * a chunk's ``c`` and a slot's ``j``: its row of the block's ``c`` and ``i`` (`Supply`: `supplied`'s indices);
+    * a read's ``root`` and ``domain``: its instance's row (`Supply`: the table round 1 served), and its ``row``, ``salt``
+      and ``path``, a row a read (`Operand`).
+
+    ValueError where the row's blocks are not all `BLOCK` keys: a block's scores are one row of the parameter."""
+    from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL
+
+    N, TOPK, block, READ = (check.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ"))
+    bl = X.blocks(N, TOPK, block)
+    if {hi - lo for lo, hi in bl} != {block}:
+        raise ValueError(f"{descriptor_id(check)}: its blocks {bl[:2]}..{bl[-1]} are not {block} keys each, and a unit's "
+                         "scores are one whole row of the block's parameter")
+    key = descriptor_id(BR.inlined(check, n_rho))
+    sup = supplied(check, n_rho)
+
+    def value(p: str) -> str:
+        return f"{key}/{p}" if tables else p
+
+    def words(d: SpecializedDefinition, port: str) -> int:
+        return dict(d.signature()[0])[port].leaves // 16
+
+    every = tuple(range(n_rho))
+    out: list[Any] = []
+    for u in X.plan(N, TOPK, block):
+        if u.keys[1] <= u.keys[0]:
+            continue
+        t, b = descriptor_id(u.defn), bl.index(tuple(u.keys))
+        if any(x.template == t for x in out):
+            raise ValueError(f"{t} is two units of an instance: its units would read two blocks' scores")
+        out += [IL.Operand(t, "scores", value("scores"), n_rho * len(bl), tuple(i * len(bl) + b for i in every),
+                           words(u.defn, "scores")),
+                IL.Operand(t, "n", value("n"), n_rho, every, words(u.defn, "n"))]
+    chunk, slot = _index_units(N, TOPK)
+    chunks = -(-TOPK // R.CHUNK)
+    out += [IL.Supply(descriptor_id(chunk), CR.INDEX_ROWS[chunk.base_id], value("c"), n_rho * chunks, tuple(range(n_rho * chunks)),
+                      sup["c"]),
+            IL.Supply(descriptor_id(slot), CR.INDEX_ROWS[slot.base_id], value("i"), n_rho * R.CHUNK,
+                      tuple(i * R.CHUNK + j % R.CHUNK for i in every for j in range(TOPK)), sup["i"])]
+    read = descriptor_id(READ)
+    out += [IL.Supply(read, p, value(p), n_rho, tuple(i for i in every for _ in range(TOPK))) for p in IL.TABLE]
+    out += [IL.Operand(read, p, value(p), n_rho * TOPK, tuple(range(n_rho * TOPK)), words(READ, p)) for p in IL.READ[3:]]
+    return tuple(out)

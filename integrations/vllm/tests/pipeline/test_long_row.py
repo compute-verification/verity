@@ -5,7 +5,10 @@
 * at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, and each
   unit reads the window's operands and the units before it as round 2 links and wires them (`second_stage`'s node links and
   node wires);
-* where its index rows are `index_values` it computes `DsaTopKReadRows_v1`'s function (slow).
+* where its index rows are `index_values` it computes `DsaTopKReadRows_v1`'s function (slow);
+* its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
+  from the replay block (`interior_links.links`), under either naming of round 1's record, and its interior window
+  (`window`) with them is the stream's interior program, a function of the replay sample's size (slow).
 """
 from __future__ import annotations
 
@@ -16,12 +19,14 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.spot import second_stage as SS
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import definitions, descriptor_id
 from verity.ml.circuits.defs import Builder, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.commitments.gates.embedding import read
 from verity.ml.definitions.registry import dsa_topk_reads as R
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
 from verity_vllm.pipeline import long_row as LR
 
 RUN = "0" * 128
@@ -122,3 +127,56 @@ def test_it_computes_the_long_rows_function() -> None:
         args[1][i] = np.asarray(_i32s([n]), dtype=np.uint8)
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
     assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)), np.asarray(BS.evaluate_bits(whole, *args[:-2])))
+
+
+PARAMS = ("scores", "n", "c", "i", "root", "domain", "row", "salt", "path")
+
+
+def test_the_served_rows_links_are_87_of_nine_values() -> None:
+    """At the served statics, two instances a block: 40 units read their block of the scores and n, the chunks ``c``, the
+    slots ``i``, and the reads the table's root and domain and their own row, salt and path. Nothing is built: the
+    links are stated from the statics."""
+    t = LR.served()
+    links = LR.links(t, 2)
+    assert len(links) == 2 * 40 + 2 + 5
+    assert IL.span_values(links) == (
+        ("scores", 16, (32768, 16)), ("n", 2, (2, 16)), ("c", 128, IL.INDEX), ("i", 64, IL.INDEX), ("root", 2, IL.DIGEST),
+        ("domain", 2, IL.DIGEST), ("row", 4096, (576, 16)), ("salt", 4096, (96, 16)), ("path", 4096, (544, 16)))
+    assert {x.value for x in links if isinstance(x, IL.Supply)} == {"c", "i", "root", "domain"}
+    c, i = (next(x for x in links if x.value == v) for v in ("c", "i"))
+    assert c.index == tuple(range(64)) * 2 and c.at == tuple(range(128))
+    assert i.index == tuple(range(R.CHUNK)) * 2 and i.at[:34] == (*range(32), 0, 1) and i.at[2048:2050] == (32, 33)
+    key = descriptor_id(BR.inlined(t, 2))
+    assert [v for v, _per, _leaf in IL.span_values(LR.links(t, 2, tables=True))] == [f"{key}/{p}" for p in PARAMS]
+    with pytest.raises(ValueError, match="keys each"):
+        LR.links(bind(LR.DsaTopKReadRowsCut, N=(1 << 17) + 4096, TOPK=2048, BLOCK=16384, READ=read(1 << 17, 576)), 2)
+
+
+@pytest.mark.slow
+def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() -> None:
+    """`links` against round 2's own derivation on the registered replay block (`interior_links.links`), where round 1's
+    record names its ports bare and where it names a history table, and the interior window of `window`'s members with
+    those values against the stream's interior program at replay samples of one and two spans. About a minute, building
+    the small template's body as the layout test does; nothing cheaper runs round 2's derivation, which reads the
+    block's Program."""
+    t = _small()
+    L = LR.layout(RUN, t)
+    key, q0 = descriptor_id(L.replay), L.n_rho
+    ms, cells = LR.window(t, q0)
+    assert [m.template for m in ms] == [descriptor_id(x) for x in L.templates] and sum(cells) == q0 * len(LR.units(t))
+    for tables, ports in ((False, list(L.ports())), (True, [*L.ports(), BT.name(RUN, L.prompt, L.outputs, 0, 0)])):
+        derived = IL.links(L.program, key, {"roots": [{"port": p} for p in ports]}, ms, cells, LR.supplied(t, q0))
+        assert LR.links(t, q0, tables) == derived
+    links = LR.links(t, q0)
+    assert IL.span_values(links) == (
+        ("scores", 6, (8, 16)), ("n", 2, (2, 16)), ("c", 2, IL.INDEX), ("i", 64, IL.INDEX), ("root", 2, IL.DIGEST),
+        ("domain", 2, IL.DIGEST), ("row", 4, (1, 16)), ("salt", 4, (96, 16)), ("path", 4, (128, 16)))
+    wires, digests = SS.replay_wires(L.program, key), []
+    for q in (1, 2):
+        values = IL.link_values(links, q)
+        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, values)
+        assert [m.n for m in w.members] == [q * n for n in cells]
+        want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
+        digests.append(P.program_digest(w.program))
+        assert digests[-1] == P.program_digest(want)
+    assert digests[0] != digests[1]
