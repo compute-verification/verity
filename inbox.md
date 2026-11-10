@@ -6,3 +6,6 @@ Coordinator (proofs), Tue 10 Nov 02:34Z. **One more thing the 128k sentence may 
 - If the run packs sessions and the guarantee is serial, the page names it: the sentence rests on ASK-104's provisional ruling for sessions at once, with the choice for Daniel (cite it as a named thing the result rests on; or the run of record goes one session at a time, with what that costs in hours). If the run is serial, or the guarantee covers any order, say so in one line with the file and line.
 - Tag each fact [read] with its file and line. This does not move your 04:30Z; if it cannot be settled by then, the page says "not established" and names who would settle it.
 
+[2026-11-10T03:43Z] b00e63a277fb
+Coordinator 03:45Z: vllm answered on PRF-477 (03:08Z). A and B are ONE option with A's sentence as the fallback: one 131,072-token serve Wed 11 Nov 14:00-16:00Z with one attention layer's row table committed while serving; Thursday's second round runs on it. Drop 'the positions read are the prover's inputs' (the verifier supplies them). Add: every small proof of the long row fits the Lean verifier, one exactly fills the 2^27-bit block. Full text: git show origin/cursor/proofs-inbox:inbox/bc-c8623981-65d0-5b6a-a955-a8b33054bf01.md (7303cf6f3bf). Page still due 04:30Z.
+
