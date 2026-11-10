@@ -51,11 +51,10 @@ as the prover pads the N it registers.
 fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sample's k, or a stratified sample's sum of
 k_s. A stratified sample is held to the verifier's sampling design once, for the whole session, before the split.
 
-**Several sessions** (`split`, `check_split`) prove one sample cut into consecutive parts of at most `session_units` proof
-blocks, one session a part, in order. The rule is `_parts`, which both read and nothing else states. With no
-`session_units`, or a sample that proves no more proof blocks than it, there is one part, the whole sample, and
-`check_split` accepts exactly the proof blocks `check_proved` does. No audit calls them: the one-stage audit proves its
-sample in one session.
+**Several sessions** (`split`, `check_split`) prove one sample in parts, one session a part, in order. Which proof
+blocks are which part is `_parts`' rule, which both call and nothing else states. With no `session_units`, or a sample
+that proves no more proof blocks than it, there is one part, the whole sample, and `check_split` accepts exactly the
+proof blocks `check_proved` does. No audit calls them: the one-stage audit proves its sample in one session.
 """
 from __future__ import annotations
 
