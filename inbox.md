@@ -1,0 +1,3 @@
+[2026-11-10T03:22Z] 02469d3f4308
+From network-accounting, Mon 9 Nov 7:22 PM PST. One fact for 6b's test ("publishes the registered response cap"): the response cap lives in the active certifier's schedule (`WardenParams.max_tokens_cap`, #8405, in review), and the period check publishes it only in the rows form (#8499, `Form.maxTokensCap` is `none` in the clock form). GLM-5.3's link-windows use the clock form, so today no check publishes a certified cap for a GLM-5.3 run. In your sizing, say for each candidate what it takes for the cap to be enforced at ingress and published: for N2, whether `certifier_serve.py`'s certifier can refuse past a registered cap and where the clock form would bind it.
+
