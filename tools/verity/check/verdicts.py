@@ -23,6 +23,10 @@ Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' s
 check's closing `export` stat the cache instead of re-reading it (hundreds of GB once grown); only new or changed entries are
 read.  Hidden files are never listed and never packed, and a missing or garbled index only costs the re-read.
 
+An entry may name the entries it can't be read without (`NEEDS`), and a pack that holds it holds them too, whether or not they
+are new: circuit-check's entries refer to read records each stored once (`circuit_check.cache`), which a later run's entries
+share.
+
 A pack is a tar of regular files under `check/` and `tests/`, gzipped, or xz-compressed when `export_paths` writes a recorded
 check's reused passes (`check.Reused`), whose circuit-check entries share most of their bytes. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix, a hidden file), and it never overwrites an entry that exists here. A member in a
@@ -37,6 +41,7 @@ import io
 import json
 import lzma
 import os
+import posixpath
 import importlib.util
 import sys
 import tarfile
@@ -48,6 +53,9 @@ SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
 SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
+#: an entry's top-level list of the entries it can't be read without, each by its path from the entry's own directory, in its
+#: own root: a cache that stores each distinct part of its entries once (`circuit_check.cache`'s read records) names them here
+NEEDS = "needs"
 
 
 def _skipped(prefix: str, top: str) -> bool:
@@ -187,41 +195,60 @@ def changed(since: dict[str, str]) -> dict[str, tuple[str, Path]]:
     return {k: (d, found[k]) for k, d in _digests(found).items() if since.get(k) != d}
 
 
-def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given) as a pack at `out`;
-    the number written.  With `since`, only the new or changed entries are read (`_digests`), so a check's closing export costs
-    what the run stored, not the whole cache."""
-    if since is None and new is None:
-        found = entries()
+def _entry_file(base: dict[str, Path], k: str) -> Path | None:
+    """The file of the verdict entry at pack path ``k`` here; None when it isn't here or the path names no verdict entry."""
+    prefix, _, rel = k.partition("/")
+    parts = Path(rel).parts
+    if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
+            and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
+        return base[prefix] / rel
+    return None
 
-        def items():
-            for k, p in sorted(found.items()):
-                data = _read(p)
-                if data is not None:
-                    yield k, data
+
+def _needs(k: str, data: bytes) -> list[str]:
+    """The pack paths the entry at ``k``, of bytes ``data``, names in its `NEEDS`, each in its own root."""
+    if f'"{NEEDS}"'.encode() not in data:
+        return []
+    try:
+        got = json.loads(data).get(NEEDS)
+    except (ValueError, AttributeError):
+        return []
+    top, here = k.split("/", 1)[0], posixpath.dirname(k)
+    return [p for n in got if isinstance(n, str) and (p := posixpath.normpath(posixpath.join(here, n))).startswith(top + "/")] \
+        if isinstance(got, list) else []
+
+
+def _closed(files: dict[str, Path]) -> dict[str, Path]:
+    """``files`` (`{pack path: file}`) with every entry here that one of them needs (`NEEDS`), and each one those need."""
+    base, out, todo = roots(), dict(files), list(files)
+    while todo:
+        k = todo.pop()
+        data = _read(out[k])
+        for n in _needs(k, data) if data is not None else ():
+            if n not in out and (f := _entry_file(base, n)) is not None:
+                out[n] = f
+                todo.append(n)
+    return out
+
+
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given), with every entry
+    they need (`_closed`), as a pack at `out`; the number written.  With `since`, only the new or changed entries and what they
+    need are read (`_digests`), so a check's closing export costs what the run stored, not the whole cache."""
+    if since is None and new is None:
+        files = entries()
     else:
         new = changed(since) if new is None else new
-
-        def items():
-            for k in sorted(new):
-                data = _read(new[k][1])
-                if data is not None:
-                    yield k, data
-    return _write(out, items())
+        files = _closed({k: p for k, (_d, p) in new.items()})
+    return _write(out, sorted(files.items()))
 
 
 def export_paths(out: Path, paths, xz: bool = False) -> int:
-    """Write the entries here that ``paths`` (pack paths) name as a pack at `out`, in path order, each once; one that isn't here
-    (or is no verdict entry) is left out.  The number written."""
+    """Write the entries here that ``paths`` (pack paths) name, with every entry they need (`_closed`), as a pack at `out`, in
+    path order, each once; one that isn't here (or is no verdict entry) is left out.  The number written."""
     base = roots()
-    files = {}
-    for k in paths:
-        prefix, _, rel = k.partition("/")
-        parts = Path(rel).parts
-        if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
-                and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
-            files[k] = base[prefix] / rel
-    return _write(out, sorted(files.items()), xz)
+    files = {k: f for k in paths if (f := _entry_file(base, k)) is not None}
+    return _write(out, sorted(_closed(files).items()), xz)
 
 
 class BadPack(Exception):
