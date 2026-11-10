@@ -1726,6 +1726,33 @@ def test_a_moved_path_after_a_prefix_the_map_lists_for_the_root_is_certified(tmp
             assert "pod/unit@.service" in {f["path"] for f in r["refusals"]} and "root_prefixes" not in r["rules"], case
 
 
+def test_a_reference_to_a_split_directory_follows_the_part_the_maps_split_row_names_for_its_file(tmp_path):
+    """`verity/ml/flock/` splits and its `[tokens]` row says the prover, but `run.sh` means the pod scripts by it. The
+    map's `[split]` row for that file names the part (`to`), the mover writes it, and the check reads it there, for the
+    directory and for a path below it that a variable ends. Refused: the same line where the row is another file's,
+    where it names a directory no file of the split one went to, where no commit names the map, and where the line
+    follows the `[tokens]` row the file's own row replaces."""
+    line, part = 'exe "verity/ml/flock/$x" verity/ml/flock\n', "verity/flock/pod"
+    row = '\n[split]\n"FILE: verity/ml/flock" = { to = "TO", why = "the pod scripts" }\n'
+    for case, file, to, message, new in (("taken", "run.sh", part, LAYOUT_MSG, part), ("another", "other.sh", part, LAYOUT_MSG, part),
+                                         ("nowhere", "run.sh", "verity/flock/gone", LAYOUT_MSG, "verity/flock/gone"),
+                                         ("unnamed", "run.sh", part, "move", part),
+                                         ("tokens", "run.sh", part, LAYOUT_MSG, "verity/flock/prover")):
+        layout = FLOCK[LAYOUT_MAP] + row.replace("FILE", file).replace("TO", to)
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: layout, "run.sh": line})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "run.sh": line.replace("verity/ml/flock", new)})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "taken":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["split"] == ["run.sh"] and "run.sh" not in r["rules"]["tokens"]
+        else:
+            assert "run.sh" in {f["path"] for f in r["refusals"]} and "split" not in r["rules"], case
+
+
 def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
     """A line with a moved path after a root prefix, rewritten, and a reference to the split directory left as written
     is the prefix rule's alone."""

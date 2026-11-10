@@ -76,11 +76,13 @@ Every path git sees changed must be one of:
   `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
   `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both, and after each prefix
   the map lists for the root (`[rewrite] root_prefixes`: a pod's install directory). A file the map lists
-  under `[drop] paths` may be deleted. And a path the line names from its file's directory, or else from its package's
+  under `[drop] paths` may be deleted. Where a `[split]` row names the part one file means by such a directory
+  (`"old file: old directory" = { to = "..." }`), that file's references to it go there instead, borne out the same
+  way. And a path the line names from its file's directory, or else from its package's
   root (the directory of the nearest `pyproject.toml` above the file), may be based again: written from where that
   directory went (the file's new directory, the directory the `pyproject.toml` moved to) to where the path went
   (`ops/README.md` to `../definitions/ops/README.md`); a plain path the root also has is a path from the root. `--json`
-  lists under `rules` the paths each of these took (`tokens`, `prefixes`, `root_prefixes`, `drop`, `relative`);
+  lists under `rules` the paths each of these took (`tokens`, `split`, `prefixes`, `root_prefixes`, `drop`, `relative`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -1067,6 +1069,10 @@ class Rows:
     directory name it nowhere. It reads the directory itself (`verity/ml/flock/`, `verity/ml/flock/*.patch`) and a path
     below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
 
+    `[split]`: for one file (by its path at BASE) and one such directory, the part the file means by it (`{ to = "..." }`),
+    which that file's references to the directory follow in place of the `[tokens]` row. It counts as a `[tokens]` row
+    does: the directory didn't move whole and part of it is now below the row's.
+
     `[drop] paths`: the files the move deletes.
 
     `[rewrite] root_prefixes`: what stands for the root before a path, beyond what the mover reads so in every tree (a
@@ -1094,6 +1100,18 @@ class Rows:
                     bad.add(d)
         for d in bad:
             del self.tokens[d]
+        self.parts, bad = {}, set()
+        for data in maps:
+            rows = data.get("split")
+            for k, v in rows.items() if isinstance(rows, dict) else ():
+                f, _, d = k.rpartition(": ")
+                if f and isinstance(v, dict) and isinstance(to := v.get("to"), str):
+                    d, to = d.strip("/"), to.rstrip("/")
+                    if d not in pmap and any(map_path(x, pmap).startswith(to + "/") for x in base.below(d)) \
+                            and self.parts.setdefault((f, d), to) != to:
+                        bad.add((f, d))
+        for k in bad:
+            del self.parts[k]
 
     @functools.cached_property
     def pattern(self) -> re.Pattern:
@@ -1102,13 +1120,14 @@ class Rows:
         maps list for the root, and a shell variable's default, `${DEFS:-verity/x.json}`)."""
         L = _rename().L
         root = "|".join((L.root_prefix(self.roots), L.SH_DEFAULT.pattern.removesuffix(r"\Z")))
-        keys = sorted({*self.pmap, *self.tokens}, key=len, reverse=True)
+        keys = sorted({*self.pmap, *self.tokens, *(d for _, d in self.parts)}, key=len, reverse=True)
         return re.compile(rf"(?:(?<![\w.\-/])|(?<=^/)|({root}))(" + "|".join(map(re.escape, keys)) + r")(?![\w.\-])", re.M)
 
-    def references(self, text: str, resolved: bool = False) -> list[tuple[int, int, str, tuple[str, ...], bool]]:
-        """Each moved path and each reference to a split directory in ``text``: (start, end, what it becomes, the rules
-        that read it beyond `_paths_pattern`'s moved path, whether it must change: in ``resolved`` text, a relative path
-        `resolve_relative` read, which names its place)."""
+    def references(self, text: str, resolved: bool = False,
+                   file: str | None = None) -> list[tuple[int, int, str, tuple[str, ...], bool]]:
+        """Each moved path and each reference to a split directory in ``text``, a line of ``file`` at BASE: (start, end,
+        what it becomes, the rules that read it beyond `_paths_pattern`'s moved path, whether it must change: in
+        ``resolved`` text, a relative path `resolve_relative` read, which names its place)."""
         out = []
         for m in self.pattern.finditer(text):
             key, must = m[2], resolved and text.endswith("<root>/", 0, m.start(2))
@@ -1119,7 +1138,10 @@ class Rows:
                 continue
             below = key + BELOW.match(text, m.end(2))[0].rstrip(".")
             if below == key or not (below in self.base.set or self.base.has_dir(below)):
-                out.append((m.start(2), m.end(2), self.tokens[key], ("tokens", *rules), must))
+                if (file, key) in self.parts:
+                    out.append((m.start(2), m.end(2), self.parts[file, key], ("split", *rules), must))
+                elif key in self.tokens:
+                    out.append((m.start(2), m.end(2), self.tokens[key], ("tokens", *rules), must))
         return out
 
     def went(self, p: str) -> tuple[str | None, bool]:
@@ -1175,7 +1197,7 @@ class Rows:
         (``pair``) what `pair` takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is
         not these rows' to say. ``at``: the line's file at BASE and at HEAD, for a relative path based again, which is
         read only where the line is not explained without it."""
-        refs = self.references(old, resolved) if self.pmap or self.tokens else []
+        refs = self.references(old, resolved, at and at[0]) if self.pmap or self.tokens or self.parts else []
         more = [r for r in self.relative(old, *at, resolved) if not any(r[0] < e and s < r[1] for s, e, *_ in refs)] if at else []
         for each in (refs, sorted(refs + more))[:2 if more else 1]:
             took = either(old, new, each)
