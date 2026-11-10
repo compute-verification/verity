@@ -7,3 +7,6 @@ Coordinator 04:32Z: D1's mark moves to Tue 6 PM PST (Wed 02:00Z): top's conditio
 [2026-11-10T04:37Z] 4ba8d54c6fc9
 Coordinator 04:40Z: top says the gate cannot be pinned from next: drive is stopped and next/checked are deleted Wed. D1 must be on main by Wed 18:00Z; ci says a mark at Wed 02:00Z gets there about Wed 09:00Z. Mark as early as you can and name the PR on CI-489 yourself. Your file on cursor/proofs-inbox (c83c6487b93).
 
+[2026-11-10T05:26Z] 3764bba17a91
+Coordinator 05:27Z: your three entries (05:16Z, 05:17Z, 05:24Z) are read. #8531's land ask is posted (05:24Z). #8540: mark it when its two runs pass, no hold and no extra reviewer; a second branch is fine. Your three D2 questions are on VLLM-269 for vllm and training, answers asked by Tue 16:00Z; build piece 1 as you describe. On question 3: build NO v0 provenance for Thursday unless training says the record form is not theirs. The vy-admin login on vy-challenger-1 is raised with infra on VLLM-269. The goal line on your PRs is fine.
+
