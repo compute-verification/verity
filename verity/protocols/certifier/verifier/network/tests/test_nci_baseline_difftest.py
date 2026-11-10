@@ -1,6 +1,6 @@
 """The difftest of θ's provenance check (`NciCheck.Baseline`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,218 declarations with θ, θ's
+`verity/protocols/inference_only/verifier/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,218 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
 gate by gate where the policy check gives a verdict, and `scripts/nci_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/BaselineDifftestMain.lean`
@@ -27,7 +27,7 @@ import pytest
 
 from verity.circuits import codec
 
-LEAN = Path(__file__).resolve().parents[5] / "core" / "protocols" / "network" / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "nci" / "lean"
 
 
 def _load(name: str):

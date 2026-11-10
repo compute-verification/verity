@@ -239,7 +239,7 @@
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
-        "benchmarks/nci/",
+        "verity/protocols/inference_only/nci/",
         "benchmarks/int8_class_rate/",
         "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
@@ -682,7 +682,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
         "benchmarks/training_slowdown/"
       ],

@@ -1,6 +1,6 @@
 """The desc fuzzer's run (`NciCheck.DescFuzzMain`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `NciCheck/DescFuzzMain.lean`
+`verity/protocols/inference_only/verifier/nci/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `NciCheck/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
 data is still what the generator writes. The second, that it holds this shape: one gate reading, through one
@@ -18,7 +18,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[5] / "core" / "protocols" / "network" / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "nci" / "lean"
 
 
 def _load(name: str):

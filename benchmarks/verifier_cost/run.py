@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/core/protocols/network/nci/lean"
+NCI = ROOT / "verity/protocols/inference_only/verifier/nci/lean"
 EXE = NCI / ".lake/build/bin/nci-check"
 SCHEMA = "verity/verifier-cost/v1"
 

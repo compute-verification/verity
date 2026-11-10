@@ -1137,7 +1137,7 @@ def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_pa
 def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
     path alone refused it as matching no package, after the run had waited for its slot."""
-    pkgs = ["verity/protocols/certifier/verifier/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    pkgs = ["verity/protocols/certifier/verifier/lean", "verity/protocols/inference_only/verifier/nci/lean", "Security"]
     for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
         (tmp_path / p).mkdir(parents=True)
         (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
