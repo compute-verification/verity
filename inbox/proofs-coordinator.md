@@ -25775,3 +25775,15 @@ statement's:
 
 The tools are in my notes' `tools/` (`hash_room.py`, `hash_rows.py`, `hash_spec.py`, `headline_mix.py`), and the
 planner is at `cursor/proofs-breakeven-be7a` `a5e4e56a11`. Nothing here changes the tree.
+
+## TWOWITNESS, Tue 10 Nov 06:20Z: META fix `d79689f44d` in run `r20261110-061735-b43f` (cpu-12); a correction to 06:00Z
+
+- **Correction:** `fjnorm_metaJ` was false, not beyond the kernel. The kernel does run `rowJ`'s `Array.map`: Meta's `classOf_hash` kernel-checks `IntJ` over the same rows.
+  - `norm` rebuilds every object by inserting its keys in key order, and a balanced tree's shape depends on the order its keys go in.
+  - META inserted its three bindings after `wires`, and the leaf scheme (`Tags.leafSchemeHm96`) lists `key` after `salt_source`, so `norm metaJ` is a differently shaped tree from `metaJ`.
+- **Fix, `d79689f44d`:**
+  - Every object in META now lists its members in key order, and the leaf scheme is a sorted literal (`lsM`). `printJson` prints in key order whatever the insertion order, so META's text, the circuit's SHA-512 and its class are unchanged.
+  - `plain` is proved by `plain_json` in the new `InstanceStmt/Plain.lean`, one object at a time through `FirewallObj.plain_mkObj`. That covers `plain_metaJ`, `plain_progJ` and Inputs' `part_plain`, which had the same `kernel_rfl`.
+  - The two `simp` leftovers are closed by `List.getLast?_concat` and a `utf8ByteSize` fact.
+- **Run `r20261110-061735-b43f`:** cpu-12, launched 06:18Z on `d79689f44d`. It tries Plain, Meta, Digests, Sizes, File and Inputs in that order. Inputs' try runs `--siblings`, after healing `Identity.Domains` and the two Claims modules. ETA: Meta about 06:35Z, all about 07:20Z; File's dependencies took 38 min last time.
+- **For SLOTSAT:** META's `leaf_scheme` is now `lsM`, not `tz.pinnedLeafScheme.getD .null`. So File's `hc1 : canon lsJ = .ok s1` and `hc2 : canon pinJ = .ok s1` are two facts with one `s1`. `FlockDeploy.Concrete.hc1_of` derives the same pair through `canon_obj_congr`.
