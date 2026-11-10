@@ -149,7 +149,7 @@ theorem decOf_hid {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β :
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
     (w : Claims.Flock.Wit) {g j y : ℕ} (hj : j < sts.size) (hy : y < 2 ^ S.kLog)
-    (hw : L.wire u g = j * 2 ^ S.kLog + y) :
+    (hw : L.wire x m₁ xS u g = j * 2 ^ S.kLog + y) :
     decOf L x m₁ xS w u g = w.hid.getD (hidAt sts.size S.kLog j β y) false := by
   rw [decOf_eq hS hβ, hw]
   obtain rfl := parse_setupOf hset hS

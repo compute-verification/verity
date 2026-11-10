@@ -381,6 +381,55 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
 
 
 @pytest.mark.slow
+def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path):
+    """Class G as served, the prefix cache off, its long-prefill threshold cut to 4 (about 6 s): a 10-token prompt prefilled 4, 4
+    and 2 rows a step, then decoded twice, its rows past INDEX_TOPK from position 4, in three Commit windows whose two edges fall
+    inside the prompt.  Each window compiles: the first leaves the request mid-prompt with its latent rows, index-K slots and
+    scales as out-ports, the second carries it in at 4 positions and out at 8, the third carries it in and finishes it, and the
+    three windows' calls are the whole window's, each window selecting the top-k of the rows it computes past INDEX_TOPK.  A
+    request left mid-prompt has no `edge.last`.  What no cheaper test can: that a served class G prefill, the 131,072-token
+    prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
+    doesn't commit the edge."""
+    from verity.ml.circuits.types import field_types
+    from verity_vllm.pipeline import edge as E
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import Registered, compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 4, "max_num_batched_tokens": 16}, model={"hf_config": hf})
+    assert reg.phi.engine["enable_prefix_caching"] is False
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    a = WA.RequestAdvice("a", 10, 3, "length")
+    steps = [_step((0, 10, s, n)) for s, n in ((0, 4), (4, 4), (8, 2), (10, 1), (11, 1))]
+    windows = (WA.Advice((a,), tuple(steps[:1]), ()), WA.Advice((a,), tuple(steps[1:2]), (), (WA.Carried(0, 4, 0, ((0, 4),)),)),
+               WA.Advice((a,), tuple(steps[2:]), (0,) * 3, (WA.Carried(0, 8, 0, ((0, 8),)),)))
+    assert WA.follows(*windows[:2]) == WA.follows(*windows[1:]) == [(0, 0)]
+    ingress = {"a": {**GREEDY, "max_tokens": 3, "prompt": list(range(1, 11))}}
+    cs = [compile_steps(reg, adv, ingress) for adv in (WA.Advice((a,), tuple(steps), (0,) * 3), *windows)]
+    units = [u for c in cs for u in c.requests]
+    assert [(u.LP, u.C, u.carried_in, u.carried_out, u.edge) for u in units] == [
+        (10, 0, False, False, ()), (10, 0, False, True, ("prefix", "prefix_ik", "prefix_iks")),
+        (10, 4, True, True, ("prefix", "prefix_ik", "prefix_iks")), (10, 8, True, False, ())]
+    assert units[0].chunks == (4, 4, 2) and units[0].T == units[3].T == 2
+
+    def calls(c) -> list[str]:
+        (p,) = c.programs.values()
+        return [n.fn.id for n in p.fn.body.nodes if not n.fn.id.startswith(("Const", "StopCheck_v1"))]
+
+    assert calls(cs[0]) == calls(cs[1]) + calls(cs[2]) + calls(cs[3])
+    assert [_members(next(iter(c.programs.values())).fn.body.nodes, COUNTED) for c in cs] == [3 * 8, 0, 3 * 4, 3 * 4]
+    wls = [c.workload for c in cs]
+    assert wls[1].edge.outs == wls[2].edge.ins and wls[2].edge.outs == wls[3].edge.ins and not wls[3].edge.outs
+    assert [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [["prefix", "prefix_ik", "prefix_iks"]]
+    assert wls[2].ports == wls[3].ports == ("edge.kv", "edge.ik", "edge.iks")
+    assert [[t.leaves for t in field_types(dict(wls[w].fn.signature()[0])["edge.kv"])] for w in (2, 3)] == [
+        [4 * 4 * 576], [4 * 8 * 576]], "every layer's latent rows so far"
+    for adv, wl in zip(windows, wls[1:]):
+        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+
+
+@pytest.mark.slow
 def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_program(tmp_path):
     """The prompt above (10 tokens in chunks of 6 and 4 beside a short request, then two decodes; rows past INDEX_TOPK from
     position 4), compiled at rank 0 under the cut checkpoint, and its trace: the command `trace_commands` gives it, run on the
