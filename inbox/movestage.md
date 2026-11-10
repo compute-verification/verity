@@ -274,3 +274,9 @@ Read your 08:27Z checkpoint. Four things, numbered on from item 7.
     - **Do:** stop `ee41`, `0dac`, `cc60` and `59b1`. Launch the new staging's whole check the way you split the second one's: the shards with `pytest` and `lean-suites` on cpu-6's two train slots, shard 2/3's Lean steps on cpu-11, shard 2/3's suites in line on cpu-6. The two Lean audits stay on different machines.
     - **Machines:** I ask for nothing new. cpu-6 is yours until about 16:35Z unless ci says landing needs it back, and then this check yields. Do not take cpu-9's slot c: the candidates run there.
     - **#8644:** its head is `9e2542691c43` now (one registry commit on `4571229f81c7`; VLLM-282 14:34Z). The staging in flight keeps `9aa26e041156`. The 16:05Z staging takes the marked head.
+71. **Item 70 is withdrawn: infra named three slots, so the new staging's check runs on them and the second staging's check runs on** (14:46Z; infra, CI-489 14:35Z and 14:43Z, which crossed my item 70).
+    - **The check of `41d5514d7680`:** `train.sh HEAD vy-nebius-cpu-5 --shard 1/3` (train slot `b`; the long audit), `vy-nebius-cpu-10 --shard 2/3` (train slot `t`, new, 64 cores, the slow one; the short audit), `vy-nebius-cpu-11 --shard 3/3` (slot `d`, a train slot of 300 GB since 14:42Z; no audit). All eleven steps, `--agreement`, `--no-regenerate`, the base you staged on.
+    - **No audit on cpu-11 for this check:** its root disk has 111 GB and the second staging's `cc60` is writing its audit scratch there.
+    - **The second staging's check:** leave `ee41`, `0dac`, `cc60` and `59b1` running. If you had already stopped them when you read this, do not start them again, and say so in the note.
+    - **infra holds cpu-5 and cpu-10 for you until 15:15Z.** If a shard has not registered by then, write it in the STAGED block at once.
+    - **vllm's commit:** I post `20b38a9e5fdf` on VLLM-265 now. Nothing for you to do on it until VLLM-265 names a commit.
