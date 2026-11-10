@@ -23,7 +23,9 @@ drive's Lean-change test (`queue.lean_change`) of a change that compiles (a lock
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member no longer
-ready names (`vqueue._stale`).
+ready names (`vqueue._stale`); `pulled` those of them others than their owners took (an eject or a mark withdrawn by
+another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of them), the only ones
+that drop a candidate in flight; and `flying` each member of the chain not ready at its head as built, with its files.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -150,7 +152,7 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (LEAN_SOURCES, PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers,
+from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
                     conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
                     priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
@@ -605,10 +607,11 @@ class World:
         #: and the graph graph2 listed of each check read (`_listing`)
         self._theirs: dict[str, dict | None] | None = None
         self._listed: dict[str, tuple[str, dict] | None] | None = None
-        #: what the last `ready` read: {number: the PR at its ready head}, and {number: (head, why it isn't ready)} of each other
-        #: open PR into `main`
+        #: what the last `ready` read: {number: the PR at its ready head}, {number: (head, why it isn't ready)} of each other
+        #: open PR into `main`, and those of them taken from the queue by others than their owners (`Snapshot.pulled`)
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
+        self.pulled: set[int] = set()
 
     def log(self, text: str) -> None:
         self.q.log(text)
@@ -672,7 +675,7 @@ class World:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
         only with a land verdict, never under the low-risk rule.  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
-        verdict, the freeze, or an untaken PR whose head it holds."""
+        verdict, the freeze, or an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
@@ -684,9 +687,10 @@ class World:
         prs = [p for p in prs if p.number not in left]
         labels.prefetch([(p.number, p.head) for p in prs])
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
-        entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
+        entries = q.entries(prs, state := q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
                             old_landed=old or None)
         left.update((n, (e.pr.head, self._unadmitted(e.pr, e.why))) for n, e in entries.items() if e.state != "ready")
+        pulled = {n for n, e in entries.items() if e.state != "ready" and self._pulled(e, state["ejected"].get(str(n)))}
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
@@ -703,6 +707,8 @@ class World:
                     took.append(n)
                 elif held:
                     left[n] = (p.head, why)
+                    if (unreviewed([r for r in reviews if self._another(n, r.by)], ()) or "").startswith("held"):
+                        pulled.add(n)
                 else:
                     left[n] = (p.head, f"{why}, and " + ("a move lands only with one" if p.move else "it isn't low-risk"))
             specs, clears = self._frozen()
@@ -711,7 +717,7 @@ class World:
                 frozen = [n for n in took if not self._cleared(n, entries[n].pr.head, clears)
                           and self._frozen_out(below, entries[n].pr, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
-                took = [n for n in took if n not in frozen]
+                took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -723,6 +729,8 @@ class World:
             left.update((n, (entries[n].pr.head, f"it holds {entries[n].holds(a)}, which isn't taken"
                                                  + (f": {left[a][1]}" if a in left else ""))) for n, a in out.items())
             chosen = {n: v for n, v in chosen.items() if n not in out}
+        while more := {n for n, e in entries.items() if n not in chosen and n not in pulled and pulled & set(e.after)}:
+            pulled |= more
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         # a stack lands its bases first, ranked or not: a PR the priority file names ahead of PRs whose heads its own holds
         # goes after them, so no ranking takes a PR off the ready list and drops the candidate holding it
@@ -739,8 +747,23 @@ class World:
 
         for n in order:
             place(n)
-        self.prs, self.left = {n: entries[n].pr for n in chosen}, left
+        self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+
+    def _another(self, n: int, by: str | None) -> bool:
+        """Whether ``by`` is someone other than PR ``n``'s owner and its handle (`_owners`), compared as `unreviewed` does."""
+        return bool(by) and _who(by) not in {_who(o) for o in self._owners(n) if o}
+
+    def _pulled(self, e: Entry, ejected: dict | None) -> bool:
+        """Whether another than its owner took ``e``, which the queue doesn't admit, from the queue (`Snapshot.pulled`): a hold
+        label, an eject (``ejected``: its record in the queue's state) or a mark withdrawn by another, as a red's eject is by
+        `EJECTOR`; not its owner's withdrawal, a push or a cause no one gave."""
+        if e.why.startswith("held ("):
+            return True
+        if e.why.startswith("ejected at"):
+            return self._another(e.pr.number, (ejected or {}).get("by") or EJECTOR)
+        return e.why.startswith("not marked ready") and self.q.marked_by is not None and self._another(
+            e.pr.number, self.q.marked_by(e.pr.number, e.pr.head))
 
     def _unadmitted(self, p: PR, why: str) -> str:
         """Why the queue doesn't admit ``p`` (``why``, its `Entry.why`), with a withdrawn mark's author: one at its head that
@@ -1701,9 +1724,14 @@ class Loop:
         holds = w.holding([x.head for x in ready if x.number not in members], chain, main) if chain else {}
         riding = {x.number: (x.head, holds[x.head]) for x in ready if x.number not in members and x.head in holds}
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
+        at = {(x.number, x.head) for x in ready}
+        flying = {(m, h) for c in cands if c.sha in chain for m, h in zip(c.members, c.heads) if (m, h) not in at}
+        gone = w._missing(h for _, h in flying)
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
-                        tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)))
+                        tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)),
+                        pulled=frozenset(w.pulled | set(out)),
+                        flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h)) for m, h in sorted(flying)))
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
 
     def _shadow_main(self, past: Past, origin: str) -> str:

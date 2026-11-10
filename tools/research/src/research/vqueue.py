@@ -36,6 +36,10 @@ on the chain is the one read, and nothing is built on a candidate that failed.  
 failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
 its own: a suspect's `cap` (half the suspects of the newest failed outcome it was in) bounds the batches it goes into until
 it reaches `main` or is ejected.
+
+A candidate in flight lands as built: a member whose owner withdrew its mark, pushed a new head or closed it stays in it,
+its new head waits for the next batch, and a fail blames it by its files as built without ejecting it.  Only a red or a
+member others took from the queue (`Snapshot.pulled`) drops a candidate, with every one above it.
 """
 from __future__ import annotations
 
@@ -127,6 +131,11 @@ class Snapshot:
                                    # as any other infra: a tree that keeps its own launch from registering is found then
     left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
                                    # take it now): what a candidate's drop for a member that left `ready` says
+    pulled: frozenset[int] = frozenset()  # the PRs of `left` taken from the queue by others than their owners (a mark
+                                   # withdrawn by another, as a red's eject is, a reviewer's hold, the freeze, or a PR
+                                   # holding the head of one): a candidate holding one is dropped
+    flying: tuple[Ready, ...] = ()  # each member of a candidate on the chain not ready at its head as built, at that head:
+                                   # the files a fail's blame reads of it
 
 
 @dataclass(frozen=True)
@@ -217,6 +226,7 @@ def decide(s: Snapshot) -> list[Action]:
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
     head a pass outcome holds: it is on `main`."""
     ready = {r.number: r for r in s.ready}
+    built = {**ready, **{r.number: r for r in s.flying}}
     acts: list[Action] = []
     chain, landed = _chain(s, ready, acts)
     main, ejected = s.main, set()
@@ -230,10 +240,10 @@ def decide(s: Snapshot) -> list[Action]:
             acts += _red(c1, _outcomes(s, acts))
             acts += [Advance(c1.sha), Drop(c1.sha, ON_MAIN, _passed(c1))]
             main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
-        elif reading == FAIL and (rerun := _rerun(c1, ready)) is not None:
+        elif reading == FAIL and (rerun := _rerun(c1, built)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
-            ejected = _failed(c1, ready, _outcomes(s, acts), acts)
+            ejected = _failed(c1, ready, _outcomes(s, acts), acts, built=built)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)
@@ -243,7 +253,7 @@ def decide(s: Snapshot) -> list[Action]:
                 acts.append(Ring(c1.sha, _ring_why(c1)))
         elif reading == INFRA and len(c1.members) > 1:
             acts.append(Ring(c1.sha, _ring_why(c1)))
-            ejected = _failed(c1, ready, _outcomes(s, acts), acts, tree=False)
+            ejected = _failed(c1, ready, _outcomes(s, acts), acts, tree=False, built=built)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA:
@@ -272,10 +282,10 @@ def decide(s: Snapshot) -> list[Action]:
             continue
         if held := any(f.base_tests is None for f in c.verdict.failed if not _inherited(f)):
             break
-        if (rerun := _rerun(c, ready)) is not None:
+        if (rerun := _rerun(c, built)) is not None:
             acts.append(rerun)
         else:
-            ejected |= _failed(c, ready, _outcomes(s, acts), acts, red=c.base == s.main)
+            ejected |= _failed(c, ready, _outcomes(s, acts), acts, red=c.base == s.main, built=built)
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain = chain[:k]
         break
@@ -361,7 +371,7 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
         for c in on:
             if c is not keep:
                 drop(c, f"a second candidate on {top[:12]}: {keep.sha[:12]}'s members come first in rank")
-        if why := _stale(keep, ready, below, untaken):
+        if why := _stale(keep, below, untaken, s.pulled):
             drop(keep, why)
             break
         done.add(keep.sha)
@@ -383,24 +393,16 @@ def _ranks(c: Candidate, ready: dict[int, Ready]) -> list[tuple[int, int, int]]:
     return sorted((0, ready[m].rank, m) if m in ready else (1, 0, m) for m in c.members)
 
 
-def _stale(c: Candidate, ready: dict[int, Ready], below: set[int], untaken: dict[int, tuple[str, str]]) -> str | None:
-    """Why ``c`` leaves the chain, naming its first member's cause: a new head (and, untaken, why: ``untaken``, by number,
-    is `Snapshot.left`), the queue no longer taking it and why, its PR no longer open into `main`, or a candidate below it
-    holding it too; None while no member has one."""
-    for m, h in zip(c.members, c.heads):
-        if (r := ready.get(m)) is not None:
-            if r.head != h:
-                return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}" + (
-                    ", which doesn't merge onto `main`" if r.conflict else "")
-            if m in below:
-                return f"#{m} is in a candidate below it too"
-            continue
-        if m not in untaken:
-            return f"#{m} isn't an open PR into `main` now"
-        head, why = untaken[m]
-        if head != h:
-            return f"#{m}'s head moved from {h[:12]} to {head[:12]}, which isn't taken: {why}"
-        return f"#{m} isn't taken now: {why}"
+def _stale(c: Candidate, below: set[int], untaken: dict[int, tuple[str, str]], pulled: frozenset[int]) -> str | None:
+    """Why ``c`` leaves the chain, naming its first member's cause: a candidate below it holding it too, or the queue no
+    longer taking it for a cause its owner didn't give (``pulled``, `Snapshot.pulled`; why: ``untaken``, by number, is
+    `Snapshot.left`); None while no member has one.  A member whose owner withdrew its mark, pushed a new head or closed it
+    lands as built."""
+    for m in c.members:
+        if m in below:
+            return f"#{m} is in a candidate below it too"
+        if m in pulled:
+            return f"#{m} isn't taken now: {untaken[m][1] if m in untaken else 'taken from the queue'}"
     return None
 
 
@@ -461,29 +463,35 @@ def _red(c: Candidate, outcomes: list[Outcome]) -> list[Red]:
                                "red on them until a fix lands, while the queue lands what fails nothing more", new)]
 
 
-def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
-    """The rerun of a lone member's own failures that meet none of its files, the first time: built alone again, its tree
-    would have the same keys, which graph2 answers from its cache."""
+def _files(built: dict[int, Ready], m: int) -> frozenset[str]:
+    return built[m].files if m in built else frozenset()
+
+
+def _rerun(c1: Candidate, built: dict[int, Ready]) -> Rerun | None:
+    """The rerun of a lone member's own failures that meet none of its files (``built``: the members as built), the first
+    time: built alone again, its tree would have the same keys, which graph2 answers from its cache."""
     own = [f for f in c1.verdict.failed if not _inherited(f)]
     keys = tuple(dict.fromkeys(f.key for f in own if f.key))
-    if len(c1.members) != 1 or c1.reruns or not keys or any(meets(ready[c1.members[0]].files, f.inputs) for f in own):
+    if len(c1.members) != 1 or c1.reruns or not keys or any(meets(_files(built, c1.members[0]), f.inputs) for f in own):
         return None
     return Rerun(c1.sha, keys)
 
 
 def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True,
-            red: bool = True) -> set[int]:
+            red: bool = True, built: dict[int, Ready] | None = None) -> set[int]:
     """What a failed candidate calls for: the ring of the reds it shows (with ``red``: its base is `main`, which they say is
     red; else none is rung or recorded), the ejection its own failures make (or, with none, its infra errors that follow the
     tree; with ``tree`` False, every infra error of a check that keeps erring, which ejects nobody), if any, and its drop;
-    the PRs it ejects.  Only those suspect anyone."""
-    v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
+    the PRs it ejects.  Only those suspect anyone, by their files as built (``built``, else ``ready``); a suspect no longer
+    marked at the head it was built at (its owner withdrew the mark, pushed or closed it) isn't ejected."""
+    v, heads, built = c1.verdict, dict(zip(c1.members, c1.heads)), ready if built is None else built
     own = tuple(f for f in v.failed if not _inherited(f))
-    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or (_tree(v) if tree else v.infra))]
+    by_inputs = [m for m in c1.members
+                 if any(meets(_files(built, m), f.inputs) for f in own or (_tree(v) if tree else v.infra))]
     eject = None
     if own and len(by_inputs) == 1:
         n = by_inputs[0]
-        hit = ", ".join(f.task for f in own if meets(ready[n].files, f.inputs))
+        hit = ", ".join(f.task for f in own if meets(_files(built, n), f.inputs))
         eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", own)
     elif own and len(c1.members) == 1:
         n = c1.members[0]
@@ -496,6 +504,8 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
                                    "change (an undeclared read, a hang, an untraced program) is the change's to fix", _tree(v))
     suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
+    if eject is not None and ((r := ready.get(eject.number)) is None or r.head != eject.head):
+        eject = None
     acts += _red(c1, outcomes) if red else []
     if eject is not None:
         acts.append(eject)

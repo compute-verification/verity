@@ -168,21 +168,39 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
                          Drop("a2", "its base was dropped"), Build((3, 5), "b", 1)]
 
 
-@pytest.mark.parametrize(("ready", "left", "why"), [
-    ([pr(1, "h1b"), pr(2), pr(3)], (), "#1's head moved from h1 to h1b"),
-    ([pr(1, "h1b", conflict=True), pr(2), pr(3)], (), "#1's head moved from h1 to h1b, which doesn't merge onto `main`"),
-    ([pr(2), pr(3)], ((1, "h1b", "it isn't marked ready"),), "#1's head moved from h1 to h1b, which isn't taken: it isn't marked ready"),
-    ([pr(2), pr(3)], ((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")),
-     "#1 isn't taken now: held by top (no reason)"),
-    ([pr(2), pr(3)], ((1, "h1", "its ready mark was withdrawn by lane-1"),), "#1 isn't taken now: its ready mark was withdrawn by lane-1"),
-    ([pr(2), pr(3)], (), "#1 isn't an open PR into `main` now"),
+@pytest.mark.parametrize(("left", "why"), [
+    (((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")), "#1 isn't taken now: held by top (no reason)"),
+    (((1, "h1", "its ready mark was withdrawn by ci"),), "#1 isn't taken now: its ready mark was withdrawn by ci"),
 ])
-def test_a_chain_candidate_whose_member_moved_or_isnt_taken_is_dropped_with_everything_above_saying_why(ready, left, why):
+def test_a_chain_candidate_holding_a_member_others_took_from_the_queue_is_dropped_with_everything_above_saying_why(left, why):
+    ready = prs(2, 3)
+    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left, pulled=frozenset({1}))
+    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build((2, 3), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left, pulled=frozenset({1}))
+    assert decide(s) == [Drop("c2", why), Build((2,), "c1", 1)]
+
+
+@pytest.mark.parametrize(("ready", "left"), [
+    ([pr(1, "h1b"), pr(2), pr(3)], ()),
+    ([pr(1, "h1b", conflict=True), pr(2), pr(3)], ()),
+    ([pr(2), pr(3)], ((1, "h1b", "it isn't marked ready"),)),
+    ([pr(2), pr(3)], ((1, "h1", "its ready mark was withdrawn by lane-1"),)),
+    ([pr(2), pr(3)], ()),
+])
+def test_a_chain_candidate_whose_member_its_owner_pushed_unmarked_or_closed_lands_as_built(ready, left):
+    """Its new head, if any, waits for the next batch."""
     s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left)
-    rebuilt = tuple(r.number for r in ready if not r.conflict)
-    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build(rebuilt, MAIN, 2)]
+    assert decide(s) == [Advance("c1"), Drop("c1", "on main", Outcome((1, 2), heads(1, 2), PASS))]
     s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left)
-    assert decide(s) == [Drop("c2", why), Build(tuple(n for n in rebuilt if n != 3), "c1", 1)]
+    assert decide(s) == []
+
+
+def test_a_fail_blames_a_member_its_owner_took_out_by_its_files_as_built_and_ejects_nobody():
+    t = task("suite:pkg1", "pkg1/")
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
+    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
+    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1,), heads(1), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
 
 
 def test_a_pr_in_a_candidate_below_makes_the_one_above_stale():
@@ -929,7 +947,8 @@ class World:
     `tree` too, as graph2 marks them.  In a
     red world `main` fails one or two red tasks in every tree without their fix, a good PR, at a key each PR touching their inputs
     changes (some good PRs touch them, the same tests failing); a red task whose failing tests graph2 doesn't report is
-    inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict and are unmarked for a while;
+    inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict, are unmarked by their
+    owners for a while (a candidate in flight lands them as built) and are held by a reviewer for a while (`Snapshot.pulled`);
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
@@ -973,6 +992,7 @@ class World:
         self.unmarks = {rng.randint(1, 30): (rng.choice(numbers), rng.randint(1, 6)) for _ in range(rng.randint(0, 2))}
         self.elsewhere = set() if self.lag is None else {rng.randint(2, 40) for _ in range(rng.randint(0, 2))}
         self.crashes = rng.randint(0, 4)
+        self.holds = {rng.randint(1, 30): (rng.choice(numbers), rng.randint(1, 6)) for _ in range(rng.randint(0, 2))}
         self.main, self.tick, self.made = MAIN, 0, 0
         self.cands: dict[str, Candidate] = {}
         self.tree: dict[str, frozenset[int]] = {MAIN: frozenset()}
@@ -983,6 +1003,8 @@ class World:
         self.merged: dict[int, int] = {}              # number -> the tick it reached main
         self.ejected: set[int] = set()
         self.unmarked: dict[int, int] = {}            # number -> the tick it is marked again
+        self.held: dict[int, int] = {}                # number -> the tick a reviewer's hold on it is lifted
+        self.landed: set[tuple[int, str]] = set()     # (number, head) that reached main
         self.rung: set[tuple[str, str]] = set()
         self.owned: set[tuple[int, str]] = set()      # (number, head) whose owner was rung
         self.again: set[tuple[str, str]] = set()      # rung by a tick that stopped before its outcome was recorded
@@ -990,13 +1012,18 @@ class World:
 
     def ready(self) -> tuple[Ready, ...]:
         return tuple(r for m, r in self.marks.items() if self.arrive[m] <= self.tick and m not in self.ejected
-                     and m not in self.unmarked and (m not in self.merged or self.lag is None or self.tick < self.merged[m] + self.lag))
+                     and m not in self.unmarked and m not in self.held
+                     and (m not in self.merged or self.lag is None or self.tick < self.merged[m] + self.lag))
 
     def snapshot(self) -> Snapshot:
         cands = list(self.cands.values())
         self.rng.shuffle(cands)
-        return Snapshot(self.main, self.ready(), tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
-                        self.tick * TICK_S, PENDING_S, self.tree_ejects)
+        ready = self.ready()
+        at = {(r.number, r.head) for r in ready}
+        flying = {(m, h): replace(self.marks[m], head=h) for c in cands for m, h in zip(c.members, c.heads) if (m, h) not in at}
+        return Snapshot(self.main, ready, tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
+                        self.tick * TICK_S, PENDING_S, self.tree_ejects, pulled=frozenset(self.held),
+                        flying=tuple(flying.values()))
 
     def done(self) -> bool:
         if self.tree_ejects:
@@ -1086,6 +1113,11 @@ class World:
             if m not in self.merged and m not in self.ejected:
                 self.unmarked[m] = self.tick + back
         self.unmarked = {m: t for m, t in self.unmarked.items() if t > self.tick}
+        if self.tick in self.holds:
+            m, back = self.holds[self.tick]
+            if m not in self.merged and m not in self.ejected:
+                self.held[m] = self.tick + back
+        self.held = {m: t for m, t in self.held.items() if t > self.tick}
         for sha, c in self.cands.items():
             v = c.verdict
             if (v.state == PENDING or v.state == FAIL and not v.ended) and self.due[sha] is not None and self.due[sha] <= self.tick:
@@ -1123,7 +1155,9 @@ class World:
             if isinstance(a, Advance):
                 c = by[a.sha]
                 assert c.base == s.main and reads(c.verdict) == PASS, where
-                assert all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads)), where
+                assert all(self.marks[m].head.startswith(h) for m, h in zip(c.members, c.heads)), where
+                assert not set(c.members) & s.pulled, f"{where}: a PR a reviewer holds lands"
+                self.seen["landed as built"] += not all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads))
                 self.seen["advanced on a red main"] += bool(self.reds(s.main))
                 self.seen["inherited by tests"] += any(f.key != f.base_key for f in c.verdict.failed)
                 self.seen["inherited at its key alone"] += any(not f.tests for f in c.verdict.failed)
@@ -1170,15 +1204,17 @@ class World:
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
                 assert len(c.members) == 1 and not c.reruns and own and a.keys == tuple(f.key for f in own), where
-                assert not any(meets(ready[c.members[0]].files, f.inputs) for f in own), where
+                assert not any(meets(self.marks[c.members[0]].files, f.inputs) for f in own), where
                 self.seen["rerun"] += 1
             elif isinstance(a, Ring):
                 assert a.pr is None or (not s.tree_ejects and by[a.sha].members == (a.pr,)), where
                 self.seen["rung late" if "still pending" in a.why else "an owner rung" if a.pr else "rung"] += 1
+            elif isinstance(a, Drop) and a.outcome is None and "isn't taken now" in a.why:
+                assert set(by[a.sha].members) & s.pulled, where
+                self.seen["dropped for a reviewer's hold"] += 1
         for c in by.values():
-            fresh = all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads))
             stale = any(isinstance(a, Drop) and a.sha == c.sha and a.outcome is None for a in acts)
-            if c.base != s.main or not fresh or stale:
+            if c.base != s.main or set(c.members) & s.pulled or stale:
                 continue
             if reads(c.verdict) == INFRA:
                 tree = s.tree_ejects and any(f.tree for f in c.verdict.infra)
@@ -1224,12 +1260,13 @@ class World:
         elif isinstance(a, Advance):
             c = self.cands[a.sha]
             assert c.base == self.main and reads(c.verdict) == PASS, where
-            assert not set(c.members) & set(self.merged), f"{where}: a PR reaches main twice"
+            assert not set(zip(c.members, c.heads)) & self.landed, f"{where}: a PR reaches main twice at one head"
             assert not set(c.members) & (set(self.bad) | set(self.erring)), f"{where}: a bad PR reaches main"
             assert self.reds(a.sha) <= self.reds(self.main), f"{where}: main advances to a new failure"
             self.seen["a fix cleared a red"] += self.reds(a.sha) < self.reds(self.main)
             self.main = a.sha
             self.merged |= dict.fromkeys(c.members, self.tick)
+            self.landed |= set(zip(c.members, c.heads))
         elif isinstance(a, Drop):
             del self.cands[a.sha]
             if a.outcome is not None:
@@ -1273,8 +1310,9 @@ def ticks(w: World) -> int:
 
 def test_the_simulated_queue_keeps_every_invariant_and_settles():
     """Over every seed: main advances only to a candidate on it with no new failure (each failure inherited, nothing running,
-    no infra error), at its members' marked heads, so its reds never grow; no PR is in two live candidates or reaches main
-    twice; with `tree_ejects`, an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other
+    no infra error), at heads its members were marked at (one its owner unmarked or pushed in flight lands as built) and
+    holding none a reviewer holds, so its reds never grow; no PR is in two live candidates or reaches main twice at one head;
+    with `tree_ejects`, an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other
     infra or listing error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; without
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
@@ -1301,7 +1339,8 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "retried", "retried late", "retried while the rest ran", "rerun", "rung", "rung late", "wedged", "a red rung",
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
-                 "a mixed failure", "waited for the rest of a check", "a fix cleared a red"):
+                 "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
+                 "dropped for a reviewer's hold"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1353,6 +1392,8 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
         s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
     "no history": lambda s: replace(s, history=()),
     "no Lean cap": lambda s: replace(s, lean=s.batch),
+    "nothing pulled": lambda s: replace(s, pulled=frozenset()),
+    "no files as built": lambda s: replace(s, flying=()),
 }
 
 
