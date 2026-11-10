@@ -14,7 +14,7 @@
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
 #   ARMS=two-stage RATES=... [PLAN_FILE=PLAN.jsonl] [PRIVATE=DIR] [BOUNDARY_ROWS='{"check":T,...}']
 #     bash benchmarks/serve_tax/run.sh   # the two-stage serve: its launch line is the arm (serve_tax.ARMS), its boundary
-#                                        # committed under OUT/two-stage/server/boundary
+#                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
@@ -27,9 +27,11 @@
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
-# PRIVATE is where an arm keeps what never leaves the node (the two-stage arm's history tables and top-k counters), a
-# directory outside every run's; without it each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces
-# the object of an arm's boundary commitment (a model with no check template of its own needs it).
+# PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
+# files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
+# <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's;
+# without it each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an arm's boundary
+# commitment (a model with no check template of its own needs it).
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
@@ -186,7 +188,7 @@ if [ "${1:-}" = leased ]; then
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
-      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE"} --out "$OUT/$arm" || rc=1
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
     last=$arm; to_serve=$((to_serve - 1))

@@ -34,9 +34,13 @@ object are all in `serve_tax.ARMS`, and the runner has no code for any one arm. 
 stated there alone, as the `two-stage` arm: a job that serves the two-stage audit serves that arm
 (`ARMS=two-stage RATES=... PLAN_FILE=...`), so the serve and its measured cost can't differ in an engine setting.
 Before an arm's server starts, the runner loads each of its plugins once in the server's environment and refuses the
-arm where one doesn't load, because vLLM logs such a plugin and serves on without it. An arm that keeps files that
-never leave the node (the history tables' rows and salts, the top-k's counters) keeps them in `PRIVATE`
-(`--private DIR`), a directory outside every run's; without one it gets a fresh directory, removed when the arm stops.
+arm where one doesn't load, because vLLM logs such a plugin and serves on without it.
+
+What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
+classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
+They go to `PRIVATE/<arm>` (`--private DIR`), a directory outside every run's, the classes under
+`PRIVATE/<arm>/boundary/w<window>/p<P>-o<O>/`; without `PRIVATE` the arm gets a fresh directory, removed when it stops.
+The run's directory keeps each class's public `commit.json`, a line of `<arm>/server/boundary.PID.jsonl`.
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.

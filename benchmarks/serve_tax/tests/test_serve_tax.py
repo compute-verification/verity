@@ -98,20 +98,27 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     assert (two.parent, two.plugin, S.ARMS["canonical-topk"].parent) == ("boundary-rows", rows.plugin, "compiled")
     private = tmp_path / "private"
     env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
-    assert json.loads(env[S.PLUGIN_ENV])["boundary_rows"] == {
+    cfg = json.loads(env[S.PLUGIN_ENV])
+    assert cfg["boundary_rows"] == {
         "window_s": 3600.0, "check": "TokenSelect_v4{V=154880}", "inline": True, "per_prompt": 0, "per_output": 1,
         "drained": True, "tables": {"layers": 1, "private": str(private)}}
     assert (env["VERITY_DSA_TOPK"], env["VERITY_DSA_TOPK_LOG"]) == ("canonical", f"{private}/topk-log")
     assert str(S.ROOT / "benchmarks/dsa_topk") in env["PYTHONPATH"].split(S.os.pathsep)
+    # a boundary commitment's classes hold the requests' tokens and the salts: the plugin is told the private
+    # directory, and the run's directory, which is published, gets only what the plugin writes to ``out``
+    assert (cfg["out"], cfg["private"]) == (str(tmp_path), str(private))
     # the arms it is made of carry the same pieces: the boundary commitment without the tables, the top-k alone
-    cfg = json.loads(S.server_env(rows, tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check)[S.PLUGIN_ENV])
+    cfg = json.loads(S.server_env(rows, tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check, private=private)[S.PLUGIN_ENV])
     assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS} and "tables" not in S.ROWS
+    assert cfg["private"] == str(private)
     alone = S.server_env(S.ARMS["canonical-topk"], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=private)
     assert S.PLUGIN_ENV not in alone and alone["VERITY_DSA_TOPK"] == "canonical"
-    assert [S.keeps_private(S.ARMS[a]) for a in ("compiled", "boundary-rows", "canonical-topk", "two-stage")] == [
-        False, False, True, True]
-    with pytest.raises(SystemExit, match="--private DIR"):       # no place on the node to keep them: nothing starts
-        S.server_env(two, tmp_path, tmp_path, None, 600.0, 600.0, check=glm.check)
+    assert [S.keeps_private(S.ARMS[a]) for a in ("compiled", "record", "boundary-rows", "canonical-topk", "two-stage")] == [
+        False, False, True, True, True]
+    assert "private" not in json.loads(S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 1.0, 1.0)[S.PLUGIN_ENV])
+    for keeps in (two, rows):                 # no place on the node to keep them: nothing starts
+        with pytest.raises(SystemExit, match="--private DIR"):
+            S.server_env(keeps, tmp_path, tmp_path, None, 600.0, 600.0, check=glm.check)
     # the arm's data names its modules by path: each is a file of this tree
     for a in S.ARMS.values():
         for entry, path in a.general:
@@ -212,21 +219,24 @@ def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
     assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching"]
     # the object is the arm's own with the model's check template; a model that names none needs one given
+    kept = tmp_path / "kept"
     for missing in (None, {}, {"per_output": 1}):
         with pytest.raises(SystemExit, match="--boundary-rows"):
-            S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=missing)
+            S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=missing, private=kept)
     # an object given stands in place of the arm's, whole: its keys alone, with the model's check where it names none
     rows = {"check": "t", "per_output": 1, "drained": True}
     cfg = json.loads(S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows,
-                                  check="the model's")[S.PLUGIN_ENV])
+                                  check="the model's", private=kept)[S.PLUGIN_ENV])
     assert cfg["record"] and cfg["boundary_rows"] == {"window_s": 30.0, **rows}
-    given = S.server_env(S.ARMS["two-stage"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows={"per_output": 2},
-                         check="the model's", private=tmp_path)
-    assert json.loads(given[S.PLUGIN_ENV])["boundary_rows"] == {"window_s": 30.0, "check": "the model's", "per_output": 2}
+    given = S.server_env(S.ARMS["two-stage"], tmp_path, tmp_path, None, 30.0, 600.0, check="the model's", private=kept,
+                         boundary_rows={"per_output": 2, "tables": {"layers": [3], "private": S.PRIVATE}})
+    assert json.loads(given[S.PLUGIN_ENV])["boundary_rows"] == {
+        "window_s": 30.0, "check": "the model's", "per_output": 2, "tables": {"layers": [3], "private": str(kept)}}
     record = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows)
     assert "boundary_rows" not in json.loads(record[S.PLUGIN_ENV])
+    # each arm of a job keeps its own under the job's private directory
     sh = (S.HERE / "run.sh").read_text()
-    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE"}' in sh
+    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"}' in sh
 
 
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):

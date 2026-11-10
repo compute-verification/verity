@@ -66,8 +66,10 @@ The arms, each one engine configuration; each adds its change to the arm it name
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
-its run's directory (the history tables' rows and salts, the top-k's counters) goes to ``--private`` (``{private}`` in
-its data), by default a fresh directory removed when the arm stops.
+its run's directory goes to ``--private`` (``{private}`` in its data), by default a fresh directory removed when the
+arm stops: a boundary commitment's classes (DIR/boundary/w<window>/p<P>-o<O>/: each class's requests' tokens and its
+salts, which are values; the run's directory keeps each class's public commit.json as a line of
+server/boundary.PID.jsonl), the history tables' rows and salts, and the top-k's counters.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -326,8 +328,9 @@ def check_plugins(env: dict[str, str], arm: Arm) -> None:
 
 
 def keeps_private(arm: Arm) -> bool:
-    """Whether an arm keeps files on the node: its environment or its boundary commitment's object names `PRIVATE`."""
-    return PRIVATE in json.dumps([arm.env, arm.rows])
+    """Whether an arm keeps files on the node: it has a boundary commitment, whose classes' directories hold their
+    requests' tokens and their salts, or its environment or its boundary commitment's object names `PRIVATE`."""
+    return "boundary_rows" in arm.plugin or PRIVATE in json.dumps([arm.env, arm.rows])
 
 
 def _private(x: object, private: Path | None) -> object:
@@ -362,8 +365,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
     stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
     them, is unset. An arm with ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its
-    place, with ``check`` (the model's check template) where it names none, at ``window_s``. `PRIVATE` in the arm's
-    data is ``private``."""
+    place, with ``check`` (the model's check template) where it names none, at ``window_s``; its classes' directories,
+    which hold values, go under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``."""
     ours = [*([str(site)] if entry_points(arm) else []),
             *([str(HERE), str(ROOT / "integrations/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
             *(str(ROOT / path) for _, path in arm.general)]
@@ -375,14 +378,14 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     env.update(_private(arm.env, private))
     rows = {}
     if "boundary_rows" in arm.plugin:
-        rows = {"window_s": window_s, **({"check": check} if check else {}), **(boundary_rows or _private(arm.rows, private))}
+        rows = {"window_s": window_s, **({"check": check} if check else {}), **_private(boundary_rows or arm.rows, private)}
         if not rows.get("check"):
             raise SystemExit("this arm's boundary commitment needs its check template, and the model names none "
                              "(Model.check): --boundary-rows, a JSON object with check (run.sh: BOUNDARY_ROWS)")
     if arm.plugin:
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
-                                      **({"boundary_rows": rows} if rows else {})})
+                                      **({"boundary_rows": rows, "private": str(private)} if rows else {})})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
@@ -1790,8 +1793,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
                         "drained, inline, tables")
     r.add_argument("--private", metavar="DIR",
-                   help="where the arm keeps what never leaves the node (history tables' rows and salts, the top-k's "
-                        "counters), outside every run's directory (default: a fresh directory, removed when it stops)")
+                   help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
+                        "rows and salts, the top-k's counters), outside every run's directory (default: a fresh "
+                        "directory, removed when it stops)")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)
