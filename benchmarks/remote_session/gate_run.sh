@@ -35,7 +35,10 @@
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine). LEASE_BY (a UTC time) is when the prover must hold its GPUs, or nothing runs: the
 # prover asks through gate_lease.sh (sent beside) from LEASE_FROM (default now) and gives up a minute before LEASE_BY,
-# and fire opens no period for a lease that began after it. PROVER_RUN names a prover already launched for PERIOD,
+# and fire opens no period for a lease that began after it. ARENA_GIB (default 62) is each engine's weights arena
+# (`engine.py --arena-gib`) and so the host's ARENA_BLOCKS, its 4 KiB blocks, and UTIL (default 0.8) vLLM's share of a
+# card (`--util`); PACED is the host run's sessions (default gate.sh's four), one word a session of PLAN.
+# PROVER_RUN names a prover already launched for PERIOD,
 # which step 4 fires against (step 3 launches none); default the one `prover` recorded in PERIOD.env, which launches
 # step 3 alone, so the prover can take its slot before the hosts are pinned at COMMIT and the probe passes (its tree is
 # recorded as prover_commit). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
@@ -65,7 +68,7 @@ WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES))} LEASE_BY=${LEASE_BY:-} LEASE_FROM=${LEASE_FROM:-}
 SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} CHECKPOINT_WAIT_S=${CHECKPOINT_WAIT_S:-900} SLOT_WAIT_S=${SLOT_WAIT_S:-3600}
-PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
+PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625} ARENA_GIB=${ARENA_GIB:-62} UTIL=${UTIL:-0.8}
 VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
 mkdir -p "$(dirname "$STATE")"
@@ -121,7 +124,7 @@ launch() {
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
-  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"})
+  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"})
 gate_step() {
   # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
   # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
@@ -184,7 +187,7 @@ fi
 echo "== 3. prover on $PROVER_NODE"
 PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
-  --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
+  --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib $ARENA_GIB --util $UTIL"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
   --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1 --env GPU_LEASE_TIMED=1)
