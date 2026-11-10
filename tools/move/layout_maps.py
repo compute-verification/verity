@@ -217,6 +217,17 @@ NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
     "archive/AGENTS.md": "stays",                      # what `archive/` is, there before the archive's files arrive
+    "verity/core/protocols/spot/schedule.py": "core:spot-python",       # `second_stage.py` imports it
+    "verity/core/service/flock/Flock/TmplLines.lean": "core:flock-lean-verifier",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+}
+#: directories written as one row though a file of theirs is archived, so that a file added to the directory, or one it
+#: fetches, goes with it: {the directory today: why}
+WHOLE = {
+    "benchmarks/nci/": "the inference-only policy's benchmark fetches `sources/` and gains files; one row carries them",
 }
 #: references to a directory a map splits that stay right as they are: (the move, "old file: old directory", why)
 SPLIT = [
@@ -815,7 +826,8 @@ def main():
             mine = {p: n for p, (n, _, m) in dest.items() if m == move}
             if not mine:
                 die(f"{move}: no file")
-            rows = compress(mine, tracked_dirs, {own_row(p) for p in mine} - {None})
+            rows = compress(mine, tracked_dirs, ({own_row(p) for p in mine} - {None})
+                            | {p for p in mine if mine[p].startswith("archive/") and any(holds(k, p) for k in WHOLE)})
             # the archive speaks for no directory
             tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows, emptied, one)
             for k, n in (agree or {}).items():         # a directory a move's map speaks for reads the same in the one map
