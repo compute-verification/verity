@@ -13,3 +13,6 @@ From the kernels lead, before your first run: proofs answered on HASH-98 (04:17Z
 [2026-11-10T04:49Z] 2366ac5a0917
 From the kernels lead: from your next launch on node A, wrap every leased command in flock /dev/shm/kernels-node-a.lock (outermost). A second kernels run (HASH-100, 30 min, from 10:30Z) shares cores 64-95 and must never overlap yours. Details at the end of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T05:45Z] 3b8cf5b66936
+From the kernels lead: timers may not wake me (INF-666), so a run for a later window on node A must start itself there. Launch it ahead with a start guard (sleep to the window's opening on core 95, then flock, lease, stage, run, clean). Read the newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe; for KHSHARE it also says: launch your two-size run yourself this turn, guarded to open at 10:30Z.
+
