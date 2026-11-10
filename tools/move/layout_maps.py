@@ -720,11 +720,13 @@ def main():
     if stay:
         die("under verity/core or verity/ml with no destination:\n  " + "\n  ".join(stay[:40]))
     trusted_dirs = [t.strip("/") for t in data["trusted_dirs"]]
-    untrusted = collections.defaultdict(list)
+    untrusted, with_suite = collections.defaultdict(list), collections.Counter()
     for p, (n, key, _) in dest.items():
-        if (key in comps and not comps[key]["trusted"] and p not in suited      # a suite's tests go with it, whoever's they are
-                and any(n == t or n.startswith(t + "/") for t in trusted_dirs)):
-            untrusted[key].append(f"{p} -> {n}")
+        if key in comps and not comps[key]["trusted"] and any(n == t or n.startswith(t + "/") for t in trusted_dirs):
+            if p in suited:                            # a suite's tests go with it, whoever's they are
+                with_suite[(key, posixpath.dirname(n))] += 1
+            else:
+                untrusted[key].append(f"{p} -> {n}")
     if set(untrusted) - set(UNTRUSTED):
         die("files of a component the auditor doesn't trust land under a trusted directory (a row in EXCEPT, or in "
             "UNTRUSTED with why it may):\n  " + "\n  ".join(f"{k} ({comps[k]['name']}): {len(v)} files, {v[0]}"
@@ -936,6 +938,8 @@ def main():
               f"split rows, {len(v['modules'])} module renames" + (f"; after {', '.join(sorted(after[move]))}" if after[move] else ""))
     for key, v in sorted(untrusted.items()):
         print(f"  untrusted under a trusted directory, allowed by UNTRUSTED: {key}, {len(v)} files ({v[0]})")
+    for (key, d), n in sorted(with_suite.items()):
+        print(f"  a suite's tests under a trusted directory: {n} of `{key}` ({comps[key]['name']}) in `{d}/`")
     print(f"  `layout.py` creates {len(created)} `__init__.py` over the maps (--created FILE lists them)")
     for n in notes:
         print("  " + n)
