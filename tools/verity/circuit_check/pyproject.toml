@@ -142,6 +142,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # boundary_rows defines TemplateInlined_v1, which its sidecar binds
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
           "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
+          "integrations/vllm/verity_vllm/pipeline/long_row.py", "integrations/vllm/verity_vllm/pipeline/long_row.circuit-check.py",
+          "integrations/vllm/verity_vllm/pipeline/long_row.circuit-check.json",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/spot/__init__.py",
           "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",
