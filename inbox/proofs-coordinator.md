@@ -24929,3 +24929,12 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 - It didn't build Lean (451 modules); the lock run after landing builds them.
 - It collected 93 suites before its 120 s budget ran out, and what ran passed.
 - It merged onto `next` with conflicts only in `pous/lean/TRUSTED.sha256`, which it rebuilt.
+
+## FUSEDSERVE, 05:53Z Tue (CIR-185): #8454 is marked ready at its new head dc0a6e8fe6; land ask to post
+
+- Marked at 05:53Z after the pre-mark run passed (r20261110-050417-a8b8 on cpu-12: 20 of 20 suites, none cached; the
+  vllm suite 14472 passed). The body now has G1's failure, the fix, its test and the retry's record.
+- **The ask, for you to post (52 words):** "#8454 at dc0a6e8fe6 (CIR-185) needs @vllm's review of its new head. New
+  since 283188b306: `expert_rows.py` declares and commits a table two fused templates read once (+37 −3, with a test).
+  It made every rank's record refuse on the first served Commit; the retry at this head built all eight. Suites green
+  on cpu-12."
