@@ -495,6 +495,130 @@ def test_a_terminated_arm_kills_its_servers_group_within_the_runners_grace(monke
     assert groups == [(4242, S.signal.SIGKILL)] and S.TERM_GRACE_S < 20
 
 
+# ---------------------------------------------------------------------------------------------------- vLLM's own client
+
+def result(completed: int = 200, failed: int = 0, duration: float = 100.0, good: float | None = 150.0, tok: float = 300.0) -> dict:
+    """A result as `vllm bench serve --save-result` writes it (its keys at the integration's pin), ``good`` requests
+    within the SLO."""
+    return {"date": "20260101-000000", "backend": "openai", "model_id": "/ck", "tokenizer_id": "/ck", "num_prompts": completed + failed,
+            "request_rate": "inf", "burstiness": 1.0, "max_concurrency": 8, "duration": duration, "completed": completed,
+            "failed": failed, "total_input_tokens": 51200, "total_output_tokens": int(tok * duration),
+            "request_throughput": completed / duration, "request_goodput": None if good is None else good / duration,
+            "output_throughput": tok, "total_token_throughput": tok + 512.0, "max_output_tokens_per_s": 2 * tok,
+            "max_concurrent_requests": 8, "mean_ttft_ms": 410.0, "median_ttft_ms": 400.0, "std_ttft_ms": 20.0,
+            "p99_ttft_ms": 900.0, "mean_tpot_ms": 31.0, "median_tpot_ms": 30.0, "std_tpot_ms": 2.0, "p99_tpot_ms": 45.0,
+            "mean_itl_ms": 30.5, "median_itl_ms": 29.0, "std_itl_ms": 3.0, "p99_itl_ms": 70.0, "mean_e2el_ms": 4000.0,
+            "median_e2el_ms": 3900.0, "std_e2el_ms": 300.0, "p99_e2el_ms": 5200.0}
+
+
+def test_a_pass_of_vllms_client_holds_a_concurrency_and_counts_goodput_against_the_models_slo(tmp_path: Path):
+    glm, chat = S.MODELS["glm53"], S.LOADS["chat"]
+    argv = S.bench_argv(glm, Path("/ck"), 8123, chat, 16, tmp_path, "chat@16-r2", dataset="/data/sharegpt.json")
+    assert argv[1:] == [
+        "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai", "--base-url", "http://127.0.0.1:8123",
+        "--endpoint", "/v1/completions", "--model", "/ck", "--served-model-name", "glm-5.3",
+        "--dataset-name", "sharegpt", "--dataset-path", "/data/sharegpt.json", "--num-prompts", "200", "--seed", "0",
+        "--request-rate", "inf", "--max-concurrency", "16", "--ignore-eos", "--temperature", "0",
+        "--goodput", "ttft:2000", "tpot:80", "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
+        "--request-id-prefix", "chat@16-r2-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
+        "--save-result", "--result-dir", str(tmp_path), "--result-filename", "result.json"]
+    # the client's tokenizer loads as the server's does, and a load with no file names none
+    moon = S.bench_argv(S.MODELS["moonlight"], Path("/ck"), 1, S.LOADS["random"], 4, tmp_path, "warm", prompts=8)
+    assert "--trust-remote-code" in moon and "--dataset-path" not in moon
+    assert moon[moon.index("--num-prompts") + 1] == "8" and moon[moon.index("--dataset-name") + 1] == "random"
+    # the release-order arm reads request k's release number from the id the client sends
+    plugin = pytest.importorskip("servetax_plugin")
+    assert plugin.release_key("cmpl-chat@16-r2-7-0-0123abcd") == ("chat@16-r2", 7)
+
+
+def test_loads_are_named_with_their_rungs_and_a_file_load_needs_its_file(tmp_path: Path):
+    assert S.parse_loads("chat") == {"chat": S.LOADS["chat"].rungs}
+    assert S.parse_loads("random=2+4, chat=12+16+24") == {"random": (2, 4), "chat": (12, 16, 24)}
+    assert (S.pass_name("chat", 16), S.load_tag("chat@16", 2, True), S.load_tag("light", 2, False)) == (
+        "chat@16", "chat@16-r2", "light2")
+    for bad in ("", "sonnet", "chat=0", "chat=8+x"):
+        with pytest.raises((SystemExit, ValueError)):
+            S.parse_loads(bad)
+    f = tmp_path / "sharegpt.json"
+    f.write_text("[]")
+    loads = S.parse_loads("chat=4,random=4")
+    assert S.parse_datasets([f"chat={f}"], loads) == {"chat": str(f)}
+    with pytest.raises(SystemExit, match="--dataset chat=FILE"):
+        S.parse_datasets(None, loads)
+    with pytest.raises(SystemExit, match="is not a file"):
+        S.parse_datasets([f"chat={tmp_path / 'absent.json'}"], loads)
+    with pytest.raises(SystemExit, match="random: not a load of --loads that reads a file"):
+        S.parse_datasets([f"chat={f}", f"random={f}"], loads)
+    assert S.parse_datasets(None, S.parse_loads("random")) == {}
+
+
+def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path):
+    now, calls = [0.0], []
+
+    def run(argv, stdout, stderr):
+        calls.append(argv)
+        stdout.write(b"Starting main benchmark run...\n")
+        d = Path(argv[argv.index("--result-dir") + 1])
+        (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(completed=197, failed=3)))
+        now[0] += 64.25
+        return NS(returncode=0)
+
+    m = S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["random"], 8, "random@8-r1", tmp_path / "rep-1",
+                      run=run, clock=lambda: now[0], now=lambda: 1700.0)
+    assert (m["requests"], m["unfinished"], m["unserved"], m["concurrency"], m["rate"]) == (200, 3, 3, 8, None)
+    assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "random@8-r1")
+    assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["random"], 8, tmp_path / "rep-1", "random@8-r1")]
+    assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
+    assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
+    for rc, why in ((1, "exited 1"), (0, "saved no result")):
+        with pytest.raises(RuntimeError, match=why):
+            S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["random"], 8, "x", tmp_path / f"bad-{rc}",
+                          run=lambda argv, stdout, stderr, rc=rc: NS(returncode=rc), clock=lambda: 0.0, now=lambda: 0.0)
+
+
+def test_a_pass_metrics_are_the_clients_own_figures():
+    m = S.bench_metrics(result(completed=197, failed=3, duration=100.0, good=150.0, tok=300.0))
+    assert (m["sent"], m["ok"], m["met"], m["output_tokens"], m["span_s"]) == (200, 197, 150, 30000, 100.0)
+    assert (m["output_tok_per_s"], m["total_tok_per_s"], m["req_per_s"], m["goodput_req_per_s"]) == (300.0, 812.0, 1.97, 1.5)
+    assert m["slo_attained"] == pytest.approx(0.75)
+    assert (m["ttft_p50_s"], m["ttft_p99_s"], m["itl_p50_s"], m["itl_p99_s"], m["tpot_p50_s"], m["tpot_p99_s"]) == (
+        0.4, 0.9, 0.029, 0.07, 0.03, 0.045)
+    none = S.bench_metrics(result(good=None))        # a pass the client counted no goodput for
+    assert none["goodput_req_per_s"] is None and none["met"] is None and none["slo_attained"] is None
+
+
+def bench_arm(d: Path, name: str, passes: dict[str, list[dict]], model_id: str = "glm53") -> Path:
+    """An arm's run dir as `run` leaves it under vLLM's client: each pass's reps' result.json and meta.json."""
+    d = d / name
+    d.mkdir(parents=True)
+    (d / "meta.json").write_text(json.dumps({
+        "arm": name, "parent": S.ARMS[name].parent, "what": S.ARMS[name].what, "model_id": model_id, "rates": {},
+        "client": "vllm-bench", "run_id": "r-1", "commit": "c" * 40, "versions": {"vllm": "0.1+gd9105ea8"},
+        "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes}}))
+    for p, reps in passes.items():
+        for i, r in enumerate(reps, 1):
+            (d / p / f"rep-{i}").mkdir(parents=True)
+            (d / p / f"rep-{i}" / "result.json").write_text(json.dumps(r))
+            (d / p / f"rep-{i}" / "meta.json").write_text(json.dumps(
+                {"rate": None, "concurrency": int(p.rpartition("@")[2]), "unfinished": r["failed"], "t0_unix": 1000.0,
+                 "wall_s": r["duration"] + 5, "gpu": {"busy_gpu_s": 8 * r["duration"]}}))
+    return d
+
+
+def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
+    d = bench_arm(tmp_path, "compiled", {"chat@8": [result(good=150.0), result(good=160.0)], "chat@16": [result(good=40.0)]})
+    m = S.arm_metrics(d)
+    assert list(m["loads"]) == ["chat@8", "chat@16"] and [r["rep"] for r in m["loads"]["chat@8"]] == [1, 2]
+    one = m["loads"]["chat@8"][0]
+    assert (one["concurrency"], one["rate"], one["goodput_req_per_s"], one["met"], one["busy_gpu_s"]) == (8, None, 1.5, 150, 800.0)
+    assert (m["commit"], m["vllm"], m["run_id"]) == ("c" * 40, "0.1+gd9105ea8", "r-1")
+    md = S.markdown(S.table([m]))
+    assert "| compiled | chat@8 | concurrency 8 | 0 of 400 | 300 | 2 | 1.55 | 77.5% | 400 / 900 | 29 / 70 |" in md
+    # the client counted goodput against the SLO it ran with: another can't be read from its result
+    with pytest.raises(SystemExit, match="serve it again"):
+        S.arm_metrics(d, (1.0, 0.05))
+
+
 def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("PYTHONPATH", raising=False)
     rows = {"check": "t"}

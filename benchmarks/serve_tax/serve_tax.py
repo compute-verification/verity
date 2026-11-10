@@ -5,6 +5,9 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py run --arm ARM --model-id ID --c4 C4.json.gz --rates NAME=R,... [--checkpoint DIR] [--reps 3] [--span-s 90]
                      [--requests N] [--plan PLAN.jsonl] [--window-s S] [--kv-window-s S]
                      [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
+    serve_tax.py run --arm ARM --model-id ID --client vllm-bench --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
+                     [--checkpoint DIR] [--reps 3] --out DIR
+    serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
@@ -51,6 +54,12 @@ The arms, each one engine configuration; each adds its change to the arm it name
   held after its loads until its windows' commits account for every finished request (`await_commits`).
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
+
+With ``--client vllm-bench`` the loads are sent by vLLM's own benchmark client instead (`vllm bench serve`, `bench_argv`),
+one pass a load and rung: a load (`LOADS`) is one of the client's datasets, and a rung the concurrency the client holds
+(``--request-rate inf --max-concurrency RUNG``, the shape of vLLM's standing serving tests), every request greedy and
+decoding to its length (``--ignore-eos``). Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
+saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`).
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
@@ -490,6 +499,137 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
     return meta
 
 
+# ------------------------------------------------------------------------------------------------- vLLM's own client
+
+#: the clients a load is sent by: the trace corpus's (`corpus.drive`) and vLLM's own (`vllm bench serve`)
+CORPUS, BENCH = "corpus", "vllm-bench"
+#: the file vLLM's client saves a pass's result to
+RESULT = "result.json"
+
+
+@dataclass(frozen=True)
+class Load:
+    """A load of vLLM's own client: its dataset's flags, whether the dataset is a file (``--dataset NAME=FILE``), the
+    prompts a pass sends, the concurrencies it is served at (its rungs: the client holds that many requests in flight
+    and sends the next when one ends) and the bounds of the model's SLO its goodput counts against, by the client's
+    names."""
+    dataset: tuple[str, ...]
+    file: bool
+    prompts: int
+    rungs: tuple[int, ...]
+    slo: tuple[str, ...] = ("ttft", "tpot")
+
+
+#: chat: the load of vLLM's standing serving tests, ShareGPT's first turns, each decoding its recorded answer's length
+#: (the client keeps prompts of at most 1,024 tokens, 2,048 with the output). random: the client's synthetic dataset,
+#: 1,024 random tokens in and 128 out, which needs no file.
+LOADS = {
+    "chat": Load(("--dataset-name", "sharegpt"), True, 200, (4, 8, 12, 16, 24, 32, 48)),
+    "random": Load(("--dataset-name", "random", "--random-input-len", "1024", "--random-output-len", "128"), False, 200,
+                   (4, 8, 12, 16, 24, 32, 48)),
+}
+
+
+def pass_name(load: str, rung: int) -> str:
+    return f"{load}@{rung}"
+
+
+def load_tag(name: str, rep: int, bench: bool) -> str:
+    """What a load's request ids start with in rep ``rep``. A pass's name ends in its rung, so its rep is set apart."""
+    return f"{name}-r{rep}" if bench else f"{name}{rep}"
+
+
+def parse_datasets(given: list[str] | None, loads: dict[str, tuple[int, ...]]) -> dict[str, str]:
+    """``--dataset NAME=FILE``'s files by load: one for each of ``loads`` whose dataset is a file, and for no other."""
+    files = dict(x.split("=", 1) if "=" in x else (x, "") for x in given or ())
+    for name in loads:
+        if LOADS[name].file and not Path(files.get(name, "")).is_file():
+            raise SystemExit(f"load {name} reads its dataset from a file: --dataset {name}=FILE"
+                             + (f" ({files[name]!r} is not a file)" if files.get(name) else ""))
+    extra = sorted(n for n in files if n not in loads or not LOADS[n].file)
+    if extra:
+        raise SystemExit(f"--dataset: {', '.join(extra)}: not a load of --loads that reads a file")
+    return files
+
+
+def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
+    """``NAME[=RUNG+RUNG...],...``: each load (`LOADS`) with the rungs it is served at, its own where none are given."""
+    out: dict[str, tuple[int, ...]] = {}
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        name, _, rungs = part.partition("=")
+        if name not in LOADS:
+            raise SystemExit(f"--loads: {name!r} is not a load ({', '.join(sorted(LOADS))})")
+        out[name] = tuple(int(x) for x in rungs.split("+")) if rungs else LOADS[name].rungs
+        if not out[name] or min(out[name]) < 1:
+            raise SystemExit(f"--loads: {part!r}: each rung is a concurrency of 1 or more")
+    if not out:
+        raise SystemExit("--loads: NAME[=RUNG+RUNG...],... names no load")
+    return out
+
+
+def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int, d: Path, tag: str,
+               dataset: str | None = None, prompts: int | None = None, seed: int = 0) -> list[str]:
+    """One pass of vLLM's client against the server on ``port``: ``load``'s prompts (the same ones under one seed, so
+    every arm and rep serves the same requests) at concurrency ``rung``, greedy and each decoding to its length, with
+    goodput against the model's SLO and its result saved to ``d``. The client sends no request of its own before the
+    pass (no ready check: `wait_ready` has waited), so every request it sends is in its result, and request k's
+    X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
+    (`servetax_plugin.release_key`). The tokenizer is the checkpoint's."""
+    slo = dict(zip(("ttft", "tpot"), model.slo))
+    return [sys.executable, "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai",
+            "--base-url", f"http://127.0.0.1:{port}", "--endpoint", "/v1/completions",
+            "--model", str(checkpoint), "--served-model-name", model.served,
+            *(["--trust-remote-code"] if "--trust-remote-code" in model.args else []),
+            *load.dataset, *(["--dataset-path", dataset] if dataset else []),
+            "--num-prompts", str(prompts or load.prompts), "--seed", str(seed),
+            "--request-rate", "inf", "--max-concurrency", str(rung), "--ignore-eos", "--temperature", "0",
+            "--goodput", *(f"{k}:{round(slo[k] * 1e3)}" for k in load.slo),
+            "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
+            "--request-id-prefix", f"{tag}-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
+            "--save-result", "--result-dir", str(d), "--result-filename", RESULT]
+
+
+def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
+                dataset: str | None = None, seed: int = 0, lib: object | None = None, prompts: int | None = None,
+                run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+                clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
+    """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
+    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved)."""
+    d.mkdir(parents=True, exist_ok=True)
+    argv = bench_argv(model, checkpoint, port, load, rung, d, tag, dataset, prompts, seed)
+    t, t0 = clock(), now()
+    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy, open(d / "bench.log", "wb") as log:
+        rc = run(argv, stdout=log, stderr=subprocess.STDOUT).returncode
+    wall = clock() - t
+    if rc or not (d / RESULT).exists():
+        raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {d / 'bench.log'}")
+    r = json.loads((d / RESULT).read_text())
+    failed = int(r.get("failed") or 0)
+    meta = {"tag": tag, "client": BENCH, "concurrency": rung, "rate": None, "requests": r["completed"] + failed,
+            "unfinished": failed, "unserved": failed, "wall_s": round(wall, 3), "t0_unix": t0, "argv": argv[1:],
+            "gpu": busy.result()}
+    (d / "meta.json").write_text(json.dumps(meta, indent=1))
+    return meta
+
+
+def bench_metrics(r: dict) -> dict:
+    """One pass's metrics from the result vLLM's client saved, under `load_metrics`'s names: the client's own figures
+    (its goodput, throughputs, medians and P99s), none recomputed here."""
+    sent = r["completed"] + int(r.get("failed") or 0)
+    good = r.get("request_goodput")
+    met = round(good * r["duration"]) if good is not None else None
+
+    def s(key: str) -> float | None:
+        return r[key] / 1e3 if r.get(key) is not None else None
+
+    return {"sent": sent, "ok": r["completed"], "output_tokens": r["total_output_tokens"], "span_s": r["duration"],
+            "output_tok_per_s": r["output_throughput"], "total_tok_per_s": r["total_token_throughput"],
+            "req_per_s": r["request_throughput"], "goodput_req_per_s": good, "met": met,
+            "slo_attained": met / sent if met is not None and sent else None,
+            "ttft_p50_s": s("median_ttft_ms"), "ttft_p99_s": s("p99_ttft_ms"), "itl_p50_s": s("median_itl_ms"),
+            "itl_p99_s": s("p99_itl_ms"), "tpot_p50_s": s("median_tpot_ms"), "tpot_p99_s": s("p99_tpot_ms")}
+
+
 def await_commits(d: Path, n: int, wait_s: float, clock: Callable[[], float] = time.monotonic,
                   sleep: Callable[[float], None] = time.sleep) -> dict:
     """Hold the server until the boundary-rows arm's sink lines in ``d`` (``boundary.PID.jsonl``, one a class, committed or
@@ -522,6 +662,14 @@ def versions() -> dict:
             for dist in ("vllm", "torch", "aiohttp", "transformers")}
 
 
+def source_commit() -> str | None:
+    """This tree's commit: the research run's source, else the checkout's HEAD."""
+    if SHARED.RESEARCH_SOURCE_SHA:
+        return SHARED.RESEARCH_SOURCE_SHA
+    p = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
 def file_sha256(p: Path) -> str:
     import hashlib
 
@@ -541,11 +689,11 @@ def tp_size(model: Model) -> int:
     return int(args[args.index("--tensor-parallel-size") + 1]) if "--tensor-parallel-size" in args else 1
 
 
-def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, float]) -> dict | None:
+def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, float], tag: str | None = None) -> dict | None:
     """The plugin's edges (`servetax_plugin.edges_of`) for an arm that takes the boundary state: one each
-    ``--edges-every-s`` seconds of each load, or at ``--edges-s`` after the first load's first request; the KV bytes kept
-    at ``--save-kv``'s edges (by default the first, at fixed times; none, every so often), which a tensor-parallel engine
-    keeps in host memory instead."""
+    ``--edges-every-s`` seconds of each load, or at ``--edges-s`` after the first load's first request (its ids start
+    with ``tag``: `load_tag`); the KV bytes kept at ``--save-kv``'s edges (by default the first, at fixed times; none,
+    every so often), which a tensor-parallel engine keeps in host memory instead."""
     if not arm.edges:
         return None
     if bool(a.edges_s) == bool(a.edges_every_s):
@@ -555,7 +703,8 @@ def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, 
     if save_kv and tp_size(model) > 1:
         raise SystemExit(f"{a.model_id} runs at TP {tp_size(model)}: its edges keep the KV bytes in host memory (no --save-kv)")
     when = ({"every_s": a.edges_every_s} if a.edges_every_s else
-            {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-"})
+            {"edges_s": [float(x) for x in a.edges_s.split(",")],
+             "edge_tag": f"-{tag or load_tag(next(iter(rates)), 1, False)}-"})
     return {**when, "save_kv": save_kv, "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None, "kv_copy": a.kv_copy,
             "dump": arm.edge_dump, "busy": arm.edge_busy}
 
@@ -573,11 +722,26 @@ def run(a: argparse.Namespace) -> int:
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    rates = parse_rates(a.rates)
-    t = time.monotonic()
-    plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
-                   plan_need(rates, a.span_s, a.requests), a.docs, a.seed)
-    print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
+    bench = a.client == BENCH
+    if bench:
+        if arm.tick or arm.sampling != "greedy" or arm.logprobs:
+            raise SystemExit(f"arm {a.arm} needs the corpus client (the certifier's stand-in feed, or its sampling): "
+                             f"--client {CORPUS}")
+        if not a.loads:
+            raise SystemExit(f"--client {BENCH} serves --loads NAME[=RUNG+RUNG...],... ({', '.join(sorted(LOADS))})")
+        loads = parse_loads(a.loads)
+        datasets = parse_datasets(a.dataset, loads)
+        passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
+        rates, plan = {}, []
+    else:
+        if not a.rates or not a.c4:
+            raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
+        passes = {}
+        rates = parse_rates(a.rates)
+        t = time.monotonic()
+        plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
+                       plan_need(rates, a.span_s, a.requests), a.docs, a.seed)
+        print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     srv = out / "server"
     srv.mkdir(exist_ok=True)
@@ -586,13 +750,16 @@ def run(a: argparse.Namespace) -> int:
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, a.max_model_len)
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
-    edges = edge_config(arm, model, a, rates)
+    edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     lib, no_nvml = nvml()
     if no_nvml:
         print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "client": a.client, "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()},
+            "datasets": {n: {"file": f, "sha256": file_sha256(Path(f))} for n, f in (datasets if bench else {}).items()},
+            "commit": source_commit(),
             "plan_sha256": file_sha256(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
@@ -609,25 +776,34 @@ def run(a: argparse.Namespace) -> int:
         meta["startup_s"] = round(time.monotonic() - t, 1)
         print(f"[serve-tax] {a.arm}: up in {meta['startup_s']} s", flush=True)
         finished = 0
+
+        def send(name: str, tag: str, d: Path, busy: object | None, warm: bool = False) -> dict:
+            if not bench:
+                return drive_load(port, model.served, plan, min(rates.values()) if warm else rates[name],
+                                  a.warm_s if warm else a.span_s, tag, d, a.drain_s, tick,
+                                  None if warm else a.requests, arm.sampling, busy)
+            n, c = passes[name]
+            return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, datasets.get(n), a.seed, busy,
+                               min(LOADS[n].prompts, 2 * c) if warm else None)
+
         if a.warm_s > 0:
-            w = drive_load(port, model.served, plan, min(rates.values()), a.warm_s, "warm", out / "warm", a.drain_s, tick,
-                           sampling=arm.sampling)
+            w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
             finished += w["requests"] - w["unfinished"]
             print(f"[serve-tax] warm-up: {w['requests']} requests, unfinished {w['unfinished']}", flush=True)
         for rep in range(1, a.reps + 1):
-            for name, rate in rates.items():
+            for name in passes or rates:
                 ok = reset_prefix_cache(port)
                 d = out / name / f"rep-{rep}"
                 before = scrape(port)
-                m = drive_load(port, model.served, plan, rate, a.span_s, f"{name}{rep}", d, a.drain_s, tick, a.requests,
-                               arm.sampling, lib)
+                m = send(name, load_tag(name, rep, bench), d, lib)
                 after = scrape(port)
                 m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
                       "schedule": {k: after[k] - before[k] for k in after}}
                 (d / "meta.json").write_text(json.dumps(m, indent=1))
                 meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
                 (out / "meta.json").write_text(json.dumps(meta, indent=1))
-                print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests at {rate:g}/s, wall {m['wall_s']} s, "
+                at = f"concurrency {m['concurrency']}" if bench else f"{m['rate']:g}/s"
+                print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests at {at}, wall {m['wall_s']} s, "
                       f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
                 finished += m["requests"] - m["unfinished"]
         if "boundary_rows" in arm.plugin:
@@ -850,23 +1026,31 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep, with the GPUs' busy time and the edges that fell in
     it, and its edges' summary (`edge_summary`)."""
     meta = json.loads((d / "meta.json").read_text())
-    slo = slo or MODELS[meta["model_id"]].slo
+    ran = MODELS[meta["model_id"]].slo
+    slo = slo or ran
     edges = edge_records(d)
     loads: dict[str, list[dict]] = {}
-    for name in meta["rates"]:
+    for name in meta.get("passes") or meta["rates"]:
         for rep in sorted((d / name).glob("rep-*"), key=lambda p: int(p.name.split("-")[1])):
-            f = rep / "client.jsonl"
-            if not f.exists():
+            if (rep / RESULT).exists():
+                if slo != ran:
+                    raise SystemExit(f"{rep}: vLLM's client counted this pass's goodput against the SLO it ran with "
+                                     f"(TTFT {ran[0]} s, TPOT {ran[1]} s); serve it again to count against another")
+                lm = bench_metrics(json.loads((rep / RESULT).read_text()))
+            elif (rep / "client.jsonl").exists():
+                lm = load_metrics([json.loads(x) for x in (rep / "client.jsonl").read_text().splitlines() if x.strip()],
+                                  slo)
+            else:
                 continue
-            recs = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
             m = json.loads((rep / "meta.json").read_text())
-            lm = load_metrics(recs, slo)
             loads.setdefault(name, []).append({"rep": int(rep.name.split("-")[1]), "rate": m["rate"],
+                                               "concurrency": m.get("concurrency"),
                                                "unfinished": m.get("unfinished"), **lm,
                                                **schedule_metrics(m.get("schedule")),
                                                **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m)})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
-            "run_id": meta.get("run_id"), "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
+            "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
+            "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
             "edges": edge_summary(edges)}
 
@@ -895,7 +1079,8 @@ def table(arms: list[dict]) -> dict:
     for a in arms:
         for load, reps in a["loads"].items():
             row = {"arm": a["arm"], "load": load, "run_id": a["run_id"], "reps": len(reps),
-                   "rate": reps[0]["rate"] if reps else None, "sent": sum(r["sent"] for r in reps),
+                   "rate": reps[0]["rate"] if reps else None,
+                   "concurrency": reps[0].get("concurrency") if reps else None, "sent": sum(r["sent"] for r in reps),
                    "unserved": sum(r["sent"] - r["ok"] for r in reps), **{k: summary([r.get(k) for r in reps]) for k in KEYS}}
             for ref_name, key in (("compiled", "tax_vs_compiled"), (a.get("parent"), "tax_vs_parent")):
                 ref = by.get(ref_name)
@@ -949,6 +1134,8 @@ def markdown(t: dict) -> str:
              "Busy GPU-s: the GPUs' NVML utilization integrated over the load, summed over GPUs, and per thousand output "
              "tokens. Edges: the replay-block edges in the load, and the engine's stall at each (the drain plus the pause) "
              "at its median and longest.",
+             "A pass of vLLM's client (a load at a rung, load@rung) holds its concurrency in place of a rate, and its "
+             "figures are the client's own.",
              "", "| arm | load | rate (req/s) | unserved | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
              "ITL p50 / p99 (ms) | steps | tokens / rows a step | busy GPU-s (per 1k tok) | edges (stall p50 / max, s) | "
              "tax vs compiled (tok/s) | tax vs compiled (goodput) | tax vs parent (tok/s) | run |",
@@ -957,7 +1144,8 @@ def markdown(t: dict) -> str:
         vc, vp = r.get("tax_vs_compiled") or {}, r.get("tax_vs_parent") or {}
         edges = (f"{_f(r.get('edges'), 1, 3)} ({_f(r.get('edge_stall_p50_s'), 1, 3)} / {_f(r.get('edge_stall_max_s'), 1, 3)})"
                  if (r.get("edges") or {}).get("n") else "—")
-        lines.append(f"| {r['arm']} | {r['load']} | {r['rate']:.3g} | {r['unserved']} of {r['sent']} | "
+        at = f"{r['rate']:.3g}" if r.get("rate") is not None else f"concurrency {r.get('concurrency')}"
+        lines.append(f"| {r['arm']} | {r['load']} | {at} | {r['unserved']} of {r['sent']} | "
                      f"{_f(r['output_tok_per_s'])} | {_f(r['req_per_s'])} | "
                      f"{_f(r['goodput_req_per_s'])} | {_f(r['slo_attained'], 100, 3)}% | "
                      f"{_f(r['ttft_p50_s'], 1e3)} / {_f(r['ttft_p99_s'], 1e3)} | {_f(r['itl_p50_s'], 1e3)} / "
@@ -1015,12 +1203,20 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--arm", required=True, choices=sorted(ARMS))
     r.add_argument("--model-id", required=True, choices=sorted(MODELS))
     r.add_argument("--checkpoint")
-    r.add_argument("--c4", required=True)
-    r.add_argument("--rates", required=True, help="NAME=REQ_PER_S,... in the order each rep serves them")
+    r.add_argument("--client", default=CORPUS, choices=(CORPUS, BENCH),
+                   help="who sends the loads: the trace corpus's client (--rates of the --c4 plan) or vLLM's own, "
+                        "`vllm bench serve` (--loads)")
+    r.add_argument("--c4")
+    r.add_argument("--rates", help="NAME=REQ_PER_S,... in the order each rep serves them")
+    r.add_argument("--loads", metavar="NAME[=RUNG+RUNG...],...",
+                   help=f"vLLM's client: the loads ({', '.join(sorted(LOADS))}) in the order each rep serves them, each at "
+                        "its rungs (concurrencies) or the ones given")
+    r.add_argument("--dataset", action="append", metavar="NAME=FILE", help="vLLM's client: a load's dataset file")
     r.add_argument("--reps", type=int, default=3)
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
-    r.add_argument("--warm-s", type=float, default=20.0, help="a warm-up load at the lowest rate first (0: none)")
+    r.add_argument("--warm-s", type=float, default=20.0,
+                   help="a warm-up load at the lowest rate first, or a short pass of vLLM's client (0: none)")
     r.add_argument("--commit-wait-s", type=float, default=900.0,
                    help="the boundary-rows arm: how long the server is held after its loads for its commits (await_commits)")
     r.add_argument("--drain-s", type=float, default=600.0)
@@ -1058,6 +1254,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--slo-tpot-s", type=float)
         if name == "table":
             p.add_argument("--out", type=Path)
+    ps = sub.add_parser("passes", help="the passes vLLM's client serves for --loads, their dataset files checked, "
+                                       "before any GPU is held")
+    ps.add_argument("--loads", required=True)
+    ps.add_argument("--dataset", action="append")
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
@@ -1098,6 +1298,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "tick":
         print(json.dumps(tick_args(a.source, None, a.load)))
+        return 0
+    if a.cmd == "passes":
+        loads = parse_loads(a.loads)
+        files = parse_datasets(a.dataset, loads)
+        for n, rungs in loads.items():
+            print(f"[serve-tax] load {n}: {LOADS[n].prompts} prompts a pass at concurrency "
+                  f"{', '.join(map(str, rungs))}" + (f", from {files[n]}" if n in files else ""))
         return 0
     slo = (a.slo_ttft_s, a.slo_tpot_s) if a.slo_ttft_s and a.slo_tpot_s else None
     arms = [json.loads(d.read_text()) if d.is_file() else arm_metrics(d, slo) for d in a.dirs]
