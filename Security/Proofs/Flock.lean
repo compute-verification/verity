@@ -12,6 +12,7 @@ public import Proofs.Flock.EndToEnd.Carry
 public import Proofs.Flock.EndToEnd.Joint
 public import Proofs.Flock.EndToEnd.Joint.MT.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
+public import Proofs.Flock.EndToEnd.Joint.V5.Layout
 public import Proofs.Flock.EndToEndRegistered
 public import Proofs.Flock.EndToEndRegistered.Honest
 public import Proofs.Flock.EndToEndRegistered.Inputs
