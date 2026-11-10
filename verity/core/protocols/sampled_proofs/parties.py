@@ -75,10 +75,9 @@ COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.V1.components`, `Core.RemoteNetwork.components`, `Core.RemoteNetworkNoPouw.components`): onsite's PoUW
-#: is its period check, as remote with the network certifier's is, and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW is Pearl+'s run verdict, remote, with or without the network certifier, composes sampled proofs as
-#: `COMPOSED` and onsite audits it with the one-stage audit (`ID`, one-stage v1)
+#: `Core.Remote.V1.components`, `Core.RemoteNetworkNoPouw.components`): onsite's PoUW is its period check and its
+#: bandwidth the P2 session on PoUS's store, remote's PoUW is Pearl+'s run verdict, remote, with or without the network
+#: certifier, composes sampled proofs as `COMPOSED` and onsite audits it with the one-stage audit (`ID`, one-stage v1)
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
@@ -86,8 +85,6 @@ SUBPROTOCOLS = {
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
                          "sampled-proofs": COMPOSED},
-    "verity/remote-network/v0": {"certifier": "verity/certifier/v0", "inference-only": "verity/inference-only/v0",
-                                 "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED},
     "verity/remote-network-no-pouw/v0": {"certifier": "verity/certifier/v0",
                                          "inference-only": "verity/inference-only/v0", "sampled-proofs": COMPOSED},
 }

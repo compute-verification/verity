@@ -1,7 +1,7 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
-Verity's composite protocols, onsite, remote and remote with the network certifier, with PoUW or without, are each one
-verdict over a list of subprotocols. Three Lake packages hold them, each on Flock's verifier and the core interface
+Verity's composite protocols, onsite, remote and remote with the network certifier without PoUW, are each one verdict
+over a list of subprotocols. Three Lake packages hold them, each on Flock's verifier and the core interface
 (`../interface`) by path, onsite and remote also on their subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
@@ -16,11 +16,11 @@ verdict over a list of subprotocols. Three Lake packages hold them, each on Floc
   the inference-only policy and Pearl+'s run, the policy and sampled proofs on one registration record and the run's
   commitment naming it (a `tiedSameB`); and H1's development executable `Core.Remote.protocol` (`verity/remote/v0`),
   with PoUW's period in Pearl+'s place and every window of the period on that record, which no configuration names.
-- `core_onsite` also holds remote with the network certifier (`Core.RemoteNetwork.protocol`,
+- `core_onsite` also holds remote with the network certifier's development executable (`Core.RemoteNetwork.protocol`,
   `verity/remote-network/v0`, `CoreRemoteNetwork.lean`): the development composite's three subprotocols (PoUW's period,
   not Pearl+'s run) and network certification under its record subprotocols, its `windows` tie and a tie of its own
-  (`egress`), so its verdict is the AND of theirs and network certification's over one registration record. And it
-  holds remote-network without PoUW (`Core.RemoteNetworkNoPouw.protocol`, `verity/remote-network-no-pouw/v0`,
+  (`egress`), so its verdict is the AND of theirs and network certification's over one registration record; like H1's,
+  no configuration names it. And it holds remote-network without PoUW (`Core.RemoteNetworkNoPouw.protocol`, `verity/remote-network-no-pouw/v0`,
   `CoreRemoteNetworkNoPouw.lean`): the same subprotocols but PoUW's period, under the same record subprotocols and
   `egress` alone, a composite of its own with its own registration, which credits no verified compute.
 
@@ -32,8 +32,9 @@ differ in their id and subprotocols. Each composite's executable is the core CLI
 These are the only composites a verifier runs (`Core.Composites`). `product IDS id | check | serve`
 (`../onsite/CoreComposites.lean`, `Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's
 subprotocols, is each composite's CLI for its subprotocols, in any order, and refuses every other set, since protocol
-soundness covers only onsite, `verity/remote/v1` and remote with the network certifier with PoUW's period or without:
-H1's `verity/remote/v0` is refused, and runs only as its development executable.
+soundness covers only onsite, `verity/remote/v1` and remote with the network certifier without PoUW: the development
+composites over PoUW's period, H1's `verity/remote/v0` and `verity/remote-network/v0`, are refused, and each runs only
+as its development executable.
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
 (`../remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
@@ -204,16 +205,15 @@ verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no
 `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one in which a
 rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another is undecided.
 `product` names the composites and refuses every other subset of their subprotocols
-(`test_product_names_only_the_composites`, H1's development composite's among them), and over a composite's
+(`test_product_names_only_the_composites`, the development composites' among them), and over a composite's
 subprotocols its `serve` gives that composite's verdicts (`test_product_over_onsites_subprotocols_is_onsite`,
-`test_product_over_remote_networks_subprotocols_is_remote_network`,
 `test_product_over_remote_network_no_pouws_subprotocols_is_remote_network_no_pouw`); remote v1's has
 no difftest until Pearl+'s run has reference cases.
 Remote with the network certifier's cases are the development composite's beside network certification's
 (`test_remote_network_agrees`). Over made components on one registration record, beside a period of network
 certification whose compute audits are on that record, its verdict is its subprotocols'; beside an accepted period
 with no compute audit, or one on another record, it refuses by `egress` unless a subprotocol already rejects. Each
-holds in Lean, `product` and Python (`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
+holds in Lean and Python (`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
 Remote-network without PoUW's cases are the same without PoUW's period (`test_remote_network_no_pouw_agrees`). Beside
 the same periods of network certification its verdict is the network certifier's, the policy's and sampled proofs',
 held to `egress` alone, and a PoUW period beside them is refused by name, as no subprotocol of it, in Lean, `product`

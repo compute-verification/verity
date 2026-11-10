@@ -71,9 +71,9 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# Remote with the network certifier (`verity/remote-network/v0`): remote's subprotocols and the network certifier's
-# period, under remote's ties and its own (CoreRemoteNetwork.lean). Its executable is the core CLI (`remote-network id | check |
-# serve`).
+# Remote with the network certifier (`verity/remote-network/v0`), development: remote's H1 subprotocols and the network
+# certifier's period, under remote's ties and its own (CoreRemoteNetwork.lean). `product` doesn't name it; its
+# executable is the core CLI (`remote-network id | check | serve`).
 [[lean_lib]]
 name = "CoreRemoteNetwork"
 
@@ -91,8 +91,8 @@ name = "CoreRemoteNetworkNoPouw"
 name = "remote-network-no-pouw"
 root = "RemoteNetworkNoPouwMain"
 
-# The composite a configuration's subprotocols make, onsite, remote, or remote with the network certifier with PoUW or
-# without, and no other: `product IDS id | check | serve` (CoreComposites.lean).
+# The composite a configuration's subprotocols make, onsite, remote, or remote with the network certifier without PoUW,
+# and no other: `product IDS id | check | serve` (CoreComposites.lean).
 [[lean_lib]]
 name = "CoreComposites"
 

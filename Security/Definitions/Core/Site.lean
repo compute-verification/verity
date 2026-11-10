@@ -279,12 +279,11 @@ namespace Registration
 open Site (Sheet)
 
 /-- The composite a site's log is registered for: onsite, whose boundary links the auditor's certifiers split and whose
-memory its challengers reach; remote, where neither need hold; or remote with the network certifier, with PoUW or
-without, whose boundary links the auditor's certifiers split and whose memory no challenger need reach. -/
+memory its challengers reach; remote, where neither need hold; or remote with the network certifier, without PoUW,
+whose boundary links the auditor's certifiers split and whose memory no challenger need reach. -/
 inductive Composite
   | onsite
   | remote
-  | remoteNetwork
   | remoteNetworkNoPouw
   deriving DecidableEq, Repr
 
@@ -416,10 +415,9 @@ def Owners : Prop :=
   ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
     (x.kind.auditor = false → x.owner = .prover)
 
-/-- `uncertified`, onsite and remote with the network certifier, with PoUW or without: every boundary link is
-certified. -/
+/-- `uncertified`, onsite and remote with the network certifier, without PoUW: every boundary link is certified. -/
 def Covered : Prop :=
-  c = .onsite ∨ c = .remoteNetwork ∨ c = .remoteNetworkNoPouw →
+  c = .onsite ∨ c = .remoteNetworkNoPouw →
     ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
 
 /-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/

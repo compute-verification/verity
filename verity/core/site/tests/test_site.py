@@ -21,11 +21,10 @@ A, B = SHEET_A.digest(), SHEET_B.digest()
 TOLERANCE = Fraction(1, 20)
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"), ("chal0", ""))),
            "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE),
-           "remote-network": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"),))}
-AUDITOR["remote-network-no-pouw"] = AUDITOR["remote-network"]
+           "remote-network-no-pouw": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"),))}
 """The auditor's data sheets for the simulated SKUs, 1 GHz clocks at 64 and 128 MACs a nanosecond in every operand class,
 its 5% tolerance around them, and its own devices' keys: onsite a certifier and a challenger, remote with the network
-certifier, with PoUW or without, a certifier. The node registers the auditor's own sheets."""
+certifier, without PoUW, a certifier. The node registers the auditor's own sheets."""
 
 
 def figures(sheet: Sheet, clock: Fraction | int | None = None, **rates: Fraction | int) -> Sheet:
@@ -48,13 +47,12 @@ FIRST = {
                              Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0),
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
-    "remote-network": replace(NODE, locs=(*NODE.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key")),
-                              links=(Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
-                                     Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0))),
+    "remote-network-no-pouw": replace(
+        NODE, locs=(*NODE.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key")),
+        links=(Link("uplink0", ("node0", "cert0"), 100_000, 100_000), Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0))),
 }
-FIRST["remote-network-no-pouw"] = FIRST["remote-network"]
 """Each composite's first entry: onsite, the uplink split by the network certifier and the memory challenger's link to
-the node; remote, a bare uplink; remote with the network certifier, with PoUW or without, the uplink split by the
+the node; remote, a bare uplink; remote with the network certifier, without PoUW, the uplink split by the
 network certifier and no memory challenger."""
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
@@ -85,10 +83,9 @@ ENTRIES = {
 """A later entry for each check `check_registration` makes, with the refusal it draws, and one it accepts: the lifecycle
 example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for, and `doubled-clock`, the
 figures check the example doesn't make yet."""
-ACCEPTS = {"onsite": set(), "remote": {"bare-uplink", "unreached-host"}, "remote-network": {"unreached-host"},
-           "remote-network-no-pouw": {"unreached-host"}}
+ACCEPTS = {"onsite": set(), "remote": {"bare-uplink", "unreached-host"}, "remote-network-no-pouw": {"unreached-host"}}
 """The refused entries each composite's site accepts: remote has no certifier and no memory challenger to hold its links
-to, and remote with the network certifier, with PoUW or without, no memory challenger."""
+to, and remote with the network certifier, without PoUW, no memory challenger."""
 
 
 def first(composite: str) -> Registration:

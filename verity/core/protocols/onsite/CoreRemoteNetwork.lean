@@ -1,5 +1,5 @@
 /-
-Remote with the network certifier (`verity/remote-network/v0`): the accounting of remote's H1 composite
+Remote with the network certifier (`verity/remote-network/v0`), **development**: the accounting of remote's H1 composite
 (`Core.Remote.protocol`, `verity/remote/v0`, whose work is PoUW's period credit, not Pearl+'s run verdict) and
 communication through the auditor's network certifiers at the site's boundary, with no memory challenger. Its
 subprotocols are that composite's three (`Core.Remote.components`: the inference-only policy, PoUW's period credit and
@@ -16,8 +16,10 @@ audit is refused. In the rows form each execution phase's scan reads its `prog` 
 (`progTied`), so there the egress the period bounds reads the run's registered values. A tie only refuses: it adds no
 step that accepts.
 
-Its registration is onsite's boundary condition without onsite's memory condition: every boundary link split by one of
-the auditor's network certifiers (`uncertified`), and no memory challenger's reach (`challengerReach`).
+It is no verifier, as the H1 composite it extends is none: `Core.Composites` doesn't list it, so no configuration names
+it, the Site has no registration composite for it, and no soundness theorem covers it; it runs only as its development
+executable (`remote-network`). The composite of record over the network certifier is the one without PoUW
+(`Core.RemoteNetworkNoPouw`), which reads this module's egress tie.
 
 The network certifier's period reads its audits' answers as its evidence carries them; nothing here holds them to
 sampled proofs' answer (`NetworkCheck.Period`'s "What it doesn't check"). The policy's v0 publishes the declared

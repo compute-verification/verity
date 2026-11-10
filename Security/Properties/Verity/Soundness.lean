@@ -16,10 +16,8 @@ with the errors summed over its subprotocols. `Soundness` is it at onsite, from 
 (`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
 (`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
-verdict and its claim in MACs at the credit its check published, and the inference-only policy). At remote with the
-network certifier it is `SoundnessOf` at that composite, from its four (sampled proofs, PoUW's period, the
-inference-only policy and the network certifier), and `RemoteNetworkNoPouwSoundness` the same statement at remote with
-the network certifier, without PoUW, from its three (sampled proofs, the inference-only policy and the network
+verdict and its claim in MACs at the credit its check published, and the inference-only policy), and
+`RemoteNetworkNoPouwSoundness` the same statement at remote with the network certifier, without PoUW, from its three (sampled proofs, the inference-only policy and the network
 certifier), with no claim about computed gates. They are proved by
 `Properties.Composition` (a composite's acceptance is its components' and its record's) and the union bound over one
 strategy in one game.

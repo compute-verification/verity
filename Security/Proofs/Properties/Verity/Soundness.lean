@@ -52,8 +52,7 @@ open scoped ENNReal
 theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P : BlobProtocol}
     (h : component k a = some P) : P ∈ componentsOf k := by
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
-    simp [componentsOf, Onsite.components, Remote.V1.components, Remote.components, RemoteNetwork.components,
-      RemoteNetworkNoPouw.components]
+    simp [componentsOf, Onsite.components, Remote.V1.components, RemoteNetworkNoPouw.components]
 
 /-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
 ids. -/
@@ -63,12 +62,11 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))
-  · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, at remote
-with the network certifier every window of PoUW's period on the policy's record, and at remote with the network
-certifier, with PoUW or without, every compute audit of the network certifier's period on it. -/
+Pearl+'s run on the policy's record, and at remote with the network certifier, without PoUW, every compute audit of
+the network certifier's period on it. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -81,12 +79,6 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.answerAccepts (Remote.V1.protocol.on s.blobs) s.params s.commitment s.evidence h
     obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Remote.V1.ties ev
       (Composition.checkSame "verity/remote/v1" Remote.V1.tied (s.components .remote) ps c ev) pub prof hch
-    exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
-  · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
-      Properties.Composition.answerAccepts (RemoteNetwork.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied RemoteNetwork.ties ev
-      (Composition.checkSame "verity/remote-network/v0" Remote.tied (s.components .remoteNetwork) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -394,9 +386,9 @@ theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c 
   rw [if_pos ⟨le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
-/-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite and at remote with the network
-certifier it certifies one gate computed, which no play computes, and at remote no credit is published, since the empty
-commitment is no binding of the components' digests. -/
+/-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite, and where remote with the
+network certifier, without PoUW, reads it, it certifies one gate computed, which no play computes, and at remote no
+credit is published, since the empty commitment is no binding of the components' digests. -/
 theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
     (σ : Game.Strategy (exact.game θ F .empty)) (log : List Release) (e : ByteArray × Array ByteArray) :
     ¬ exact.Holds k θ F .empty σ .pouw ⟨θ, F, .empty, log, e.1, e.2⟩ := by
@@ -410,9 +402,6 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     change Composition.decodeCommitment ByteArray.empty = .ok c' at hc
     rw [Composition.decodeCommitment, if_neg h64] at hc
     cases hc
-  · change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
-    simp at h
-    norm_num at h
   · change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
     simp at h
     norm_num at h
@@ -546,19 +535,16 @@ theorem network_fails_of_accepts (k : Verity.Registration.Composite) (hk : Subpr
 end Idle
 
 /-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
-subprotocol meeting its target at onsite, at remote and at remote with the network certifier, with PoUW or without. -/
+subprotocol meeting its target at onsite, at remote and at remote with the network certifier, without PoUW. -/
 theorem soundness_at_of_targets_honest :
     Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
       Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
       Idle.unbounded.Target .onsite .poub ∧ Idle.unbounded.Target .onsite .network ∧
       Idle.unbounded.Target .onsite .wipe ∧ Idle.unbounded.Target .remote .sampled ∧
       Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly ∧
-      Idle.unbounded.Target .remoteNetwork .sampled ∧ Idle.unbounded.Target .remoteNetwork .pouw ∧
-      Idle.unbounded.Target .remoteNetwork .inferenceOnly ∧ Idle.unbounded.Target .remoteNetwork .network ∧
       Idle.unbounded.Target .remoteNetworkNoPouw .sampled ∧ Idle.unbounded.Target .remoteNetworkNoPouw .inferenceOnly ∧
       Idle.unbounded.Target .remoteNetworkNoPouw .network :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
-    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _⟩

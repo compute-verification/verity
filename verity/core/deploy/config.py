@@ -56,12 +56,11 @@ PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite, remote (v1,
-#: Pearl+'s run verdict its work) and remote with the network certifier, with PoUW's period or without, the only ones
-#: protocol soundness covers
+#: Pearl+'s run verdict its work) and remote with the network certifier, without PoUW, the only ones protocol soundness
+#: covers
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs"),
-              "verity/remote-network/v0": ("certifier", "inference-only", "pouw", "sampled-proofs"),
               "verity/remote-network-no-pouw/v0": ("certifier", "inference-only", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")

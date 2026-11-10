@@ -118,13 +118,11 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert e.value.name in ("composite", "requires")
 
 
-def test_the_composites_are_remote_remote_network_with_pouw_or_without_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, REMOTE_NETWORK, REMOTE_NETWORK_NO_POUW)} == {
-        "verity/onsite/v0", "verity/remote/v1", "verity/remote-network/v0", "verity/remote-network-no-pouw/v0"}
+def test_the_composites_are_remote_remote_network_without_pouw_and_onsite():
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, REMOTE_NETWORK_NO_POUW)} == {
+        "verity/onsite/v0", "verity/remote/v1", "verity/remote-network-no-pouw/v0"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
-    assert K.composite(REMOTE_NETWORK[::-1], REG.components) == "verity/remote-network/v0"
     assert K.composite(REMOTE_NETWORK_NO_POUW[::-1], REG.components) == "verity/remote-network-no-pouw/v0"
-    assert K.new("toy", list(REMOTE_NETWORK), REG.components, REG.workloads, COMMIT)["protocols"] == list(REMOTE_NETWORK)
     assert K.new("toy", list(REMOTE_NETWORK_NO_POUW), REG.components, REG.workloads, COMMIT)["protocols"] == list(
         REMOTE_NETWORK_NO_POUW)
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
@@ -132,11 +130,8 @@ def test_the_composites_are_remote_remote_network_with_pouw_or_without_and_onsit
     assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
                                                    "pearl-plus": "verity/pouw/pearl-plus/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
-    assert SP.SUBPROTOCOLS["verity/remote-network/v0"] == {
-        "certifier": "verity/certifier/v0", "inference-only": "verity/inference-only/v0",
-        "pouw": "verity/pouw/period/v1", "sampled-proofs": SP.COMPOSED}
     assert SP.SUBPROTOCOLS["verity/remote-network-no-pouw/v0"] == {
-        n: i for n, i in SP.SUBPROTOCOLS["verity/remote-network/v0"].items() if n != "pouw"}
+        "certifier": "verity/certifier/v0", "inference-only": "verity/inference-only/v0", "sampled-proofs": SP.COMPOSED}
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/one-stage/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
@@ -360,14 +355,17 @@ def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     assert "network-certifier" not in capsys.readouterr().out
 
 
-def test_remotes_development_composite_is_no_composite():
-    """H1's development composite (remote with PoUW's period as its work) is no composite a configuration can name:
-    protocol soundness covers only onsite and remote v1, so `check` refuses it by name."""
-    assert refused(edit(lambda c: c.update(protocols=list(REMOTE_V0)))) == "composite"
+@pytest.mark.parametrize(("protocols", "composite"), [(REMOTE_V0, "verity/remote/v0"),
+                                                      (REMOTE_NETWORK, "verity/remote-network/v0")])
+def test_remotes_development_composites_are_no_composite(protocols, composite):
+    """The development composites over PoUW's period (H1's, remote with the period as its work, and remote with the
+    network certifier beside it) are no composite a configuration can name: protocol soundness covers only onsite,
+    remote v1 and remote with the network certifier without PoUW, so `check` refuses each by name."""
+    assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
-        K.composite(REMOTE_V0, REG.components)
+        K.composite(protocols, REG.components)
     assert e.value.name == "composite" and "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)" in str(e.value)
-    assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
+    assert composite not in K.COMPOSITES and composite not in SP.SUBPROTOCOLS
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):

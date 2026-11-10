@@ -37,7 +37,7 @@
   "CoreComposites": {
    "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw"],
    "except": [],
-   "why": "the composite a deployment's listed subprotocols make, onsite, remote, or remote with the network certifier with PoUW or without: code over the four composites, no Mathlib and nothing of Security"
+   "why": "the composite a deployment's listed subprotocols make, onsite, remote, or remote with the network certifier without PoUW: code over the three composites, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

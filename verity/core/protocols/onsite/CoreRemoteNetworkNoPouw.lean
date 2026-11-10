@@ -1,8 +1,9 @@
 /-
-Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`): remote with the network
-certifier's subprotocols but PoUW's period credit, registered as a composite of its own. Its subprotocols are the
-network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`), the inference-only policy
-(`NciCheck.Protocol.protocol`, `verity/inference-only/v0`) and sampled proofs (`VStar.Recursive.Sampled.protocol`,
+Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`): the subprotocols of remote with
+the network certifier's development composite (`Core.RemoteNetwork`) but PoUW's period credit, registered as a
+composite of its own. Its subprotocols are the network certifier over the period (`NetworkCheck.Period.protocol`,
+`verity/certifier/v0`), the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`) and
+sampled proofs (`VStar.Recursive.Sampled.protocol`,
 `verity/sampled-proofs/v1`), each as remote with the network certifier reads it. `Core.Composition.tiedSameB` composes
 them on the caller's blobs under remote's record subprotocols (`Core.Remote.tied`) and remote with the network
 certifier's egress tie (`Core.RemoteNetwork.egress`), so its verdict is the AND of its three subprotocols' over one
@@ -15,10 +16,11 @@ with the network certifier with a subprotocol switched off: it has its own id, i
 (`Core.Site.Registration.Composite.remoteNetworkNoPouw`) and its own place among the composites protocol soundness
 covers (`Core.Composites`).
 
-Its registration is remote with the network certifier's: every boundary link split by one of the auditor's network
-certifiers (`uncertified`), and no memory challenger's reach (`challengerReach`). What it doesn't check is remote with
-the network certifier's: the network certifier's period reads its audits' answers as its evidence carries them, and the
-policy's v0 publishes the declared division and each inference block's profile in the clear (`Core.Remote`).
+Its registration is onsite's boundary condition without onsite's memory condition: every boundary link split by one of
+the auditor's network certifiers (`uncertified`), and no memory challenger's reach (`challengerReach`). What it doesn't
+check is remote with the network certifier's: the network certifier's period reads its audits' answers as its evidence
+carries them, and the policy's v0 publishes the declared division and each inference block's profile in the clear
+(`Core.Remote`).
 -/
 import CoreComposition.Cases
 import CoreComposition.Stubs

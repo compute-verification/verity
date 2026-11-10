@@ -144,14 +144,12 @@ def ofRegEntry : Verity.Registration.Entry → Core.Site.Registration.Entry
 def composite : Core.Site.Registration.Composite → Verity.Registration.Composite
   | .onsite => .onsite
   | .remote => .remote
-  | .remoteNetwork => .remoteNetwork
   | .remoteNetworkNoPouw => .remoteNetworkNoPouw
 
 /-- The code's composite of a spec composite. -/
 def ofComposite : Verity.Registration.Composite → Core.Site.Registration.Composite
   | .onsite => .onsite
   | .remote => .remote
-  | .remoteNetwork => .remoteNetwork
   | .remoteNetworkNoPouw => .remoteNetworkNoPouw
 
 /-- The spec's refusal of a code refusal. -/
