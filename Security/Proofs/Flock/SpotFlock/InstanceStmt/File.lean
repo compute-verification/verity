@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.InstanceStmt.Meta
 public import Proofs.Flock.SessionLoop.Concrete.File
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
+import Proofs.Pouw.Period.Sort
 import Flock.HmRow
 import Flock.Net
 import Flock.HmNets
@@ -170,6 +171,12 @@ theorem part_hex {p : Lean.Json} (hp : p = (metaJ.getObjVal? "partition").toOpti
   subst hp
   exact sha512Hex_of _ (by decide +kernel)
 
+/-- The rows' names in order, as `HmOut.checkRows` sorts them: `qsort` is well-founded, so the kernel does not unfold
+it. -/
+theorem qsort_io {X : Array String} (hX : X = #["i0", "o0"]) : X.qsort (· < ·) = #["i0", "o0"] := by
+  subst hX
+  exact Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := #["i0", "o0"]) (by decide))
+
 fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
     (hcl : HmRow.classOf (bytesOf ls lh) "flock-circuit copy16" metaJ = .ok C)
@@ -180,8 +187,8 @@ fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
       HmNets.check c = .ok ()) :
     HmRow.parse tz (bytesOf ls lh) [] by
-  [hH, hcl, prog_hex, part_hex, hutf ls lh, hsplit ls lh, lines_if _, getD_toArray, getElem!_toArray, lines1, trim_meta, starts_meta,
-    drop_meta, parse_meta, trim_of, size_lines ls lh hls hlh, line_unit ls lh hls hlh, line_sha ls lh hls hlh,
+  [hH, hcl, prog_hex, part_hex, hutf ls lh, hsplit ls lh, lines_if _, getD_toArray, getElem!_toArray, lines1,
+    trim_meta, starts_meta, drop_meta, parse_meta, trim_of, size_lines ls lh hls hlh, line_unit ls lh hls hlh, line_sha ls lh hls hlh,
     line_hm ls lh hls hlh, tokens3, getD3, toNat?_toString, ext_unit ls lh hls hlh, ext_sha ls lh hls hlh,
     ext_hm ls lh hls hlh, parse_unit, hps, hph, forIn_yield, forIn_done, hc1, hc2, bne_self, hck, unit_eq, open_none,
     res_none, sparse_none, opening_none]
@@ -199,7 +206,7 @@ fwd_def cO parseOut_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Spar
     (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
       HmNets.check c = .ok ()) :
     HmOut.parse tz (bytesOf ls lh) [] by
-  [parse_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck]
+  [parse_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck, qsort_io]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse]
   shallow [metaText]
