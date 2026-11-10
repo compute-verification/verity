@@ -74,6 +74,22 @@ def test_the_interior_program_takes_a_per_span_value_at_q_typed_by_its_leaf_type
     assert P.program_digest(stream.interior_program(Q)) != P.program_digest(plain.interior_program(Q))
 
 
+def test_the_interior_program_takes_the_streams_values_then_its_per_span_values():
+    """The interior program's parameters are the stream's `values`, then its `span_values` at Q: the program, so the
+    digest, both verifiers check an interior record against and an integration registers its values in. The other order
+    is another program."""
+    x = ("x", 2, 16)
+    stream = FC.Stream(_spec(), WINDOW, replay=MIXED, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
+                       values=(x,), span_values=(HIST,))
+    for q in (1, Q):
+        assert stream.interior_program(q).fn.signature()[0][:2] == (("x", Array(2, Value(16))), ("hist", Array(q, DIGEST)))
+    cells = [(w, n * Q) for w, n in zip(WINDOW, stream.cells)]
+    span = ("hist", Q, (8, 64, 1))
+    got = P.program_digest(stream.interior_program(Q))
+    assert got == P.program_digest(P.mixed_population_program(cells, values=(x, span)))
+    assert got != P.program_digest(P.mixed_population_program(cells, values=(span, x)))
+
+
 def test_a_per_span_value_of_digests_is_registered_in_digest_order_and_its_flat_form_refused():
     """The interior registers the supplied root R7 fills in Digest order, both verifiers agreeing; the same roots
     committed in the flat form, a `Digest` port's 32 u16 words a row, are refused (R7: another row width, so another

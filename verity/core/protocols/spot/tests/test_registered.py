@@ -859,6 +859,38 @@ def test_r7_refuses_a_supplied_value_it_cannot_fill():
     assert R.check(rec, **{**check, "supplied": x}).ok
 
 
+def test_a_supplied_value_in_a_bit_row_format_is_its_leaves_packed():
+    """Where the verifier names a supplied value's row format (`schemas`: `row/v2` or `row-seg/v1`, the format of the
+    port that reads it), R7 commits each row's leaves packed into that format's words, each leaf's bits least significant
+    first (`bit_words`): a `Digest` row in `row/v2` is 32 u16 words, each big-endian 64-bit word's u16 pieces low first.
+    Both verifiers accept the record registering it so; the same rows in `row/v1` or in the other bit-row format are
+    refused."""
+    d = hashlib.sha512(b"a table's root").digest()
+    assert G.bit_words(G.digest_leaves(d), 1, 16) == [(int.from_bytes(d[i:i + 8], "big") >> (16 * j)) & 0xFFFF
+                                                      for i in range(0, 64, 8) for j in range(4)]
+    assert G.bit_words([0x5, 0xA], 4, 8) == [0xA5] and G.bit_words([0x12345678], 32, 16) == [0x5678, 0x1234]
+    for bad in (([1, 0, 1], 1, 16), ([2], 1, 1)):
+        with pytest.raises(ValueError):
+            G.bit_words(*bad)
+    base, check, w, flat = _seeded_case(1)
+    prog, sup = check["program"], G.sources(SUPPLIED)["pouw.roots"]
+    bare = {**base, "registered": [w.entry()]}
+    leaves = G.supplied_rows(prog, "pouw.roots", sup, bare, ["pouw.roots"])
+    words = {**check["registered"], "pouw.roots": 64}
+    for schema, other in ((G.SCHEMA_V2, G.SCHEMA_SEG), (G.SCHEMA_SEG, G.SCHEMA_V2)):
+        roots = G.supplied_value(prog, "pouw.roots", sup, bare, ["pouw.roots"], schema=schema)
+        assert roots.schema == schema and (roots.words, roots.word_bits, roots.leaves) == (64, 16, 2)
+        assert [list(r) for r in roots.rows] == [G.bit_words(r, 1, 16) for r in leaves]
+        rec = {**base, "registered": [w.entry(), roots.entry()]}
+        mine = {**check, "registered": words, "schemas": {"pouw.roots": schema}}
+        got = V.check(rec, **mine)
+        assert got.ok and got.codes == (), (schema, got)
+        assert R.check(rec, **{**mine, "schemas": {"pouw.roots": other}}).codes == ("R7-supplied",)
+        assert not R.check(rec, **{**check, "registered": words}).ok
+        assert R.check(base, **mine).codes == ("R7-words", "R7-domain", "R7-supplied")
+    assert flat.schema == G.SCHEMA and R.check(base, **check).ok
+
+
 def _history(body_flip: bool = False) -> tuple[dict, str, str]:
     """A history table `k_hist` of writer `W`'s three `o` strings, its one member's public body under the leaf layer
     of that body and a reader's, the window registering its root: the verifier's `history` parameter, the leaf layer
