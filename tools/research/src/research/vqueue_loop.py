@@ -19,7 +19,8 @@ the ready PRs it contains; `files` is its change against its merge base with `ma
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
-the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+the command's (`--lean`, `--pending-hours`), and `wide` the PRs `--wide-file` names, read each tick as the priority file is
+(`World.wide`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
@@ -134,6 +135,9 @@ GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executo
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
+#: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
+#: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
+WIDE = Path("/data/vqueue/live/wide")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
 INTERVAL_S = 60
@@ -515,9 +519,11 @@ class World:
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
-                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None):
+                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None,
+                 wide_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
+        self.wide_file = wide_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -658,6 +664,11 @@ class World:
             place(n)
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+
+    def wide(self) -> frozenset[int]:
+        """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is
+        missing or empty."""
+        return frozenset(priority_list(self.wide_file, "--wide-file")) if self.wide_file else frozenset()
 
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
         """drive's verdict carry (`Driver._carry_verdicts`), as drive.toml's `verdict_carry` at `main` says: an admitted PR
@@ -1490,6 +1501,7 @@ class Loop:
         w = self.world
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
+        wide = w.wide()
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready = []
         for x in w.ready(main):
@@ -1536,7 +1548,7 @@ class Loop:
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
-                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects, wide=wide)
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], dict(w.carried))
 
     def _shadow_main(self, past: Past, origin: str) -> str:
@@ -1703,8 +1715,9 @@ class Loop:
     def summary(self, t: Tick) -> str:
         s = t.snap
         lines = [f"tick {t.n}: main {s.main[:12]}" + (f" (origin's {t.origin[:12]})" if t.origin != s.main else ""),
-                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change): "
-                 + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "") for x in s.ready)]
+                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change, W a wide one): "
+                 + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "")
+                            + ("W" if vqueue._wide(x, s.wide) else "") for x in s.ready)]
         for c in s.candidates:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
@@ -2154,6 +2167,10 @@ def main(argv: list[str]) -> int:
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate that change Lean, a lock or a "
                                                            f"spec (default {LEAN})")
+    ap.add_argument("--wide-file", type=Path, default=WIDE,
+                    help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
+                         f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
+                         f"one takes none until it is on `main`; none while the file is missing or empty (default {WIDE})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
@@ -2198,7 +2215,7 @@ def main(argv: list[str]) -> int:
         q.branch = "main"
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
-                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
+                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, wide_file=a.wide_file)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects)
         if a.once or a.dry_run:

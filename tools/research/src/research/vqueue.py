@@ -112,6 +112,8 @@ class Snapshot:
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
                                    # error that ran out of attempts on two or more nodes, as an outage's do
+    wide: frozenset[int] = frozenset()  # the PRs whose Lean change is wide: one of them that `lean` counts (`Ready.lean`)
+                                   # fills that cap alone, and a batch on a candidate holding one takes none `lean` counts
 
 
 @dataclass(frozen=True)
@@ -194,7 +196,8 @@ BASE_DROPPED = "its base was dropped"
 def decide(s: Snapshot) -> list[Action]:
     """The actions ``s`` calls for, in the order they are applied: the drops of the candidates off main's chain, what the
     lowest candidate's verdict calls for, then, while the chain is shorter than `depth`, one batch built on its top: one a
-    tick, since the batch above it would sit on the sha the loop gives this one.
+    tick, since the batch above it would sit on the sha the loop gives this one.  While the chain holds a wide member
+    (`Snapshot.wide`), the batch takes no Lean member: built on it, a Lean change would build again what the wide one built.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -252,7 +255,8 @@ def decide(s: Snapshot) -> list[Action]:
         base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
-        members = _batch(pool, _outcomes(s, acts), s.batch, s.lean)
+        lean = 0 if any(_wide(ready[m], s.wide) for c in chain for m in c.members) else s.lean
+        members = _batch(pool, _outcomes(s, acts), s.batch, lean, s.wide)
         if members:
             acts.append(Build(members, base, s.depth - len(chain)))
     return acts
@@ -483,7 +487,7 @@ def _waiting(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], lande
     """Whether another PR waits behind the lowest candidate: in a candidate above it, or in the next batch."""
     busy = landed | set(chain[0].members)
     pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
-    return len(chain) > 1 or bool(_batch(pool, outcomes, s.batch, s.lean))
+    return len(chain) > 1 or bool(_batch(pool, outcomes, s.batch, s.lean, s.wide))
 
 
 def _tree_why(c: Candidate) -> str:
@@ -491,10 +495,16 @@ def _tree_why(c: Candidate) -> str:
         f.task for f in _tree(c.verdict))
 
 
-def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> tuple[int, ...]:
+def _wide(r: Ready, wide: frozenset[int]) -> bool:
+    """Whether ``r`` is a wide member: ``wide`` names it and the `lean` cap counts it (`Ready.lean`)."""
+    return r.lean and r.number in wide
+
+
+def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int]) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
-    most ``lean`` Lean PRs.  A suspect's cap is half the suspects of the newest outcome holding it at its head, at least 1;
-    a PR set aside (`infra`) comes after every other, alone, the longest set aside first."""
+    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that cap.  A suspect's cap is half
+    the suspects of the newest outcome holding it at its head, at least 1; a PR set aside (`infra`) comes after every other,
+    alone, the longest set aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
     at = {id(o): i for i, o in enumerate(outcomes)}
     batch: list[int] = []
@@ -502,8 +512,8 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> 
     for r in sorted(pool, key=lambda r: at[id(o)] if (o := newest.get(r.number)) is not None and o.state == INFRA else -1):
         if len(batch) >= limit:
             break
-        o = newest.get(r.number)
-        if (o is not None and o.state == PASS) or (r.lean and leans >= lean):
+        o, w = newest.get(r.number), _wide(r, wide)
+        if (o is not None and o.state == PASS) or (r.lean and (leans >= lean or w and leans > 0)):
             continue
         if o is not None and o.state == INFRA and batch:
             break
@@ -511,7 +521,7 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> 
                1 if o is not None and o.state == INFRA else size)
         if len(batch) < cap:
             batch.append(r.number)
-            limit, leans = min(limit, cap), leans + r.lean
+            limit, leans = min(limit, cap), lean if w else leans + r.lean
     return tuple(batch)
 
 
