@@ -7,8 +7,10 @@
 #              PT_NS, or of its own list (UNIT@N,N...; a census type's N may be stage.py's full or full/D), PT_JOBS at a
 #              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
-#              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os);
-#              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu
+#              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os),
+#              each drawing every unit (`--draw subset:N`: Lean's verifier refuses a session without a draw);
+#              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu;
+#              out/DEV/NAME/start and done hold the statement's start and end (epoch seconds)
 #   4. prove_time.py: out/summary.json
 # env: PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights"  PT_NS="16 64"  PT_DEVICE=gpu (or cpu)  PT_JOBS=4  WARM=1
 #      RUNS=3  VCPUS=4  LEASE_MIN=30  SM=120  PT_CARD (gpu: the leased card's, from nvidia-smi)  FLOCK_WORK (default a
@@ -110,10 +112,11 @@ gpu_sample() {
 session() {
   local nm=$(name "$1" $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
-  mkdir -p $o $O/stage/$nm; rm -rf $d/sessions; cp $d/stage.json $O/stage/$nm/
+  mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
-  taskset -c $VCPU $B serve --zk --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin --circuit $d/circuit.txt \
-    --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
+  local N=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['n'])" $d/stage.json)
+  taskset -c $VCPU $B serve --zk --draw subset:$N --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin \
+    --circuit $d/circuit.txt --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
   local SP=$!
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   [ $DEV = gpu ] && { gpu_sample $o & GS=$!; }
@@ -128,6 +131,7 @@ session() {
   fi
   [ -n "$GS" ] && { touch $o/stop; wait $GS; }
   kill $SP; wait $SP 2>/dev/null
+  date +%s.%N > $o/done
   grep -h panicked $o/prove.err | head -3
   return 0
 }
