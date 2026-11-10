@@ -2690,6 +2690,57 @@ def test_with_head_statuses_a_name_the_candidate_lacks_is_read_on_its_lone_membe
     assert gated(batch=2).tick() == [] and hub.main() == sha     # two members: no one head's statuses are the candidate's
 
 
+def test_under_the_statuses_gate_a_candidate_is_the_loop_s_own_merge_commits_one_a_member_and_never_a_member_s_head(hub):
+    """Each member is merged by `git commit-tree` (`Queue._merge`), so a candidate is a commit no service has seen, even
+    where a member's head sits on `main`'s tip and a plain merge would fast-forward: it has that head's tree and is another
+    commit.  A PR whose head `main` holds is no member.  A member whose head the tip already holds makes no commit
+    (`_merge` returns the tip), as a PR opened at a head the candidate below already has: it is left out, its owner told
+    once as of one that doesn't merge, and the candidate of it alone is built as nothing each tick: no ref is pushed, so none
+    at a commit pushed before.  It lands with the candidate that has its head."""
+    main, gh, origin = hub.main(), hub.o.gh, hub.o.origin
+
+    def parents(c: str) -> list[str]:
+        return _git(origin, "rev-list", "--parents", "-1", c).split()[1:]
+
+    def tree(c: str) -> str:
+        return _git(origin, "rev-parse", f"{c}^{{tree}}")
+
+    head = hub.put(1, {"a.txt": "1\n"})
+    gh.put(9, main)                                             # `main` itself: nothing to land, so no member
+    loop = _gated(hub, batch=3, depth=2)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert parents(head) == [main] and built["members"] == [1]  # on `main`'s tip: a plain merge is that head
+    assert sha != head and parents(sha) == [main, head] and tree(sha) == tree(head) and hub.queued() == {branch(sha): sha}
+    for name in (WEB, DOCS):
+        gh.status(sha, name, "success")
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and hub.main() == sha
+    assert set(gh.prs) == set()                                 # #9 too: `main` holds its head
+    lower = hub.o.change({"b.txt": "2\n"})
+    gh.put(2, upper := hub.o.change({"c.txt": "3\n"}, base=lower))
+    other = hub.put(4, {"d.txt": "4\n"})
+    (built,) = loop.tick()
+    cand, heads = built["sha"], {head, lower, upper, other}
+    assert (built["members"], built["heads"]) == ([2, 4], [upper, other]) and cand not in heads
+    first, second = parents(cand)
+    assert (parents(first), second) == ([sha, upper], other) and first not in heads and tree(first) == tree(upper)
+    assert _git(origin, "rev-list", "--first-parent", f"{sha}..{cand}").split() == [cand, first]     # one a member
+    gh.put(3, lower)                                            # opened since, at a head #2's holds: the candidate has it
+    for _ in range(2):                                          # each tick while that candidate waits
+        skip, none = loop.tick()
+        assert (skip["action"], skip["members"], skip["base"]) == ("skip", [3], cand)
+        assert skip["why"] == f"its head {lower[:12]} is already in what it merges onto"
+        assert (none["action"], none["sha"], none["members"], none["why"]) == ("build", None, [], "no member merges onto its base")
+        assert "enqueued" not in none and hub.queued() == {branch(cand): cand} and len(hub.posts) == 1
+    for name in (WEB, DOCS):
+        gh.status(cand, name, "success")
+    *landed, skip, none = loop.tick()                           # #3 was ready when the tick began: left out once more
+    assert _acts(landed) == ["advance", "on_main", "drop"] and (skip["base"], none["sha"]) == (cand, None)
+    assert hub.main() == cand and set(gh.prs) == set() and hub.queued() == {} and loop.tick() == []
+    pushed = {r["sha"] for r in hub.lines() if r["action"] == "build" and r["sha"]}
+    assert pushed == {sha, cand} and not pushed & heads
+
+
 def _command(hub: Env, monkeypatch, capsys) -> tuple:
     """The command itself on ``hub``, in a clone of its origin with a store of its own: `research data label` on a PR's head,
     and one tick of `research queue vqueue --gate statuses` on `WEB` and `DOCS` (with ``more`` flags), as the lines it logged."""

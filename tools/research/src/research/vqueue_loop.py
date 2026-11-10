@@ -81,7 +81,12 @@ and says why; a name the other read answers needs none of it.  With `--head-stat
 of is read on its lone member's head while the candidate is that head fast-forwarded: its tree is the head's
 (`World.same_tree`), as the merge of a head that holds its base is.  That is for a service that reports on PR heads alone,
 and a status there is of the head's files, not of its commit: a service that builds only what differs from a commit's parent
-may say success of a head it never built.  The loop then runs none of verity's own machinery (`World.detach`): no graph2 (no
+may say success of a head it never built.  It is only for a provider that builds a pushed commit it has seen before: one
+that builds a commit once (Vercel, so never on compute-verification/infra) keeps a head's skipped build for good.  A candidate
+itself is always the loop's own merge commits, one a member (`Queue._merge`, by `git commit-tree`), even where a member's head
+sits on its base's tip and a plain merge would fast-forward: a commit no provider has seen, never a member's head.  A member
+whose head its base already holds makes no commit and is left out, and a candidate of such members alone isn't pushed.  The
+loop then runs none of verity's own machinery (`World.detach`): no graph2 (no
 enqueue, listing, verdict, rerun or cancel: a build and a retry are logged `enqueued`, the push being what asks, so `tries`
 and the pending clock read as before), no run beside a check, no freeze, no priority file unless `--priority-file` names one
 (rank is then mark time), and no flake, base, dispute or compare ring; no failure is inherited, so none is rung red.  Its
@@ -2413,8 +2418,11 @@ def main(argv: list[str]) -> int:
                          f"(default Vercel's, `{SKIPPED}`; a TEXT given replaces it)")
     ap.add_argument("--head-statuses", action="store_true",
                     help=f"with --gate {STATUSES_GATE}: a named status a candidate's commit has none of is read on its lone "
-                         "member's head, while the candidate is that head fast-forwarded (its tree is the head's), for a "
-                         "service that reports on PR heads and not on pushed branches")
+                         "member's head, while the candidate's tree is that head's (the head holds its base), for a service "
+                         "that reports on PR heads and not on pushed branches; only for a provider that builds a pushed "
+                         "commit it has seen before, and never for compute-verification/infra: its provider builds a commit "
+                         "once, so a head keeps a skipped build's status for good, and a candidate there is always the "
+                         "loop's own merge commit, which the provider hasn't seen")
     ap.add_argument("--shards", type=int, default=None,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, an N ci.toml has a shard plan for, one "
                          f"launch each (default {SHARDS})")
