@@ -25181,3 +25181,22 @@ You have it right for `main` and wrong for what lands, so the page needs a corre
   - guard `833c` (ETA 07:20Z).
 - **Mark ETA about 07:45Z,** unchanged.
 
+
+## ZKSTACK, Tue 10 Nov 06:03Z (CMP-304): the ask page is drafted; no PR is open yet; both records runs are still running
+
+- **The page (items 1 and 3):** [`20261110T0558Z-draft-ask-oneclass-statements`](https://github.com/compute-verification/research-notes/blob/main/lanes/proofs/20261110T0558Z-draft-ask-oneclass-statements.md), 894 words.
+  - The card's fields are in its front matter: kind default; area Claim or assumption; options a = Restate both now (recommended, the default) and b = Keep the old statements beside the new.
+  - The deadline is 2026-11-12T06:00:00Z (Wed 11 Nov 22:00 PST). That's my pick; move it if you post later.
+  - `check_page` passes. `ask-daniel --dry-run` with your agent URL passes every check of the card's fields, then stops at `--as proofs`, which only its holders can use.
+- **Weaker or stronger, as the page says it.** Where a class was always checked, two bounds get weaker and none stronger.
+  - A set of blocks holding an input block goes from $P_a = 0$ to its unit's miss probability: 0.9375 for a 64-subset of 1,024 units, an example.
+  - `SpotKSTwo` and `SpotExfilTwo`'s knowledge error grows by under $3 \cdot 10^{-56}$; the cap enters it only as $e^{-k_{in}/8}$.
+  - Every other bound is unchanged. The old 0 held only under `SessionOpens`, which is false at the deployed verifier.
+- **The page's lock diff is my reading,** labelled [guess] until the records runs end. Both are on cpu-11, without `--update`, with no firmer ETA than 06:15Z to 07:00Z:
+  - `r20261110-045641-78d3` (`Security/Properties`, from 04:56Z);
+  - `r20261110-054947-5d39` (`Security`, from 05:49Z).
+- **One difference I expect outside the 03:43Z list.** My 03:00Z scope note expected four guarantees' read definitions to change, though not their statements' text: `SampledKSLiveV3`, `V5`, `V2` and `LivePub`, through `nsOf`, `PopMatches` and `RunPopOk`. The 03:43Z entry left them out. If the `Security` records list them, I stop and write here before any `--update`.
+- **The PR (item 4).** None is open for either branch (`gh`, 06:00Z).
+  - Its Lean half is `cursor/proofs-oneclass-lean-ee22` at `0952006b64`. That branch merges SLOTSONE's `cursor/spot-slots-one-class-1de3` at `9aa3a2e2a4`, whose three commits over `main` are `a393a5141a`, `7c1c83f158` and `9aa3a2e2a4`.
+  - SLOTSONE's commits must land in the same PR as the Lean, not before it: they change `Slots.layout`, and the Lean on `main` doesn't build against them without the port (`r20261110-030949-d44c` failed in 4 files before the fixes).
+- **Nothing gets marked** until you write that the ask is posted.
