@@ -1110,26 +1110,43 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 OVER_PARTITION_BUDGET: dict[str, str] = {}
 
 
+_OVER: list[dict[str, str]] = []
+
+
 def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
-    """{the suite's Calls over `Options.partition_max_gates` or `Options.partition_max_leaves`: which}.  Gate counts are the
-    catalog's (`Catalog.reached`): a target made from its record has no body built, and building every Call's would take about
-    half an hour."""
+    """{the suite's Calls over `Options.partition_max_gates` or `Options.partition_max_leaves`: which}, read once a process (its
+    catalog is the session's).  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has no body
+    built, and building every Call's would take about half an hour."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
-    suite, out = catalog.suite, {}
-    for k in suite:
-        if catalog.reached[k][0] in calls:
-            if (n := catalog.reached[k][1]) > OPTS.partition_max_gates:
-                out[k] = f"{n} gates"
-            elif (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves:
-                out[k] = f"{n} leaves"
-    return out
+    if not _OVER:
+        suite, out = catalog.suite, {}
+        for k in suite:
+            if catalog.reached[k][0] in calls:
+                if (n := catalog.reached[k][1]) > OPTS.partition_max_gates:
+                    out[k] = f"{n} gates"
+                elif (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves:
+                    out[k] = f"{n} leaves"
+        _OVER.append(out)
+    return _OVER[0]
+
+
+#: `checks.uncut` under `OPTS` by Definition id, and `checks.callee_gap`'s ``seen``, for every Definition the tests below judge:
+#: each is judged once a process, where a body of a million nodes calls the same few Definitions
+_UNCUT: dict[str, str | None] = {}
+_GAPS: dict[str, str | None] = {}
+
+
+def _uncut(fn) -> str | None:
+    if fn.id not in _UNCUT:
+        _UNCUT[fn.id] = CK.uncut(fn, OPTS)
+    return _UNCUT[fn.id]
 
 
 def _gap(fn) -> str | None:
     """Why a Call of ``fn`` over the budget passes with its partition unchecked, or None: for one `checks.uncut` leaves to its
     callees (a member that the cut member by member leaves whole included), `checks.callee_gap`."""
-    return CK.callee_gap(fn, OPTS) if CK.uncut(fn, OPTS) is not None else None
+    return CK.callee_gap(fn, OPTS, _GAPS) if _uncut(fn) is not None else None
 
 
 _WALK: dict = {}
@@ -1153,18 +1170,18 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
         seen: set[str] = set()
         while stack:
             fn = stack.pop()
-            if fn.id in seen or CK.uncut(fn, OPTS) is None:
+            if fn.id in seen or _uncut(fn) is None:
                 continue
             seen.add(fn.id)
             if fn.id in OVER_PARTITION_BUDGET:
                 held.add(fn.id)
                 continue
-            if (gap := CK.callee_gap(fn, OPTS)) is not None:
+            if (gap := CK.callee_gap(fn, OPTS, _GAPS)) is not None:
                 gaps[fn.id] = gap
-            for n in fn.body.nodes if hasattr(fn, "body") else ():
-                if (f := TG.family(n.fn)) not in own:
+            for c in CK._callees(fn) if hasattr(fn, "body") else ():    # each Definition the body calls, once
+                if (f := TG.family(c)) not in own:
                     want.setdefault(f, set()).add(TG.family(fn))
-                stack.append(n.fn)
+                stack.append(c)
         _WALK.update(want=want, held=held, gaps=gaps)
     return _WALK["want"], _WALK["held"], _WALK["gaps"]
 
