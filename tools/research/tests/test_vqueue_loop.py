@@ -2706,6 +2706,41 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
     assert loop.tick() == [] and len(runs.launches) == 6             # `main`'s check is the candidate's
 
 
+@pytest.mark.parametrize("graph2", ["fail", "pass"])
+def test_under_gate_check_a_drop_cancels_no_graph2_check_and_one_that_ends_after_its_candidate_landed_is_compared_once(
+        env, monkeypatch, graph2):
+    """In shadow graph2's check runs to its verdict: a candidate whose check passed lands while graph2's still runs, and
+    once graph2's own verdict says it ended the two are compared in one line, after the drop; a candidate dropped before
+    its own check ended has nothing to compare, and its graph2 check isn't cancelled either."""
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    script = env.graph2_script(loop, {"state": "pending", "pending": 1})
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(env.main())
+    runs.end(sha)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha
+    assert logged[-1]["cancel"] == "none: graph2, in shadow, runs to its verdict"
+    assert logged[-1]["compare"] == {"check": PASS, "said": PASS}
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", graph2)
+    assert loop.tick() == []                                     # graph2's own verdict still counts a task pending
+    Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": graph2}))
+    (compared,) = loop.tick()
+    why = {"fail": "disagree: graph2 fail (pytest:a), the check pass", "pass": "agree: graph2 and the check pass"}[graph2]
+    assert (compared["action"], compared["sha"], compared["why"], compared["dropped"]) == ("compare", sha, why, True)
+    assert (compared["graph2"], compared["check"], compared["members"]) == (graph2, PASS, [1])
+    assert f"research queue vqueue: tick 4: {sha[:12]} graph2 in shadow, after its drop: {why}" in env.out
+    assert loop.tick() == []                                     # compared once
+    two = env.put(2, {"b.txt": "2\n"})
+    built, _ = loop.tick()
+    env.o.gh.ready.discard((2, two))                             # its ready mark withdrawn: dropped while its check runs
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["sha"], "compare" in drop) == ("drop", built["sha"], False)
+    assert drop["cancel"] == "none: graph2, in shadow, runs to its verdict" and not Path(f"{script}.cancel").exists()
+
+
 def test_under_gate_check_a_step_one_shard_fails_fails_the_candidate_though_another_shard_and_graph2_passed_it(env, monkeypatch):
     """pytest's suites are split over two shards: one's pass doesn't answer for the other's failure.  The candidate fails
     on the step, its `Failed` naming the suite's failing test and the test's file, and its member is ejected, while
