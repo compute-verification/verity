@@ -53,11 +53,12 @@ PACK = "verdicts.tar.gz"
 #: the pack paths it carries (`verdicts.entries`): the packages' passes with the facts kept beside them, and the modules'
 #: replay entries. Nothing else a process of this node stored meanwhile, a suite's pass or a circuit-check report, is this audit's
 LEAN_VERDICTS = ("check/lean-audit/", "check/lean-replay/")
-#: what the audit found, in `--out`: `facts`' object
+#: what `audit_merge` found, in `--out`: the packages reached and those audited, the module count, whether it is wide, the
+#: audit's exit and how many verdicts the pack holds
 FACTS = "warm.json"
 FACTS_SCHEMA = "lean-warm/v1"
-#: the module count (`moved`) from which a change is wide. The Lean changes the queue holds fall well to either side of it:
-#: a change to a leaf proof moves tens of modules, and one under the modules most proofs import moves over a thousand
+#: the module count (`moved`) from which a change is wide: between a change to a leaf proof and one under the modules most
+#: proofs import
 WIDE = 500
 #: the most the last line says, prefix included: a caller that quotes a line's tail quotes this one whole
 LINE = 300
