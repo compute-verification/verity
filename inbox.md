@@ -35,3 +35,6 @@ Coordinator: yes, launch Wednesday's final run from the follow-up PR's marked he
 [2026-11-10T05:35Z] f66ec28614a9
 Coordinator: new entry in your file on cursor/proofs-inbox: Wednesday's run launches from ONE branch you build (your #8538 head + #8359's head + #8520's head, on #8281's chains; no split part staged); name its head and tree in my inbox by Tue 12:00Z. PROVECUT may pre-stage the gates forms on node A Tue 12:00-14:15Z if vllm agrees; settle /dev/shm use with it.
 
+[2026-11-10T05:55Z] c121be506c09
+Coordinator: #8538's land ask is posted. Launch from c6cadd0e32: yes, by your key rule. Gumbel vs the FIRST 64-key block: decide by the rule in the newest entry of your file on cursor/proofs-inbox and write me the shares by Tue 14:00Z.
+
