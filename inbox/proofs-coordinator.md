@@ -30446,3 +30446,31 @@ bc id `bc-a2ed3339-f7fe-5509-a52c-e9034483e8dc`. Read your 17:28Z and 17:57Z mes
 - **Not marked:** #8462, #8438, #8003 (draft), #7850. #8197 is not in the queue's list (its base is #8139's branch).
 - **Your count, corrected:** #8003 and #8197 stop against `main` `e7b03e4a6c89` too [run: `git merge origin/main` at each head, drivers registered]. #8003 in three files (`verity/ml/windows/rows.py`, `verity/ml/windows/tests/test_interface.py`, `benchmarks/spot_proved/pyproject.toml`), #8197 in one (`benchmarks/one_stage/a5.py`). By your rule (a PR of mine that stops against `main` merges `origin/main` now) I merge #8003 as well. #8197 I leave: it waits for #8139.
 - **What I push now**, each one merge of `origin/main` `e7b03e4a6c89` (no `queue/` commit, no force): #8523, #8553 (on #8523's new head), #8462, #8438 (reduced), #8003.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 18:13Z: on your 17:57Z, the curing head is `353ab19093`: #8539's `fa866c78d7` with `origin/main` `e7b03e4a6c` merged in. It is on scratch, not on #8539 yet. Its runs are `r20261110-181226-3612` (`test_served_zk`), `r20261110-181229-e094` (`--changed origin/main --quick`, ETA about 20:00Z [guess]) and `r20261110-181231-0e19` (Lean tries). It goes to #8539's head when `3612` passes
+
+**`a509` passed at `fa866c78d7`.** [run] It ran the 68 suites the change from the merge base touches, 0 cached and 0 failed; `verity-pouw-benchmarks` passed 1,237 with 21 skipped. #8539's body now says so. That head predates your 17:57Z, so it stands for the fix and not for the merge.
+
+**The merge** (`353ab19093`, parents `fa866c78d7` and `e7b03e4a6c`):
+- It stops in the same seven files as your `git merge-tree`.
+- In each of them, `main`'s copy equals `queue/034a1702664b`'s (`dad8d911f9^2`), and #8539's is unchanged since `b3a5cc07e5`. [run: `git diff --quiet` per file] So I took the scratch cross's resolutions byte for byte. They keep both sides: R8's `tied` and published F, and main's history tables.
+- The locks and `.lean` files merged with the registered driver (`tools/verity/lean/merge.py`), with no conflict.
+- Main's `figure1.py` still passes `fanout=FANOUT` at its one `plancheck.two` call. [read]
+- Against the cross, the merged tree differs under spot and Security only by the dropped candidate's two extra PRs: `second_stage.py`, `SecondStage.lean`, two `SpotFlock` proofs, the lock, and 59 lines of `test_difftest.py`. [run: `git diff --stat`]
+
+`cb4b` (Lean tries at the cross) passed all three, with 78 theorems on the standard axioms. [run] It stands for `OneStage.lean` and the Spot properties, whose copies are the same in the merge. `0e19` checks the merged head itself.
+
+**The push:** to #8539's head (`cursor/proofs-accountd-6a92`) when `3612` passes. It is a fast-forward from `fa866c78d7`. No mark, no candidate, no force. `e094`'s verdict then goes into the body and the NET-302 text.
+
+**NET-302 text, replacing my 17:44Z one:**
+> #8539's head will be `353ab19093`: `fa866c78d7` with `origin/main` merged in. It cures the red on `verity-pouw-benchmarks`. Since R8, Lean's registration piece answers the fan-out F beside the codes, under a template query, which every PoUW window has, and any tied names. PoUW's served window held that answer against a Python reference giving the codes alone, so every window refused with `lean-python-disagree: registration`. The reference now gives the verdict's whole answer under the same conditions. At `fa866c78d7`, `test_served_zk.py` passes on a node (`r20261110-173157-a1c1`), and so do all 68 suites the change touches (`r20261110-173251-a509`, `--changed origin/main --quick`). At the merged head: `r20261110-181226-3612` and `r20261110-181229-e094`, verdicts to follow.
+
+**PRF-504:** the commit is `0b64e58192` on `cursor/proofs-accountd-prf504-7b2e`, still off the old cross. Its runs are on cpu-3:
+- `r20261110-175323-c63c`: Lean tries;
+- `r20261110-175325-2f1a`: the Security records, with `--update`;
+- `r20261110-175425-5cf4`: the Security/Properties records, with `--update`;
+- `r20261110-175511-37eb`: the suites `--changed dad8d911f9`.
+
+They tell which hashes move. The cross is moot now, so unless you say otherwise I put the commit on `353ab19093` once that head is pushed. `main` equals the candidate in three of its four files; `test_difftest.py` differs by 59 lines, so a cherry-pick may conflict there. The question of Daniel's word on `AcceptMeans` (17:47Z) stands.
+
+**Needs your word:** only the 17:47Z question. The scratch-cross merge I offered at 17:44Z is void, since crossing is off.
