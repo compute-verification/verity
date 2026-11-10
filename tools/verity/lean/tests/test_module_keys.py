@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import shutil
+import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -506,6 +507,48 @@ def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_
     _setup(root, "R", "r", mine | {"Mathlib": root / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean",
                                     "Init": Path("/elan/lib/lean/Init.olean")})
     assert MK.indexable("R", keyed, pkgs) == "/elan/lib/lean is in no root's fetched packages"
+
+
+def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_path, monkeypatch):
+    """`put` asks `indexable` of a build's modules on several threads over one ``owners``. While one thread reads the two
+    manifests that refuse a directory, another asking of the same directory must not find it there as one the root
+    pins: it would index a module compiled over another root's pins. The first thread waits inside `pinned_as` until
+    the second has looked the directory up, and both refuse."""
+    root = _workspace(tmp_path)
+    pkgs = MK.workspace(root)[0]
+    keyed = MK.keys(root)
+    _write(tmp_path, {"p/lake-manifest.json": json.dumps({"name": "p", "packages": [
+        {"type": "git", "name": "mathlib", "rev": "another"}]}), "p/lean-toolchain": TOOLCHAIN})
+    _setup(root, "R", "r", {"D.X": tmp_path / "d/.lake/build/lib/lean/D/X.olean", "R.A": root / ".lake/build/lib/lean/R/A.olean",
+                            "Mathlib": tmp_path / "p/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean"})
+    inside, looked = threading.Event(), threading.Event()
+    first = threading.current_thread()
+    pinned_as = MK.pinned_as
+
+    class Owners(dict):
+        def __contains__(self, d):
+            if threading.current_thread() is not first and "packages" in d:
+                looked.set()
+            return super().__contains__(d)
+
+    def slow(root, here):
+        if threading.current_thread() is first:
+            inside.set()
+            looked.wait()
+        return pinned_as(root, here)
+
+    monkeypatch.setattr(MK, "pinned_as", slow)
+    owners, got = Owners(), []
+
+    def second():
+        inside.wait()
+        got.append(MK.indexable("R", keyed, pkgs, owners))
+
+    other = threading.Thread(target=second)
+    other.start()
+    got.append(MK.indexable("R", keyed, pkgs, owners))
+    other.join()
+    assert [why is not None and "pins mathlib otherwise than" in why for why in got] == [True, True], got
 
 
 def test_a_module_file_is_indexed_where_lake_handed_its_compile_the_modules_lean_loads(tmp_path):

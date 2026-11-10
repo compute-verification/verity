@@ -637,7 +637,8 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
     Every other module there is a fetched package's, read where the key's root pins it (`pinned_as`, ``pkgs[0]`` being
     the root's package). ``owners`` holds, for one build's calls, the package whose build holds each directory an
     `.olean` is in, and of any other directory why it is refused (`REFUSED`): a module lists up to every module it
-    imports transitively, Mathlib's included, thousands of paths in a few hundred directories."""
+    imports transitively, Mathlib's included, thousands of paths in a few hundred directories. `put` calls this on
+    several threads over one ``owners``, so a directory's verdict is written there once, whole."""
     k = keyed[mod]
     try:
         setup = json.loads((k.package.build() / "ir" / path_of(mod, ".setup.json")).read_text())
@@ -660,9 +661,10 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
         d = os.path.dirname(olean)
         if d not in owners:
             here = Path(d).resolve()
-            owners[d] = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
-            if owners[d] is None and (why := pinned_as(pkgs[0].dir, Path(os.path.normpath(d)))):
-                owners[d] = REFUSED + why
+            owner = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
+            if owner is None and (why := pinned_as(pkgs[0].dir, Path(os.path.normpath(d)))):
+                owner = REFUSED + why
+            owners[d] = owner
         if (owner := owners[d]) is not None and owner.startswith(REFUSED):
             return owner.removeprefix(REFUSED)
         if owner is not None:
