@@ -21345,3 +21345,35 @@ in a /tmp worktree. Next entry by 01:58Z.
 > #8409 (CIR-195, served history pins) is marked at `94021846eb`. It lands after #8416, which it carries: drive's `after`
 > lists #8416, whose land ask waits on DSAREAD's records runs. r20261109-235252-f27a passed its 56 suites, with no skip
 > in its own tests. Its Lean and lock files are #8416's, so #8416's records cover it.
+
+
+## TWOPROVE, Tue 10 Nov 01:10Z: runs, #8458 marked, #8429 and #8444 moved, `checked` hasn't moved, N2
+
+**Runs.**
+- **r20261109-231343-f143 passed** at #8458's head `9c4fa71387`, with 10 suites and none cached:
+  - spot 834; sampled-proofs 209, with 2 skipped (the opt-in real-templates test); protocols 266; repository 283;
+  - two_stage 10; spot_proved 85; requirement 23; one_stage 500; circuit-check 388, with 3 skipped;
+  - vllm's pipeline 2,039, with 24 skipped.
+  - I marked #8458 ready at `9c4fa71387`, and it is admitted. **Land ask:** TWOVERIFY reviews it, as round 2's reviewer.
+- **Cancelled r20261109-222624-22e7** (#8429 at `e504cd8001`) **and r20261109-223949-e702** (#8444 at `b84c6cb34b`), both on cpu-1.
+  - Each had run on one process for 140 to 155 minutes, in slots p5 and p7. Neither gave a verdict, and both heads have moved since.
+  - Before circuit-check, e702 had passed 8 of its 9 suites: sampled-proofs 211 with 2 skipped, repository 283, spot 834, one_stage 500, requirement 23, spot_proved 85, protocols 266, and two_stage 10.
+- **r20261110-010243-12b1, on cpu-12 (pool proofs):** #8429 at `eb3785ff3e`, running the Spot build, the Lean check, 9 suites and vllm's pipeline. ETA about 03:00Z. I mark #8429 when it passes.
+
+**ci's rewording went into #8429**, at `eb3785ff3e`.
+- `SecondStageExamples.lean` went from 11 retired-term hits to 6. The 6 left are code: an `Own` field `drawn` and the record keys `draw`, `law` and `unit_draw`. Renaming those changes the records' format, so they are not part of this.
+- `test_difftest.py`: `drawn` became `units` at ci's three lines, and three uses of "verifier of record" became "the verifier". The file still has 1,205 hits against its allowance of 1,040, from other lines.
+
+**#8444 is at `58c64766d3`.**
+- I did the relay's check. Its tests named the interior's stand-in for a read's `ok` "an all-ones `ones`". It is now `opened`, the word 1 a passing read holds, and the prose says so.
+- It still waits on #8309's mark. Then I merge #8309's marked head once, re-check on cpu-12 and re-mark.
+
+**#8413 is not on `checked`.** At 01:10Z, `checked` is `00d07520b3` and `next` is `15ab284aa5`. Neither has moved since Mon 15:20 to 15:25Z. #8413, #8416 and #8458 are admitted and wait for the next sync. Drive looks stalled for ten hours; infra should hear it if they don't know.
+
+**N4:** answered on PRF-477 at 23:25Z.
+
+**N2, due 12:00Z.** My answer so far is no: neither #8444 nor #8458 carries round 1's half.
+- That half is PR 2's first clause. Lean's `Run` would hold an interior `history` entry that names a served table to round 1's port root.
+- The hold would then rest on the verifier, not on the challenger's copy. The challenger's copy is DSAREAD's N1 way, which vllm's #8448 at `a65514cb0c` now does.
+- It is about 8 h (Lean, mirror, and difftest with negatives), on #8416's `history` source, which is admitted but not landed.
+- My full answer, with whether it moves a Thursday date, comes by 12:00Z. It waits on the index choice I owe PRF-477 by 06:00Z, since one of its two answers is round-1 Lean of mine.
