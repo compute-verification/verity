@@ -2,7 +2,7 @@
 main before a unit's population gained its ports, `_instance_ports`) holds some of the programs this package's catalog makes:
 `TemplateInstances` v1 at N = 1 and 3 and v0 at N = 3 over each complete composite root of every circuit-check sidecar under
 `verity/ml/circuits` (the Gemm family's word and Boolean templates, the served rows' coordinates among them), and
-`TemplatePopulations` v1 and v0 over each consecutive pair of them. A record of all of them is past the repository's file cap.
+`TemplatePopulations` v1 and v0 over each consecutive pair of them. A full record is past the repository's 256 KiB file limit.
 
 The test builds only the programs the record holds (`programs`' ``keys``). The catalog's others are held to no value, and
 building them with these took 13 minutes and 23 GB in one process.
