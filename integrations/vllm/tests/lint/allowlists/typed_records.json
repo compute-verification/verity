@@ -433,7 +433,6 @@
     {"file": "verity_vllm/protocols/pouw/h1/requests.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/pouw/h1/z-table/v2"},
     {"file": "verity_vllm/protocols/pouw/h1/requests.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/protocols/pouw/h1/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/commit_map.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/protocols/remote_bandwidth/registry.py", "kind": "schema-literal", "symbol": "RemoteBandwidthReceipt", "detail": "verity/remote-bandwidth/receipt/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},
@@ -469,7 +468,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "verity-capture/tp2-param-hashes/v0"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_profiler_stop", "detail": "verity-capture/census-rank/v0"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/commit_map.py", "kind": "schema-literal", "symbol": "write", "detail": "verity-vllm/memory-map-layout/v1"},
     {"file": "verity_vllm/target_family.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3}
   ]
 }

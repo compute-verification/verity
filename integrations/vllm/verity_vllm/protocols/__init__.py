@@ -69,7 +69,7 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
-#: (``--remote-verifier``) and the Commit's memory map (``--memory-map``)
+#: (``--remote-verifier``)
 DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a

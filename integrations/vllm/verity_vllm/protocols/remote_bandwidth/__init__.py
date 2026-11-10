@@ -12,7 +12,6 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
   tensor read back for an opening).  Tests drive it with a fake codec and receipt.
 - `binder`: installs the hooks into a vLLM engine (`verity_vllm.engine.hooks`), all of them undone by `uninstall`.
 - `memory_map`: the store's KV events as memory-map/v1, the prover's record of the blocks each step wrote and freed.
-- `commit_map`: the Commit's memory-map/v1 from the circuit (``commit --memory-map``), over the Build's KV rows.
 - `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested
   against.
 """
