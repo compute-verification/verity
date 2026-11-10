@@ -1,6 +1,7 @@
 module
 
 public import Difftest
+public import Flock.JsonParse
 public import Spot.Pieces
 public import Spot.OneStageZk
 
@@ -50,7 +51,7 @@ def circuitOf (input : Json) : IO (Flock.V Flock.Circuit) := do
 /-- The response line to one request line: `slots` or `file_part` on the circuit file it names, or a piece of
 `Pieces.table`. -/
 def respond (request : String) : IO String := do
-  match Json.parse request with
+  match Flock.JsonParse.parse request with
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "slots", .ok input =>
