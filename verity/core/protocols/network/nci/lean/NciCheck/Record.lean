@@ -111,8 +111,9 @@ fields in order (`tmplOf`). A template has a layout where it has at least six in
 * input rows 3, 4 and 5: the opened rows (the row the unit opens, its salt and its path);
 * output 1: the verdict.
 
-Any later input row and any other output has no role. The closure digest covers a Definition's parameters and return
-type, which its entry holds inline, so two Definitions of one digest have one layout.
+Any later input row and any other output has no role. A closure digest is taken over its Definition's entry, which
+holds the parameters and the return type inline, so a pin fixes its Definition's layout as it fixes its body, up to a
+SHA-512 collision.
 
 `rolesOf` holds the record to it, for every template that an opening or a table read names as its reader and whose
 Definition is pinned: it has a layout (`reader-layout`); an opening of it has the layout's key for its `key`, the
