@@ -5,7 +5,8 @@
 * every unit of a V = 64 row has a Boolean version whose word view is the unit, and its gates on the twin's inputs for the
   unit (`numerics.topp_stage_twins`) compute the twin's words, which the word unit computes (`test_topp_stages`);
 * at the served vocabulary every unit's Boolean version, at every split count, has rows a proof block holds
-  (`interface.check_proof_block`) and fits one Flock block, and every Definition its body Calls is Boolean.
+  (`interface.check_proof_block`) and fits one Flock block, and every Definition its body Calls is Boolean;
+* a served select chunk on bits, lowered flat, stays within the nonzeros of the largest unit proved under ``--zk``.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_words
 from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.numerics import topp_stage_twins as TW
@@ -26,6 +28,10 @@ from verity.ml.definitions.registry import topp_word_gates as TG
 from verity.ml.windows import interface as IF
 
 from test_topp_stages import ROWS, SERVED_V, f32, row, unit_args
+
+#: the nonzeros of the largest unit proved under ``--zk``: the 1B decode attention row with its table reads in lookup slots
+#: (`verity_vllm.pipeline.chunk_rows.reads`)
+PROVED_NNZ = 314_000_000
 
 SPECIAL = [0, 1, 0x007FFFFF, 0x00800000, 0x34000000, 0x3F000000, 0x3F7FFFFF, 0x3F800000, 0x3F800001, 0x41200000, 0x4B000000,
            0x4E800000, 0x4F000000, 0x4F7FFFFF, 0x4F800000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF,
@@ -131,3 +137,29 @@ def test_each_served_unit_on_bits_fits_a_proof_block():
         assert IF.check_proof_block(b) == IF.check_proof_block(d) <= IF.K_MAX and IF.unit_rows(b) == IF.unit_rows(d), t
         block = FC.unit_block(b)
         assert FC.past_block(block) is None and block["k_log"] <= IF.K_MAX, (t, block)
+
+
+@pytest.mark.slow
+def test_a_served_select_chunk_on_bits_is_within_the_largest_unit_proved():
+    """A select chunk of the served row on bits, lowered flat as serving's stager lowers it (`class_statement.unit_lowering`,
+    whose layout's nonzeros a staged unit reports), has no more nonzeros than the largest unit proved under ``--zk``
+    (`PROVED_NNZ`).  The count is a one-lane and a two-lane chunk's at the served vocabulary, scaled to the chunk's lanes
+    (`topp_stages.chunk`), not the chunk's own, whose lowering takes minutes and gigabytes: what grows faster than the lanes
+    (the tie counts' scan, the running best) is left out of it.  It fails when `topp_stages.SELECT_N` goes back up and when a
+    lane's nonzeros do: `gumbel_boolean.philox_round` commits each round's words, and without that a lane has ten times
+    these."""
+    from verity_flock.class_statement import unit_lowering
+
+    def nnz(lanes: int) -> int:
+        b = BB.boolean_version(bind(T.GumbelTopPSelect, V=SERVED_V, N=lanes, FIRST=False, LAST=False))
+        low, _words = unit_lowering(b, "unit/select", [(r, ps) for r, _schema, _bits, ps in IF.unit_rows(b)[0]])
+        return int(low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"])
+
+    n, one, two = T.chunk(SERVED_V), nnz(1), nnz(2)
+    lane = two - one
+    chunk = one + (n - 1) * lane
+    assert chunk <= PROVED_NNZ, (
+        f"a served select chunk on bits is about {chunk:,} nonzeros lowered flat ({n} lanes of {lane:,}), past the "
+        f"{PROVED_NNZ:,} of the largest unit proved under --zk: set topp_stages.SELECT_N to at most "
+        f"{1 + (PROVED_NNZ - one) // lane} lanes, or, if a lane's nonzeros grew, commit the form its ANDs now read (as "
+        "gumbel_boolean.philox_round commits a round's words); raise PROVED_NNZ only to a larger unit proved under --zk")
