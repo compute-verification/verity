@@ -120,12 +120,17 @@ def moves_on(commit: str, base: str, maps: list[str]) -> dict:
     return {"status": "made", "commit": tip, "tree": RS.tree_of(tip, None), "steps": steps}
 
 
-def apply_moves(commit: str, moves: list[tuple[str, str, tuple[str, ...]]], keep_going: bool = False) -> dict:
+def apply_moves(commit: str, moves: list[tuple[str, str, tuple[str, ...]]], keep_going: bool = False,
+                no_lock: bool = False) -> dict:
     """Each staged move's script and arguments (`restack.moves_on`'s rows) run on `commit` and then on the one before, each
     with the scripts of that move's own base, as `restack.py` runs them: the last commit, or the first that made none.
-    With ``keep_going`` a script that fails is recorded (`failed`) and the chain goes on from the tree before it."""
+    With ``keep_going`` a script that fails is recorded (`failed`) and the chain goes on from the tree before it. With
+    ``no_lock`` a layout move runs with `--no-lock`: for a merge's ancestor, which nothing ever syncs and whose merged
+    `pyproject.toml`s `uv lock` may not parse."""
     steps, tip, failed = [], commit, []
     for move, script, args in moves:
+        if no_lock and script == "tools/move/layout.py" and "--no-lock" not in args:
+            args = (*args, "--no-lock")
         t0 = time.time()
         base = RS.move_base(move, None)
         rec = {"on": tip, "move": move, "scripts_of": base, "script": script, "args": list(args)}
@@ -400,7 +405,7 @@ def _virtual_then_moves(ours: str, staged: str, moves: list) -> tuple[dict, dict
         except Exception as e:  # noqa: BLE001
             return {"error": repr(e)}, None
     say(f"the ancestor git merge builds: {v['paths']} paths from {v['merge_bases']} merge bases ({v['minutes']} min)")
-    return v, apply_moves(v["commit"], moves, keep_going=True)
+    return v, apply_moves(v["commit"], moves, keep_going=True, no_lock=bool(os.environ.get("LEAN251_ANCESTOR_NO_LOCK")))
 
 
 def do_movesfirst_all(name: str, ours: str, staged: str) -> int:
