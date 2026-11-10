@@ -15,18 +15,16 @@ public import Std.Data.String.ToNat
 /-!
 # The registration v2's parameters name, at the record
 
-* **v2's slots are two classes** (`partSlots_classes`): the population, in the registration's strata, and the input
-  class, at most one stratum. The population's strata have the sizes of the layout's first class.
 * **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor
   parses as the parameters' verifier's program and its query is their verifier's (`SetsUp.params`).
 * **`parseDesign` reads a law's text back** (`parseDesign_count`, `parseDesign_bernoulli`): `kind:K` at `K ≥ 1`, for a `subset`,
   `stratified` or `work` law, is `{law: kind, k: K}`, and `bernoulli:NUM/DEN` at `0 < DEN` and `NUM ≤ DEN` is
   `{law: bernoulli, p: "NUM/DEN"}`, each number in `Nat.repr`'s digits.
-* **The population is `PopMatches`' count** (`units_of_popMatches`): where the descriptor parses and its layout under
-  the query is laid out, `Partition.units` of the program and query is the `n` of `PopMatches`.
-* **The design at the law's text is the law the draw reads** (`slotDesign_lawText`, `slotDesign_designSlots`): over the
+* **The population is `PopMatches`' count** (`units_of_popMatches`): where the descriptor parses, `Partition.units` of
+  the program and query is the `n` of `PopMatches`.
+* **The design at the law's text is the law the draw reads** (`slotDesign_lawText`, `slotDesign_stmtA`): over the
   verifier's program and query of `n` units, where `lawAt` reads the law `L`, `slotDesign` under the rule
-  `law (lawText L)` is `L`'s one-stage design and then `all`, at a subset law of at least one unit. `parseDesign` names a
+  `law (lawText L)` is `L`'s one-stage design, one rule, at a subset law of at least one unit. `parseDesign` names a
   law that `deriveLaw` and `flockLaw` read as they read the verifier's (`deriveLaw_congr`, `deriveLaw_none`,
   `deriveLaw_some`, `flockLaw_subset_text`, `flockLaw_bernoulli_text`).
 -/
@@ -40,32 +38,10 @@ namespace Verity.Sampled.Record
 open Lean (Json)
 open Claims.Sampling
 open Verity.Sampled.Trees (bind_ok)
-open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
-  laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases slotDesign_law bind_eq_ok throw_ne
-  throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok)
+open Properties.Spot.SecurityProofs (units_eq strata_ok strataOf_perm partition_evaluate_tiles lawObj kindOf
+  flockLaw_cases deriveLaw_cases slotDesign_law bind_eq_ok throw_ne throw_bind_ne nat_toJson derive_bounds derive_ok
+  deriveWork_ok)
 open private split1 digits from Spot.Select
-
-theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
-    strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) =
-      (l.classes.toList.headD #[]).toList.map Array.size := by
-  unfold _root_.Properties.Spot.slotPartition strataSizes
-  generalize l.classes.toList = cs
-  cases cs <;> simp [Function.comp_def]
-
-/-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
-class of the registration's layout `l`, and the input class, at most one stratum. -/
-theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.Layout}
-    (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
-    (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
-    ∃ pop ins, (partSlots A).classes = [pop, ins] ∧ ins.length ≤ 1 ∧
-      strataSizes pop = strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) := by
-  refine ⟨_, InputSlot.inputClass (Flock.Bridge.progOf A.Cc A.κ), rfl, ?_, ?_⟩
-  · unfold InputSlot.inputClass
-    split <;> simp
-  · rw [strataSizes_slotPartition, ← Flock.Bridge.nsOf_eq hp hl]
-    unfold strataSizes
-    apply List.map_splitLengths_length
-    exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
 
 /-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
 their verifier's program and its query is their verifier's, at the parameters whose verifier's law the draw reads over
@@ -153,22 +129,21 @@ theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
 
 /-! ## The population -/
 
-/-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
-`l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
+/-- **The population is `PopMatches`' count**: where the descriptor parses as `p`, `PopMatches desc q n` makes
+`Partition.units p q` the count `n`, since the run's population is the strata's units, which tile `[0, units)`. -/
 theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
-    {l : _root_.Spot.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
-    (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
-    (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by
-  obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok p q _ hl
+    (h : Flock.Bridge.PopMatches desc q n)
+    (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p) : _root_.Spot.Partition.units p q = .ok n := by
+  obtain ⟨p', us, hp', hus, hn⟩ := Flock.Bridge.popMatches_iff.1 h
+  obtain rfl : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
+  obtain ⟨S, hS, hu⟩ := Flock.Bridge.popUnits_ok hus
+  obtain ⟨rs, he, rfl⟩ := strata_ok p q S hS
   rw [units_eq p q rs he]
-  have hperm : (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).Perm
-      (List.range' 0 (Flock.TemplateQuery.population rs)) :=
-    strataOf_perm _ _ (partition_evaluate_tiles p q rs he)
-  have hsum := Flock.Bridge.nsOf_sum h
-  rw [Flock.Bridge.nsOf_eq hp hl] at hsum
-  change (pop.toList.map Array.size).sum = n at hsum
-  rw [(laysOut_units _ _ hlays).2, ← length_popUnits, hperm.length_eq, List.length_range'] at hsum
-  rw [hsum]
+  have hlen : (List.range n).length = (List.range' 0 (Flock.TemplateQuery.population rs)).length := by
+    rw [← hn, hu]
+    exact (strataOf_perm _ _ (partition_evaluate_tiles p q rs he)).length_eq
+  rw [List.length_range, List.length_range'] at hlen
+  rw [hlen]
 
 /-! ## The design at the law's text -/
 
@@ -357,13 +332,13 @@ def lawText : Flock.Draw.Law → String
   | .work k _ => "work" ++ ":" ++ Nat.repr k
 
 /-- **The design at the law's text is the law `lawAt` reads**: over the verifier's program and query of `n` units,
-where `lawAt` reads the law `L`, `slotDesign` under the rule `law (lawText L)` is `L`'s one-stage design, then `all`,
+where `lawAt` reads the law `L`, `slotDesign` under the rule `law (lawText L)` is `L`'s one-stage design, one rule,
 at a subset law of at least one unit. -/
 theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : lawAt v n = .ok L)
     (hk : ∀ k, L = .subset k → 1 ≤ k) :
     _root_.Properties.Spot.slotDesign (.law (lawText L)) v.program v.query v.workTable =
-      .ok ⟨[_root_.Properties.Spot.oneStageOf L, .all]⟩ := by
+      .ok ⟨[_root_.Properties.Spot.oneStageOf L]⟩ := by
   obtain ⟨derived, parsed, hd, hf, rfl⟩ := lawAt_ok hl
   have hne : _root_.Spot.Select.Rule.law (lawText (derived.getD parsed)) ≠ .all := nofun
   cases derived with
@@ -390,13 +365,13 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
       rw [← hd]
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
-/-- **v2's design at the law's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
-`A`'s law, the design under `law (lawText A.law)` is `designSlots A`. -/
-theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
+/-- **v2's design at the law's text is the statement's**: over the verifier's program and query of `A`'s population,
+where `lawAt` reads `A`'s law, the design under `law (lawText A.law)` is `stmtA A`'s. -/
+theorem slotDesign_stmtA (A : Live) {v : _root_.Spot.Registration.Verifier}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.law)
     (hk : ∀ k, A.law = .subset k → 1 ≤ k) :
     _root_.Properties.Spot.slotDesign (.law (lawText A.law)) v.program v.query v.workTable =
-      .ok (designSlots A) :=
+      .ok (stmtA A).design :=
   slotDesign_lawText hu hl hk
 
 end Verity.Sampled.Record

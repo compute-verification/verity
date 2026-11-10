@@ -893,18 +893,20 @@ theorem popOk_of_popHeld {v : _root_.Spot.Registration.Verifier} {record : Json}
     cases h
 
 /-- **The session's population is the one the program holds** where the session's descriptor parses to v2's program
-and its query is v2's: `Live.hpop` and `Slots.popOk` read one layout's population. -/
+and its query is v2's: `Live.hpop` and `Slots.popOk` read one population (`Slots.popUnits`). -/
 theorem n_of_popOk {A : Live} {v : _root_.Spot.Registration.Verifier} {n : ℕ}
     (hd : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok v.program) (hq : A.qr = v.query)
     (h : _root_.Spot.Slots.popOk v.program v.query n = true) : A.n = n := by
-  unfold _root_.Spot.Slots.popOk at h
-  split at h
-  · cases h
-  · rename_i l hl
-    have h1 := Flock.Bridge.popOf_units (l := l) A.hpop hd (by rw [hq]; exact hl)
-    have h2 := of_decide_eq_true h
-    have := congrArg List.length (h1.symm.trans h2)
-    simpa only [List.length_map, List.length_range] using this
+  obtain ⟨p, us, hp, hus, hn⟩ := Flock.Bridge.popMatches_iff.1 A.hpop
+  rw [hd] at hp
+  obtain rfl : v.program = p := Except.ok.inj hp
+  rw [hq] at hus
+  have h2 : us.toList = List.range n := by
+    unfold _root_.Spot.Slots.popOk at h
+    rw [hus] at h
+    simpa using h
+  have := congrArg List.length (hn.symm.trans h2)
+  simpa only [List.length_range] using this
 
 /-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
 session's population is the sample's (`n_of_popTied`). `SetsUp`'s `params` implies it. -/

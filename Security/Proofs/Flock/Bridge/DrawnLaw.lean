@@ -148,21 +148,12 @@ theorem drawnLaw_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.
     · exact Or.inl hder
     · exact Or.inr ⟨tab, hwork⟩
 
-/-- The registration's strata are the evaluated query's ranges, by template (`Partition.strata`). -/
-theorem strata_evaluate {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
-    (hS : Spot.Partition.strata p q = .ok S) :
-    ∃ rs, Spot.Partition.evaluate p q = .ok rs ∧
-      S = Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) := by
-  unfold Spot.Partition.strata at hS
-  obtain ⟨rs, he, h⟩ := SecurityProofs.bind_eq_ok.1 hS
-  exact ⟨rs, he, (Except.ok.inj h).symm⟩
-
 /-- **The registration's strata each hold a unit**: `TemplateQuery.evaluate` refuses a template with no instance
 (`strataOf_pos`, `partition_covered`). -/
 theorem strata_pos {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
     (hS : Spot.Partition.strata p q = .ok S) :
     ∀ s ∈ S.toList, 1 ≤ (SecurityProofs.expand s.2.toList).length := by
-  obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
+  obtain ⟨rs, he, rfl⟩ := SecurityProofs.strata_ok _ _ _ hS
   exact SecurityProofs.strataOf_pos _ (SecurityProofs.partition_covered p q rs he)
 
 /-- **The registration's strata's slots hold each unit once**: they are the evaluated ranges, which tile the population
@@ -170,7 +161,7 @@ theorem strata_pos {p : Spot.Program} {q : Lean.Json} {S : Array (String × Arra
 theorem strata_nodup {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
     (hS : Spot.Partition.strata p q = .ok S) :
     (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList).Nodup := by
-  obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
+  obtain ⟨rs, he, rfl⟩ := SecurityProofs.strata_ok _ _ _ hS
   exact (SecurityProofs.strataOf_perm _ _ (SecurityProofs.partition_evaluate_tiles p q rs he)).nodup_iff.2
     List.nodup_range'
 
@@ -183,25 +174,17 @@ theorem flatMap_expand_eq {α : Type} {f : α → Array (ℕ × ℕ)} {l : List 
 
 /-- **At `PopMatches`, the registration's strata are its population**: where `desc` parses to `p`, whose strata under
 the query `q` are `S` (`Partition.strata`), `nsOf` is their sizes and their slots, stratum by stratum, are the units
-`0, …, n − 1`, since the layout `PopMatches` reads lays each stratum's units in order (`layout_ok`, `laysOut_units`). -/
+`0, …, n − 1`, since the run's population check reads the units off those strata in order (`popUnits_ok`). -/
 theorem popMatches_strata {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {S : Array (String × Array (ℕ × ℕ))} (hpop : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hS : Spot.Partition.strata p q = .ok S) :
     nsOf desc q = (S.toList.map fun s => (SecurityProofs.expand s.2.toList).length) ∧
       (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range n := by
-  obtain ⟨p', l, hp', hl, hu⟩ := popMatches_iff.1 hpop
-  have epp : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
-  rw [epp] at hl
-  obtain ⟨rs, he, pop, rfl, hlays⟩ := SecurityProofs.layout_ok p q l hl
-  obtain ⟨rs', he', rfl⟩ := strata_evaluate hS
-  obtain rfl : rs' = rs := by rw [he] at he'; exact (Except.ok.inj he').symm
-  obtain ⟨h1, h2⟩ := SecurityProofs.laysOut_units _ _ hlays
-  have hpo : popOf { classes := #[pop, SecurityProofs.inputClass p] } = pop.toList.flatMap (·.toList) := by
-    simp [popOf, List.flatMap_def]
-  refine ⟨?_, List.map_injective_iff.2 (Option.some_injective _) ?_⟩
-  · rw [nsOf_eq hp hl]
-    simpa [SecurityProofs.rsSize] using h2
-  · rw [← h1, ← hu, hpo]
+  obtain ⟨p', us, hp', hus, hn⟩ := popMatches_iff.1 hpop
+  obtain rfl : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
+  obtain ⟨S', hS', hu⟩ := popUnits_ok hus
+  obtain rfl : S' = S := by rw [hS] at hS'; exact (Except.ok.inj hS').symm
+  exact ⟨nsOf_eq hp hS, hu.symm.trans hn⟩
 
 /-- **The sampling design the audit samples under is on the registration's strata**: at `PopMatches`, a `drawnLaw` that is not a
 Bernoulli law is `LawOn` the strata's sizes `nsOf`, sampling `lawK` units: a subset sampling design within the `n` units they sum to,
