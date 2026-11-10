@@ -48,11 +48,11 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+from verity_config.settings import SHARED  # noqa: E402
+
 import f1_rates as F1  # noqa: E402
 import probe as P  # noqa: E402
 import vec as V  # noqa: E402
-from verity_config.settings import SHARED  # noqa: E402
-
 from verity.ml.circuits.silicon import models as M  # noqa: E402
 
 ARCH = "sm_120a"
@@ -115,7 +115,7 @@ class Operands:
         return (np.arange(self.acodes.shape[0]) // LUT_TPB) % self.wcodes.shape[0]
 
 
-def mixed_acc(rng, shape) -> np.ndarray:
+def mixed_acc(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     """+0, -0, subnormals, every finite exponent, and exponents near the products' binades, in equal parts."""
     kind = rng.integers(0, 5, shape)
     frac = rng.integers(0, 1 << 23, shape).astype(np.uint64)
@@ -255,7 +255,8 @@ def pack(ops: Operands, g: int) -> Packed:
                   c(weight_scale_words(ops.wcodes, ops.wscale)), c(ops.c0, np.uint32))
 
 
-def terms(acodes, ascale, wcodes, wscale, grp) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def terms(acodes: np.ndarray, ascale: np.ndarray, wcodes: np.ndarray, wscale: np.ndarray,
+          grp: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Per (row, column, block), each (R, C, 4): the group dot (quarters), its scaled mantissa, X = -2 + ea + eb, participation
     (a nonzero product and both scale mantissas nonzero), as the pinned model's ``group_terms``."""
     r, c = acodes.shape[0], wcodes.shape[1]
@@ -390,7 +391,7 @@ def build(out: Path) -> dict:
 
 # ------------------------------------------------------------------------------------------------------------------------ device
 
-def _p(a: np.ndarray | None):
+def _p(a: np.ndarray | None) -> int | None:
     """A kernel argument's address.  C-contiguous only: a kernel reads memory order, which for a strided array (einsum's output,
     say) is not its index order."""
     if a is None:
@@ -401,7 +402,7 @@ def _p(a: np.ndarray | None):
 
 
 class F3Device:
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = lib = ctypes.CDLL(str(so))
         I, L, V = ctypes.c_int, ctypes.c_longlong, ctypes.c_void_p
         pI, pL, pF = ctypes.POINTER(I), ctypes.POINTER(L), ctypes.POINTER(ctypes.c_float)
@@ -442,7 +443,8 @@ class F3Device:
             raise RuntimeError(f"f3_occupancy({v}) rc={rc}")
         return n.value
 
-    def run_lut(self, v, arm, c, pk: Packed, rows, ng, nblocks, iters, want=True):
+    def run_lut(self, v: int, arm: str, c: int, pk: Packed, rows: int, ng: int, nblocks: int, iters: int,
+                want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         out = np.zeros(rows * c * (4 if arm == "dots" else 1), np.uint32)
         cyc = np.zeros(nblocks, np.int64)
@@ -452,7 +454,8 @@ class F3Device:
             raise RuntimeError(f"f3_run_lut({v}) rc={rc}")
         return ms.value, out, cyc
 
-    def run_native(self, pk: Packed, rows, c, ng, ntiles, nblocks, iters, want=True):
+    def run_native(self, pk: Packed, rows: int, c: int, ng: int, ntiles: int, nblocks: int, iters: int,
+                   want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         out = np.zeros(ntiles * 128, np.uint32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -471,29 +474,30 @@ class FakeF3:
 
     SMS, MHZ = 2, 2000.0
 
-    def __init__(self, table, nt):
+    def __init__(self, table: list[tuple[str, int, int]], nt: int) -> None:
         self._table, self._nt = table, nt
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
                 "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
-    def table(self):
+    def table(self) -> tuple[list[tuple[str, int, int]], int]:
         return self._table, self._nt
 
     def device(self) -> dict:
         return {"sms": self.SMS, "max_threads_per_sm": 1536, "cc": "12.0"}
 
-    def occupancy(self, v, tpb) -> int:
+    def occupancy(self, v: int, tpb: int) -> int:
         return 1
 
     def _ms(self, cycles: float) -> float:
         return cycles / (self.MHZ * 1e3)
 
-    def run_lut(self, v, arm, c, pk: Packed, rows, ng, nblocks, iters, want=True):
+    def run_lut(self, v: int, arm: str, c: int, pk: Packed, rows: int, ng: int, nblocks: int, iters: int,
+                want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         for a in (pk.arows, pk.tables, pk.wsc, pk.c0):
             _p(a)
         _, g, _ = self._table[v]
@@ -522,7 +526,8 @@ class FakeF3:
         part = ((amask[:, None, :] & (wv >> 8)) != 0) & (mm != 0)
         return self._ms(cycles), chain(pk.c0[:rows], gd * mm, x, part, iters).reshape(-1), cyc
 
-    def run_native(self, pk: Packed, rows, c, ng, ntiles, nblocks, iters, want=True):
+    def run_native(self, pk: Packed, rows: int, c: int, ng: int, ntiles: int, nblocks: int, iters: int,
+                   want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         for a in (pk.arows, pk.wrows, pk.c0):
             _p(a)
         warps = nblocks * NATIVE_TPB // 32
@@ -552,7 +557,7 @@ def native_grid(d: dict, occ: int) -> dict:
     return {"threads_per_block": NATIVE_TPB, "blocks_per_sm": bps, "blocks": d["sms"] * bps, "warps_per_sm": bps * NATIVE_TPB // 32}
 
 
-def native_words(dev, pk: Packed, rows: int, c: int, ng: int, nt: int, iters: int) -> np.ndarray:
+def native_words(dev: F3Device | FakeF3, pk: Packed, rows: int, c: int, ng: int, nt: int, iters: int) -> np.ndarray:
     """The native atom's words on the first ``rows`` rows, (rows, 8): column j is group column j mod C."""
     ntiles = rows // 16
     warps = -(-ntiles // nt)
@@ -561,7 +566,7 @@ def native_words(dev, pk: Packed, rows: int, c: int, ng: int, nt: int, iters: in
     return out.reshape(rows, 8)
 
 
-def check(dev, ops: Operands, pk: Packed, gd: np.ndarray, idx: dict, geo: dict, c: int, ng: int, nt: int, length: int, rng,
+def check(dev: F3Device | FakeF3, ops: Operands, pk: Packed, gd: np.ndarray, idx: dict, geo: dict, c: int, ng: int, nt: int, length: int, rng: np.random.Generator,
           sample: int, corrupt: bool, model: bool = True) -> dict:
     """The words of both LUT arms and the native atom at one chain length, compared."""
     rd, re_ = geo["dots"]["rows"], geo["exact"]["rows"]
@@ -586,7 +591,7 @@ def check(dev, ops: Operands, pk: Packed, gd: np.ndarray, idx: dict, geo: dict, 
     return rec
 
 
-def run_width(args) -> int:
+def run_width(args: argparse.Namespace) -> int:
     t_all = time.time()
     bdir, out = Path(os.path.expandvars(args.build)), Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
@@ -640,7 +645,7 @@ def run_width(args) -> int:
     if failures:
         return finish(out, rec, failures, args, None, t_all)
 
-    def launch(f, arm, iters, want=False):
+    def launch(f: str, arm: str, iters: int, want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         _, pk, _ = fam[f]
         if arm == "native":
             return dev.run_native(pk, rows, c, ng, rows // 16, geo["native"]["blocks"], iters, want)
@@ -702,7 +707,7 @@ def run_width(args) -> int:
     return finish(out, rec, failures, args, per, t_all)
 
 
-def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_all: float) -> int:
+def finish(out: Path, rec: dict, failures: list[str], args: argparse.Namespace, per: dict | None, t_all: float) -> int:
     rec["failures"] = failures
     rec["elapsed_s"] = time.time() - t_all
     name = f"{args.width}.json" if not args.fake_silicon else f"{args.width}.fake.json"
@@ -722,7 +727,7 @@ def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_
 
 # ---------------------------------------------------------------------------------------------------------------------- collect
 
-def collect(args) -> int:
+def collect(args: argparse.Namespace) -> int:
     """The price table over every recorded width (each priced against the NVFP4 of its own run) and the claim's check."""
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
@@ -794,7 +799,7 @@ def collect(args) -> int:
     return 0 if ok else 1
 
 
-def build_cmd(args) -> int:
+def build_cmd(args: argparse.Namespace) -> int:
     rec = build(Path(os.path.expandvars(args.out)))
     print(f"F3 BUILD {'ok' if rec['ok'] else 'FAILED'}: FTZ {rec.get('ftz_fp32') or 'none'}", flush=True)
     for n, g in (rec.get("gate") or {}).items():
