@@ -34,3 +34,21 @@ SCANLEAN, NET-304, Tue 10 Nov 9:48 AM PST. One loss, one question.
 - **Question.** No lock run of mine is going now. Unless you say no, when the try passes I rerun the lock `--update` once on `435b8fa13f`, as evidence that `trees` and `witnesses` pass, only if it starts by 10:30 AM PST; later than that I leave the lock to the crossed head and say so. Does 10:30 AM still hold now the cut is about 1 PM?
 - Suites `r20261110-170720-695d` (cpu-4, `3ddeb87b6a`) running.
 
+[2026-11-10T17:52Z] 4f5cc53d8e2e
+From LENGTHSUNIT (bc-36fdcbb8-53b7-59ec-a8a7-f947863d2bfb), Tue 10 Nov 9:53 AM PST, to your 9:44 and 9:48 AM PST. **Step 2 passes on a node: circuit-check and its touched suites (56 of 56, the builder's tests among them). Your four rulings are done or answered below. I cross nothing and move no file.**
+
+**Runs since 9:20 AM PST.**
+- [run] r20261110-164629-ff1c (cpu-4, at a6a5c10aa3, `suites.py --changed e42861fca5 --quick`): `56 suites: 56 passed (0 cached), 0 failed`. The certifier's suite is 1200 passed: step 1's 1166 and the lengths row's 34. Step 2's head is 544cd87567, one README commit later (pushed).
+- [run] r20261110-165642-d5b4 (cpu-4, at e42861fca5): `KEPT: verdict REFUSED (branch exit 1, base exit 1)`; the digest is the base's byte for byte, 0 of 2 registrations, 3 of 3 certificates under each. The same lines as GLMLINK's run, with the same `art:` id [read: his run's `job.json`]. Refused by branch and base alike; not accepted.
+- Out: r20261110-171751-7d26, step 1 without `--quick`, on a slot since 9:38 AM PST. I report its verdict when it ends.
+
+**Ruling 1 (the 2,730 slots): the rule stays in `Shape` alone.** [run locally] With the import inside `WardenParams.__post_init__`, `tests/test_boundaries.py` fails `test_core_unit_imports_only_inward[core.protocols.certifier]` (`warden.py: verity.ml.protocols.certifier.lengths_row`). I reverted it; step 2's PR body draft says so; there is no second copy of the number. Not built, yours to rule if you want the device held [argued]: the rule can live in core's `connection_rows` (from `UNIT_CLASS_MAX`, which core's certifier may already import, and the lengths slot's size), with `Shape` and `WardenParams` both calling it: one rule, no new edge.
+
+**Ruling 2 (the lane hold): `main` has it.** [run locally: the probe on a worktree of `origin/main` e7b03e4a6c, its own `ingress_scan.py` and `warden.py`] The same table as step 1's head: accepts at n = 0, 1, refuses at n = 2, 4, 6 with the next connection admitted at s + D + 1; accepts at every n a bucket later. `ingress_scan.py` is the same blob on both. Step 1's PR body draft says it neither adds nor closes it. The "For step 3" comment is on NET-300 (six lines), with ruling 3's line. No test added.
+
+**Ruling 4 (the port's timing), my one line** [argued]: the builder is the same either way; "w's registration waits a window" costs it nothing, every read of the block staying inside w's record, while "carries w − 1's tables" makes the block's request row a read of window w − 1's committed values from w's record (a window offset in `reads` and in that read), which the compute side must keep open a window longer. Waiting costs less in the builder.
+
+**What was "after the layout" for me:** the crossing, the reruns on the moved tree, and the two PRs' opening. I do none of them. Both branches merge clean with `origin/main` e7b03e4a6c [run: `git merge-tree --write-tree`, exit 0, no path]. I have not merged it: both heads stay where their verdicts are, and a merge would need the quick tier again (about 85 min a branch). Both PR bodies' drafts are in my note at `main`'s paths; the crossing's mend is kept there as written.
+
+Note: `network-accounting/20261110T1550Z-state-net300-lengthsunit`.
+
