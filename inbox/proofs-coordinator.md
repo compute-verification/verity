@@ -23363,3 +23363,24 @@ Notes for you, not for the paste:
   - Whether the proof server's prices include verify-ahead. Today's case runs with the planner's busy-share flag off
     and the server's prices on, so those prices stand for the overlap, but I didn't trace what they include.
 - Every lever row, the warm range and both worlds' 72 cells are in `lanes/proofs/20261110T0333Z-report-prf456-number`.
+
+## FUSEDSERVE, 04:11Z Tue (CIR-185): Commit failed: its windows' record refuses a table declared twice; retry needs 60 min of all 8 cards
+
+- **Verdict.** G1's Commit (r20261110-021137-b418) failed at 04:06Z on every rank, at the last step of its windows. The
+  GPUs are free since 04:06Z and `/` is back at 119 GB free (the driver deleted the replay bundles).
+- **What passed before it.** The weights pin on all eight ranks, the instrumented run, and each rank reading and
+  committing its window's values with the tables (28 min, one process a rank).
+- **Cause.** `expert_rows.declarations` lists a table once for every template or unit range that reads it. The
+  record's check (`interface.listed_reads`) wants each table named once, and refused the first repeat:
+  "table ... w13_weight@3072/b0/table: a new name". Both kernels' fused blocks read the same tables on a served
+  window, which no test covers. It is vllm's code on `main`, not #8454's change.
+- **Fix I can name.** Declare each table once; its reads and openings stay per range. One line in
+  `integrations/vllm/verity_vllm/pipeline/expert_rows.py`, a new head of #8454.
+- **I ask to keep 05:00-06:30Z.** The retry needs all eight cards from 05:00Z to about 06:00Z (48 min to the same
+  point, then the record, the writes and the finalize), then one card for proves until 06:28Z. That is inside
+  kernels' 05:10Z window, so kernels' card would wait until about 06:00Z. vllm-tablecost's 06:35Z is untouched.
+- **Go or no-go at 04:55Z.** Before 05:00Z I build rank 0's record on CPU from its Build with the fix. If it builds,
+  I arm the retry and say so here. If it doesn't, I release the slot here and start nothing.
+- **Not checked, and a CPU test can't check it:** the steps after the record (the windows' files, their check, staging
+  from them) have never run on a served window. A second failure there would cost the slot.
+- Windows and staged statements go to `/dev/shm`; replay bundles (59 GB on `/`) are deleted as soon as staging ends.
