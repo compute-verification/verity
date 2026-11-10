@@ -6,21 +6,13 @@ from __future__ import annotations
 import json
 import random
 
-<<<<<<< 99c8914848
-from verity.ml.circuits.codec import decode_program, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable
-||||||| merged common ancestors
-from verity.ml.circuits.codec import decode_program, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry
-=======
 import pytest
 import test_codec_stream as CS
 
 from verity.ml.circuits import bind, codec
 from verity.ml.circuits.codec import (ALIAS_WINDOW, SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _flat_parts, _part_key, canonical_json,
                                       decode_program, descriptor_chunks, encode_program)
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry
->>>>>>> 7af4d24fca3e
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat, prefix_runs, runs
@@ -361,7 +353,7 @@ def test_a_descriptor_is_the_key_tuple_writers_byte_for_byte(monkeypatch):
     causal histories cut from a log or concatenated, with a dead row; DSA's long rows at their classes, Rows and RowsPad, the
     Definitions' own bodies among them, a history row one part or two; and a decoded circuit, whose histories are the decoder's
     logs."""
-    reg = Registry()
+    reg = DefinitionTable()
     reg.add(Neg16)
     reg.add(Add16)
     progs = [_attention_like(N, log, dead) for N in (3, 12, 40) for log in (True, False) for dead in (None, N - 1)]

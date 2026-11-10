@@ -507,15 +507,9 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
     """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
-<<<<<<< 99c8914848
     when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
     function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
     registered."""
-||||||| merged common ancestors
-           registered: dict | None = None, scheme: str = SCHEME) -> dict:
-=======
-    when given."""
->>>>>>> 7af4d24fca3e
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
@@ -588,13 +582,7 @@ def python(c: Case) -> dict:
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-<<<<<<< 99c8914848
                     schemas=p.get("row_schemas")).codes
-||||||| merged common ancestors
-                    p["partition"], p["work_table"], p["registered"]).codes
-=======
-                    schemas=p.get("schemas")).codes
->>>>>>> 7af4d24fca3e
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:

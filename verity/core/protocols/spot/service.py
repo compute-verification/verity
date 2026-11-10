@@ -150,19 +150,10 @@ registration to itself and the prover (`registration.check`'s `binding`). An out
 one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds `"halt"`, the halt's cause, and
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-**Not built yet.** A stream refuses a window statement, a timed session and a check with no proof deadline. After R1 to
-R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli` at `0 < p < 1`), and `select`
-refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't cover either.
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-**Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
-at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
-=======
-**Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline, and under a two-stage design more than one round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p` (`bernoulli`), and `select` refuses a
-closure map (`closure`), which the sampled audit's soundness statement doesn't cover either.
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+**Not built yet.** A stream refuses a window statement, a timed session and a check with no proof deadline, and under a
+two-stage design more than one round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p`
+(`bernoulli`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't cover
+either.
 """
 from __future__ import annotations
 
@@ -332,53 +323,11 @@ class Law:
         return {"rule": "law", "law": self.text}
 
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-Selection = All | Law
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-@dataclass(frozen=True)
-class Sequential:
-    """A timed session's draw, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
-    `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
-
-    law: str
-    population: str
-
-    def __post_init__(self) -> None:
-        if not _UNIFORM.match(str(self.law)):
-            raise ValueError(f"a sequential rule's law is uniform:k, not {self.law!r}")
-        if not (isinstance(self.population, str) and self.population):
-            raise ValueError("a sequential rule names its population's public item")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"rule": "sequential", "law": self.law, "population": self.population}
-
-
-Selection = All | Law | Sequential
-=======
-@dataclass(frozen=True)
-class Sequential:
-    """A timed session's sample, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
-    `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
-
-    law: str
-    population: str
-
-    def __post_init__(self) -> None:
-        if not _UNIFORM.match(str(self.law)):
-            raise ValueError(f"a sequential rule's law is uniform:k, not {self.law!r}")
-        if not (isinstance(self.population, str) and self.population):
-            raise ValueError("a sequential rule names its population's public item")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"rule": "sequential", "law": self.law, "population": self.population}
-
-
 def _grain(g: Any) -> bool:
     """`Select.grain?`: `partition.template_instance_query`'s form, exactly `{name, version, params: {template}}`."""
     return (isinstance(g, Mapping) and set(g) == {"name", "version", "params"} and g["name"] == "Q_template_instance"
             and type(g["version"]) is int and g["version"] == 0 and isinstance(g["params"], Mapping)
             and set(g["params"]) == {"template"} and isinstance(g["params"]["template"], str))
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
 
 
 def _replay_law(text: Any) -> bool:
@@ -417,7 +366,7 @@ class TwoStage:
                 "k": self.k if type(self.k) is int else dict(self.k)}
 
 
-Selection = All | Law | Sequential | TwoStage
+Selection = All | Law | TwoStage
 
 
 def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
@@ -496,19 +445,8 @@ class Spec:
         names = [v.name for v in self.values]
         if len(set(names)) != len(names):
             raise ValueError("a spec's values have distinct names")
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-        if _names_two_stage(self.selection):
-            raise ValueError(RETIRED_TWO_STAGE)
-        if not isinstance(self.selection, (All, Law)):
-            raise ValueError(f"a selection rule is All or Law, not {self.selection!r}")
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-        if _names_two_stage(self.selection):
-            raise ValueError(RETIRED_TWO_STAGE)
-        if not isinstance(self.selection, (All, Law, Sequential)):
-            raise ValueError(f"a selection rule is All, Law or Sequential, not {self.selection!r}")
-=======
-        if not isinstance(self.selection, (All, Law, Sequential, TwoStage)):
-            raise ValueError(f"a selection rule is All, Law, Sequential or TwoStage, not {self.selection!r}")
+        if not isinstance(self.selection, (All, Law, TwoStage)):
+            raise ValueError(f"a selection rule is All, Law or TwoStage, not {self.selection!r}")
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
             if not interior or not any(v.phase == "serve" and not v.registered for v in self.values):
@@ -519,7 +457,6 @@ class Spec:
         elif interior:
             raise ValueError(f"values {interior!r}: phase interior is a two-stage design's interior commitment, after "
                              "its first stage; a one-stage selection has none")
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
         if not isinstance(self.check, Check):
             raise ValueError("a spec's check is a Check")
         if not (isinstance(self.public, tuple) and all(isinstance(p, Public) for p in self.public)):
@@ -568,19 +505,9 @@ class Terms:
 class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
-    of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
-    of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
-=======
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the
     verifier reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
@@ -1024,30 +951,26 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
+    #: supplied, pinned, schemas, window_root, held, outputs), its window's seed salt and its history tables
     copies: tuple[Any, ...] = ()
     seed_salt: str | None = None
+    history: Mapping[str, Any] | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
     drawn_at: float | None = None
     sessions: list[str] | None = None
     outcome: Outcome | None = None
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
     session: ProofRun | None = None
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-    session: Session | None = None
-=======
-    session: Session | None = None
     #: under a two-stage design: the interior registration, its population program and what `register_interiors`
-    #: handed R1-R7 (as `copies`), then the second stage's sample and the coins it read
+    #: handed R1-R7 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
     interior_seed_salt: str | None = None
+    interior_history: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
 
 
 def _reading(x: Any) -> float | None:
@@ -1530,6 +1453,12 @@ class Fleet:
                 self._streams[j]._halt(d["ok"]["cause"])
 
 
+def _stream_values(values: Sequence[Any]) -> tuple[Any, ...]:
+    """A stream's values as tuples, each width a tuple where it is a leaf type's shape."""
+    return tuple(tuple(tuple(x) if isinstance(x, list) else x for x in v) if isinstance(v, (list, tuple)) else v
+                 for v in values)
+
+
 class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
@@ -1540,16 +1469,8 @@ class Stream:
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-    verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-    verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
-=======
     verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
     public parameters of the stream. `coins` is
     the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
     the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
@@ -1584,8 +1505,9 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each), which a registration registers as its
-    program's (R7); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
+    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
+    supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network certifier's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
     templates', one range each, in the window's order, and it is each registration's population program, a registration
@@ -1599,16 +1521,19 @@ class Stream:
     template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
     registration is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
     interior registration (`interior_program`), a second `select` on it is the second stage, and `deliver` and
-    `outcome` take that sample (the module docstring). A window's `values` are then the interior's.
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's, and so are its
+    `span_values`, `(name, leaves, width)` each in `values`' form with `leaves` a sampled span's: the interior program
+    over a replay sample of Q takes each at `leaves * Q`, after `values`, since under a rate sampling design Q is what the
+    first stage's coins chose (a table read's supplied root, one `Digest` a sampled span, say); the stream's digest names
+    them.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
-                 values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
-        if isinstance(spec.selection, Sequential):
-            raise ValueError("the service doesn't run a Sequential selection yet")
+                 values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
+                 replay: SpecializedDefinition | None = None, program: Program | None = None,
+                 span_values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> None:
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -1636,21 +1561,15 @@ class Stream:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
         if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
             raise ValueError(NO_OWN_COINS)
-        values = tuple(tuple(v) if isinstance(v, (list, tuple)) else v for v in values)
+        values, span_values = _stream_values(values), _stream_values(span_values)
         if values and isinstance(unit, SpecializedDefinition):
             raise ValueError("a stream of one template's instances takes no values: a window with values is a mixed "
                              "population of its templates (give its unit as a sequence of them)")
-        if values:
-            P.mixed_population_program([(u, 1) for u in units], values=values)
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-        try:
-            earlier = [(dict(r), R.digest(r)) for r in log]
-            R.held_roots(r for r, _d in earlier)
-        except (AttributeError, KeyError, TypeError, ValueError) as e:
-            raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
-                             f"entries name their value, domain and root: {type(e).__name__}: {e}") from None
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-=======
+        if span_values and (isinstance(unit, SpecializedDefinition) or replay is None):
+            raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
+                             "sequence of templates and its replay block")
+        if values or span_values:
+            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1676,17 +1595,17 @@ class Stream:
             self.n_rho = sum(self.cells)
         elif replay is not None:
             raise ValueError("only a two-stage stream has a replay block (Stream(replay=))")
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
-        self.rounds, self.values, self.program = rounds, values, program
+        self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {}),
+                               **({"span_values": [list(v) for v in span_values]} if span_values else {}),
                                **({"program": P.program_digest(program)} if program is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
@@ -1922,7 +1841,8 @@ class Stream:
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
-                 outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                 outputs: Mapping[str, Mapping[str, str]] | None = None,
+                 history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1931,7 +1851,7 @@ class Stream:
         the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held` and `outputs`, as `registration.check` takes them). Then the receipt. Under
+        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1978,7 +1898,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -2008,13 +1928,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-                                     window_root, held, outputs)))
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-                                     window_root, held)))
-=======
-                                     window_root, held, outputs), seed_salt))
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+                                     window_root, held, outputs), seed_salt, history))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2031,14 +1945,9 @@ class Stream:
         if not (isinstance(counts, Mapping) and set(counts) == set(ids)
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
             return None
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-        return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)])
-=======
         if self.program is not None:
             ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
             return self.program if ranges == dict(counts) else None
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
         return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
     def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
@@ -2100,7 +2009,8 @@ class Stream:
                            registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                            window_root: str | None = None, held: Sequence[str] | None = None,
-                           outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                           outputs: Mapping[str, Mapping[str, str]] | None = None,
+                           history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
@@ -2109,8 +2019,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links or wires: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`).
+        It names no links, wires or rows: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2129,7 +2039,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -2148,17 +2058,20 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
-        e.interior_seed_salt = seed_salt
+        e.interior_seed_salt, e.interior_history = seed_salt, history
         return reg
 
     def interior_program(self, q: int) -> Program:
         """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
         population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
-        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`)."""
+        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`), then its
+        `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
             return P.population_program(self.unit, q * self.n_rho)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)], values=self.values)
+        spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
+        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+                                          values=self.values + spans)
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its registration's order and token and its token; for a two-stage design's
@@ -2226,11 +2139,6 @@ class Stream:
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         return e.draw
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-    def session(self, draws: Sequence[Draw]) -> ProofRun:
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-    def session(self, draws: Sequence[Draw]) -> Session:
-=======
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
         assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
@@ -2264,8 +2172,7 @@ class Stream:
         e.second, e.second_read = got["draw"], got["read"]
         return e.second
 
-    def session(self, draws: Sequence[Draw]) -> Session:
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+    def session(self, draws: Sequence[Draw]) -> ProofRun:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive registrations in order, each
         round's registration its own tables of the session's statement: once, after the last covered sample. Its proof
         deadline is the first covered sample's (`Check.proof_deadline` from that sample), for every round it covers. Raises
@@ -2297,21 +2204,11 @@ class Stream:
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
         on the verifier (`outcome`). A `ProofRun`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-        draw's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
-        didn't open."""
-        if isinstance(draw, ProofRun):
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-        draw's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
-        didn't open."""
-        if isinstance(draw, Session):
-=======
         sample's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
         didn't open. Under a two-stage design the proof is the second stage's sample's, and the deadline counts from the
         first stage: before it, the first stage's sample is refused (`second` before the second stage, `not-drawn`
         after)."""
-        if isinstance(draw, Session):
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+        if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", **self._drawn_op(draw), "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
@@ -2328,8 +2225,8 @@ class Stream:
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
         `verifier.check_verdicts`); then one-stage's audit record by the verifier
-        (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `ProofRun` covers is decided alone, on the session's delivered records and its own
+        (`verifier.audit_record`; `proved_units` and `instances` default to the sample's, `served` and `session_roots` are
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A sample a `ProofRun` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a sample from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
@@ -2447,13 +2344,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-                      value_outputs=given)
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-                      binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins)
-=======
-                      value_outputs=given, seed_salt=e.seed_salt)
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py
+                      value_outputs=given, seed_salt=e.seed_salt, history=e.history)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2466,8 +2357,9 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links and wires, which it derives from the replay block's
-        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        interior program's strata make, the design's links and wires and their rows, which it derives from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
+        reads the verdicts report, what they
         name of each session they accepted
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
@@ -2494,8 +2386,9 @@ class Stream:
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
-                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
+        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
         accepted = rec["accepted"] and boundary["accepted"]
@@ -2516,10 +2409,10 @@ class Stream:
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
-                                "seed_salt": e.interior_seed_salt,
+                                "seed_salt": e.interior_seed_salt, "history": e.interior_history,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
@@ -2610,17 +2503,7 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/service.py
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
-           "ProofRun", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
-           "select_draw", "selection_law"]
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/service.py
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
-           "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
-           "select_draw", "selection_law"]
-=======
-           "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
+           "PHASES", "Pending", "ProofRun", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME",
+           "SOURCES", "Selection", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
            "replay_cells", "second_counts", "second_law", "select_draw", "select_second", "selection_law"]
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/service.py

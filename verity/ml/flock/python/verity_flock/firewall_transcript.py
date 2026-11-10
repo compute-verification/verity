@@ -4,16 +4,8 @@ the ZK server's own decision beside it. ``flock-firewall contract`` (``Flock.Fir
 decides the same transcript, held to the verifier's public input (``verity/firewall-public/v0``, `public`), never to
 anything the transcript says of itself; `firewall_agree.py` compares the two.
 
-<<<<<<< 99c8914848
-The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`InnerRun.handle`). It
-||||||| merged common ancestors
-The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`Session.handle`). It
-=======
 The recorder watches the ZK server from outside: a challenger that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`Session.handle`). It
->>>>>>> 7af4d24fca3e
+source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`InnerRun.handle`). It
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the ZK server's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
