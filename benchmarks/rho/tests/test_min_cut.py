@@ -268,6 +268,8 @@ def test_a_stated_most_a_block_reads_lowers_the_cap_and_charges_no_block_below_t
     assert under.slowdown == charged(54_300, most=20_000).slowdown > charged(54_300, 20_435).slowdown
     assert "no block charged, none reading more than the threshold w = 20435" in under.rests_on
     assert "at most 20000 of them in one block" in under.rests_on
+    assert charged(54_300, 20_435, most=20_435.5).charged == 0 == charged(54_300, 20_435.5, most=20_436.5).charged - 32
+    assert min_cut.best_w(C, TIED, blocks=2_379, untied=UNTIED, most=335_684.5, **SERVED) == 335_684
     over = charged(54_300, 20_435, most=20_436)
     assert (over.charged, over.cap, over.squares) == (32, TIED + 32 * 20_435, charged(54_300, 20_435).squares)
     few = charged(54_300, most=10)

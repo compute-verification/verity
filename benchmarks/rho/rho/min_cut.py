@@ -208,7 +208,7 @@ class Charged:
     #: the most untied words one block reads, where its caller states one; else `untied`, all of them
     most: float
     word: float
-    #: the blocks charged whole, at most: `⌊untied / (w + 1)⌋`, no more than `blocks`, and none where `most ≤ w`
+    #: the blocks charged whole, at most: `⌊untied / (w + 1)⌋`, no more than `blocks`, and none where `⌊most⌋ ≤ w`
     charged: float
     #: the MACs the charged blocks hold whole, at most: each its whole work, `c / mac_gates`
     charged_macs: float
@@ -248,7 +248,7 @@ class Charged:
         """What the figure rests on, as a sentence."""
         threshold = ("no threshold, so no block charged" if self.w == math.inf else
                      f"no block charged, none reading more than the threshold w = {self.w:.6g} untied words"
-                     if self.most <= self.w else
+                     if self.charged == 0 else
                      f"at most {self.charged:.6g} of {self.blocks:.6g} blocks charged whole at the threshold "
                      f"w = {self.w:.6g}, fixed before the period, each holding at most its gates over a MAC's "
                      f"{self.mac_gates:.4g}")
@@ -281,7 +281,7 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
 
     The count is `HECharged`'s at the period's blocks, `G` the blocks that read at most `w` untied words:
 
-    * at most `⌊untied / (w + 1)⌋` blocks are charged, and none where `most ≤ w`, each holding at most
+    * at most `⌊untied / (w + 1)⌋` blocks are charged, and none where `⌊most⌋ ≤ w`, each holding at most
       `c / mac_gates` MACs whole, MACs being disjoint;
     * all the blocks together read `T ≤ blocks · k + word · untied`;
     * a block of `G` that reads `w_u` untied words reads at most `k + word · w_u`, with `w_u ≤ v = min(w, most)` and
@@ -308,7 +308,9 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     over = min(w, most)  # the most untied words a block that isn't charged reads
     cap = k + word * over
     beta_x = beta(cap) if beta_x is None else beta_x
-    charged = 0 if most <= w else min(blocks, math.floor(untied / (w + 1)))
+    # words are whole: a block that reads at most `most` of them reads at most `⌊most⌋`
+    under = most <= w or (most < math.inf and math.floor(most) <= w)
+    charged = 0 if under else min(blocks, math.floor(untied / (w + 1)))
     total = blocks * k + word * untied
     squares = blocks * k ** 2 + word * min(untied, blocks * over) * (2 * k + word * over)
     premises = (HARDNESS, EXPORTS, UNTIED_WORDS, WORD_BITS)
