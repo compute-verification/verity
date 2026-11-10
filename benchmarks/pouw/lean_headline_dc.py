@@ -604,6 +604,14 @@ def certificate(cert: dict[str, float], digits: int = 9) -> dict[str, Fraction]:
 
 
 OUT = LH.ROOT / "Security" / "Definitions" / "Accounting" / "HeadlineDc"
+
+
+def _as_written(path: str) -> str:
+    """A Lean file's path as the generated modules' doc comments name it: its top directory with the capital it had when
+    they were written. A layout move that renames that directory leaves Lean sources byte for byte (Lake builds from
+    them), so the committed modules keep the old name, and what this writes must stay what they hold."""
+    top, _, rest = path.partition("/")
+    return f"{top.capitalize()}/{rest}"
 SHEET_ROW = {"DS_issue": ".issue", "DS_tensor": ".tensor", "DS_smem": ".smem"}
 SHAPES = {"Sm90": "sm_90's wgmma as one warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at "
                   "its dense twin's, its mma.sync whole, DMMA's at the f64 peak",
@@ -712,7 +720,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
         f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}` as "
-        f"`{fam.sh.lean}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
+        f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
         f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
         f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "

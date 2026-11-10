@@ -515,7 +515,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 POUS = "verity/core/protocols/pous/lean"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json"
-UP = "../../../../../Security/Proofs/lakefile.toml"
+UP = posixpath.relpath("Security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
 VECTORS = ('{"a": 1}', '{"b": 2}')
@@ -3488,7 +3488,8 @@ ROOT = Path(__file__).resolve().parents[3]
 #: inputs with that commit's own code (`lean_keys`)
 KEY_FILES = ("tools/verity/lean/lean_changed.py", "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py",
              "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "tools/verity/lean/siblings.py",
-             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
+             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/moved.py", "tools/verity/lean/settings.py",
+             "tools/verity/check/common.py",
              "tools/verity/check/slot.py", "tools/verity/check/lean_slot.py", "tools/verity/graph/verity_graph/contract.py")
 #: two Lake packages, `pkg` requiring `lib` by path, each with its toolchain
 LAKE = {"pkg/lakefile.toml": 'name = "pkg"\n', "pkg/lean-toolchain": "v1\n",
