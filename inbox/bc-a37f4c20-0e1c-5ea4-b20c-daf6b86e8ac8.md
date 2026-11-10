@@ -413,3 +413,22 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
 - **Daniel's standing word (1:42 PM PST, 21:42Z), for every lead: a branch gets its PR once its checks pass, with no ask each time.** From now you open your own: `research queue open --head BRANCH --sha SHA --title T --body-file F --issue KEY --by proofs`, with `Lane proofs` as the body's first line and a `Goal proofs/...` line. Leave it unmarked and name its number in your entry; I mark. The hook refuses a `git push` whose branch is a shell variable: write the branch and SHA out.
 - **`main` moved to `2b869ed35db5` at about 21:30Z** (16 PRs: #8411, which changes `Security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean`; #8470, lock records; 22 files of `verity/ml/definitions`; `integrations/vllm`; `tools/move`; `tools/research`). **Our rule since 20:28Z stands: no mark unless the head holds `main`'s tip with its runs at that head, or you show for each run that nothing it reads changed.** Rule 1 (CI-489) is unchanged: no push to a marked PR that a candidate holds or that has its land verdict.
 - **For you (ACCOUNTD):** #8539 (`980eb64b368e`) holds `5482988e3496`, not the new tip; it merges clean with it [my `git merge-tree`, 21:40Z]. Its lock-only commit goes on a merge with the new tip, since #8411 and #8470 both change `Security/lean-audit.json` and `Security/Properties/lean-audit.json`. Say which of `e4b1` and `2209` still count after that.
+
+## proofs coordinator, Tue 10 Nov 22:40Z: `2209` failed, on R8 refusing vllm's edge-history test program. Decide whose fix it is
+
+**What I read in `r20261110-204111-2209`** (cpu-6, head `980eb64b368e`, base `5482988e3496`) [run and read by me]:
+
+- One suite failed, `verity-vllm`: 3 failed, 13,828 passed. Every other suite passed.
+- All three are in `integrations/vllm/tests/pipeline/test_edge_history.py`, and all on `R8-shared-input`:
+  - `test_an_honest_two_window_serve_registers_and_verifies_its_history`: the honest serve is refused, `{'R8-shared-input': {'inputs': [0], …}}`, at `Q_template_instances` with `GpTestEdge_v1{LP=3,C=0,E=4,LAST=false,CHK=0}`.
+  - `test_window_ws_verifier_refuses_an_edge_port_under_another_domain`: codes are `('R3-domain', 'R8-shared-input')`, the test wants `('R3-domain',)`.
+  - `test_tampered_history_is_refused_by_name`: `('R7-held', 'R8-shared-input')`, wants `('R7-held',)`.
+- `e4b1` still waits on cpu-8.
+
+**What I need, in one entry:**
+
+1. Is R8 right here? Does that program's run Input 0 have its leaves read by more than one proof block, the case R8 is there to refuse, or does R8 catch a case it should let through?
+2. Whose fix is it, and the smallest one: the test program gives each block its own leaves or registers the value, or R8 narrows. Name the file's owner from the registry.
+3. Two sentences I can pass to network-accounting on what R8 means for their edge program. They asked on NET-302, and I owe them Wed 18:00Z.
+
+**Then:** read CI-489, merge `main` (`2b869ed35db5`) into #8539, apply the fix, rerun, and write "ready to mark #8539 at" with the full SHA. If the fix is in a file that is not ours, commit it and name the owner in the entry's heading: I tell them before the mark.
