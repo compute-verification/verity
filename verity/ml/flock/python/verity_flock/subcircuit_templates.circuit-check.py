@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 #: the parameters each template is checked at: the workload ones where Flock pins its unit circuit, else small (a template's
-#: example is its served size)
+#: example is its served size); an entry ``<template>@<name>`` checks some of a template's instances as a binding of their own
 TEMPLATE_PARAMS = {
     "gemm-coordinate": [{"K": 64, "semantics": "sm80.mma.m16n8k16.bf16"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k16.bf16"},
                         {"K": 64, "semantics": "sm89.mma.m16n8k32.e4m3"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k32.e4m3"},
@@ -18,9 +18,12 @@ TEMPLATE_PARAMS = {
     "rmsnorm-triton-v5": [{"N": 128, "EPS": 1e-06}],
     "silu-mul": [{"I": 8192}],
     "silu-mul-v2": [{"I": 256}, {"I": 1536}],
-    # GLM-5.3's hidden 6144 at both launches of each kernel (fewer than 256 tokens, then 256 or more)
-    "rmsnorm-fused-cuda-vec8": [{"N": 6144, "EPS": 1e-05, "BLOCK": 1024}, {"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
-    "rmsnorm-cuda-vec8": [{"N": 6144, "EPS": 1e-05, "BLOCK": 768}, {"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
+    # GLM-5.3's hidden 6144 at both launches of each kernel (fewer than 256 tokens, then 256 or more), each launch a binding
+    # of its own, so a task of its own: one launch's unit is about 2^21.7 ANDs
+    "rmsnorm-fused-cuda-vec8@b1024": [{"N": 6144, "EPS": 1e-05, "BLOCK": 1024}],
+    "rmsnorm-fused-cuda-vec8@b256": [{"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
+    "rmsnorm-cuda-vec8@b768": [{"N": 6144, "EPS": 1e-05, "BLOCK": 768}],
+    "rmsnorm-cuda-vec8@b256": [{"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
     "gumbel-top-p-token-select": [{"V": 64}],
     "token-select-greedy": [{"V": 64}],
     "embedding-row": [{"V": 64, "H": 16}],
