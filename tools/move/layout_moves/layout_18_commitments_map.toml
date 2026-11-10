@@ -1,6 +1,6 @@
 # The layout move of commitments, hashes, signatures and the challenge derivation, to `verity/commitments`: what
-# `tools/move/layout.py --map tools/move/layout_18_commitments_map.toml` moves and rewrites. 135 files in 75 rows.
-# Written by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
+# `tools/move/layout.py --map tools/move/layout_moves/layout_18_commitments_map.toml` moves and rewrites. 140 files
+# in 45 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
@@ -55,46 +55,15 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/commitments/row_table.py" = "verity/commitments/row_table.py"
 "verity/ml/commitments/rowleaf.py" = "verity/commitments/rowleaf.py"
 "verity/ml/commitments/scheme.py" = "verity/commitments/scheme.py"
-"verity/ml/commitments/tests/fixtures/" = "verity/commitments/tests/fixtures/"
-"verity/ml/commitments/tests/lms_rfc8554_tc2.json" = "verity/commitments/tests/lms_rfc8554_tc2.json"
-"verity/ml/commitments/tests/test_advice.py" = "verity/commitments/tests/test_advice.py"
-"verity/ml/commitments/tests/test_boolean_compress_calls.py" = "verity/commitments/tests/test_boolean_compress_calls.py"
-"verity/ml/commitments/tests/test_boolean_embedding.py" = "verity/commitments/tests/test_boolean_embedding.py"
-"verity/ml/commitments/tests/test_boolean_frame_v3.py" = "verity/commitments/tests/test_boolean_frame_v3.py"
-"verity/ml/commitments/tests/test_boolean_hm96.py" = "verity/commitments/tests/test_boolean_hm96.py"
-"verity/ml/commitments/tests/test_boolean_lms.py" = "verity/commitments/tests/test_boolean_lms.py"
-"verity/ml/commitments/tests/test_boolean_merkle.py" = "verity/commitments/tests/test_boolean_merkle.py"
-"verity/ml/commitments/tests/test_boolean_rowleaf.py" = "verity/commitments/tests/test_boolean_rowleaf.py"
-"verity/ml/commitments/tests/test_coin_tree.py" = "verity/commitments/tests/test_coin_tree.py"
-"verity/ml/commitments/tests/test_frame_v3.py" = "verity/commitments/tests/test_frame_v3.py"
-"verity/ml/commitments/tests/test_history.py" = "verity/commitments/tests/test_history.py"
-"verity/ml/commitments/tests/test_hm96.py" = "verity/commitments/tests/test_hm96.py"
-"verity/ml/commitments/tests/test_hm96_batch.py" = "verity/commitments/tests/test_hm96_batch.py"
-"verity/ml/commitments/tests/test_identity.py" = "verity/commitments/tests/test_identity.py"
-"verity/ml/commitments/tests/test_indexed.py" = "verity/commitments/tests/test_indexed.py"
-"verity/ml/commitments/tests/test_layout.py" = "verity/commitments/tests/test_layout.py"
-"verity/ml/commitments/tests/test_lms.py" = "verity/commitments/tests/test_lms.py"
-"verity/ml/commitments/tests/test_lms_hss.py" = "verity/commitments/tests/test_lms_hss.py"
-"verity/ml/commitments/tests/test_lms_lean_difftest.py" = "verity/commitments/tests/test_lms_lean_difftest.py"
-"verity/ml/commitments/tests/test_lms_sign_lean_difftest.py" = "verity/commitments/tests/test_lms_sign_lean_difftest.py"
-"verity/ml/commitments/tests/test_multiproof.py" = "verity/commitments/tests/test_multiproof.py"
-"verity/ml/commitments/tests/test_row_table.py" = "verity/commitments/tests/test_row_table.py"
-"verity/ml/commitments/tests/test_rowleaf_bits.py" = "verity/commitments/tests/test_rowleaf_bits.py"
-"verity/ml/commitments/tests/test_rowleaf_nvfp4.py" = "verity/commitments/tests/test_rowleaf_nvfp4.py"
-"verity/ml/commitments/tests/test_rowleaf_seg.py" = "verity/commitments/tests/test_rowleaf_seg.py"
-"verity/ml/commitments/tests/test_scheme.py" = "verity/commitments/tests/test_scheme.py"
-"verity/ml/commitments/tests/test_sha512_framings.py" = "verity/commitments/tests/test_sha512_framings.py"
-"verity/ml/commitments/tests/test_turboshake.py" = "verity/commitments/tests/test_turboshake.py"
-"verity/ml/commitments/tests/test_window.py" = "verity/commitments/tests/test_window.py"
+"verity/ml/commitments/tests/" = "verity/commitments/tests/"
 "verity/ml/commitments/window.py" = "verity/commitments/window.py"
 "verity/ml/crypto/" = "verity/commitments/crypto/"
 "verity/ml/randomness/" = "verity/commitments/randomness/"
 
 [tokens]
-# directories this move shares with other moves, as a reference to one reads after it
+# directories no row moves whole, as a reference to one reads after the move
 "verity/ml/commitments/" = "verity/commitments/"
 "verity/ml/commitments/gates/" = "verity/commitments/gates/"
-"verity/ml/commitments/tests/" = "verity/commitments/tests/"
 
 [retired]
 paths = []
@@ -107,13 +76,13 @@ paths = []
 # archive), and files whose bytes a digest pins.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
            "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
-           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
-           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
-           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
-           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
-           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
-           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+           "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py",
+           "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
 
 [modules]
@@ -146,36 +115,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.ml.commitments.row_table" = "verity.commitments.row_table"
 "verity.ml.commitments.rowleaf" = "verity.commitments.rowleaf"
 "verity.ml.commitments.scheme" = "verity.commitments.scheme"
-"verity.ml.commitments.tests.fixtures" = "verity.commitments.tests.fixtures"
-"verity.ml.commitments.tests.test_advice" = "verity.commitments.tests.test_advice"
-"verity.ml.commitments.tests.test_boolean_compress_calls" = "verity.commitments.tests.test_boolean_compress_calls"
-"verity.ml.commitments.tests.test_boolean_embedding" = "verity.commitments.tests.test_boolean_embedding"
-"verity.ml.commitments.tests.test_boolean_frame_v3" = "verity.commitments.tests.test_boolean_frame_v3"
-"verity.ml.commitments.tests.test_boolean_hm96" = "verity.commitments.tests.test_boolean_hm96"
-"verity.ml.commitments.tests.test_boolean_lms" = "verity.commitments.tests.test_boolean_lms"
-"verity.ml.commitments.tests.test_boolean_merkle" = "verity.commitments.tests.test_boolean_merkle"
-"verity.ml.commitments.tests.test_boolean_rowleaf" = "verity.commitments.tests.test_boolean_rowleaf"
-"verity.ml.commitments.tests.test_coin_tree" = "verity.commitments.tests.test_coin_tree"
-"verity.ml.commitments.tests.test_frame_v3" = "verity.commitments.tests.test_frame_v3"
-"verity.ml.commitments.tests.test_history" = "verity.commitments.tests.test_history"
-"verity.ml.commitments.tests.test_hm96" = "verity.commitments.tests.test_hm96"
-"verity.ml.commitments.tests.test_hm96_batch" = "verity.commitments.tests.test_hm96_batch"
-"verity.ml.commitments.tests.test_identity" = "verity.commitments.tests.test_identity"
-"verity.ml.commitments.tests.test_indexed" = "verity.commitments.tests.test_indexed"
-"verity.ml.commitments.tests.test_layout" = "verity.commitments.tests.test_layout"
-"verity.ml.commitments.tests.test_lms" = "verity.commitments.tests.test_lms"
-"verity.ml.commitments.tests.test_lms_hss" = "verity.commitments.tests.test_lms_hss"
-"verity.ml.commitments.tests.test_lms_lean_difftest" = "verity.commitments.tests.test_lms_lean_difftest"
-"verity.ml.commitments.tests.test_lms_sign_lean_difftest" = "verity.commitments.tests.test_lms_sign_lean_difftest"
-"verity.ml.commitments.tests.test_multiproof" = "verity.commitments.tests.test_multiproof"
-"verity.ml.commitments.tests.test_row_table" = "verity.commitments.tests.test_row_table"
-"verity.ml.commitments.tests.test_rowleaf_bits" = "verity.commitments.tests.test_rowleaf_bits"
-"verity.ml.commitments.tests.test_rowleaf_nvfp4" = "verity.commitments.tests.test_rowleaf_nvfp4"
-"verity.ml.commitments.tests.test_rowleaf_seg" = "verity.commitments.tests.test_rowleaf_seg"
-"verity.ml.commitments.tests.test_scheme" = "verity.commitments.tests.test_scheme"
-"verity.ml.commitments.tests.test_sha512_framings" = "verity.commitments.tests.test_sha512_framings"
-"verity.ml.commitments.tests.test_turboshake" = "verity.commitments.tests.test_turboshake"
-"verity.ml.commitments.tests.test_window" = "verity.commitments.tests.test_window"
+"verity.ml.commitments.tests" = "verity.commitments.tests"
 "verity.ml.commitments.window" = "verity.commitments.window"
 "verity.ml.crypto" = "verity.commitments.crypto"
 "verity.ml.randomness" = "verity.commitments.randomness"

@@ -39,9 +39,11 @@ def no_rows_of_the_real_tree(monkeypatch):
         monkeypatch.setattr(G, table, empty)
 
 
-def plan(tracked=TRACKED, data=DATA):
+def plan(tracked=TRACKED, data=DATA, suites=()):
+    """What `G.plan` gives: {file: (new path, component, move)}, with the emptied `__init__.py`s under "emptied"."""
     said = []
-    return G.plan(data, G.place(data, set(tracked), said.append), said.append), said
+    dest, emptied, _ = G.plan(data, G.place(data, set(tracked), said.append), said.append, suites)
+    return {**dest, "emptied": emptied}, said
 
 
 def test_a_file_goes_to_its_components_directory_under_the_name_it_has_today():
@@ -54,15 +56,36 @@ def test_a_file_goes_to_its_components_directory_under_the_name_it_has_today():
     assert "tools/t.py" not in dest
 
 
-def test_a_sidecar_goes_with_its_module_and_an_emptied_package_level_is_archived_last():
+def test_a_sidecar_goes_with_its_module_and_an_emptied_package_levels_init_stays():
     dest, said = plan()
     assert dest["verity/ml/gates/b.py"][0] == "verity/protocols/poub/verifier/gates/b.py"
     assert dest["verity/ml/gates/b.circuit-check.py"] == ("verity/protocols/poub/verifier/gates/b.circuit-check.py", "ops", "poub")
     assert any(s.startswith("with its module: verity/ml/gates/b.circuit-check.py") for s in said)
-    for level in ("verity/core/devices", "verity/ml/gates"):       # each stays, and every other file under it leaves
-        assert dest[f"{level}/__init__.py"] == (f"archive/{level}/__init__.py", "stays", "emptied")
+    # each stays and every other file under it leaves: no row, and it is named for the commit that deletes it
+    assert dest["emptied"] == ["verity/core/devices/__init__.py", "verity/ml/gates/__init__.py"]
+    assert "verity/core/devices/__init__.py" not in dest and "verity/ml/gates/__init__.py" not in dest
     kept, _ = plan([*TRACKED, "verity/ml/gates/stays.py"], {**DATA, "stays": [*DATA["stays"], "verity/ml/gates/stays.py"]})
-    assert "verity/ml/gates/__init__.py" not in kept
+    assert kept["emptied"] == ["verity/core/devices/__init__.py"]
+    # archived while a module of its package is not: a row would rename the package, and every mention left, to `archive.…`
+    archived = {**DATA, "stays": ["tools/t.py", "verity/ml/gates/__init__.py"], "archived": [*DATA["archived"], "verity/core/devices/__init__.py"]}
+    assert plan(data=archived)[0]["emptied"] == dest["emptied"]
+
+
+def test_a_suite_moves_whole_with_its_pyproject():
+    data = {**DATA, "stays": [*DATA["stays"], "tools/pyproject.toml"],
+            "components": [*DATA["components"], {"id": "kernels", "to": "verity/definitions", "part": "",
+                                                 "paths": ["verity/core/protocols/pouw/tests/test_kernel.py"]},
+                           {"id": "t", "to": "verity/definitions", "part": "", "paths": ["tools/tests/test_t.py"]}]}
+    tracked = [*TRACKED, "verity/core/protocols/pouw/pyproject.toml", "verity/core/protocols/pouw/tests/test_kernel.py",
+               "verity/core/protocols/pouw/tests/fixtures/k.json", "tools/pyproject.toml", "tools/tests/test_t.py"]
+    suites = [("verity/core/protocols/pouw/pyproject.toml", ["verity/core/protocols/pouw/tests"]), ("tools/pyproject.toml", ["tools/tests"])]
+    alone, _ = plan(tracked, data)
+    assert alone["verity/core/protocols/pouw/tests/test_kernel.py"][0] == "verity/definitions/pouw/tests/test_kernel.py"
+    dest, said = plan(tracked, data, suites)
+    assert dest["verity/core/protocols/pouw/tests/test_kernel.py"] == ("verity/protocols/pouw/verifier/tests/test_kernel.py", "kernels", "pouw")
+    assert dest["verity/core/protocols/pouw/tests/fixtures/k.json"][0] == "verity/protocols/pouw/verifier/tests/fixtures/k.json"
+    assert ("with its suite: 1 file of kernels goes to verity/protocols/pouw/verifier/tests, not verity/definitions/pouw/tests") in said
+    assert "tools/tests/test_t.py" in alone and "tools/tests/test_t.py" not in dest      # its suite stays, and so does it
 
 
 def test_a_file_the_data_does_not_know_goes_with_its_directory_or_stops_the_script_by_name():

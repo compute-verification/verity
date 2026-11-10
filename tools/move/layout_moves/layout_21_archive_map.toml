@@ -1,5 +1,5 @@
 # The layout move of what the layout archives, to `archive`: what `tools/move/layout.py --map
-# tools/move/layout_21_archive_map.toml` moves and rewrites. 126 files in 20 rows. Written by
+# tools/move/layout_moves/layout_21_archive_map.toml` moves and rewrites. 129 files in 23 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -29,6 +29,9 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "benchmarks/network_traces/tests/test_demo_endpoint.py" = "archive/benchmarks/network_traces/tests/test_demo_endpoint.py"
 "benchmarks/pous/hbm_audit/" = "archive/benchmarks/pous/hbm_audit/"
 "benchmarks/resource_accounting/" = "archive/benchmarks/resource_accounting/"
+"benchmarks/torch_gpu/commit_slots/green_probe.py" = "archive/benchmarks/torch_gpu/commit_slots/green_probe.py"
+"benchmarks/torch_gpu/commit_slots/overlap.py" = "archive/benchmarks/torch_gpu/commit_slots/overlap.py"
+"benchmarks/torch_gpu/commit_slots/overlap.sh" = "archive/benchmarks/torch_gpu/commit_slots/overlap.sh"
 "examples/h200/" = "archive/examples/h200/"
 "verity/core/protocols/bandwidth/" = "archive/verity/core/protocols/bandwidth/"
 "verity/core/protocols/pous/period_reports.py" = "archive/verity/core/protocols/pous/period_reports.py"
@@ -45,13 +48,13 @@ paths = []
 # archive), and files whose bytes a digest pins.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
            "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
-           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
-           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
-           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
-           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
-           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
-           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+           "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py",
+           "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
 
 [modules]
@@ -65,6 +68,8 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks.network_traces.tests.test_demo_endpoint" = "archive.benchmarks.network_traces.tests.test_demo_endpoint"
 "benchmarks.pous.hbm_audit" = "archive.benchmarks.pous.hbm_audit"
 "benchmarks.resource_accounting" = "archive.benchmarks.resource_accounting"
+"benchmarks.torch_gpu.commit_slots.green_probe" = "archive.benchmarks.torch_gpu.commit_slots.green_probe"
+"benchmarks.torch_gpu.commit_slots.overlap" = "archive.benchmarks.torch_gpu.commit_slots.overlap"
 "examples.h200" = "archive.examples.h200"
 "verity.core.protocols.bandwidth" = "archive.verity.core.protocols.bandwidth"
 "verity.core.protocols.pous.period_reports" = "archive.verity.core.protocols.pous.period_reports"
