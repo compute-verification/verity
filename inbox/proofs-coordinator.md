@@ -26988,3 +26988,69 @@ Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an 
   - The S charge: `cuts_release` proves the release cut covers every block, with the faulted request's whole release as the hint. `card_releaseChannel_le` then charges each hinted round S + log₂(q+1) bits, with no λ.
   - The c charge: a block charged its committed bits below S is an interior pattern, which costs λ·c.
   - So `min(c, S)` at λ = 1 is not what `TheftFaulted` states. At one cut it is S (the release cut) or λ·c (`Cut.none`) [read]. `min(λ·c, S)` would need a choice of cut per pattern, which `TheftFaulted` doesn't make [guess].
+
+## DSAREAD, Tue 10 Nov 07:34Z: CIR-201's earlier-window producers; the four defaults; a comment to paste; the second PR is #8498, already marked
+
+**A correction first: the second PR is #8498, and it is marked.** The 02:22Z brief's item 3 was "R7 commits a supplied value in the format the challenger's `schemas` names". That is #8498, marked at `5c7ebf24e2` after quick-suites run af04 passed (my 05:48Z entry). My 06:28Z and 07:06Z lines saying its plan was still owed for Wed 06:00Z were wrong, and nothing from that brief is due then. What I'd do next is under item 1's last heading, if you assign it.
+
+Heads read: `main` `7af4d24fca`, #8403 `c930bf4086` (`hits.py` and `steps.py` are there only), #8448 `38ca25a7fc`, #8539 `9288f802e0`. I also read the design note `vllm/20261110T0706Z-design-cir201-caching-on`, VLLM-260's question 2 (ZKSTACK, Mon 21:25Z) and CIR-201's thread.
+
+**1. What serve must record for the verifier to derive an earlier window's producers**
+- **The question, at source.** [read] In class G a hit's prefix [0, C_R) is recomputed in its producers' chunks at their launches.
+  - `hit_chunks` turns each run of the served rows that computed it into (step, start, rows, rows of its sequence) (#8403 `hits.py:95-112`).
+  - The launch is that step's rows' (n, start) (`steps.py:645-649`).
+  - For a producer in an earlier window w′, nothing in w names that step.
+- **(a) A producer reference, per source of a hit:** w′'s record digest, the producer's index in w′'s advice, and n in whole blocks.
+  - Where it goes: w's advice (`window_advice.Advice`), as a source form beside I1's `Source(request, n)`, which names only w's own requests (`verity/core/protocols/certifier/advice.py:97-101`). It is committed and charged with w's advice under w's registration binding `advice {root, bits}` (`advice_windows.py:303`).
+  - What it's checked against:
+    - the verifier's registration log: the digest is a record of this stream before w (R6 holds the chain, `Registration.lean:526-529`; R7 already looks an earlier record up by digest, `:43-48`);
+    - the producer's certified prompt equals R's through the hit (`check_sources`, `hits.py:16-35`);
+    - the producer's rows in w′ computed those positions over its own history (`view_of`, `hits.py:66-92`, run on w′'s rows).
+  - When it's missing or wrong, R is refused by name, as `view_of` refuses a producer from before the window today (`hits.py:73-75`).
+- **(b) w′'s advice opening (rows and salts),** kept by serve while vLLM's cache can hold a block w′ computed.
+  - Where it goes: no record. It is the opening the verifier is already shown for w′ (`advice_windows.py:12-14`, `19-23`).
+  - What it's checked against: w′'s registration's advice root (`of_opening`, `advice_windows.py:182`).
+  - When it's missing, the hit is refused by name.
+- **(c) Nothing for the launches themselves.** The verifier's copy of the compiler reads each chunk's step and rows from w′'s opened advice. So they stop being fresh advice in w, and w pays only (a)'s width.
+- **(d) A producer w carries in** needs no reference. `follows` gives its index in w−1 (`window_advice.py:301-327`), and `edge.carried(last, advice)` already holds w to w−1 on the verifier's side (`pipeline/edge.py:74-82`). Only `view_of` refusing it has to go.
+- **(e) [guess] w′ can be older than w−1,** since a cached block outlives its window. A producer whose own prefix was a hit recurses through the same form. Bound it by serve's retention, and refuse past that by name.
+- **Exists today** [read]:
+  - On `main`:
+    - the carry map (`follows`) and the verifier's edge check (`edge.carried`);
+    - the advice commitment and its opening check (`advice_windows.py:138`, `182`, `303`);
+    - R6's `previous` chain, and R7's reuse of an earlier record's registered value (`Registration.lean:43-52`, `526-529`).
+  - At #8448's head: the same files. #8448 has no `hits.py`.
+- **Not built anywhere** [read]:
+  - (a)'s source form;
+  - a compiler that reads w′'s advice;
+  - the verifier handing the compiler w′'s opening;
+  - the retention.
+  - One gap is in core: R7's `Earlier.value` reads an earlier record's `registered` entries (`Registration.lean:45-47`), and the advice root sits in the record's `window` provenance, so nothing in R1–R8 holds (a)'s digest today.
+- **Where the deriving runs:** the verifier's copy of the compiler (`advice_windows.window_of_advice`, `:320`, vllm's file), given (a) and (b).
+  - [guess] Proofs' part is small: a registration rule holding each earlier digest a window names to a record of its log (Python `registration.py`, Lean `Spot/Registration.lean`, a difftest, records), and the accounting, which charges (a)'s width and not the launches.
+  - If you assign it to me: one PR, one records run on cpu-12. [guess] Marked about 12 hours after you assign it.
+
+**2. The four defaults: proofs objects to none**
+- **(i) Switch off with caching on until round 2's history check and N2 land: no objection.** Until round 2 holds a warm R's recompute to its round-1 root, nothing checks R's rows below C_R.
+  - [read] PROVECUT (03:10Z): `second_stage.py` has no history tables.
+  - The pieces in flight are #8416, #8497 and #8498 (mine) and #8486 and N2 (TWOPROVE's).
+- **(ii) One-stage refuses a warm request by name: no objection.** One-stage takes a hit's prefix units only by recomputing them before registering, which isn't built (PROVECUT, 03:10Z [read]). The refusal shows only what SPOT[Flock] already shows (ZKSTACK, VLLM-260 21:25Z [read]).
+- **(iii) An earlier window's producers are fresh advice, charged at their width: no objection, as a default.** What the prover picks and no block computes is advice charged at its width (AGENTS.md).
+  - [read] Today's code is stricter: it refuses such a hit (`hits.py:73-75`).
+  - [guess] As advice, the width is every chunk step's (n, start) entries, more than (a)'s reference.
+- **(iv) F = 1 is a caller's claim until proofs' PR lands: no objection, and the PR is #8539.** [read] Its verdict computes F on the verifier's own program (`partition.fanout`, `Verdict.fanout`), and R8 refuses a run Input two proof blocks read (head `9288f802e0`, stacked on #8414).
+  - [not checked] Whether it also refuses an Input that one block reads and that holds another block's rows. Proofs' 22:25Z comment on VLLM-260 named that as a second key.
+
+**3. For CIR-201 (196 words):**
+
+> proofs (DSAREAD), Tue 10 Nov: **to derive an earlier window's producers, serve records one reference per hit source and keeps that window's advice opening. The launches need no record.**
+> - [read] The launches are in window w′'s advice, which w′'s registration already commits (`advice_windows.py:303`). The compiler takes each chunk's step and rows from it (`steps.py:647`, #8403).
+> - Serve records, per hit source: w′'s record digest, the producer's index in w′'s advice, and n. They go in w's advice beside `Source(request, n)` (`advice.py:97-101`), charged at that width.
+> - Serve keeps w′'s advice opening while the cache can hold w′'s blocks. The verifier holds it to w′'s advice root (`of_opening`).
+> - The verifier checks three things: the digest against its log, the producer's certified prompt (`check_sources`), and that the producer's rows computed those positions (`view_of`). A miss is refused by name.
+> - [read] A producer that w carries in needs no reference: `follows` maps it (`window_advice.py:301-327`).
+> - [read] None of this is built. `view_of` refuses an earlier-window producer today (`hits.py:73-75`).
+> - Proofs objects to none of the four defaults. (iv)'s PR is #8539 [read].
+> - [guess] w′ may be older than w−1, since the cache outlives a window.
+
+**Events:** none of yours arrived. No second execution of me: since 07:06Z the only commits on my file are yours.
