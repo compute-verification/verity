@@ -186,7 +186,10 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
       cases hpop : Spot.nat? (Spot.getD own.boundary "population") with
       | none => simp [hf, hpop] at hm
       | some m =>
-        simp only [hf, hpop, Bool.and_eq_true] at hm
+        cases hro : Spot.SecondStage.rowsOf own p.template port with
+        | none => simp [hf, hpop, hro] at hm
+        | some ro =>
+        simp only [hf, hpop, hro, Bool.and_eq_true] at hm
         have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk]
         have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hvl]
         rw [hRI, hRK]
@@ -205,8 +208,11 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
         cases hpw : Spot.SecondStage.writerOf own w with
         | none => simp [hfi, hpw] at hok
         | some pw =>
-          simp only [hfi, hpw, Bool.and_eq_true] at hok
-          obtain ⟨-, hsx, -⟩ := hok
+          cases hro : Spot.SecondStage.rowsOf own p.template port with
+          | none => simp [hfi, hpw, hro] at hok
+          | some ro =>
+          simp only [hfi, hpw, hro, Bool.and_eq_true] at hok
+          obtain ⟨-, ⟨hsx, -⟩, -⟩ := hok
           have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hfi]
           have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hfi]
           rw [hRI, hRK]

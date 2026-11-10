@@ -4,23 +4,25 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
 `export` writes, from a run's ``--out`` (`audit.py`) and its stream:
 
 * ``x.bin`` and ``m1.bin``: the boundary and interior registrations' records, as registered (`registration.json`);
-* ``m2.bin``: round 2's message, each template's session statement as `FlockDeploy.Raw.encode` of what Lean's
-  `flock-verify verify` read for it (its verify log's command line, the objects of its session's archive, its record's
+* ``m2.bin``: round 2's message, each template's session statement as `FlockDeploy.Raw.encode` of what Flock's Lean
+  verifier read for it (its verify log's command line, the objects of its session's archive, its record's
   ``unit_draw``), in template order, as `FlockDeploy.encList (encBytes ·)`;
-* ``verdicts.json``: Lean's `flock-verify verify` verdict on each of those statements, in template order (`verdict`);
+* ``verdicts.json``: Flock's Lean verifier's verdict on each of those statements, in template order (`verdict`);
 * ``c0.bin`` and ``c1.bin``: the bytes of the challenger's coins each stage's sample read (`service.Stream`'s);
-* ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: its
-  reference circuit and public file (`toy.references`), the reference window's partition and program as a5 writes a
-  session's, ``--zk``, one table, and the sample of the second stage's size at its first units (`ref_draw`), with no
-  registered reads: Flock's verifier parses a statement's as a ``--registered`` file, roots and rows included, and the
-  params' name none of the run's fields;
+* ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: the
+  circuit and public file of its reference (`toy.references`), the reference window's partition and program as a5
+  writes a session's, ``--zk``, one table, and the sample of the second stage's size at its first units
+  (`ref_sample`), with no registered reads: Flock's verifier parses a statement's as a ``--registered`` file, roots
+  and rows included, and the params' name none of the run's fields;
 * ``ref-<t>.reads.json``: template ``t``'s registered reads as the params name them (``proofs.json``'s
   ``templates[t].registered``, canonical JSON as a0 writes a session's ``registered.json``), ``null`` where they don't;
 * ``held.json``: the rest of the `Held`, each from the registration and the design: the first stage's `select` input
   (rule, program, query, work table, closure), the second stage's cells ``ns`` and counts ``ks``, the templates'
-  names, the design's links (`second_stage.replay_links` at the boundary window's own port names) and wires
-  (`second_stage.replay_wires`, each derived from the replay Definition), each template's
-  units ``vus``, the statement program's descriptor ``desc`` and the check's query.
+  names, the design's links (`second_stage.replay_links` at the boundary window's own port names), wires
+  (`second_stage.replay_wires`) and the rows their units read (`second_stage.replay_rows`), each derived from the
+  replay Definition, the names the boundary and interior registrations' records must name (``boundary_names``,
+  ``interior_names``: the design's ports and no registered values), each template's units ``vus``, the statement
+  program's descriptor ``desc`` and the check's query.
 
 Nothing in ``held.json`` or a ``ref-<t>.*`` is read from the run's records, sessions or coins; `export` checks the
 links, the first stage's input, each reference's partition and program and the run's records against what the run
@@ -46,7 +48,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: `Flock/Lookup.lean`, whose `MUFU_TABLES` `flock-verify --archive` reads by SHA-512, in its order
+#: `Flock/Lookup.lean`, whose `MUFU_TABLES` Flock's Lean verifier reads from its `--archive` by SHA-512, in its order
 LOOKUP = ROOT / "verity" / "core" / "service" / "flock" / "Flock" / "Lookup.lean"
 #: `FlockDeploy.FORMAT`, a statement encoding's first field
 FORMAT = "flock-verify-statement/v1"
@@ -106,7 +108,7 @@ def verify_args(log: Path) -> list[str]:
 
 
 def session_statement(session_dir: Path) -> bytes:
-    """The statement Lean's `flock-verify verify` read for a member's session (``audit/session-m<k>``), as
+    """The statement Flock's Lean verifier read for a member's session (``audit/session-m<k>``), as
     `FlockDeploy.Raw.encode`: the objects its command line names in its archive (each checked to hash to its name), the
     MUFU tables the archive holds, and its session record's ``unit_draw``."""
     args = verify_args(session_dir / "lean-verify.log")
@@ -135,25 +137,25 @@ def session_statement(session_dir: Path) -> bytes:
         return named(opts[flag]) if flag in opts else None
     record = json.loads((Path(opts["--session"]) if Path(opts["--session"]).is_dir() else
                          next((session_dir / "sessions").iterdir())).joinpath("session.json").read_text())
-    draw = record.get("unit_draw")
+    sample = record.get("unit_draw")
     return raw(opts["--statement"], obj("--circuit"), obj("--public"),
                [(n, named(h)) for n, h in mufu_tables() if (archive / "sha512" / h).exists()],
                zk="--zk" in flags, os_coins=opts.get("--coins") == "os", count=int(opts.get("--session-tables", "1")),
-               draw=None if draw is None else compact(draw), partition=obj("--partition"), program=obj("--program"),
+               draw=None if sample is None else compact(sample), partition=obj("--partition"), program=obj("--program"),
                registered=obj("--registered"))
 
 
 def verdict(session_dir: Path) -> dict:
-    """Lean's `flock-verify verify` verdict on a member's session: its verify log's ``VERDICT`` line's ``accepted`` and
+    """Flock's Lean verifier's verdict on a member's session: its verify log's ``VERDICT`` line's ``accepted`` and
     ``why``."""
     line = [x for x in (session_dir / "lean-verify.log").read_text().splitlines() if x.startswith("VERDICT ")][-1]
     v = json.loads(line.removeprefix("VERDICT "))
     return {"accepted": v["accepted"], "why": v.get("why", "")}
 
 
-def ref_draw(q: int, n_t: int, k: int) -> dict:
+def ref_sample(q: int, n_t: int, k: int) -> dict:
     """The second stage's sample of template ``t``'s part at its first units: ``q·min(k, n_t)`` of its ``q·n_t``, the size
-    of every sample the second stage draws there (`select.second_law`'s subset in each cell)."""
+    of every sample the second stage takes there (`select.second_law`'s subset in each cell)."""
     size = q * min(k, n_t)
     return {"k": size, "law": "subset", "population": q * n_t, "units": list(range(size))}
 
@@ -183,6 +185,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     wires = SS.replay_wires(replay, key)
     if wires is None:
         raise ValueError("the design's wires don't derive from the replay Definition, which round 2's design check refuses")
+    rows = SS.replay_rows(replay, key)
     irec = json.loads((run_out / "interior" / "registration.json").read_text())
     regs = {"boundary_names": (bw, brec), "interior_names": (ref, irec)}
     names_of = {which: {"ports": list(expected_ports(w)), "values": []} for which, (w, _) in regs.items()}
@@ -201,6 +204,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     held = {"first": first, "ns": list(stream.cells), "ks": list(stream.counts), "names": names, **names_of,
             "links": None if links is None else [{"template": x.template, "port": x.port, "value": x.value} for x in links],
             "wires": [{"template": w.template, "port": w.port, "writer": w.writer, "wport": w.wport} for w in wires],
+            "rows": [r.to_json() for r in rows],
             "vus": vus, "desc": prog.hex(),
             "query": {"name": query["name"], "version": query["version"], "params": canonical_json(query["params"]).hex()},
             "k": list(stream.counts)}
@@ -217,7 +221,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
         (out / f"ref-{t}.bin").write_bytes(raw(
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
-            draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog))
+            draw=compact(ref_sample(q, n_t, k)), partition=part, program=prog))
         (out / f"ref-{t}.reads.json").write_bytes(canonical_json(reads))
         stmts.append(session_statement(audit / f"session-m{t}"))
     (out / "m2.bin").write_bytes(enc_list(enc_bytes, stmts))

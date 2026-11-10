@@ -4,8 +4,8 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and the
-sampled proof system's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and
+SPOT's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
 round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`) built from
 `DIR/held.json`, the reference statements `DIR/ref-<t>.bin` and their templates' reference reads
 `DIR/ref-<t>.reads.json` alone, never from the run's messages or coins. `M2` replaces round 2's message `DIR/m2.bin` (a
@@ -51,7 +51,7 @@ def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
 def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.SecondStage.Own :=
   { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
     boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
-    refs := refsOf h, refReads := refRegisteredOf h }
+    rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
@@ -158,6 +158,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let k ← natsOf "k" (field held "k")
   let links := Spot.SecondStage.linksOf? (field held "links")
   let wires := Spot.SecondStage.wiresOf? (field held "wires")
+  let rows ← ok "rows" ((Spot.SecondStage.rowsOf? (field held "rows")).elim (.error "not a list of rows") .ok)
   let boundaryNames ← namesOf held "boundary_names"
   let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
@@ -165,7 +166,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
       { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
-      { desc, vus, query, k, names, links, wires, boundaryNames, interiorNames, xS₀ := refAt refs,
+      { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
         xS₀_ok := refAt_ok refs hz,
         refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
@@ -257,7 +258,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
       let own : Spot.SecondStage.Own :=
         { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
           boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
-          refs, refReads }
+          rows := h.rows, refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then
