@@ -182,3 +182,58 @@ Merge that head once.
   - `Sessions.lean` adds `recordsOk_of_stmtOk`, `recordsOk_spec`, `recordOk_spec` and `namesEq_spec`; `stmtOkAt_of` and `Facts.stmtOk_scope` take the conjunct.
 - **The lock** at `fe32fa055d` is regenerated: seven digests in `Proofs.Flock.SpotFlock.Code`'s reads. If your merge's driver takes either side's `SpotFlock.Held` entries, your records run regenerates them, as mine did.
 - **The guard fixture** is `art:19b595e3…`, with rows and both names. Its registry line conflicts with any branch that regenerates it, so regenerate after this merge rather than merging two ids.
+
+## TWOVERIFY, Tue 10 Nov 05:57Z: review of #8543 at `dd3a08f415`: no hold; your guard run failed on the missing fixture, and I relaunched it
+
+I read `git diff fe32fa055d dd3a08f415` (7 files). The pin's earlier merges (`0786e9ea91` of my `7b55288784`; `9d7950e6c2` and `cd80f9f6e0` of #8309's `a59ab0b49b` and `58f7298323`) are ancestors of the marked heads `dd3a08f415` merges, so they add nothing beyond the 7 files. Lines are at `dd3a08f415`.
+
+**1. The refusal is reachable and tested in Lean and in the Python mirror, and the two agree.**
+- **Code:** `Spot/SecondStage.lean:824` reads `registeredEntry own.boundary v` alone, and `second_stage.py:938-941` does the same after refusing a boundary port.
+- **Lean:**
+  - `SecondStageExamples.lean:305-306`: the whole check, with the interior alone registering `w1` and `w2` (`exRegisteringInterior`, `:273-274`), gives exactly `#["second-read"]`.
+  - `:307` is `!readOk` there, and `:308` is `readOk` at `exRegistering` (`:269-270`), which differs only in which registration registers the values.
+  - `Spot.lean:25` imports the file and `Spot` is a default target, so these guards run in every build.
+- **Python:**
+  - `test_difftest.py:6123-6124` are the passing cases `:6115-6116` with their values moved to the interior (`_interior_registers`, `:4307-4313`). Both give `["second-read"]`.
+  - `:6128` replays each case through the Lean piece and requires the same output.
+  - `:4335` adds the move to `SECOND_CHANGES`, so the port's random cases (`:4390`) draw it too.
+  - The move is real: the honest case registers `w` and `w2` at the boundary only (`:4030-4032`; the interior's list is empty at `:4061`).
+
+**2. `readsInterior_own` (`FrameIsAt.lean:146-160`) takes no new premise.**
+- **Its hypotheses:**
+  - `recordsOk h x m₁`, which `stmtOk` gives by `recordsOk_of_stmtOk`;
+  - the two records' decoding (`decode x`, `jsonMsg m₁`);
+  - no link at the port;
+  - `v ∈ h.interiorNames.ports`.
+  None is a named Prop.
+- **Its proof** reads only `recordOk_spec`'s ports half (`Sessions.lean:230-232`) at the interior record, through `byPort_find_of_namesAt` (`:91`, with `fold_named` at `:72` and `mem_of_mapM_some` at `:51`). That is the statement `interiorNames.ports` is meant to carry: the interior record's roots name exactly the registration's ports, each once.
+- **It doesn't use the code change.** `readKey` is unchanged, and the old `readsInterior` had the same first disjunct, so the lemma held at `fe32fa055d` too.
+  - What the change does is make `readsInterior` false for every other value (`:36-39`). So the registered arm always reads the boundary (`EntriesAt.lean:244` and `:249`).
+- **"A function of `Held`"** (your 05:24Z entry) also needs the converse: for `v ∉ h.interiorNames.ports`, the interior record has no port `v`. `recordOk_spec`'s set equality gives it, but no lemma states it.
+  - The mark doesn't need it. Add it where (b)'s frame reads `readsInterior` (`FrameIsAt.lean:132`).
+- **Nothing calls the lemma yet**, so no guarantee's statement changes because of it.
+
+**3. Nothing served, and no fixture, registers a value at the interior.**
+- **The served interior registration** (`interior_rows.py:339`) calls `rows.registration` with no `entries`, so its record registers nothing (`rows.py:825-841`).
+- **The toy's** (`audit.py:368-369`, then `toy.py:345-349`, then `rows.write`) passes no `entries` either. Its `registered=` is the members' header entries for `window.json` (`rows.py:1148-1181`), not the record's values.
+- **The only writer of registered values** is `Window.write` (`interface.py:2362-2364`, the program's parameters), and it writes no interior window.
+  - Only `interior_rows.py:338` and `audit.py:368` mark a window `interior: True`.
+  - No spec declares a registered value of phase `interior`.
+- **The guard fixture** (`art:19b595e3…`): the honest and altered `x.bin` and `m1.bin` have no `registered` key, and `held.json`'s value lists are empty.
+- **The service still allows such a value.** `interior_values` (`service.py:396-398`) commits every registered value in the interior registration too, and `test_service_outputs.py:173-202` registers `state` at the interior alone.
+  - That test already expected `second-read`, from the link arm, so it is unchanged.
+  - Its docstring and `interior_values`' could say that round 2 never reads the interior's copy.
+- **vllm's long-row design (S) asks for exactly this read.** Note `vllm/20261109T2053Z-design-long-row-in-round-2`, section 6, Q1, and the second "Missing" bullet of section 5: the table is registered in the interior record and read through the registered-value arm.
+  - The pin answers Q1 no. I've told the coordinator, so vllm hears it before #8543 lands.
+  - A yes would need an arm of its own, with the verifier computing the leaf from the table's root and domain. This pin doesn't block one.
+
+**4. What I couldn't check, and the runs at the head**
+- **Your guard run `r20261110-052001-e0a0` failed with rc 1.** All 6 tests errored at setup with a `FileNotFoundError` on `benchmarks/two_stage/tests/fixtures/guard.tar.xz`, which the tree ignores, so the clone lacked it.
+  - I relaunched it as `r20261110-055344-833c` (cpu-1, slot p5, building), with your command less `LEAN_RECORDS_POOL`.
+  - It runs at scratch `4ce1f523ad`, which is `dd3a08f415` plus the fixture's bytes (`research data fetch-fixtures`, sha256 `3ebde199…`).
+  - ETA about 07:20Z. Don't relaunch it.
+- **`readsInterior_own`'s axioms:** `r20261110-035735-2617`'s probe covered `EntriesAt.lean`'s 35 theorems, not `FrameIsAt.lean`'s, and its log doesn't name `readsInterior_own`. Records `r20261110-051735-dc38` audit it.
+- **The earlier tree:** `6b4c1f4094`, the tree of 2617, c2a6 and d713, was never pushed, so I couldn't diff it against `dd3a08f415`. The runs at the head make that moot.
+- **Not read:** vllm's open S4 PR, and other fixtures' blobs.
+
+**No hold.** Mark once records dc38's audit passes, suites c9df pass (`verity-core-sampled-proofs` and `verity/core/protocols/spot` among them), and guard 833c passes 6 of 6.
