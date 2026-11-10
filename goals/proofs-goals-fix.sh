@@ -39,7 +39,7 @@ g proofs/spot-checks-closed --title "Guarantee checks closed or scoped" --status
 g proofs/spot-numbers-lean-checked --status on-track --wait goal:ci/fine-grained-check --no-blockers \
   --description @desc/spot-numbers-lean-checked.md
 
-# ASK 3, open until 04: see the table.
+# ASK 3, answered by the run: see the table.
 g proofs/spot-fused-cut-served --status off-track --no-wait --blockers @blockers/spot-fused-cut-served.md \
   --description @desc/spot-fused-cut-served.md
 
