@@ -40,8 +40,10 @@ def reads(tp: Any) -> str:
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
-    (its EX2 is gates), so it lowers flat either way."""
+    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A key block's Boolean body
+    (``SparseMlaHeadBlock_v2``, the template a partition names for a key block proved under ``--zk``) has no table to read,
+    its EX2 being gates, so it is flat at every key count: the unit returns its own outputs, the one form `verify --zk`
+    takes (`one_stage.proofs.ks_form_why`), which a word block in slots, whose last stage returns them, is not."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -49,7 +51,7 @@ def reads(tp: Any) -> str:
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
-    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block"):
+    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block") or tp.id != tp.word:
         return "inline"
     S = spec_statics(tp.word)
     return "slots" if int(S["NVIS"]) >= int(S["BN"]) else "inline"
