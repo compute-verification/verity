@@ -43,14 +43,14 @@ trap 'rm -rf $S' EXIT
 
 # Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
-LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock $REPO/verity/ml/flock/tests/lean/TmplUnit.lean)
+LSHA=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock $REPO/verity/ml/flock/tests/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ]; then
-    rm -rf $L/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $L/lean-src) \
+    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $L/lean-src) \
       && cp verity/ml/flock/tests/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
       && (cd $LEAN_SRC && lake build flock-verify flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \

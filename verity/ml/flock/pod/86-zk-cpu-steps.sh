@@ -46,7 +46,7 @@ KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh v
 BUILDS=${BUILDS:-$KEY}
 bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
 F=$FW/flock-gpu-link/flock
-LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
+LSHA=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock)
 LEAN_FROM=${LEAN_FROM:-/workspace/jobs/rec-reprice/cache}
 LEAN_BIN=$L/lean-$LSHA/flock-verify; [ -x $LEAN_FROM/lean-$LSHA/flock-verify ] && LEAN_BIN=$LEAN_FROM/lean-$LSHA/flock-verify
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
@@ -215,7 +215,7 @@ build)
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
-      rm -rf $L/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $L/lean-src) \
+      rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $L/lean-src) \
         && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
     fi
   ) > $O/build-lean.log 2>&1 &

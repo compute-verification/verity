@@ -76,11 +76,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
 lean_key() {        # lean_key [FILE...]: the key of the Lean verifier's package, the packages it requires by path, and FILEs
-  python3 "$SRC/tools/verity/lean/closure.py" key "$SRC/verity/core/service/flock" "$@"
+  python3 "$SRC/verity/ml/flock/pod/lake_closure.py" key "$SRC/verity/core/service/flock" "$@"
 }
 lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DEST/.lake the verifier's build directory; its directory on stdout
   local P
-  P=$(python3 "$SRC/tools/verity/lean/closure.py" copy "$SRC/verity/core/service/flock" "$1") \
+  P=$(python3 "$SRC/verity/ml/flock/pod/lake_closure.py" copy "$SRC/verity/core/service/flock" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify

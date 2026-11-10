@@ -208,12 +208,12 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
+  LSHA=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $FW/lean-src) \
+    rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $FW/lean-src) \
       && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
       && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi

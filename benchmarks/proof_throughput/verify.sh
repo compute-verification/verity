@@ -27,12 +27,12 @@ command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 
 # the Lean verifier, built once per tree of verity/core/service/flock and the packages it requires by path (as
 # benchmarks/pouw/hidden_zk/job.sh builds it)
-KEY=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
+KEY=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock)
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
   if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
-    rm -rf "$L.tmp" && P=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
+    rm -rf "$L.tmp" && P=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
       && (cd "$P" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )

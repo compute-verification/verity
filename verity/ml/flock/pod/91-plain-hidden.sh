@@ -39,14 +39,14 @@ trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$PH_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
 # Lean's flock-verify, built once per source, while the prover builds
-LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
+LSHA=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
-    rm -rf $L/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $L/lean-src) \
+    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $L/lean-src) \
       && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &

@@ -1,4 +1,4 @@
-"""`closure.py` on toy packages: what a package's closure is, what its key covers, and where a copy puts each directory."""
+"""`pod/lake_closure.py` on toy packages: what a package's closure is, what its key covers, and where a copy puts each directory."""
 from __future__ import annotations
 
 import importlib.util
@@ -6,8 +6,8 @@ import json
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("lean_closure_for_tests", HERE / "closure.py")
+POD = Path(__file__).resolve().parents[1] / "pod"
+spec = importlib.util.spec_from_file_location("lake_closure_for_tests", POD / "lake_closure.py")
 C = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = C
 spec.loader.exec_module(C)

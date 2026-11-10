@@ -63,7 +63,7 @@ FOLD_BIN=$L/fold-$FSHA/inner-fold
   export PATH=$HOME/.elan/bin:$PATH
   exec 9>$L/fold.lock; flock 9
   if [ ! -x $FOLD_BIN ]; then
-    C=$L/fold-src; rm -rf $C && C=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $C) && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+    C=$L/fold-src; rm -rf $C && C=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $C) && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
       && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
       && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
   fi

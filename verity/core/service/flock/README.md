@@ -11,7 +11,7 @@ program format, its decoder, the partition and annotations) and `commitments` (`
 of units). Their declarations keep the namespace `Flock`. A module that moved there keeps its old name here as a
 re-export, one `public import` and nothing else (`Flock/Bytes.lean` re-exports `Base.Bytes`), until every importer names
 the base module. A job that builds this package outside the checkout copies it with those three
-(`tools/verity/lean/closure.py`).
+(`verity/ml/flock/pod/lake_closure.py`).
 
 The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
 the ZK server (`FlockZkServer`, which imports `Flock.Firewall` and the modules under it) and the recursion (`FlockRec`,

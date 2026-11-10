@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """A Lake package with the packages of the tree it requires by path, for a job that builds it outside the checkout.
 
-    python3 tools/verity/lean/closure.py dirs PACKAGE           the package's directory, then each package its manifest gives
+    python3 verity/ml/flock/pod/lake_closure.py dirs PACKAGE           the package's directory, then each package its manifest gives
                                                                 by path (the inherited ones too), one a line
-    python3 tools/verity/lean/closure.py key PACKAGE [PATH...]  16 hex digits over every file of those directories and of
+    python3 verity/ml/flock/pod/lake_closure.py key PACKAGE [PATH...]  16 hex digits over every file of those directories and of
                                                                 PATHs (files or directories): the name of a cached build
-    python3 tools/verity/lean/closure.py copy PACKAGE DEST      copies those directories into DEST, each at its place
+    python3 verity/ml/flock/pod/lake_closure.py copy PACKAGE DEST      copies those directories into DEST, each at its place
                                                                 relative to the others, and prints PACKAGE's directory there
 
 A copy of the package's directory alone does not build once it requires another by path, and a key over it alone misses

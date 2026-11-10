@@ -45,12 +45,12 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
 . verity/ml/flock/pod/challenger.sh
 challenger_build
-LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
+LSHA=$(python3 verity/ml/flock/pod/lake_closure.py key verity/core/service/flock)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 (
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
-    rm -rf $L/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $L/lean-src) \
+    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/ml/flock/pod/lake_closure.py copy verity/core/service/flock $L/lean-src) \
       && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
