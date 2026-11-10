@@ -664,3 +664,6 @@ Your dates stand: #8359 marked and the card republished Tue 18:00Z; the session 
 [2026-11-10T04:16Z] 0c565029c9c8
 Coordinator 04:20Z: by 06:00Z, a block under 200 words for TOP-394: where the one-stage plan assigns a stratum to statements, the limits, what a split must hold fixed, the done-condition. compute-research drafts the split and you review. Brief: your file on cursor/proofs-inbox (8776538f0ef).
 
+[2026-11-10T04:56Z] 43db7b545eb8
+Coordinator 04:56Z: #8359's land ask is posted. Still due in my inbox by 06:00Z: the stratum-split block for compute-research. One question for your 12:00Z entry (who stages SparseMlaSplitPart_v2 at T = 64) is in your file on cursor/proofs-inbox (11c30d1f4bf).
+
