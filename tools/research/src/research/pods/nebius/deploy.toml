@@ -125,6 +125,12 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
+# cpu-13 (a train slot): only the lock-out's files (pods/nebius/lockout) are deploy's there, and `managed` names just those
+[nodes.vy-nebius-cpu-13]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/sbin/vy-admin-setup", "/usr/local/sbin/vy-lockout", "/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs",
+           "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-seal-runs.*", "/etc/systemd/system/vy-sudo-fallback-expire.*"]
+
 # circuits' H200 VMs: only the GPU-lease files are infra's to manage there
 [nodes.vy-glm53-eu]
 record = "/workspace/research/deploy/record.jsonl"
@@ -1357,74 +1363,81 @@ nodes = ["vy-nebius-1", "vy-nebius-2"]
 run = ["systemd:vy-node-sweep.timer"]
 owner = "infra"
 
-# ---- both nodes: the lock-out (pods/nebius/lockout, its README: the apply order and each step's rollback). Install stages
-# the tools, LIB's files and root.env, and starts nothing: sudoers.d and a unit's .d are vy-lockout's to write, as vy-admin, and
-# its steps enable the timers.
+# ---- both nodes and the CPU nodes that carry it: the lock-out (pods/nebius/lockout, its README: the apply order and each
+# step's rollback). Install stages the tools, LIB's files and root.env, and starts nothing: sudoers.d and a unit's .d are
+# vy-lockout's to write, as vy-admin, and its steps enable the timers. A CPU node's allowlist is its own file, staged under the
+# same name. Where vy-sudo is installed, `research run --job-user` asks for root through it.
 
 [[file]]
 path = "/usr/local/sbin/vy-admin-setup"
 src = "tools/research/src/research/pods/nebius/lockout/admin_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-lockout"
 src = "tools/research/src/research/pods/nebius/lockout/lockout.py"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-sudo-fallback-expire.timer"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-sudo"
 src = "tools/research/src/research/pods/nebius/lockout/vy_sudo.py"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-seal-runs"
 src = "tools/research/src/research/pods/nebius/lockout/seal_runs.py"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-seal-runs.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-seal-runs.service"
 src = "tools/research/src/research/pods/nebius/lockout/vy-seal-runs.service"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-seal-runs.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-seal-runs.timer"
 src = "tools/research/src/research/pods/nebius/lockout/vy-seal-runs.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-seal-runs.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-sudo-fallback-expire.service"
 src = "tools/research/src/research/pods/nebius/lockout/vy-sudo-fallback-expire.service"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-sudo-fallback-expire.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-sudo-fallback-expire.timer"
 src = "tools/research/src/research/pods/nebius/lockout/vy-sudo-fallback-expire.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13"]
 run = ["systemd:vy-sudo-fallback-expire.timer"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lockout/10-vy-admin"
 src = "tools/research/src/research/pods/nebius/lockout/sudoers/10-vy-admin"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-13", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lockout/50-vy-research"
 src = "tools/research/src/research/pods/nebius/lockout/sudoers/50-vy-research"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-lockout/50-vy-research"
+src = "tools/research/src/research/pods/nebius/lockout/sudoers/50-vy-research-cpu"
+nodes = ["vy-nebius-cpu-13"]
 owner = "infra"
 
 [[file]]
