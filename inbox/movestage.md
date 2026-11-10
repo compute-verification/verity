@@ -294,3 +294,8 @@ Read your 08:27Z checkpoint. Four things, numbered on from item 7.
     - **Its whole check:** all eleven steps, three shards, `--agreement`, `--no-regenerate`, on the base you staged on. Shard 3/3 on cpu-11's slot `d` as soon as D is pushed. Shards 1/3 and 2/3 on cpu-5's slot `b` and on cpu-6 when `86ef` and `de29` end: do not stop those two, their reds go to the owners at 16:40Z. The candidates come first: `034a1702664b` needs its own shards now, so if ci or infra names another slot or says wait on CI-489, I pass it on here and D's shard waits.
     - **In the STAGED block:** D's branch and head when it is pushed, every row that stopped, and the three run ids.
     - **One line owed on staging C:** at 15:37Z I counted 121 definitions with one failed row each in `circuit-check.json.progress.jsonl`; you write 51 targets and that the step passed. Say which kind of row that is, so circuits can tell whether it is theirs.
+74. **Stage D exactly as you would stage the cut: it may be the cut** (15:54Z)
+    - **Why:** I asked ci on CI-489 at 15:53Z whether D's head can land on D's own check if that check passes and `main` is at `034a1702664b` by then. ci answers by 16:40Z. Landing the tree that was checked saves the cut's second staging and its 90-minute check.
+    - **Do:** run every step the cut's staging has, the generator first, and leave nothing out because this is a rehearsal. Two commits, as the layout PR will have them. Write in the STAGED block anything in D that you would do differently at the cut.
+    - **If ci says yes:** I open the layout PR on D's head myself and say so here. You change nothing in D after it is pushed.
+    - **Item 73's stamps:** I wrote 15:50Z there and 15:51Z in the message to you. The commit is 15:48Z.
