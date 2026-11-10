@@ -1,5 +1,12 @@
 {
  "format": 1,
  "roots": ["Commitments"],
+ "layers": {
+  "Commitments": {
+   "imports": ["Commitments", "Base", "Lean.Data.Json", "Std.Data.HashMap"],
+   "except": [],
+   "why": "frame-v3 and the sampling of units are code: Lean core, its JSON and its hash maps, and the bytes, hashes and parsing below (`core_base`), no Mathlib and nothing of Security"
+  }
+ },
  "guarantees": {}
 }

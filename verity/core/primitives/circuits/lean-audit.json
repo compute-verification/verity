@@ -1,5 +1,12 @@
 {
  "format": 1,
  "roots": ["Circuits"],
+ "layers": {
+  "Circuits": {
+   "imports": ["Circuits", "Base", "Lean.Data.Json", "Std.Data.HashMap", "Std.Data.HashSet"],
+   "except": [],
+   "why": "the circuit format is code: Lean core, its JSON and its hash containers, and the bytes, hashes and parsing below (`core_base`), no Mathlib and nothing of Security"
+  }
+ },
  "guarantees": {}
 }
