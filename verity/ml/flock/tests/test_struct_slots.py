@@ -29,10 +29,10 @@ ADDS = CompositeDefinition("StructSlotsAdds", 1, (), lambda _S: ((("x", F32), ("
 
 def test_a_read_of_a_reads_value_is_a_later_stage_and_the_split_is_the_flat_lowering():
     """rcp(ex2(x) + y) reads a slot whose index is of depth one: the unit computes both ex2 indices, stage0 the rcp index
-    from their words, stage1 the outputs; each net is ordered, and each stage's input port and each slot's index has one
-    wire."""
+    from their words, and the last net the outputs; each net is ordered, and each stage's input port and each slot's index
+    has one wire."""
     sp, _tm, _lw = SS.lower(CHAIN)
-    assert [SS.net_name(s) for s in range(len(sp.nets))] == ["unit", "stage0", "stage1"]
+    assert [SS.net_name(s) for s in range(len(sp.nets))] == ["unit", *(f"stage{k}" for k in range(2))]
     assert all(T.ordered(n)["ok"] for n in sp.nets)
     assert sorted(sp.lookups) == [("ex2", 0), ("ex2", 0), ("rcp", 1)]
     dsts = [tuple(w[:3]) for w in sp.wires]
@@ -44,9 +44,9 @@ def test_a_read_of_a_reads_value_is_a_later_stage_and_the_split_is_the_flat_lowe
 
 
 def test_rows_only_a_later_stage_reads_are_placed_there_when_that_passes_fewer_bits():
-    """Placed at their depths, the unit passes on what it computes from x and y for stage1; placed as late as their readers
-    allow, stage1 computes it from x and y itself. Both splits compute the same outputs, and `lower` keeps the one passing
-    fewer bits between its nets."""
+    """Placed at their depths, the unit passes on what it computes from x and y for the last net; placed as late as their
+    readers allow, the last net computes it from x and y itself. Both splits compute the same outputs, and `lower` keeps the
+    one passing fewer bits between its nets."""
     tm, lw, _top = SL.lower(CHAIN, slots=SS.SLOTS)
     sites = {sp.index: sp.sites for sp in lw.order if sp.sites}
     early, late = (SS.split(tm, sites, late=v) for v in (False, True))

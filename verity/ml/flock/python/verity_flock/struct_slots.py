@@ -1,7 +1,7 @@
 """A structural lowering's table reads in Flock lookup slots: `struct_lower`'s template, lowered with ``slots`` (each read of
 a pinned MUFU table only its value columns, `struct_lower._SlotRead`), split by read depth into one ``flock-ir-tmpl/v2``
-template a net, the unit and then ``stage0``, ``stage1`` .., wired to ``lookup:<table>`` slots as `read_slots` wires a flat
-unit's, the last stage returning the outputs.
+template a net, the unit and then a net a stage (``stage0`` and on, `net_name`), wired to ``lookup:<table>`` slots as
+`read_slots` wires a flat unit's, the last stage returning the outputs.
 
 Depth is `read_slots`' (an input bit 0, a row its operands' greatest, a slot read's value bits one more than its index's
 greatest), found once per Definition and pattern of its inputs' depths (`_Info`), so a Definition is split once per depth
@@ -633,7 +633,7 @@ def evaluate(sp: Split, inputs: np.ndarray) -> np.ndarray:
 
 
 def check(target, seed: int) -> dict:
-    """``target``'s split evaluated on 64 random inputs drawn from ``seed`` (`evaluate`), against the flat lowering's
+    """``target``'s split evaluated on 64 random inputs made from ``seed`` (`evaluate`), against the flat lowering's
     outputs (`forms.Circuit.evaluate`)."""
     from verity.ml.circuits.boolean.forms import Circuit
 

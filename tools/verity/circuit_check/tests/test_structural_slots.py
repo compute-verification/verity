@@ -82,7 +82,7 @@ def test_the_command_holds_a_registered_definitions_split(tmp_path):
     (lambda m: m["wires"].pop(), "wires"),
     (lambda m: m["wires"].append(list(m["wires"][0])), "wires"),
     (lambda m: m["wires"].append(["unit", 0, 0, "unit", 0, 0]), "wires"),
-    (lambda m: _wire(m, "lookup:rcp", (0, 0)).__setitem__(3, "stage1"), "wires"),
+    (lambda m: _wire(m, "lookup:rcp", (0, 0)).__setitem__(3, SS.net_name(2)), "wires"),
     (_other_width, "wires"),
     (lambda m: m["outs"][-1].__setitem__(0, ["to", 9]), "ports"),
 ], ids=["a port no wire fills", "a port wired twice", "a wire into the unit", "an index from a later net",
