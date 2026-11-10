@@ -537,11 +537,9 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 - **What the figures mean.** Each figure is the slowdown over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** Draft. `min-cut` sets them, `reference-remote-h200-pouw`'s and `reference-remote-h200-sampled`'s
-  at inference blocks of 2·10⁷ fresh bits: the min-cut bound, proved in Lean under the conjectures
-  `training-cut-hardness` and `training-cut-exports`, which are assumed at that block size. They are draft because
-  the bound counts free compute under `draft:no-straddle`. `cover` sets `reference-remote-h200-elementary`'s 1,
-  contested via `output-premise`.
+- **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
+  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
+  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
