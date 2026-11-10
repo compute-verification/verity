@@ -33,6 +33,13 @@ RANGES = {
         "N=4096", "N=131072",
         "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
     ),
+    # B2a's long rows in class G's batched form, each selecting among its own n keys at its class N (`vllm_dsa.long_row_keys`),
+    # whole up to `dsa_topk_mask_cut.WHOLE_MAX` = 40,960 keys and past it as its cut (`CUTS`), each unit held to the block: the
+    # spots above, the last class checked whole and the first one cut (three blocks, the last of 10,240 keys)
+    "DsaTopKMaskCounted_v1{N=4096..131072 step 2048,TOPK=2048}": (
+        "N=4096", "N=131072",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024", "N=40960", "N=43008",
+    ),
     # GLM-5.3's rows past INDEX_TOPK = K = 2,048 read below their size class (`DsaButterflyRowsPad`): a row of T keys at its class N,
     # the next multiple of K, so N is one of the 63 classes 4,096..131,072 and T one of the N - 2,047..N - 1 keys below it (at T = N
     # the row is `DsaButterflyRows`).  A rule spans each static alone, so its T range is every class's together.  The spots are rows
