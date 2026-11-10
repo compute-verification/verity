@@ -17,7 +17,10 @@ leave out.
   (`toyA_wordsRead`); the block reads it on the circuit with it as an input (`toyA_wordsRead_asInputs`).
 * **Not vacuous.** With the word a registered input, the hypotheses hold and the bounds are met with equality
   (`toyB_*`). Without `OneReader` the total fails (`toyC_*`).
-* **In bits, with the words as inputs** (`novelReads_asInputs_le`), which the file states only for `untie`.
+* **With the words as inputs**, in bits (`novelReads_asInputs_le`) and all blocks together
+  (`sum_card_unregistered_asInputs_le`), which the file states only for `untie`.
+* **The output values' term over a set `G` of blocks** is at most the output wires in the blocks of `G`
+  (`sum_card_fedBy_on_le`), which are at most `O` (`sum_card_inter_on_le_O`).
 * **(H) carries over.** `κ` from the unregistered inputs only grows when gates leave `θ` or become inputs
   (`kappaWords_le_untie`, `kappaWords_le_asInputs`), so (H) at `d` gives (H) at `d.untie E` and at `d.asInputs T`
   (`hardness_untie`, `hardness_asInputs`), `Π` at the untied circuit is at most `Π` at `d` (`piMax_untie_le`), and
@@ -205,6 +208,41 @@ theorem novelReads_asInputs_le (d : RegisteredCircuit) {b : ℕ} (𝒲 : Finset 
         Nat.add_le_add_left
           (width_into_inter_biUnion_le (d.D.asInputs (𝒲.biUnion id)) 𝒲 h𝒲 (R \ 𝒲.biUnion id)) _
 
+/-- **All blocks together, with the words as inputs.** When each word is read by at most one block on the circuit with
+the words as inputs, the blocks read there at most `m k + b |𝒲|` gates outside `θ` between them. -/
+theorem sum_card_unregistered_asInputs_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b : ℕ}
+    (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hk : ReadsAtMost d P k)
+    (hone : OneReader (P.asInputs (𝒲.biUnion id)) 𝒲) :
+    ∑ u, ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card ≤
+      m * k + b * 𝒲.card := by
+  have hsum : ∑ u : Fin m, (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card ≤
+      𝒲.card := by
+    have h := sum_card_wordsRead_le (P.asInputs (𝒲.biUnion id)) 𝒲 hone univ
+    simp only [Partition.asInputs_gates] at h
+    exact h
+  have hblock : ∀ u, ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card ≤
+      k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card := by
+    intro u
+    have hg : (P.asInputs (𝒲.biUnion id)).gates u = P.gates u \ 𝒲.biUnion id := P.asInputs_gates (𝒲.biUnion id) u
+    calc ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card
+        = ((d.asInputs (𝒲.biUnion id)).unregistered (P.gates u \ 𝒲.biUnion id)).card :=
+          congrArg (fun S => ((d.asInputs (𝒲.biUnion id)).unregistered S).card) hg
+      _ ≤ (d.unregistered (P.gates u) ∪
+            (d.D.asInputs (𝒲.biUnion id)).into (P.gates u \ 𝒲.biUnion id) ∩ 𝒲.biUnion id).card :=
+          card_le_card (d.unregistered_asInputs_subset (𝒲.biUnion id) (P.gates u))
+      _ ≤ (d.unregistered (P.gates u)).card +
+            ((d.D.asInputs (𝒲.biUnion id)).into (P.gates u \ 𝒲.biUnion id) ∩ 𝒲.biUnion id).card :=
+          card_union_le _ _
+      _ ≤ k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card :=
+          Nat.add_le_add (hk u)
+            (card_into_inter_biUnion_le (d.D.asInputs (𝒲.biUnion id)) 𝒲 h𝒲 (P.gates u \ 𝒲.biUnion id))
+  calc ∑ u, ((d.asInputs (𝒲.biUnion id)).unregistered ((P.asInputs (𝒲.biUnion id)).gates u)).card
+      ≤ ∑ u : Fin m, (k + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card) :=
+        sum_le_sum fun u _ => hblock u
+    _ = m * k + b * ∑ u : Fin m, (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card := by
+        rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_sum]
+    _ ≤ m * k + b * 𝒲.card := Nat.add_le_add_left (Nat.mul_le_mul_left b hsum) _
+
 /-! ### (H) carries over to the untied circuit and to the circuit with gates as inputs -/
 
 /-- `κ` grows with the set the paths start from. -/
@@ -318,6 +356,66 @@ theorem hardness_mono_arrays {ρ V : Type} [Fintype ρ] [DecidableEq V] (d : Reg
   refine mul_le_mul_of_nonneg_left ?_ (hβ r)
   exact Nat.cast_le.2 (card_le_card (image_subset_image (inter_subset_inter (Finset.Subset.refl S) (hA r))))
 
+/-! ### The output values' term over a set of blocks -/
+
+section Outputs
+
+open Nci.Cut.SecurityProofs (fedBy card_fedBy_le)
+
+variable {C : Circuit} {m : ℕ}
+
+/-- The gates of `Y` in each block of `G`, summed, are at most the gates of `Y` in the blocks of `G`. -/
+theorem sum_card_inter_gates_on_le (P : Partition C m) (G : Finset (Fin m)) (Y : Finset (Fin C.N)) :
+    ∑ u ∈ G, (Y ∩ P.gates u).card ≤ (Y ∩ G.biUnion P.gates).card := by
+  rw [← card_biUnion]
+  · exact card_le_card (biUnion_subset.2 fun u hu g hg =>
+      mem_inter.2 ⟨(mem_inter.1 hg).1, mem_biUnion.2 ⟨u, hu, (mem_inter.1 hg).2⟩⟩)
+  · intro u _ v _ huv
+    refine disjoint_left.2 fun g hu hv => huv ?_
+    exact Option.some_injective _
+      ((P.mem_gates.1 (mem_inter.1 hu).2).symm.trans (P.mem_gates.1 (mem_inter.1 hv).2))
+
+/-- The pairs of a block of `G` and an output with a wire in it are at most the output wires in the blocks of `G`. -/
+theorem sum_card_hit_on_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) :
+    ∑ u ∈ G, (univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card ≤
+      ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card := by
+  calc ∑ u ∈ G, (univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card
+      = ∑ u ∈ G, ∑ o : W.Out, if ¬ Disjoint (W.y o) (P.gates u) then 1 else 0 :=
+        sum_congr rfl fun u _ => card_filter _ _
+    _ ≤ ∑ u ∈ G, ∑ o : W.Out, (W.y o ∩ P.gates u).card := by
+        refine sum_le_sum fun u _ => sum_le_sum fun o _ => ?_
+        by_cases h : Disjoint (W.y o) (P.gates u)
+        · rw [ite_eq_right (not_not.2 h)]
+          exact Nat.zero_le _
+        · rw [ite_eq_left h]
+          exact card_pos.2 (not_disjoint_iff_nonempty_inter.1 h)
+    _ = ∑ o : W.Out, ∑ u ∈ G, (W.y o ∩ P.gates u).card := sum_comm
+    _ ≤ ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card :=
+        sum_le_sum fun o _ => sum_card_inter_gates_on_le P G (W.y o)
+
+/-- **The output values' term, at the blocks of `G` alone.** The pairs of a block of `G` and an output it feeds are at
+most the output wires in the blocks of `G`, and the pairs of a block of `G` and an output in its `E(block)`. -/
+theorem sum_card_fedBy_on_le {ι : Type} [Fintype ι] [DecidableEq ι] (P : Partition C m) (W : Work C ι)
+    (G : Finset (Fin m)) :
+    ∑ u ∈ G, (fedBy P W u).card ≤
+      ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card + ∑ u ∈ G, (W.clear (P.gates u)).card :=
+  calc ∑ u ∈ G, (fedBy P W u).card
+      ≤ ∑ u ∈ G, ((univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card +
+          (W.clear (P.gates u)).card) := sum_le_sum fun u _ => card_fedBy_le P W u
+    _ = ∑ u ∈ G, (univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card +
+          ∑ u ∈ G, (W.clear (P.gates u)).card := sum_add_distrib
+    _ ≤ ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card + ∑ u ∈ G, (W.clear (P.gates u)).card :=
+        Nat.add_le_add_right (sum_card_hit_on_le P W G) _
+
+/-- The output wires in the blocks of `G` are at most all the output wires, `O`. -/
+theorem sum_card_inter_on_le_O {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) :
+    ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card ≤ W.O :=
+  calc ∑ o : W.Out, (W.y o ∩ G.biUnion P.gates).card
+      ≤ ∑ o : W.Out, (W.y o).card := sum_le_sum fun o _ => card_le_card inter_subset_left
+    _ = W.O := rfl
+
+end Outputs
+
 /-! ### `Circuit.asInputs` and `Accounting.Placed.cut` -/
 
 section Cut
@@ -326,25 +424,27 @@ variable {L : Type*} (A : Accounting.Placed L) (T : Finset (Fin A.N))
 
 theorem cut_compl_isInput (g : Fin A.N) : (A.cut Tᶜ).isInput g = (A.toCircuit.asInputs T).isInput g := by
   by_cases h : g ∈ T
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
+  · simp [Accounting.Placed.cut, h]
+  · simp [Accounting.Placed.cut, h]
 
 theorem cut_compl_reads (g : Fin A.N) : (A.cut Tᶜ).reads g = (A.toCircuit.asInputs T).reads g := by
   by_cases h : g ∈ T
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
+  · simp [Accounting.Placed.cut, h]
+  · simp [Accounting.Placed.cut, h]
 
 theorem cut_compl_op (g : Fin A.N) (v : (a : Fin A.N) → BitVec (A.w a)) :
     (A.cut Tᶜ).op g v = (A.toCircuit.asInputs T).op g v := by
   by_cases h : g ∈ T
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
-  · simp [Accounting.Placed.cut, Circuit.asInputs, h]
+  · simp [Accounting.Placed.cut, h]
+  · simp [Accounting.Placed.cut, h]
 
 /-- What a set of gates reads from outside itself is the same in the two. -/
 theorem cut_compl_into (R : Finset (Fin A.N)) : (A.cut Tᶜ).into R = (A.toCircuit.asInputs T).into R := by
-  ext a
-  rw [Nci.Cut.SecurityProofs.mem_into, Nci.Cut.SecurityProofs.mem_into]
-  exact and_congr_right fun _ => exists_congr fun g => and_congr_right fun _ => by rw [cut_compl_reads A T g]
+  refine Finset.ext fun a => (Accounting.SecurityProofs.Actual.mem_into_iff (A.cut Tᶜ)).trans
+    (Iff.trans ?_ (Accounting.SecurityProofs.Actual.mem_into_iff (A.toCircuit.asInputs T)).symm)
+  refine and_congr_right fun _ => ⟨fun ⟨g, hg, h⟩ => ⟨g, hg, ?_⟩, fun ⟨g, hg, h⟩ => ⟨g, hg, ?_⟩⟩
+  · rwa [cut_compl_reads A T g] at h
+  · rwa [cut_compl_reads A T g]
 
 /-- The cut's outputs are the gates it keeps. -/
 theorem cut_compl_outputs : (A.cut Tᶜ).outputs = Tᶜ := rfl
