@@ -14,6 +14,8 @@ from research import auto, cores, remote
 from research.cli import main
 
 N2, CPU1, CPU5 = auto.AUTO_NODE, "vy-nebius-cpu-1", "vy-nebius-cpu-5"
+#: node 2's answer as `auto.read` gives it while the node is stopped
+DOWN = f"{auto.NO_SSH} (Connection timed out)"
 
 
 def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = None) -> dict:
@@ -117,7 +119,7 @@ def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node
     window."""
     target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
-    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} can't be reached.*research run --on MACHINE --mem-gb N"):
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job.*research run --on MACHINE --mem-gb N"):
         auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
     with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs and 300 GB"):
         auto.choose({N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))}, 64, 300)
@@ -243,14 +245,36 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
 
 def test_on_auto_refuses_a_job_too_big_for_any_slot_while_node_2_is_down(tmp_path, monkeypatch, capsys):
     launched, placed = [], []
-    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))})
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: DOWN, CPU1: pool(slot("r0"))})
     monkeypatch.setattr(remote, "launch", _refusing(launched))
     monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
     monkeypatch.chdir(_auto_repo(tmp_path))
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     assert main([*runs, "--cpus", "64", "--mem-gb", "300", "--", "pytest"]) == 2
     assert launched == placed == []
-    assert f"research run --on auto: refused: {N2}'s share wasn't read" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert f"research run --on auto: refused: {N2} is down: its ssh doesn't answer (Connection timed out); " in err
+    assert err.count(" is down") == 1 and f"no pool fits and {N2} takes no job" in err
+
+
+def test_a_stopped_node_2_costs_its_probe_a_few_seconds_and_the_placement_says_once_that_it_is_down(tmp_path):
+    """A stopped node 2 held its probe for ssh's default connect timeout, and the placement then quoted ssh's whole error line,
+    address included, as a share that "wasn't read"."""
+    at = {"host": "h", "port": 22, "user": "u"}
+    assert f"ConnectTimeout={auto.NODE_CONNECT_S}" in auto._argv(N2, at) and auto.NODE_CONNECT_S <= 5
+    assert "ConnectTimeout=15" in auto._argv(CPU1, at), "a pool's machine keeps remote.ssh_argv's default"
+    ssh = "import sys; print({!r}, file=sys.stderr); sys.exit(255)"
+    dead = [sys.executable, "-c", ssh.format("ssh: connect to host h port 22: Connection timed out")]
+    assert auto.read(tmp_path, 4, reach=lambda name: dead)[N2] == DOWN
+    target, why = auto.choose({N2: DOWN, CPU1: pool(slot("r0"))}, 4, 16)
+    assert target == (CPU1, "research") and why.startswith(f"{N2} is down: its ssh doesn't answer (Connection timed out); {CPU1}'s ")
+    with pytest.raises(auto.Unplaceable) as refused:
+        auto.choose({N2: DOWN, CPU1: pool(slot("r0"))}, 64, 300)
+    assert str(refused.value).count(" is down") == 1 and "port 22" not in str(refused.value)
+    denied = [sys.executable, "-c", ssh.format("u@h: Permission denied (publickey).")]
+    assert auto.read(tmp_path, 4, reach=lambda name: denied)[N2] == "exit 255: u@h: Permission denied (publickey)."
+    assert auto.off("exit 255: u@h: Permission denied (publickey).").startswith(f"{N2}'s share wasn't read (exit 255: ")
+    assert auto.off(share(free=8)) is None
 
 
 @pytest.mark.parametrize("text, n", [("8-19", 12), ("0", 1), ("48-51,56-63", 12)])

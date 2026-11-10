@@ -22,6 +22,9 @@ A GPU job, a run naming its own node, or one asking more than a pool slot gives 
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
 the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
+
+A stopped node 2 costs a launch NODE_CONNECT_S: its probe's ssh gives up connecting after that long, beside the pools' probes,
+and the placement says once that node 2 is down (`off`).
 """
 from __future__ import annotations
 
@@ -42,6 +45,10 @@ SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
+#: ssh's ConnectTimeout for node 2's probe: a stopped node 2 costs a launch this long, not remote.ssh_argv's default
+NODE_CONNECT_S = 5
+#: how `read` words a machine whose ssh connection fails (it is stopped, or off the network); `off` reads it back for node 2
+NO_SSH = "its ssh doesn't answer"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
@@ -139,15 +146,33 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
+def _argv(name: str, target: dict) -> list[str]:
+    """The probe's ssh to machine `name` at `target` (remote.pod_target's); node 2's gives up connecting after NODE_CONNECT_S."""
+    from . import remote
+
+    quick = {"connect_timeout": NODE_CONNECT_S} if name == AUTO_NODE else {}
+    return [*remote.ssh_argv(target["host"], target["port"], user=target["user"], **quick), "python3 -"]
+
+
 def _reach(name: str) -> list[str]:
     from . import remote
 
-    t = remote.pod_target(remote.resolve_machine(name, AUTO_PROJECT))
-    return [*remote.ssh_argv(t["host"], t["port"], user=t["user"]), "python3 -"]
+    return _argv(name, remote.pod_target(remote.resolve_machine(name, AUTO_PROJECT)))
 
 
 def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
     return subprocess.run(argv, input=data, capture_output=True, timeout=READ_TIMEOUT_S)
+
+
+def off(n2: Any) -> str | None:
+    """Why node 2 takes no `--on auto` job, from its answer to `read`: it is down, or its share wasn't read. None when it was."""
+    if isinstance(n2, str) and n2.startswith(NO_SSH):
+        return f"{AUTO_NODE} is down: {n2}"
+    share = n2.get("share") if isinstance(n2, dict) else None
+    if not isinstance(share, dict) or "error" in share:
+        why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
+        return f"{AUTO_NODE}'s share wasn't read ({why})"
+    return None
 
 
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None) -> dict[str, dict | str]:
@@ -168,6 +193,8 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
             return str(e) or type(e).__name__
         if r.returncode:
             err = r.stderr.decode(errors="replace").strip().splitlines()
+            if r.returncode == 255 and err and err[-1].startswith("ssh: connect to host "):
+                return f"{NO_SSH} ({err[-1].rsplit(': ', 1)[-1]})"
             return f"exit {r.returncode}: {err[-1] if err else 'no output'}"
         try:
             doc = json.loads(r.stdout)
@@ -207,9 +234,8 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
-    if not isinstance(share, dict) or "error" in share:
-        why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
-        share, said = None, f"{AUTO_NODE}'s share wasn't read ({why})"
+    if (said := off(n2)) is not None:
+        share = None
     else:
         said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
                 f"{share['waiters']} waiting")
@@ -231,7 +257,7 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
     if share is None:
-        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
+        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} takes no job, so nothing would run it. "
                           f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
                           f"it (`research pods list`), or shrink --cpus/--mem-gb to a pool slot's")
     if share.get("fits") and not share["waiters"]:
