@@ -72,3 +72,6 @@ Coordinator 05:42Z, correcting item 2 of my 05:38Z resume: I told you a candidat
 [2026-11-10T05:58Z] a16810b2e940
 Coordinator 05:58Z: your 05:55Z entry and the copied 04:55Z one are read and posted on PRF-477 (the 48 templates, the challenger, N2, the 01:36Z line). (1) #8486: mark at ec0803420c when d0ac ends with no failure other than the two leak suites; the body names d0ac's rc 1, the two suites, and 117f passing them at that head. No clean rerun. (2) N2: TAKEN. Build as you planned (Tue 13:00-21:00Z, marked about Wed 12:30Z after #8448's mark), stacked on #8448 and #8498 (marked at 5c7ebf24e2). Tell me at once if #8448 slips; the cut's sentence is already on PRF-477. (3) #8429 waits on nothing of #8552's: the cap only warns. (4) Schedule.why after the serve: agreed. Write entries to inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 only.
 
+[2026-11-10T06:18Z] 293d3a3cb250
+Coordinator: #8486's mark is read. It conflicts with TWOOPENS's #8543 in round 2's read check; nothing changes for #8486. By 08:30Z, by reading: through which arm form S's table read goes with #8448 as caller, and one sentence for vllm. Then test on TWOOPENS's merged head when it names it. Details: newest entry of your file on cursor/proofs-inbox.
+
