@@ -23533,3 +23533,50 @@ two off lists and the two choices there stand.
 - #8517 reads no verify record, only a serve's `meta.json`, so the rename does not touch it.
 - Section 3's Program row still says "not reconciled": the field names are fixed, and VERIFYFAST-B's spec of what the
   final card run must keep so Lean's verdict is an acceptance has not reached me.
+
+## BINDKSAT, Tue 10 Nov 04:21Z: the one-stage period's two statements, in #8527, elaborate; `k = 1` and the count form below
+
+PR #8527 (`cursor/proofs-oneperiod-5d1e` at `38eeed51b9`, unmarked, linked to PRF-466), based on `main`, since it needs nothing from #8512. `Security/Proofs/WeightSecurity/Reg.lean` holds the statements and `RegPeriod.lean` the proof. Both elaborate (`r20261110-041404-e3a6`): `Reg.lean` is lean exit 0, definitions only, and `RegPeriod.lean` is lean exit 0, its 6 theorems on only `propext`, `Classical.choice` and `Quot.sound`. No lock entry until you have shown Daniel the form.
+
+#8512: `r20261110-030203-14d5` passed per file (`TwoRegMiss.lean` and `TwoRegPeriod.lean` lean exit 0; its rc 1 is the siblings clash). `compilerMissTwo_honest` (`0e81aaca57`) had an unsolved goal, fixed at `278453abc5`; `r20261110-041740-9cd7` tries it.
+
+A window (`oneGame L Rls`) runs in three steps. The datacenter sends what leaves: egress, tick and advice. It then sends the statement and the prover (`Msg × Prover Unit`), and the verifier flips the run's coins. The window's record (`oneRegRec`) says:
+- it is accepted when the run accepts;
+- its sample holds an incorrect proof block when `∃ u ∈ L.checked x r, u ∈ L.Freg H P x ()`;
+- it counts `oneRegCount H L x P`, which is `|Freg|` in scope and `0` out of it. The statement and prover fix it before the coins.
+
+```lean
+def PeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop :=
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, PeriodPlays (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+      (Lv t).εreg H τ.2.1.1 τ.2.1.2 ≤ ε t) →
+    ∀ M : ℕ, Verity.Game.value (Served.Undetected M) (oneRegRun H Lv T s) ≤
+      ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) + ENNReal.ofReal (x ^ M)
+
+def CompilerPeriodReg : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
+    (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ), A.KS H →
+    (∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) → 0 ≤ x → x ≤ 1 →
+    (∀ t y s P, (Lv t).parse y = some s → (Lv t).partition s = some P → InScope P s →
+      ∀ B ⊆ Finset.range P.blocks.length, s.design.Pa P B ≤ x ^ B.card) →
+    PeriodReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv x
+```
+
+What the premises are:
+- Each window meets `CompilerKSReg`'s premises (`A.KS`, `Binds`, `Sessions`).
+- Each window's design misses every set `B` of proof blocks with probability at most `x^{|B|}` (`P_a(B) ≤ x^{|B|}`), at every statement in scope.
+- `ε_t` bounds window `t`'s `ε_reg` at every strategy the run plays it with.
+
+The proof is `period_undetected` at `oneRegRec`:
+- `hacc` is `KSReg`'s first conjunct at `Ω = Unit`; out of scope the run refuses (`Sessions.refuses`).
+- `hstage` is the sample's miss at `Freg`, at most `P_a(Freg)` by `Sessions.draws` and `Pr_forkOn`.
+- `compilerPeriodReg` is `compilerPeriodReg_of compilerKSReg`.
+
+At `k = 1`, the one-stage case does not fall out of the two-stage theorem as stated, for three reasons:
+- `CompiledTwo` adds a second stage, and `εregTwo` adds `N·√Pr[B_conf,2]` to `ε_reg`;
+- the two-stage miss is `(1 − r₁·r₂)^{|W|}`, from the two rate predicates, not a general `P_a(B) ≤ x^{|B|}`;
+- a `Compiled` becomes a `CompiledTwo` only through a contract transfer, which nothing proves.
+
+So I proved it directly on `Compiled`, as the same `period_undetected` instance.
+
+Count form: no named count form of `compilerKSTwo` exists, neither on `main` nor in #8512 (no `KSCountTwo` or `CompilerKSCountTwo`). Its content is #8512's unnamed theorem `CompiledTwo.KSAt.wrongBlocks_le` (`TwoKSAt.lean`, with `wrongAtBoundary_le` beside it). At rates `r₁`, `r₂` it bounds the probability that the verifier accepts while the extracted boundary trace marks at least `K` replay blocks incorrect at every interior by `KSAt`'s bound, at every `δ ≥ (1 − r₁·r₂)^K`, through `main`'s `Design.Two.card_wrongBlocks_lt`. It reads the time-budget form `KSAt` rather than `KS`. At one stage the named form is `KSCount` (`CompilerKSCount`).
