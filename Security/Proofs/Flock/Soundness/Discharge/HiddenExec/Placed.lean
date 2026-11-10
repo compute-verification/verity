@@ -206,22 +206,10 @@ section Sites
 variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-<<<<<<< ours
-/-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
-table unit `u` is drawn into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
-(`sat`) and is 0 at every pinned output's bit (`pin`), and the unit's template instance (`vu`, below `vus_per_block`)
-and block (`o`) there. A pinned output's Δ copies are the table's and not `A`'s or `B`'s. -/
-||||||| base
-/-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
-table unit `u` is drawn into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
-(`sat`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`) there. A pinned output's Δ
-copies are the table's and not `A`'s or `B`'s. -/
-=======
 /-- **Each sampled proof block's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
 table unit `u` is sampled into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
-(`sat`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`) there. A pinned output's Δ
-copies are the table's and not `A`'s or `B`'s. -/
->>>>>>> theirs
+(`sat`) and is 0 at every pinned output's bit (`pin`), and the unit's template instance (`vu`, below `vus_per_block`)
+and block (`o`) there. A pinned output's Δ copies are the table's and not `A`'s or `B`'s. -/
 structure SitesH where
   A : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
     Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)

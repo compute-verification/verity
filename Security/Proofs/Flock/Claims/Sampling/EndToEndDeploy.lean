@@ -163,16 +163,8 @@ theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Progr
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
 /-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
-<<<<<<< ours
-theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.SlotOrder}
-    (h : _root_.SampledProofs.Slots.layout p q = .ok l) :
-||||||| base
-theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.Layout}
-    (h : _root_.SampledProofs.Slots.layout p q = .ok l) :
-=======
-theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.Layout}
+theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.SlotOrder}
     (h : _root_.Spot.Slots.layout p q = .ok l) :
->>>>>>> theirs
     ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
   unfold _root_.Spot.Slots.layout at h
   obtain ⟨_, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
@@ -185,16 +177,8 @@ theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spo
   · exact Or.inl rfl
   · exact Or.inr ⟨_, rfl⟩
 
-<<<<<<< ours
-theorem slotPartition_classes {l : _root_.SampledProofs.Slots.SlotOrder}
-    {pop ins : Array (Array _root_.SampledProofs.Slots.ProofBlock)}
-||||||| base
-theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout}
-    {pop ins : Array (Array _root_.SampledProofs.Slots.ProofBlock)}
-=======
-theorem slotPartition_classes {l : _root_.Spot.Slots.Layout}
+theorem slotPartition_classes {l : _root_.Spot.Slots.SlotOrder}
     {pop ins : Array (Array _root_.Spot.Slots.ProofBlock)}
->>>>>>> theirs
     (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
     ∃ c ic, (_root_.Properties.Spot.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by
   unfold _root_.Properties.Spot.slotPartition

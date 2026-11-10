@@ -233,16 +233,8 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
   simp only [checks, checksFast, find?_byPort]
 
-<<<<<<< ours
-/-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
-def profileDraw (law : Json) : Option Core.SamplingDesign :=
-||||||| base
-/-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
-def profileDraw (law : Json) : Option Core.Draw :=
-=======
 /-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
-def profileDraw (law : Json) : Option Core.Draw :=
->>>>>>> theirs
+def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do
