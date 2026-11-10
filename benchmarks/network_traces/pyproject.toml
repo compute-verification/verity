@@ -51,9 +51,13 @@ untraced = [
 # step trace and the records it imports, and its CLI, which served_session's endpoint step runs it through) and
 # network-e2e's chain. certifier_piece is the network certifier's piece of
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
-# leak_bounds counts K over the census's reference datacenter and the adversary resource model's world, one link a
-# machine.
-inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "integrations/vllm/workloads",
+# leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is rho's
+# world fleet and its machine's GPUs, a scope's requests are the census's request and GPU peak at the workload card's
+# MACs a token, and the weights are that card's parameters. `verity bench certifier_term`'s runner runs it.
+inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
+          "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml",
+          "benchmarks/spot_figures/cards/workload.glm-5.3.json", "benchmarks/certifier_term/run.py",
+          "integrations/vllm/workloads",
           "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
