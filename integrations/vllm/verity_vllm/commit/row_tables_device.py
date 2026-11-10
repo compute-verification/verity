@@ -68,18 +68,7 @@ def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, he
     h = hashlib.sha256()
     for s in sources:
         h.update(s.encode() + b"\0" + (CUDA_DIR / s).read_bytes() + b"\0")
-<<<<<<< 99c8914848
-    for p in (*SHARED, *headers):
-||||||| merged common ancestors
-<<<<<<<<< Temporary merge branch 1
-    for p in SHARED:
-||||||||| merged common ancestors
-=========
     for p in headers:
->>>>>>>>> Temporary merge branch 2
-=======
-    for p in headers:
->>>>>>> 7af4d24fca3e
         h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
     version = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout
     h.update(" ".join(flags).encode() + b"\0" + version.encode())

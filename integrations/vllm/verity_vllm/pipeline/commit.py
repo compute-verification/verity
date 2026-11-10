@@ -1326,23 +1326,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
             compiled_kernels.attach(com, required_manifest)
-<<<<<<< 99c8914848
-            com.program_digest = (SR if com.rows else SCH).program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
-||||||| merged common ancestors
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
-=======
             com.program_digest = SR.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
->>>>>>> 7af4d24fca3e
             print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
-<<<<<<< 99c8914848
-            com.program_digest = (SR if com.rows else SCH).program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
-||||||| merged common ancestors
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
-=======
             com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
->>>>>>> 7af4d24fca3e
         if compiled_src is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
