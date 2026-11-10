@@ -52,11 +52,19 @@ markers = [
     "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/verity/check/post_train.py)",
 ]
 
+# vLLM's mypy settings; tests/lint/test_mypy.py runs mypy under them and holds its errors to allowlists/mypy.json
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
 # needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
 untraced = [
     "tests/lint/test_merge_allowlist.py",
+    "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
     "tests/lint/test_ruff_vllm.py",
     "tests/migrate/test_superseded_quarantine.py",
