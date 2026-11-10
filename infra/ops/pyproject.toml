@@ -53,7 +53,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
           "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
           # drive's loop, whose checkout per verb is tested here
-          "infra/control/drive.sh"]
+          "infra/control/drive.sh",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
