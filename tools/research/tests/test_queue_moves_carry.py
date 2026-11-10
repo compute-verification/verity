@@ -436,6 +436,19 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
 
 
+def test_a_moves_script_on_an_unreviewed_head_runs_without_the_queues_credentials(world, monkeypatch):
+    """The script runs the head's own code (`rename.py` runs the tree's `pins.py`, `layout.py` its `uv lock`), which nobody
+    reviewed, so it sees none of the queue's GitHub and Slack credentials, and `gh` finds no stored login."""
+    q = _queue(world)
+    head = _git(q.workdir, "rev-parse", q.base)
+    for k in Q.UNREVIEWED_UNSET:
+        monkeypatch.setenv(k, "dummy-" + k.lower())
+    monkeypatch.setattr(Q, "_MAPPED", "import os, sys; gh = os.environ.get('GH_CONFIG_DIR', ''); sys.exit("
+                        "','.join(sorted(k for k, v in os.environ.items() if v.startswith('dummy-'))) + '|' + "
+                        "str(gh.startswith(os.environ['TMPDIR']) and not os.path.exists(gh)))")
+    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: |True")
+
+
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
     """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
     (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
