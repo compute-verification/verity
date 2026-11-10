@@ -25,6 +25,11 @@ leave out.
   (`card_unregistered_asInputs_block_le`), and all blocks together without `OneReader`
   (`sum_card_unregistered_asInputs_pairs_le`). One block's count at its own cap, with the outputs it holds a wire of
   in place of `O` (`counts_block`).
+* **A block newly reads only the words it held.** With computed gates `T` as inputs, a gate of `T` in another block
+  was read already, so a block reads at most what it read and the gates of `T` it held
+  (`unregistered_asInputs_subset_held`, `card_unregistered_asInputs_held_le`), and all blocks together at most
+  `m k + |T|` with no condition on who reads a word (`sum_card_unregistered_asInputs_held_le`). On `TD` a computed
+  word has two readers and the reads are the same tied and with it as an input (`toyD_*`).
 * **Two instances of the count over a set of blocks.** A MAC with a gate in each of two blocks is an entry of the
   block that reads across (`toyS_*`). Of the two output wires of `Nci.Cut.Toy`, one is in block 0 (`toyO_*`).
 * **(H) carries over.** `κ` from the unregistered inputs only grows when gates leave `θ` or become inputs
@@ -280,6 +285,98 @@ theorem sum_card_unregistered_asInputs_pairs_le {m : ℕ} (d : RegisteredCircuit
         sum_le_sum fun u _ => card_unregistered_asInputs_block_le d P 𝒲 h𝒲 hk u
     _ = m * k + b * ∑ u : Fin m, (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (P.gates u \ 𝒲.biUnion id)).card := by
         rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_sum]
+
+/-! ### With computed words as inputs, a block newly reads only the words it held -/
+
+/-- With computed gates `T` as inputs, what is left of `R` reads outside `θ` at most what `R` read outside `θ` and the
+gates of `T` that `R` held: a gate of `T` outside `R` that it reads was a computed gate outside it, read already. -/
+theorem unregistered_asInputs_subset_held (d : RegisteredCircuit) (T R : Finset (Fin d.D.N))
+    (hT : ∀ g ∈ T, d.D.isInput g = false) :
+    (d.asInputs T).unregistered (R \ T) ⊆ d.unregistered R ∪ R ∩ T := by
+  intro a ha
+  have ha' : a ∈ (d.D.asInputs T).into (R \ T) \ (d.θ \ T) := ha
+  obtain ⟨hin, hout⟩ := mem_sdiff.1 ha'
+  obtain ⟨haS, g, hg, hag⟩ := (mem_filter.1 hin).2
+  have hag' : a ∈ d.D.reads g := by
+    have h : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
+    rwa [ite_eq_right (mem_sdiff.1 hg).2] at h
+  by_cases haR : a ∈ R
+  · exact mem_union_right _ (mem_inter.2 ⟨haR, Classical.byContradiction fun hT' => haS (mem_sdiff.2 ⟨haR, hT'⟩)⟩)
+  · refine mem_union_left _ ?_
+    show a ∈ d.D.into R \ d.θ
+    refine mem_sdiff.2 ⟨mem_filter.2 ⟨mem_univ a, haR, g, (mem_sdiff.1 hg).1, hag'⟩, fun hθ => ?_⟩
+    by_cases haT : a ∈ T
+    · have h := hT a haT
+      rw [d.θ_input a hθ] at h
+      cases h
+    · exact hout (mem_sdiff.2 ⟨hθ, haT⟩)
+
+/-- **Each block, at the gates of the words it held.** With computed gates `T` as inputs, a block reads outside `θ` at
+most what it read and the gates of `T` it held. -/
+theorem card_unregistered_asInputs_held_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
+    (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false) (u : Fin m) :
+    ((d.asInputs T).unregistered ((P.asInputs T).gates u)).card ≤
+      (d.unregistered (P.gates u)).card + (T ∩ P.gates u).card := by
+  have hg : (P.asInputs T).gates u = P.gates u \ T := P.asInputs_gates T u
+  calc ((d.asInputs T).unregistered ((P.asInputs T).gates u)).card
+      = ((d.asInputs T).unregistered (P.gates u \ T)).card :=
+        congrArg (fun S => ((d.asInputs T).unregistered S).card) hg
+    _ ≤ (d.unregistered (P.gates u) ∪ P.gates u ∩ T).card :=
+        card_le_card (unregistered_asInputs_subset_held d T (P.gates u) hT)
+    _ ≤ (d.unregistered (P.gates u)).card + (P.gates u ∩ T).card := card_union_le _ _
+    _ = (d.unregistered (P.gates u)).card + (T ∩ P.gates u).card := by rw [inter_comm]
+
+/-- **All blocks together, whoever reads a word.** With computed gates `T` as inputs, the blocks read at most
+`m k + |T|` gates outside `θ` between them: each gate of `T` is newly read by the one block that held it. -/
+theorem sum_card_unregistered_asInputs_held_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k : ℕ}
+    (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false) (hk : ReadsAtMost d P k) :
+    ∑ u, ((d.asInputs T).unregistered ((P.asInputs T).gates u)).card ≤ m * k + T.card :=
+  calc ∑ u, ((d.asInputs T).unregistered ((P.asInputs T).gates u)).card
+      ≤ ∑ u : Fin m, (k + (T ∩ P.gates u).card) := sum_le_sum fun u _ =>
+        (card_unregistered_asInputs_held_le d P T hT u).trans (Nat.add_le_add_right (hk u) _)
+    _ = m * k + ∑ u : Fin m, (T ∩ P.gates u).card := by
+        rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul]
+    _ ≤ m * k + T.card := Nat.add_le_add_left (Nci.Cut.SecurityProofs.sum_card_inter_gates_le P T) _
+
+/-- Toy D: a computed word with two readers. A registered input, the word's gate reading it, and two gates reading
+the word. -/
+def readsD : Fin 4 → Finset (Fin 4) := ![∅, {0}, {1}, {1}]
+
+/-- The toy circuit, one bit a gate. -/
+abbrev TD : Circuit where
+  N := 4
+  w := fun _ => 1
+  isInput := fun g => decide (g.val < 1)
+  reads := readsD
+  reads_lt := by decide
+  input_reads := by decide
+  op := fun _ _ => 0
+  op_congr := fun _ _ _ _ => rfl
+  outputs := {2, 3}
+
+/-- Toy D, its input registered. -/
+abbrev dD : RegisteredCircuit := .ofCircuit TD {0} (by decide)
+
+/-- A block for each computed gate: the word's, and its two readers'. -/
+def PD : Partition TD 3 where
+  unit := fun g => if g.val < 1 then none else if g.val = 1 then some 0 else if g.val = 2 then some 1 else some 2
+  input_iff := by decide
+
+/-- The word: the one computed gate both readers read. -/
+abbrev wordD : Finset (Finset (Fin TD.N)) := {{1}}
+
+/-- Tied, the blocks read two gates outside `θ` between them: each reader reads the word, a computed gate of another
+block. -/
+theorem toyD_tied : ∑ u, (dD.unregistered (PD.gates u)).card = 2 := by decide
+
+/-- With the word as an input they read the same two. -/
+theorem toyD_asInputs :
+    ∑ u, ((dD.asInputs ({1} : Finset (Fin TD.N))).unregistered ((PD.asInputs {1}).gates u)).card = 2 := by decide
+
+/-- The word has two readers on the circuit with it as an input. -/
+theorem toyD_not_oneReader : ¬ OneReader (PD.asInputs ({1} : Finset (Fin TD.N))) wordD := by
+  unfold OneReader
+  decide
 
 /-! ### (H) carries over to the untied circuit and to the circuit with gates as inputs -/
 
