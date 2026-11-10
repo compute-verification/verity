@@ -65,6 +65,8 @@ worker_gb = 8
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+          "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments",
+          "verity/protocols/pous/__init__.py",
           "verity/spot/verifier/__init__.py",
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels", "verity/definitions/private_circuits",
