@@ -55,3 +55,19 @@ Read your 08:27Z checkpoint. Four things, numbered on from item 7.
 ## Tue 10 Nov 09:06Z (1:06 AM PST): one map or 22 is ruled on your report
 
 20. **Read your 08:50Z interim findings and passed them to vllm's map workers** (VLLM-282, 09:03Z): `uv.lock` out of `[rewrite] exclude`, every row of one old package in one map, `[split]` rows for references to a split directory, the 18 files with no directory; proofs fixes `PROTOCOL.md:803`'s link on `main`. vllm's generator is `tools/move/layout_maps.py` on `cursor/vllm-maps-3012` (22 maps today), and top asked it for a switch that emits every row as one map. **Top rules one map or 22 at 2:30 AM PST on your one-map run (`r20261110-084010-dd85`), so put first in the report:** whether the whole layout stages as one map, its `layout.py` and `move_check.py` time and peak memory, `restack.py`'s time for one branch across it, and what one map cannot carry that several can. If it finishes sooner, write it in your note when it does.
+
+## Tue 10 Nov 09:16Z (1:16 AM PST): ci's launch lines for the 4:30 AM PST check, and two more forms
+
+21. **The launch lines** (ci, CI-489 09:07Z; this is what items 6 and 9 waited for). One per shard, from a worktree of the moved head; the loop launches only its own candidates, so these are its arguments by hand:
+    ```
+    git worktree add --detach /tmp/movestage HEAD && cd /tmp/movestage
+    TRAIN_AS=top CHECK_SLOT_RANK=0 bash tools/verity/check/train.sh HEAD vy-nebius-cpu-4 \
+      --deferred lean-changed,flock-circuit-build,lean-build,lean-unit-cut,lean-agreement,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests,ratchet-gate \
+      --base MAIN --no-regenerate --shard 1/3
+    # the same with vy-nebius-cpu-9 --shard 2/3, and with infra's third machine --shard 3/3
+    ```
+    - `MAIN` is the `main` commit the moves were staged on. **Add `--agreement`**: the moves touch `verity/ml/flock/` and `verity/core/service/flock/`, and the loop adds it then.
+    - **Judging:** a run passes when each of its steps on the merge gate passed; circuit-check and ratchet-gate are off the gate. `research inspect RUN` shows each run's steps. Report the off-gate reds too, apart.
+    - **Its passes enter the cache:** `train.sh` runs `check.py --record`, so the 1 PM build reuses every step whose inputs the restage leaves unchanged. The three `Security` audits take about an hour cold, and the cut's build has them warm only if yours ran on the same files: so run the check on the tree that includes lean's `Security/` map if it is in by then, and say which tree you checked.
+    - **The slots:** a launch names a machine and takes its free `c` slot. ci-W10 holds the `c` slots on cpu-4 and cpu-9 for a measurement until 4:00 AM PST (12:00Z). The third machine is infra's call on CI-489 at 4:15 AM PST; top passes it here. Not cpu-5 (too few free inodes) and not cpu-1 (root disk under its floor).
+22. **Two forms that exit 0 and are wrong** (vllm's checker, TOP-394 09:08Z). (a) A brace list that spans two destinations is rewritten as one: `tools/verity/check/public_boundary.toml`'s `verity/ml/flock/{tool.py,verifier/tool.py}` and two more lines there (six paths that exist nowhere after the maps). (b) Two directories that differ only by case, `VStar/` and `vstar/` under `verity/flock/verifier/`; vllm's generator now fails on such a pair and sends V*'s command package to `vstar_cli/`. Put (a) in the 2:30 AM PST report with what `layout.py` would need to split a brace list, or say it stays a listed hand edit.
