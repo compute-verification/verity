@@ -60,23 +60,11 @@ def spent {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (E
 
 end Chain
 
-<<<<<<< ours
-/-- A session of `n` chained windows on one store, each closed by its pooled draw of `d` openings: a play over its
-windows (`Verity.Play`), window `w`'s chained prover any function of the earlier windows' coins, their draws among
+/-- A session of `n` chained windows on one store, each closed by its pooled sample of `d` openings: a play over its
+windows (`Verity.Play`), window `w`'s chained prover any function of the earlier windows' coins, their samples among
 them. -/
 abbrev Session (n P N b h ρ S L q r s d : ℕ) : Type :=
   Verity.Play n (WindowCoins P N b h ρ r s d) (fun _ => Chain P N b h ρ S L q r s)
-||||||| base
-/-- A session of `n` chained windows on one store, each closed by its pooled draw of `d` openings: window `w`'s chained
-prover is any function of the earlier windows' coins, their draws among them. -/
-structure Session (n P N b h ρ S L q r s d : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → Chain P N b h ρ S L q r s
-=======
-/-- A session of `n` chained windows on one store, each closed by its pooled sample of `d` openings: window `w`'s chained
-prover is any function of the earlier windows' coins, their samples among them. -/
-structure Session (n P N b h ρ S L q r s d : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → Chain P N b h ρ S L q r s
->>>>>>> theirs
 
 namespace Session
 

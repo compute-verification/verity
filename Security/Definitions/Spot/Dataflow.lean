@@ -26,26 +26,12 @@ What a checker can confirm from the dataflow alone (`Checked`):
 
 `Determinate` is the semantic property: for every choice of unit functions, every input has exactly one assignment in
 which every unit is correct. `down B` is the downstream cone of a set of units, `up O` the slots upstream of a set of
-<<<<<<< ours
 slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress an
 incorrect `u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`)
-and whose incorrect units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect
-units. `amp` is the amplification set: the egress values the secrets give once the incorrect units and their writes are
+and whose incorrect proof blocks lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect
+proof blocks. `amp` is the amplification set: the egress values the secrets give once the incorrect proof blocks and their writes are
 fixed. `SkipsLucky` is work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by
 luck.
-||||||| base
-slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress a wrong
-`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose wrong
-units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` wrong units. `amp` is the
-amplification set: the egress values the secrets give once the wrong units and their writes are fixed. `SkipsLucky` is
-work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
-=======
-slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress a wrong
-`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose incorrect
-proof blocks lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect proof blocks. `amp` is the
-amplification set: the egress values the secrets give once the incorrect proof blocks and their writes are fixed. `SkipsLucky` is
-work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
->>>>>>> theirs
 
 `DynPopulation` is the object a machine trace is: its read sets depend on values, as a VM step reads memory at an
 address it holds. It is here so that the counterexamples can be stated against it.
@@ -77,16 +63,8 @@ def Correct {V : Type} (f : P.Fns V) (σ : S → V) (u : U) : Prop :=
   ∀ s : P.writes u, σ s = f u (fun r => σ r) s
 
 open Classical in
-<<<<<<< ours
-/-- The incorrect units of an assignment. -/
-noncomputable def incorrect [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : Finset U :=
-||||||| base
-/-- The wrong units of an assignment. -/
-noncomputable def wrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : Finset U :=
-=======
 /-- The incorrect proof blocks of an assignment. -/
-noncomputable def wrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : Finset U :=
->>>>>>> theirs
+noncomputable def incorrect [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : Finset U :=
   univ.filter fun u => ¬ P.Correct f σ u
 
 /-- `σ` holds the inputs `a` on every input slot outside `X` (the secret slots, left free). -/
@@ -135,28 +113,14 @@ open Classical in
 noncomputable def coneEgress [Fintype U] (O : Finset S) (B : Finset U) : Finset S := O ∩ P.writesOf (P.down B)
 
 open Classical in
-<<<<<<< ours
 /-- **The egress values** at the incorrect set `B`: what the assignments that hold the inputs `a` off the secret slots `X`,
-and whose incorrect units lie in `B`, show on the egress slots `O`. -/
-||||||| base
-/-- **The egress values** at the wrong set `B`: what the assignments that hold the inputs `a` off the secret slots `X`,
-and whose wrong units lie in `B`, show on the egress slots `O`. -/
-=======
-/-- **The egress values** at the wrong set `B`: what the assignments that hold the inputs `a` off the secret slots `X`,
 and whose incorrect proof blocks lie in `B`, show on the egress slots `O`. -/
->>>>>>> theirs
 noncomputable def egress [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (B : Finset U) : Finset (O → V) :=
   (univ.filter fun σ : S → V => P.Holds a X σ ∧ P.incorrect f σ ⊆ B).image fun σ o => σ o
 
 open Classical in
-<<<<<<< ours
-/-- **The egress values with at most `m` incorrect units**. -/
-||||||| base
-/-- **The egress values with at most `m` wrong units**. -/
-=======
 /-- **The egress values with at most `m` incorrect proof blocks**. -/
->>>>>>> theirs
 noncomputable def egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (m : ℕ) : Finset (O → V) :=
   (univ.filter fun σ : S → V => P.Holds a X σ ∧ (P.incorrect f σ).card ≤ m).image fun σ o => σ o
@@ -165,13 +129,7 @@ open Classical in
 /-- **The amplification set** at the incorrect set `B` and its writes `b`, over the secrets `Cl`: what the egress slots
 `O` show in the assignments that hold the inputs `a` with a secret `s ∈ Cl` on the secret slots `X`, are incorrect only in
 `B`, and write `b` on `B`'s slots. Its size is how many egress values the rest of the population makes of the secrets
-<<<<<<< ours
-once the incorrect units' writes are fixed. -/
-||||||| base
-once the wrong units' writes are fixed. -/
-=======
 once the incorrect proof blocks' writes are fixed. -/
->>>>>>> theirs
 noncomputable def amp [Fintype U] [Fintype S] [DecidableEq S] {V : Type} [Fintype V] [DecidableEq V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (Cl : Finset (S → V)) (B : Finset U) (b : P.writesOf B → V) : Finset (O → V) :=
   ((Cl ×ˢ (univ : Finset (S → V))).filter fun p =>
@@ -205,16 +163,8 @@ variable {U S V : Type} (D : DynPopulation U S V)
 def Correct (σ : S → V) (u : U) : Prop := ∀ s ∈ D.writes u, σ s = D.f u σ s
 
 open Classical in
-<<<<<<< ours
-/-- The incorrect units of an assignment. -/
-noncomputable def incorrect [Fintype U] (σ : S → V) : Finset U := univ.filter fun u => ¬ D.Correct σ u
-||||||| base
-/-- The wrong units of an assignment. -/
-noncomputable def wrong [Fintype U] (σ : S → V) : Finset U := univ.filter fun u => ¬ D.Correct σ u
-=======
 /-- The incorrect proof blocks of an assignment. -/
-noncomputable def wrong [Fintype U] (σ : S → V) : Finset U := univ.filter fun u => ¬ D.Correct σ u
->>>>>>> theirs
+noncomputable def incorrect [Fintype U] (σ : S → V) : Finset U := univ.filter fun u => ¬ D.Correct σ u
 
 /-- `σ` holds the inputs `a` on every input slot outside `X`. -/
 def Holds (a : S → V) (X : Finset S) (σ : S → V) : Prop := ∀ s ∈ D.input, s ∉ X → σ s = a s

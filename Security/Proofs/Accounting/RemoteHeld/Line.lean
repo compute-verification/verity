@@ -44,18 +44,18 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RemoteHeld
 import Proofs.Pouw.Prob
+public import Proofs.Properties.Accounting.Remote.Session
 
 /-!
-<<<<<<< ours
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`), and memory held from it
 
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
 the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
-`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledDraw` at the records read
+`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledSample` at the records read
 through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversSession` at the record's
-draws, whose receipts on an accepted record are `recordDraw`'s sizes, `receipts_of_line`, and the line's check of their
-draws, `wrong_le_line`), and the line read off the record credits no more bits read than its groups' passes read
+draws, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
+draws, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
 (`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
 each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a draw
 keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
@@ -64,31 +64,6 @@ keeps the parameters and registration, `frame_run`, and an accepted state has it
 Memory held follows from bits read under the device model (`heldAt_of_read`, over the outcomes `pr_held_le_read`): the
 blocks the passes read are the correct receipts of the trace of those passes alone, whose wrong receipts `ReadAt` holds
 to the line's W, and on it every stretch of the line credits what the trace held (`heldAt_of`):
-||||||| base
-# The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
-
-At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
-receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
-(`holdsAnd` of `SketchBound`, from `SketchBoundAt` and `NoOutsideCompute` by `sketchBound_of_noOutside`, and
-`Draw.pooledDraw` at the records read through the coin commitment, `recordCommitted`, so at most the W the line reads:
-`LineCoversSession` at the record's draws, whose receipts on an accepted record are `recordDraw`'s sizes,
-`receipts_of_line`, and the line's check of their draws, `wrong_le_line`), every stretch of the line read off the
-record credits what the trace held (`heldAt_of`), its groups one for each of the session's windows and its registered
-blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
-`frame_run`, and an accepted state has its parameters' windows, `windows_of_accepted`):
-=======
-# The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
-
-At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
-receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
-(`holdsAnd` of `SketchBound`, from `SketchBoundAt` and `NoOutsideCompute` by `sketchBound_of_noOutside`, and
-`Draw.pooledSample` at the records read through the coin commitment, `recordCommitted`, so at most the W the line reads:
-`LineCoversSession` at the record's draws, whose receipts on an accepted record are `recordSample`'s sizes,
-`receipts_of_line`, and the line's check of their draws, `incorrect_le_line`), every stretch of the line read off the
-record credits what the trace held (`heldAt_of`), its groups one for each of the session's windows and its registered
-blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
-`frame_run`, and an accepted state has its parameters' windows, `windows_of_accepted`):
->>>>>>> theirs
 
 * the arithmetic link (`stretchBound`, `Proofs.Properties.Accounting.Remote.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
@@ -524,25 +499,11 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
 below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
-<<<<<<< ours
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.draws κ X)}
-    {rec : DrawCoins node.draws κ X → Record} {correct : Fin node.draws → DrawCoins node.draws κ X → Finset ℕ}
-    {ω : DrawCoins node.draws κ X} (hv : Verified node (rec ω))
-    (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
-    ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
-||||||| base
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
-    {rec : Coins node.draws κ X → Record} {correct : Fin node.draws → Coins node.draws κ X → Finset ℕ}
-    {ω : Coins node.draws κ X} (hv : Verified node (rec ω))
-    (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
-    ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
-=======
-theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.samples κ X)}
-    {rec : Coins node.samples κ X → Record} {correct : Fin node.samples → Coins node.samples κ X → Finset ℕ}
-    {ω : Coins node.samples κ X} (hv : Verified node (rec ω))
+theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
+    {rec : DrawCoins node.samples κ X → Record} {correct : Fin node.samples → DrawCoins node.samples κ X → Finset ℕ}
+    {ω : DrawCoins node.samples κ X} (hv : Verified node (rec ω))
     (hw : (T.incorrect ω : ℝ) ≤ (recordSample node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong := fun l hline => by
->>>>>>> theirs
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
   obtain ⟨-, hws, hlim⟩ := ofSummaryAt_ok hs
   have hR : sampleReceipts node.groupsPerCoin sm.windows =
@@ -580,7 +541,7 @@ every registered block but its wrong receipts (`read_card`), and the passes are 
 theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record} (hp : Paced T (recordPace node rec))
     (hcov : Covers T) (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
+    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong) :
     ReadAt T ω node (rec ω) := by
   intro l hline
   obtain ⟨sm, gs, ws, hsm, hs, hgs, -⟩ := lineOf_ok hline
@@ -595,15 +556,15 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
   have h1 : ∑ p ∈ range P, ((T.read ω p).card + (T.plan ω p \ T.correct ω p).card) = P * T.blocks := by
     rw [Finset.sum_const_nat fun p hp' => read_card hcov ha (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)
       (hk p (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)), Finset.card_range]
-  have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.wrong ω :=
+  have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.incorrect ω :=
     Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 hPle)
-  have hsum : P * T.blocks ≤ T.reads ω P + T.wrong ω := by
+  have hsum : P * T.blocks ≤ T.reads ω P + T.incorrect ω := by
     rw [Finset.sum_add_distrib] at h1
     unfold Trace.reads
     rw [← h1]
     exact Nat.add_le_add_left h2 _
   have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
-  have hsum' : (P : ℝ) * T.blocks ≤ T.reads ω P + T.wrong ω := by exact_mod_cast hsum
+  have hsum' : (P : ℝ) * T.blocks ≤ T.reads ω P + T.incorrect ω := by exact_mod_cast hsum
   have hwl := hw l hline
   have hb : (0 : ℝ) ≤ 8 * node.blockBytes := by positivity
   refine mul_le_mul_of_nonneg_left ?_ hb
@@ -613,13 +574,12 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
 
 /-- **The memory line of record, in bits read** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-<<<<<<< ours
   intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
   have hN : (ofRecord T node r).blocks = node.blocks := rfl
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
+    (Draw.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
-  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
+  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
 /-- **Memory held from bits read, under the device model**: on an accepting outcome where the record's line credits no
 more bits read than its groups' passes read (`ReadAt`), every stretch of form `i` credits what the trace held over its
@@ -665,7 +625,7 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
     obtain ⟨t, ht, htj⟩ := Finset.mem_biUnion.1 (Finset.mem_inter.1 hj').2
     exact ⟨t, (Finset.mem_Ico.1 ht).1, (Finset.mem_Ico.1 ht).2, htj⟩
   have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
-  have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.wrong ω : ℝ) ≤ l.wrong := fun l' hline' => by
+  have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.incorrect ω : ℝ) ≤ l.wrong := fun l' hline' => by
     have h8 : (0 : ℝ) < 8 * node.blockBytes := by
       have : (1 : ℝ) ≤ node.blockBytes := by exact_mod_cast hb
       linarith
@@ -674,10 +634,10 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
     have hp1 : ∀ p ∈ range P, (univ \ T.read ω p).card + (T.read ω p).card = T.blocks := fun p _ => by
       have := Finset.card_sdiff_add_card_inter (univ : Finset (Fin T.blocks)) (T.read ω p)
       rwa [Finset.univ_inter, Finset.card_univ, Fintype.card_fin] at this
-    have hsum : T'.wrong ω + T.reads ω P = P * T.blocks := by
+    have hsum : T'.incorrect ω + T.reads ω P = P * T.blocks := by
       show ∑ p ∈ range P, (univ \ T.read ω p).card + ∑ p ∈ range P, (T.read ω p).card = P * T.blocks
       rw [← Finset.sum_add_distrib, Finset.sum_const_nat hp1, Finset.card_range]
-    have hsumR : (T'.wrong ω : ℝ) + T.reads ω P = (P : ℝ) * node.blocks := by
+    have hsumR : (T'.incorrect ω : ℝ) + T.reads ω P = (P : ℝ) * node.blocks := by
       rw [← hNr]; exact_mod_cast hsum
     push_cast at hR
     linarith
@@ -700,62 +660,5 @@ theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {r
       Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → ReadAt (ofRecord T node rec) ω node (rec ω))) :=
   Pouw.pr_mono fun _ hω => ⟨hω.1, fun h => hω.2 fun hq =>
     heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp rfl hω.1 hω.1 (h hq)⟩
-||||||| base
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hl hsq hd hS hr hp hcov hk hO hL hR hC
-  have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1
-    (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
-  · intro h0
-    simp only [Node.link, ns]
-    push_cast
-    positivity
-  · simpa using hc.2.2.1
-  · simpa using hc.2.2.2
-
-/-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
-theorem lineHeldIdentity : LineHeldIdentity := by
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hI hsq hd hS hr hp hcov hk hO hL hR hC
-  have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
-    hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
-=======
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hl hsq hd hS hr hp hcov hk hO hL hR hC
-  have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1
-    (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
-  · intro h0
-    simp only [Node.link, ns]
-    push_cast
-    positivity
-  · simpa using hc.2.2.1
-  · simpa using hc.2.2.2
-
-/-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
-theorem lineHeldIdentity : LineHeldIdentity := by
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hI hsq hd hS hr hp hcov hk hO hL hR hC
-  have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
-    hS hr hp hcov hN ha hω.1 h.1 (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
->>>>>>> theirs
 
 end Properties.RemoteAudit.Line.SecurityProofs

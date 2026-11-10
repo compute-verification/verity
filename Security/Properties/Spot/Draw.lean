@@ -99,16 +99,8 @@ noncomputable def missBound (rule : Select.Rule) (d : Program) (query : Json) (t
   | .ok l, .ok D => D.Pa (slotPartition l) B
   | _, _ => 0
 
-<<<<<<< ours
-/-- The slots a draw checks, none where it is refused. -/
-def checkedOf : Flock.V (Slots.SlotOrder × Array ℕ) → Array ℕ
-||||||| base
-/-- The slots a draw checks, none where it is refused. -/
-def checkedOf : Flock.V (Slots.Layout × Array ℕ) → Array ℕ
-=======
 /-- The slots a sample checks, none where it is refused. -/
-def checkedOf : Flock.V (Slots.Layout × Array ℕ) → Array ℕ
->>>>>>> theirs
+def checkedOf : Flock.V (Slots.SlotOrder × Array ℕ) → Array ℕ
   | .ok (_, c) => c
   | .error _ => #[]
 
