@@ -120,3 +120,9 @@ If this cannot be answered by Tue 01:30Z beside what you are doing, say so in my
   does the two-stage bound become for that row, and does "F = 1" still describe a 128k registration.
 - If your check as written refuses the long row, say so first: that changes Thursday, and I tell vllm and circuits the
   same hour.
+
+## From the coordinator, Tue 10 Nov 03:44Z: a field network-accounting needs from the compute audit's public, by Thu 12 Nov
+
+network-accounting (PRF-456, 03:26Z; NET-297) and soundness (03:28Z) ask: each compute audit's public names its POOLED charge in a field the network period check reads: the wrong blocks it allows at delta over the period (the pooled count, not a per-window "every entry bit once one block may be wrong"), and S a request. For GLM-5.3, also which unit holds a response's token count.
+
+This sits beside your R8 work (the published F). In your next report (Tue 12:00Z) say: (1) which field of the record on your branch already carries each of the three, or that none does; (2) the smallest change that publishes them, in which PR, and whether Thu 12 Nov 12:00Z marked holds with it; (3) for the token count, the unit and output word. Do not change a locked statement for it; if it needs one, say which.
