@@ -28,3 +28,29 @@ From the vllm coordinator, Mon 9 Nov, on your note 2252Z (the window's number fr
 [2026-11-09T23:34Z] 3d195a3c277f
 From the vllm coordinator, Mon 9 Nov 23:36Z. Daniel, 3:22 PM PST: there is no intermediate remote demo, and Thursday is no longer a date. One final run carries every check (goal demos/remote-demo on the Goals page; demos/both-demos is removed). For you nothing stops, and nothing is cut to fit Wednesday: the composer on the auditor's machine and the record writer are built as the final run will use them, with the writer's refusal in code, and the run of Fri 6 Nov is their test case. The served day's inference-only verdict is still wanted. At your next checkpoint, list what the final run needs from the composer that Friday's case cannot test. Reply in your note with the line: inbox ok 23:36.
 
+[2026-11-10T00:44Z] 21fb391dc26c
+From the vLLM coordinator, Tue 00:44Z. Soundness answered PRF-482 at 00:34Z, and it changes your task F. Read the comment itself if you can (`research msg linear list` does not show comments; the text below is its content).
+
+SETTLED (my decision 2): the final run's inference-only check is `verity/inference-only/v0`: the policy `Nci.CompliesRate Γ α`, decided by Lean's `NciCheck.Baseline.evaluate` (`Core.Remote.components`, CoreRemote.lean:48). It is the only inference-only check the remote theorem reads. The count rule (c, k, n), `nci-check --count` and Python's `inference_only.judge` are outside the theorem; a record whose inference-only verdict is the count rule's does not cite the theorem for that part.
+
+v0's instance is exactly `{alpha, gamma, owner, program, provenance, theta}`, with no block count in it:
+- alpha, gamma: the verifier's own params, fixed and registered before the serve. Never read off the run's division (`served_cases.py --from-division` gives a case the theorem says nothing about).
+- theta: the root inputs holding registered information (the weights), each with its provenance: the registration record, the value and the root it was registered under, in the deployment's log before the run's record. An empty theta makes every weight bit fresh, and v0 rightly rejects. So the run must register its weights and the case must carry their provenance.
+- program: the declared circuit; the run's record names its SHA-512, the digest one-stage's audit commits to.
+- owner: the declared division, the prover's evidence. v0 PUBLISHES it, with each block's profile (gates and fresh-input bits), as a stated exception for one run of record (CoreRemote.lean's header); v1, the private form, replaces it and does not exist yet.
+
+TASK F, AS IT NOW STANDS (dues unchanged: first note Tue 06:00Z, whole Tue 16:00Z)
+1 to 3 stand: why theta is empty today (files and lines), and whether Friday's registration data (`advice/<window>/registration.json`, `serve.json`) is on cpu-3.
+4 changes: build NO one-off for the count rule. If it is small, build v0's case for Friday's run and run `inference-only check` on it privately, as a test of the path only: Friday's alpha and gamma were not registered before the serve, so it can never be a verdict. Say whether Lean accepts and where it stops if not.
+5 is now the main item. For the final run, per field: what exists, what is missing, whose file changes, roughly how many lines, which tests.
+  a. alpha, gamma: who registers them and where (the auditor's own registration), which command, and what replaces `--from-division`.
+  b. theta and provenance: does serving register the weights in the deployment's log before the run's record today? What is missing?
+  c. program: is the digest the record names already the one one-stage's audit commits to?
+  d. owner: list exactly what the published division and block profiles reveal about a served day (how many requests? each request's length? arrival order?). I take this to Daniel: the demo's goal says nothing private is published. Kinds of fact only, no values from Friday's run.
+  e. Which alpha and gamma would honest serving of Llama 3.2 1B pass at: say how they would be chosen and from what (a public bound from the model's shape, not from a private run), and whether publishing them reveals anything.
+6. The count rule: one paragraph on what it would take for it to count (soundness: its own component and guarantee; `NciCheck.Properties.DescCountsCK` is open in the lock). Daniel's daily goal `vllm/daily-inference-block-counts` is the count rule, so I must tell him which of the two his daily verdict can be.
+
+ALSO
+- Three components, not two: `Core.Remote.components` is the inference-only policy, PoUW's period and SPOT's sampled proofs. Soundness says the Glossary's "two" is stale and to fix it in the change that writes the record. Find every place that says two (`git grep`), fix them on your branch in one commit of its own on top of f89ec955c9, and give me the new SHA. A docs-only commit needs no new suites run.
+- The command that checks the record again (list C; do not build yet) has two requirements from soundness: (a) it reads the params (alpha, gamma, the registration log, the challenger's key `Auditor.key`) from the auditor's own registration, never from the prover's deployment files; (b) nothing private is needed, since v0's division is public and SPOT's private values appear only as zero-knowledge proofs in the record. It trusts only the challenger's signature (`LmsUnforgeable`) and an honest challenger for the coins.
+
