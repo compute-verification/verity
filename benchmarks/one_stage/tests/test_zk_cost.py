@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import zk_cost as Z
 
 K, FIXED_S, MARGINAL_S = 6144, 2.0, 1e-3
-NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+PUBLIC_INPUTS = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 
 
 def _records(out: Path, sizes: tuple[int, ...] = (1024, 2048)) -> None:
@@ -63,7 +63,7 @@ def test_overhead_divides_a_blocks_seconds_by_the_cards_rate(tmp_path):
 @pytest.mark.parametrize("verdict, outcome, said, rc", [
     ({"accepted": True, "why": ""}, "accepted", "accepted", 0),
     ({"accepted": False, "why": Z.NO_PROGRAM}, "NO_PROGRAM", "Zk.verify passed, then refused for NO_PROGRAM", 0),
-    ({"accepted": False, "why": NO_DRAW}, "FAIL", "FAILS", 1)])
+    ({"accepted": False, "why": PUBLIC_INPUTS}, "FAIL", "FAILS", 1)])
 def test_a_served_sessions_record_keeps_leans_verdict_and_counts_no_refusal_as_an_acceptance(
         tmp_path, monkeypatch, capsys, verdict, outcome, said, rc):
     (tmp_path / "records").mkdir()
@@ -77,7 +77,7 @@ def test_a_served_sessions_record_keeps_leans_verdict_and_counts_no_refusal_as_a
         0, {"wall_s": 1.0, "user_s": 0.5, "sys_s": 0.1, "maxrss_kb": 1}, [(0.5, "VERDICT " + json.dumps(verdict))]))
     # a served type's session is verified without a Program: it holds when Zk.verify passed, and only Lean's accepting it
     # counts as an acceptance
-    assert Z.verify(argparse.Namespace(out=str(tmp_path), lean="flock-verify")) == rc
+    assert Z.verify(argparse.Namespace(out=str(tmp_path), lean="lean")) == rc
     (rec,) = Z.read_jsonl(tmp_path / "records" / "verify.jsonl")
     assert (rec["accepted"], rec["why"], rec["zk_verify_passed"]) == (verdict["accepted"], verdict["why"], rc == 0)
     assert "passes" not in rec and Z.lean_outcome(rec) == outcome
@@ -94,7 +94,7 @@ def test_overhead_reports_each_lean_verdict_as_what_happened(tmp_path):
     base = {"unit": f"fp8-coord:K={K}", "tag": tag, "arm": "dev", "c": 2048, "k": 2048, "user_s": 1.0, "sys_s": 0.1}
     verdicts = [{"accepted": True, "why": None, "zk_verify_passed": True},
                 {"accepted": False, "why": Z.NO_PROGRAM, "passes": True},   # kept before zk_verify_passed was
-                {"accepted": False, "why": NO_DRAW, "zk_verify_passed": False}]
+                {"accepted": False, "why": PUBLIC_INPUTS, "zk_verify_passed": False}]
     (tmp_path / "records" / "verify.jsonl").write_text("".join(json.dumps(base | v) + "\n" for v in verdicts))
     assert Z.overhead(argparse.Namespace(out=str(tmp_path), card="h200-sxm-141gb", run="r-test")) == 0
     (t,) = json.loads((tmp_path / "overhead.json").read_text())["types"].values()
