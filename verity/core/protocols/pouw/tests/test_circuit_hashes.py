@@ -8,10 +8,10 @@ from dataclasses import replace
 
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
-from verity.ml.circuits.types import Array
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
+from verity.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256

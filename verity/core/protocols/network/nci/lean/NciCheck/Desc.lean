@@ -14,7 +14,7 @@ difftest (`NciCheck.DescDifftest`) checks both on the same declarations, the old
 
 The fields are `NciCheck.Check`'s (`program`, `theta`, `owner`, `gamma`, `alpha`), read by `NciCheck.parse`, with two read
 per root node instead of per gate:
-* `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`) bound at registration
+* `theta`: θ as root nodes, each an input node (§5.2 of `verity/circuits/PROTOCOL.md`) bound at registration
   (`RegisteredInput<w>_v1`), none twice. θ is every gate of those nodes.
 * `owner`: one entry per root node: `"input"` for an input node, and `u` for a Call (any other root node), every gate of
   which is in IU `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of

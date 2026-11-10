@@ -13,7 +13,7 @@ def _boolean_roots() -> list[Any]:
     feature kernel (40 tokens of a 9-word vocabulary, 3 features) and on the sort path (3073 tokens, 2 words, 1 feature), and
     the run scan on each kernel and the sort path's segment scan over 12 tokens, since past its gate budget circuit-check
     checks only a family's smallest binding."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import torch_embedding as TE
 
     return [

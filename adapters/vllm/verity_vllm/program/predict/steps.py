@@ -74,7 +74,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
@@ -544,9 +544,9 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
 def dead_gates_of(compiled: Compiled) -> dict:
     """Each compiled Program's dead gates as circuit-check counts them (`liveness.dead_gates`, transitive: gates no output depends
     on), with the unread inputs apart, and the dead gates under each of the root's nodes by definition (its id up to `{`)."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.intervals import full, total
-    from verity.ml.circuits.liveness import Liveness, dead_gates
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.intervals import full, total
+    from verity.circuits.liveness import Liveness, dead_gates
     out = {}
     for digest, program in sorted(compiled.programs.items()):
         rep = dead_gates(program, limit=0, transitive=True)

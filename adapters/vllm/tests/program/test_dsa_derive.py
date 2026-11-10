@@ -32,11 +32,11 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Affine, runs
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import codec
+from verity.circuits.defs import bind
+from verity.circuits.refs import Affine, runs
+from verity.circuits.evaluation import evaluate
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves

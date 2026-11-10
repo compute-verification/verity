@@ -11,7 +11,7 @@ def _pouw_roots() -> list[Any]:
     `PouwCallCheck_v1` at KS = 2 (one digit word) on duo's chain words, on fx1's full state and on fx1's chain words (the
     EPS1 sm_120 scheme's spot check, `circuit.eps1`); and `PouwWarpCheck_v1` (li) and `PouwWarpCheck_v2` (duo, fx1) at
     KS = 2 over two lanes. Each grows linearly in KS (and NL), which the served shapes are priced by."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.core.protocols.pouw.circuit import segment as SG
 
     return [bind(SG.PouwSegCheck, S=1, FOLD="duo"),

@@ -223,8 +223,8 @@ build)
     mkdir -p $dd/stage && for f in circuit.txt inst-$n.bin pub-$n.bin; do ln -f $C/$f $dd/stage/$f || cp $C/$f $dd/stage/$f; done
     python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json <<'EOF' || exit 1
 import json, sys
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json, encode_program
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
 program, _calls, _prov = CS.distinct_calls(None, None, defs, None)

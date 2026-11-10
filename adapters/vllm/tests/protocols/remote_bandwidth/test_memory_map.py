@@ -18,7 +18,7 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
 from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
-from verity.ml.circuits import requirement
+from verity.circuits import requirement
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory

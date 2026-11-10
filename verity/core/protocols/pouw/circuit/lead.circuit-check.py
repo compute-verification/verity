@@ -13,7 +13,7 @@ def _pouw_roots() -> list[Any]:
     reading A·B back from the last word). The pieces, `PouwLeadStep0Row`, `PouwLeadStep0Mma`, `PouwLeadStepRow` and
     `PouwLeadStepMma` are catalog roots (primitives and static-free composites)."""
     from verity.core.protocols.pouw.circuit import lead as L
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     shapes = ((21, 0, 0, 16, 8, 0), (49, 16, 8, 1, 5, 0), (917, 0, 0, 16, 8, 0), (917, 0, 0, 16, 8, 1))
     return [bind(L.PouwLeadTile, K=K, R0=R0, C0=C0, ROWS=ROWS, COLS=COLS, BLK=BLK) for K, R0, C0, ROWS, COLS, BLK in shapes]

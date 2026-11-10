@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import struct
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, const_bits, maj
+from verity.circuits.boolean.forms import ONE, ZERO, Circuit, const_bits, maj
 
 __all__ = ["CARRY_EVERY", "IV", "K", "M64", "commit", "compress_gadget", "compress_ref", "midstate", "pad_tail", "words_be"]
 

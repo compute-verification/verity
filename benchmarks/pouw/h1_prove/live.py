@@ -61,7 +61,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
 from verity.core.protocols.pouw.circuit import live_reads as LR  # noqa: E402

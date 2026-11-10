@@ -12,10 +12,10 @@ from operator import xor
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops.boolean.scalar import fmaxmin
-from verity.ml.circuits.ops.scalar import F32Fmaxf, F32Fminf
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops.boolean.scalar import fmaxmin
+from verity.circuits.ops.scalar import F32Fmaxf, F32Fminf
 from verity.ml.definitions.registry import boolean_int8  # noqa: F401  (registers the Boolean F32Rint and F32ToS8Rzi the quantizer lowers through)
 from verity.ml.definitions.registry import int8_exact as X
 from verity_flock import class_statement as CS

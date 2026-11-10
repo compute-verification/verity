@@ -1,7 +1,7 @@
 """The exact-int8 profile's linear and attention (`TargetProfile.int8_exact`) as Definitions: what `verity_vllm.engine.int8_exact`
 (the plain int8 linear) and `verity_vllm.engine.int8_attention` (compute accounting's integer LUT softmax) compute in torch, on the
-CPU and the GPU alike.  The linear's product is `verity.ml.circuits.ops.gemm.ScaledMmS8_v1` over the sm_120 s8 IMMA step; the
-attention's matmuls are the shared s8 family's plain arm (`verity.ml.circuits.ops.s8.S8Matmul_v1`: NOISE "none", no tail, COMMIT
+CPU and the GPU alike.  The linear's product is `verity.circuits.ops.gemm.ScaledMmS8_v1` over the sm_120 s8 IMMA step; the
+attention's matmuls are the shared s8 family's plain arm (`verity.circuits.ops.s8.S8Matmul_v1`: NOISE "none", no tail, COMMIT
 "final"); every rounding is its own primitive, so the census counts each.
 
 RN32 / RN64 are float32 / float64 round to nearest even, one rounding per operation; every division is a true IEEE division.
@@ -54,13 +54,13 @@ import struct
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.ops import gemm as GEMM
-from verity.ml.circuits.ops import prims as CP
-from verity.ml.circuits.ops import s8 as S8
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops import gemm as GEMM
+from verity.circuits.ops import prims as CP
+from verity.circuits.ops import s8 as S8
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import tables as T
@@ -160,7 +160,7 @@ def LutIndex(d: int, a: int) -> int:
 def Exp2Lut127(t: int) -> int:
     """The LUT softmax's gather (`engine.int8_attention.lut_e`'s ``LUT[t]``): LUT[t] = rint(127 2^(-t/16)) for the unsigned byte t,
     a 256-entry table whose entries are in [0, 127], as a 32-bit word.  The table is fattn's, not the library's, so the primitive
-    holds it as the program's registered `exp2_lut127` (`verity.ml.circuits.operations.program_data` lists it)."""
+    holds it as the program's registered `exp2_lut127` (`verity.circuits.operations.program_data` lists it)."""
     return LUT[t & 0xFF]
 
 
@@ -297,8 +297,8 @@ def Int8RowQuantV5(B, S, x):
 
 
 def scaled_mm(K: int, N: int):
-    """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.ml.circuits.ops.gemm`): one quantized token row against the N
-    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.ml.circuits.cut.separable`)."""
+    """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.circuits.ops.gemm`): one quantized token row against the N
+    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.circuits.cut.separable`)."""
     return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 

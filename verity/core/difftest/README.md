@@ -12,7 +12,7 @@ is what the Lean is checked against; after, the Python is held to the Lean.
   request, an output with no canonical form). Output is canonical JSON, written by C-Flock's `Flock.canon` (required by path
   from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive. `annot-difftest`
   (`AnnotDifftest.lean`) serves C-Flock's annotation check, `Flock.Annot`, and its per-gate reference, for the tests that
-  hold `verity.ml.circuits.query_ast` to them; `verity_difftest.annot` is its Python side (`port`, `server`, `instance`,
+  hold `verity.circuits.query_ast` to them; `verity_difftest.annot` is its Python side (`port`, `server`, `instance`,
   and `INPUTS`, the files a calling suite declares), and `tests/test_annot.py` holds it to `query_ast` on small Programs.
   `flock-json-difftest` is C-Flock's JSON parser's port (C-Flock's package has no dependencies): `Flock.JsonParse.parse`
   and Lean core's `Lean.Json.parse` against one Python mirror, value and refusal text alike (`tests/test_flock_json_port.py`).

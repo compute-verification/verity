@@ -28,11 +28,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, concat
+from verity.circuits.types import Array, RecordType, Type, Value
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
 from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_batch, launch_rows

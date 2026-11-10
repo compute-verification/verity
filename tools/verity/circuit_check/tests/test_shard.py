@@ -278,8 +278,8 @@ def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch
 
 #: a small sidecar set: argmax's chunks and combines and the Boolean scalars, each checked as a Call (`--as-call`), so neither
 #: builds the catalog
-SIDECARS = [str(TG.REPO / "verity/ml/circuits/ops/argmax.circuit-check.py"),
-            str(TG.REPO / "verity/ml/circuits/ops/boolean/scalar.circuit-check.py")]
+SIDECARS = [str(TG.REPO / "verity/circuits/ops/argmax.circuit-check.py"),
+            str(TG.REPO / "verity/circuits/ops/boolean/scalar.circuit-check.py")]
 
 
 def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, capsys):

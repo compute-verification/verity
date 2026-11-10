@@ -14,10 +14,10 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.bits import compile as compile_bits
-from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.bits import compile as compile_bits
+from verity.circuits.evaluation.bits import evaluate_words
 from verity.core.protocols.pouw.circuit import lead as L
 
 WORDS = {L.PouwLeadStep0: L.PouwLeadStep0Word, L.PouwLeadStep: L.PouwLeadStepWord, L.PouwLeadPad0: L.PouwLeadPad0Word,
@@ -61,14 +61,14 @@ def _vectors(piece, rng: random.Random, n: int) -> list[list[int]]:
 
 
 def _widths(piece) -> list[int]:
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     params, _ = bind(piece).signature()
     return [w for _n, t in params for w in BL.elements(t)]
 
 
 def _split(piece, rows: list[list[int]]) -> list[np.ndarray]:
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     params, _ = bind(piece).signature()
     out, k = [], 0

@@ -86,8 +86,8 @@ def bf16(a) -> np.ndarray:
 
 
 def ex2(a) -> np.ndarray:
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.ops import mufu
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.ops import mufu
     a = u32(a)
     if a.size == 0:
         return a

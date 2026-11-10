@@ -13,7 +13,7 @@ atom's bit-exact batch form).
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
 exception) is the reference's own.  FP32 adds and products are numpy float32's, IEEE nearest-even with subnormals kept, as
-`verity.ml.circuits.ops.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
+`verity.circuits.ops.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
 
 `install(scheme)` puts them in place of the scalar functions for a Pearl-C v1 scheme on a promoted device, with the `blake3`
 package's BLAKE3 (the same digests) for the plain-Python one, and returns the function that puts the scalar ones back:
@@ -26,7 +26,7 @@ from collections.abc import Sequence
 
 import numpy as np
 from verity.ml.kernels import tc as K
-from verity.ml.circuits.silicon import fp32
+from verity.circuits.silicon import fp32
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_kw as P

@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     row, a token's first and later pairs, a head over two pairs, and one head's prefill over one pair.  A token's 16 heads over
     one pair and over a full C4 row's nine (over `targets.MAX_GATES`: the twin's bindings stand for the family) are checked by
     id."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import flashmla_prefill as P
 
     S = P.FLASHMLA_PREFILL_DSV4

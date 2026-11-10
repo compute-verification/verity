@@ -1,4 +1,4 @@
-"""`verity_vllm.query.units` held to the canonical partition, `verity.ml.circuits.partition_object.CallPartition` (`Q_call` v1).
+"""`verity_vllm.query.units` held to the canonical partition, `verity.circuits.partition_object.CallPartition` (`Q_call` v1).
 
 On a request Program read as the audit reads its Build (`write_build`, `from_instances`, the correspondence record), the Values a Call
 produces that `units.required_values` requires under the query of record (each Call its own proof block) and serving's policy
@@ -20,9 +20,9 @@ from typing import Any, Callable
 
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import call_scope
-from verity.ml.circuits.layout import resolve
+from verity.circuits import partition_object as PO
+from verity.circuits.cut import call_scope
+from verity.circuits.layout import resolve
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.naming import named_program, write_build

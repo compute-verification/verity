@@ -19,15 +19,15 @@ import dataclasses
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
-from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.boolean import trace as TR
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.ml.definitions import boolean as SW
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.numerics import fp8_moe_rows as MR
@@ -154,8 +154,8 @@ def test_the_gathers_are_column_reads() -> None:
 def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
     """A descriptor naming `GatherE4m3x{V}_v1` / `GatherF32x{V}_v1` decodes in a process that never built the program (the gathers
     are made per vocabulary while deriving): the lazy families resolve them like `GatherBf16x{V}_v1` (the GLM-5.3 Match of record)."""
-    from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import REGISTRY
     assert lookup_primitive(REGISTRY, "GatherE4m3x256_v1") is X.gather_e4m3(256)
     assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
 

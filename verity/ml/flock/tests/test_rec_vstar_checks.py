@@ -385,7 +385,7 @@ def test_meta_binds_the_verifiers_own_program_digests_by_value(l16_h1, tmp_path)
     """A `rec-open/l16-h1` file whose META `program_digests` names the template at another digest, otherwise V*'s file
     under those bindings, is refused against the verifier's own bindings by the value; so is the honest file against
     bindings of another digest, and a circuit checked without `--rec-bindings`, naming the flag."""
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     inner = _inner(tmp_path / "inner.json", 23, 22, 8)
     honest, own = l16_h1
@@ -656,7 +656,7 @@ def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
 
 
 def _staged(d: Path, text: str, part: dict, program) -> Path:
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     d.mkdir(exist_ok=True)
     (d / "circuit.txt").write_text(text)

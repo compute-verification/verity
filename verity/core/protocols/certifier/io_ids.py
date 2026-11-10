@@ -47,10 +47,10 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, add, and_reduce, const_bits
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ZERO, add, and_reduce, const_bits
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import head_check as HC

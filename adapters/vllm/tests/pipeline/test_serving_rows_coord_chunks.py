@@ -7,11 +7,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 from verity.ml.windows import rows as CS

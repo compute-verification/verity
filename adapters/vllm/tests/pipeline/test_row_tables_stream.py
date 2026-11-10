@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R

@@ -1,4 +1,4 @@
-"""A unit class of any partition (`verity.ml.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
+"""A unit class of any partition (`verity.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
     python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
@@ -51,13 +51,13 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.cut import DefinitionCut
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.cut import DefinitionCut
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -451,9 +451,9 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.program import Program
     from verity.ml.definitions.encoding import encode_specialization, definition_digest
 
     TG.load_registries()
@@ -480,14 +480,14 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     arity = [len(fn.signature()[0]) for fn in fns]
 
     def body(B, S, *xs):
-        from verity.ml.circuits.refs import tuple_of
+        from verity.circuits.refs import tuple_of
         outs, at = [], 0
         for fn, k in zip(fns, arity):
             outs.append(B.call(fn, *xs[at:at + k]))
             at += k
         return tuple_of(*outs)
 
-    from verity.ml.circuits.types import Tuple as TupleT
+    from verity.circuits.types import Tuple as TupleT
     ret = TupleT(*[fn.signature()[1] for fn in fns])
     root = CompositeDefinition("DistinctCalls", 1, (), lambda S: (tuple(params), ret), body, register=False)
     return Program(root), calls, prov
@@ -656,7 +656,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     writers: list = []
     definition = None
     if wiring is not None:
-        from verity.ml.circuits.codec import descriptor_id
+        from verity.circuits.codec import descriptor_id
 
         if core_rows or idents is None:
             raise ValueError(f"class {name}: a wired class has u16 rows and lanes with source identities")
@@ -1125,10 +1125,10 @@ class UnitStager:
 
     def reference_check(self, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]) -> None:
         """``outs`` (``{o{j}: (n, words)}``) are the IR reference's on every instance's ``rows``, leaf by leaf, from one call of
-        `verity.ml.circuits.evaluation.evaluate_batch` (its registered kernel, or a Boolean Definition's word Definition's,
+        `verity.circuits.evaluation.evaluate_batch` (its registered kernel, or a Boolean Definition's word Definition's,
         where one is; else bit-sliced for a Boolean Definition and the reference for the rest), whose exceptions (rows outside
         the Definition's domain) propagate."""
-        from verity.ml.circuits.evaluation import evaluate_batch
+        from verity.circuits.evaluation import evaluate_batch
 
         params, ret = self.definition.signature()
         types = dict(params)
@@ -1443,7 +1443,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check",
+    for name in ("verity", "verity.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
@@ -1775,7 +1775,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
-        from verity.ml.circuits.codec import descriptor_id
+        from verity.circuits.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
             per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
             for sh, c in per_definition[descriptor_id(fn)].items():

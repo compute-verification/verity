@@ -29,7 +29,7 @@ from verity.core.deploy import runtime
 from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Send
 from verity.core.wire import Message
-from verity.ml.circuits import codec
+from verity.circuits import codec
 from verity.ml.crypto import lms
 
 ID = "lifecycle-onsite"

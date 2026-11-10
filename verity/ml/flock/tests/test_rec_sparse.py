@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean.gf2k import mul
 from verity_flock import rec_sparse as RS
 from verity_flock.rec_algebra import skip_weights
 
@@ -232,7 +232,7 @@ def _bits(words):
 def test_the_definition_computes_the_reference():
     """`RecSparse_v1{NU=2,ELL=6,S_LOG=1,T_LOG=1}` (the circuit-check binding) evaluated bit-sliced from its descriptor on an
     honest rep, each forgery, and random words, against the reference; and its ANDs."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     sh = RS.Shape(2, 6, 1, 1)
     d = RS.definition(2, 6, 1, 1)
@@ -251,7 +251,7 @@ def test_the_definition_computes_the_reference():
 
 
 def test_the_ands_are_the_products_and_the_selects():
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits.evaluation import bits as BS
 
     sh = RS.Shape(2, 6, 1, 1)
     assert BS.compile(RS.definition(2, 6, 1, 1)).counts["and"] == RS.ands(sh) == 151 * 2187 + 256
@@ -357,7 +357,7 @@ def test_the_unit_is_the_definitions_ands_and_computes_the_reference(sh):
     """The M0 unit (through its layout, what Flock proves) on an honest rep, each forgery and random words equals the reference;
     its inputs are the ports' bits, and its ANDs are the Definition's (`ands`: 2,187 a product and the selects) and
     `copy_rows`' rows of ``B = 1`` (the leaf sums and the committed operands; one stacked slot's all-ones ``w_t`` is one AND)."""
-    from verity.ml.circuits.boolean.forms import ONE
+    from verity.circuits.boolean.forms import ONE
 
     low = RS.lowering(sh)
     C = low.circuit

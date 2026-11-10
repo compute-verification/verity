@@ -66,8 +66,8 @@ from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity.core.protocols.pouw.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.codec import canonical_json
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent

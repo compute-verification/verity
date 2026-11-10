@@ -72,14 +72,14 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import reduce
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.ops.boolean import gf2k as G
-from verity.ml.circuits.ops.boolean.gf2k import mul
-from verity.ml.circuits.boolean.forms import ZERO
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
+from verity.circuits.boolean import trace as TR
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean.gf2k import mul
+from verity.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 
 __all__ = ["PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "SparsePublics", "ands", "copy_rows", "definition", "entries",
@@ -679,7 +679,7 @@ def unit_name(sh: Shape) -> str:
 def unit_circuit(sh: Shape):
     """The unit over `forms`: inputs ``in0 ..`` (each port's words in `ports`' order, 16 bits each), outputs ``out0 ..
     out{out_words - 1}``."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     sh = _shape(sh)
     C = Circuit()
@@ -714,8 +714,8 @@ def subcircuit(sh: Shape):
     """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``RecSparse_v1{shape}``."""
     from types import SimpleNamespace
 
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import program_digest
+    from verity.circuits.program import Program
 
     sh = _shape(sh)
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")

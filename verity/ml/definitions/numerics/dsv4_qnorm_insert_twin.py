@@ -240,7 +240,7 @@ def _sample_token(rng, n, params, *, H, D, DR, SCALE):
 def _targets(defs: dict, family: str) -> list:
     """The specialisations the self-check binds: DeepSeek-V4-Pro's head and row, a small token of each kernel, and an eps that
     dominates the sum of squares."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     d, s = defs, 128 ** -0.5 * 64 ** -0.5
     return {

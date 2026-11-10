@@ -174,13 +174,13 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.boolean import trace as TR  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Tuple  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.boolean import trace as TR  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
+from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
+from verity.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402

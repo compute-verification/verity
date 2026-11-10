@@ -126,8 +126,8 @@ def registered_entries(roots: list[Any]) -> list[Entry]:
 
 
 def _kind(fn: Any) -> str | None:
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity.ml.circuits.evaluation import ScalarReference
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.evaluation import ScalarReference
 
     return "P" if isinstance(fn, PrimitiveDefinition) else "S" if isinstance(fn, SpecializedDefinition) else \
         "R" if isinstance(fn, ScalarReference) else None
@@ -153,7 +153,7 @@ def _calls(fn: Any) -> list[str]:
 def _described(fn: Any, k: str) -> dict:
     """What a record holds of ``fn`` (of kind ``k``) beyond what it reaches: its descriptor and, unless it is a reference, its
     name and its descriptor id where that is not its id."""
-    from verity.ml.circuits import codec as C
+    from verity.circuits import codec as C
 
     out = {"d": CC.descriptor(fn)}
     if k != "R":
@@ -168,7 +168,7 @@ def _reach(roots: list[Any], described: bool = True, pinned: frozenset[str] | No
     """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects; without
     ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against).  Described
     (`_described`): each one `targets.select` could keep, the ``pinned`` ids (default `targets.pinned`) among them."""
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     objs = TG.reachable(roots)
     nodes: dict[str, dict] = {}
@@ -536,7 +536,7 @@ def made_words(plan: Plan) -> int:
     registers; the count made."""
     import importlib
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     n = 0
     for e in plan.entries:
@@ -643,10 +643,10 @@ def _reach_one(e: Entry, described: bool = False, pinned: frozenset[str] | None 
 
 
 def _words(before: set[str]) -> list[list[str | None]]:
-    """``[id, word id, module]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.trace`
+    """``[id, word id, module]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.circuits.boolean.trace`
     registers one) registered since the registry held ``before``, in the order it was registered; ``module`` the first imported
     that holds it by a name (one that registers it as it is imported), else None."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     new = []
     for fid, d in REGISTRY.defs.items():
@@ -696,7 +696,7 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
     what it did that the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its
     build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's
     build."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     from . import cli
 

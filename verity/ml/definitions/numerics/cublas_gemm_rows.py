@@ -128,7 +128,7 @@ ROWS = {GEMM_F32_OUT: gemm_f32_out, SPLITK_F32_OUT: splitk_f32_out, SPLITK_BF16:
 def check_targets(family: str) -> list:
     """K = 64 (four k16 blocks, the circuit-check binding's statics) and K = 160 (two 64-element chunks and a 32-element remainder at
     SPLIT_K 3), N = 3, at the Ampere and the Hopper step."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import b1, cublas_bf16 as CB, hopper
 
     dots = (b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)

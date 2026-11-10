@@ -377,7 +377,7 @@ RECORD_SCHEMA = "verity/settings/v1"
 
 REGISTRY = EnvSettings(
     __file__, ("VERITY_ML_",),
-    # ---- verity.ml.circuits, its suites included
+    # ---- verity.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
     # ---- verity.core.protocols.composition's suite

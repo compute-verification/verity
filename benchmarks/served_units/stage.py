@@ -52,11 +52,11 @@ from typing import Callable
 import numpy as np
 
 from circuit_check import targets as TG
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as OG
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import bind
+from verity.circuits.ops import gemm as OG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS

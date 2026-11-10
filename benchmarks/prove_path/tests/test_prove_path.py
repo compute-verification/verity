@@ -41,7 +41,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, registration as R
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -510,7 +510,7 @@ def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = N
     program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
     import gzip
 
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.pipeline.build_instances import write_instances
 
     d.mkdir(parents=True, exist_ok=True)
@@ -551,7 +551,7 @@ def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, reques
 def test_i2_refuses_a_build_whose_body_was_swapped_under_its_old_digest(tmp_path, requests_of_tiny):
     """The Build's ``result.json`` (and its instances head) keep the digest I2 compiled, and its body is another Program's:
     each is refused by name, the descriptor by its recomputed digest, the instances by the descriptor's rows."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     greedy, longer = requests_of_tiny["greedy"], requests_of_tiny["longer"]
     dg, other = (program_digest(encode_program(p)) for p in (greedy, longer))

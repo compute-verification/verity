@@ -7,7 +7,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
 CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bits=32, cap=4096, parts=((STEP, 8),))
@@ -87,8 +87,8 @@ def test_shape_of_reads_a_definitions_body():
     import json
     from pathlib import Path
 
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm, prims
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm, prims
 
     pins = json.loads((Path(prims.__file__).parent / "prims.circuit-check.json").read_text())["pieces"]
     pieces = {k: v["and"] for k, v in pins.items()}

@@ -38,8 +38,8 @@ from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.circuit import segment as SG
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

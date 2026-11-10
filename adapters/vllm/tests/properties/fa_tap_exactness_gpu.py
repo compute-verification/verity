@@ -159,8 +159,8 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     the reference evaluator (`AttentionHead_v4`, gate by gate).  `decode`: each row against the decode-shaped Definition instead, the
     one-row decode's tile (`decode_tile`) and `MASKED_FROM` (its row 0's).  Mismatched rows are counted, those of a token whose every score
     is special (`SPECIAL`) apart, with the fewest keys a mismatched row sees."""
-    from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.numerics import derived_rows as DR
     from verity.ml.definitions.registry import fa3_check_inf as F3
     from verity.ml.definitions.registry import attention_vocab

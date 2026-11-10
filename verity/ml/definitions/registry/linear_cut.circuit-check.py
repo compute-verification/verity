@@ -11,7 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     2,048 read as its 32 heads' rows, call 1) and at down_proj (K = 8,192 from one SiluMul row, call 3), and at one row of a
     small K; y at qkv (N = 3,072 in rows of 64, call 0), at o_proj's and down_proj's (N = 2,048 in rows of 64, calls 1 and 3)
     and at gate_up's, the widest (N = 16,384 in rows of 256, call 2); each word Definition and its σ."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import linear_cut as LC
 
     return [

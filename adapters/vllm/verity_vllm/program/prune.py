@@ -2,7 +2,7 @@
 
 A unit is one node of a body: a Call, a primitive, a batch or a scan. It is live when the body's return reads one of its outputs,
 or a live unit's arguments do; a unit no live unit or return reads is dead, whatever its gates compute. This is the unit level of
-circuit-check's dead-gates property (`verity.ml.circuits.liveness`, transitive), which also counts the gates no output reads inside
+circuit-check's dead-gates property (`verity.circuits.liveness`, transitive), which also counts the gates no output reads inside
 a live unit. `without_dead_units` drops the dead units and renumbers the references to the rest, each reference kept in its form
 (an `Affine` stays an `Affine`, a `Concat` keeps its parts), so that equal bodies stay equal.
 
@@ -19,8 +19,8 @@ from dataclasses import replace
 from functools import cache
 from typing import Any
 
-from verity.ml.circuits.defs import Body, BodyNode, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
+from verity.circuits.defs import Body, BodyNode, bind
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
 
 
 def _read(r: Refs, out: set[int]) -> None:

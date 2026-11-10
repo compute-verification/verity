@@ -3,9 +3,9 @@
 `RsqrtApprox`) and `F2fpBf16_v2`, each traced as one circuit (`boolean_dsa.flat`), so its word view is the `_v1` at the same statics."""
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import dsa_norm as DN
 from verity.ml.definitions.registry.boolean_dsa import bit_ops, flat
 

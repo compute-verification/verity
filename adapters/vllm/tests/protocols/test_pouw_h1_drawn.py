@@ -41,11 +41,11 @@ from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Model
 from tests.protocols.test_pouw_h1_served import _unit
-from verity.ml.circuits.boolean import AND, NOT, XOR, operands
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ports import In, Out, Ports
-from verity.ml.circuits.refs import Coll, coll_concat
-from verity.ml.circuits.types import Value
+from verity.circuits.boolean import AND, NOT, XOR, operands
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ports import In, Out, Ports
+from verity.circuits.refs import Coll, coll_concat
+from verity.circuits.types import Value
 
 V1 = Value(1)
 J10R_UNIT = HW.tile_unit

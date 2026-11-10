@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
@@ -113,10 +113,10 @@ def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_it
     running that Definition's ``build``: found through core's registry, not imported from its owner."""
     from types import SimpleNamespace
 
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.types import Array
-    from verity.ml.circuits.boolean.forms import NOT
-    from verity.ml.circuits.boolean.trace import definition
+    from verity.circuits import boolean as BL
+    from verity.circuits.types import Array
+    from verity.circuits.boolean.forms import NOT
+    from verity.circuits.boolean.trace import definition
 
     U4, word = Array(4, BL.BIT), SimpleNamespace(id="FlockTestNot4_v1")
     assert word.id not in IL.PIECES
@@ -210,7 +210,7 @@ def test_the_other_rows_pieces_match_the_ir_primitives(name):
 
 
 def _e2m1_vectors(rng: random.Random) -> list[list[int]]:
-    from verity.ml.circuits.silicon.cast import E2M1_UP
+    from verity.circuits.silicon.cast import E2M1_UP
     words = [b + d for b, _ in E2M1_UP for d in range(-4, 5)] + [b | 1 << i for b, _ in E2M1_UP for i in range(21)]
     words += [0, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000] + [0x7F800000 | 1 << i for i in range(23)]
     words += [e << 23 | rng.getrandbits(3) << 20 | rng.choice([0, 1, rng.getrandbits(20)]) for e in range(118, 134) for _ in range(16)]
@@ -229,8 +229,8 @@ def test_the_nvfp4_cast_and_bit_and_pieces_match_the_ir_primitives(name, widths,
     """Exact bits: the E4M3 widening on every byte (NaN 0x7FFFE000), the AND on every pair of bits, and the E2M1 cast on each
     boundary of its grid (the six ties and 5, where saturation begins) within 4 ulps and with each of its low 21 bits set, on
     ±0, subnormals, ±inf and a NaN per payload bit, across the exponents around the grid and on random words, both signs."""
-    import verity.ml.circuits.ops.prims  # noqa: F401  (registers the casts)
-    import verity.ml.circuits.ops.scalar  # noqa: F401  (registers BitAnd_v1)
+    import verity.circuits.ops.prims  # noqa: F401  (registers the casts)
+    import verity.circuits.ops.scalar  # noqa: F401  (registers BitAnd_v1)
 
     vecs = gen(random.Random(name))
     ref = REGISTRY[name].evaluate
@@ -242,7 +242,7 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding(name):
     """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` and sm_120's ``BlackwellE4m3QmmaDot32`` (the total models): E4M3 NaNs (0x7F,
     0xFF), zeros, subnormals, the largest magnitudes, accumulators of every class (Hopper's 14-bit adder truncates them too, sm_120's
     26-bit one does not), bit for bit."""
-    import verity.ml.circuits.ops.prims  # noqa: F401  (registers the steps)
+    import verity.circuits.ops.prims  # noqa: F401  (registers the steps)
 
     Q = REGISTRY[name]
 
@@ -290,7 +290,7 @@ def test_the_nvf4_step_matches_the_ir_on_every_encoding():
     """``unit_fp4.step_total`` = ``BlackwellNvf4OmmaDot64``: NaN scale bytes (low seven bits 0x7F, either bit 7), bit 7 set on
     ordinary scales (ignored), zero and subnormal scale mantissas, the top exponent field, NaN and infinite accumulators, cancelling
     groups, bit for bit."""
-    from verity.ml.circuits.ops.prims import BlackwellNvf4OmmaDot64 as Q
+    from verity.circuits.ops.prims import BlackwellNvf4OmmaDot64 as Q
 
     def scale(rng, fam):
         def one():
@@ -311,7 +311,7 @@ def test_the_mxf4_step_matches_the_ir_on_every_encoding():
         lo, hi = {3: (0, 20), 4: (230, 254), 5: (100, 150)}.get(fam, (0, 254))
         return [0xFF if rng.random() < 0.03 else rng.randint(lo, hi) for _ in range(4)]
 
-    from verity.ml.circuits.ops.prims import BlackwellMxf4OmmaDot64 as Q
+    from verity.circuits.ops.prims import BlackwellMxf4OmmaDot64 as Q
 
     vecs = _fp4_vectors(random.Random(14), 3500, scale)
     got = run_piece(IL.PIECES["BlackwellMxf4OmmaDot64_v1"], [32] + [4] * 128 + [8] * 4, 32, vecs)
@@ -530,8 +530,8 @@ def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
     """`LoweredUnit.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
     pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
     ``useful``."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
     from verity_flock import circuit as FC
 
     if which == "gemm-tc-step":
@@ -653,8 +653,8 @@ def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
     (``ir_lower.whole``), the chunk's input row 64 bf16 logits, one SHA-512 block: their rows equal the IR on synthetic sets, and
     the chunks' units feeding the combine's give ``TokenSelect_v1``'s token on rows of V = 200 whose maximum is tied across a
     chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate_batch
     from verity.ml.definitions.registry import b1
 
     V = 200
@@ -1025,7 +1025,7 @@ def test_vec8_units_are_the_definition_on_edge_and_random_rows(template):
     """The lowered units with the IR's cut words against the Definition's gate reference, outputs and warp aggregates, on
     :func:`_vec8_rows`; every honest lane satisfied. Builds a 1.2M-row unit (about 30 s): a vec8 warp is 256 elements, and
     nothing smaller exercises the width-8 thread partials, the square-pair sums or the FMA chain."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit(template, N=512, EPS=1e-5, BLOCK=64)            # two warps of one vector a thread, a unit each
     low = REG.module(template).lowering(sub)
@@ -1054,9 +1054,9 @@ def test_vec8_glm_pins(template, block):
 
 
 def test_units_refuse_components_of_different_shapes():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.refs import array_of
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.refs import array_of
+    from verity.circuits.types import Array, Value
 
     mixed = CompositeDefinition("FlockLoweringMixed", 1, (), lambda S: ((("x", Array(4, Value(32))),), Array(2, Value(32))),
                                 lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Mul, x[2], x[3])]),
@@ -1066,8 +1066,8 @@ def test_units_refuse_components_of_different_shapes():
 
 
 def test_a_primitive_without_a_piece_is_named():
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     odd = PrimitiveDefinition("FlockLoweringTestOnly", 1, (("a", Value(8)),), Value(8), lambda a: a ^ 0x55, register=False)
     C = gf2.Circuit()
@@ -1292,7 +1292,7 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     primitive on special-heavy vectors (NaN payloads, both infinities, subnormals, cancellation)."""
     import random
 
-    from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16 as P
+    from verity.circuits.ops.prims import HopperBF16WgmmaDot16 as P
 
     rng = random.Random(7)
     spec16 = [0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x3F80]

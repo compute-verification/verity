@@ -32,8 +32,8 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.partition_object import calls
+from verity.circuits.defs import bind
+from verity.circuits.partition_object import calls
 
 FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
@@ -468,7 +468,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     prompt rows before the last narrowed to its keys and values), so a request Program's only dead gates are inputs no gate reads:
     `dead_gates_of` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
-    from verity.ml.circuits.liveness import dead_gates
+    from verity.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):

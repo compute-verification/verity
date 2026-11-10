@@ -80,9 +80,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import (
+from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import (
     BitAnd,
     BitNot,
     I32Add,
@@ -90,8 +90,8 @@ from verity.ml.circuits.ops.scalar import (
     I32Le,
     SelectI32,
 )
-from verity.ml.circuits.refs import Coll, broadcast, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, broadcast, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry.dead_free import TokenSelectCombineV2
 from verity.ml.definitions.registry.prims import BIT, I32

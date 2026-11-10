@@ -34,7 +34,7 @@ it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
-computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
+computes (`verity.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
 own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
@@ -121,7 +121,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
-from verity.ml.circuits import partition_object as PO
+from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB

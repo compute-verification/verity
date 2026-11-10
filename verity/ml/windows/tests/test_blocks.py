@@ -11,10 +11,10 @@ from dataclasses import replace
 import pytest
 import test_interface as TI
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.ml.windows import interface as I, rows as CS
 
 GID, RUN = TI.GID, TI.RUN

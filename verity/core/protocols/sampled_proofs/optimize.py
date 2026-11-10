@@ -48,7 +48,7 @@ from pathlib import Path
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
     """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):

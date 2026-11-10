@@ -16,12 +16,12 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c4_vectors as V
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le
-from verity.ml.circuits.silicon import fp32
+from verity.circuits.evaluation import evaluate
+from verity.circuits import partition_object as PO
+from verity.circuits.program import Program
+from verity.circuits.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le
+from verity.circuits.silicon import fp32
 from verity.ml.randomness import derive
 from verity.core.protocols.pouw.circuit import pc4, plan
 from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes

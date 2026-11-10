@@ -24,7 +24,7 @@ resource audit shares:
 
 A step is always an **engine step**: the engine's `s`-th step, never a device tick.
 
-`verity/ml/circuits/requirement.py` (`Placement`, `Store`) and its code-Lean port
+`verity/circuits/requirement.py` (`Placement`, `Store`) and its code-Lean port
 `verity/core/primitives/requirement/CircuitRequirement.lean` are their executable forms.
 -/
 

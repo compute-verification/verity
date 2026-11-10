@@ -242,7 +242,7 @@ def weight_pins(params: Sequence[str]) -> dict[str, str]:
 def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> dict[str, Any]:
     """A circuit record's block class: its session Definition's digest and key, m slots and positions, gates by
     `table_of`'s table and fresh bits at ``pins`` and ``roots`` (`block_counts`), and the table."""
-    from verity.ml.circuits import codec, partition_v2 as PV2
+    from verity.circuits import codec, partition_v2 as PV2
     from verity_vllm.program.predict import block_counts as BC
 
     try:
@@ -279,7 +279,7 @@ def session_work(cls: Any, model: str) -> dict[str, int]:
 def capacity(work: int, lease_min: int, utilization: Fraction, clock: str = CLOCK) -> dict[str, Any]:
     """n: the sessions of ``work`` θ-MACs the card serves in ``lease_min`` minutes at ``utilization``, rounded up to the
     public grid, with its inputs."""
-    from verity.ml.circuits import partition_v2 as PV2
+    from verity.circuits import partition_v2 as PV2
 
     rate = 4096 * 132 * SS.CLOCKS_MHZ[clock] * 10**6
     if work <= 0 or lease_min <= 0 or not 0 < utilization <= 1:
@@ -372,8 +372,8 @@ def _reference():
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int) -> dict[str, Any]:
     """`NciCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population_program`) with no θ, its block that Definition."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.population import population_program
+    from verity.circuits import codec
+    from verity.circuits.population import population_program
     from verity_vllm.program.predict import block_counts as BC
 
     fn, m, _ = BC.session(doc)

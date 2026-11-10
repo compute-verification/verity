@@ -12,7 +12,7 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows

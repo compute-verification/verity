@@ -44,11 +44,11 @@ this registry, nor this registry core, so the two are separate bodies, and core'
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ops.fp32 import Bf16Add, F32AddV2, F32DivV2, F32MulV2
-from verity.ml.circuits.ops.prims import ZERO32, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind, composite
+from verity.circuits.ops.fp32 import Bf16Add, F32AddV2, F32DivV2, F32MulV2
+from verity.circuits.ops.prims import ZERO32, F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.boolean import sigma_lift
 
 __all__ = ["PearlCChain", "PearlCChainV2", "PearlCTileRead", "PearlCTileReadCell", "PearlCTileReadCellV2", "PearlCTileReadV2",

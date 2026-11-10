@@ -22,7 +22,7 @@ def test_closure_covers_every_core_file():
 
 
 def test_glob_re_crosses_directories_only_at_double_star():
-    assert sid.glob_re("verity/**").match("verity/ml/circuits/ops.py")
+    assert sid.glob_re("verity/**").match("verity/circuits/ops.py")
     assert sid.glob_re("**/x.py").match("x.py") and sid.glob_re("**/x.py").match("a/b/x.py")
     assert not sid.glob_re("verity/*.py").match("verity/ml/ops.py") and sid.glob_re("verity/*.py").match("verity/ops.py")
     assert not sid.glob_re("adapters/vllm/**").match("integrations/vllmx/a.py")

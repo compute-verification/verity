@@ -30,11 +30,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
-from verity.ml.circuits.ops.prims import const
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.prims import const
 from verity.ml.definitions.registry import hopper
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import _lane

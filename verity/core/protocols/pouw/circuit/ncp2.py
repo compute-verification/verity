@@ -44,13 +44,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
-import verity.ml.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
-import verity.ml.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
-from verity.ml.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
+import verity.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
+from verity.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
 
 from ..protocol import DomainError
 from ..schemes.ncp import BETA, admissible_perm, shift_perm, word_perm

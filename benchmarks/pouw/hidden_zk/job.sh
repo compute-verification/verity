@@ -223,7 +223,7 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/ml/circuits verity/ml/kernels \
+    benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/circuits verity/ml/kernels \
     verity/core)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

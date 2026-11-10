@@ -32,7 +32,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -491,7 +491,7 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
         x["definition_ids"] = ids[lo:lo + n]
     g["definitions"] = defs
     g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
-                                                 "(verity.ml.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "(verity.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
                                                  "chained when each reads the one before; a varying group names its smallest and largest representative")
     return g
 
@@ -659,7 +659,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ml.circuits.codec.canonical_json), fold hints excluded",
+                                                                 "digest": "sha256 of the definition's canonical JSON (verity.circuits.codec.canonical_json), fold hints excluded",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 

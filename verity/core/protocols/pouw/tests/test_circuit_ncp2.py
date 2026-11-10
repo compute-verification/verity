@@ -7,7 +7,7 @@ import hashlib
 import pytest
 
 import circuit_fixtures as F
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.evaluation import evaluate
 from verity.core.protocols.pouw.circuit import ncp2
 from verity.core.protocols.pouw.circuit import reference as R
 from verity.core.protocols.pouw.protocol import DomainError
