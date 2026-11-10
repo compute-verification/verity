@@ -26742,3 +26742,70 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
 - **A correction to my 07:17Z item 4:** the output-row case is `interface.py` 2211–2217 on `main`; 2221–2227 was my branch's numbering.
 
 **Could not verify:** as in my 07:17Z entry; nothing new.
+
+## SERVEDCARD, Tue 10 Nov 07:24Z: kernels' two questions on HASH-98 (a block to paste below); a FlashInfer finding that changes Wednesday's plan; `cb3b` not in yet
+
+**For you, not for the paste:**
+- **The finding.** Since `7244aa8424` (on `main` since Fri 6 Nov 08:34Z), the serving rows cut decode's FlashInfer FP8 linear into two parts, quantising once:
+  - `FlashInferFp8Quant1x128_v1{K}`, once a row;
+  - `ScaledMmFp8BlockSharedScale_v1{K,N=4,G=128}` (N = 8 at K = 1536), shared with DeepGemm.
+
+  `main`'s `glm53_blocks.json` was generated an hour earlier (07:29Z). So `main`'s card still prices `FlashInferFp8Linear_v1{K,N=1}`, and `ScaledMm` at N = 1. #8281's regenerated partition (`4de4a9592f`), which is in our launch tree, has the parts [read: both files and `git log`].
+- **What it changes:**
+  - Kernels' f308 and PROVECUT's four `fi` gates forms price `main`'s card.
+  - In my Wednesday plan, the two `ScaledMm` types at N = 1 and the four `fi` linear types aren't served units on the launch tree's partition.
+  - My 05:55Z memory plan missed this: there I compared only the sparse MLA types between the two partitions.
+- **My default for Wednesday, unless you say otherwise by 18:00Z:** keep `main`'s types (PROVECUT's 13 and the two N = 1 `ScaledMm`), so the run prices either partition, and add #8281's parts:
+  - `ScaledMmFp8BlockSharedScale_v1` at (K, N) = (256, 4), (1536, 8), (2048, 4) and (6144, 4);
+  - `FlashInferFp8Quant1x128_v2` at K = 256 and 1536. K = 2048 is already in the plan, and K = 6144 is PROVECUT's `fi-quant`.
+  - **Cost:** about 15 CPU-minutes at under 25 GB at once, and about 12 more statements on the GPUs [guess, scaled from the run below].
+- **How I read the pins:** `stage.py` has no `--dry`, and a pin is the SHA-512 of the built circuit. So I ran one staging run at one block a type: `r20261110-071007-f920` on cpu-12, 9 min, peak 15 GB. It kept only its logs and a TSV.
+- **`cb3b`** (`r20261110-054743-cb3b`, the launch branch's quick suites) **isn't in.** At 07:11Z, 40 of its 98 suites had passed and none had failed. It ends by 08:48Z at the latest.
+- No Slack, Linear or timer events of yours reached me, and I found no second execution of me.
+
+**To paste on HASH-98:**
+
+> **proofs, on kernels' two questions (Mon 10:46 PM PST).** A pin here is the first 16 hex digits of the circuit file's SHA-512 (`stage.json`'s `circuit_sha512`). The pins come from r20261110-071007-f920, which staged each type at one block from Wednesday's launch tree `c6cadd0e32`, staging key `07218e39d5a621d4` [run].
+>
+> **1. Yes, on `main`'s partition: r20261110-055806-f308 proved the block the card stages for FlashInfer K2048. Only the staging key differs.**
+> - **Same block:**
+>   - The card stages `fi:K=2048`, which is `FlashInferFp8Linear_v2{K=2048,N=1}`: the `_v2` form, flat, its reads inline.
+>   - Its pin is `794d564d3a4a6755`, the same as f308's [run: f920, and PROVECUT's r20261110-063211-4a04, also at `c6cadd0e32`].
+> - **Same statement:**
+>   - `full` is 2,048 blocks at `k_log` 24, as in f308 [run].
+>   - `stage.py` seeds a census type's values from its type and statics, which gives `fi-k2048-n1` both for kernels' `fi 2048` and for the card's `fi:K=2048 full`. So the values should be the same too [read; not compared byte for byte].
+> - **Same prover:** no Rust, CUDA or Cargo file differs between `main` and `c6cadd0e32` [run: `git diff`]. Under `verity/ml/flock`, what changed is the GPU build script's `DRV` handling and the proof server's thread-split fallback under a cgroup quota [read].
+> - **What differs is only the staging key:** `e7fd28f39503f89f` at `12fd6a285a` [PROVECUT's run] against `07218e39d5a621d4` at `c6cadd0e32` [run]. The key names only the statement's directory. Wednesday's window doesn't reuse f308's directory, but it stages the same circuit.
+> - **The verifier is the same, and so is what's missing.** In both, the acceptance is Flock's Rust verifier in loopback (`serve --zk`), and neither has a Lean verdict [read].
+> - **On #8281's partition (`glm53_blocks.json` at `4de4a9592f`, in Wednesday's launch tree), `FlashInferFp8Linear_*{K=2048,N=1}` is not a served block** [read].
+>   - Since `7244aa8424` (on `main` since 6 Nov), the serving rows cut decode's FlashInfer FP8 linear into its parts, quantising once. `main`'s `glm53_blocks.json` was generated an hour before that commit and still lists the linear whole.
+>   - At K = 2048 the parts are two blocks. One is `FlashInferFp8Quant1x128_v1{K=2048}`, once a row (43,896 decode blocks). The other is `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`, four output columns a block and shared with DeepGemm (44,949,504 decode blocks). `main`'s partition has 179,798,016 `FlashInferFp8Linear_v1{K=2048,N=1}` blocks instead [read].
+>   - So f308 prices FlashInfer K2048 as `main`'s card defines it. Once #8281 lands, that stratum is those two blocks, and f308 prices neither.
+>
+> **2. The seven types.** First, what Lean does under `--zk` today, the same for every row:
+> - **Lean's verifier accepts none of them.**
+>   - `flock-verify verify --zk` refuses every served-block session, f308's included, for `ProvedScope.NO_PROGRAM`: no call passes it a proof block's Program, Wednesday's Lean leg included [read: `Flock/ProvedScope.lean`, the same on `main` and `c6cadd0e32`].
+>   - So whatever the form, none is "verified under `--zk`".
+> - **Lean's form check accepts all of them** [run: f920, with `ks_form_why` and `template_why`, the Python mirror of `flock-verify ks-form`, on each staged circuit]. None is refused the way `mla-split-part`'s slots form is.
+> - **Rust loopback acceptance** [run: Window 1, r20261110-013529-74a7, on `main`'s partition]: 4 of 4 sessions accepted by `serve --zk` at each of two sizes for:
+>   - the six rows below marked with ✓, each at that row's spec;
+>   - `FlashInferFp8Linear_v1{K=256,N=1}` (`_v1`, not `_v2`).
+>
+> **To stage each:** `uv run python benchmarks/served_units/stage.py 'SPEC' full OUT` at `c6cadd0e32`, or at any tree that gives the same pin. Every statement is flat, with its reads inline [run].
+>
+> | kernels' name | spec the card stages | pin | `k_log`, blocks a statement (`full`) |
+> |---|---|---|---|
+> | BatchedGemm K512 ✓ | `census:BatchedGemm_v1{B=1,K=512,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` | `90f9df32e5e20d20` | 22, 8,192 |
+> | CublasSplitKGemmF32Out K6144 ✓ | `census:CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` | `f7684104e1f464ef` | 25, 1,024 |
+> | LlBf16DotprodGemm K6144 ✓ | `census:LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}` | `b0b234472279f8f9` | 26, 512 |
+> | CublasSplitKGemm K6144 ✓ | `census:CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` | `6b13e83d07796e19` | 25, 1,024 |
+> | Gemm_v2 K6144 ✓ | `census:Gemm_v2{K=6144,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` | `b8ae9f3ffbc30d25` | 25, 1,024 |
+> | ScaledMm K256 on `main`'s partition (DeepGemm's) ✓ | `census:ScaledMmFp8BlockSharedScale_v1{K=256,N=1,G=128}` | `2579f6a0bca1063c` | 22, 8,192 |
+> | ScaledMm K256 on #8281's (DeepGemm's and FlashInfer's) | `census:ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}` | `332a01187371d5ed` | 22, 8,192 |
+> | FlashInfer K256 on `main`'s partition | `fi:K=256`, which is `FlashInferFp8Linear_v2{K=256,N=1}` | `21ca764c67f4e013` | 22, 8,192 |
+> | FlashInfer K256 on #8281's: its quantisation part | `census:FlashInferFp8Quant1x128_v2{K=256}` | `63c581a9b9c2017e` | 22, 8,192 |
+>
+> - **#8281's FlashInfer K256 is two rows:** the quantisation part, plus the `ScaledMm` K256 N = 4 row as its GEMM part.
+> - **The five GEMM rows are the same in both partitions** [run: the two files' definitions agree on them]. Which partition the priced card follows decides which ScaledMm and FlashInfer rows kernels needs.
+> - **Staging one block on cpu-12 took 15 to 115 s and at most 3.7 GB, except `LlBf16DotprodGemm`: 286 s and 15 GB** [run]. At `full`, `stage.py` builds the same circuit once and draws more values [read]. Time and memory at `full` weren't measured here.
+> - **The `_v1` quantisation part,** `FlashInferFp8Quant1x128_v1{K=256}`, has pin `8f76ac8a2c5af822`, and the form check accepts it too [run]. The card stages `_v2`, as it does for `fi-quant`.
