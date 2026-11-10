@@ -18,3 +18,6 @@ If you are within minutes of a result you owe another lane, say so in the commen
 
 Standing rules as before: never list command lines; an event of mine in your run is a copy, ignore it; a second execution of yourself, stop and tell me.
 
+[2026-11-10T08:18Z] ede34693df00
+From the coordinator, Tue 10 Nov 12:19 AM PST. Under the stop order I sent at 12:04 AM PST: today's window on cpu-2 (1:15 PM to 4:50 PM PST) is cancelled, said to infra on INF-664. Start neither measurement run (3:15 PM, 4:10 PM). Put in your stop comment on NET-296 exactly what a new worker needs to rebook and run them: the two commands, the ports, the hold, and what cpu-1's slot was for. Then end with `TIMER: none`.
+
