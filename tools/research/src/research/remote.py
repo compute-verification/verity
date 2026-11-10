@@ -241,12 +241,9 @@ def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
     """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
     (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
     keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
-    refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. An unreadable manifest leaves the
-    entries' `auditor` alone to tell."""
-    try:
-        nodes = tomllib.loads(DEPLOY_MANIFEST.read_text()).get("nodes", {})
-    except (OSError, tomllib.TOMLDecodeError):
-        nodes = {}
+    refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
+    `auditor` alone tells."""
+    nodes = tomllib.loads(DEPLOY_MANIFEST.read_text()).get("nodes", {}) if DEPLOY_MANIFEST.is_file() else {}
     admin = {n for n, c in nodes.items() if isinstance(c, dict) and c.get("admin") is True}
     return {n for n, m in machines.items() if isinstance(m, dict) and (m.get("auditor") or n in admin)}
 

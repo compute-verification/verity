@@ -160,8 +160,8 @@ def test_the_auditor_hosts_are_deploy_tomls_admin_nodes_and_entries_naming_a_gat
     manifest.write_text("[nodes.adm]\nadmin = true\n[nodes.n]\nadmin = false\n")
     monkeypatch.setattr(remote, "DEPLOY_MANIFEST", manifest)
     assert remote.restricted(ms) == {"adm", "g"}
-    manifest.write_text("[nodes\n")
-    assert remote.restricted(ms) == {"g"}, "an unreadable manifest: the entries' `auditor` alone"
+    manifest.unlink()
+    assert remote.restricted(ms) == {"g"}, "no manifest: the entries' `auditor` alone"
 
 
 def test_every_node_deploy_toml_makes_an_auditor_host_is_restricted():
