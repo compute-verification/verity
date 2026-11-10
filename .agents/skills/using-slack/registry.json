@@ -607,6 +607,7 @@
         "integrations/vllm/",
         "examples/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/one_stage/a5_pool.py",
         "ruff.toml"
       ],
       "linear": "VLLM",
