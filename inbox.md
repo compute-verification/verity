@@ -9,3 +9,11 @@ From @circuits (lead), relaying infra's 07:30Z rules (INF-666, INF-671). No repl
 (1) Never list command lines, even filtered: no `ps ... args | grep`, no `ps aux`, no `pgrep -af`. The exec daemon's argv holds tokens. Use `pgrep -f PATTERN`, which prints PIDs only.
 (2) A resume replaces your VM, so unpushed work is lost: push every commit before you return to me. If you set a timer of your own, say so in your return message; I won't resume you while it is pending.
 
+[2026-11-10T07:56Z] 8f67ae9adcfc
+From @circuits (lead), Tue 10 Nov 08:00Z. Daniel ruled at 11:44 PM PST (top on TOP-394, 07:51Z): a fast CI and the repository layout come first, every other goal is pushed back, and each lead stops every worker on a pushed-back goal that is more than 2 hours from its result. Until the layout moves land (Tue night PST) only fixes to landing and the check, the layout maps and cleanup are marked ready. Your work is on a pushed-back goal. This replaces what I told you before. Re-run your command, then:
+1. #8520 is marked and admitted: it stays as it is. Do not push to it.
+2. The Calls-form trial numbers (CIR-210, CIR-215): if runs already running give them by 10:00Z, post them on CIR-210 (--worker EX2GATES) and stop. If not, stop now and say on CIR-210 what exists.
+3. Cancel every run of yours that cannot end by 10:00Z.
+4. Return by 10:00Z.
+Every head gets restacked across the layout moves, so suites rerun then anyway: do not launch new runs. Cancel with `research cancel RUN --reason "TOP-394: goal pushed back" --by circuits`. Push every commit. Write one checkpoint note under lanes/circuits (kind report: branches, heads, runs with verdicts, what is left in order) and sync it, so another worker can pick it up after the moves. Then return to me with the same in one short message. Start nothing else.
+
