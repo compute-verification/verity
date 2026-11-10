@@ -465,19 +465,21 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
 
 
 def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
-                    wires: Sequence[Any] = ()) -> CS.Binding:
+                    wires: Sequence[Any] = (), values: Sequence[tuple[str, int, int]] = ()) -> CS.Binding:
     """The window of the replay sample's interior, template-major: template t's Q·n_t units from off_t = Q·Σ_{t'<t} n_t',
     laid out as ``members[t]`` (its ports and their words), each a shared-row member of one table row a unit a port,
     under `interior_run`: what the prover commits and the challenger derives the ports of. ``members``: one, or one a
     template in the check's order; ``n_rho``: its n_t each (the stream's ``cells``), or one template's n_rho. ``wires``:
     the replay block's (`second_stage.replay_wires`). A wired port commits no tree of its own (`rows.Member.wired_trees`):
-    its table is its writer's Q·n_w output rows, whole, and unit u of span s reads its writer's unit off_w + s·n_w."""
+    its table is its writer's Q·n_w output rows, whole, and unit u of span s reads its writer's unit off_w + s·n_w.
+    ``values``: the values its program takes ahead of the templates' parameters (a window stream's, `table_values`)."""
     ms, cells = _cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
     offs = [int(o) for o in np.cumsum([0, *sizes[:-1]])]
     held = _held(ms, cells, offs, q, wires)
-    program, query = CS.population_program([(SRW.template(m.template).fn, n) for m, n in zip(ms, sizes, strict=True)])
+    program, query = CS.population_program([(SRW.template(m.template).fn, n) for m, n in zip(ms, sizes, strict=True)],
+                                           values=values)
     return CS.Binding(program, query, {"law": "subset", "k": sum(sizes)}, interior_run(boundary, sample),
                       tuple(replace(m, n=n, base=o, name="", wired=tuple((p, x[0], x[2]) for p, x in h.items()),
                                     wired_trees=not h, tables=tuple((p, sizes[h[p][1]] if p in h else n) for p, _ in m.rows))
@@ -485,11 +487,11 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
 
 
 def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
-                   wires: Sequence[Any] = ()) -> dict[str, dict[str, Any]]:
+                   wires: Sequence[Any] = (), values: Sequence[tuple[str, int, int]] = ()) -> dict[str, dict[str, Any]]:
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
-    size class, the boundary registration's digest, its own replay sample and the wires it derives from the replay
-    block."""
-    return CS.expected_ports(interior_window(members, n_rho, boundary, sample, wires))
+    size class, the boundary registration's digest, its own replay sample, the wires it derives from the replay block
+    and its stream's values."""
+    return CS.expected_ports(interior_window(members, n_rho, boundary, sample, wires, values))
 
 
 #: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v1`): its key, its table's root and domain id, its opening
@@ -502,6 +504,13 @@ _HM = hm96.SHA512
 SUPPLIED = {"root": "history/root", "domain": "history/domain"}
 #: the held value a published table's strings are in `history`
 HELD = "strings"
+
+
+def table_values(q: int) -> tuple[tuple[str, int, int], ...]:
+    """The values of an interior of ``q`` sampled spans whose reads open tables, as a window stream takes them
+    (`mixed_population_program`'s ``(name, leaves, width)``) and its interior program its parameters, so R7 registers
+    `supplied`'s: each of `SUPPLIED`'s, ``q`` rows of a `Digest` port's 32 u16 words."""
+    return tuple((n, 32 * int(q), 16) for n in SUPPLIED.values())
 
 
 def supplied(program: str, entries: Sequence[Mapping[str, Any]]) -> tuple[Any, Any]:
@@ -687,7 +696,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     table: the table round 1 served (`boundary_tables.Kept.table`), as round 1's record ``served`` registers it under its
     name, holding its class's ``positions`` strings (`boundary_tables.positions`). The interior commits none of them:
     every read must open its span's (`table_reads`), each read's ``root`` and ``domain`` rows are committed as the
-    `supplied` values' rows, on the host, and the tables' strings are published (`Interior.published`)."""
+    `supplied` values' rows, on the host, which its program takes (`table_values`: the stream is a window's, with them),
+    and the tables' strings are published (`Interior.published`)."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -697,9 +707,10 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     first = [_layout(s.member) for s in per[0]]
     if any([_layout(s.member) for s in p] != first for p in per):
         raise ValueError("the spans' units are not the same templates' in one layout and one order")
-    window = interior_window([s.member for s in per[0]], n_rho, boundary, sample, wires)
+    members = [s.member for s in per[0]]
+    readers = [(k, vh) for k, m in enumerate(members) if (vh := _reader(m)) is not None]
+    window = interior_window(members, n_rho, boundary, sample, wires, table_values(len(sample)) if tables else ())
     ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
-    readers = [(k, vh) for k, m in enumerate(window.members) if (vh := _reader(m)) is not None]
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
         raise ValueError(f"{len(tables)} tables for a replay sample of {len(sample)} and {len(readers)} templates of table "
                          "reads: each sampled span brings its table exactly when a template reads one")
@@ -715,13 +726,13 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                              f"{[(t.leaves, t.words) for t in tcs]}")
     roots = {r["port"]: r for r in served["roots"]} if tcs else {}
     for t in tcs:
+        if len(t.bcs) != positions:
+            raise ValueError(f"table {t.value} holds {len(t.bcs)} strings, not its class's {positions}: rows past its "
+                             "length are filled (`boundary_tables.fill`), so its strings never show it")
         e, r = t.entry(), roots.get(t.value, {})
         if [r.get(k) for k in ("root", "leaves", "domain")] != [e[k] for k in ("root", "leaves", "domain")]:
             raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a drawn span's reads open "
                              "the table served before the coins")
-        if len(t.bcs) != positions:
-            raise ValueError(f"table {t.value} holds {len(t.bcs)} strings, not its class's {positions}: rows past its "
-                             "length are filled (`boundary_tables.fill`), so its strings never show it")
     given = supplied(P.program_digest(window.program), [t.entry() for t in tcs]) if tcs else ()
     if device is not None:
         c = committed(window, device)
@@ -764,4 +775,4 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 __all__ = ["HELD", "MOVED", "READ", "SUPPLIED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed", "gather",
            "history", "interior", "interior_ports", "interior_run", "interior_window", "named", "pieces", "port_map",
-           "register", "sources", "span", "supplied", "table_reads"]
+           "register", "sources", "span", "supplied", "table_reads", "table_values"]
