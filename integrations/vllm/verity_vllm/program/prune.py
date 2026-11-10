@@ -32,17 +32,9 @@ from functools import cache
 from itertools import accumulate, chain
 from typing import Any
 
-<<<<<<< 99c8914848
 from verity.ml.circuits.defs import Body, BodyNode, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
-||||||| merged common ancestors
-from verity.ml.circuits.defs import Body, Node, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
-=======
-from verity.ml.circuits.defs import Body, Node, bind
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, concat
 from verity.ml.circuits.types import Array
->>>>>>> 7af4d24fca3e
 
 
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
@@ -379,7 +371,7 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
     """`body` in the batched form (module docstring), and how many of `body`'s nodes each of its nodes holds, in order."""
     nodes, peers = body.nodes, frozenset(i for i, (name, _) in enumerate(body.params) if name.startswith(PEERS))
     at: list[tuple[int, int]] = []
-    out: list[Node] = []
+    out: list[BodyNode] = []
     sizes: list[int] = []
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
@@ -403,7 +395,7 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
                 shared = all(_same(r, rs[0]) for r in rs[1:])
                 args.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
                 axes.append(None if shared else 0)
-            out.append(Node("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
+            out.append(BodyNode("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
             at.extend((j, m * n.out.leaves) for m in range(hi - k))
         sizes.append(hi - k)
         k = hi

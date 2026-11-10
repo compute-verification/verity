@@ -2,30 +2,13 @@
 
     verity-vllm conformance [--out record.json]
 
-<<<<<<< 99c8914848
-One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
-`not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
-definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table) are recorded here too, so that no
-summary of the B1/B0 programs can be produced from this record without them.
-
-`tests/program/test_conformance_record.py` holds the record to the registry, and `tests/program/test_nan_conversion.py`
-holds its NaN entry to the L8 NaN store scan (the data directory that test names) and the measured conversion words.
-||||||| merged common ancestors
-One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
-`not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
-definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table, typed-b1.md §5.2) are recorded here too, so that no
-summary of the B1/B0 programs can be produced from this record without them.
-
-The record is what typed-b1.md §3 states in prose; the two must agree (`tests/program/test_conformance_record.py`).
-=======
 One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
 `verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
 or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
-recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them
-(`tests/program/test_conformance_record.py`).
->>>>>>> 7af4d24fca3e
+recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them.
+
+`tests/program/test_conformance_record.py` holds the record to the registry, and `tests/program/test_nan_conversion.py`
+holds its NaN entry to the L8 NaN store scan (the data directory that test names) and the measured conversion words.
 """
 
 from __future__ import annotations
@@ -47,14 +30,8 @@ INPUT_QUALIFICATIONS = [
      "statement": "the Input gates of this table are 'rebuilt from the registered source' only if that source is the CUDA computation"},
 ]
 
-<<<<<<< 99c8914848
 # Recorded production divergences, keyed by definition id.  The B0 store sweep is `verity-vllm rmsnorm-fused-sweep` over
 # the B0 bundle (`rmsnorm_fused_sweep.BUNDLE`), which neither the tree nor the evidence store keeps.
-||||||| merged common ancestors
-# Recorded production divergences (typed-b1.md §5), keyed by definition id.
-=======
-# Recorded production divergences, keyed by definition id.
->>>>>>> 7af4d24fca3e
 DIVERGENCES = {
     "RMSNormFusedCuda_v1": [
         {"where": "B1 t=1/layers.27/post_attention_layernorm.rmsnorm/port=0, word 629 of 1536", "ir": "0x3f04", "captured": "0x3f03",
