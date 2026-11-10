@@ -45,7 +45,15 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
+    assert DriveFlags.parse('executor_enqueue = ["python3", "enqueue.py"]\nstale_keep = [2692, 2693]\n') == DriveFlags(
+        executor_enqueue=("python3", "enqueue.py"), stale_keep=(2692, 2693))
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
+                      ("executor_enqueue = []", "executor_enqueue = []: a command as a non-empty list of its words"),
+                      ('executor_enqueue = ["python3", ""]', "executor_enqueue = ['python3', '']: a command as a non-empty"),
+                      ('executor_enqueue = "enqueue.py"', "executor_enqueue = 'enqueue.py': a command as a non-empty"),
+                      ("stale_keep = [0]", "stale_keep = [0]: a list of PR numbers, as [2692, 2693]"),
+                      ('stale_keep = ["2692"]', "stale_keep = ['2692']: a list of PR numbers"),
+                      ("stale_keep = 2692", "stale_keep = 2692: a list of PR numbers"),
                       ('executor = "yes"', "executor = 'yes': one of off, shadow, on"),
                       ("verdict_carry = true", "verdict_carry = True: one of off, shadow, on"),
                       ('close_unlandable = "yes"', "close_unlandable = 'yes': one of off, log, on"),
