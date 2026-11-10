@@ -28522,3 +28522,45 @@ LEDGER, PRF-492. The planner's run needs a stamp of two switches, read from a fi
 - The switch 17 reader against a stored two-stage `meta.json`: it is private. Unchanged from #8517.
 
 **Next:** PRF-496's comment (items 3 and 4 at their sources), then the claims pass for 20:00Z.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 16:15Z: the ServedCover issue text and network's 3, 4 and 5 are ready to paste; ServedCover will likely refuse the cap's class at S = 28,000
+
+Both below are ready to paste; I can't post as proofs. Labels: [read] means read on `main` `c3ae3eaaf0` or #8539 `b3a5cc07e5`, [guess] is mine, [argued] is reasoning, not a proof.
+
+### For proofs' team: the `ServedCover` issue
+
+> **Title:** `ServedCover` on GLM-5.3: check each size class's registration against the capped point
+>
+> `ServedCover` is a domain premise of the capped form's bound (`Properties.Spot.TwoStageCheckServedSound`, `Security/Properties/Spot/TwoStageCheck.lean`). It says no proof block is read by two requests, and the requests reading in each replay block serve at most the class's `N` times the point's `S` bits together. Nothing checks it on GLM-5.3, and the content tie's charge for a wrong ingress tie block (at most S a request, NET-297) rests on it.
+>
+> **What is checked**, for each size class (P, O) of a GLM-5.3 window's two-stage registration:
+> 1. **The first clause, no shared proof block.** The registration's published fan-out F (`Verdict.fanout`, #8539) is at most the class's `N` in the point. Each request's served outputs are its own replay block's: `boundary_rows` makes slot r the r-th span. With F = 1 and R8, no proof block reaches two requests.
+> 2. **The second clause, at most N·S.** A request's served bits are at most `S`. Its `b.egress` row is n, the finish and O ids, each a u32: 32 × (O + 2) bits.
+>
+> **Against which files:** each class's `commit.json` under `w<window>/p<P>-o<O>/` (`boundary_rows.write`: the layout and O); its registration verdict in `stage1.json` (`WindowCommitmentRecord.fanout`); and the capped point the planner checks (`plancheck.two`'s design: its `S` and each class's `N`), with S from the certifier card's `max_tokens_cap` (`benchmarks/spot_figures/cards/`).
+>
+> **A refusal** is code `served-cover`, naming the clause and its numbers: `{"clause": "fanout", "class": "p<P>-o<O>", "F": F, "N": N}` or `{"clause": "served", "class": "p<P>-o<O>", "bits": 32 × (O + 2), "S": S}`. A refused class's capped bits are not claimed, and its bound is the sets' form's, which doesn't read `ServedCover`.
+>
+> **Expected on today's layout** [read, arithmetic]: the cap's class is O = 1024, the least power of two covering 875 ids. At S = 28,000 (32 × 875) it fails the second clause, since its row is 32 × 1,026 = 32,832 bits. Either S is the row's width, or the served outputs stop at the cap. This rests on the request map being the egress row, which no code defines until the class's request Definition lands [guess].
+>
+> **Size:** a Python check of about 60 lines beside `plancheck.two`, which already refuses a fan-out above 1 in the patterns' form. `benchmarks/one_stage/two_stage.py` calls it on each class, with tests on a recorded GLM-5.3 class. Discharging the premise in Lean from the same two facts is larger and gets its own issue.
+>
+> **Date:** the Python check Fri 13 Nov 12:00Z, after the layout, since it needs #8539's published F on `main`; the Lean discharge Mon 30 Nov, with LEAN-186 [guess]. **Owner:** proofs (PRF-456 ACCOUNTD).
+
+### For PRF-456: network's items 3, 4 and 5
+
+> @network-accounting proofs, Tue 10 Nov. **Your 3 is BREAKEVEN's; your 4 we take in another shape, with vllm's emitter; your 5 is ours, a new statement your statement takes as a named input.**
+>
+> - **3. Which form are the rows of record in:** [BREAKEVEN's answer goes here]. Either way, our field carries `pool.form`, so the period check reads each audit's form rather than assuming one.
+> - **4. The certifier's head in the Spec: taken, as a per-window port, not a registered value.**
+>   - A registered value is "committed once per deployment and read by position" (`service.Value`), and R7 holds it at its first registration's root [read]. A head that changes every link-window would then be refused (`R7-held`) from the second window on [guess].
+>   - So the head goes in each class's record as a port of phase `serve`, beside `b.ingress` and `b.egress` (`two_stage.spec_of`'s values, `boundary_rows.PORTS`), with its `leaves:` and `domain:` public items. Its root and domain are then in the record that the registration's digest binds before the coins.
+>   - It lands with vllm's emitter, since the Spec without the emitter refuses every registration. VLLM-270's answer is due Wed 11 Nov 6 PM PST; our side is about 15 lines and a test, by Fri 13 Nov [guess].
+> - **5. The pooled statement: ours.** A new Properties statement beside `TwoStageCheckServedSound`, which your statement takes as a named input.
+>   - What it states: at one registered point (form, q, θ, δ, S, p), over a period's audits whose first stages each sample at rate at least q on their own live coins, the admissible sets over all windows at one δ have the capped sum at most 2^b, with b = (θ·lnUpper(1/δ, p) + Σ_w ln_count_w) / lnLower(2, p).
+>   - Why it should hold [argued]: Rankin's step runs once, at one δ. Each window's coins are independent and each request is within one window, so the probability and the capped bits factor over windows, and the sum is the product of the windows' sums, each at most e^{ln_count_w} (`Spot.FactorUpper`). δ is charged once a period, not once a window.
+>   - What is new: the statement; `classSum` over a concatenated class list is the sum of its parts (one line); and the design over the union, `FirstStageAt` per window with `InScopeTwo` over the union. No locked statement changes.
+>   - Its premises: `InScopeTwo` over the union (open, LEAN-186), and `FirstStageAt`, `ClassesCover` and `ServedCover` per window. That the windows' coins are independent is the protocol's (one session a staged statement, on live coins), so it is a domain premise and not an assumption for Daniel [guess; soundness may rule otherwise].
+>   - When: the statement by Thu 12 Nov 12:00Z, the proof by Mon 30 Nov [guess].
+
+**Piece 1, review-1:** `c555` and `2002` were both still waiting for slots at 16:13Z.
