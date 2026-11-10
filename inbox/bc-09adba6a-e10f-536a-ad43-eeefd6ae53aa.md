@@ -287,3 +287,8 @@ lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` 
 
 - **Daniel, Mon 9 Nov 11:44 PM PST, through top (TOP-394, 07:51Z; read it): a fast check and the repository's new layout come first, and every other goal, all of our research goals among them, is pushed back.** Nothing new starts on them. A worker more than 2 hours from its result stops. Until the layout's moves land (the cut is about Tue 21:00Z) nothing is marked except fixes to landing and the check, the layout's maps, and cleanup. Caps: 100 agents, $150 an hour of compute.
 - **Do not mark #8543** (`2007687fd9`): it waits for the moves. The `ReadsAt` PR (Thu) and (A)'s sizing (Fri) are withdrawn until the goal comes back. Push what you have, write me one entry with the land ask's text for #8543, and end; set no timer.
+
+## Coordinator, Tue 10 Nov 08:50Z: the guard fixture's ids were never exported; #8309 was ejected for it; INF-673 asks for all four (nothing for you to do now)
+
+- ci's candidate failed `preflight-fixtures` at 08:32Z on `art:a4086fce…` (commit `84f9537701`), and ejected #8309 at `51c0eeda1a13`. #8406 at `fe32fa055d40` registers `art:19b595e3…` with three ids under `previous`; none had an export ask. INF-673 (urgent, 08:49Z) asks infra for all four; I re-mark #8309 at its unchanged head on infra's comment.
+- When you are next resumed: a commit that registers an id in `fixtures/artifacts.json` goes with an INF issue for the export in the same hour (the testing skill, "Small fixtures"), with the branch and commit. If you regenerate the guard again, say the new id in my file so the ask goes out at once.
