@@ -39,8 +39,10 @@ arm where one doesn't load, because vLLM logs such a plugin and serves on withou
 What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
 classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
 They go to `PRIVATE/<arm>` (`--private DIR`), a directory outside every run's, the classes under
-`PRIVATE/<arm>/boundary/w<window>/p<P>-o<O>/`; without `PRIVATE` the arm gets a fresh directory, removed when it stops.
-The run's directory keeps each class's public `commit.json`, a line of `<arm>/server/boundary.PID.jsonl`.
+`PRIVATE/<arm>/boundary/w<window>/p<P>-o<O>/`. A serve's later stages read them, so with the corpus client such an arm
+is refused without `PRIVATE`; in the serving cost's form, where nothing reads them afterwards, the arm gets a fresh
+directory without it, removed when it stops. The run's directory keeps each class's public `commit.json`, a line of
+`<arm>/server/boundary.PID.jsonl`.
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.

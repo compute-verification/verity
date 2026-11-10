@@ -66,10 +66,11 @@ The arms, each one engine configuration; each adds its change to the arm it name
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
-its run's directory goes to ``--private`` (``{private}`` in its data), by default a fresh directory removed when the
-arm stops: a boundary commitment's classes (DIR/boundary/w<window>/p<P>-o<O>/: each class's requests' tokens and its
-salts, which are values; the run's directory keeps each class's public commit.json as a line of
-server/boundary.PID.jsonl), the history tables' rows and salts, and the top-k's counters.
+its run's directory goes to ``--private`` (``{private}`` in its data): a boundary commitment's classes
+(DIR/boundary/w<window>/p<P>-o<O>/: each class's requests' tokens and its salts, which are values; the run's directory
+keeps each class's public commit.json as a line of server/boundary.PID.jsonl), the history tables' rows and salts, and
+the top-k's counters. A serve's later stages read them, so the corpus client needs ``--private``; a cost's run by
+vLLM's client, which nothing reads them of, gets by default a fresh directory removed when the arm stops.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -908,8 +909,10 @@ def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, 
 
 
 def run(a: argparse.Namespace) -> int:
-    """Serve one arm (`serve`), what it keeps on the node in ``--private``: where none is given and the arm keeps
-    something (`keeps_private`), a fresh directory outside the run's, removed when the arm stops."""
+    """Serve one arm (`serve`), what it keeps on the node in ``--private``. Where none is given and the arm keeps
+    something (`keeps_private`): under vLLM's client, a cost's run, which nothing reads those files of afterwards, a
+    fresh directory outside the run's, removed when the arm stops; under the corpus client, a serve whose later stages
+    read them, refused before anything starts."""
     out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
 
     def outside(private: Path) -> Path:
@@ -925,6 +928,10 @@ def run(a: argparse.Namespace) -> int:
         return serve(a, private)
     if not keeps_private(ARMS[a.arm]):
         return serve(a, None)
+    if a.client != BENCH:
+        raise SystemExit(f"arm {a.arm} keeps on the node what holds values (a boundary commitment's classes hold its "
+                         "requests' tokens and its salts), and a serve's later stages read it: --private DIR, outside "
+                         "every run's directory (run.sh: PRIVATE)")
     with tempfile.TemporaryDirectory(prefix="serve-tax-private.") as d:
         return serve(a, outside(Path(d).resolve()))
 
@@ -1794,8 +1801,8 @@ def main(argv: list[str] | None = None) -> int:
                         "drained, inline, tables")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
-                        "rows and salts, the top-k's counters), outside every run's directory (default: a fresh "
-                        "directory, removed when it stops)")
+                        "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
+                        "by default a fresh directory, removed when the arm stops; the corpus client needs it)")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)

@@ -135,12 +135,20 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
             S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
     assert not seen and not (tmp_path / "run").exists()
     kept = tmp_path / "kept"
-    assert S.run(NS(out=str(out), private=str(kept), arm="two-stage")) == 0
+    assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
-    # none given: a fresh directory for an arm that keeps something, gone when the arm stops; none for the others
-    assert S.run(NS(out=str(out), private=None, arm="two-stage")) == 0 == S.run(NS(out=str(out), private=None, arm="compiled"))
+    # none given, under vLLM's client (a cost's run, whose kept files nothing reads afterwards): a fresh directory for an
+    # arm that keeps something, gone when the arm stops; none for the others
+    bench = {"out": str(out), "private": None, "client": S.BENCH}
+    assert S.run(NS(arm="two-stage", **bench)) == 0 == S.run(NS(arm="compiled", **bench))
     (fresh, was_there), stock = seen[1], seen[2]
     assert was_there and not fresh.exists() and not fresh.is_relative_to(tmp_path / "run") and stock == (None, True)
+    # none given, under the corpus client (a serve, whose later stages read them): refused, so no serve finds its
+    # classes gone with a directory it never named; an arm that keeps nothing serves as before
+    for keeps in ("boundary-rows", "two-stage", "canonical-topk"):
+        with pytest.raises(SystemExit, match=r"a serve's later stages read it: --private DIR.*PRIVATE"):
+            S.run(NS(out=str(out), private=None, arm=keeps, client=S.CORPUS))
+    assert len(seen) == 3 and S.run(NS(out=str(out), private=None, arm="record", client=S.CORPUS)) == 0
 
 
 def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
