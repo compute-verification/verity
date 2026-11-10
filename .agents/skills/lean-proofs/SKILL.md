@@ -155,9 +155,9 @@ Their history is in the decisions log.
   overhead front door measures it. Measure first, prove second.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
-  failing either, it says nothing. `check.py`'s `witness_failures` has their forms: both build their instance, an
-  exclusion's nontrivial lemma and each past the first of a list included (one drops a premise no earlier one drops:
-  a `Wf` negation, when `Wf` is a premise).
+  failing either, it says nothing. `check.py`'s `witness_failures` has their forms: each builds its instance and takes
+  only listed assumptions, and in a `nontrivial` list each lemma past the first drops a premise no earlier one drops
+  (a `Wf` negation, when `Wf` is a premise).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not
   claims: they live in `Proofs/` with one concrete instance where the honest case holds.
