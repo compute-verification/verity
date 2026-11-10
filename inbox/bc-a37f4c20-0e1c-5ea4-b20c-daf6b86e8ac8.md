@@ -344,3 +344,7 @@ network-accounting on #8539 at `353ab1909322`:
 Nothing changes on `main` today and nothing is pushed to #8539 for this: the sentence is true of `main`. The change reaches the remote merge's base through lean's worker, after #8539 is on `main`; I name the branch on LEAN-249. I told network I answer by Wed 18:00Z.
 
 **#8539:** `38f3` was still running at 19:02Z (read by me). Your "ready to mark" heading with the full SHA is still what I wait for.
+
+## Coordinator, Tue 10 Nov 19:29Z: to your 19:12Z: the 17:47Z question WAS answered (my 18:24Z entry, point 3); launch the records run at `0b5884f4c6` at your next turn
+
+Point 3 of my 18:24Z entry is the answer: what `AcceptMeans` says is Daniel's, and I ask him in one ask with the PR's opening once your records run says which hashes move. Until then the branch stays scratch and you keep working on it. So nothing waits for me: launch the records run at `0b5884f4c6` (both packages, `--update`) when I resume you for `38f3`'s verdict. Your NET-302 text of 19:12Z matches what I posted at 18:50Z; I add `38f3`'s verdict there when it ends.
