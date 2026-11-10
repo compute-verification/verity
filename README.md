@@ -99,7 +99,7 @@ Hardware figures are data and an input to the protocols.
 
 | Written in | What goes there |
 | --- | --- |
-| Lean | Everything that decides: each protocol's check, the registration check, whether a configuration is acceptable, and remote and onsite as wholes. Also every guarantee and its proof. |
+| Lean | Everything that decides: each protocol's check, the registration check, whether a configuration is acceptable, and the two protocols an auditor runs. Also every guarantee and its proof. |
 | TOML | Public facts with no logic: a run's configuration, the hardware data sheets. |
 | Python and CUDA | What must be fast or touch the world: provers, adapters, sockets and processes. |
 
@@ -134,8 +134,8 @@ benchmarks/  tools/  tests/
 ```
 
 The four files at the top of `verity/` are types and plumbing. `fixtures/` is not in this tree: each of its files goes
-to the code that reads it. The harness for the differential tests goes under `tools/`, and the datacenter model stays in
-`benchmarks/`.
+to the code that reads it. The harness for the differential tests goes under `tools/`, and the model of a datacenter
+stays in `benchmarks/`.
 
 `verity/` keeps only the circuits a protocol names: the circuit language, the type of Boolean circuit Flock proves,
 matrix multiplication and the other primitives with what each GPU instruction computes, SHA-512 and the universal
@@ -216,9 +216,10 @@ The sections above describe the target. `main` differs from it in these ways:
 - **Parties for every protocol.** Only `spot`, PoUS and PoUB declare their parties. The served run that `verity run`
   knows is driven by a shell script, not by parties.
 - **Hardware as an argument.** No protocol declares which part of the registered hardware it accounts for. Registration
-  refuses a boundary link with no network certifier and memory that no challenger reaches. Nothing checks that every
-  device is under PoUW or all memory under PoUS.
+  refuses a boundary link with no network certifier and memory that no memory challenger reaches. Nothing checks that
+  every device is under PoUW or all memory under PoUS.
 - **No decision in Python.** Python still holds decisions: the verifiers of the protocols not yet switched to Lean, a
   Python copy of the registration check, and the configuration check.
 - **Two adapters.** There is one adapter, for vLLM. It is not split into a PyTorch adapter and a vLLM adapter on it.
-- **The served kernels' circuits with their adapter.** They are still under `verity/`, in `verity/ml/definitions/`.
+- **Each kernel with whoever uses it.** The served kernels' circuits are still under `verity/`, in
+  `verity/ml/definitions/`, and the two CUDA headers are in `verity/ml/kernels/`.
