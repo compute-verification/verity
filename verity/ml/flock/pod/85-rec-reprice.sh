@@ -100,7 +100,7 @@
 #              (core-firewall session, built beside flock-verify) and writes out/oprove/release.json, each part's release
 #              time against when the Lean loop decided it (rec_inner.py release-report), failing unless every part left)
 #      RELEASE_WINDOWS_S=lead=1500,L0=2800,L=900,alg=900,cap=120,other=900 (each part's window by its class, seconds; lead is
-#              added to the first's)  RELEASE_BUDGET= (the stream's failure budget; empty: none)
+#              added to the first's)  RELEASE_BUDGET= (the stream's failure budget, at least 1: RELEASE=1 needs it)
 #      REC_LINKS=0 (build, vstage; 1: the inner population wired, rec_reprice.py stage-chain: its N units in a chain, each
 #              cut wire a link the inner statement carries, META links, checked by serve, replay and statement against the
 #              verifier's links file stage/links.json; vstage then stages V*'s link part over it, rec_vstage stage-links:
@@ -337,7 +337,7 @@ proxied() {
     rm -rf $FWS; mkdir -p $FWS
     rel=(--firewall $FWS $(python3 -c 'import json, sys; r = json.load(open(sys.argv[1]))
 print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str, r["windows_ms"])))' $DD/release.json) \
-      ${RELEASE_BUDGET:+--budget $RELEASE_BUDGET})
+      --budget $RELEASE_BUDGET)
   fi
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
     --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_FIREWALL_LEAN "${rel[@]}" > $O/inner/proxy/proxy.log 2>&1 &
@@ -683,6 +683,7 @@ inner)
   if [ $RELEASE = 1 ]; then
     [ $NS = 1 ] || { echo "REFUSED: RELEASE=1: one inner session opens the one recursive session (WARM=0 RUNS=1), not $NS"; exit 2; }
     [ -z "${LEVELS:-}" ] || { echo "REFUSED: RELEASE=1 with LEVELS=$LEVELS: a part left out is the recursive session's stop"; exit 2; }
+    [ -n "${RELEASE_BUDGET:-}" ] || { echo "REFUSED: RELEASE=1 needs RELEASE_BUDGET, the stream's failure budget, at least 1: rec_live opens no recursive session on a ZK server without one"; exit 2; }
     corefw_build > $O/inner/build-corefw.log 2>&1 || { tail -20 $O/inner/build-corefw.log; exit 1; }
     $LEAN_BIN rec-inner --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json \
       > $O/inner/rec-inner.json 2> $O/inner/rec-inner.err || { tail -5 $O/inner/rec-inner.err; exit 1; }

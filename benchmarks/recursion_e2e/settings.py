@@ -62,7 +62,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
       "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
     S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),
-    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget (85's RELEASE_BUDGET); unset, none"),
+    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget, at least 1 (85's RELEASE_BUDGET): "
+      "RELEASE=1 needs it, and --release sets 1"),
     S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),
