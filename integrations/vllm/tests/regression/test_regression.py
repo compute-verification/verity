@@ -39,9 +39,6 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           (commit_summary.json is deprecated as a verdict in favour of verdict.json; its execution-configuration fields stay the contract)
     verdict               verdict.json (vllm-verdict/v1; read, or rebuilt in memory from the Commit evidence): outcome == the fixture
                           class, compat.commit_pass == v1, every check group == the v1 facts of runs.jsonl, #57 names fa2_layers_bad     STRONG   T0
-    decomp_hashes         per-request canonical_sha256{a,b}, derived_digest, n_instances, LP / T / steps / prefill chunks, XREQ counts
-                          and the attribution table of match_decomp.json recomputed over the 0.6-5.8 GB fold record by the v2 path
-                          (observe.iter_observations -> resolve -> resolve_decomp; batch_decomp.Projection / compare_steps wrapped)     STRONG   T1
     replay_partition      the sampled-replay PARTITION of sampled_replay_p0.json (population by family / not-evaluable by name / strata
                           sizes / lifetime split / not-executed split / the seeded sample's per-stratum counts and picks per
                           (request, step) / phase anchors) recomputed over the Programs + manifest of record; the evaluations

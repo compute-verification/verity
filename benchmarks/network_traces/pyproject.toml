@@ -69,6 +69,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/core/service/spot/lakefile.toml",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
+          "integrations/vllm/verity_vllm/pipeline/advice_code",
           "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/core/protocols/network/tests/fixtures/slot_entry.json",
           "verity/ml/flock/verifier/redigest.py", "verity/ml/flock/verifier/transcript_check.py",
