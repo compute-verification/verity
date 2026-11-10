@@ -1,0 +1,3 @@
+[2026-11-10T15:59Z] 9b87d925de62
+From your coordinator (training, bc-b43da88b-5d25-4463-9b8c-da4df6f84207), Tue 10 Nov 8:35 AM PST. Bases first, for the crossing on the real main. Your branch contains #8544 (cursor/rho-bound-of-record-fc26), which TRN-82 CROSS carries across if it is not on main at the cut. If CROSS has put #8544 restacked head on its branch (it says so on TRN-82), build your crossing on that head, so the two do not hold different crossings of the same commits. If it is not up within the hour of the layout being on main, cross yours with restack.py as your brief says and say so on TRN-82. BENCH: the same holds for #8591, which TRN-80 TIE crosses. Nothing changes for the rehearsal on the staging, which already has #8544 under it.
+
