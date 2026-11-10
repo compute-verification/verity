@@ -37,6 +37,7 @@ from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.commitments.gates import embedding as EMBEDDING
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 from verity.ml.windows import wiring as WI
@@ -558,6 +559,21 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     alone = IF.input_count(doc, pins={one: pins[one]}, roots=roots)["registered"]
     other = IF.input_count(doc, pins=pins, roots={**roots, one: "cd" * 64})["registered"]
     assert 0 < alone and other == count["registered"] - alone
+
+
+@pytest.mark.slow
+def test_under_a_pin_of_the_catalogs_embedding_read_no_input_row_is_free(window):
+    """With the embedding read's Definition pinned too, by the closure digest of the catalog's own
+    (`interface.reader_digest` of `gates.embedding.read`), `held`'s count finds no free input row: the template the
+    lowering names as the openings' reader resolves to that Definition, its units read the table's root and domain id,
+    and its row, salt and path count registered. Slow by the digest alone, taken once for the pin and once in the count,
+    each an encoding of the embedding read's whole body (its leaf's and path's SHA-512 rounds, a node a gate). The windows
+    suite's reader-pin tests count stand-in readers of a few nodes, so only this one holds the served reader, as a
+    window's record names it, to the pin of the Definition the catalog registers."""
+    circuit, _ = window
+    count = IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit),
+                           readers=[IF.reader_digest(EMBEDDING.read(256, 64))])
+    assert (count["registered"], count["free"]) == (HELD + OPENED + 2 * 4548 * 16, 0)
 
 
 #: TINY's rotary table's parameter, the one weight with no byte digest in the weights record (held to the analytic table)
