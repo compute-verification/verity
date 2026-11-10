@@ -1,6 +1,7 @@
-"""``frame-v3-sha512`` and ``vllm-v1-sha512``: each reference reproduces its vectors, the variant is the SHA-256 framing's bytes
-through SHA-512, openings verify only under their own hash, and a configuration never mixes hashes; a tree's levels and root
-from chunks folded on their own (`levels`) and from subtree roots (`root_from_subtrees`) are `tree_levels`'."""
+"""``frame-v3-sha512``: the reference reproduces its vectors, the variant is the SHA-256 framing's bytes through SHA-512,
+openings verify only under their own hash, and a configuration never mixes hashes; a tree's levels and root from chunks
+folded on their own (`levels`) and from subtree roots (`root_from_subtrees`) are `tree_levels`'.  ``vllm-v1-sha512``'s
+half is ``test_vllm_v1.py``'s."""
 
 from __future__ import annotations
 
@@ -8,13 +9,11 @@ import hashlib
 
 import pytest
 
-from verity.ml.commitments import vllm_v1 as ref
 from verity.ml.commitments.frame_v3 import NAME_SHA512 as FRAME_SHA512
 from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.ml.commitments.frame_v3 import vectors_sha512 as FV
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.ml.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain, RangeU64Domain
-from verity.ml.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, CommitmentDomain, MerkleTree, Opening, _uint,
                                           frame_hash, levels, range_u64_domain_message, root_from_subtrees, tree_levels,
@@ -22,11 +21,9 @@ from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, C
 from verity.ml.commitments.multiproof import multiproof, verify_multiproof
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.ml.commitments.scheme import CommitmentScheme
-from verity.ml.commitments.vllm_v1 import vectors_sha512 as VV
-from verity.errors import InvalidArtifact, ProtocolError
+from verity.errors import ProtocolError
 
 F = FV.load()
-W = VV.load()
 
 
 def _b(text: str) -> bytes:
@@ -265,86 +262,6 @@ def test_a_frame_configuration_never_mixes_hashes() -> None:
         FrameV3({"x": Port(d512, RowLeaf("sha512", ROLE_X, 16, 4))}).tree_leaf("x", 0, bytes(32))
 
 
-# --- vllm-v1-sha512 ----------------------------------------------------------------------------------------------
-
-
-def test_vllm_vectors_file_is_what_the_reference_generates() -> None:
-    assert VV.main(["--check"]) == 0, "rerun `python -m verity.ml.commitments.vllm_v1.vectors_sha512`"
-
-
-def test_vllm_leaves_and_tree_hash_vectors() -> None:
-    for case in W["hash"]:
-        assert H(case["tag"], *[_b(p) for p in case["parts"]], hash="sha512").hex() == case["digest"]
-    for case in W["pos_leaves"]:
-        value = _b(case["value"])
-        assert ref.pos_leaf(value, "sha512").hex() == case["leaf"]
-        assert ref.pos_leaf_layout(len(value), "sha512").digest(value).hex() == case["leaf"]
-        assert case["leaf"] == hashlib.sha512(ref.POS_LEAF_TAG + len(value).to_bytes(8, "big") + value).hexdigest()
-    for case in W["chunk_leaves"]:
-        assert ref.chunk_header(**case["fields"]).hex() == case["header"]
-        assert ref.chunk_leaf(_b(case["header"]), _b(case["chunk"]), "sha512").hex() == case["leaf"]
-    for case in W["thread_leaves"]:
-        assert ref.thread_leaf(_b(case["header"]) + _b(case["words"]), "sha512").hex() == case["leaf"]
-
-
-@pytest.mark.parametrize("case", W["trees"], ids=lambda c: f"n{c['leaf_count']}")
-def test_vllm_tree_vectors(case: dict) -> None:
-    leaves = [_b(x) for x in case["leaves"]]
-    root = _b(case["root"])
-    assert ref.TREE_SHA512.root(leaves) == root and len(root) == 64
-    for i in range(case["leaf_count"]):
-        path = _path(case["paths"][i])
-        assert ref.TREE_SHA512.path(leaves, i) == path
-        assert ref.TREE_SHA512.verify_path(root, case["leaf_count"], i, leaves[i], path)
-        assert not ref.TREE.verify_path(root, case["leaf_count"], i, leaves[i], path)
-    if case["leaf_count"] == 3:
-        a, b, c = leaves
-        assert root == H(NODE_TAG, H(NODE_TAG, a, b, hash="sha512"), H(LIFT_TAG, c, hash="sha512"), hash="sha512")
-
-
-def test_vllm_root_vectors() -> None:
-    fns = {"semantic": ref.semantic_root, "step": ref.step_root, "run": ref.run_root, "weights": ref.weights_root,
-           "stream": ref.stream_root, "thread": ref.thread_root}
-    for case in W["roots"]:
-        i = case["inputs"]
-        args = {
-            "semantic": lambda: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
-                                 _b(i["tree_root"])),
-            "step": lambda: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
-            "run": lambda: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
-            "weights": lambda: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
-            "stream": lambda: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
-            "thread": lambda: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
-        }[case["kind"]]()
-        assert fns[case["kind"]](*args, hash="sha512").hex() == case["root"]
-        if case["kind"] == "stream":
-            assert ref.stream_ctx_digest(launch_tag=i["launch_tag"], src_mask=i["src_mask"], chunk_words=i["chunk_words"],
-                                         leaf_count=i["leaf_count"], hash="sha512").hex() == i["ctx_digest"]
-        if case["kind"] == "thread":
-            assert ref.thread_ctx_digest(launch_tag=i["launch_tag"], src_mask=i["src_mask"], hash="sha512").hex() == i["ctx_digest"]
-
-
-def test_vllm_openings_accept_exactly_the_honest_values() -> None:
-    assert [(c["kind"], c["accept"]) for c in W["openings"]] == [(k, a) for k in ("semantic", "step", "stream") for a in (True, False)]
-
-
-def test_vllm_configuration_names_its_hash_and_never_mixes() -> None:
-    d = hashlib.sha256(b"cfg").digest()
-    s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
-    scheme = ref.VllmV1({"v": s512}, value_nbytes={"v": lambda _i: 8})
-    assert isinstance(scheme, CommitmentScheme)
-    assert (scheme.name, scheme.hashes) == (ref.NAME_SHA512, ("sha512",)) == (W["scheme"], ("sha512",))
-    leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).digest(bytes(8))) for i in range(3)]
-    root = scheme.root("v", leaves)
-    assert scheme.verify_path("v", root, 3, 1, leaves[1], scheme.path("v", leaves, 1))
-    with pytest.raises(InvalidArtifact):
-        scheme.tree_leaf("v", 0, bytes(32))
-    with pytest.raises(InvalidArtifact):
-        ref.VllmV1({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
-    assert ref.domain_digest(s512) != ref.domain_digest(ref.StepDomain(d, d, d, d, 3))
-    assert ref.VllmV1({}).name == ref.NAME
-
-
 # --- the red team's conditions on the SHA-512 framings --------------------------------------------------------------
 
 
@@ -380,16 +297,6 @@ def test_validate_commitment_rejects_a_root_of_the_other_width() -> None:
     assert not validate_commitment(d512, Commitment(t256.commitment.root, 3))
     assert not validate_commitment(d256, Commitment(t512.commitment.root, 3))
     assert not verify_opening(d512, Commitment(t512.commitment.root[:32], 3), t512.open(1), "raw", VerificationLimits())
-
-
-def test_vllm_sha512_domain_digests_are_sha512() -> None:
-    d = hashlib.sha256(b"dd").digest()
-    s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
-    doc = {"kind": "step", "leaf_count": 3, "program_digest": d.hex(), "ctx_digest": d.hex(), "geo_digest": d.hex(), "layout_digest": d.hex(),
-           "chunk": None, "hash": "sha512"}
-    assert ref.domain_digest(s512) == identity_digest_sha512(ref.DOMAIN_DIGEST_TAG, doc)
-    assert len(ref.domain_digest(s512)) == 64 and len(ref.domain_digest(ref.StepDomain(d, d, d, d, 3))) == 32
-    assert all(len(_b(c["domain_digest"])) == 64 for c in W["openings"])
 
 
 def test_hiding_row_schemas_are_named_at_their_widths() -> None:
