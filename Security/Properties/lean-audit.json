@@ -2302,6 +2302,11 @@
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
+ "trees": {
+  "except": {
+   "Proofs.Properties.Verity.Sampled": "the deployed remote soundness theorem (remote_soundness_deployedReady) and its honest witness state SPOT's target at the deployed vocabulary (`Instance.vocab`) over Flock's live session (`Live`, `Constructions`) and the deployment's inputs (`Instance.SessionsReady`, `RegisteredFiles`, `SessionRegistered`, `LogOpensRecorded`), which read through Flock's live session and its V5 bridge, still in Proofs; excepted until the instance's vocabulary moves into Definitions once Flock's is there (PRF-193)"
+  }
+ },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "owner": "@lean",
