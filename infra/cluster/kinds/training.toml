@@ -1,0 +1,9 @@
+# training's jobs on the queue: one job per seed and split of an attack config, queued by
+# `verity bench training-slowdown CONFIG` (benchmarks/training_slowdown/run.py).
+
+[kinds.training-attack]
+phase = "gpu1"
+max_wall_min = 60
+question = "How many counted gates does this attack config's route take from its start, and what does each checkpoint score on the job's held-out split?"
+outputs = ["$RESEARCH_RUN_DIR/out/run.json"]
+restart = "requeue"    # a requeued job starts again from θ: it resumes from no checkpoint
