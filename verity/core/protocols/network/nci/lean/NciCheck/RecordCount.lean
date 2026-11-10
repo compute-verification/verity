@@ -6,34 +6,34 @@ public import NciCheck.Record
 /-!
 # The count of `(c, k)`-inference blocks on an execution phase's circuit record
 
-`NciCheck.Count` counts `(c, k)`-inference blocks on a Program whose blocks are activations of block Definitions. On
-an execution phase's circuit record the blocks are the slots of the record's class, and `NciCheck.Record.summarize`
+`Count` counts `(c, k)`-inference blocks on a Program whose blocks are activations of block Definitions. On
+an execution phase's circuit record the blocks are the slots of the record's class, and `Record.summarize`
 takes one summary of them. `evaluate` is that decision on the summary: a block's Boolean gates at most `c`, its fresh
 bits at most `k`, the blocks at most `n`. `c` is in Boolean gates, the gate table's unit: the summary's `gates`, which
 the rate rule reads, are the Program's gates at their widths, another figure.
 
 A block's Boolean gates (`boolGates`) are, over the record's templates, a template's units in a block times its
-Definition's Boolean gates per activation by the gate table (`NciCheck.Count.boolGates`: per primitive, the Boolean
+Definition's Boolean gates per activation by the gate table (`Count.boolGates`: per primitive, the Boolean
 gates its lowering computes). They are the same in every block, as the summary's gates are. The fresh bits and the
-blocks are the summary's (`NciCheck.Record.Summary.fresh`, `blocks`).
+blocks are the summary's (`Record.Summary.fresh`, `blocks`).
 
-The gate table is read here and nowhere in `NciCheck.Record`: the rate rule (`NciCheck.Record.rate`) reads the
-Program's own gate counts, and nothing it depends on imports `NciCheck.Count`.
+The gate table is read here and nowhere in `Record`: the rate rule (`Record.rate`) reads the
+Program's own gate counts, and nothing it depends on imports `Count`.
 
 ## The limits
 
-One JSON object beside `NciCheck.Record`'s instance and trusted input, `{"table", "c", "k", "n"}`: the gate table
-`{key: g}` and the policy, as `NciCheck.Count`'s instance states them.
+One JSON object beside `Record`'s instance and trusted input, `{"table", "c", "k", "n"}`: the gate table
+`{key: g}` and the policy, as `Count`'s instance states them.
 
 ## Refusals
 
 In the order checked: `instance` (the limits are no object, a field is missing, or `table` is no object), `params`
-(`c`, `k`, `n` or a value of `table` is not a natural), then `NciCheck.Record`'s own in its order, then `gate-table`
+(`c`, `k`, `n` or a value of `table` is not a natural), then `Record`'s own in its order, then `gate-table`
 (the table lacks a primitive a template computes).
 
 ## What is published
 
-As `NciCheck.Count`: `check` gives `{complies}`, or the refusal. A block's Boolean gates and the rule that failed stay
+As `Count`: `check` gives `{complies}`, or the refusal. A block's Boolean gates and the rule that failed stay
 in the private record (`checkDetail`).
 -/
 
