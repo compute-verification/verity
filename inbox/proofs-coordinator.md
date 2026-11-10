@@ -30676,3 +30676,76 @@ All six quick runs are `uv sync … && suites.py --changed e7b03e4a6c89c54436503
 - #7850: kept, head left.
 
 Not read: the control run `549f` on #8197's old head (its log is not on this VM). Note: `~/.research/notes/lanes/proofs/20261110T1827Z-checkpoint-benchcross.md`. When resumed I read the seven runs, a red one first, put each verdict in its PR's body, and make #8462's lock-only commit if records moved. I end my turn.
+
+## PRF-502 SERVEDCARD, Tue 10 Nov 18:30Z: rows 3, 5 and 13 stage at `d7ab9059c3` (pins `7e8a66f6cf13209d`, `1fd651999b36433d`, `8372f70f9df7f6d0`, both form checks accepted), on course for Wed 04:00Z; `tok` is already one 32-bit element in the read's word view
+
+All three staged from `d7ab9059c3a5f94093759753d23b06a4872026c0` (branch `cursor/proofs-census-bit-leaves-8f33`), at N = 1, in `r20261110-181316-4240` on cpu-3, which ended rc 0 at 18:24:56Z. Every figure below is read from its `out/rows.tsv` and `out/types/*.stage.json` [run]. kernels can stage from this commit now. **Against Wed 04:00Z: all three are on course.** Nothing I know of stops them. A staging at `full` checks that before kernels' runs: `r20261110-182740-a43b`, ETA about 19:00Z.
+
+**Ready to post on HASH-98:**
+
+> proofs (PRF-502): rows 3, 5 and 13 stage. Stage them from `d7ab9059c3a5f94093759753d23b06a4872026c0` (branch `cursor/proofs-census-bit-leaves-8f33`). That is `c6cadd0e32`, the tree of rows 1 and 2, plus one commit: `stage.py`'s `census_leaves` now draws 1-bit leaves as seeded uniform bits, sixteen to a u16 word, with a test beside the census tests. Every parameter of the three is 1-bit leaves, and that commit is what was in the way.
+>
+> | Row | Spec (`stage.py SPEC full OUT`) | Pin | ANDs | k_log (unit_log) | Blocks a statement at `full` | `ks_form_why` / `template_why` | Staging at N = 1 |
+> |---|---|---|---|---|---|---|---|
+> | 3 | `census:MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}` | `7e8a66f6cf13209d` | 9,144,187 | 25 (24) | 1,024 | None / None (accepted) | 387 s, 10.5 GB |
+> | 5 | `census:MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}` | `1fd651999b36433d` | 10,680,491 | 25 (24) | 1,024 | None / None (accepted) | 430 s, 11.7 GB |
+> | 13 | `census:EmbeddingRead_v1{V=256,H=4}` | `8372f70f9df7f6d0` | 2,500,350 | 23 (22) | 4,096 | None / None (accepted) | 189 s, 4.8 GB |
+>
+> Run: `r20261110-181316-4240`, from that commit.
+> - **Row 13 is a table read.** It is staged on the verifier's own template (statement `iv/hybrid/4`, structural), so the staging machine needs `flock-read-tmpl`. KSTEADY's `READ_TMPL=1` builds it; our run built it from a scratch copy of `verity/core/service/flock` in 44 s with `leanprover/lean4:v4.34.0`.
+> - **Rows 3 and 5 don't need `flock-read-tmpl`.** They are fused, read inline.
+> - **"G2's run", FUSEDSERVE's `r20261110-071007-9daa`, does hold `rate.json` rows of rows 3 and 5's own Definitions.** Its types `t2` and `t1` are those two ids exactly, at 1, 2 and 4 provers on one H200, every session accepted.
+>   - They are not full statements: they were staged from one served window at n = 31 (row 3) and n = 256 (row 5), where `full` is 1,024.
+>   - Their AND counts and `class_sha512` (`7427f92dcab00d5a` and `95457e4fd7ce86f1`) equal ours.
+>   - Their pins (`769320ae0def085f`, `c7b93144fc7c9351`) differ from ours only because a window staging binds its `partition_digest`.
+
+**What the run's own files show beyond that** [run]:
+- **Rows 3 and 5 reached `census_leaves` only now.** At `c6cadd0e32` they built for 352 s and 391 s and stopped there (`aeed`). At `d7ab9059c3` they built and staged with no other refusal.
+- **Statement forms:** row 3's and row 5's statements are `{'reads': 'inline'}`. Row 13's is `{'layout': 'iv/hybrid/4', 'structural': True}`, with 4 slot types and no lookups.
+- **Peak memory** at N = 1 is 4.8 to 11.7 GB a type. A node needs little beyond the prover.
+
+**At `full`, before kernels relies on it:**
+- `r20261110-182740-a43b` (cpu-3, from `d7ab9059c3`, launched 18:27Z) stages the same three at `full`: 1,024, 1,024 and 4,096 instances, the n KSTEADY's `STAGED` check requires. It checks that each pin is unchanged at `full` and that nothing fails only at size.
+- ETA about 19:00Z [guess: about 7 min of building each, plus the instances]. If it fails, I say what failed and whether 04:00Z holds, well before 22:00Z.
+
+**Row 30**, `EmbeddingRead_v1{V=256,H=96}`, is benchmarks' other table read, which `afe0` couldn't stage without `flock-read-tmpl`. It is staging at N = 1 from `d7ab9059c3` in `r20261110-182836-3720` (cpu-1), ETA about 18:45Z.
+
+**The rest of benchmarks' list at `c6cadd0e32`, N = 1** (`r20261110-161919-afe0`, cpu-3, ended rc 0 at 18:11Z; each accepted by both form checks) [run]:
+
+| Row | Type | Pin | ANDs | k_log (unit_log) | `full` | Peak GB | Seconds |
+|---|---|---|---|---|---|---|---|
+| 15 | `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v1"}}` | `0bd0add320930b34` | 1,676,431 | 23 (21) | 4,096 | 4.8 | 222 |
+| 17 | `EmbeddingShard_v1{VS=19360,H=1,START=0}` | `731e8fe918418ef0` | 309,844 | 25 (20) | 1,024 | 1.3 | 23 |
+| 18 | `…START=19360}` | `b74505b01a4c09d2` | 309,894 | 25 (20) | 1,024 | 1.3 | 23 |
+| 19 | `…START=38720}` | `650796d246e68126` | 309,893 | 25 (20) | 1,024 | 1.3 | 22 |
+| 20 | `…START=58080}` | `c3b2e17268c59c4e` | 309,893 | 25 (20) | 1,024 | 1.3 | 22 |
+| 21 | `…START=77440}` | `837d3dae75dd7a6a` | 309,891 | 25 (20) | 1,024 | 1.3 | 22 |
+| 22 | `…START=96800}` | `d87b068f2787bc30` | 309,894 | 25 (20) | 1,024 | 1.3 | 22 |
+| 23 | `…START=116160}` | `e7bde8131a1708d2` | 309,893 | 25 (20) | 1,024 | 1.3 | 22 |
+| 24 | `…START=135520}` | `e30e9c19ce937e8a` | 309,892 | 25 (20) | 1,024 | 1.2 | 22 |
+| 25 | `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` | `662376a7f1a926c1` | 10,868,736 | 25 (24) | 1,024 | 64.0 | 1,515 |
+| 26 | `AllReduceResidualMnnvl_v1{WORLD=8,N=96,SHOT=1}` | `c4b9a5082cfafc17` | 751,296 | 22 (20) | 8,192 | 1.4 | 24 |
+| 27 | `ScaledMmFp8BlockSharedScale_v1{K=1536,N=8,G=128}` | `22d86a02205bfea2` | 3,264,576 | 24 (22) | 2,048 | 4.0 | 80 |
+| 28 | `RmsNormMnnvl_v1{N=6144,SHOT=1,CLUSTER=8,EPS=…,FMA=true}` | `3cb448d020bc2ac0` | 38,548,892 | 27 (26) | 256 | 42.5 | 856 |
+| 29 | `RMSNormFusedCudaVector8_v1{N=6144,EPS=…,BLOCK=256}` | `d14d9482483c000c` | 29,530,074 | 27 (25) | 256 | 31.6 | 581 |
+| 30 | `EmbeddingRead_v1{V=256,H=96}` | in `3720` | | | | | |
+| 31 | `ResidualAdd_v1{N=384}` | `915f3d2f086a7636` | 289,536 | 22 (19) | 8,192 | 1.2 | 18 |
+| 32 | `Fp8GroupQuantUe8m0_v1{K=2048,G=128}` | `ab73d147d39dbc50` | 3,622,912 | 24 (22) | 2,048 | 21.4 | 493 |
+| 33 | `DsaMqaLogits_v3{N=1,H=32,D=128}` | `31afaccb8313fd26` | 1,087,058 | 23 (21) | 4,096 | 1.6 | 35 |
+| 34 | `MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}` | `5653e001e2a03173` | 8,313,579 | 25 (23) | 1,024 | 15.5 | 569 |
+| 35 | `SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}` | `8b75eb57b089e818` | 1,363,955 | 23 (21) | 4,096 | 2.3 | 67 |
+| 36 | `DsaRMSNorm_v1{N=2048,EPS=…}` | `6b42eb27952e35a5` | 9,459,490 | 25 (24) | 1,024 | 10.7 | 243 |
+
+- The ids are the census of record's keys, with the full statics, in `afe0`'s `out/specs.tsv`.
+- The pins are census stagings, so a served window's staging of the same type binds a different `partition_digest`, as with rows 3 and 5.
+- Rows 37 to 40 remain deferred, at about 200 GB and 80 min a block as `_v2`. Say if you want them run tonight.
+
+**For LEAN-238, a finding that changes your 17:24Z first reading's premise** [run: `BL.is_boolean`, `BL.word_type` on `read(256, 4)` at `c6cadd0e32`; read: `verity/ml/circuits/boolean/__init__.py` at `main`]:
+- **`EmbeddingRead_v1` is a Boolean Definition** (`is_boolean` True). A Boolean Definition's signature has only 1-bit leaves by definition.
+- **`tok` is already one 32-bit element.** Its word view, the signature of the word Definition it computes, is `word_type(Array<32,Value<1>>)` = `Value<32>`, bit j being leaf j, least significant first. The word view of the whole read is `tok: Value<32>, root/domain: Array<8,Value<64>>, row: Array<H,Value<16>>, salt: Array<24,Value<64>>, path: Array<D,Array<8,Value<64>>>`.
+- **`word_type(Value<32>)` raises** "not a Boolean type (its leaves must be Value<1>)". So `tok` as a literal `I32` leaf in this Definition's signature would take the read out of the Boolean Definitions. Every path that lowers it as Boolean refuses that, so it is not a moved pin.
+- **So the smaller change may be in training's record form, not in the read.** The form refuses a 32-bit writer leaf read by 32 one-bit reader leaves. If it compared a Boolean reader's port in its word view (`BL.word_type`), it would see one `Value<32>` leaf, the writer's width, and nothing in `EmbeddingRead_v1`, its template, its pins or vllm's fixtures would move.
+- I haven't read training's record form, and I haven't run your item 3's checks. If training needs the read's own signature changed, it is a new Definition shape (a word read with a Boolean `_v2` body), not `EmbeddingRead_v1` with a moved pin.
+- I'll make this the first line of the check due Wed 16:00Z, unless you'd rather put it to training and lean now.
+
+**Still owed:** LEDGER's three stamp keys (by Wed 06:00Z) and the word check (Wed 16:00Z). Next, when `a43b` and `3720` end: rows 3, 5 and 13 at `full`, and row 30.
