@@ -85,8 +85,8 @@ def test_the_verify_cli(tmp_path):
 
 @pytest.mark.parametrize("E,renorm", [(64, False), pytest.param(128, True, marks=pytest.mark.slow)])
 def test_the_irs_outputs_are_the_record_routers_on_every_edge_row(E, renorm):
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import moe
 
     kernel_order = bind(moe.MoeRouterTopKNorm if renorm else moe.MoeRouterTopK, E=E, TOPK=8, VPT=8)

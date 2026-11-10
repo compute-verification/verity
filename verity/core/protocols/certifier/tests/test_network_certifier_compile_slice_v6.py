@@ -17,7 +17,7 @@ import pytest
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.head_check import ands
-from verity.ml.circuits import boolean as BL
+from verity.circuits import boolean as BL
 from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.gates import rowleaf as RG
 from verity.ml.protocols.certifier import compile_slice_v5 as V5, compile_slice_v6 as V6

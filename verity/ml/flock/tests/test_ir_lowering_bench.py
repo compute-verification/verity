@@ -53,8 +53,8 @@ def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
     (``ir_lower.whole``), the chunk's input row 64 bf16 logits, one SHA-512 block: their rows equal the IR on synthetic sets, and
     the chunks' units feeding the combine's give ``TokenSelect_v1``'s token on rows of V = 200 whose maximum is tied across a
     chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate_batch
     from verity.ml.definitions.registry import b1
 
     V = 200

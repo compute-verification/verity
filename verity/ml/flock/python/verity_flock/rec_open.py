@@ -6,7 +6,7 @@ it, and their plain-integer reference.
     RecOpen_v4{LANES, H}(row: Array<8 LANES, U16>, aux: Array<A(H), U16>, acc: Array<64, U16>, coef: Array<16 LANES, U16>,
                          dirs: Array<64, U16>) -> (out: Array<64, U16>, acc_out: Array<64, U16>)
 
-Every port is u16 words (a Boolean element of 16 bits, `verity.ml.circuits.boolean`'s word view): a word's bits LSB first, a byte
+Every port is u16 words (a Boolean element of 16 bits, `verity.circuits.boolean`'s word view): a word's bits LSB first, a byte
 string's bytes two to a word, little-endian, so leaf ``t`` of a port is bit ``t & 7`` of its byte string's byte ``t >> 3``. An
 element of F = GF(2^128) is 8 words, its 16 bytes ``lo`` LE then ``hi`` LE, so its bit k is bit ``k % 16`` of word ``k // 16``.
 
@@ -56,14 +56,14 @@ import hashlib
 from collections.abc import Sequence
 from functools import reduce
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 
 from .rec_residuals import residual_forms
 from .sha512_circuit import word_bit
@@ -304,7 +304,7 @@ RecOpen = CompositeDefinition(
 def unit_circuit(LANES: int, H: int):
     """The unit over `forms`: inputs ``in0 ..`` (``row``'s words, then ``aux``'s, ``acc``'s, ``coef``'s and ``dirs``', 16 bits
     each), outputs ``out0 .. out63`` (``out``) then ``acc0 .. acc63`` (``acc_out``)."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     _check(LANES, H)
     C = Circuit()

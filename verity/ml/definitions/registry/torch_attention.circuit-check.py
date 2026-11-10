@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     eager row and its backward at smollm2's D = 64, RoPE and its backward on a head of 8, and repeat_kv's backward at
     smollm2's three query heads a KV head. The step's blocks at one sequence of 16 tokens with D = 16, two query heads a KV
     head."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import torch_attention as TA
 
     block = dict(N=16, NH=4, KVH=2, D=16)

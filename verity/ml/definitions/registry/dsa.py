@@ -64,11 +64,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.fp8 import E4M3

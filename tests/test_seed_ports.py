@@ -47,17 +47,17 @@ UNITS = {
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
     "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
         "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
-    "verity/ml/circuits/population.py::_instance_ports":
+    "verity/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
-    "verity/ml/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
+    "verity/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
-    "verity/ml/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
-    "verity/ml/circuits/tests/test_population_ports.py::Counted":
+    "verity/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
+    "verity/circuits/tests/test_population_ports.py::Counted":
         "the population tests' stand-in key count: a position alone, whose population keeps it",
-    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
     "verity/ml/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
@@ -67,23 +67,23 @@ KEY_COUNTS = {
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {
-    "verity/ml/circuits/ops/boolean/shared_row.py::WINDOW":
+    "verity/circuits/ops/boolean/shared_row.py::WINDOW":
         "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
 }
 TESTS = {
-    "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
-    "verity/ml/circuits/tests/test_ports.py::UNIT_PORTS": "the port rules' unit vectors: a seeded unit whose receipt is its sink",
-    "verity/ml/circuits/tests/test_ports.py::SALTED": "seeds batched over positions (E_COIN_REUSE's vectors)",
-    "verity/ml/circuits/tests/test_ports.py::test_a_seed_takes_the_coin_and_a_position":
+    "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
+    "verity/circuits/tests/test_ports.py::UNIT_PORTS": "the port rules' unit vectors: a seeded unit whose receipt is its sink",
+    "verity/circuits/tests/test_ports.py::SALTED": "seeds batched over positions (E_COIN_REUSE's vectors)",
+    "verity/circuits/tests/test_ports.py::test_a_seed_takes_the_coin_and_a_position":
         "the descriptor's port entry a batched seed encodes to, as the expected value",
-    "verity/ml/circuits/tests/test_ports.py::test_a_position_is_a_run_input_passed_through":
+    "verity/circuits/tests/test_ports.py::test_a_position_is_a_run_input_passed_through":
         "E_PORT_KIND's negatives: a seed whose position is computed, not a run input",
-    "verity/ml/circuits/tests/test_ports_one_use.py::ROOT_PORTS":
+    "verity/circuits/tests/test_ports_one_use.py::ROOT_PORTS":
         "the one-use check's random and negative Programs: a root's positions, read by seeds batched over them",
-    "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
-    "verity/ml/circuits/tests/test_population_ports.py::Seed":
+    "verity/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
+    "verity/circuits/tests/test_population_ports.py::Seed":
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
-    "verity/ml/circuits/tests/test_population_values.py::Unit":
+    "verity/circuits/tests/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
@@ -164,7 +164,7 @@ def test_only_pouw_mints_a_seed() -> None:
 def test_the_scan_sees_each_form() -> None:
     src = '''
 import dataclasses
-from verity.ml.circuits.ports import In, Out, Ports
+from verity.circuits.ports import In, Out, Ports
 
 SEED = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")})
 UNIT = Ports(params={"p": In(kind="position")}, ret=Out(sink=True))

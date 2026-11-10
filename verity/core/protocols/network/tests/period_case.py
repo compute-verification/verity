@@ -64,12 +64,12 @@ from verity.core.protocols.certifier.warden import INTEGER_FIELDS, WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.spot.one_stage import registration as R
 from verity.core.protocols.spot.one_stage.draw import stratum_k
-from verity.ml.circuits import boolean as BL, codec, population
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits import boolean as BL, codec, population
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import REGISTRY
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.ml.definitions.registry.sampling import bit_at

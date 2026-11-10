@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """The seeded top-p token select over V = 16 at the split count S = 4 (the frontend's `token_select_stochastic_split`
     instance), which reaches its mask and keep word."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import topp_words as TW
 
     return [

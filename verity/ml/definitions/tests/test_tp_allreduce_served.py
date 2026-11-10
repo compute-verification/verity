@@ -9,8 +9,8 @@ import json
 from functools import cache
 from pathlib import Path
 
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import program_digest
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import tp_allreduce as TA
 
 SIDECAR = Path(TA.__file__).with_name("tp_allreduce.circuit-check.py")

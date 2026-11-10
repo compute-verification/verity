@@ -427,7 +427,7 @@ def model_gate(dev: Dev, ops: dict, ref: int, m: int, n: int, k: int, samples: i
     try:
         import numpy as np
         from verity.ml.kernels.tc import block_scaled_batch, chain_batch
-        from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4 as model
+        from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4 as model
     except ImportError as e:
         return {"skipped": f"{type(e).__name__}: {e}"}
     t0 = time.time()

@@ -24,8 +24,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import lifted as L
 
@@ -92,7 +92,7 @@ def test_refusals_fire_eagerly_in_the_builder_and_lazily_on_a_direct_bind_both_b
     """`lserve()`/`lifted_request()` validate BEFORE the lazy specialization exists (no `Program()` needed); a direct
     `bind(LServe, …)` that skips the builder is still refused, at `Program()`, by the same names.  The static is `STEPS`
     (decode steps = cap − 1), so the spec string's population reads `STEPS + 1 = cap`."""
-    from verity.ml.circuits import bind
+    from verity.circuits import bind
     eager = [
         (ValueError, "non-empty declared EOS set", dict(eos=())),
         (ValueError, "1 <= STEPS and LP \\+ STEPS <= MAX_POS", dict(cap=C["MAX_POS"] - LP + 2)),

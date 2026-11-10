@@ -16,10 +16,10 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import lookup_primitive
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.types import Tuple
+from verity.circuits.codec import lookup_primitive
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.types import Tuple
 from verity.ml.definitions.numerics import topp_stage_twins as TW
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import topp_keep_builder as K

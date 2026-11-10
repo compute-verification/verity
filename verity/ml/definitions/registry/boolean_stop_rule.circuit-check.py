@@ -9,7 +9,7 @@ from typing import Any
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`StopRule_v2` at small classes (4 outputs and one stop id, 5 outputs and two) and at GLM-5.3's served class (32
     outputs, its three EOS ids)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_stop_rule as BS
 
     return [("StopRule_v2:4:1", lambda: bind(BS.StopRuleV2, T=4, NSTOP=1)),

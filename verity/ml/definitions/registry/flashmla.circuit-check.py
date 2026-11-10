@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     blocks, a split writing bf16 and a partial one, the combine of a lone request's 10 splits, a head over the window and a block
     of compressed rows in two splits, and one head's decode over one window block.  A token's 16 heads (over `targets.MAX_GATES`:
     the twin's bindings stand for the family) are checked by id."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import flashmla as F
 
     S = F.FLASHMLA_DSV4

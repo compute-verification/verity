@@ -4,7 +4,7 @@ audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exac
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
 reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
 the cap the committed pass row and the public lifetime cap give), one instance of each per step
-(`verity.ml.circuits.requirement_units`), the layout row at two epochs a value.
+(`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
@@ -84,9 +84,9 @@ from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_m
 from verity.core.protocols.remote_bandwidth import schedule as SC  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
+from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
 from verity.ml.commitments.gates import block_check as BC  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402

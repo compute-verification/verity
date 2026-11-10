@@ -63,15 +63,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import cast as CA
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BMU
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import cast as CA
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BMU
+from verity.circuits.ports import In, Ports
+from verity.circuits.refs import Coll, Explicit, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 
 from . import cublas_bf16 as CB
 from . import torch_attention as TA

@@ -13,8 +13,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from verity.ml.kernels.tc import block_scaled_batch, group_sum_total_batch
-from verity.ml.circuits.silicon import fp32
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 from verity.ml.protocols.pouw.schemes import pearl_kw as P

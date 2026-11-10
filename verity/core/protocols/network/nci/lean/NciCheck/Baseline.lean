@@ -28,7 +28,7 @@ The trusted input, beside the instance, is what the service holds, never the pro
   `SHA-512(format || 0 || canon(record))`, `digest`);
 * `run`: the digest of the run under check's own record, the log's first for the deployment's first run;
 * `params`: the verifier's own copy of its program function's parameters, `[[name, type], ...]` as a body's params are
-  written. The descriptor names no parameters (`verity/ml/circuits/PROTOCOL.md` §5.1: the root starts with each
+  written. The descriptor names no parameters (`verity/circuits/PROTOCOL.md` §5.1: the root starts with each
   parameter's input nodes, in parameter order), so these say which parameter each θ node holds a part of: they must
   lower onto the root's input nodes exactly (`ownersOf`), as `Spot.Registered.params` requires.
 

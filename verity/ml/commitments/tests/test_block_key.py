@@ -10,9 +10,9 @@ import struct
 
 import pytest
 
-from verity.ml.circuits.boolean.gf128 import mul
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.boolean.gf128 import mul
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.gates import block_key as BK
 
 #: (Definition, statics) -> its traced circuit's (And, Xor, Not) gates

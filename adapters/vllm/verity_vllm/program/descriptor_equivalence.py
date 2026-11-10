@@ -32,11 +32,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
-from verity.ml.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.circuits.layout import FunctionCall
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided
+from verity.circuits.codec import decode_program, descriptor_id, program_digest
+from verity.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.layout import FunctionCall
+from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided
 
 from verity_vllm.config import UsageError, option
 
@@ -193,7 +193,7 @@ def _compare_definition(fid: str, a, b, rep: dict) -> None:
 
 
 def _static_view(v: Any) -> Any:
-    from verity.ml.circuits.defs import FunctionDefinition
+    from verity.circuits.defs import FunctionDefinition
     if isinstance(v, FunctionDefinition):
         return ("fn", descriptor_id(v))
     if isinstance(v, (list, tuple)):
@@ -214,7 +214,7 @@ def _all_definitions(root: SpecializedDefinition) -> dict[str, Any]:
         if isinstance(fn, SpecializedDefinition):
             for n in fn.body.nodes:
                 visit(n.fn)
-            from verity.ml.circuits.codec import _static_functions, _as_specialized
+            from verity.circuits.codec import _static_functions, _as_specialized
             for k in fn.defn.statics:
                 for f in _static_functions(fn.bindings[k]):
                     visit(_as_specialized(f, fid))
@@ -252,7 +252,7 @@ def _call_view(c: FunctionCall, depth: int, rng: random.Random, samples: int = 2
         if n_leaves <= INTERFACE_LEAF_LIMIT:
             d["args"], d["returns"], d["in"], d["out"] = tuple(c.args), tuple(c.returns), c.in_, _declared_out(c)
         else:
-            from verity.ml.circuits.layout import param_leaf, resolve
+            from verity.circuits.layout import param_leaf, resolve
             state = rng.getstate()
             picks = []
             for pi, (_, t) in enumerate(params):
@@ -409,10 +409,10 @@ def main(a: Options) -> int:
         B, ib = _load(a.new)
         ib["bytes"] = os.path.getsize(a.new)
     elif a.build:
-        from verity.ml.circuits.program import Program
-        from verity.ml.circuits.defs import bind
+        from verity.circuits.program import Program
+        from verity.circuits.defs import bind
         from verity.ml.definitions.registry import b1
-        from verity.ml.circuits.codec import encode_program, canonical_json
+        from verity.circuits.codec import encode_program, canonical_json
         cfg, LP, STEPS = a.build[0], int(a.build[1]), int(a.build[2])
         t0 = time.time()
         B = Program(bind(b1.Serve, C={"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[cfg], LP=LP, STEPS=STEPS))

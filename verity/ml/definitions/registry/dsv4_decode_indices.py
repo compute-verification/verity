@@ -43,12 +43,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.codec import register_lazy_family
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.codec import register_lazy_family
+from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.numerics import dsv4_decode_indices_twin
 from verity.ml.definitions.registry import fp8_moe_experts as FX
 from verity.ml.definitions.registry import marlin_moe as MM

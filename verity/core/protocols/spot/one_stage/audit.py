@@ -26,8 +26,8 @@ import hashlib
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.partition import Level
+from verity.circuits.codec import canonical_json
+from verity.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
 from .draw import check_draw, check_proved, law_of

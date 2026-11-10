@@ -7,10 +7,10 @@ import random
 
 import pytest
 
-from verity.ml.circuits import (Array, FunctionCall, Program, Tuple, Value, bind, composite, decode_program, descriptor_size,
+from verity.circuits import (Array, FunctionCall, Program, Tuple, Value, bind, composite, decode_program, descriptor_size,
                        encode_program, primitive, program_digest, query, query_ast, QueryError, REGISTRY)
-from verity.ml.circuits.evaluation import evaluate_call, evaluate_region
-from verity.ml.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
+from verity.circuits.evaluation import evaluate_call, evaluate_region
+from verity.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 
 V16 = Value(16)
 MASK = 0xFFFF
@@ -141,7 +141,7 @@ def test_a_block_never_spans_a_gap():
         r0 = B.call(bind(Row, act=Relu16), x, w)
         t = B.call(Id16, r0)
         r1 = B.call(bind(Row, act=Relu16), x, w)
-        from verity.ml.circuits import array_of
+        from verity.circuits import array_of
         return array_of([t, r1])
 
     P = Program(bind(Gappy))
@@ -179,7 +179,7 @@ def test_repeated_references_in_interface():
     # (one id, one body — verity_vllm.program.frontend.check_identity)
     @composite("FRepeated", 1, [], lambda S: ((("a", V16), ("b", V16)), Tuple(V16, V16, V16)))
     def F(B, S, a, b):
-        from verity.ml.circuits import tuple_of
+        from verity.circuits import tuple_of
         t = B.call(Add16, a, a)
         return tuple_of(t, a, t)
 

@@ -53,12 +53,12 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.types import Array
 
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.gather import gather
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.gather import gather
 
 __all__ = ["AND", "NAND", "NOOP", "Netlist", "UniversalUnit", "XNOR", "XOR", "and_count", "arguments", "build", "index_bits",
            "interpret", "pad", "traced"]
@@ -136,7 +136,7 @@ def _bits(v: int, k: int) -> list[int]:
 
 def arguments(net: Netlist, x: Sequence[int]) -> tuple[list[int], list[int], list[int], list[int]]:
     """``UniversalUnit_v1{G = len(gates), N_IN = n_in, N_OUT = len(outputs)}``'s four arguments, each a flat list of bits in leaf
-    order (`verity.ml.circuits.evaluation.evaluate`'s form)."""
+    order (`verity.circuits.evaluation.evaluate`'s form)."""
     k = index_bits(len(net.gates), net.n_in)
     if any(i >> k for g in net.gates for i in g[1:]) or any(o >> k for o in net.outputs):
         raise ValueError(f"an index does not fit the class's {k}-bit wire indices")

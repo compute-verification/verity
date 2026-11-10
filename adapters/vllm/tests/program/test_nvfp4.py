@@ -7,10 +7,10 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
+from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.registry import nvfp4 as N4
 from verity.ml.definitions.numerics import nvfp4_twins

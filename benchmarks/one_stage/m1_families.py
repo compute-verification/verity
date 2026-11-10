@@ -34,7 +34,7 @@ LIMIT_LOG = 26
 
 
 def _leaf_cost(fn, IL) -> dict:
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     C = Circuit()
     params, _ret = fn.signature()
@@ -52,9 +52,9 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
     informational, as the census's are)."""
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.census import PRODUCTS, _rule, family
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.census import PRODUCTS, _rule, family
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.program import is_input
 
     if fn.id in memo:
         return memo[fn.id]

@@ -37,9 +37,9 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import tp_allreduce as TA
 from verity.ml.definitions.registry.prims import BF16

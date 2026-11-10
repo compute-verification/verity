@@ -12,7 +12,7 @@ def _boolean_roots() -> list[Any]:
     the one-stage unit, at GLM-5.3's tree with IEEE adds and at the balanced tree with FTZ ones; and NCCL's tree one of 8
     elements at WORLD 4, down the TP4 capture's chain and down another, and its coordinate at WORLD 8 down the PCI order (the
     coordinate combine a TP8 window wires under batch invariance, `tp_combine.coordinate_binding`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_tp_allreduce as BA
     from verity.ml.definitions.registry import tp_allreduce as TA
 

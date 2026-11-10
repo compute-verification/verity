@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import bits as BS
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import cublas_bf16 as CB
 
@@ -156,9 +156,9 @@ ROUTE_IDS = ["nosplit", "splitk-bf16", "serialk", "splitk-bf16-align8", "splitk-
 def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v2() -> None:
     """`TRAIN_DOT` is `HopperBF16WgmmaDot16_v3`, ``opt_in``: each route binds it and names the word the served step names, and
     `boolean_version` of that word, and of a route's word, is still on `HopperBF16WgmmaDot16_v2`, so no served Program moves."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.ops import prims as P
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.ops import prims as P
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.boolean import boolean_version
 
     assert CB.TRAIN_DOT is BG.HopperBF16WgmmaDot16V3 and CB.TRAIN_DOT.opt_in
@@ -177,8 +177,8 @@ def test_the_training_steps_chain_parts_give_the_served_steps_words() -> None:
     ones, x's own gates shared), give `HOPPER_STEP`'s words: on rows of near-1 words, and on rows of uniform or near-1 words
     with special words (NaNs of several payloads, the infinities, the zeros, subnormals, the largest finite) at a rate of 1,
     5 or 30%."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
 
     rng = np.random.default_rng(118)
     special = np.array([0x7FC0, 0x7F81, 0xFFFF, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x807F, 0x7F7F, 0xFF7F], np.uint16)
@@ -215,8 +215,8 @@ def test_route_gemm_on_bits_is_the_route_model(route) -> None:
 def test_route_gemm_on_words_is_the_route_model(route) -> None:
     """Each route's Definition on words, what the grader prices and the training rules bind, is its numpy model on the spread
     and cancelling words, evaluated by the reference evaluator."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.evaluation.reference import evaluate
 
     word = word_of(CB.route_gemm(route, 64, 3))
     for x, w in BC.route_probe_rows(4, 64, 3, np.random.default_rng(119)):
@@ -227,7 +227,7 @@ def test_route_gemm_on_words_is_the_route_model(route) -> None:
 def test_an_unsplit_route_pads_k_to_whole_k16_steps() -> None:
     """At a K that is not a multiple of 16 an unsplit route is `GemmPad_v2`: on bits, the route's model on x and W's rows padded
     with +0 words at the back to the next multiple of 16.  A split route there is refused."""
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
     from verity.ml.definitions.boolean import boolean_version
 
     target = CB.route_gemm({"kernel": "nosplit"}, 40, 3)

@@ -70,11 +70,11 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
-from verity.ml.circuits.evaluation.reference import evaluate_region  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import runs  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
+from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
+from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -424,7 +424,7 @@ def _reaches(c, unit_id: str) -> bool:
 def _run_units(c, args: np.ndarray, unit_id: str, sink: list, n: int) -> np.ndarray:
     """`evaluation.bits._run`, keeping in ``sink`` the argument and return bits of instance 0's first ``n`` calls of
     ``unit_id``."""
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits.evaluation import bits as BS
     words = args.shape[1]
     W = np.empty((c.size, words), dtype=np.uint64)
     W[0] = 0
@@ -472,8 +472,8 @@ def boolean_units(spec, unit, args: list[np.ndarray], n: int, full_gates: int) -
     of a parameter's word view is its word leaf j), its first ``n`` calls of ``unit`` with their argument and return bits, and
     the Call's returns as words (``call_out``, element j of the return's word view at word leaf j, as `call_twin` reads a
     word Call's)."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits import boolean as BL
+    from verity.circuits.evaluation import bits as BS
     t0 = time.time()
     c = BS.compile(spec)
     cols = []
@@ -740,7 +740,7 @@ def live(fn, registry):
     """A decoded Definition as the registry's own: a specialization bound again on its composite (the decoded one has no
     builder, which `Program` and the stager's binding need), function-valued statics likewise; one of `LAZY` built again."""
     import importlib
-    from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
+    from verity.circuits.defs import FunctionDefinition, SpecializedDefinition
     if not isinstance(fn, SpecializedDefinition):
         return fn
     name = f"{fn.defn.name}_v{fn.defn.version}"
@@ -763,7 +763,7 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
     again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
     (a kind saved with more loads only those, and says so)."""
-    from verity.ml.circuits.codec import decode_program
+    from verity.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.engine.profiles import family_facts as FF
 
 #: (config.json key, C key) of the sizes `mhc_config` reads off the rank's config.json; the header check compares the recorded ones

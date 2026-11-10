@@ -13,10 +13,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     splits.  Then every route `cublas_routes.json` records for GLM-5.3's two split-K weights on one TP8 rank (``served-``), up to
     its m_max: the MoE router's gate (K = 6144, N = 256, f32 out) and the indexer's ``wk`` (K = 6144, N = 160), each at two,
     three and four splits and non-split (the indexer's is core's `Gemm_v2`); `test_cublas_served` holds them to the table."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -50,8 +50,8 @@ def _boolean_roots() -> list[Any]:
     16 words at k-tile 16 (each 24-word slice's residue tile of 8 words and 8 zeros before its whole tile); and the padded
     GEMM at T = 40 of K = 48, N = 3.  The f32-out, batched, bf16-workspace, serial, grid.z and padded ones again on the
     training routes' step (`CB.TRAIN_DOT`, `HopperBF16WgmmaDot16_v3`)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
 
     HOP, TRAIN = BG.HopperBF16WgmmaDot16, CB.TRAIN_DOT

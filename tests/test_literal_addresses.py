@@ -129,7 +129,7 @@ ALLOWED: dict[str, int] = {
     "examples/vllm/placement.toml": 1,
     "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py": 1,
     "tools/verity/check/tests/test_placement.py": 3,
-    "verity/ml/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
+    "verity/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
     # stand-ins that predate the documentation ranges
     "tools/verity/check/tests/test_verdicts.py": 2,
     # version numbers the scan reads as addresses

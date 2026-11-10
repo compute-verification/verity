@@ -37,9 +37,9 @@ import tool  # noqa: E402
 import vec as V  # noqa: E402
 import w1_price as W  # noqa: E402
 
-from verity.ml.circuits.silicon import models as M  # noqa: E402
-from verity.ml.circuits.silicon.errors import InvalidArtifact  # noqa: E402
-from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
+from verity.circuits.silicon import models as M  # noqa: E402
+from verity.circuits.silicon.errors import InvalidArtifact  # noqa: E402
+from verity.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
 
 @pytest.fixture

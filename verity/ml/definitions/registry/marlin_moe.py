@@ -16,7 +16,7 @@ One output word of one (token, slot) pair, column n, over K:
     y      = F2fpBf16(R); the w2 launch Bf16MulBf16(y, F2fpBf16(topk_weight))              write_result, 1769-1900; 518-527
 
 The k16 step is `mma.sync.m16n8k16` (bf16, f32 accumulate), which on sm_90 is `HopperBF16WgmmaDot16_v1` (`DOT`: measured equal on the
-H100, `verity.ml.circuits.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
+H100, `verity.circuits.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
 swapped, which leaves each product a * b, and a block of 16 or more `mma` itself.  The f32 adds are FADD: Marlin MoE is built
 without fast-math.  `E2m1ToBf16` is the exact e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`:
 exact, a zero code's sign kept), `E8m0DequantBf16` the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so
@@ -78,11 +78,11 @@ MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cu
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
-from verity.ml.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
+from verity.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.registry import fp8_moe_experts as X
 from verity.ml.definitions.registry.dsa import I32Sub
 from verity.ml.definitions.registry.prims import BF16, F32, I32, Bf16MulBf16, F32Add
@@ -486,7 +486,7 @@ def MoeAlignBlocks(B, S, ids, rank, start):
     The kernel pads each expert's pairs to whole blocks in expert order; an expert outside [0, E) opens no block
     (`ignore_invalid_experts`).
 
-    Ranks and blocks are two Definitions, and each body's nodes read only its parameters (`verity.ml.circuits.cut.separable`), so the
+    Ranks and blocks are two Definitions, and each body's nodes read only its parameters (`verity.circuits.cut.separable`), so the
     word check cuts one pair's member, not a body over all P pairs (42.5M gates at P = 1536, over its gate limit)."""
     blk = B.batch(bind(MoeAlignBlockOf, P=S.P, BM=S.BM), ids, rank, ids, start, axes=(0, 0, None, None))
     return tuple_of(blk, B.call(bind(MoeAlignPar, P=S.P), start))

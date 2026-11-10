@@ -2,7 +2,7 @@
 
 - what the default rules and the training rules refuse: the strict derivation's refusal, then a survey that stands a run input in
   for every refused node (`step_report(..., survey=True)`), its holes by op and reason; each derivation's CPU time;
-- the survey's census (`verity.ml.circuits.census`) of the step by class, in word gates and in Boolean gates and ANDs:
+- the survey's census (`verity.circuits.census`) of the step by class, in word gates and in Boolean gates and ANDs:
   each primitive at its Boolean version's counts (`definitions.boolean.boolean_version`, `evaluation.bits.compile`), since the
   reference composites (`LinearRef`, `DotRef`, ...) have no Boolean version of their own; primitives with none are listed;
 - te_core's count of the same step: `te_core.flops.Counter`'s MAC rules applied to the step's graph (matmuls m·k·n, one MAC per
@@ -81,8 +81,8 @@ def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, StepSurve
 
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.circuits.codec import descriptor_id
     from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
 
     out = {}

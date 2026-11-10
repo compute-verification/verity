@@ -39,11 +39,11 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 __all__ = ["DIGEST_BITS", "RECORD_BITS", "PousVerdict", "chain", "counter_width", "gates", "round_hit", "round_verdict",

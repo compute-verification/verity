@@ -32,12 +32,12 @@ from typing import Callable
 import torch
 from torch.func import functional_call, grad_and_value
 
-from verity.ml.circuits import parts
-from verity.ml.circuits.boundary import gate_width, in_gates
-from verity.ml.circuits.census import census
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.query_ast import GateSet
+from verity.circuits import parts
+from verity.circuits.boundary import gate_width, in_gates
+from verity.circuits.census import census
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.program import Program, is_input
+from verity.circuits.query_ast import GateSet
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -175,7 +175,7 @@ class StepSurvey:
     holds no Program: the one it counts takes each refused node's outputs from fields of the `run` input that no gate checks."""
     unsupported: Unsupported | None   # the step's refusal (`step_program`'s); None: the step derives, and the survey has no holes
     holes: list[dict]                 # each refused node: node, op, reason, hint and its `run` fields
-    census: dict | None               # `verity.ml.circuits.census.census` of the step with its holes; None when `refused`
+    census: dict | None               # `verity.circuits.census.census` of the step with its holes; None when `refused`
     primitives: dict[str, PrimitiveDefinition]   # the primitives it calls, by id: what a census prices
     theta: dict                       # theta's input names, input nodes and bits
     layout: StepLayout
@@ -213,7 +213,7 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
 
 
 def primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
-    """The primitives `prog` calls, at any depth, by id: what a census (`verity.ml.circuits.census.census`) prices."""
+    """The primitives `prog` calls, at any depth, by id: what a census (`verity.circuits.census.census`) prices."""
     out, seen, stack = {}, set(), [prog.root]
     while stack:
         fn = stack.pop()

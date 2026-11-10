@@ -14,11 +14,11 @@ from math import comb
 
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value as Bits
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.core.protocols.profile import Bernoulli, Subset
 from verity.core.protocols.spot import second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import (draw as D, partition as P, registration as R,

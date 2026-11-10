@@ -15,13 +15,13 @@ import pytest
 
 from verity_flock import class_statement as CS
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.boolean.trace import word_of
 from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.registry import boolean_fp8_moe as BFM
 from verity.ml.definitions.registry import boolean_gather as BGA

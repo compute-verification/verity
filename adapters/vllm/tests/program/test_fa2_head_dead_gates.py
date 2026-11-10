@@ -9,13 +9,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.ops.prims import ZERO32
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.ops.prims import ZERO32
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import b1, fa2_check_inf as F2, hopper, prims as P
 from verity.ml.definitions.registry.prims import BF16, F32
 

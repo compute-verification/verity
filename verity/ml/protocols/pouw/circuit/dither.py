@@ -70,17 +70,17 @@ from dataclasses import dataclass, field
 from operator import mul
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, add, and_reduce, compress_columns
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind, primitive
-from verity.ml.circuits.silicon.integer import (
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, ZERO, add, and_reduce, compress_columns
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind, primitive
+from verity.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     HOPPER_SM90_S8_K32,
     IntegerMma,
     exact_k_limit,
 )
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain

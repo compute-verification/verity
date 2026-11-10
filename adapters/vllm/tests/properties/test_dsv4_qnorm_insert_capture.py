@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_qnorm_insert_capture_gpu as X
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity.ml.definitions.registry import dsv4_qnorm_insert as R
 from verity_vllm.properties.record import REGISTRY, digest_of

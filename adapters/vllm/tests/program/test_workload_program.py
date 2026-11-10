@@ -4,11 +4,11 @@ lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
 import pytest
 
-from verity.ml.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, RecordType, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -204,8 +204,8 @@ def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
 def test_registered_values_are_shared_once_and_registered_at_the_root():
     """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
     Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
-    from verity.ml.circuits.constants import REGISTRATION, RUN, inputs
-    from verity.ml.circuits.ports import facts
+    from verity.circuits.constants import REGISTRATION, RUN, inputs
+    from verity.circuits.ports import facts
     ca, cb = _registered_component(2), _registered_component(5)
     assert ca.bindings == (RUN, REGISTRATION, RUN)
     wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
@@ -234,9 +234,9 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
     """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
-    from verity.ml.circuits.constants import REGISTRATION, RUN
-    from verity.ml.circuits.ports import facts
-    from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
+    from verity.circuits.constants import REGISTRATION, RUN
+    from verity.circuits.ports import facts
+    from verity.circuits.program import INPUT_ID, REGISTERED_ID
     off, on = _wl([(3, 2), (5, 0)]), _wl([(3, 2), (5, 0)], theta_registered=True)
     assert off.digest == _wl([(3, 2), (5, 0)], theta_registered=False).digest
     assert on.registered == on.theta == ("shared.weights",) and on.digest != off.digest
@@ -262,7 +262,7 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
 def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
     """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
     registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only check counts against the limit."""
-    from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
+    from verity.circuits.program import INPUT_ID, REGISTERED_ID
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
     cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))
     reqs = [W.WorkloadRequest("r0", 0, 3, 3, 0, ca, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)]
@@ -457,7 +457,7 @@ def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output
     beside r1. Evaluated, every out-port field is its request's rows (its history's, then its own) or the idle one's in-port
     field; R1 (`check.batch.separable` over `predict.batch.workload_labels`) holds each field its request's own, and a field
     handed to another request is the crossing it names."""
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
     from verity_vllm.check.batch import SHARED, Fields, own, separable
     from verity_vllm.program.predict.batch import workload_labels
     out = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))))
@@ -497,7 +497,7 @@ def test_an_edge_request_returning_checks_keeps_them_its_output():
     """A request Program whose rows read past INDEX_TOPK returns its samples, then its checks, then its edge rows (`with_checks`,
     then `build_program(edge=)`): GP-01's output for it is (samples, checks), as for a request no edge carries, and its out-port
     fields are the rows after them."""
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
     V = Value(16)
     wl = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False, True)}, W.Edge(outs=((1, _groups(2)),)))
     assert wl.fn.signature()[1] == W.TupleT(Array(1, V), W.TupleT(Array(1, V), Array(1, V)), *[W.TupleT(Array(2, V))] * 3)
@@ -546,7 +546,7 @@ def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
-    from verity.ml.circuits.defs import IdentityConflict
+    from verity.circuits.defs import IdentityConflict
     da = encode_program(Program(_stepped_request(3, 2)))
     sid = next(k for k, v in da["definitions"].items() if v["form"] == "composite" and k.startswith("GpTestStep"))
     db = copy.deepcopy(da)
@@ -574,8 +574,8 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     the same id: a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id.
     Such a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import IdentityConflict, SpecializedDefinition
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import IdentityConflict, SpecializedDefinition
     from verity_vllm.program.shared_definitions import repoint
 
     def sig(S):

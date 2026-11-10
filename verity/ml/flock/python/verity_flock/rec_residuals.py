@@ -51,16 +51,16 @@ from types import SimpleNamespace
 
 import numpy as np
 from verity.ml.commitments import hm96
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ZERO, Circuit, L
+from verity.circuits import boolean as BL
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ZERO, Circuit, L
 from verity.ml.commitments.gates.sha512 import commit
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL

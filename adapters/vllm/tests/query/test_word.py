@@ -1,5 +1,5 @@
 """`Q_word_v1{X,W,R=no-recompute}` (`verity.ml.definitions.word`): every computation gate certified by exactly one unit, cross-unit reads
-only through committed values (`verity.ml.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
+only through committed values (`verity.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
 the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
 the code, and the manifest is the same with it."""
@@ -8,8 +8,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
-from verity.ml.circuits.cut import call_scope
+from verity.circuits.query_ast import oracle_gateset, oracle_out
+from verity.circuits.cut import call_scope
 from verity.ml.definitions import word as W
 
 
@@ -52,7 +52,7 @@ def test_every_computation_gate_is_certified_by_one_unit(fam, statics):
     assert R["cut"].ok, R["cut"].detail
     assert G.n + G.free == fn.gates and R["owner"].min() >= 0 and int(R["gates"].sum()) == G.n
     assert R["cut"].detail["input_gates"] == len(G.input_ids) > 0 and R["cut"].detail["certified"] == G.n
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     prims = {G.prim_names[p] for p in set(G.prim.tolist())}
     assert not prims & W.WIRING and all(REGISTRY.defs[p].params for p in prims)     # structure is in no unit
 
@@ -70,7 +70,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
 
 
 def test_the_checker_names_gates_that_break_the_invariant():
-    from verity.ml.circuits.partition import validate_unit_cut
+    from verity.circuits.partition import validate_unit_cut
     v = validate_unit_cut(10, 2, [0, 0, 1, -1, 1, 1, 2, 2], [(0, 2), (1, 2), (2, 6), (4, 6)], [7], {1, 7})
     assert v.codes == ("gate-not-certified-once", "gate-count", "read-uncommitted")
     assert v.detail["gate-not-certified-once"]["gates"] == [3] and v.detail["read-uncommitted"]["gates"] == [[0, 2], [2, 6], [4, 6]]
@@ -78,7 +78,7 @@ def test_the_checker_names_gates_that_break_the_invariant():
     assert validate_unit_cut(9, 2, [0, 0, 1, 1, 1, 1, 2], [(1, 2), (5, 6)], [6], {1, 5, 6, 3}).codes == ("committed-unread",)
     assert validate_unit_cut(9, 2, [0, 0, 1, 1, 1, 1, 2], [(1, 2), (5, 6)], [6], {1, 5}).codes == ("output-uncommitted",)
     # the input unit: every input gate in it, read by any unit through its committed value
-    from verity.ml.circuits.partition import INPUT_UNIT
+    from verity.circuits.partition import INPUT_UNIT
     own = [0, 1, INPUT_UNIT, INPUT_UNIT]
     assert validate_unit_cut(5, 1, own, [(2, 0), (3, 1), (0, 1)], [1], {0, 1, 2, 3}, input_gates=[2, 3]).ok
     v = validate_unit_cut(5, 1, [0, 1, 0, INPUT_UNIT], [(2, 0), (3, 1), (0, 1)], [1], {0, 1, 3}, input_gates=[2, 3])
@@ -103,7 +103,7 @@ def _copies_bits(prim, rng) -> bool:
 
 
 def test_wiring_only_rearranges_bits():
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     W.specialization("Gemm_v1", {"K": 16, "N": 1})
     rng = np.random.default_rng(0)
     assert all(_copies_bits(REGISTRY.defs[p], rng) for p in W.WIRING)
@@ -236,7 +236,7 @@ def test_a_dead_gate_joins_the_unit_it_reads():
 
 @pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
 def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import moe
     f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
     G = W.Graph(f)
@@ -255,7 +255,7 @@ def test_a_recompute_fails_the_cut():
 
 
 def test_a_value_computed_again_in_its_own_unit_is_redundant_not_a_recompute():
-    from verity.ml.circuits.partition import validate_unit_cut
+    from verity.circuits.partition import validate_unit_cut
     assert validate_unit_cut(3, 0, [0, 0, 1], [(0, 2), (1, 2)], [2], {0, 2}, recomputed=[(1, 0)]).codes == ("read-uncommitted",)
     v = validate_unit_cut(3, 0, [0, 0, 0], [(0, 2), (1, 2)], [2], {2}, recomputed=[(1, 0)])
     assert v.ok and v.detail["redundant_gates"] == 1
@@ -273,8 +273,8 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
 
 def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array
     from verity.ml.definitions.registry import prims as P
     f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
                                  lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
@@ -285,12 +285,12 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
 
 
 def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
-    # word.Graph is verity.ml.circuits.cut.CallGraph's graph in flat arrays; a Program's cut, as verity/partition/v1, checks in core
-    from verity.ml.circuits import cut, partition_object as PO
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Tuple
+    # word.Graph is verity.circuits.cut.CallGraph's graph in flat arrays; a Program's cut, as verity/partition/v1, checks in core
+    from verity.circuits import cut, partition_object as PO
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Tuple
     fns = [_fn("RMSNormTriton_v1", N=64, EPS=1e-05), _fn("TokenSelect_v1", V=8), _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128)]
     for f in fns:
         c, g = cut.CallGraph(f), W.Graph(f)
@@ -322,8 +322,8 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
 def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unchanged(monkeypatch):
     """`EmbeddingShard_v1`'s gathers are wide gates over a strided (transposed) view of the Call's own table: operands a wide gate never
     lists.  Skipping them unresolved gives the graph that resolving every operand gives (the OLMoE shard's cut: 29 s -> 0.06 s)."""
-    from verity.ml.circuits import cut
-    from verity.ml.circuits.layout import resolve
+    from verity.circuits import cut
+    from verity.circuits.layout import resolve
     fn = _fn("EmbeddingShard_v1", VS=cut.WIDE_FAN_IN + 3, H=4, START=0)
     enumerated = []
 
@@ -351,8 +351,8 @@ def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unch
 
 def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
@@ -360,9 +360,9 @@ def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
 
 def _twice():
     """The same F32Add computed twice, each copy read by its own output: a value computed in two units."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x):
@@ -373,16 +373,16 @@ def _twice():
 
 
 def _sampler():
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import sampling as SM
     return bind(SM.GumbelTopPTokenSelect, V=16)
 
 
 def _dead_input():
     """A parameter read only by wiring nothing reads (committed, unread), beside one returned through wiring."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x, y):
@@ -404,7 +404,7 @@ class _Reference:
     """main's `word.Graph` before the flat arrays: core's `CallGraph` itself, with numpy views of the arrays the cut computes on."""
 
     def __new__(cls, fn):
-        from verity.ml.circuits import cut
+        from verity.circuits import cut
         g = cut.CallGraph(fn)
         for a in ("keep", "width", "prim", "scope", "src", "dst"):
             setattr(g, a, np.asarray(getattr(g, a), np.int64))
@@ -414,7 +414,7 @@ class _Reference:
 
 def _reference_verdict(G, owner, head):
     """main's check of a cut: `validate_unit_cut` over a Python pair per read, the Call's parameters standing for the input unit."""
-    from verity.ml.circuits.partition import INPUT_UNIT, validate_unit_cut
+    from verity.circuits.partition import INPUT_UNIT, validate_unit_cut
     k = len(G.input_ids)
     reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
     return validate_unit_cut(G.total + k, G.free, np.asarray(owner).tolist() + [INPUT_UNIT] * k, reads,
@@ -428,7 +428,7 @@ def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     `_reference_verdict`): GLM-5.3's MoE expert FP8 GEMMs scaled down, and a failing cut's violation detail, gate ids and all."""
     import hashlib
     import json
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     f = CORPUS[name]()
     new = W.unit_rule(f, memo={})
     monkeypatch.setattr(W, "Graph", _Reference)

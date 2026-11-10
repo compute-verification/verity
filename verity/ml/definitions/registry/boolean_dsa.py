@@ -9,12 +9,12 @@ logits' version 4, whose word view is `_v3`.
     DsaMqaLogitsQ_v1{H,D}, DsaMqaLogitsKey_v1{H,D}      DsaMqaLogit_v4's circuit cut at what a row's keys share; no word view
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
-The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
+The callees are core's Boolean FP32 pieces (`verity.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
 Each composite but `DsaMqaLogits_v4` is one traced circuit (`flat`): its body over those callees, compiled
-(`verity.ml.circuits.evaluation.bits.compile`) and its gates traced again (`trace.trace`), so a constant operand is folded and a
+(`verity.circuits.evaluation.bits.compile`) and its gates traced again (`trace.trace`), so a constant operand is folded and a
 value its calls share (the log2f polynomial's ``t``, the scale every quantized element divides by, a row's mean) is computed once
 (`Q_word`'s no-recompute rule).  `DsaMqaLogits_v4{N,H,D}` is the one whose description must not grow with N: `DsaMqaLogit_v4{H,D}`'s
 circuit, traced over (qw, k, ks) with qw q's bits then w's, is cut by what its gates read (`EW.shared_specialized`), so
@@ -27,20 +27,20 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.boolean import attention as BA
-from verity.ml.circuits.ops.boolean import cast as BC
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.silicon import fp as FP
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp as FP
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import definition
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry.boolean_attention import _Bits
 from verity.ml.definitions.registry.topp_word_gates import I32ToF32 as I32ToF32V1

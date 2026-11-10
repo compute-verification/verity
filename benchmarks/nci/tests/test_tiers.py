@@ -19,7 +19,7 @@ ROOT = HERE.parents[2]
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
 #: Kimi K2's MoE capacity factor, routed slots per token over its top-k: no workload declares one, and the circuits' MoE
-#: Definitions (verity/ml/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
+#: Definitions (verity/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
 #: one ReferenceLayered states
 CAPACITY_FACTOR = 1
 #: the bits of an entry of Kimi K2's embedding table, bf16: no model config or workload declares its dtype (kappa.MODELS
@@ -276,7 +276,7 @@ def test_reference_layered_at_kimi_k2():
     the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with e_lk = 0, layer 0's
     attention-input projections uncounted. tiers.py counts products, a step's width to a step. It can't find a
     reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
-    gemm = (ROOT / "verity/ml/circuits/ops/boolean/gemm.py").read_text()
+    gemm = (ROOT / "verity/circuits/ops/boolean/gemm.py").read_text()
     dot = re.search(r'^GEMM_HOPPER: dict = \{"DOT": (\w+)\}$', gemm, re.M).group(1)
     operand = re.search(rf'^{dot} = definition\(.*?\(\("acc", F32\), \("a", (\w+)\), \("b", \1\)\)', gemm, re.M | re.S)
     step = int(re.search(rf"^{operand.group(1)} = Array\((\d+), BF16\)$", gemm, re.M).group(1))

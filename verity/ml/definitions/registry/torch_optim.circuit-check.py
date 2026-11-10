@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """AdamW's step at N = 1 under both lerp contractions (with and without the bf16 copy; at N = 4 each is past
     `targets.MAX_GATES`, so `select` would keep one), SGD's at N = 4 under both, and the step's host scalars (`AdamWScalars_v1`
     reaches its three parts)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import torch_optim as TO
 
     return [

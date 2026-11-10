@@ -41,9 +41,9 @@ a Program that composes the block uses `LMoeFfn_v1` (y only).  Both take the ena
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import lifted as L
 from verity.ml.definitions.registry import moe

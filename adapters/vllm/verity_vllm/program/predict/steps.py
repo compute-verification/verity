@@ -109,8 +109,8 @@ from pathlib import Path
 from typing import Any
 
 import verity.core.protocols.certifier.advice as I1
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP

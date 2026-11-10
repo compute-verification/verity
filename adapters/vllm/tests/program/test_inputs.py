@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import Builder, PrimitiveDefinition, bind
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import Builder, PrimitiveDefinition, bind
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array, Value
 from verity.ml.definitions.registry import dsa_topk
 from verity_vllm.program import inputs as IN
 from verity_vllm.program.frontend.registration import RunInputs

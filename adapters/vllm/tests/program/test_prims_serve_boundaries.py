@@ -21,7 +21,7 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_chec
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.ml.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
@@ -54,8 +54,8 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
                 "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))

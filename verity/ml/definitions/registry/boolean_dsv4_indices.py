@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, mux
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, mux
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import boolean_dsv4_indexer as BI
 from verity.ml.definitions.registry import dsv4_indices as X
 

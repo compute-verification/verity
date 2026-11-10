@@ -12,7 +12,7 @@ def _network_io_ids_roots() -> list[Any]:
     readings of a slot, the keys at a field and elsewhere and the chain's checks; the slots at B = 4,096, the served
     cell size; and the keys and the chain (with its first member's check and its link) at the parts' tests' sizes. The
     slow test holds the proof block at {512, 2, 2, 16, 8} to its reference."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.certifier.io_ids import (IoTieIdsChain, IoTieIdsFirst, IoTieIdsKeys, IoTieIdsLink,
                                                         IoTieIdsSlots, IoTieRequestIds)
 

@@ -6,7 +6,7 @@ import struct
 
 import numpy as np
 
-from verity.ml.circuits.types import Array, RecordType
+from verity.circuits.types import Array, RecordType
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
 from verity.ml.definitions.registry.prims import BF16, F32

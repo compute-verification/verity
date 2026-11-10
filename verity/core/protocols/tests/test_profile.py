@@ -16,10 +16,10 @@ from math import comb, exp, inf, log, sqrt
 
 import pytest
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits import query_ast as G
-from verity.ml.circuits.partition import Level, validate_partition
-from verity.ml.circuits.ops import gemm
+from verity.circuits import Program, bind
+from verity.circuits import query_ast as G
+from verity.circuits.partition import Level, validate_partition
+from verity.circuits.ops import gemm
 from verity.core.protocols.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
 

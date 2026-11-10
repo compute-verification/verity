@@ -8,8 +8,8 @@ import random
 
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.ml.protocols.pouw.circuit import h1window as W
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR

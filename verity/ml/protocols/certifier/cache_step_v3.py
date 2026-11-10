@@ -1,5 +1,5 @@
 """vLLM's prefix-cache block pool as memory-checked RAM: a window's pool calls as one stream of access slots, each slot one
-read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `verity.ml.circuits.boolean.memcheck`).
+read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `verity.circuits.boolean.memcheck`).
 
     PoolSlot_v1{NB, RW, KW, REFW, TW}
         (carry, start: Value<1>, kind: Array<3, Value<1>>, r: Array<RW, Value<1>>, a: Array<CW, Value<1>>,
@@ -95,14 +95,14 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Callable, NamedTuple, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import memcheck as MC
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.boolean.gf128 import mul, mul_forms
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import memcheck as MC
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.gf128 import mul, mul_forms
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.head_check import _coll, _Consts, _refs, ands
 
 __all__ = ["CacheStep", "Call", "KINDS", "Out", "PARTS", "PoolEnd", "PoolEntry", "PoolSlot", "Refused", "SLOT_STATICS",

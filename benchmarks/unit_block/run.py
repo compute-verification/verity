@@ -45,8 +45,8 @@ def _rows(definition, firsts: list[int], n: int, seed: int) -> dict:
 
 
 def build(word_id: str, firsts: list[int], stage: int, scratch: Path) -> dict:
-    from verity.ml.circuits.codec import descriptor_id, lookup_primitive
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
+    from verity.circuits.codec import descriptor_id, lookup_primitive
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity.ml.definitions import boolean as BB
     from verity_flock import circuit as FC

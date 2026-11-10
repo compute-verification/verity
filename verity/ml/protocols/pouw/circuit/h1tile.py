@@ -72,12 +72,12 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, add, and_reduce, compress_columns, const_bits, or_reduce
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, add, and_reduce, compress_columns, const_bits, or_reduce
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, RecordType, Value
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import compile as C
@@ -90,7 +90,7 @@ except ImportError:  # H1's receipts and their checks (`circuit.segment`) are no
     SG = None
 
 try:
-    from verity.ml.circuits import ports as _ports
+    from verity.circuits import ports as _ports
 except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
     _ports = None
 

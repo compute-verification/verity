@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, store
-from verity.ml.circuits import codec as circuits_codec
+from verity.circuits import codec as circuits_codec
 
 ROLE = "synthetic-bf16"
 NODE = b"test-node"
@@ -104,7 +104,7 @@ def test_a_salt_is_sha512_in_counter_mode_over_its_versioned_message():
 
 
 def test_the_local_canonical_json_is_ml_circuits_codecs_on_the_shapes_pins_use():
-    """This protocol may not import `verity.ml.circuits`, so `store.canonical_json` is its own: the same bytes as
+    """This protocol may not import `verity.circuits`, so `store.canonical_json` is its own: the same bytes as
     `codec.canonical_json` on a pin's checkpoint ({file: SHA-512 hex}), a pin, a models.json entry and core's
     `models.json` itself, whose every role's `checkpoint_sha512` it reproduces."""
     files = {"model-00002-of-00002.safetensors": "ab" * 64, "config.json": "cd" * 64, "tokenizer.json": "0f" * 64}

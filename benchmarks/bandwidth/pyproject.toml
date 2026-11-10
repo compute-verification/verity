@@ -13,5 +13,5 @@ untraced = ["tests/test_stream.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
-          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/ml/kernels/sha512.cuh"]

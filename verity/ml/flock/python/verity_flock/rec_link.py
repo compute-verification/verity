@@ -52,12 +52,12 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.hm96 import DIGEST as HM_DIGEST
 from verity.ml.commitments.gates.hm96 import SALT as HM_SALT
@@ -393,7 +393,7 @@ RecLink = CompositeDefinition(
 def unit_circuit(UB: int, PB: int):
     """The unit over `forms`: inputs ``in0 ..`` (``trow``'s words, then ``xr``'s, ``yr``'s, ``raux``'s, ``xw``'s, ``yw``'s and
     ``waux``', 16 bits each), outputs ``rin0 .. rin63`` then ``rout0 .. rout63``."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     _check(UB, PB)
     C = Circuit()
@@ -433,8 +433,8 @@ def lowering(UB: int, PB: int) -> IL.Lowering:
 def subcircuit(UB: int, PB: int) -> SimpleNamespace:
     """What `circuit.compose` and `circuit.write` read of a subcircuit (`VStar.linkSub`): its ports and its Definition,
     ``RecLink_v1{UB, PB}``."""
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import program_digest
+    from verity.circuits.program import Program
 
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
     defn = definition(UB, PB)

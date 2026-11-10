@@ -1,4 +1,4 @@
-"""`torch_words`' word primitives on bits: the Boolean version of each, the same function (`verity.ml.circuits.boolean.trace`).
+"""`torch_words`' word primitives on bits: the Boolean version of each, the same function (`verity.circuits.boolean.trace`).
 
     I64Add_v2         (a, b: Array<64, Value<1>>) -> Array<64, Value<1>>        word view: I64Add_v1, a ripple-carry adder
     I64Le_v2          (a, b: Array<64, Value<1>>) -> Value<1>                   word view: I64Le_v1, not b < a unsigned with the
@@ -23,12 +23,12 @@
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, shr, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.ops.boolean.scalar import gt_u, select
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, shr, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean.scalar import gt_u, select
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
 
 from . import torch_words as W
 
