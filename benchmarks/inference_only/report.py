@@ -74,7 +74,7 @@ def priced(p: P.Policy, sh: P.Shape, blocks: float = 1.0) -> dict[str, Any]:
     N = p.work[P.TOTAL] / blocks
     return {
         "label": p.label, "model": p.model, "class": list(p.cls), "division": p.division, "source": p.source,
-        "c": p.c, "k": p.k, "n": p.n,
+        "c": p.c, "k": p.k, "n": p.n, "units": P.UNITS,
         "k_by_kind": [{"kind": kind, "bits": bits, "how": how} for kind, bits, how in p.parts],
         "k_unexplained": p.unexplained,
         "work": {**{x: p.work[x] / blocks for x in P.WORK}, "N": N},
@@ -110,11 +110,11 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"  source    {p.source}",
         f"  blocks    {p.division}: class {','.join(map(str, p.cls))} (slots, prompt ids, outputs), a session one slot's "
         f"{positions} positions",
-        f"  c         {p.c:,} gates a block",
-        f"  k         {p.k:,} fresh input bits a block, made of",
+        f"  c         {p.c:,} {P.UNITS['c']}",
+        f"  k         {p.k:,} {P.UNITS['k']}, made of",
         *(f"              {bits:>{width},}  {kind}{': ' + how if how else ''}" for kind, bits, how in p.parts),
         f"              {p.unexplained:>{width},}  unexplained",
-        f"  n         {p.n:,} blocks" + ("" if p.label != "built" else ", the stated policy's" + (
+        f"  n         {p.n:,} {P.UNITS['n']}" + ("" if p.label != "built" else ", the stated policy's" + (
             "" if p.division == "session" else " times the division's blocks a session") + ": nothing here derives n"),
         f"  work      N = {_n(w['N'])} MACs a block, in the policy's unit: {_n(w['linears'])} linears + 2 × "
         f"({_n(w['attention'])} attention + {_n(w['lm_head'])} LM head)",
@@ -127,9 +127,9 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
                    + (f", {check['failed']} failed" if not check["complies"] else ""))
         if not check["complies"]:
             f = check["failed"]
-            what = {"c": "gates a block", "k": "fresh bits a block", "n": "blocks"}[f]
-            out.append(f"            the Lean counts {check['counted'][f]:,} {what} against {f} = "
-                       f"{check['declared'][f]:,}: {check['why']}")
+            same = f != "c" and check["counted"]["c"] == check["declared"]["c"]
+            out.append("            the Lean counts " + (f"c's {P.UNITS['c']} exactly, and " if same else "")
+                       + f"{check['counted'][f]:,} {P.UNITS[f]} against {f} = {check['declared'][f]:,}: {check['why']}")
         if cost:
             out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, "
                        f"{cost['peak_mib']:,.0f} MiB peak, on an instance of {cost['instance_bytes']:,} bytes")

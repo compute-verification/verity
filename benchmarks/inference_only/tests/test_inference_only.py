@@ -146,7 +146,9 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert "nci-check --count --detail (NciCheck.Count: Nci.CompliesAtMost c k n): complies: false, k failed" in out
     assert "the registered Program has no θ and no dataflow" in out
+    assert "the Lean counts c's Boolean gates a block exactly, and " in out
     served, built = doc["policies"]
+    assert served["units"] == built["units"] == P.UNITS and f"{served['c']:,} Boolean gates a block" in out
     assert (doc["value"], doc["check"], doc["rests_on"]) == (served["value"], served["check"], served["rests_on"])
     assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and "run" not in doc and doc["commit"] == "0" * 40
     assert "nothing on this tree builds or checks" in doc["rests_on"]

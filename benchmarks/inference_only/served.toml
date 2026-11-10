@@ -5,7 +5,10 @@ source = "the policy the serve states for its class before it starts: the class'
 model = "unsloth/Llama-3.2-1B"
 # the class: slots, prompt ids, outputs. A block is one slot's session, prompt + outputs - 1 positions.
 class = [4, 32, 4]
-# gates a block, fresh input bits a block, blocks
+# c: Boolean gates a block: two-input gates, as `NciCheck.Count` counts a block Definition's by the gate table, with
+# every primitive priced (`BitAtx32_v1` at 147, as `definitions.boolean.gate_table` prices it; a count that leaves it
+# unpriced is a lower bound and not this c). Not the block's gates at their widths, `inference_blocks.budgets`'s c.
+# k: fresh input bits a block. n: blocks.
 c = 13818131814643
 k = 422197408
 n = 25165824

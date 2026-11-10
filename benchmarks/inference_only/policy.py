@@ -1,7 +1,7 @@
 """An inference-only policy's number: the least slowdown of training run inside the policy's inference blocks.
 
-A policy is `(c, k, n)`: blocks of at most `c` gates, each reading at most `k` bits from outside itself and outside θ, at
-most `n` of them (`Nci.CompliesAtMost c k n`). Its number is the slowdown `min_cut.bound` gives it
+A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` bits from outside itself and
+outside θ, at most `n` of them (`Nci.CompliesAtMost c k n`; `UNITS`). Its number is the slowdown `min_cut.bound` gives it
 (`benchmarks/rho/rho/min_cut.py`, the arithmetic of `Nci.Cut.Guarantees.HE`) on one block's work: `N` the block's work
 in the policy's own MACs, `O = N o b` its output wires (`o` the output values a MAC of the model's forward matmuls,
 `Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size `c`. That is `max(1, N / cap)`, `cap`
@@ -35,6 +35,10 @@ SERVED = HERE / "served.toml"
 #: the rest at its BF16 rate, half of it, so a linear's MAC counts one and a BF16 MAC two
 WORK = ("linears", "attention", "lm_head")
 TOTAL = "total"
+#: a policy's units. `c` is in two-input Boolean gates, as `NciCheck.Count` counts a block Definition's by the gate
+#: table (`definitions.boolean.gate_table`): not the block's gates at their widths (`Definition.gates`), which
+#: `inference_blocks.budgets` sums into a number also called c
+UNITS = {"c": "Boolean gates a block", "k": "fresh input bits a block", "n": "blocks"}
 
 
 @dataclass(frozen=True)
@@ -56,12 +60,12 @@ class Shape:
 
 @dataclass(frozen=True)
 class Policy:
-    """A policy's public numbers on one window class, with what its `k` is made of and what checked it."""
+    """A policy's public numbers on one class, with what its `k` is made of and what checked it."""
 
     #: `served`, `stated` or `built`
     label: str
     model: str
-    #: the window class: slots, prompt ids, outputs
+    #: the class: slots, prompt ids, outputs
     cls: tuple[int, int, int]
     c: int
     k: int

@@ -29,7 +29,12 @@ the executable on the class's instance). That is heavy work, so it goes through 
    they hold at most, and that as a share of the compute they cover; with one line each on what is proved, what is a
    premise and what is scaled.
 4. **One JSON object**, the last line, also written to `--out DIR` (default `$OUT`) as `inference_only.json`: `value`,
-   `unit`, `check`, `rests_on`, `policies`, `divisions`, `periods`, `commit`, and `run` where the environment names one.
+   `unit`, `check`, `rests_on`, `policies` (each with its `c`, `k`, `n` and their `units`), `divisions`, `periods`,
+   `commit`, and `run` where the environment names one. `check` is the Lean count's verdict on the policy the value is
+   of, `refused` or `accepted` by its executable. For a stated policy it is `not run`, which is no verdict: this tree
+   has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
+   counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
+   refuses on `k`, and an instance of any other class has the same form.
 
 For each policy it prints what `k` is made of. For a stated policy: the outputs of the linears the class leaves outside
 the circuit, from the model's shape (layers × positions × widths × bits a value), and the class's scan state row, with
@@ -37,13 +42,16 @@ what they leave of `k` printed as unexplained. For the built class: the rows a b
 
 ## What the number means
 
-A policy is `(c, k, n)`: blocks of at most `c` gates, each reading at most `k` fresh input bits, at most `n` of them. The
-number is `min_cut.bound`'s slowdown on one block: `max(1, N / cap)`, where `N` is the block's own work in MACs and
-`cap` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The benchmark passes the bound `N`, the
-output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward matmuls, `b` a BF16 value's 16
-wires) and the circuit's size `c`; the work is taken as training of the model's own matmul shapes with its weights
-outside θ. With the circuit's size `c`, `c` cancels: the number is the blocks the count needs for one block's work. A
-number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as training.
+A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` fresh input bits, at most `n` of
+them. `c` counts two-input Boolean gates, as `NciCheck.Count` counts a block Definition's by the gate table; the
+integration's `inference_blocks.budgets` also calls a number c, the block's gates at their widths, which is not this
+one. The number is `min_cut.bound`'s slowdown on one block: `max(1, N / cap)`, where `N` is the block's own work in MACs
+and `cap` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The benchmark
+passes the bound `N`, the output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward matmuls,
+`b` a BF16 value's 16 wires) and the circuit's size `c`; the work is taken as training of the model's own matmul shapes
+with its weights outside θ. With the circuit's size `c`, `c` cancels: the number is the blocks the count needs for one
+block's work. A number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as
+training.
 
 The served class leaves the layers' linears outside the circuit, so a block reads their outputs as fresh input and its
 `k` is large; the class with the linears inside reads only its scan state row. `k` is the lever.
@@ -68,7 +76,8 @@ The number is a block's ratio under two named premises, on a check that Lean doe
 ## The policy file
 
 `served.toml`, and any `--policy FILE`: `source`, one sentence saying where the numbers come from; `model`, a checkpoint
-the integration's manifests pin; `class`, `[slots, prompt ids, outputs]`; `c`, `k`, `n`; `[work]`, one block's MACs by
-kind (`linears`, `attention`, `lm_head`) and `total = linears + 2 × (attention + lm_head)`; and optionally `[outside]
-linears`, the bits a value of the layers' linears' outputs that a block reads as fresh input. The tests hold
-`served.toml`'s work and its `k` by kind to what the tree computes for its class.
+the integration's manifests pin; `class`, `[slots, prompt ids, outputs]`; `c` in Boolean gates a block, `k` in fresh
+input bits a block, `n` in blocks; `[work]`, one block's MACs by kind (`linears`, `attention`, `lm_head`) and `total =
+linears + 2 × (attention + lm_head)`; and optionally `[outside] linears`, the bits a value of the layers' linears'
+outputs that a block reads as fresh input. The tests hold `served.toml`'s work and its `k` by kind to what the tree
+computes for its class; its `c` is held to nothing here, and the number does not read it.
