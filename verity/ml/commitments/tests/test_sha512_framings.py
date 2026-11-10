@@ -8,13 +8,13 @@ import hashlib
 
 import pytest
 
-from verity.ml.commitments import vllm_v1 as ref
+from verity_vllm.commitments import vllm_v1 as ref
 from verity.ml.commitments.frame_v3 import NAME_SHA512 as FRAME_SHA512
 from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.ml.commitments.frame_v3 import vectors_sha512 as FV
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.ml.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain, RangeU64Domain
-from verity.ml.commitments.leaves import LIFT_TAG, NODE_TAG, H
+from verity_vllm.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, CommitmentDomain, MerkleTree, Opening, _uint,
                                           frame_hash, levels, range_u64_domain_message, root_from_subtrees, tree_levels,
@@ -22,7 +22,7 @@ from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, C
 from verity.ml.commitments.multiproof import multiproof, verify_multiproof
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.ml.commitments.scheme import CommitmentScheme
-from verity.ml.commitments.vllm_v1 import vectors_sha512 as VV
+from verity_vllm.commitments.vllm_v1 import vectors_sha512 as VV
 from verity.errors import InvalidArtifact, ProtocolError
 
 F = FV.load()
@@ -269,7 +269,7 @@ def test_a_frame_configuration_never_mixes_hashes() -> None:
 
 
 def test_vllm_vectors_file_is_what_the_reference_generates() -> None:
-    assert VV.main(["--check"]) == 0, "rerun `python -m verity.ml.commitments.vllm_v1.vectors_sha512`"
+    assert VV.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`"
 
 
 def test_vllm_leaves_and_tree_hash_vectors() -> None:

@@ -1,7 +1,7 @@
 """The one hash function of the POC and its tags.
 
 ``H``, the leaf/node/lift/ids/empty tags and their rules, ``ids_digest`` among them, are core's
-(:mod:`verity.ml.commitments.leaves`).
+(:mod:`verity_vllm.commitments.leaves`).
 
 Byte layout of ``H(tag, *parts)`` (SHA-256 over a single stream)::
 
@@ -48,7 +48,7 @@ import hashlib
 import json
 from typing import Any
 
-from verity.ml.commitments.leaves import (
+from verity_vllm.commitments.leaves import (
     DIGEST_BYTES,
     EMPTY_TAG,
     IDS_TAG,

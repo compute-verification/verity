@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from verity.ml.commitments.leaves import (
+from verity_vllm.commitments.leaves import (
     LeafOpening,
     LeafTree,
     LeafValue,

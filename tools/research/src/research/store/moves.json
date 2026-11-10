@@ -2398,6 +2398,16 @@
         "verity/core/protocols/pyproject.toml": "verity/protocols/pyproject.toml",
         "verity/core/protocols/reporting.py": "verity/protocols/reporting.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/tests/test_window_chain.py": "integrations/vllm/network_traces/tests/test_window_chain.py",
+        "benchmarks/network_traces/window_chain.py": "integrations/vllm/network_traces/window_chain.py",
+        "verity/ml/commitments/leaves.py": "integrations/vllm/verity_vllm/commitments/leaves.py",
+        "verity/ml/commitments/tests/test_leaves.py": "integrations/vllm/tests/commitments/test_leaves.py",
+        "verity/ml/commitments/tests/test_vllm_v1.py": "integrations/vllm/tests/commitments/test_vllm_v1.py",
+        "verity/ml/commitments/vllm_v1/": "integrations/vllm/verity_vllm/commitments/vllm_v1/"
+      }
     }
   ]
 }
