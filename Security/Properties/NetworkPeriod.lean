@@ -32,9 +32,11 @@ though an incorrect proof block's outputs would reach the egress; `RowsTiedSampl
 unsampled. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries,
 the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
-`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
-check that accepts every period.
+alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no link-window whose
+scan's answer names a tied Input other than the scan's `prog`, the one `RowsProgWired` is about: a run Input several
+proof blocks read, which one-stage's registration check lets through only named. Beside them, their
+nontrivial lemmas' objects: `RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedInputWiredOf`, the
+properties of any period check, and `acceptAllRows`, a check that accepts every period.
 -/
 
 @[expose] public section
@@ -125,9 +127,28 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
+/-- **The rows form accepts no link-window whose scan's answer names a tied Input the check does not wire.**
+One-stage's registration check refuses a run Input that several proof blocks read, unless its verifier names the Input
+tied: a later check then ties its rows to the registrations that computed them, and the answer's public outputs name
+each Input it let through (`rests_on_period_check`). If the check accepts a period in the rows form, each
+link-window's scan's answer names none, or the scan's `prog` alone (`tiedInputWired`): the one whose entry `scan/prog`
+the check holds to a compute audit's slot entries (`RowsProgWired`). It is a statement about the published name: that
+the name `prog` is the Input the entry `scan/prog` registers is one-stage's registration check's, and is not said
+here. -/
+def RowsTiedInputWired : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      ∀ (i : ℕ) (x : Window), e.windows[i]? = some x → tiedInputWired x.answer = true
+
+/-- `RowsTiedInputWired` of any period check. -/
+def RowsTiedInputWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      ∀ (i : ℕ) (x : Window), e.windows[i]? = some x → tiedInputWired x.answer = true
+
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedSampled`, `RowsProgWired` and
-`RowsStateTied` to say something. -/
+`RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedInputWiredOf` must fail at for `RowsTiedSampled`,
+`RowsProgWired`, `RowsStateTied` and `RowsTiedInputWired` to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 

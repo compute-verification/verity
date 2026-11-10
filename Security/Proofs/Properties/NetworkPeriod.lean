@@ -15,9 +15,9 @@ Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
-`RowsTiedSampled`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
-finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
-`stateCheck`.
+`RowsTiedSampled`, `RowsProgWired`, `RowsStateTied` and `RowsTiedInputWired` read the check's refusals off its
+findings: on acceptance every finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's
+`wiredCheck`, `stateCheck` and `tiedInputCheck`.
 -/
 
 @[expose] public section
@@ -381,5 +381,66 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+/-! ## The rows form's scan's answer names no tied Input but its `prog` -/
+
+theorem tiedInputChecks_getElem? {p : Params} {e : Evidence} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {x : Window} (hx : e.windows[i]? = some x) :
+    (tiedInputChecks p e)[i]? = some (tiedInputCheck (p.first + i) x) := by
+  simp [tiedInputChecks, hform, Array.getElem?_zipIdx, hx]
+
+theorem rowsTiedInputWired : RowsTiedInputWired := by
+  intro p c e pub prof h s sd scan hform i x hx
+  have hmem := Array.mem_of_getElem? (tiedInputChecks_getElem? hform hx)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _
+      (List.mem_append_right _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+    unfold tiedInputCheck at h0
+    split at h0
+    · assumption
+    · cases h0
+
+/-- A scan's answer whose public outputs hold `tied` as their tied Inputs. -/
+def tiedAnswer (tied : Array Lean.Json) : Core.Answer :=
+  { protocol := oneStage, verdict := .accept, reason := none, digest := none,
+    published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr tied)]), profile := none }
+
+/-- Its honest side: an answer that names the scan's `prog` alone rests on the tie the check holds, and so does one
+that names none: one with no public outputs, or with other keys only (a scan no two units of which read one row). -/
+theorem rowsTiedInputWired_honest :
+    tiedInputWired (tiedAnswer #[.str progParam]) = true ∧ tiedInputWired otherAnswer = true ∧
+      tiedInputWired { otherAnswer with published := some (Lean.Json.mkObj [("bound", Lean.Json.num 0)]) } = true := by
+  decide +kernel
+
+/-- An answer that names a second tied Input beside the scan's `prog`, another one alone, or an empty list, does not. -/
+theorem tiedAnswer_unwired :
+    tiedInputWired (tiedAnswer #[.str progParam, .str "state"]) = false ∧
+      tiedInputWired (tiedAnswer #[.str "state"]) = false ∧ tiedInputWired (tiedAnswer #[]) = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsTiedInputWired`'s property** (its nontrivial lemma): such a
+check accepts a rows-form period of one link-window whose scan's answer names a second tied Input, which no check
+wires. -/
+theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
+  intro h
+  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+  let x : Window := ⟨tiedAnswer #[.str progParam, .str "state"], #[], .rows #[]⟩
+  have hw : tiedInputWired x.answer = true :=
+    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 x rfl
+  rw [tiedAnswer_unwired.1] at hw
+  cases hw
 
 end Properties.NetworkPeriod
