@@ -79,7 +79,7 @@ def Domain.mk? (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) : Ex
 
 namespace Domain
 
-/-- The domain as C-Flock's: positions start at 0. -/
+/-- The domain as Flock's: positions start at 0. -/
 def fv3 (d : Domain) : FV3.Domain d.hash.scheme := { id := d.id, count := d.count }
 
 /-- The frame leaf over `value` at `rank` (its position too: positions are ranks), schema `schema`. -/

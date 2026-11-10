@@ -203,58 +203,26 @@ namespace Session
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
 /-- Window `t`'s draw count, `min(s_t, U_t)`. -/
-<<<<<<< ours
-def draws (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
-||||||| base
-def draws (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
-=======
-def samples (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
->>>>>>> theirs
+def samples (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
 
 /-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
 `rest ω t` where the sampler rejects a first word. -/
-<<<<<<< ours
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : DrawCoins n κ X) : Finset ℕ :=
-  openings (D.size t ω) (D.draws t ω) (prf t (ω.2 t)) (rest ω t)
-||||||| base
-def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
-    (ω : Coins n κ X) : Finset ℕ :=
-  openings (D.size t ω) (D.draws t ω) (prf t (ω.2 t)) (rest ω t)
-=======
-def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
-    (ω : Coins n κ X) : Finset ℕ :=
   openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)
->>>>>>> theirs
 
 /-- Window `t`'s correct receipts among its `U_t`. -/
 def good (t : Fin n) (ω : DrawCoins n κ X) : ℕ :=
   ((range (D.size t ω)).filter (· ∈ D.correct t ω)).card
 
 /-- Window `t`'s bound on uniform first blocks: `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t`. -/
-<<<<<<< ours
 noncomputable def bound (t : Fin n) (ω : DrawCoins n κ X) : ℝ :=
-  if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
-||||||| base
-noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
-  if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
-=======
-noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
   if D.samples t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.samples t ω else 0
->>>>>>> theirs
 
 /-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
 receipts. -/
-<<<<<<< ours
 def lands (t : Fin n) (ω : DrawCoins n κ X) (b : Blocks m) : Prop :=
-  test (D.size t ω) (D.draws t ω) (D.correct t ω) b
-||||||| base
-def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
-  test (D.size t ω) (D.draws t ω) (D.correct t ω) b
-=======
-def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
   test (D.size t ω) (D.samples t ω) (D.correct t ω) b
->>>>>>> theirs
 
 /-- **Window `t`'s distinguisher** on coins `y.1 = (ω, u)` and first blocks `y.2`: windows `j < t` land on `prf j` at
 their coins in `ω`, window `t` lands on `y.2`, and the threshold coin `u` falls below `∏_{j ≤ t} bound j`. -/
@@ -270,25 +238,11 @@ def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (
     below δ (∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t), D.bound j z.1) z.2
 
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
-<<<<<<< ours
-def wrong (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
-||||||| base
-def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
-=======
-def incorrect (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
->>>>>>> theirs
+def incorrect (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
 /-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
-<<<<<<< ours
 noncomputable def pooled (δ : ℝ) (ω : DrawCoins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
-||||||| base
-noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
-=======
-noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
   Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
->>>>>>> theirs
 
 end Session
 

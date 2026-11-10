@@ -240,7 +240,7 @@ def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array (Flock.Draw.Stra
     strata := strata.push (← stratumOf work s s!"{ctx}.strata[{strata.size}]")
   pure strata
 
-/-- A bernoulli draw's `p`: `num/den`, each a natural number in canonical decimal, so `lawName` writes it as written. -/
+/-- A bernoulli sample's `p`: `num/den`, each a natural number in canonical decimal, so `lawName` writes it as written. -/
 def pOf (s ctx : String) : V (Nat × Nat) :=
   let canon (t : String) : Option Nat := t.toNat?.bind fun n => if toString n == t then some n else none
   match s.splitOn "/" with

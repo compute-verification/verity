@@ -216,44 +216,20 @@ def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-<<<<<<< ours
-def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
-    (correct : Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
-  size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
-||||||| base
-def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
-  size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
-=======
-def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.samples κ X → Record)
-    (correct : Fin node.samples → Accounting.Remote.Draw.Coins node.samples κ X → Finset ℕ) :
+def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
+    (correct : Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
     Accounting.Remote.Draw.Session node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
->>>>>>> theirs
   correct := correct
 
 /-- **The records' opening draw, read through the coin commitment**: holding commitment `c`, the prover's record at
 `ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-<<<<<<< ours
-    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
-  view c := recordDraw node (recs c) (correct c)
-||||||| base
-    (recs : Cm → Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
-  view c := recordDraw node (recs c) (correct c)
-=======
-    (recs : Cm → Accounting.Remote.Draw.Coins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.Coins node.samples κ X → Finset ℕ) :
+    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
     Accounting.Remote.Draw.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordSample node (recs c) (correct c)
->>>>>>> theirs
 
 /-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/
 def played {Ω Cm : Type} (recs : Cm → Ω → Record) (com : Ω → Cm) (ω : Ω) : Record := recs (com ω) ω

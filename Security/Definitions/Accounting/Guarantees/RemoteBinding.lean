@@ -66,34 +66,6 @@ namespace Accounting.Guarantees.Remote
 
 open Accounting.Remote.Draw
 
-<<<<<<< ours
-/-- **The receipts' binding term, in its fork form.** For a session `D` on the first blocks `prf` and fallbacks `rest`,
-its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the binding term is at most
-`Σ_t √(|L_t|·s_t·(fork_t + split_t))`: `fork_t` the chance that two runs from window `t`'s cut on independent openings
-coins hash a SHA-512 collision between the checks of one receipt's two openings (`Receipts.fork`), `split_t` the chance
-that their roots split (`Receipts.split`). -/
-def ReceiptsBindingOfFork : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
-    (∀ t ω, D.opened prf rest t ω ⊆ L t) →
-    (R.binding D prf rest).toReal ≤
-      ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))
-
-||||||| base
-/-- **The receipts' binding term, in its fork form.** For a session `D` on the first blocks `prf` and fallbacks `rest`,
-its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the binding term is at most
-`Σ_t √(|L_t|·s_t·(fork_t + split_t))`: `fork_t` the chance that two runs from window `t`'s cut on independent openings
-coins hash a SHA-512 collision between the checks of one receipt's two openings (`Receipts.fork`), `split_t` the chance
-that their roots split (`Receipts.split`). -/
-def ReceiptsBindingOfFork : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
-    (∀ t ω, D.opened prf rest t ω ⊆ L t) →
-    (R.binding D prf rest).toReal ≤
-      ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))
-
-=======
->>>>>>> theirs
 /-- **The receipts' binding term under `cr/sha-512`.** `ReceiptsBindingOfFork` with each window's fork finder
 (`Receipts.finder`, at `q_t` SHA-512 calls) meeting `Claims.StrictBirthday`: the binding term is at most
 `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. -/

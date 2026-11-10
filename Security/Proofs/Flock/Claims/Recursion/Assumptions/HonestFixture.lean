@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.IrDep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -32,7 +33,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-public import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
 # The honest deployed recursive run (`HonestFixture`)
@@ -70,7 +70,7 @@ at one statement `x`): at the deployed brings at `x` (`bLAt`), the inner verifie
 completeness holds at it (`HonestWitSatisfies`), no part's recorded calls collide (`NoCollAt`), and at the run's inner
 rounds before the last (`hist.take (kI x - 1)`) the reps' tops differ (`TopsAt`). The inner prover is the deployed one,
 `IrDep x`: the rows `rec_live` commits and the openings, salts, κ, eq(α) and v `rec_vstage`, `rec_vstar` and
-`verifier_rows` build, at C-Flock's proofs.
+`verifier_rows` build, at Flock's proofs.
 
 The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
 16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
@@ -78,23 +78,9 @@ on it:
 * `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*
   parts (L0–L3, alg-p0, alg-p1, cap, cap-L1–L3) and on the inner session, and the parts that read a flipped challenge
   or query coin refused it.
-<<<<<<< ours
 * `TopsAt`: holds on the run's tree (the reps' tops differ at levels 1–3).
 * `HonestWitSatisfies`: passed on the same tree (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
-  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
-||||||| base
-* `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
-  both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
-* `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
-  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
-=======
-* `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
-  both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
-* `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
   --session`): all 10 parts, each at the table `verify --zk` sets up at the sample its session records, under the zero
->>>>>>> theirs
   mask and a random one, 20 of 20 lines with no bad rows, pin or region bits.
 * `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
   --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input

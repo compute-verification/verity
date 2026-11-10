@@ -6,38 +6,16 @@ public import Properties.Accounting.Remote.Schedule
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
 
-<<<<<<< ours
-`Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
+`Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
 layout (`Properties.RemoteAudit.sessionLayout`: each tile where `checkOpening` checks the block at its position of the
 pass's plan) with that premise replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`)
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
-which the spec doesn't; its theorem, `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
+which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
+`Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.RemoteAudit.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
 layout, `Properties.RemoteAudit.scheduleLayoutGap_code`).
-||||||| base
-`Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
-reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` with that premise
-replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) at the steering cap the session
-committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`) accepts each pass of the
-session, under the named gap between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is
-stated here because it reads the verifier's code, which the spec doesn't; its theorem,
-`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
-layout steered there by `Properties.RemoteAudit.steered_of_checked`.
-=======
-`Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
-reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` with that premise
-replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) at the steering cap the session
-committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`) accepts each pass of the
-session, under the named gap between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is
-stated here because it reads the verifier's code, which the spec doesn't; its theorem,
-`Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
-layout steered there by `Properties.RemoteAudit.steered_of_checked`.
->>>>>>> theirs
 -/
 
 @[expose] public section
@@ -50,22 +28,10 @@ open scoped ENNReal
 
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
-<<<<<<< ours
-`G` (`Accounting.Guarantees.DeclaredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
+`G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
 the bound as it states them) at the verifier's layout, with its premise `SteeredLayout layout steer` replaced by the
 schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix `c` of
 the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
-||||||| base
-`G` (`Accounting.Guarantees.DeclaredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
-the bound as it states them) with its premise `SteeredLayout layout steer` replaced by the named gap `ScheduleLayoutGap`
-and the schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix
-`c` of the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
-=======
-`G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
-the bound as it states them) with its premise `SteeredLayout layout steer` replaced by the named gap `ScheduleLayoutGap`
-and the schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix
-`c` of the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
->>>>>>> theirs
 blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
 `sent c y`. The layout is the verifier's of those appends and runs (`Properties.RemoteAudit.sessionLayout`: tile `i` at
 the position the verifier checks the plan's `i`-th block at), `dflt c` where they give no layout of `N` tiles in

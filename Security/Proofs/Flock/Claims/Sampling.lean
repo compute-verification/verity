@@ -29,6 +29,7 @@ public import Proofs.Flock.Claims.Sampling.ZK
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Refusals
+public import Proofs.Flock.Claims.Sampling.Reference
 
 /-! The sampling compiler's lemmas: each registered sampling design's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli sample's bound (`Sampling.ExecBernoulli`); each design's acceptance probability as its model sample's

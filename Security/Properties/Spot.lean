@@ -12,31 +12,15 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
-<<<<<<< ours
-  and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
-  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
-  window's stream and prover (`R6`); for a v2 record its registered values (`R7`); and in the per-member form each
-  member's one count of link points (`RL`);
-* **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
-  stratified or work law, its strata and closure;
-* **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
-||||||| base
-  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
-  for a v2 record its registered values (`R7`);
-* **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
-  stratified or work law, its strata and closure;
-* **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
-=======
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
-  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); and for a v2 record its registered
+  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
-  rule or its reset restarts it, for a verifier with a pool (`PoolChained`);
+  rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and in the per-member form each member's
+  one count of link points (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
->>>>>>> theirs
   registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
   (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
@@ -261,21 +245,6 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
     SuppliedIs es mine' v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
-<<<<<<< ours
-/-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own law over its
-program and query applies (`LinkPoints.lawOf`, with the population), some draw under it ends, and no member's fewest
-and most drawn units under it, over the draws that end, give different link points (`LinkPoints.refused`, which
-refuses a law no draw of which ends); a draw that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
-def RL (v : Registration.Verifier) : Prop :=
-  v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
-    LinkPoints.refused law n v.members = .ok #[]
-
-/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the
-verifier expects values registered; and the per-member form's members' link points (`RL`). -/
-||||||| base
-/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the
-verifier expects values registered. -/
-=======
 /-- R7's pool chain (`Registration.poolChained`): for a verifier with a pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the
 window opens (`Registration.poolOpen`): the previous record's entry for the value the pool was left in (`pout`) when the
@@ -300,18 +269,20 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
     v.outputs.any (·.1 == want.value) = false → ∀ x ∈ v.pinned.find? (·.1 == want.value), ∀ e,
       Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
 
+/-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
+program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
+and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
+refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+def RL (v : Registration.Verifier) : Prop :=
+  v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
+    LinkPoints.refused law n v.members = .ok #[]
+
 /-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
-chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered. -/
->>>>>>> theirs
+chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered; and the per-member form's
+members' link points (`RL`). -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
-<<<<<<< ours
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v) ∧ RL v
-||||||| base
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v)
-=======
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v)
->>>>>>> theirs
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ RL v
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -418,41 +389,19 @@ def drawnNats (draw : Json) : Array Nat :=
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-<<<<<<< ours
-/-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
-ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
-for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
-||||||| base
-/-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
-ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
-for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
-=======
 /-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
->>>>>>> theirs
+def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
 
-<<<<<<< ours
-/-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, drawn by
-`d`; and the number of units drawn. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
-||||||| base
-/-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, drawn by
-`d`; and the number of units drawn. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
-=======
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
->>>>>>> theirs
+def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],

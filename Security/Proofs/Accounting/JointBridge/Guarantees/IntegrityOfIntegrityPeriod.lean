@@ -23,16 +23,8 @@ A period's sampled-proofs audit (`Audit.sampled`) is Flock's integrity audit ove
 (`Flock.Guarantees.IntegrityHorizon`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
 fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is flock-verify's on every
-<<<<<<< ours
-sampling block, and the claim's units and incorrect proof blocks are the sampling blocks'. `IntegrityOfIntegrityPeriod`
-is then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
-||||||| base
-sampling block, and the claim's units and faulty proof blocks are the sampling blocks'. `IntegrityOfIntegrityPeriod` is
-then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
-=======
 sampling block, and the claim's units and incorrect proof blocks are the sampling blocks'. `IntegrityOfIntegrityPeriod` is
 then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
->>>>>>> theirs
 
 Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityHorizon`, this module imports
 them.
@@ -54,23 +46,10 @@ open scoped ENNReal
   the live coin flow: each sampling block's subset sample comes from the verifier's byte source, which the period's
   sampled coordinate is (A3, `FlockSoundness.Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee).
 * `accepts_iff`: the sampled audit accepts exactly when flock-verify accepts every sampling block.
-<<<<<<< ours
-* `wrong_eq`: the incorrect proof blocks of the run's partition in its committed trace are, in number, the sampling
-  blocks' incorrect proof blocks (`SamplingBlock.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the key
-  program's partition). This is the program-from-circuit correspondence (M1: the key program and its partition are the
-  circuit `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is this
-  field.
-||||||| base
-* `wrong_eq`: the faulty proof blocks of the run's partition in its committed trace are, in number, the sampling blocks'
-  faulty proof blocks (`SamplingBlock.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the key program's
-  partition). This is the program-from-circuit correspondence (M1: the key program and its partition are the circuit
-  `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is this field.
-=======
 * `wrong_eq`: the incorrect proof blocks of the run's partition in its committed trace are, in number, the sampling blocks'
   incorrect proof blocks (`SamplingBlock.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the key program's
   partition). This is the program-from-circuit correspondence (M1: the key program and its partition are the circuit
   `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is this field.
->>>>>>> theirs
 * `units_eq`, `gates_nonempty`: the partition's public unit-size property. Its units are the sampling blocks' units, and
   every unit has at least one of the circuit's gates, so no empty unit, trivially correct, dilutes the share `ε` the
   claim bounds. -/
@@ -88,16 +67,8 @@ structure RealizesIntegrityOfIntegrityPeriod {ι : Type} {d : Device ι} {α : T
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
-<<<<<<< ours
-  /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
-||||||| base
-  /-- the run's faulty proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
-=======
   /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
   wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
->>>>>>> theirs
   /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/

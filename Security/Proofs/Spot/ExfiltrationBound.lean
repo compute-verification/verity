@@ -16,25 +16,11 @@ meta import Lean.Meta.Tactic.NormCast
 /-!
 # Exfiltration before detection: from the sample and the population to the probability of theft
 
-<<<<<<< ours
-* `indepDraw_acceptCoins`, `indepDraw_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
-  incorrect set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
-* `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the draw and the cone.** A window whose leak is at
-  most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a draw that catches `u` with probability
-  `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
-||||||| base
-* `indepDraw_escapes`, `indepDraw_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
-  wrong set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
-* `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the draw and the cone.** A window whose leak is at
-  most its faulty proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a draw that catches `u` with probability
-  `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
-=======
 * `indepSample_acceptCoins`: the sample that catches unit `u` independently, when its coin `p u` comes up `true`, lets the
-  wrong set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
+  incorrect set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
 * `pressure_of_sample`, `pressure_indepSample`: **detection pressure from the sample and the cone.** A window whose leak is at
   most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a sample that catches `u` with probability
   at least `κ E(u)`, meets `DetectionPressure κ`.
->>>>>>> theirs
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
   the honest one, with the same inputs, number at most `Σ_{u ∈ incorrect} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
 * `guess_le`: **bits to probability.** A view that is a deviation `d ∈ 𝓓` applied to the honest view gives up the target
@@ -46,16 +32,8 @@ meta import Lean.Meta.Tactic.NormCast
   with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
 * `card_changedThrough_le`, `exfiltration_bound_windows`: **over a deployment's windows.** The slots the windows change
   through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
-<<<<<<< ours
   differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof
   blocks' cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
-||||||| base
-  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its faulty proof blocks'
-  cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
-=======
-  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof blocks'
-  cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
->>>>>>> theirs
 -/
 
 @[expose] public section
@@ -67,21 +45,6 @@ open Verity.Game (iid piLaw_toReal prodLaw prodLaw_toReal)
 
 /-! ## Detection pressure from the sample and the cone -/
 
-<<<<<<< ours
-/-- **The independent draw's acceptance probability**: the incorrect set `B` escapes with probability
-`Π_{u ∈ B} (1 - a u)`. -/
-theorem indepDraw_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
-    ∑ c ∈ acceptCoins B, indepDraw a c = ∏ u ∈ B, (1 - a u) := by
-  let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else if b then a u else 1 - a u
-  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepDraw a c else 0) = ∏ u, f u (c u) := by
-||||||| base
-/-- **The independent draw's acceptance probability**: the wrong set `B` escapes with probability
-`Π_{u ∈ B} (1 - a u)`. -/
-theorem indepDraw_escapes {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
-    ∑ c ∈ escapes B, indepDraw a c = ∏ u ∈ B, (1 - a u) := by
-  let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else if b then a u else 1 - a u
-  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepDraw a c else 0) = ∏ u, f u (c u) := by
-=======
 /-- A catch coin comes up `false` with the probability it doesn't come up `true`. -/
 theorem toReal_false_eq (q : PMF Bool) : (q false).toReal = 1 - (q true).toReal := by
   have h := Verity.Game.sum_toReal_pmf q
@@ -93,14 +56,13 @@ theorem toReal_true_le_one (q : PMF Bool) : (q true).toReal ≤ 1 := by
   rw [Fintype.sum_bool] at h
   linarith [ENNReal.toReal_nonneg (a := q false)]
 
-/-- **The independent sample's acceptance probability**: the wrong set `B` escapes with probability
+/-- **The independent sample's acceptance probability**: the incorrect set `B` escapes with probability
 `Π_{u ∈ B} P(p u = false)`. -/
 theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) (B : Finset U) :
     Verity.Game.prPMFReal (indepSample p) (· ∈ acceptCoins B) = ∏ u ∈ B, (p u false).toReal := by
   rw [Verity.Game.prPMFReal_mem]
   let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else (p u b).toReal
   have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then (indepSample p c).toReal else 0) = ∏ u, f u (c u) := by
->>>>>>> theirs
     intro c
     by_cases hc : ∀ u ∈ B, c u = false
     · rw [ite_eq_left hc, indepSample, piLaw_toReal]
@@ -137,26 +99,7 @@ theorem pressure_of_sample {Ω U : Type} {μ : PMF Ω} {κ : ℝ} (hκ : 0 ≤ �
   have h2 : κ * A.leak h ≤ κ * ∑ u ∈ B h, E u := mul_le_mul_of_nonneg_left (hleak h) hκ
   linarith
 
-<<<<<<< ours
-/-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
-does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the draw catching `u` with probability
-`a u ≥ κ E(u)`. -/
-theorem pressure_indepDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
-    (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u) (A : Strategy (U → Bool))
-    (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = acceptCoins (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (indepDraw a) κ A :=
-  pressure_of_draw hκ A B E a ha hκE hleak fun h => by rw [hA h, indepDraw_acceptCoins]
-||||||| base
-/-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
-does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the draw catching `u` with probability
-`a u ≥ κ E(u)`. -/
-theorem pressure_indepDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
-    (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u) (A : Strategy (U → Bool))
-    (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = escapes (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (indepDraw a) κ A :=
-  pressure_of_draw hκ A B E a ha hκE hleak fun h => by rw [hA h, indepDraw_escapes]
-=======
-/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
+/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
 does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the sample catching `u` with probability
 `P(p u = true) ≥ κ E(u)`. -/
 theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E : U → ℝ)
@@ -167,7 +110,6 @@ theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (
     (fun u => ⟨ENNReal.toReal_nonneg, toReal_true_le_one (p u)⟩) hκE hleak fun h => by
     rw [hA h, indepSample_acceptCoins]
     exact (prod_congr rfl fun u _ => toReal_false_eq (p u)).le
->>>>>>> theirs
 
 /-! ## Bits to probability -/
 

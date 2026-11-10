@@ -9,9 +9,10 @@ wider than the widest class is refused (a template instance's bits are its disti
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
-`unitGates` runs as `unitGatesFast` (`@[csimp]`, `unitGates_eq_unitGatesFast`): a template query's units read their
-gates off one `table`, each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
-once, where `TemplateQuery.gates` recomputes both per unit.
+`unitGatesFast` is the walk unit by unit with a template query's units reading their gates off one `table`
+(`gatesBy_table`), each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
+once, where `TemplateQuery.gates` recomputes both per unit. `unitGates` reads a range at a time instead
+(`TemplateQuery.unitGates`), so nothing runs as `unitGatesFast`.
 -/
 module
 
@@ -203,7 +204,6 @@ def wordGates (P : Flock.Program.Prog) (k d : Nat) (c : Flock.Qword.DCut) : V (A
     | some s => pure s
     | none => throw s!"query-refused: a unit of {(P.defs[d]!).key} owns no gate"
 
-<<<<<<< ours
 /-- Each Definition of `d` by its id, the first of an id as `Desc.def?` finds it. -/
 def defMap (d : Desc) : Std.HashMap String DDef := d.defs.foldr (fun p m => m.insert p.1 p.2) {}
 
@@ -423,20 +423,11 @@ theorem gatesBy_table (d : Desc) (rs : Array TRange) (i : Nat) :
         rfl
       · rfl
 
-/-- `partition.unit_gates`: each unit's gates `[lo, hi)` in root gates, by unit: an instance's (`TemplateQuery.gates`),
-a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. It runs as `unitGatesFast`. -/
-def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
-||||||| base
-/-- `partition.unit_gates`: each unit's gates `[lo, hi)` in root gates, by unit: an instance's (`TemplateQuery.gates`),
-a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
-def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
-=======
 /-- `partition.unit_gates` with a template query's units laid out by `instances` (`TemplateQuery.unitGates` or
 `TemplateQuery.unitGatesRef`): each unit's gates `[lo, hi)` in root gates, by unit: an instance's
 (`TemplateQuery.gates`), a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
 def unitGatesBy (instances : Flock.TemplateQuery.Desc → Array TRange → Except Nat (Array (Nat × Nat))) (p : Program)
     (query : Json) : V (Array (Nat × Nat)) := do
->>>>>>> theirs
   let rs ← evaluate p query
   let q := getD (build (Flock.hexOf p.sha512) query) "query"
   let name := (q.getObjValAs? String "name").toOption.getD ""
@@ -452,9 +443,12 @@ def unitGatesBy (instances : Flock.TemplateQuery.Desc → Array TRange → Excep
   return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
     acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
 
-<<<<<<< ours
-/-- `unitGates` with a template query's units read off one `table` of the program and ranges (`gatesBy`), rather than
-each unit recomputing its node's offset and its template's gates. -/
+/-- `partition.unit_gates`, a template query's instances a range at a time (`TemplateQuery.unitGates`). -/
+def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := unitGatesBy Flock.TemplateQuery.unitGates p query
+
+/-- The walk unit by unit (`unitGatesBy` at each unit's `TemplateQuery.gates`) with a template query's units read off
+one `table` of the program and ranges (`gatesBy`, `gatesBy_table`), rather than each unit recomputing its node's offset
+and its template's gates. `unitGates` reads a range at a time instead, and nothing runs this. -/
 def unitGatesFast (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
   let rs ← evaluate p query
   let q := getD (build (Flock.hexOf p.sha512) query) "query"
@@ -473,16 +467,4 @@ def unitGatesFast (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
   return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
     acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
 
-@[csimp] theorem unitGates_eq_unitGatesFast : @unitGates = @unitGatesFast := by
-  funext p query
-  simp only [unitGates, unitGatesFast, gatesBy_table]
-
-end SampledProofs.Partition
-||||||| base
-end SampledProofs.Partition
-=======
-/-- `partition.unit_gates`, a template query's instances a range at a time (`TemplateQuery.unitGates`). -/
-def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := unitGatesBy Flock.TemplateQuery.unitGates p query
-
 end Spot.Partition
->>>>>>> theirs

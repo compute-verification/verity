@@ -5,6 +5,7 @@ public import Definitions.Core.Formalism.Instances
 public import Definitions.Core.Accel
 public import Definitions.Core.Assumptions.Accel
 public import Definitions.Core.Transport
+public import Definitions.Core.Assumptions.Transport
 public import Definitions.Core.Assumptions.DeviceFigures
 public import Definitions.Core.Blocks
 public import Definitions.Core.DeviceFigures
@@ -27,6 +28,7 @@ public import Definitions.Nci.Formalism.Instances
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
+public import Definitions.Pous.Guarantees.StreamedWipeInfo
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
 public import Definitions.Pouw
@@ -99,6 +101,7 @@ public import Definitions.Accounting.Assumptions.Parties
 public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
+public import Definitions.Hash.Assumptions.Prf
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak

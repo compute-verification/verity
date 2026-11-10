@@ -73,16 +73,8 @@ def PooledCovers : Prop :=
 (`Draw.Session.pooled`). -/
 def PooledCoversSession : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Session n m s κ X)
-<<<<<<< ours
     (ω : Accounting.Remote.Draw.DrawCoins n κ X) (δ : ℚ) (b : Pooled.Bound),
-    Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ = .ok b →
-||||||| base
-    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (b : Pooled.Bound),
-    Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ = .ok b →
-=======
-    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (b : Pooled.Bound),
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.samples t ω)) δ = .ok b →
->>>>>>> theirs
       D.pooled δ ω ≤ b.wrong
 
 /-- Whenever the memory line (`RemoteAudit.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the

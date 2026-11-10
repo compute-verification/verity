@@ -7,14 +7,14 @@ file's units), which the setup reads already.
 -/
 module
 
-public import SampledProofs.Json
-meta import SampledProofs.Json
+public import Spot.Json
+meta import Spot.Json
 
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace SampledProofs.PublicUnits
+namespace Spot.PublicUnits
 
 open Lean (Json)
 open Flock (V)
@@ -73,4 +73,4 @@ def piece (j : Json) : V Json := do
 #guard (unitIndices "{\"units\":{\"indices\":[3,-1]}}".toUTF8).toOption.isNone
 #guard (unitIndices "{\"units\":{}}".toUTF8).toOption.isNone
 
-end SampledProofs.PublicUnits
+end Spot.PublicUnits

@@ -14,6 +14,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+public import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
 # The statement flock-verify sets up for one table, under either tag

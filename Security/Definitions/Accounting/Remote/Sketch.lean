@@ -80,16 +80,8 @@ def coins (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) : Mode
   (ω.1, ω.2.1, A.keys ω.1 ω.2.1 ω.2.2)
 
 /-- Pass `j`'s candidate `c` at the model's coins. -/
-<<<<<<< ours
 def devAt (A : Session β Hs P N m h S L q ks G) (x : ModelCoins β P N m h ks G) (j : Fin P) (c : Fin (G j)) :
-    RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
-||||||| base
-def devAt (A : Session β Hs P N m h S L q ks G) (x : Coins β P N m h ks G) (j : Fin P) (c : Fin (G j)) :
-    RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
-=======
-def devAt (A : Session β Hs P N m h S L q ks G) (x : Coins β P N m h ks G) (j : Fin P) (c : Fin (G j)) :
     RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
->>>>>>> theirs
   A.device x.1 j (fun i => x.2.2 i.1) c
 
 /-- The blocks whose receipts pass `j`'s candidate `c` gets right at an outcome: its tag is the receipt hash of the

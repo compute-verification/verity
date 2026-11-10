@@ -226,7 +226,7 @@ theorem pr_coins_flat {S A B D : Type} [Fintype S] [Fintype A] [Fintype B] [Fint
     (P : S × ((A × B) × D) → Prop) :
     pr P = pr (fun x : S × A × B × D => P (x.1, (x.2.1, x.2.2.1), x.2.2.2)) := by
   let e : S × A × B × D ≃ S × ((A × B) × D) := (Equiv.refl S).prodCongr (Equiv.prodAssoc A B D).symm
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Fintype.card_congr e, Finset.card_equiv e (t := Finset.univ.filter P) fun x => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact Iff.rfl]
 

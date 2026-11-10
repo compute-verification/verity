@@ -395,22 +395,11 @@ the root of that content (`Registered.checkKnownAll`). Beside the ports, the row
 statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
-<<<<<<< ours
-reads to), and the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads). -/
-||||||| base
-reads to). -/
-=======
-reads to), and the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
->>>>>>> theirs
+reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
+the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
-<<<<<<< ours
-      Array String × Array RegBound.Bound))) := do
-||||||| base
-      Array String))) := do
-=======
-      Array String × String))) := do
->>>>>>> theirs
+      Array String × Array RegBound.Bound × String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -423,26 +412,16 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-<<<<<<< ours
         let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String ×
-            Array RegBound.Bound) := do
+            Array RegBound.Bound × String) := do
+          let file := j
           let bound ← RegBound.ofJson j
           let j := RegBound.ownOf j
-||||||| base
-        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
-=======
-        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String × String) := do
->>>>>>> theirs
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-<<<<<<< ours
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, bound)
-||||||| base
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j)
-=======
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, ← sha512Of j)
->>>>>>> theirs
+          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, bound,
+            ← sha512Of file)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -450,7 +429,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
 def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port))) :=
   return (← registeredFile args flag ctx).bind fun
-    | some (own, _, _, bound) =>
+    | some (own, _, _, bound, _) =>
       if bound.isEmpty then .ok (some own)
       else .error s!"{ctx}: the file binds ports ({RegBound.KEY}), which only a statement's `verify` and `statement` read"
     | none => .ok none
@@ -981,20 +960,10 @@ deployed form), and only `agree` reads it.
 outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABLES` tables, at a subset sample, with the
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
-<<<<<<< ours
-public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
-def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
-||||||| base
-public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
-def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
-=======
 public file is refused. Without it a plain session has at most one table. Not with `--zk`.
 With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts. -/
 def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
->>>>>>> theirs
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
@@ -1066,19 +1035,12 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-<<<<<<< ours
-  let (registered, known, params, bound) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+  let (registered, known, params, bound, registeredSha) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[],
+        (r.map (·.2.2.2.1)).getD #[], r.map (·.2.2.2.2))
     | .error e => IO.eprintln e; return 2
   let declared ← match ← interfaceInput args partition with
     | .ok d => pure d
-||||||| base
-  let (registered, known, params) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2)).getD #[])
-=======
-  let (registered, known, params, registeredSha) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[], r.map (·.2.2.2))
->>>>>>> theirs
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -1337,13 +1299,7 @@ statement to the table, to the roots of the inner statement's input and output r
 (`RecLinkPart.check`, which needs the inner statement's files; `Flock.Guarantees.LinksBindDeployed`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-<<<<<<< ours
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
-||||||| base
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
-=======
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins tree]"; return 2
->>>>>>> theirs
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins tree]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
@@ -1361,7 +1317,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
   let (registered, known, bound) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.2.1)).getD #[])
     | .error e => IO.eprintln e; return 2
   let declared ← match ← interfaceInput args partition with
     | .ok d => pure d

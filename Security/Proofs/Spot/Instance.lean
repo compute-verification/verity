@@ -121,19 +121,9 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n
     rw [P.fns_encode hW X u]
     exact congrArg (BitVec.setWidth W) (h s.1.1 s.1.2 ((P.mem_writes).1 s.2))
 
-<<<<<<< ours
-/-- **The bridge**: the population's incorrect units are the partition's. -/
-theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
-    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
-||||||| base
-/-- **The bridge**: the population's wrong units are the partition's. -/
-theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
-    P.toDataflow.wrong (P.fns W) (P.encode W X) = P.wrong X := by
-=======
 /-- **The bridge**: the population's incorrect proof blocks are the partition's. -/
-theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
-    P.toDataflow.wrong (P.fns W) (P.encode W X) = P.wrong X := by
->>>>>>> theirs
+theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
+    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
   ext u
   simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_wrong, P.correct_iff hW X u]
 

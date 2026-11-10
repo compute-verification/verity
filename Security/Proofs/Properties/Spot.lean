@@ -813,33 +813,6 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
-<<<<<<< ours
-theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
-    (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
-  unfold DeclaredDay Registration.declaredCode
-  rcases v.declared with _ | ⟨day, ds⟩
-  · simp
-  · rcases h : Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
-    · simp [h]
-    · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
-    · simp [h]
-
-theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
-  unfold Registration.linkRefused RL
-  cases v.members.isEmpty
-  · simp only [Bool.not_false, Bool.true_and, forall_const]
-    rcases LinkPoints.lawOf v.program v.query v.law v.workTable with e | ⟨law, n⟩
-    · simp [bind, Except.bind]
-    · cases hr : LinkPoints.refused law n v.members with
-      | error e => simp [bind, Except.bind, hr]
-      | ok rs =>
-        simp only [bind, Except.bind, hr, Bool.not_eq_false', Array.isEmpty_iff]
-        exact ⟨fun h => ⟨law, n, rfl, by rw [hr, h]⟩,
-          fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
-  · simp
-
-||||||| base
-=======
 theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
     (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
   unfold DeclaredDay Registration.declaredCode
@@ -860,63 +833,46 @@ theorem poolChained_iff (rec : Json) (v : Registration.Verifier) :
       rcases ho : Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
     exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
->>>>>>> theirs
+theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
+  unfold Registration.linkRefused RL
+  cases v.members.isEmpty
+  · simp only [Bool.not_false, Bool.true_and, forall_const]
+    rcases LinkPoints.lawOf v.program v.query v.law v.workTable with e | ⟨law, n⟩
+    · simp [bind, Except.bind]
+    · cases hr : LinkPoints.refused law n v.members with
+      | error e => simp [bind, Except.bind, hr]
+      | ok rs =>
+        simp only [bind, Except.bind, hr, Bool.not_eq_false', Array.isEmpty_iff]
+        exact ⟨fun h => ⟨law, n, rfl, by rw [hr, h]⟩,
+          fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
+  · simp
+
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
-<<<<<<< ours
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ RL v ∧ True :=
     step_ite (P := True) (RL v) j14 (fun _ c => (pure c : Id (Array String))) _ _
       (fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩) (fun _ => rfl) (linkRefused_false_iff v)
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ RL v ∧ True := by
-||||||| base
-  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
-    c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
-=======
-  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
-    j1 j0 c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
   have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
-      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True := by
->>>>>>> theirs
+      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ RL v ∧ True := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-<<<<<<< ours
-      rw [h14, checkOutputs_nil]
-      exact ⟨fun ⟨⟨a, b⟩, r⟩ => ⟨a, b, r⟩, fun ⟨a, b, r⟩ => ⟨⟨a, b⟩, r⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
-      exact ⟨fun ⟨a, r⟩ => ⟨a, trivial, r⟩, fun ⟨a, _, r⟩ => ⟨a, r⟩⟩
-||||||| base
-      rw [h14, checkOutputs_nil]
-      exact ⟨fun ⟨⟨a, b⟩, _⟩ => ⟨a, b, trivial⟩, fun ⟨a, b, _⟩ => ⟨⟨a, b⟩, trivial⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
-      exact ⟨fun ⟨a, _⟩ => ⟨a, trivial, trivial⟩, fun ⟨a, _⟩ => ⟨a, trivial⟩⟩
-=======
       rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, _⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, trivial⟩,
-        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, trivial⟩⟩
+      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, l⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, l⟩,
+        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, l⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, l⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
-      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, _⟩ => ⟨a, s, r, wk, p, o, trivial, trivial⟩,
-        fun ⟨a, s, r, wk, p, o, _⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, trivial⟩⟩
->>>>>>> theirs
+      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, l⟩ => ⟨a, s, r, wk, p, o, trivial, l⟩,
+        fun ⟨a, s, r, wk, p, o, _, l⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, l⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
-<<<<<<< ours
-      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ RL v ∧ True) := by
-||||||| base
-      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ True) := by
-=======
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
       (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
-        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True) := by
->>>>>>> theirs
+        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ RL v ∧ True) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1088,45 +1044,17 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
-<<<<<<< ours
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h7r, hrl, _⟩
-||||||| base
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
-      h4', h5', h6a, h6b, h6c, h7r, _⟩
-=======
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, _⟩
->>>>>>> theirs
+      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, hrl, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-<<<<<<< ours
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r, hrl⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r, hrl⟩
-||||||| base
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
-=======
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩
+      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩, hrl⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r⟩
->>>>>>> theirs
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
-<<<<<<< ours
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h7r, hrl, trivial⟩
-||||||| base
-      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
-      h6a, h6b, h6c, h7r, trivial⟩
-=======
-      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩
->>>>>>> theirs
+      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, hrl, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1654,7 +1582,7 @@ theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Pu
           jeq (getD x "root") (getD r "root") = true ∧ jeq (getD x "domain") (getD r "domain") = true ∧
           int? (getD x "leaves") = int? (getD r "leaves") := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2 hv).1 u q hreg hu honly hs
+  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2.1 hv).1 u q hreg hu honly hs
 
 /-- `PinnedHeld` at what the check accepts (`acceptMeans`): the record's entry for each value the verifier pinned and
 takes from no earlier run, the window's arrivals at the root the network certifier signed among them, has its pinned
@@ -1662,6 +1590,6 @@ root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact (hr.2.2.2.2.2.2 hv).2.2
+  exact (hr.2.2.2.2.2.2.1 hv).2.2
 
 end Properties.Spot

@@ -30,6 +30,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
 public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.Aliased
 
 @[expose] public section
 

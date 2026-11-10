@@ -1,9 +1,9 @@
 module
 
-public import Properties.Accounting.Remote.Schedule
 public import Batteries.Tactic.OpenPrivate
-public import Proofs.Properties.RemoteAudit.Plan
-public import Proofs.Properties.RemoteAudit.Window
+public import Properties.Accounting.Remote.Schedule
+public import Proofs.Properties.Accounting.Remote.Plan
+public import Proofs.Properties.Accounting.Remote.Window
 public import Definitions.Accounting.Assumptions.Stacking
 public import Mathlib.Tactic.Choose
 public import Mathlib.Data.Fintype.Pigeonhole
@@ -763,7 +763,7 @@ opening verifies (`verifyOpening_zeroRoot`). The zero block decodes under every 
 payload `zeroPayload`; a registration whose payload tree holds that payload at block 0, and a pass over the whole store
 whose receipt tree holds the zero block's receipt at position 0, accept the opening of position 0
 (`opensAtPosition_honest`). The payload is the zero block's decoding under the codec key, which an honest prover stores
-after the key is drawn; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
+after the key is sampled; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
 deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
 
 theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by
@@ -1047,7 +1047,7 @@ theorem opensAtPosition_nontrivial :
 /-- **The schedule check meets the deployed session.** The deployed session commits no schedule cap and appends
 nothing, so its ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are
 the plans of the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99
-one-byte integers). The premises of `Properties.DeclaredCircuit.ScheduledRequirement` besides the check are `G`'s,
+one-byte integers). The premises of `Properties.RegisteredCircuit.ScheduledRequirement` besides the check are `G`'s,
 whose honest lemma is `G`'s; at the deployed plan the verifier's layout is store order (`codeLayout_whole`). -/
 theorem scheduled_meets : Schedule.check ⟨#[], #[], (List.range 96).toArray⟩ 130023424 792
     ((List.range 96).map fun s => (s, (Plan.whole 130023424).runs)).toArray #[] = .ok 792 := by

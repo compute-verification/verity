@@ -78,16 +78,8 @@ theorem card_egress_le_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] (hs
   have hch := D.padOver_checked C hsa ht
   exact (D.padOver C).card_egress_le ((D.padOver C).covered_of_singleAssignment hch.1) hch.2 _ a hX
 
-<<<<<<< ours
 /-- **T3 for a program, the uniform form**: at most `m` incorrect proof blocks and every unit's padded cone egress at
 most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
-||||||| base
-/-- **T3 for a program, the uniform form**: at most `m` faulty proof blocks and every unit's padded cone egress at most
-`E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
-=======
-/-- **T3 for a program, the uniform form**: at most `m` incorrect proof blocks and every unit's padded cone egress at most
-`E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
->>>>>>> theirs
 theorem card_leak_le_coneEgress_pad [Fintype U] [Fintype S] [Fintype V] [DecidableEq V] [Inhabited V]
     (hsa : D.SingleAssignment) {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} (O : Finset S)
     {m E : ℕ} (hmU : m ≤ Fintype.card U) (hE : ∀ u, ((D.padOver C).coneEgress O {u}).card ≤ E) {ι : Type}

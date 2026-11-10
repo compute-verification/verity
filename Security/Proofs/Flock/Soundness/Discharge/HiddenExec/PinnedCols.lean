@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
 @[expose] public section
 

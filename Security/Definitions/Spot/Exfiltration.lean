@@ -13,28 +13,14 @@ import Mathlib.Data.EReal.Inv
 
 A lab serves its model through sampled proofs. The adversary controls the serving stack and knows the weights. The
 deployment is a sequence of audit windows (a request, or a batch of them). In each window the prover commits the
-<<<<<<< ours
 window's values; the commitment fixes which units are incorrect, and so what the window's egress carries beyond the honest
-run. Then the challenger draws the window's coins, live and fresh, and a drawn incorrect unit fails visibly. The egress of
-||||||| base
-window's values; the commitment fixes which units are wrong, and so what the window's egress carries beyond the honest
-run. Then the challenger draws the window's coins, live and fresh, and a drawn wrong unit fails visibly. The egress of
-=======
-window's values; the commitment fixes which units are wrong, and so what the window's egress carries beyond the honest
 run. Then the challenger flips the window's coins, live and fresh, and a sampled incorrect proof block fails visibly. The egress of
->>>>>>> theirs
 a window leaves before its verdict (detection, not prevention), and the deployment halts at the first failure.
 
 This file is the vocabulary for that game, over a finite coin space with a distribution `μ`, with no measure theory.
 
 * A `Strategy` is adaptive: at a window it has seen every earlier window's coins (the history `h`, newest first). It
-<<<<<<< ours
-  fixes the window's leak `leak h` (in a population, the egress slots in its incorrect units' cones, `Dataflow.coneEgress`)
-||||||| base
-  fixes the window's leak `leak h` (in a population, the egress slots in its wrong units' cones, `Dataflow.coneEgress`)
-=======
   fixes the window's leak `leak h` (in a population, the egress slots in its incorrect proof blocks' cones, `Dataflow.coneEgress`)
->>>>>>> theirs
   and the coins on which the window escapes detection, `esc h`. Neither depends on the window's own coin: that is what
   live coins, flipped after the commitment, mean.
 * `ex μ n F` and `prob μ n E` are the expectation and the probability over `n` windows' coins, each window's coin flipped
@@ -46,38 +32,16 @@ This file is the vocabulary for that game, over a finite coin space with a distr
 The named assumptions:
 
 * `DetectionPressure μ κ A`: whatever the prover has seen, a window whose egress leaks `ℓ` escapes with probability at
-<<<<<<< ours
-  most `exp (-κ ℓ)`. Live coins and a draw that includes each unit with probability at least `κ E(u) / (1 - p)`, `E(u)`
-  its cone egress and `p` a drawn incorrect unit's luck, give it (`Exfil.acceptProb_le_exp`).
-* `TrustedModel ρ S hon g`: from the honest egress alone no guess of the target `S` (a function of the weights drawn
-||||||| base
-  most `exp (-κ ℓ)`. Live coins and a draw that includes each unit with probability at least `κ E(u) / (1 - p)`, `E(u)`
-  its cone egress and `p` a drawn wrong unit's luck, give it (`Exfil.escape_le_exp`).
-* `TrustedModel ρ S hon g`: from the honest egress alone no guess of the target `S` (a function of the weights drawn
-=======
   most `exp (-κ ℓ)`. Live coins and a sample that includes each unit with probability at least `κ E(u) / (1 - p)`, `E(u)`
   its cone egress and `p` a sampled incorrect proof block's luck, give it (`Exfil.acceptProb_le_exp`).
 * `TrustedModel ρ S hon g`: from the honest egress alone no guess of the target `S` (a function of the weights sampled
->>>>>>> theirs
   from `ρ`) succeeds with probability above `g`. It is what trusted training buys: a model with a trigger that makes its
   honest outputs carry weight bits fails it.
 
-<<<<<<< ours
-`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `acceptCoins B` its coins that
-miss the incorrect set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
-slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
-detection.
-||||||| base
-`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `escapes B` its coins that
-miss the wrong set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
-slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
-detection.
-=======
 `indepSample p` is the sample that catches unit `u` independently, when its coin `p u` comes up `true`, and
-`acceptCoins B` its coins that miss the wrong set `B`. A deployment's egress is its honest egress with a deviation
+`acceptCoins B` its coins that miss the incorrect set `B`. A deployment's egress is its honest egress with a deviation
 (`Dev`, `Dev.apply`) applied: the slots that differ, and their values. `changedThrough` collects the slots each window
 changes, through the first detection.
->>>>>>> theirs
 
 When a guarantee states these, they move to a `Definitions/Spot/Assumptions` module with their records.
 -/
@@ -90,16 +54,8 @@ open Finset
 
 /-- An adaptive exfiltration strategy against a windowed audit with live coins. At the window after the history `h` of
 earlier windows' coins (newest first) the prover's commitment fixes `leak h`, what the window's egress carries beyond
-<<<<<<< ours
-the honest run, and `esc h`, the window's coins that miss its incorrect units. Both are fixed before the window's coin is
-drawn. -/
-||||||| base
-the honest run, and `esc h`, the window's coins that miss its wrong units. Both are fixed before the window's coin is
-drawn. -/
-=======
 the honest run, and `esc h`, the window's coins that miss its incorrect proof blocks. Both are fixed before the window's coin is
 flipped. -/
->>>>>>> theirs
 structure Strategy (Ω : Type) where
   leak : List Ω → ℝ
   esc : List Ω → Finset Ω
@@ -116,13 +72,7 @@ noncomputable abbrev prob [Fintype Ω] (μ : PMF Ω) (n : ℕ) (E : (Fin n → �
   Verity.Game.prPMFReal (Verity.Game.iid μ n) E
 
 /-- **What leaves up to and including the first detection**, over `n` windows from the history `h`: each window's leak,
-<<<<<<< ours
-until the first window whose coin catches an incorrect unit. That window's egress left before its verdict. -/
-||||||| base
-until the first window whose coin catches a wrong unit. That window's egress left before its verdict. -/
-=======
 until the first window whose coin catches an incorrect proof block. That window's egress left before its verdict. -/
->>>>>>> theirs
 noncomputable def Strategy.cum [DecidableEq Ω] (A : Strategy Ω) : (n : ℕ) → List Ω → (Fin n → Ω) → ℝ
   | 0, _, _ => 0
   | n + 1, h, cs => A.leak h + if cs 0 ∈ A.esc h then A.cum n (cs 0 :: h) (Fin.tail cs) else 0
@@ -156,31 +106,13 @@ egress `hon` succeeds with probability above `g`. A trigger that makes the hones
 def TrustedModel {W H T : Type} (ρ : PMF W) (S : W → T) (hon : W → H) (g : ℝ) : Prop :=
   ∀ γ : H → T, Verity.Game.prPMFReal ρ (fun w => γ (hon w) = S w) ≤ g
 
-<<<<<<< ours
-/-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether an
-incorrect `u` would be caught (drawn, and not lucky). -/
-def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
-||||||| base
-/-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether a wrong
-`u` would be caught (drawn, and not lucky). -/
-def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
-=======
 /-- The sample that catches each unit `u` independently, when its coin `p u` comes up `true`: a coin says, per unit,
-whether a wrong `u` would be caught (sampled, and not lucky). -/
+whether an incorrect `u` would be caught (sampled, and not lucky). -/
 noncomputable abbrev indepSample {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) : PMF (U → Bool) :=
   Verity.Game.piLaw p
->>>>>>> theirs
 
-<<<<<<< ours
-/-- The coins of the independent draw on which the incorrect set `B` escapes: none of its units is caught. -/
+/-- The coins of the independent sample on which the incorrect set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
-||||||| base
-/-- The coins of the independent draw on which the wrong set `B` escapes: none of its units is caught. -/
-def escapes {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
-=======
-/-- The coins of the independent sample on which the wrong set `B` escapes: none of its units is caught. -/
-def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
->>>>>>> theirs
   univ.filter fun c => ∀ u ∈ B, c u = false
 
 /-- **The slots changed through the first detection**: window `i` of `n` changes its egress slots `chg h ⊆ O`, which

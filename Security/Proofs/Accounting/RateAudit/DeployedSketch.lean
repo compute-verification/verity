@@ -416,16 +416,8 @@ theorem pr_samples_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G 
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) => Ev x.1 x.2) ≤ B :=
   pr_samples_map_of_causal id A Ev B hB
 
-<<<<<<< ours
-/-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
-theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
-||||||| base
-/-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
-theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
-=======
 /-- The pooled sample over the whole monitoring period, on any store sampled before the session's coins. -/
 theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
->>>>>>> theirs
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
@@ -453,27 +445,13 @@ theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-<<<<<<< ours
-/-- The pooled draw over the whole monitoring period. -/
-theorem pr_draws_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
-||||||| base
-/-- The pooled draw over the whole monitoring period. -/
-theorem pr_draws_horizon_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
-=======
 /-- The pooled sample over the whole monitoring period. -/
 theorem pr_samples_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
->>>>>>> theirs
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-<<<<<<< ours
-  pr_draws_pooled_le_map id A K
-||||||| base
-  pr_draws_horizon_le_map id A K
-=======
   pr_samples_pooled_le_map id A K
->>>>>>> theirs
 
 /-- The pooled sample in every window, on any store sampled before the session's coins. -/
 theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
@@ -510,16 +488,8 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono fun _ h => h.2.imp (fun hK => ⟨h.1, hK⟩) (fun hw => ⟨h.1, hw⟩)).trans
-<<<<<<< ours
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_pooled_le_map store A K)
-      (pr_draws_window_le_map store A Kw)))
-||||||| base
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K)
-      (pr_draws_window_le_map store A Kw)))
-=======
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
       (pr_samples_window_le_map store A Kw)))
->>>>>>> theirs
 
 /-- Both pooled-draw readings. -/
 theorem pr_samples_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K Kw : ℕ) :

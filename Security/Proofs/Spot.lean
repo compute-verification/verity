@@ -35,25 +35,11 @@ slots in `u`'s downstream cone, read off the wiring; the bound is attained, and 
 bounded-reach terms, control reach is at most `min(m w, Reach_inf) + log C(|U|, ≤ m)` and leakage about the secrets at
 most `Reach_inf + log C(|U|, ≤ m)`, `Reach_inf` the egress slots inside the incorrect proof blocks' cone.
 Equivalently, control times amplification: at most `K · α` values, `α = 1` when no secret is upstream of the egress, and
-<<<<<<< ours
 fixed arithmetic at fixed indices amplifies one incorrect bit into `N` secret bits.
-`Work`: every skipped unit is downstream of an incorrect unit or lucky, so the skipped work is at most `m F` plus the
+`Work`: every skipped unit is downstream of an incorrect proof block or lucky, so the skipped work is at most `m F` plus the
 lucky work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times
 its root's weight; a copied unit is correct work never done, so luck needs distinct units.
-`Instance`: a circuit's partition is a single-assignment population whose incorrect units are the partition's, and an
-||||||| base
-fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
-`Work`: every skipped unit is downstream of a wrong unit or lucky, so the skipped work is at most `m F` plus the lucky
-work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times its
-root's weight; a copied unit is correct work never done, so luck needs distinct units.
-`Instance`: a circuit's partition is a single-assignment population whose wrong units are the partition's, and an
-=======
-fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
-`Work`: every skipped unit is downstream of an incorrect proof block or lucky, so the skipped work is at most `m F` plus the lucky
-work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times its
-root's weight; a copied unit is correct work never done, so luck needs distinct units.
 `Instance`: a circuit's partition is a single-assignment population whose incorrect proof blocks are the partition's, and an
->>>>>>> theirs
 acyclic one when its units are ordered along the wires (intervals in layout order, as `Q_call` v1 cuts); a unit that
 sandwiches another on a path of wires, as `Q_word` v1 can cut, makes a cycle.
 `Oblivious`: every time-ordered trace pads to a checked population with its own incorrect proof blocks, and an oblivious one (read
@@ -88,13 +74,7 @@ gets the target with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K
 deployment's windows.
 `ExfiltrationExamples`: the stopping-time bound is attained, and without detection pressure, a halt, bound inputs or a
 trusted model the leak is unbounded.
-<<<<<<< ours
-`DrawPressure`: the deployed draw, `k` of the `n` units without replacement, misses a `K`-unit incorrect set with
-||||||| base
-`DrawPressure`: the deployed draw, `k` of the `n` units without replacement, misses a `K`-unit wrong set with
-=======
-`SamplePressure`: the deployed sample, `k` of the `n` units without replacement, misses a `K`-unit wrong set with
->>>>>>> theirs
+`SamplePressure`: the deployed sample, `k` of the `n` units without replacement, misses a `K`-unit incorrect set with
 probability `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`, so it gives detection pressure `k/n` for a leak
 of at most one per incorrect proof block, and with probability at least `1 - δ` what leaves through the first detection is below
 `ℓ + (n/k) ln (1/δ)`.

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.NetworkCertifier.Accepted
-public import Proofs.Properties.CertifierNetwork.Instance
+public import Proofs.Properties.NetworkCertifier.DeviceOutput.Instance
 
 /-!
 # A later window's sync never changes an earlier window's rows (5c)

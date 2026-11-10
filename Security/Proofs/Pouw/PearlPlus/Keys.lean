@@ -2,6 +2,7 @@ module
 
 public import PouwPearlPlus.Rule
 public import Proofs.Pouw.PearlC.CoreOps
+public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.TileValues
 
 /-!

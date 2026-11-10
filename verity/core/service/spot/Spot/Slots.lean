@@ -100,19 +100,9 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   | .error _ => false
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
-<<<<<<< ours
-/-- **The checked slots** (`Deploy.checked`) of a draw that proves the units `proved`: every proof block among them and
-every input slot, in slot order. An input slot listed here is opened only where a drawn unit reads its row. -/
-def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=
-||||||| base
-/-- **The checked slots** (`Deploy.checked`) of a draw that proves the units `proved`: every proof block among them and
-every input slot, in slot order. An input slot listed here is opened only where a drawn unit reads its row. -/
-def checked (l : Layout) (proved : Array Nat) : Array Nat :=
-=======
 /-- **The checked slots** (`Deploy.checked`) of a sample that proves the units `proved`: every proof block among them and
 every input slot, in slot order. An input slot listed here is opened only where a sampled proof block reads its row. -/
-def checked (l : Layout) (proved : Array Nat) : Array Nat :=
->>>>>>> theirs
+def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.all proved.contains).map (·.2)
 
 /-- **The challenger's sample in the claims' slots**: the layout of `p` under `query`, and the slots of the units

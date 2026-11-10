@@ -42,16 +42,8 @@ def OptCorrect {V : Type} (f : P.Fns V) (σ : S → Option V) (u : U) : Prop :=
   ∃ x : P.reads u → V, (∀ r : P.reads u, σ r = some (x r)) ∧ ∀ s : P.writes u, σ s = some (f u x s)
 
 open Classical in
-<<<<<<< ours
-/-- The incorrect units of an assignment over `Option V`. -/
-noncomputable def optIncorrect [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
-||||||| base
-/-- The wrong units of an assignment over `Option V`. -/
-noncomputable def optWrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
-=======
 /-- The incorrect proof blocks of an assignment over `Option V`. -/
-noncomputable def optWrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
->>>>>>> theirs
+noncomputable def optIncorrect [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
   univ.filter fun u => ¬ P.OptCorrect f σ u
 
 /-- `σ` holds the inputs `a`, as values, on every input slot outside `X`. -/
@@ -59,28 +51,14 @@ def OptHolds {V : Type} (a : S → V) (X : Finset S) (σ : S → Option V) : Pro
   ∀ s ∈ P.input, s ∉ X → σ s = some (a s)
 
 open Classical in
-<<<<<<< ours
 /-- **The egress over `Option V`** at the incorrect set `B`: what the assignments over `Option V` that hold the inputs `a`
-off the secret slots `X`, and whose incorrect units lie in `B`, show on the egress slots `O`, ⊥ included. -/
-||||||| base
-/-- **The egress over `Option V`** at the wrong set `B`: what the assignments over `Option V` that hold the inputs `a`
-off the secret slots `X`, and whose wrong units lie in `B`, show on the egress slots `O`, ⊥ included. -/
-=======
-/-- **The egress over `Option V`** at the wrong set `B`: what the assignments over `Option V` that hold the inputs `a`
 off the secret slots `X`, and whose incorrect proof blocks lie in `B`, show on the egress slots `O`, ⊥ included. -/
->>>>>>> theirs
 noncomputable def optEgress [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (B : Finset U) : Finset (O → Option V) :=
   (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ P.optIncorrect f σ ⊆ B).image fun σ o => σ o
 
 open Classical in
-<<<<<<< ours
-/-- **The egress over `Option V` with at most `m` incorrect units**. -/
-||||||| base
-/-- **The egress over `Option V` with at most `m` wrong units**. -/
-=======
 /-- **The egress over `Option V` with at most `m` incorrect proof blocks**. -/
->>>>>>> theirs
 noncomputable def optEgressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (m : ℕ) : Finset (O → Option V) :=
   (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ (P.optIncorrect f σ).card ≤ m).image fun σ o => σ o
