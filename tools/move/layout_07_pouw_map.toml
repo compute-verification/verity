@@ -1,5 +1,5 @@
 # The layout move of PoUW, to `verity/protocols/pouw`: what `tools/move/layout.py --map
-# tools/move/layout_07_pouw_map.toml` moves and rewrites. 292 files in 12 rows. Written by
+# tools/move/layout_07_pouw_map.toml` moves and rewrites. 284 files in 4 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -13,15 +13,7 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"benchmarks/pouw/budget.py" = "verity/protocols/pouw/budget.py"
-"benchmarks/pouw/budget_fill.json" = "verity/protocols/pouw/budget_fill.json"
-"benchmarks/pouw/budget_sampling.json" = "verity/protocols/pouw/budget_sampling.json"
 "benchmarks/pouw/clear/" = "verity/protocols/pouw/clear/"
-"benchmarks/pouw/eps_budget.py" = "verity/protocols/pouw/eps_budget.py"
-"benchmarks/pouw/gamma.py" = "verity/protocols/pouw/gamma.py"
-"benchmarks/pouw/grind_price.py" = "verity/protocols/pouw/grind_price.py"
-"benchmarks/pouw/period_cost.py" = "verity/protocols/pouw/period_cost.py"
-"benchmarks/pouw/proved_ticks.py" = "verity/protocols/pouw/proved_ticks.py"
 "benchmarks/pouw/receipts/" = "verity/protocols/pouw/receipts/"
 "verity/core/protocols/pouw/" = "verity/protocols/pouw/verifier/"
 "verity/ml/protocols/pouw/" = "verity/protocols/pouw/prover/"
@@ -48,13 +40,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.pouw.budget" = "verity.protocols.pouw.budget"
 "benchmarks.pouw.clear" = "verity.protocols.pouw.clear"
-"benchmarks.pouw.eps_budget" = "verity.protocols.pouw.eps_budget"
-"benchmarks.pouw.gamma" = "verity.protocols.pouw.gamma"
-"benchmarks.pouw.grind_price" = "verity.protocols.pouw.grind_price"
-"benchmarks.pouw.period_cost" = "verity.protocols.pouw.period_cost"
-"benchmarks.pouw.proved_ticks" = "verity.protocols.pouw.proved_ticks"
 "benchmarks.pouw.receipts" = "verity.protocols.pouw.receipts"
 "verity.core.protocols.pouw" = "verity.protocols.pouw.verifier"
 "verity.ml.protocols.pouw" = "verity.protocols.pouw.prover"
