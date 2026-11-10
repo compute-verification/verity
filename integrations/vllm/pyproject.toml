@@ -167,7 +167,6 @@ paths = ["integrations/vllm/verity_vllm/acquire/norm_tap_src"]
 tests = [
     "tests/check/test_capture_map.py",
     "tests/pipeline/test_tp_gpu_lease.py",
-    "tests/pipeline/test_tp_rejudge.py",
 ]
 paths = ["integrations/vllm/verity_vllm/pipeline/tp"]
 

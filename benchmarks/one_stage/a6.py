@@ -97,7 +97,7 @@ def stage_template(K: int, n: int, base: int, bound: dict, out: Path, chunk: int
     t0 = time.time()
     tag = f"s8-coord-k{K}"
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/one-stage/a6/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = SU._s8_coord_draw({"K": K}, n, rng)
+    rows, twin = SU._s8_coord_values({"K": K}, n, rng)
     in_rows = [("x", SEG, 16 * rows["x"].shape[1], ["x", "sx"]), ("w", V2, 16 * rows["w"].shape[1], ["wrow", "sw"])]
     st = CS.UnitStager(template(K), f"unit/a6-{tag}", in_rows, [(V2, (0,))], circuit=out / "circuit.txt", bind=bound)
     t_build = time.time() - t0
