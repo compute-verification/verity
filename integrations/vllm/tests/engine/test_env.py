@@ -202,7 +202,8 @@ def test_every_process_of_the_suite_loaded_inductor_under_the_pin() -> None:
     that ran before it."""
     import importlib.util
 
-    assert ("torch._inductor.config" in sys.modules) == (importlib.util.find_spec("torch") is not None)
+    loaded, installed = "torch._inductor.config" in sys.modules, importlib.util.find_spec("torch") is not None
+    assert loaded == installed, "conftest.py imports torch._inductor.config right after it pins the fixed switches, where torch is installed"
     env.require_inductor({})
 
 
