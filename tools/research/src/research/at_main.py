@@ -8,6 +8,11 @@ moves. Both are as of the checkout's last fetch: no network, so a credential pro
 research code runs its own. `RESEARCH_AT_CHECKOUT=1` runs the checkout's copy (and marks the re-executed process, so it
 never loops). The working directory is kept, so `research run` still ships the caller's checkout.
 
+Setting that worktree up never stops a command: all of it (every git call and the wait for the cache's lock) has `SETUP_S`
+together, and when that runs out, or git fails, or the cache can't be written, the checkout's own copy runs and one line
+on stderr says why. A worktree a killed git left half-made is never run from: the cache names the commit its tree is
+wholly at (`tree`), and the next command makes the tree again.
+
 `cli.main` asks this module first, which covers a checkout that has it. A checkout from before it can't ask, so on an
 agent VM `/usr/local/bin/research` (`tools/agent-guard/research.sh`, installed at boot) runs origin/main's copy of this
 file as a script, with `RESEARCH_CHECKOUT` naming the checkout: it runs origin/main's code or the checkout's.
@@ -17,53 +22,100 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
-import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Callable
 
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"
+#: what one command gives to setting up origin/main's copy, every git call and the wait for the cache's lock together,
+#: before it runs the checkout's own: many times a checkout of this repository on a busy machine, and short enough that
+#: the command isn't taken for hung
+SETUP_S = 60.0
+#: how often a command waiting for the cache's lock tries it again
+LOCK_POLL_S = 0.1
+#: the runner, the clock and the wait of a set-up, which a test stands in for
+run, clock, sleep = subprocess.run, time.monotonic, time.sleep
 
 
-def git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60,
-                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+def late(at: str) -> TimeoutError:
+    return TimeoutError(f"its {SETUP_S:g} s ran out at {at}")
 
 
-def behind(repo: Path) -> tuple[str, int] | None:
+def left(end: float, at: str) -> float:
+    """The seconds until ``end``, a `clock` reading; TimeoutError, naming ``at``, when none are."""
+    if (s := end - clock()) <= 0:
+        raise late(at)
+    return s
+
+
+def call(name: str, argv: list[str], end: float, check: bool = False) -> subprocess.CompletedProcess:
+    """``argv`` (``name`` in a message) within what is left until ``end``: TimeoutError when that runs out, killing it, and
+    with ``check`` OSError when it fails."""
+    try:
+        r = run(argv, capture_output=True, text=True, timeout=left(end, name), env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except subprocess.TimeoutExpired:
+        raise late(name) from None
+    if check and r.returncode:
+        raise OSError(f"{name} exited {r.returncode}: {r.stderr.strip()[-300:]}")
+    return r
+
+
+def git(repo: Path, *args: str, end: float, check: bool = False) -> subprocess.CompletedProcess:
+    name = " ".join(["git", *(a for a in args[:2] if not a.startswith("-"))])
+    return call(f"`{name}`", ["git", "-C", str(repo), *args], end, check)
+
+
+def behind(repo: Path, end: float | None = None) -> tuple[str, int] | None:
     """`(origin/main's commit, commits behind)` when `repo`'s research code is only behind origin/main's, else None."""
-    main = git(repo, "rev-parse", "-q", "--verify", "origin/main^{commit}").stdout.strip()
-    base = git(repo, "merge-base", "HEAD", main).stdout.strip() if main else ""
+    end = clock() + SETUP_S if end is None else end
+    main = git(repo, "rev-parse", "-q", "--verify", "origin/main^{commit}", end=end).stdout.strip()
+    base = git(repo, "merge-base", "HEAD", main, end=end).stdout.strip() if main else ""
     if not base:
         return None
-    own = git(repo, "diff", "--quiet", base, "HEAD", "--", *PATHS).returncode
-    dirty = git(repo, "diff", "--quiet", "HEAD", "--", *PATHS).returncode
-    moved = git(repo, "diff", "--quiet", base, main, "--", *PATHS).returncode
+    own = git(repo, "diff", "--quiet", base, "HEAD", "--", *PATHS, end=end).returncode
+    dirty = git(repo, "diff", "--quiet", "HEAD", "--", *PATHS, end=end).returncode
+    moved = git(repo, "diff", "--quiet", base, main, "--", *PATHS, end=end).returncode
     if own != 0 or dirty != 0 or moved != 1:
         return None
-    n = git(repo, "rev-list", "--count", f"{base}..{main}", "--", *PATHS).stdout.strip()
+    n = git(repo, "rev-list", "--count", f"{base}..{main}", "--", *PATHS, end=end).stdout.strip()
     return main, int(n or 0)
 
 
-def tree(repo: Path, main: str, cache: Path) -> Path:
-    """The cached worktree of `repo` at `main`, made or moved there under a lock."""
-    common = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+def tree(repo: Path, main: str, cache: Path, end: float | None = None) -> Path:
+    """The cached worktree of `repo` at `main`, made or moved there under a lock, by ``end`` (`SETUP_S` from now).
+
+    Beside the tree, `at` names the commit the tree is wholly at: written once git has checked it out, removed before git
+    changes it. So a tree whose checkout was killed (its HEAD already at `main`, its files partly there, its entry in the
+    repository still locked) has no `at`, and is removed and made again, over that entry; a whole tree is moved, and made
+    again when the move fails. The bound stops whatever writes or removes files: the checkout is a git call of its own
+    (`git worktree add` checks out in a child, which outlives it), and `rm` removes the tree."""
+    end = clock() + SETUP_S if end is None else end
+    common = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir", end=end).stdout.strip()
     home = cache / hashlib.sha256(common.encode()).hexdigest()[:12]
     home.mkdir(parents=True, exist_ok=True)
-    wt = home / "tree"
+    wt, at = home / "tree", home / "at"
+    checkout = ("checkout", "-q", "--force", "--detach", main)
     with open(home / "lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if (wt / ".git").exists() and git(wt, "rev-parse", "HEAD").stdout.strip() == main:
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                left(end, f"the wait for {home / 'lock'}, which another research command holds")
+                sleep(LOCK_POLL_S)
+        whole = at.read_text().strip() if at.is_file() and (wt / ".git").exists() else ""
+        if whole == main:
             return wt
-        if (wt / ".git").exists() and git(wt, "checkout", "-q", "--detach", main).returncode == 0:
-            return wt
-        shutil.rmtree(wt, ignore_errors=True)
-        git(repo, "worktree", "prune")
-        r = git(repo, "worktree", "add", "-q", "--detach", str(wt), main)
-        if r.returncode:
-            raise OSError(f"git worktree add {wt} {main[:12]}: {r.stderr.strip()[-300:]}")
+        at.unlink(missing_ok=True)
+        if not whole or git(wt, *checkout, end=end).returncode:
+            call(f"`rm -rf {wt}`", ["rm", "-rf", "--", str(wt)], end, check=True)
+            git(repo, "worktree", "add", "--force", "--force", "-q", "--no-checkout", "--detach", str(wt), main, end=end,
+                check=True)
+            git(wt, *checkout, end=end, check=True)
+        at.write_text(main + "\n")
     return wt
 
 
@@ -74,18 +126,21 @@ def start(src: Path, argv: list[str], execve: Callable = os.execve) -> None:
 
 
 def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None, execve: Callable = os.execve) -> None:
-    """Re-execute `research ARGV` from origin/main's code when `repo`'s is only behind it (module doc); else return."""
+    """Re-execute `research ARGV` from origin/main's code when `repo`'s is only behind it (module doc); else return, with
+    one line on stderr when origin/main's should run and couldn't be set up."""
     repo = repo or Path(__file__).resolve().parents[4]
     if os.environ.get(OPT_OUT) or not (repo / ".git").exists():
         return
     try:
-        found = behind(repo)
+        end = clock() + SETUP_S
+        found = behind(repo, end)
         if found is None:
             return
         main, n = found
-        wt = tree(repo, main, cache or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main")
-    except (OSError, ValueError, subprocess.SubprocessError) as e:
-        print(f"research: running this checkout's copy; origin/main's could not be set up: {e}", file=sys.stderr)
+        wt = tree(repo, main, cache or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main", end)
+    except Exception as e:  # noqa: BLE001  whatever keeps origin/main's from being set up, the checkout's own still runs
+        print(f"research: running this checkout's copy: origin/main's could not be set up ({' '.join(str(e).split())})",
+              file=sys.stderr)
         return
     print(f"research: this checkout's research code is {n} commit(s) behind origin/main ({main[:10]}, as of its last "
           f"fetch), so origin/main's runs, from {wt}; {OPT_OUT}=1 runs this checkout's", file=sys.stderr)
