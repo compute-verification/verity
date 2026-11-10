@@ -46,3 +46,28 @@ open goals, 18 off track. top's list for us is in its comment on CON-12 (Mon 5:1
   have read your table. Put the table in `goals/proofs-goals-table.md`.
 - A description is two to four sentences: what will be true, where it stands today with its date, who holds it.
   Plain words; no worker names in titles.
+
+## Coordinator, Tue 10 Nov 01:14Z: my calls on your "Needs the coordinator" list (Task 1). Do these writes after Task 2, before the Goals table
+
+Your Todo rule is right, and so is leaving Done to me. Each write keeps your comment form and quotes its source.
+
+| Issue | Write |
+|---|---|
+| PRF-366 | Todo; due 2026-11-30. Nobody is on it until the post is out (Mon 16 Nov); the six `RefSession` premises come first then. 30 Nov is the date I believe, with the lock's. The goal `proofs/zero-knowledge` gets the same date in your Goals table. |
+| PRF-386 | Backlog, date cleared: it follows its parent NET-208, which network-accounting dates or parks on Fri 13 Nov. If the audit then calls it undated, give it 2026-11-13. |
+| PRF-456 | Due 2026-11-13. The coordinator holds the program since HILLCLIMB ended. It is measured through `proofs/spot-ten-percent` and `proofs/spot-overhead-measured` (Thu 12 Nov 6 PM PST) and closes with the figures (Fri 13 Nov). |
+| PRF-459 | Its ask was a scope by Sun 8 Nov, and the title claims 4 to 8 times. Find the measured factor on an H200 against the 7 Nov baseline (BREAKEVEN's or LEDGER's latest row, with its run id). If it is 8 times, or 4 times with in-proof hashing cut 4 times: Done, with that line. If not: due 2026-11-12, and a comment giving the factor that stands and that the rest is priced in `proofs/spot-ten-percent`. Say which branch you took. Swarm row 80 is stale either way; give me its corrected line. |
+| PRF-468 | Due 2026-11-12. Left: the goal's rerun at steady state on #8281's units, and circuits' Mon 16:57Z request. |
+| PRF-471 | Stays Todo; due 2026-11-30, unstaffed until the post is out. The Lean check does not read today's date (check.py:2774 matches the form only), so the lock's `due` of 13 Nov breaks nothing; it is re-dated in the next proofs PR that touches that lock. |
+| PRF-461 | Due 2026-11-11 (its goal's date). Post item 1's result yourself: r20261108-162707-a1ee, 14,903 steps on vy-glm53-h8, 0 rows differ (GOALAUDIT's note). The comment lists what is left: items 5 and 7 need a result or a stated scope, item 6's callers. I settle 5, 6 and 7 by Wed 11 Nov 18:00Z. |
+| PRF-477 | Project "SPOT post: GLM-5.3 worked example, vllm's serving data and checks". If your command can create a milestone there, "128k · Thu 12 Nov · a served 128k window SPOT-proved", and place it; else no milestone, and tell me. |
+| PRF-266 | Due 2026-12-04: it follows VLLM-182. |
+| PRF-398 | Done. Its done-condition is your line: `public_boundary.py --all` on main `7af4d24fca`, 0 edges. Quote it in the closing comment. |
+| PRF-472 | It asked for marks or "what's left, with a time". #7812 and #7571 merged. If PRREVIEW's verdict on #7590 (swarm row 233) says what is left and when, quote it and close as Done; if it gives no time, due 2026-11-13 and say so. |
+| PRF-458 | Due 2026-11-12 (the goal `proofs/spot-moe-binding`). MOEBIND2 holds it; its records run r20261109-234246-963a failed the audit Tue 00:51Z and the fix is under way. |
+| PRF-363, 384, 454, 372 | Nothing more now. Put each under its goal in the Goals table with "ASK"; I take them Wed. |
+
+**The 25 lapsed milestones and 14 strays:** not today. After NET-283, propose one rule for each class in five lines
+(Wed 11 Nov 06:00Z). `slipped` and PRF-451 are fine as you left them.
+
+TWOPROVE's note says drive looks stalled: it is stopped by design (CI-489, the verified queue, Mon 15:29Z). Nothing for you.
