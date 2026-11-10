@@ -4,7 +4,9 @@
 against. End-to-end demos, what a person runs to serve and audit a workload, are in `examples/`. Results are not
 committed: a run publishes its outputs to the evidence store, and tables are rendered from the store on demand.
 `verity-bench` (`harness/`) is the shared harness for what an arm adds to served inference against stock vLLM, with its
-specs in `specs/`; `verity bench NAME` runs a directory's own runner.
+specs in `specs/`; `verity bench NAME` runs a directory's own runner. The harness's kit (`harness/verity_bench/kit.py`)
+holds what runners share, each written once: the GPU lease, the host stamp, the paired ratio and the result's writer,
+which records measurements and refuses a verdict of record.
 
 Each directory's README, or its main module's docstring where it has none, says how to run it. Its status is one of:
 
@@ -21,7 +23,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
+| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |

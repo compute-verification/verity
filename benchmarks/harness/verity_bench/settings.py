@@ -40,6 +40,9 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("RESEARCH_RUN_ID", str, "local", WHERE, "the research run a point is, which its result names"),
     S("RESEARCH_SOURCE_SHA", str, None, VALUE, "the commit research run shipped, which a point's identity hashes; unset, the "
       "checkout's HEAD"),
+    # ---- gpu-lease's (the kit's host stamp)
+    S("GPU_LEASE_UUID", str, None, WHERE, "the UUIDs of the GPUs gpu-lease leased the job (it sets them), which the host stamp "
+      "reads the clocks of; unset, every GPU of the host"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # benchmarks/numerical/tests/bench/test_instances.py's opt-in
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads
