@@ -217,6 +217,7 @@ NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
     "archive/AGENTS.md": "stays",                      # what `archive/` is, there before the archive's files arrive
+    "benchmarks/training_slowdown/tests/test_min_cut.py": "stays",   # STAGING ONLY: a file of a pull request not on main
     "verity/core/protocols/spot/schedule.py": "core:spot-python",       # `second_stage.py` imports it
     "verity/core/service/flock/Flock/TmplLines.lean": "core:flock-lean-verifier",
     "verity/ml/definitions/registry/dsa_topk_mask_cut.py": "ml:definitions-registry",
