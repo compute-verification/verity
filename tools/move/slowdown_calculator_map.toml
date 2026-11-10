@@ -1,0 +1,34 @@
+# The slowdown calculator's place: what `tools/move/layout.py --map tools/move/slowdown_calculator_map.toml` moves and
+# rewrites. `benchmarks/rho/`, the calculator of the slowdown lower bound, is `benchmarks/slowdown/`, and its package
+# `rho` is `slowdown`, so `verity bench rho` is `verity bench slowdown` (the command runs the directory it names). The
+# symbol ρ stays wherever the math writes it, and so does every other `rho`: only the directory, the package and the
+# references to them are rewritten.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", rho = "benchmarks/rho/rho" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"benchmarks/rho/" = "benchmarks/slowdown/"
+"benchmarks/rho/rho/" = "benchmarks/slowdown/slowdown/"
+
+[retired]
+paths = ["benchmarks/rho/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, and `move_check.py`, whose docstring names this directory as its example of a moved one.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.rho" = "benchmarks.slowdown"
+"rho" = "slowdown"

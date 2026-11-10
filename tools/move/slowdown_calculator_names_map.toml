@@ -1,0 +1,41 @@
+# The slowdown calculator's names that its move leaves: what `tools/move/rename.py --map
+# tools/move/slowdown_calculator_names_map.toml` renames, on a tree `slowdown_calculator_map.toml`'s move has run on (its
+# files are named where that move puts them). They rename no path, module or Lean declaration, so the change they make is
+# an ordinary one, reviewed as such.
+# - The command: `verity bench rho` is `verity bench slowdown`.
+# - Its outputs: `rho.md` and `rho.json` are `slowdown.md` and `slowdown.json`.
+# - The joins the move's tools don't follow: `HERE.parent / "rho"` in the two runners that put the calculator on
+#   `sys.path`, and the row `rho/` of `benchmarks/README.md`'s table.
+# - The calculator named "rho" in the benchmarks' prose: "rho's" is "the slowdown calculator's".
+# What stays: the symbol ρ, every `rho` that is a number (`Overhead.rho`, `Estimate.rho`, the JSON's `rho`), and the
+# red team's codec, whose `rho` is a function of its own ([keep_in]).
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/slowdown/**", "verity/core/protocols/remote/README.md"]
+words = { "verity bench rho" = "verity bench slowdown", "rho.md" = "slowdown.md", "rho.json" = "slowdown.json" }
+
+[[words_in]]
+files = ["benchmarks/circuit_properties/run.py", "benchmarks/nci/statement.py"]
+words = { 'HERE.parent / "rho"' = 'HERE.parent / "slowdown"' }
+
+[[words_in]]
+files = ["benchmarks/README.md"]
+words = { "`rho/`" = "`slowdown/`" }
+
+[[words_in]]
+files = ["benchmarks/**"]
+words = { "rho's" = "the slowdown calculator's" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, lock files, and the cards a digest names.
+exclude = ["tools/move/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+strings = []
+
+[keep_in]
+"benchmarks/property_redteam/**" = ["rho's"]
