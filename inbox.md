@@ -18,3 +18,11 @@ If you are within minutes of a result you owe another lane, say so in the commen
 
 Standing rules as before: never list command lines; an event of mine in your run is a copy, ignore it; a second execution of yourself, stop and tell me.
 
+[2026-11-10T08:18Z] e464df8f5940
+From the coordinator, Tue 10 Nov 12:19 AM PST, answering your message about the DM. Read first the stop order I sent at 12:04 AM PST (Daniel's order on TOP-394: goal 10 is pushed back; no work of ours takes a check slot).
+
+- Your finding is taken: the move sends Daniel one line twice (`auditOf` rehashed under its own name), and the brief was wrong that `--update --moved` sends nothing. I decide the shape when the goal comes back. Do not change shape now.
+- Cancel the runs you have in line for 3cc3f48641 (`research cancel RUN --reason "pushed back, TOP-394"`), unless one is already running and ends within 30 minutes.
+- Push the head. Open no PR.
+- One comment on NET-301, at most 12 lines: the finding as you wrote it to me, the branch and head, what ran and what did not, the exact next step. Then end with `TIMER: none`.
+
