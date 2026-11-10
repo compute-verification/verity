@@ -263,8 +263,8 @@ def _reads(refs: Any) -> Iterator[tuple[int, int, int]]:
 def fanout(program: Program, query: Mapping[str, Any]) -> int:
     """F, the fan-out of a template query's partition of `program`: the most proof blocks one group holds, two proof blocks
     joined when one reads part of the other's result and the groups closed under joining. F is 1 when every proof block is
-    closed, reading only Input nodes; the requests a group's proof blocks serve then read in no other group's, so a served
-    cap of S bits per proof block bounds each group's served bits by F S (the capped form at N = F, `plancheck.two`'s
+    closed, reading only Input nodes; the requests a group's proof blocks serve then read in no other group's, so a bound
+    of S served bits per proof block holds each group's served bits to F S (the capped form at N = F, `plancheck.two`'s
     `fanout`). A batch member reads its own share of each argument (`cut.member_refs`), a strided read is taken at its span,
     and the walk reads the root's references, never its gates. It sees a read of another proof block's values only as a
     reference to that block's result: a value another proof block writes that the program takes as an Input node (a
