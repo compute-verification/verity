@@ -84,3 +84,28 @@ Your node A run (r20261110-160454-6084) and its comment are read and checked aga
 HASH-100 at 16:45Z. This section replaces the 07:54Z STOP, which the 15:35Z brief had already lifted: you were right
 to take the brief. Card 5 with cores 24-47 is KSTEADY's from 16:50Z. Launch nothing; if you are ever resumed, read
 your note's first line and wait for a new section here.
+
+## Tue 10 Nov 23:58Z: a new issue, HASH-109: where a fused expert block's steady second goes
+
+Daniel asked every lead (TOP-394's thread, 23:52Z) to use what sits idle and look ahead. benchmarks' command now
+prices 91.4% of Flock's proving from KSTEADY's steady rows, and on the new census the two fused expert types are
+most of it: 1.4848 and 1.4420 GPU-seconds a statement at one prover, the card busy under half the time. Nobody has
+profiled them. Read HASH-109's brief; this section is how.
+
+- **What:** the two fused types of benchmarks' rows 3 and 5 (specs and pins in proofs' comment on HASH-98, 18:44Z;
+  stage at full from `d7ab9059c3a5f94093759753d23b06a4872026c0`, as KSTEADY did: its `ksteady-jobs/` show how), at 1,
+  2 and 4 provers, on **12 cores, one card's share of the node**. A steady statement's wall time split: the host's
+  witness build, GPU kernels by HASH-100's classes, copies, the waits, idle card time; the prover's own phases
+  beside it; how the split moves from 1 to 4 provers. Then the three largest levers, each with the most it could
+  save, marked inferred, and what would have to change.
+- **Where:** node A, **card 3, cores 0-11, Wed 00:15Z to 03:30Z** (the calendar's row, pushed 23:57Z). The same start
+  check under the kernels lock, one lease on card 3, an end time before 03:30Z. Cards 0 to 2 are not yours. KSTEADY
+  times on cards 4 to 7 meanwhile: say what ran beside you, and keep half your processes without nsys as before.
+- **Checks a timed number needs here:** every session accepted, no CPU throttling (the cgroup's counters before and
+  after: Monday's prover run on a rented pod was throttled and nobody saw), the card clear at start and end, the
+  verifier named (Rust's in loopback, not Lean).
+- **Staging first on a CPU node** if it saves the card's time, as you did for HASH-100; a run that waits on cpu-3
+  or cpu-6 goes to `vy-nebius-cpu-12` instead (`inbox/RULES.md`, "Runs").
+- **Report on HASH-109 by Wed 04:00Z:** the run ids with their verdict lines, the table, the three levers, in at
+  most 150 words for proofs and benchmarks; exports and summary in the store; the note synced. No change to the
+  prover, no pull request, no label on any row.

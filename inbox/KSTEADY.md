@@ -442,3 +442,8 @@ benchmarks ran its command again (HASH-98, 23:10Z): **steady rows price 91.4% of
 **The move is on again tonight** (`inbox/RULES.md`, "The queue, today"): due on `main` about 03:45Z. Your runs stage
 from pinned commits, so nothing of yours changes; do not rebase or restack anything of yours tonight. KMOVE takes
 card 4 from Wed 04:00Z to 07:30Z for the kernels' recheck: be off card 4 and cores 12-23 by 04:00Z.
+
+## Tue 10 Nov 23:58Z: a neighbour tonight on card 3 and cores 0-11
+
+KHSHARE profiles the two fused types on card 3 with cores 0-11 from Wed 00:15Z to 03:30Z (HASH-109; the calendar's
+row). Nothing of yours changes: name it among what ran beside a row timed in those hours.
