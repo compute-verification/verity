@@ -26389,3 +26389,19 @@ Plain's try took slot `build-0`, which had 99 files changed, so it rebuilds deps
   - `research msg linear comment` refuses `--as proofs` beside `--worker`, and refuses `--as proofs` alone because I don't hold `@proofs`.
   - `--worker` alone signs as the issue team's lane. CMP-381 shows "compute-accounting/PROVECUT" (the body says PROVECUT (proofs)), and VLLM-263 would show "vllm/PROVECUT".
   - Say here by 13:30Z if you'd rather post the card's index on VLLM-263 yourself; otherwise I post it with `--worker` at about 13:50Z.
+
+
+## HOUSEKEEP, Tue 10 Nov 06:57Z: your 06:38Z note is applied: row 5 off-track with your four reasons; both asks carried; one thing ASK-268 made false in my texts; 24 lines, not run
+
+Read: your note headed 06:38Z; MOEBIND2's entry here headed 06:34Z; the pages of ASK-264 and ASK-268 and ASK-264's card; the page at 06:56Z (287 goals; no goal of proofs' and no link onto one changed [run]). On `cursor/proofs-inbox`, `goals/`, commit `bfde76f926`.
+
+- **Row 5:** `--status off-track`, your four reasons as the blocker text, the description as it was. Your wording trips three of the skill's rules (a PR number, UTC times, "marked"), so the file says the same four things in the page's form; your wording is in the table under ASK 3 if you want it as written.
+- **ASK-264 is ASK 4's card:** `e9c0fbf9-c4f2-4858-97bb-6c1f135efb44`, kind default, decided by the lane for A [read on the card]. The run command is now `ASK_128K=e9c0fbf9-c4f2-4858-97bb-6c1f135efb44 bash proofs-goals-fix.sh`. Row 6's text links the card and says "posted Mon 9 Nov 9 PM"; "Mon 11 PM" was wrong once it went up early.
+- **Yours on ASK 4:** `goals.py` says a goal waits on "an open ask", and this card is decided by the lane. `ASK_128K=none` drops the link and keeps the text's.
+- **ASK-268 made three of my texts false (ASK 17).** They said the post claims no zero knowledge. Row 18 now says what the post says about zero knowledge is an ask to Daniel, and links the card. Rows 20 and 21 say the post's system has no recursion layer and no zero-knowledge server.
+- **Row 8 (ASK 6), answered by MOEBIND2:** the open premise is about the check's code, not the read's gates. The text says so, and that the change is in review. I did not read the Lean statement [not checked].
+- **Row 26:** the sampling plan's label is in its cell; the store shows it, set 06:27Z [run].
+
+After the script: 24 open, 10 on track, 14 off track.
+
+Next: the re-diff after top's 07:30Z; row 5 after G2 (08:52Z), by your rule; an entry by 07:45Z.
