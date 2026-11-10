@@ -7,6 +7,21 @@ answer of a given size can cross the path, which bounds a timed read from below.
 challenger and responder, with one challenge datagram and a per-challenge answer datagram size; the memory challenger
 (`verity/protocols/pous/device`) has no network transport yet.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `python3 benchmarks/pous/lateness/job.py [--conditions LIST] [--challengers LIST]`, with `OUT` and `OMP_NUM_THREADS` | One job on a GPU node with two GPUs: it builds `lat`, starts the responder, and for each condition runs its load and times challenges from each challenger in turn. It writes each cell's records, the loads' reports, the environment and `summary.json` to `$OUT`. |
+| `python3 benchmarks/pous/lateness/net.py [--only LIST]`, with `OUT` | The network path alone, with no GPU: host-memory answers and pings, in variants and as concurrent series. It writes to `$OUT`. |
+| `python3 benchmarks/pous/lateness/irqpin.py [--ops OPS] [--dgram BYTES] [--seconds S]`, with `OUT` | The challenger on and off its flow's receive-interrupt CPU. It writes to `$OUT`. |
+| `python analyze.py ROOT... --json FILE` | p(τ) with intervals, each late answer's cause, and the strict audit's rejection and survival curves, from the jobs' output trees. `table.py`, `align.py`, `bins_irqpin.py`, the two models and the two plots read its JSON or the same trees. |
+| `lat serve`, `lat probe` and `lat load` (`lat.cu`, built by the lines in its header) | The UDP responder, the challenger and a serving-like load. Their datagrams and records are the two sections below, Wire format and Records. |
+
+Nothing outside this directory imports or runs it, and it has no tests. `tests/test_vllm_boundary.py` lists
+`vllm_load.py` among the benchmark files that import vLLM.
+
 Measuring:
 
 - `lat.cu`: `lat serve` (the responder), `lat probe` (the challenger) and `lat load` (a serving-like load). Build lines are

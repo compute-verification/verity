@@ -17,7 +17,8 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/vllm_encoded/run.sh`, with `ARMS` as its header lists them | Llama-3.1-8B or 70B decode in vLLM on one GPU with its linear weights stored only encoded, against the same engine with plain FP8 weights: `ve.cu` built, the layout tests, one `serve.py` process an arm, then `compare.py`'s gates and points. It writes to `$RESEARCH_RUN_DIR/out`. |
 | `bash benchmarks/vllm_encoded/stack.sh`, with `MODE` one of `paged`, `splits`, `window`, `rekey` and `serve` | The encoded stack on one GPU: `paged.cu` built at the stack's codec, then `MODE`'s job (`paged_gate.py`, `paged_splits.py`, `window_gate.py`, `rekey_gate.py`, or `serve.py`'s arms). It writes to `$RESEARCH_RUN_DIR/out`. |
 
-Read from outside `benchmarks/`: `paged.py`, loaded from its file, and `paged.cu`'s build.
+Read from outside `benchmarks/`: `benchmarks/vllm_encoded/paged.py`, loaded from its file, and the build of
+`benchmarks/vllm_encoded/paged.cu`.
 
 ## Arms
 

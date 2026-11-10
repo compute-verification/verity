@@ -15,8 +15,8 @@ What code outside this directory may use. Everything else here is internal.
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. |
 
 Read from outside `benchmarks/`: `benchmarks/remote_session/prover.py`, `benchmarks/remote_session/device.py` and
-`benchmarks/remote_session/inplace.py`, each loaded from its file by the vLLM integration; and `session.cu`'s build.
-The verifier's process is not here: these scripts run PoUB's,
+`benchmarks/remote_session/inplace.py`, each loaded from its file by the vLLM integration; and the build of
+`benchmarks/remote_session/session.cu`. The verifier's process is not here: these scripts run PoUB's,
 `verity/protocols/poub/verifier/remote_session/verifier_process.py`.
 
 **Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`

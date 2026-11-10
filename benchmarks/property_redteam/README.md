@@ -9,6 +9,22 @@ which falsified `EncodeChainHardness`, and `free_codec.py` is the construction b
 `SquaringFloor` in the gate model at p1024, `renorm.py` searches toy fields for counterexamples to the re-normalization
 conjecture N_L, `products_pass.py` counts data products on property/v1's pass, and `demo.py` evaluates a registry.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `uv run tools/verity/check/suites.py benchmarks/property_redteam` | The suite: every attack and the cases, on the CPU. It writes no result. |
+| `uv run python benchmarks/property_redteam/run.py --check MODULE:FUNCTION [--case ID ...] [--out FILE.json]` | Grades one check of the stacking property against the cases. A check is `FUNCTION(program) -> {"refused": bool, "charged": {class: units}}`; `accept-all` and `refuse-all` name the two trivial ones. It prints each case's outcome, writes the report to `--out`, and exits 0 when every graded case is `ok` or `sound`. |
+| `uv run python benchmarks/property_redteam/run.py --json` | Prints the cases' metadata, which is `cases.json`. |
+| `cases.json` | The cases as data: each one's id, kind, verdict and charge, as `run.py --json` writes them. |
+
+Nothing outside `benchmarks/` imports from this directory. Named from outside by their paths:
+`tests/test_bitwise_codec.py`, which the security analysis cites as the test that falsified `EncodeChainHardness`;
+`bitwise_codec.py`, which two of its proofs cite as the construction; and `cases.py`, the closed table that
+`security/Definitions/Accounting/Gates/Registry.lean` compares `classOf` with.
+
 **Status: active.** The lock names `tests/test_bitwise_codec.py::test_the_conjecture_fails_at_p1024` as
 `EncodeChainHardness`'s falsification test, `security/Definitions/Accounting/Gates/Registry.lean` holds `classOf` to
 `cases.py`'s closed table, `benchmarks/stacked_share` loads `products_pass.py`, and the audit's `test_encode_chain.py`

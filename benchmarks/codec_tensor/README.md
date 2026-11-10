@@ -17,8 +17,8 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/codec_tensor/reader.sh` | The device reader on one GPU (`reader.py`): `reader.cu` built, gated byte for byte against PoUB's driver, then one pass timed. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
 | `bash benchmarks/codec_tensor/step.sh`, with `MODEL` and `BATCH` | One decode step at HBM exhaustion on one GPU (`step.py`), after the codecs' tests and `reader.cu`'s gate. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
 
-Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
-`benchmarks/remote_session/session.cu`'s build.
+Nothing outside `benchmarks/` reads this directory by its path. `benchmarks/codec_tensor/reader.cu` leaves it inside
+the build of `benchmarks/remote_session/session.cu`.
 
 **Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes

@@ -3,6 +3,20 @@
 The measurements PoUB's timing cites (`verity/protocols/poub/verifier/timing.py`): how fast a node's writers can
 fill a tier with labels, and how much a card holds on chip. Each probe is one Attempt on a GPU node.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `bash benchmarks/bandwidth/run_write_gpu.sh [ARGS]` | The write ceilings' GPU half: it builds `write.cu` (`bwwrite`) and runs every arm on one RTX PRO 6000, the queue's GPU or one it leases. `ARGS` go to `bwwrite`. It writes `build.txt`, `sass.txt`, `gpu.txt`, `dmon.txt`, `write.jsonl` and `rc.txt` to `$OUT`. |
+| `bash benchmarks/bandwidth/run_write_host.sh`, with `KERNELS`, `REPS`, `SECONDS` and `MIB` | The write ceilings' host half: it builds `write_host.c` (`bwwrite_host`) and writes host DRAM on the CPUs the job was given. It writes `env.txt`, `build.txt`, `write_host.jsonl` and `rc.txt` to `$OUT`. |
+| `bash benchmarks/bandwidth/run_chip.sh`, with `GPUS`, `TIMED`, `ONLY` and `UR_PAIRS` | The chip's stores on one RTX PRO 6000: it builds `chip.cu` (`bwchip`), assembles the code-footprint kernels and runs the sweeps under a lease of one GPU. It writes `build.txt`, `gpu.txt`, `sass.txt`, `uniform.txt`, `chip.json` and `ur.jsonl` to `$RESEARCH_RUN_DIR/out`. |
+
+Each script runs from the source tree's root, and its header gives the command of its Attempt. The directory has no
+suite, and nothing imports from it. PoUB's `timing.py` names `write.cu`, `write_host.c` and `chip.cu` by their paths as
+the benches of its three constants, and a test of PoUB's suite holds the two write ceilings' docstrings to those paths.
+
 ## Write ceilings
 
 The write ceilings of PoUB, `timing.GPU_WRITE_BYTES_PER_S` and
