@@ -12,9 +12,8 @@ a table read's is the templated statement of the verifier's read template), boun
 is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
 circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
-circuit a5 composes: slots for a ``SPLITS`` part or a ``CHAINS`` block of whole blocks (`verity_vllm.pipeline.split_rows`,
-`chain_rows`), a ``STAGES`` stage, a whole attention row (``chunk_rows.SLOT_ROWS``) and FlashInfer's FP8 linear, a coordinate
-or its quantisation part (``chunk_rows.SLOT_LINEARS``), else inline.
+circuit a5 composes: slots for a ``SPLITS`` part of whole blocks (`verity_vllm.pipeline.split_rows`) and for a whole attention
+row (``chunk_rows.SLOT_ROWS``), else inline.
 """
 from __future__ import annotations
 
