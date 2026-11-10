@@ -63,6 +63,8 @@ def test_a_reds_kind_is_read_from_its_failed_tasks():
 def test_the_check_nodes_are_the_loops_on_flag():
     assert qt.check_nodes("--batch 16\n# a comment\n--on vy-nebius-cpu-13,vy-nebius-cpu-7\n--gate check\n") == ["vy-nebius-cpu-13", "vy-nebius-cpu-7"]
     assert qt.check_nodes("") == []
+    appended = "--on vy-nebius-cpu-1,vy-nebius-cpu-2\n# it runs --on vy-nebius-cpu-7\n--shards auto:5 --depth 2 --on vy-nebius-cpu-13,vy-nebius-cpu-9\n"
+    assert qt.check_nodes(appended) == ["vy-nebius-cpu-13", "vy-nebius-cpu-9"]       # a deploy appends a line, and the last flag wins
 
 
 def test_a_shards_gate_ends_with_its_last_step_on_the_gate():

@@ -78,8 +78,8 @@ except OSError:
 # the executor's own list of its checks: one line a check, its tasks by state (`graph2.py status`, which only reads)
 checks, why = [], ""
 try:
-    words = shlex.split(args)
-    g2 = shlex.split(words[words.index("--graph2") + 1]) if "--graph2" in words else []
+    words = shlex.split(args, comments=True)
+    g2 = shlex.split(words[len(words) - words[::-1].index("--graph2")]) if "--graph2" in words[:-1] else []
     out = subprocess.run([*g2, "status"], capture_output=True, text=True, timeout=40).stdout if g2 else ""
     why = "" if out else "the loop's args name no --graph2, or its status printed nothing"
 except (OSError, ValueError, subprocess.SubprocessError) as e:
@@ -276,9 +276,10 @@ def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tupl
 
 
 def check_nodes(args: str) -> list[str]:
-    """The nodes the loop sends a candidate's shards to: its `--on` flag."""
-    m = re.search(r"^--on\s+(\S+)", args, re.M)
-    return m.group(1).split(",") if m else []
+    """The nodes the loop sends a candidate's shards to: the last `--on` of its arguments file, as its parser reads them (a
+    deploy appends a line, and a line starting with `#` is a comment)."""
+    found = re.findall(r"(?:^|\s)--on[ =](\S+)", "\n".join(ln for ln in args.splitlines() if not ln.lstrip().startswith("#")))
+    return found[-1].split(",") if found else []
 
 
 def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
