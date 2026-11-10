@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
-import Proofs.Flock.Claims.Sampling.Select.SecondWitness
+public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 import Flock.HmRow
 import Flock.TemplateQuery
 import Flock.Canon
