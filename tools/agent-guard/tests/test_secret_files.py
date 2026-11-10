@@ -30,7 +30,9 @@ def hook():
         yield load("shell_hook")
 
 
-REFUSED = [
+#: the plain readers (`cat`, `head`, `sed`, `grep` and the like) in each place a command can sit: the base that every later
+#: reading of a command line keeps refusing, whatever stands ahead of the reader (NAMESAKES)
+PLAIN_READS = [
     # each reading command, on each kind of file
     "cat key.pem",
     "head -3 ~/.ssh/id_rsa",
@@ -103,6 +105,32 @@ REFUSED = [
     # the local-work opt-in is not this rule's
     "AGENT_GUARD_LOCAL_OK=1 cat x.pem",
     "AGENT_GUARD_LOCAL_OK=1 ssh n1 'cat /root/.config/verity/*'",
+]
+
+#: words that name a printer judged on no word after it, and the ways such a word stands ahead of a command without running it
+NAMESAKES = ["openssl", "tee", "tr", "dd"]
+AHEAD = ["{word} {command}", "ssh {word} {command}", "docker run alpine/{word} {command}", "env PATH=/opt/{word} {command}"]
+#: where a command can sit
+PLACES = ["{}", "ssh n1 {}", "ssh n1 '{}'", "research pods ssh vy-nebius-1 -- {}", "research pods ssh vy-nebius-1 -- '{}'",
+          "bash -c '{}'", "sudo sh -c '{}'", "echo \"$({})\"", "KEY=$({})"]
+
+REFUSED = PLAIN_READS + [
+    # a word that only shares a printer's name (a host, an image, a directory, a file) hides no reader after it
+    "ssh tee cat ~/.ssh/id_rsa",
+    "docker run alpine/openssl cat /k.pem",
+    "find openssl -name '*.pem' -exec cat {} +",
+    "env PATH=/opt/openssl cat k.pem",
+    "ssh tee 'cat ~/.ssh/id_rsa'",
+    "docker run alpine/openssl sh -c 'cat /k.pem'",
+    "ssh sort 'cat x.env | cut -d= -f1'",
+    "ssh cmp head -1 /root/.config/verity/r2.env",
+    "docker run alpine/diff -q cat /k.pem",
+    "tee cat x.pem",
+    "dd status=none cat x.pem",
+    "openssl version; openssl x509 -noout cat x.pem",
+    "perl -e 'system(\"head -1 x.pem\")'",
+    "python3 -c \"import os; os.system('head -1 x.pem')\"",
+    "python3 -c 'import sys' head x.env",
     # a grep's option that takes a value is neither its pattern nor a file
     "grep -m 1 TOKEN x.env",
     "grep -A 2 -e KEY x.env",
@@ -298,6 +326,19 @@ ALLOWED = [
     "-C ~/.ssh -xf -'",
     "research pods ssh vy-nebius-1 -- 'sudo tar -C /etc/verity -cf - lean-cache.env' | research pods ssh vy-nebius-3 -- 'sudo mkdir -p "
     "/etc/verity && sudo tar -C /etc/verity --no-same-owner -xf - && sudo chmod 600 /etc/verity/lean-cache.env'",
+    # a grep's, sed's or awk's later words are its pattern, its script and its files, whatever they spell
+    "grep -l sort x.env",
+    "grep -c cat x.env",
+    "rg -l tee secrets/",
+    "sed -i 's/cat/dog/' x.env",
+    "sed -i -e s/tar/zip/ x.env",
+    "ssh n1 grep -l tar /etc/vy/env/root.env",
+    "awk 'BEGIN { print \"cat x.env\" }'",
+    # a word that shares a printer's name ahead of a command that shows no contents
+    "ssh tee ls -la ~/.ssh",
+    "docker run alpine/openssl sha256sum /k.pem",
+    "env PATH=/opt/dd stat key.pem",
+    "ssh gzip chmod 600 /root/.ssh/id_rsa",
     # openssl on a certificate, on a public key, checking a key, or writing a file
     "openssl x509 -in cert.pem -noout -text",
     "openssl x509 -in /etc/ssl/certs/ca.pem -noout -fingerprint -sha256",
@@ -357,6 +398,24 @@ def test_a_command_that_would_print_a_secret_file_is_refused_with_the_fix(hook, 
 @pytest.mark.parametrize("command", ALLOWED)
 def test_a_command_that_shows_no_secret_files_contents_passes(hook, command):
     assert hook.secret_file_reason(command) is None, command
+
+
+@pytest.mark.parametrize("command", PLAIN_READS)
+def test_a_word_that_only_shares_a_printers_name_hides_no_plain_read(hook, command):
+    """Every plain read stays refused with a namesake ahead of it: the first word that names a printer is not the only one
+    judged, so one that names no file of its own (a host called `tee`, an image `alpine/openssl`) lifts no refusal."""
+    hidden = [line for line in (form.format(word=word, command=command) for form in AHEAD for word in NAMESAKES)
+              if hook.secret_file_reason(line) is None]
+    assert not hidden
+
+
+@pytest.mark.parametrize("place", PLACES)
+@pytest.mark.parametrize("word", NAMESAKES)
+def test_a_namesake_before_or_after_the_reader_keeps_the_refusal_in_each_place(hook, word, place):
+    for command in (f"{word} cat key.pem", f"/opt/{word}/bin/{word} head -1 x.env", f"cat {word} key.pem", f"cat key.pem {word}",
+                    f"cat key.pem | {word}", f"{word} < x.env | cat ~/.ssh/id_rsa"):
+        reason = hook.secret_file_reason(place.format(command))
+        assert reason and "would print" in reason, place.format(command)
 
 
 @pytest.mark.parametrize("command, reader, path, kind", [
