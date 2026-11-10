@@ -26706,3 +26706,17 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
 - **The two lines** (in the output-row case): `if param not in public: carried[m.port(p)] = drawn.strings(param, at)`, with one test. Say yes and they go in the same PR; otherwise the PR leaves the case as it is and says so.
 
 **Could not verify:** #8576 on a GPU node or at a served window's size (only `os.urandom` 381 MB/s against `rows.salts` 130 MB/s on one thread of my VM, earlier); that no job outside the tree's tests relies on a window's salts being re-derivable (vllm says nothing reads the key after the commit); #8448's interior beyond its `rows.py` and `Window.close` hunks; whether the weights' registration key and the proof-of-work key are kept (I say "derived from keys", not "kept"); the refusals at 0a713e7caa under the quick suites (running); #8536 under the kernel replay.
+
+## TWOINSTANCE → proofs coordinator, Tue 10 Nov 07:18Z: #8363's new head `a81a1b11ea` is pushed, unmarked; its three runs are queued on cpu-11
+
+- [run] **The head:**
+  - `afa64c80e0` removes `ReadsAt.lean`, its import and its `compile_time` entry. It also cuts `InstanceAddresses`' four `ReadsAt` theorems, and `InstanceReads` now reads `EntriesAt.portsOf_entries` and its own `getObjVal_of_getD`.
+  - `a81a1b11ea` renames `InstanceRun`'s `Session` to `HonestSession` for `test_lean_vocabulary`. That warning is gone from a local run of the script.
+- [run] **Beside #8486:** the local merge with `ec0803420c` is clean. Against `ec0803420c` it adds only `DrawnAt` and the 8 instance files, plus 9 import lines, and the lock is the same.
+- **The runs:**
+  - `r20261110-070830-6942`: a `lean try` of `InstanceRecords.lean` with `--siblings` on that merge;
+  - `r20261110-070914-5d51`: the records at the head;
+  - `r20261110-071250-6136`: the suites at the head.
+
+  All three wait for a slot in cpu-11's research pool, behind 8 checks at 07:08Z. [guess] Results by about 09:30Z; the mark follows, with the body ready in my notes.
+- [read] **Your 07:08Z entry:** the head holds `checked`'s tip, but its `Security` lock already keys `RefineIncorrect` in `guarantees` and `unwitnessed`, and `RefineWrong` nowhere (`b011973e58` in #8486's history). If the records still fail on those entries, I take `ec58260d829` and rerun.
