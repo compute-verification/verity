@@ -460,16 +460,14 @@ of leaking it.
 | the HTTP status line and headers (`date`, `server`, `content-type`, request ids, load metrics), chunk sizes, keep-alives | refused | none: no HTTP head leaves |
 
 **Not yet true.**
-- The format gate isn't written. `warden.Warden._egress` cuts the server's bytes into cells without reading them, and
-  `warden.REASONS` has no `format`. The reasons are in the parameters' digest, so the gate changes the network
-  certifier's parameters.
 - The I/O tie is a prototype on a fake upstream: in no Spec, unproved, and with the real port, vLLM's Commit, not wired
   to it. Its Lean is to be the egress half of the explanation premise of the composed weight-security theorem.
 - No proof block checks the stop rule yet. Advice v1's tie checks it in the clear (`stop_rule`), and the compile slice
   has no stopping request.
-- The deployed network certifier has neither the gate nor the tie. Its egress check is the step-indexed scan's
-  egress transfer blocks (`EgressBucket`), which render a drawn bucket's id-form row from the scan's slot state, so a
-  byte out of form is caught only in a drawn bucket.
+- The network certifier has the gate in the id egress form only (`warden.Warden._egress`; a schedule in the bytes form
+  relays any bytes), and not the tie. What a cell's ids are is checked by the step-indexed scan's egress transfer
+  blocks (`EgressBucket`), which render a sampled bucket's id-form row from the scan's slot state, so a wrong id is
+  caught only in a sampled bucket.
 - vLLM's own server emits its stock framing, so behind the gate every connection of its would fail `format`. (`LiveServer`
   in `benchmarks/network_traces/active_replay.py` writes the ordinal event, which `parse_cell` doesn't read, but it never
   sits behind the gate: it is the active replay's server side, where the ordinal event tells requests apart.)
