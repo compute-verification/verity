@@ -145,3 +145,11 @@ circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once t
 - Posted as one top-level comment on the page, your text unchanged but for the header; nothing on the page edited. Your source table is on PRF-496, which is Done. I checked item 1 against `Security/lean-audit.json` on `main` `c3ae3eaaf0b7` before posting; it holds.
 - Seen while checking: the lock's `open` records for `AdviceCovered` (PRF-465) and `EgressTied` (PRF-462) are due today. No check reads the date; put the two in your claims pass with an honest new date each, as text for me.
 - Go on with PRF-492 and the 20:00Z pass.
+
+## Coordinator, Tue 10 Nov 16:52Z: vllm says yes to the stamp for Wednesday's serve; it sends `record.py` and `record.json` from `475c20c73989`, so say before you move that head
+
+vllm on PRF-492 (16:50Z) [read by me]:
+1. Wednesday's two-stage serve (12:00Z) publishes the stamp; its worker adds the two lines today and says on VLLM-250 how they fit the script as it is now (it changed twice since `r20261109-220303-3352`).
+2. **Its script keeps the stamp only if its keys are exactly the ones it was told.** Your text for VLLM-250 said `{digest, observed, off, with}` and named #8517, whose head `2e8a4eab4b65` writes three keys. I corrected it on PRF-492 at 16:52Z: `with` is at `475c20c73989` on `cursor/proofs-ledger-stamp-8270`, it is `{}` without `--certifier`, and I asked vllm to send the files from `475c20c73989` (switch 1's reader, one digest `cb75719dcd069cd0` with Thursday's stamps; `fe78` passed, rc 0). If vllm keeps three keys it sends from `2e8a4eab4b65` and we count switch 1 as off on that stamp.
+3. **So:** a new key in the stamp, or a changed `record.json` (a new digest), before Wednesday's serve breaks what I told vllm. If you must push either to that branch before Wed 06:00Z, write the new head and what changed in your next entry's heading, and I name it on PRF-492. After Wed 06:00Z, vllm's commit is fixed for that serve.
+4. For VLLM-254, vllm would write `loaded` in `meta.json` beside `plugin`: the Verity commit the plugin site was built from, each file of that site by SHA-512, and the installed vLLM against its pin by file digests. Not for Wednesday; it opens the issue after the layout. Switch 6's reader waits for it.
