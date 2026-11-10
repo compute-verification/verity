@@ -13,7 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     splits.  Then every route `cublas_routes.json` records for GLM-5.3's two split-K weights on one TP8 rank (``served-``), up to
     its m_max: the MoE router's gate (K = 6144, N = 256, f32 out) and the indexer's ``wk`` (K = 6144, N = 160), each at two,
     three and four splits and non-split (the indexer's is core's `Gemm_v2`); `test_cublas_served` holds them to the table.
-    Last, the TF32 GEMM at the rotation codecs' (K, N) = (64, 64) (`TRAIN_TF32`); at (512, 512) one unit is past C-Flock's
+    Last, the TF32 GEMM at the rotation codecs' (K, N) = (64, 64) (`TRAIN_TF32`); at (512, 512) one proof block is past Flock's
     proved block range, and `test_cublas_train` holds that shape to the capture's words."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
