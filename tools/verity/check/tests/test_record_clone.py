@@ -48,6 +48,19 @@ def test_every_launch_on_a_machine_asks_for_its_own_clone_and_a_local_one_runs_i
     assert local[local.index("--cwd") + 1] == "source"
 
 
+def test_a_deselect_list_travels_as_an_after_landing_runs_input_and_no_other_recorded_check_takes_one(tmp_path, monkeypatch, capsys):
+    """`--deselect FILE`: the tests a candidate's check leaves out reach its machine as the run's `DESELECT_FILE` input, and only
+    an after-landing run (`--deferred` on a machine), which no gate takes, sends one."""
+    listed = tmp_path / "deselect.txt"
+    listed.write_text("a/tests/test_a.py::test_a\n")
+    [head] = _launches(monkeypatch, ["--on", "vy-x", "--priority", "--keep-going", "--deferred", "pytest", "--deselect", str(listed)])
+    assert [Path(head[i + 1]).name for i, x in enumerate(head) if x == "--send"].count(CHECK.DESELECT_FILE) == 1
+    for argv in (["--on", "vy-x", "--deselect", str(listed)], ["--deferred", "pytest", "--deselect", str(listed)],
+                 ["--on", "vy-x", "--deferred", "pytest", "--deselect", str(tmp_path / "absent.txt")]):
+        assert CHECK.record(["--base", "HEAD", *argv]) == 2
+        assert "--deselect" in capsys.readouterr().err
+
+
 def _git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args], cwd=cwd,
                           check=True, capture_output=True, text=True).stdout.strip()
