@@ -171,7 +171,8 @@ def test_r8_lets_a_tied_value_through_on_both_verifiers():
             (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
             (first, {"W": 2}, None, (), ())):
         v = V.check(rec, prog, Q, LAW, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
-        assert v.codes == codes and v.tied == through and v.verifiers["lean"]["codes"] == list(codes), (tied, v)
+        assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
+        assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
 
 
 def test_r7_reads_each_values_first_registration():

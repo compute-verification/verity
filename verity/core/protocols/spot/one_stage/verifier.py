@@ -9,7 +9,8 @@ alone, or an audit record that does not accept, has no profiles and fails its `v
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
 * `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
-  verdict publishes (`Verdict.fanout` and `Verdict.tied`, the Lean's `fanout` and `tied`); the details are Python's
+  verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
+  `rests_on_period_check`); the details are Python's
   (the Lean reports codes);
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
@@ -218,14 +219,14 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
     both = {"lean": _summary(got), "python": _summary(mine)}
     verifiers = {"of_record": RECORD_VERDICT, **both}
     same = "refused" not in got and (_same(got, mine) if whole else both["lean"] == both["python"]
-                                     and got.get("fanout") == mine.get("fanout") and got.get("tied") == mine.get("tied"))
+                                     and all(got.get(k) == mine.get(k) for k in ("fanout", "rests_on_period_check")))
     if not same:
         return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers, py.fanout,
-                       py.tied)
+                       py.rests_on_period_check)
     if RECORD_VERDICT == "lean":
         return Verdict(got["ok"], tuple(got["codes"]), dict(got.get("detail", py.detail)), verifiers, py.fanout,
-                       py.tied)
-    return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout, py.tied)
+                       py.rests_on_period_check)
+    return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout, py.rests_on_period_check)
 
 
 def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
@@ -297,7 +298,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"],
-               **{k: got[k] for k in ("fanout", "tied") if k in got}}
+               **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
     return _decide(got, py, whole=False)
 
 

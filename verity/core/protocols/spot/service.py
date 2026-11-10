@@ -556,8 +556,9 @@ class WindowCommitmentRecord:
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise). `fanout`
     is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
-    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form. `tied` is the tied
-    values its verdict let through (`Verdict.tied`): its acceptance rests on the later check that ties their rows."""
+    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
+    `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
+    rests on the network period check."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -566,7 +567,7 @@ class WindowCommitmentRecord:
     salted_at: float | None = None
     received_at: float | None = None
     fanout: int | None = field(default=None, compare=False)
-    tied: tuple[str, ...] = field(default=(), compare=False)
+    rests_on_period_check: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -1929,7 +1930,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout, v.tied)
+                                                     v.fanout, v.rests_on_period_check)
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -1981,9 +1982,9 @@ class Stream:
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
                       received_at: float | None = None, fanout: int | None = None,
-                      tied: tuple[str, ...] = ()) -> WindowCommitmentRecord:
+                      rests_on_period_check: tuple[str, ...] = ()) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, tied)
+                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check)
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)

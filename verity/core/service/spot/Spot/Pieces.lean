@@ -210,7 +210,7 @@ def registration (j : Json) : V Json := do
   let cs := (Registration.check (getD j "record") v).map Json.str
   let through := Registration.tiedThrough v
   return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
-    ++ (if through.isEmpty then [] else [("tied", Lean.toJson through)]))
+    ++ (if through.isEmpty then [] else [("rests_on_period_check", Lean.toJson through)]))
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/

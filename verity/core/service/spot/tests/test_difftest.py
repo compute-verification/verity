@@ -808,7 +808,7 @@ def registration(j):
     j = _json(j)
     v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
-            **({"tied": list(v.tied)} if v.tied else {})}
+            **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
 
 def registered(j):
@@ -4964,7 +4964,7 @@ def test_r8_reads_the_readers_python_does(pieces):
         assert reg == {"codes": ["R8-shared-input"] if shared else [], "fanout": f}
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
         sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
-        for tied, want in ((["x"], {"codes": [], "fanout": f, **({"tied": ["x"]} if shared else {})}),
+        for tied, want in ((["x"], {"codes": [], "fanout": f, **({"rests_on_period_check": ["x"]} if shared else {})}),
                            (["nope"], {"codes": ["R8-tied", *(["R8-shared-input"] if shared else [])], "fanout": f})):
             tied_given = {**given, "params": {**given["params"], "parameters": sig, "tied": tied}}
             assert registration(tied_given) == want

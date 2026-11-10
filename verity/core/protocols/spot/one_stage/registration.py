@@ -33,9 +33,10 @@
     its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
     on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
-    a later check ties its rows to the registrations that computed them, which this check doesn't, so the verdict
-    publishes each tied name it let through (`Verdict.tied`) and refuses one that isn't a run Input of the program's
-    own, or that it expects registered or holds (`R8-tied`).
+    the network period check ties its rows to the registrations that computed them, which this check doesn't, so the
+    verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
+    none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
+    or holds (`R8-tied`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -264,8 +265,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the registrations that computed them
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
-    through (`Verdict.tied`), and refuses a name that isn't a parameter of `program`, one `registered` or `held` names,
-    or one whose gates aren't one interval of run Input nodes (`R8-tied`)."""
+    through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
+    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`)."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -286,7 +287,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
-        return c.verdict(fanout=fan, tied=through)
+        return c.verdict(fanout=fan, rests_on_period_check=through)
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
@@ -383,7 +384,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
     if shared:
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
-    return c.verdict(fanout=fan, tied=through)
+    return c.verdict(fanout=fan, rests_on_period_check=through)
 
 
 def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
