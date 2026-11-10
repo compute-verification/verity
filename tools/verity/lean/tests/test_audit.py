@@ -5277,8 +5277,12 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     (tmp_path / "graph").mkdir()
     sealed = A.Sealed(b, (b / "lean-toolchain").read_text().strip(), tmp_path / "seal").take(
         ["P"], {}, tmp_path / "graph", log=lambda s: None)
+    def rewrite(f: Path, data: bytes) -> None:
+        f.unlink()          # Lake restored it as a read-only link into its cache, which a build replaces, never writes through
+        f.write_bytes(data)
+
     honest = (a / ".lake/build/lib/lean/P/M2.olean").read_bytes()
-    (lib / "P/M2.olean").write_bytes(honest)
+    rewrite(lib / "P/M2.olean", honest)
     mods = sorted(["P", *(f"P.M{i}" for i in range(10))])
     samples = {s: random.Random(s).sample(mods, A.SAMPLE_MIN) for s in range(100)}
     miss = next(s for s, d in samples.items() if "P.M2" not in d and "P.M5" in d and "P" in d)
@@ -5298,7 +5302,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     assert {k: v for k, v in setup.items() if k != "importArts"} == {k: v for k, v in lakes.items() if k != "importArts"}
 
     for f in A.olean_files(lib):
-        f.write_bytes(b"garbage a dependent's build left")
+        rewrite(f, b"garbage a dependent's build left")
     before, given = files_of(build), []
     real = A.run
 
