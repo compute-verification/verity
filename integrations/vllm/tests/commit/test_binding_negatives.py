@@ -22,7 +22,7 @@ from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES
-PD = hashlib.sha256(b"program").hexdigest()
+PD = hashlib.sha512(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
 #: the run's identities coin, as the auditor host's challenger would open it after the run's root
@@ -62,13 +62,13 @@ def produce(seed: int = 7, steps: int = STEPS) -> list[list[tuple[str, bytes]]]:
 
 
 def committer(program: bytes = b"program") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(program).digest())
+    return NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha512(program).digest())
 
 
 def commit(stream, program: bytes = b"program", **map_kw):
     c = committer(program)
     run = c.commit_offline(stream)
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, hashlib.sha256(program).hexdigest(), chunk=CHUNK, **map_kw)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, hashlib.sha512(program).hexdigest(), chunk=CHUNK, **map_kw)
     return c, run, bmap
 
 
