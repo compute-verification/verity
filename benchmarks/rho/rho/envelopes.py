@@ -2,7 +2,7 @@
 working draft's §8).
 
 An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
-summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+summed over server blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
 uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
 cryptography's advantage:
 
@@ -21,7 +21,7 @@ cryptography's advantage:
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the monitoring period.
-* `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
+* `Certifier`: a server block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
@@ -30,10 +30,10 @@ cryptography's advantage:
   blocks (`Policy`), registered once.
 
 A **regime** is the envelopes that run: `Remote` (PoUW, detection and the NCI check; no wipe or certifier, so its
-serving block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
-and the certifier, whose serving block between two wipes gets the serving cut too). `Regime.partition` gives the serving
+server block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
+and the certifier, whose server block between two wipes gets the serving cut too). `Regime.partition` gives the server
 blocks (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and
-serving blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
+server blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
 strategy that never cheats can use (`ABIDING`), at the training MFU.
 
 A regime's table is flat: each key is a field of one of its envelopes (or the regime's own `form`), and a table may name
@@ -90,7 +90,7 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    """`Σ_a δ_a`, over envelopes and server blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
     devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
@@ -239,7 +239,7 @@ class Wipe:
         return self.SERVER + self.DEVICE if self.per == "server" else self.DEVICE
 
     def state(self, loc: Location) -> float:
-        """`k_wipe` of a location's serving block: what the wipe leaves of its servers' memory, and their boot disks."""
+        """`k_wipe` of a location's server block: what the wipe leaves of its servers' memory, and their boot disks."""
         disks = loc.hosts * self.boot_disk_bits
         if self.per == "server":
             return loc.hosts * self.k_wipe + disks
@@ -447,19 +447,19 @@ class Regime(Protocol):
     def delta(self, ctx: Context) -> Delta: ...
 
 
-def _dark(ctx: Context) -> dict[str, float]:
-    return {"eps_dark": ctx.fleet.eps_dark, "dark_mfu": ctx.fleet.dark_mfu}
+def _unreg(ctx: Context) -> dict[str, float]:
+    return {"eps_dark": ctx.fleet.eps_dark, "unreg_mfu": ctx.fleet.unreg_mfu}
 
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
+    """No protocol: every server block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
     def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.period
-        return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
+        return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_unreg(ctx))
 
     def delta(self, ctx: Context) -> Delta:
         return Delta({})
@@ -468,7 +468,7 @@ class Unmonitored:
 @dataclass(frozen=True)
 class Remote:
     """The remote audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's links, so its
-    serving block is a server over the monitoring period, and the inference cut is the only one."""
+    server block is a server over the monitoring period, and the inference cut is the only one."""
 
     name: str
     pouw: Pouw
@@ -516,7 +516,7 @@ class Remote:
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
         block = ServingBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
-        return Partition((block,), **_dark(ctx))
+        return Partition((block,), **_unreg(ctx))
 
 
 FORMS = ("certified", "links")
@@ -524,7 +524,7 @@ FORMS = ("certified", "links")
 
 @dataclass(frozen=True)
 class Onsite(Remote):
-    """The remote audit's envelopes plus the wipe and the certifier: each serving block, one server between two wipes,
+    """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
     gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
 
     wipe: Wipe = Wipe()
@@ -557,13 +557,13 @@ class Onsite(Remote):
         return tuple(dict.fromkeys(self.SERVING + self.wipe.cites() + self.certifier.cites()))
 
     def state(self, ctx: Context) -> float:
-        """Bits a serving block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves
+        """Bits a server block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves
         (`certified`)."""
         loc = ctx.location
         return loc.hosts * loc.server_memory if self.form == "links" else self.wipe.state(loc)
 
     def rate_in(self, ctx: Context) -> float:
-        """Bit/s into a serving block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
+        """Bit/s into a server block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
         return ctx.location.links if self.form == "links" else self.certifier.rate_in(ctx)
 
     def budget(self, ctx: Context) -> Budget:
@@ -574,15 +574,15 @@ class Onsite(Remote):
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
-        # The uncertified block may take the whole serving block's input: generous to the adversary, since the
+        # The uncertified block may take the whole server block's input: generous to the adversary, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
                      self.cites())
         count = ctx.fleet.count * ctx.period.seconds / self.wipe.wipe_s
-        block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
+        block = ServingBlock("server-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
-        return Partition((block,), **_dark(ctx))
+        return Partition((block,), **_unreg(ctx))
 
 
 KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}

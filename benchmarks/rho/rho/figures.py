@@ -4,10 +4,10 @@ Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an
 (`tests/test_repository.py` forbids tracked renders):
 
 * `class-vs-k`: each class's per-block overhead against the block's novel input budget `k`, at the inference block's
-  gates and at the serving block's (one server between two wipes), and where each becomes vacuous.
+  gates and at the server block's (one server between two wipes), and where each becomes vacuous.
 * `overheads`: the overhead per scenario and family: its lower bound from the bounds at each status, each bound alone,
   and each attack beside it.
-* `dark`: the overhead's lower bound, and the best known attack's, against the dark share, per scenario.
+* `unregistered`: the overhead's lower bound, and the best known attack's, against the unregistered share, per scenario.
 * `phase`: the overhead over pairs of parameters (`PHASES`), with its contours and frontier at each target.
 * `tornado`: each scenario's tornado.
 * `vulnerability`: each parameter's plausible range against the overhead across a window around it, and where it crosses
@@ -123,8 +123,8 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
     """Each class's per-block overhead `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
-    inference block's gates `c` and (for a regime with serving blocks) at the serving block's `c_S`, with the declared
-    policy's `k` and the serving block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
+    inference block's gates `c` and (for a regime with server blocks) at the server block's `c_S`, with the declared
+    policy's `k` and the server block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
     plt = _plt()
@@ -140,7 +140,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
     panels = [("the inference block's gates c", c)]
     if win is not None:
-        panels.append(("the serving block's gates c_S = ⌊Φ_s Δ_wipe⌋", win.gates))
+        panels.append(("the server block's gates c_S = ⌊Φ_s Δ_wipe⌋", win.gates))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
@@ -211,7 +211,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                                          label=f"declared policy k = {k_policy:.2g} bits")
         if win is not None:
             lines["window K"] = ax.axvline(win.inputs, c="#d7191c", lw=1, ls="-.",
-                                           label=f"serving block k_S = {win.inputs:.2g} bits")
+                                           label=f"server block k_S = {win.inputs:.2g} bits")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(ks[0], ks[-1])
@@ -300,10 +300,10 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
     return _save(fig, out, "overheads", {"rows": rows, "targets": list(targets)})
 
 
-def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+def unregistered(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """The overhead's lower bound (solid) and the best known attack's (dashed) against the dark share `ε_dark`
-    (`grid + 11` points), per scenario, with `μ/ε_dark`, the most the dark pool alone allows."""
+    """The overhead's lower bound (solid) and the best known attack's (dashed) against the unregistered share `ε_unreg`
+    (`grid + 11` points), per scenario, with `μ/ε_unreg`, the most the unregistered pool alone allows."""
     points = grid + 11
     plt = _plt()
     names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
@@ -328,17 +328,17 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
         ax.plot(ds, [_finite(v) for _, v in attack], c=c, lw=1.2, ls="--", label=f"{name}: best known attack")
         ax.plot([registry[key]], [base.lo], "o", c=c, mec="k")
     for m in sorted(ms):
-        ax.plot(ds, [m / d for d in ds], c="k", lw=0.8, ls=(0, (1, 1)), label=f"m/d (dark pool alone, m = {m:g})")
+        ax.plot(ds, [m / d for d in ds], c="k", lw=0.8, ls=(0, (1, 1)), label=f"m/d (unregistered pool alone, m = {m:g})")
     ax.axvspan(p0.low, p0.high, color="#fde0dd", alpha=0.6, zorder=0, label=f"plausible d ({_short(p0.key)})")
     _targets(ax, targets)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("dark share ε_dark (the dark leaves' share of the inventory's capacity)")
+    ax.set_xlabel("unregistered share ε_unreg (the unregistered leaves' share of the inventory's capacity)")
     ax.set_ylabel("overhead")
-    ax.set_title("The overhead against the dark share, per scenario (• at today's ε_dark)", fontsize=11)
+    ax.set_title("The overhead against the unregistered share, per scenario (• at today's ε_unreg)", fontsize=11)
     ax.grid(True, which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    return _save(fig, out, "dark", data)
+    return _save(fig, out, "unregistered", data)
 
 
 def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
@@ -549,7 +549,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
         for n, c in found.items()}})
 
 
-FIGURES = {"class-vs-k": class_vs_k, "overheads": overheads, "dark": dark, "phase": phase, "tornado": tornado,
+FIGURES = {"class-vs-k": class_vs_k, "overheads": overheads, "unregistered": unregistered, "phase": phase, "tornado": tornado,
            "vulnerability": vulnerability, "corner": corner}
 
 
