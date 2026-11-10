@@ -23,7 +23,12 @@ What no function here checks, and a caller states of its work: the MACs are pair
 words; `val` is one-to-one on a matmul's words (the casts of one value are one word); the sharing its `F` needs; every
 block reads at most `k`; and (H) and (E), conjectures one set of gates refutes. A work's weights are outside `θ`: a
 registered weight has no path from a fresh input, so (H) holds for it only at `β_w = 0`, where the bound says
-nothing.
+nothing. So is any table a word of the work is read from: words that are a function of `θ` and a few fresh gates (a
+registered embedding's row, looked up by a token) carry many values behind those gates, (H) fails at any `β` above
+the gates over the values, and a caller whose work reads such words leaves the matmuls that read them out of `N`. A
+`β` is at most the gates of the word it prices, 16 for a bf16 word, a word's own wires being a cut. `O` is wires, an
+output's values times their width, never a count of values: the count is in pairs of a block and an output, which
+the wires bound and the distinct outputs do not.
 
 Blocks charged whole. `HECharged` is the count over a set `G` of a partition's blocks, the rest charged whole: with `T`
 at least what all the blocks read outside `θ` between them and `S` at least the sum over `G` of the squares of what
@@ -348,7 +353,7 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
 
     * at most `⌊untied / (w + 1)⌋` blocks are charged, and none where `⌊most⌋ ≤ w`, each holding at most
       `c / mac_gates` MACs whole, MACs being disjoint;
-    * all the blocks together read `T ≤ blocks · k + word · untied`;
+    * all the blocks together, the charged ones among them, read `T ≤ blocks · k + word · untied`;
     * a block of `G` that reads `w_u` untied words, a whole number, reads at most `r_u = k + word · w_u`, with
       `w_u ≤ v = min(w, most)` and the `w_u` summing to at most `untied`. `Q` is at least the sum over `G` of
       `r_u² / q_u`, `q_u = β_w β_x` where the block is asked (H). Asked once, `q_u = q` at `k + word · v` and
@@ -361,7 +366,10 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     * `O` is the output wires of every MAC the period's blocks hold, `O / N` a MAC, the charged blocks' among them.
 
     Which blocks are charged is not the caller's to say, so each term is taken at its most: `H` at every block that
-    can be charged, and `Q` at `|G| = blocks`, none charged. The MACs `M'` of the count then satisfy
+    can be charged, and `Q` at `|G| = blocks`, none charged. The count holds of any partition and any set of its
+    blocks; that the partition a period's audit reads, fixed before its coins, has so few blocks over `w` is that
+    audit's to give, a join the guarantee that reads this bound owes and nothing here states. The MACs `M'` of the
+    count then satisfy
     `M' ≤ H + macs_on(T, Q, (O / N) M', 1, b)`, which is solved for `M'`; the period's MACs are `M = untied_macs + M'`,
     their gates as a plain circuit `M · size / N` (`Charged.gates`, the pooled total, no more than the blocks' own),
     and the slowdown is the blocks' gates over those, `blocks · c / (M · size / N)`, at least 1. With no untied word
