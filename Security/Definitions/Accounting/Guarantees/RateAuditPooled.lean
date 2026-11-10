@@ -2,6 +2,7 @@ module
 
 import Mathlib.Basic.ENNReal.Real
 public import Definitions.Accounting.RateAuditPooled
+public import Definitions.Accounting.RateAuditRemote
 
 /-!
 # The causal bound over the monitoring period (trusted)
@@ -17,19 +18,9 @@ coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 * `RatePooled`: the bound for a chain's passes, with their correct receipts as the good sets.
 * `RateChainSampledRO`, `RateChainSampled`: the route `Sampled`: with `RateChainPaidRO`'s conservation, a window whose
   passes are all accepted read the words of more than `K` correct receipts, except with the two bounds' sum.
-<<<<<<< ours
-* `RateWindowDraw`: the deployed window's draw, `d` openings pooled over its passes' `P·N` receipts after the last root.
-* `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' draws: the monitoring
-  period's shortfall and every window's, at once.
-||||||| base
-* `RateWindowDraw`: the deployed window's draw, `d` openings pooled over its passes' `P·N` receipts after the last root.
-* `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' draws: the horizon's shortfall and
-  every window's, at once.
-=======
 * `RateWindowSample`: the deployed window's sample, `d` openings pooled over its passes' `P·N` receipts after the last root.
-* `RateSessionSample`: a session of such windows, each adapting to the earlier windows' samples: the horizon's shortfall and
-  every window's, at once.
->>>>>>> theirs
+* `RateSessionSample`: a session of such windows, each adapting to the earlier windows' samples: the monitoring
+  period's shortfall and every window's, at once.
 
 The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditPooled.lean`): these bound the correct
 receipts, and with conservation the words read, rebuilt or held, whichever devices or parties hold them.
@@ -80,16 +71,8 @@ receipts number at most `K` in all is at most `(K / (P·N))^(s·P)`.
 
 **The reading.** At `K = (1 − d̄)·P·N`, a prover whose passes fall short of the store by `d̄` on average passes all
 `s·P` openings with probability at most `(1 − d̄)^(s·P)`. The passes may be a window's chained passes, or a session's
-<<<<<<< ours
-windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass draws its own
-sample here; a window's single pooled draw over its passes' receipts is `PooledSampling` with `M = P·N`.
-||||||| base
-windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass draws its own
-sample here; a window's single pooled draw over its passes' receipts is `HorizonSampling` with `M = P·N`.
-=======
 windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass samples its own
 sample here; a window's single pooled sample over its passes' receipts is `PooledSampling` with `M = P·N`.
->>>>>>> theirs
 
 Proof: `Accounting.SecurityProofs.RatePooled`, `PooledSampling` at each store, with pass `j`'s correct receipts as
 its good set, which the store, the earlier passes' coins and pass `j`'s stream and oracle family fix.
@@ -152,13 +135,7 @@ window holds at most `K` correct receipts is at most `(K / (P·N))^d`.
 the last root, opens `d` of all its passes' receipts. At `K = (1 − d̄)·P·N`, a window short of its receipts by `d̄`
 passes with probability at most `(1 − d̄)^d`, however its shortfall is spread over its passes.
 
-<<<<<<< ours
-Proof: `Accounting.SecurityProofs.RateWindowDraw`: `PooledSampling`'s one round at `M = P·N`: the draw is uniform and
-||||||| base
-Proof: `Accounting.SecurityProofs.RateWindowDraw`: `HorizonSampling`'s one round at `M = P·N`: the draw is uniform and
-=======
 Proof: `Accounting.SecurityProofs.RateWindowSample`: `PooledSampling`'s one round at `M = P·N`: the sample is uniform and
->>>>>>> theirs
 independent of the window's other coins, so at each value of them it lands in the correct receipts with probability
 `(#correct/(P·N))^d`.
 
@@ -169,23 +146,11 @@ def RateWindowSample : Prop :=
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d
 
-<<<<<<< ours
-/-- **A session's pooled draws: the monitoring period and every window.** For every session of `n` chained windows on
-one store (`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their draws among
-them), each closed by its pooled draw of `d` openings: the probability that every window's openings land on correct
+/-- **A session's pooled samples: the monitoring period and every window.** For every session of `n` chained windows on
+one store (`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their samples among
+them), each closed by its pooled sample of `d` openings: the probability that every window's openings land on correct
 receipts while either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at
 most
-||||||| base
-/-- **A session's pooled draws: the horizon and every window.** For every session of `n` chained windows on one store
-(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their draws among them), each
-closed by its pooled draw of `d` openings: the probability that every window's openings land on correct receipts while
-either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at most
-=======
-/-- **A session's pooled samples: the horizon and every window.** For every session of `n` chained windows on one store
-(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their samples among them), each
-closed by its pooled sample of `d` openings: the probability that every window's openings land on correct receipts while
-either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at most
->>>>>>> theirs
 
   `(K / (n·P·N))^(d·n) + (((n − 1)·P·N + K_w) / (n·P·N))^(d·n)`.
 
@@ -195,13 +160,7 @@ was short by less than `d̄` over its monitoring period and by less than `d_w` i
 can't make a short window pass more often by shorting several. At `2^-40` for each, `d̄ = 0.15%` needs `d·n ≥ 18,470`
 openings over the monitoring period and `d_w = 1%` needs `d ≥ 2,773` a window.
 
-<<<<<<< ours
-Proof: `Accounting.SecurityProofs.RateSessionDraw`, `PooledSampling` with the windows as rounds and `M = P·N` at each
-||||||| base
-Proof: `Accounting.SecurityProofs.RateSessionDraw`, `HorizonSampling` with the windows as rounds and `M = P·N` at each
-=======
 Proof: `Accounting.SecurityProofs.RateSessionSample`, `PooledSampling` with the windows as rounds and `M = P·N` at each
->>>>>>> theirs
 store, twice: with each window's correct receipts as its good set, and with every window's receipts good but the first
 window holding at most `K_w`, whose correct receipts are its good set.
 

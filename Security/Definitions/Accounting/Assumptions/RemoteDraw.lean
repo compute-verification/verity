@@ -88,15 +88,7 @@ def Refused [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ �
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
-<<<<<<< ours
 def Counted (D : Session n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
-  ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
-||||||| base
-def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
-  ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
-=======
-def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.incorrect ω ≤ D.incorrect ω
->>>>>>> theirs
 
 end Accounting.Remote.Draw.Assumptions
