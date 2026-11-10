@@ -679,6 +679,28 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def redirected_base(url: str, key: str) -> str:
+    """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
+    anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
+    import urllib.error
+    import urllib.request
+
+    class Stay(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    try:
+        urllib.request.build_opener(Stay).open(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        loc = (e.headers.get("Location") or "").split("?")[0]
+        if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
+            return loc[: -len(key) - 1]
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        print(f"monitors: the store's redirect probe failed ({type(e).__name__}: {e}); reading {url} directly", file=sys.stderr)
+    return url
+
+
 def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
     a manifest there means the fixture is whole."""
@@ -688,9 +710,10 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     from .store.local import manifest_key
     from .store.remote import HttpRemote
 
-    pub = HttpRemote(url)
+    keys = [manifest_key(ids.hex_of(a)) for a in arts]
+    pub = HttpRemote(redirected_base(url, keys[0]) if keys else url)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+        held = list(ex.map(lambda k: pub.head(k) is not None, keys))
     return [a for a, h in zip(arts, held) if not h]
 
 
@@ -716,6 +739,7 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 DRIVE_STATE = "root/.research/queue/verity.state.json"
 DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
+VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
 DRIVE_TICK_STALE_S = 30 * 60
 TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
 
@@ -741,7 +765,20 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
     hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
+
+    Since main moves only through the verified queue (drive stopped for good), its decisions file
+    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
+    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
+    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
+        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+        last = json.loads(lines[-1]).get("at") if lines else None
+        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
+        if (behind := ctx.now - since) < UNVERIFIED_S:
+            return []
+        hours = int(behind // 3600)
+        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
     if drive_ticking(ctx):
         return []
     state = json.loads((ctx.root / DRIVE_STATE).read_text())

@@ -280,6 +280,29 @@ def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tm
     assert json.loads((run / "result.json").read_text())["verdicts"]["in"]["added"] == 4
 
 
+def test_a_pack_under_a_directory_the_machine_cant_read_is_found_in_the_runs_inputs(tmp_path, monkeypatch):
+    """The launcher names the pack by its own path, and on another machine that path can sit under a directory the run may not
+    read (the control pod's /root): stat raises PermissionError there, not FileNotFoundError, and the run's copy is used."""
+    check = _load("check")
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    V.export(tmp_path / "verdicts-gathered.tar.gz")
+    _machine(tmp_path, monkeypatch, "node")
+    run = tmp_path / "run"
+    (run / "inputs").mkdir(parents=True)
+    (tmp_path / "verdicts-gathered.tar.gz").rename(run / "inputs" / "verdicts-gathered.tar.gz")
+    launcher = Path("/root/fast/vqueue-tmp/check-lean-deps-x/verdicts-gathered.tar.gz")
+    exists = Path.exists
+
+    def denied(self, *a, **kw):
+        if self == launcher:
+            raise PermissionError(13, "Permission denied", str(self))
+        return exists(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "exists", denied)
+    got = check.verdicts_in(launcher, run)
+    assert got["added"] == 4 and got["pack"] == "verdicts-gathered.tar.gz"
+
+
 def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     check = _load("check")
     base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "VERITY_SLOW": "1"}
@@ -339,6 +362,39 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert V.import_(got) == (3, 0)
     assert (V.roots()["tests"] / "k1.json").read_text() == "new"
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
+
+
+def test_a_gather_passes_over_a_pack_that_would_take_it_past_its_byte_budget_before_fetching_it(tmp_path, monkeypatch, capsys):
+    """A recorded check can publish a pack far larger than the rest.  Every shard's launch fetched it and recombined its
+    entries, staging many times its size on the launcher's disk, so no run started within the queue's wait.  A pack whose
+    listed size would take the gather past `GATHER_BYTES` is passed over by name and never fetched; the smaller packs of older
+    checks are still taken, and a pack the store lists no size for counts by the file fetched."""
+    check = _load("check")
+    packs = {}
+    for name in ("new", "big", "old", "older"):
+        r = _machine(tmp_path, monkeypatch, name)
+        _write(r["tests"] / f"{name}.json", name)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    fetched = []
+
+    class Sized(_Store):
+        def listing(self, art: str) -> list[dict]:
+            rid = art.removeprefix("art:")
+            return [{"path": "verdicts.tar.gz", **({} if rid == "r-new" else {"bytes": 10**9 if rid == "r-big" else 100})}]
+
+        def fetch(self, art: str, to: Path, *, paths: list[str]) -> Path:
+            fetched.append(art)
+            return super().fetch(art, to, paths=paths)
+
+    budget = packs["new"].stat().st_size + 150
+    monkeypatch.setattr(check, "GATHER_BYTES", budget)
+    store = Sized(tmp_path, {"r-new": packs["new"], "r-big": packs["big"], "r-old": packs["old"], "r-older": packs["older"]})
+    check.gather_verdicts(tmp_path / "out", store)
+    out = capsys.readouterr().out
+    assert "skipping r-big's pack: its 954 MiB would take this gather past" in out
+    assert "skipping r-older's pack" in out, "r-new's fetched size and r-old's 100 bytes leave under 100 bytes of room"
+    assert "2 entries gathered from 2 recorded checks (r-new, r-old)" in out
+    assert fetched == ["art:r-new", "art:r-old"], "a pack passed over is never fetched"
 
 
 def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
