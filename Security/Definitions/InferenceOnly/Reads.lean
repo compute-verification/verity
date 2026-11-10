@@ -1,11 +1,11 @@
 import Definitions.InferenceOnly
 
 /-!
-# NCI in reads form: the read factor, and reads in a set of gates
+# The inference-only policy in reads form: the read factor, and reads in a set of gates
 
 `readFactor K b_w b_a d` is the actual-circuit model's `f(K)`: the least number of bits of novel information an IU that
 reads at most `K` bits pays a product of an updated matrix multiplication chain, at widths `b_w` of a weight entry and `b_a` of an activation entry and smallest inner
-dimension `d`. NCI's slowdown factor is `F = f(K) / (2α)`.
+dimension `d`. The inference-only policy's slowdown factor is `F = f(K) / (2α)`.
 
 `readsIn d R G` counts what `R` reads physically, baseline included, but only in the gates `G`: the width of
 `in(R) ∩ G`. At `G = univ` it is at least `freshInput d R`, which leaves the baseline out.

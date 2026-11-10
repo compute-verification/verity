@@ -7,7 +7,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 `Circuit.ofDecl d` is `d`'s wiring bit by bit (`Definitions.InferenceOnly.BitView`). `bitDecl d` is the same bits as a declaration
 (`Verity.Declaration`), so that the covering bound's vocabulary (`InferenceOnly.Covering`), stated over a declaration's gates,
 reads `d` bit by bit: each of its gates is one bit wide, and its counts (`|S|`, `|in(S) \ θ|`, a cut's size) count bits,
-the unit of the NCI policy's novel reads and of the covering bound's costs (an activation's width: 16 at bf16, 8 at FP8,
+the unit of the inference-only policy's novel reads and of the covering bound's costs (an activation's width: 16 at bf16, 8 at FP8,
 4 at FP4).
 
 * Its gates are the bits `(g, i)` of `d`'s gates, numbered as in the bit view, and each reads what the bit view says

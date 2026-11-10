@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Guarantees.Fmt
 import Proofs.InferenceOnly.Info
 
 /-!
-# Proofs of NCI's guarantees with each thread charged by its work
+# Proofs of the inference-only policy's guarantees with each thread charged by its work
 
 Theorem 1's counting reads a thread's count only through the threading inequality and the charge, so it holds for any
 nonnegative count `ρ` of each thread's values that meets both (`threaded_count_of`, in `Proofs.InferenceOnly.Threads`). The work

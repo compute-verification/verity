@@ -2,7 +2,7 @@ import Properties.InferenceOnly
 import InferenceOnlyCheck.Desc
 
 /-!
-# The description-sized NCI check's property, stated against the Lean functions
+# The description-sized inference-only check's property, stated against the Lean functions
 
 `InferenceOnlyCheck.Desc.evaluate` reads θ and the owners per root node and never lays the circuit out (`InferenceOnlyCheck.Desc`).
 

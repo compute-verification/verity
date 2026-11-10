@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Assumptions.Fmt
 
 /-!
-# NCI over threads, each thread charged by its work at a format's rate: the guarantees
+# The inference-only policy over threads, each thread charged by its work at a format's rate: the guarantees
 
 `ThreadedReadsInfo`, `ThreadedContainedInfo` and `ThreadedOfState` restated under `WeightsSupportFmt`, which takes the
 place of both `WeightsSupport` and the threading premise `ThreadedInfo`: Theorem 1 with reads counted by information

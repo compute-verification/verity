@@ -3,9 +3,9 @@ import Definitions.InferenceOnly.Assumptions.Theta
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI over threads: the guarantees
+# The inference-only policy over threads: the guarantees
 
-The thread draft's Theorems 1 and 2. Under the NCI policy an IU reads at most `α` bits per gate and has at most `Γ`
+The thread draft's Theorems 1 and 2. Under the inference-only policy an IU reads at most `α` bits per gate and has at most `Γ`
 gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the

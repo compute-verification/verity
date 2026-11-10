@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Assumptions.Fmt2
 
 /-!
-# NCI over threads, each value charged once over its copies: the guarantees
+# The inference-only policy over threads, each value charged once over its copies: the guarantees
 
 `ThreadedReadsInfoFmt`, `ThreadedContainedInfoFmt` and `ThreadedOfStateFmt` restated under `WeightsSupportFmt2`: Theorem
 1 with reads counted by information (`ThreadedReadsInfoFmt2`), through a containment (`ThreadedContainedInfoFmt2`), and

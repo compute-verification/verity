@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Info
 
 /-!
-# NCI over threads, each thread charged by the work done on it: the vocabulary
+# The inference-only policy over threads, each thread charged by the work done on it: the vocabulary
 
 `WeightsSupport` charges a subcircuit `b_a` for each novel value of a thread it reads, and `(d, e)`-threading bounds the
 counted multiplications of a thread it does by `e` per value read, below `d` values. Charging reads fails where reads

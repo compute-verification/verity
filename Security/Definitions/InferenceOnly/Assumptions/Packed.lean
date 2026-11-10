@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Assumptions
 import Definitions.InferenceOnly.Packed
 
 /-!
-# NCI's activations assumption on a chain with several products to a gate
+# The inference-only policy's activations assumption on a chain with several products to a gate
 
 `ActivationsIncompressible`, restated for a `PackedChain`, so that it applies to a reference circuit that computes in
 `Dot16` steps. At `k = 1` it is `ActivationsIncompressible` on the chain itself (`Chain.toPacked`).

@@ -7,7 +7,7 @@ import Definitions.InferenceOnly.Dark
 
 Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
 reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
-multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound` is NCI's Theorem 1 over threads
+multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound` is the inference-only policy's Theorem 1 over threads
 (`InferenceOnly.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
 actual circuit's region, and `c` need only be contained in it.
 

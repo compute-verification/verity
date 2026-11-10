@@ -10,7 +10,7 @@ import Proofs.InferenceOnly.Cover.Training
 blocks each at its own rate: blocks that compute every gate with a predecessor, block `u` handed `k_u ≤ α σ_u` gates
 outside `θ` with `σ_u ≤ Γ`, have `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) Σ σ_u`. Each chained block is charged to a block
 computing its output gate, each block takes at most `(k_u / c_w)(k_u / c_a) + k_u` of them
-(`CoveringTwoCosts.card_charged_le`), and the per-block bounds add up at the NCI policy's rate (`sum_area_le`).
+(`CoveringTwoCosts.card_charged_le`), and the per-block bounds add up at the inference-only policy's rate (`sum_area_le`).
 
 On `c`'s bits as a declaration (`bitDecl c`) the gate view is the bit view (`ofGates_bitDecl`), so the block of a set of
 `c`'s gates (`block`) is a subcircuit of `bitDecl c` (`bitBlock`) that is handed what the bit view says and computes

@@ -2,7 +2,7 @@ import Definitions.InferenceOnly
 import Mathlib.Data.FinEnum
 
 /-!
-# NCI's incompressibility in support form: the vocabulary
+# The inference-only policy's incompressibility in support form: the vocabulary
 
 The draft's incompressibility charges an IU `b_w` bits for each weight entry and `b_a` for each input entry of which it
 holds a product. Stated over wiring alone, that is false: a declaration can hold a weight in a constant gate, or rebuild

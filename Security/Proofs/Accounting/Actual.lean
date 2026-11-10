@@ -29,7 +29,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
-  plus its ingress, from `WindowsAt` pulled back through the containment and NCI's `ThreadedReads` per window;
+  plus its ingress, from `WindowsAt` pulled back through the containment and the inference-only policy's `ThreadedReads` per window;
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.

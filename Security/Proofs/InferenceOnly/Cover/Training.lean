@@ -5,7 +5,7 @@ import Proofs.InferenceOnly.Cover.Bits
 import Proofs.InferenceOnly.Cover.Sum
 
 /-!
-# The cover theorem on a declaration that complies with the NCI policy, proved
+# The cover theorem on a declaration that complies with the inference-only policy, proved
 
 Pull a compliant division of `d` back to `c` (`pull`): piece `u` has at most `σ_u ≤ Γ` gates (`card_pull_gates_le`) and
 reads at most `α σ_u` bits of novel information (`freshInput_pull`). Its block in `c`'s bit view (`block`) is handed

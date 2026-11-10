@@ -2,10 +2,10 @@ import Definitions.InferenceOnly
 import InferenceOnlyCheck.Check
 
 /-!
-# The NCI check's properties, stated against the Lean function
+# The inference-only check's properties, stated against the Lean function
 
 `InferenceOnlyCheck.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
-the verifier's check of a declared division against the NCI policy, `InferenceOnly.Complies Γ α` (`Definitions/InferenceOnly.lean`), and
+the verifier's check of a declared division against the inference-only policy, `InferenceOnly.Complies Γ α` (`Definitions/InferenceOnly.lean`), and
 `InferenceOnlyCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
 θ holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as

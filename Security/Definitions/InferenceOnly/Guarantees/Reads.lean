@@ -3,7 +3,7 @@ import Definitions.Core.Partition
 import Definitions.InferenceOnly.Reads
 
 /-!
-# NCI's guarantee in reads form
+# The inference-only policy's guarantee in reads form
 
 B5 of the actual-circuit model: the bound for
 updated matrix multiplications before its division by `α`. It is about any division into IUs that are small and read

@@ -1,5 +1,5 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
-`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests and C-Flock's
+`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the inference-only difftests and C-Flock's
 (`verity/ml/flock/tests/test_lean_verifier.py`).
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does C-Flock's decoder, which

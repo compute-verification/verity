@@ -2,7 +2,7 @@ import Definitions.InferenceOnly
 import Definitions.InferenceOnly.Transfers
 
 /-!
-# NCI from the bits on the wire and the credited gates
+# The inference-only policy from the bits on the wire and the credited gates
 
 For a division `P` of a circuit into machines, what `R_b` reads from outside itself is its transfers in and the input
 gates it reads, `in(R_b) = transfersInto b ∪ inputsRead b` (`into_eq`), two disjoint sets, and a transfer gate is
@@ -12,7 +12,7 @@ computed, so never in a baseline. So `freshInput d R_b` is the width of `(transf
 `FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`freshInput_eq_card`,
 `freshInput_eq_card_add`).
 
-So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds
+So compliance with the inference-only policy is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
 `|transfersInto b|` network accounting's certified count of the bits into `b` and `size R_b` compute credit's total for
 `b`. When every novel input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
@@ -40,7 +40,7 @@ theorem transfers_self (b : Fin n) : transfers P b b = ∅ := by
   simp only [transfers, Circuit.into, mem_inter, mem_filter, mem_univ, true_and, notMem_empty, iff_false, not_and]
   exact fun h => h.1
 
-/-- **Transfers in NCI's words**: for `a ≠ b`, the gates of `R_a` that `R_b` reads are `out(R_a) ∩ in(R_b)`. -/
+/-- **Transfers in the inference-only policy's words**: for `a ≠ b`, the gates of `R_a` that `R_b` reads are `out(R_a) ∩ in(R_b)`. -/
 theorem transfers_eq_exits_inter_into {a b : Fin n} (hab : a ≠ b) :
     transfers P a b = C.exits (P.gates a) ∩ C.into (P.gates b) := by
   ext g
@@ -191,7 +191,7 @@ theorem iu_iff_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n
         ((transfersInto P b).card + (inputsRead P b \ d.θ).card : ℝ) ≤ α * d.D.size (P.gates b)) := by
   rw [freshInput_eq_card_add d P hw, Nat.cast_add]
 
-/-- **NCI compliance is a ratio of two certified numbers** (the Boolean profile): when every input gate `R_b` reads
+/-- **Compliance with the inference-only policy is a ratio of two certified numbers** (the Boolean profile): when every input gate `R_b` reads
 outside the baseline reaches it through another machine instead (a client holds the prompt), `R_b`'s IU condition is
 `size R_b ≤ Γ` and `|transfersInto b| ≤ α · size R_b`, the bits on the wire into `b` against the gates credited to `b`. -/
 theorem iu_iff_wire (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) (hθ : inputsRead P b ⊆ d.θ) :

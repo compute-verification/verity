@@ -11,7 +11,7 @@ import InferenceOnlyCheck.CountDifftest
 import InferenceOnlyCheck.Protocol
 
 /-!
-# The NCI policy's check
+# The inference-only policy's check
 
 `InferenceOnlyCheck.Theta.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
 isolation units meets `InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`), for IUs aligned to the root's Calls, at the

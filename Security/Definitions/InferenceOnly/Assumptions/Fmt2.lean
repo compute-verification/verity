@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Sources
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
-# NCI over threads, each value charged once over its copies: the named assumption
+# The inference-only policy over threads, each value charged once over its copies: the named assumption
 
 `WeightsSupportFmt` is false at the deployed point: on weights a few
 AdamW steps past the checkpoint, on a weight's fprop and dgrad copies, and at llama-3-405b's fan-out.

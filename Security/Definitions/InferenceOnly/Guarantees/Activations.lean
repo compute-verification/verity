@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Assumptions
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's activations bound over all of training ([ACTIVATIONS-BOUND])
+# The inference-only policy's activations bound over all of training ([ACTIVATIONS-BOUND])
 
 Under `ActivationsIncompressibleAll`, every small subcircuit of the reference circuit `c` computes at most
 `Λ = max(e, c_r · K / (4 dd b_w))` counted multiplications per `b_a` bits it reads, where `e` bounds how many counted

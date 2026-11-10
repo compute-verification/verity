@@ -2,7 +2,7 @@ import Proofs.Properties.InferenceOnly.Lemmas
 import Proofs.Properties.InferenceOnly.Desc
 
 /-!
-# The NCI check's properties, proved
+# The inference-only check's properties, proved
 
 Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.InferenceOnly.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with

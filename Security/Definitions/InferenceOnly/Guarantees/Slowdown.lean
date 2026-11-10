@@ -13,7 +13,7 @@ guarantee or of the model's accounting:
 * the monitored compute residual trains at full efficiency, `M_r ≤ κ (C − W_cert)/2`: the reading, outside its error,
   of the compute audit's covert residual (`Accounting.Guarantees.CovertResidual`, `CovertResidualPerRun`), whose other
   accounts stay within `F·T − W_cert`;
-* the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: NCI's thread bound,
+* the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only policy's thread bound,
   `InferenceOnly.Guarantees.ThreadedThrottled`, which `SlowdownThreaded` takes as proved rather than as a hypothesis;
 * faulty proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' draw
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
@@ -66,7 +66,7 @@ def SlowdownWindows : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
-/-- **The compute dampener over NCI's thread bound.** As `SlowdownWindows`, with the declared computation's bound proved:
+/-- **The compute dampener over the inference-only policy's thread bound.** As `SlowdownWindows`, with the declared computation's bound proved:
 the declared circuit `d` contains the reference training circuit `c` (`Mc`), threaded by `T` and with incompressible
 weights, and complies with NCI at `(Γ, α)`, with its θ registered (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
 (`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(αΓ))`, and `size(d) ≤ C`. The windows' bound is stated with
@@ -87,7 +87,7 @@ def SlowdownThreaded : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
-/-- **The compute dampener over NCI's thread bound, per parameter slot**: `SlowdownThreaded` with the reference
+/-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with the reference
 circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
 declared computation's bound from `InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
 def SlowdownThreadedSlots : Prop :=

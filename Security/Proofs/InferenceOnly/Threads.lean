@@ -4,7 +4,7 @@ import Proofs.InferenceOnly.Pull
 import Proofs.InferenceOnly.Fit
 
 /-!
-# Proofs of NCI's guarantees over threads
+# Proofs of the inference-only policy's guarantees over threads
 
 Theorem 1 (`threaded_reads`) follows the draft's Appendix A: split a small subcircuit's threads into those it reads fewer
 than `d` values of (low) and the rest (high). Low threads give at most `e` multiplications per value read; each high
@@ -362,7 +362,7 @@ theorem threaded_one_zero {c : Declaration} (T : Threading c) (Γ : ℕ) (S : �
 
 /-- **Theorem 1 from structure alone**: when weights are novel input gates at least `b_w` bits wide, threads are closed
 and no thread value is baseline, with every thread value at least `b_a` bits wide, every small subcircuit computes at
-most `c · S / (4 b_w)` counted multiplications per `b_a` bits it reads, with no named assumption: an NCI floor of
+most `c · S / (4 b_w)` counted multiplications per `b_a` bits it reads, with no named assumption: a floor by the inference-only policy of
 `2 b_w b_a / (cS)`. -/
 theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (hbw : 0 < b_w)
     (hba : 0 < b_a) (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b_w ≤ c.D.w g)

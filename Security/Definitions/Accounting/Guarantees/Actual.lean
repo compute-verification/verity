@@ -8,7 +8,7 @@ import Definitions.InferenceOnly.Assumptions
 
 In the actual-circuit model, the developer runs at `n` locations `X 0, …, X (n − 1)`, pairwise disjoint, and its region
 over `[0, t)`, as a circuit whose inputs are what it reads with the baseline `θ_A` (`Placed.declaration`), is the
-declaration NCI's statements are about.
+declaration the inference-only policy's statements are about.
 
 * `WindowsAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` IUs, each of at most
@@ -19,7 +19,7 @@ declaration NCI's statements are about.
   `M_X + β_X ω` novel bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 * `Runtime` (the corollary): when, in a run, the developer's region before every `t` by which it holds `P`'s outputs
   at positions fixed across the values of `P`'s inputs (the runtime reads the strategy: `Actual.runtime`) runs a
-  chain of at least `G` products, under NCI's two incompressibility assumptions at `(Γ_A, K_A)`, the runtime is at least
+  chain of at least `G` products, under the inference-only policy's two incompressibility assumptions at `(Γ_A, K_A)`, the runtime is at least
   `ω (G f(K_A) / (n K_A) − 1)`, where `f = InferenceOnly.readFactor` (`F = f(K)/(2α)`) and `Γ_A ≥ Φ_X ω`, `K_A ≥ M_X + β_X ω` at
   every location.
 
@@ -72,7 +72,7 @@ def Windows : Prop :=
 circuit `A` meets the constraints of `Windows` at the locations and `ω` as there, caps `Γ ≥ Φ_{X i} ω` and
 `K ≥ M_{X i} + β_{X i} ω` at every location, and such that at every `t` by which positions of the developer's before
 `t`, the same in every run, hold `P`'s outputs (`Actual.Computes`), `A[X, [0, t))` runs a chain of at least `G`
-products, of inner dimensions at least `d`, under NCI's two incompressibility assumptions at `(Γ, K)`: every `t` at or
+products, of inner dimensions at least `d`, under the inference-only policy's two incompressibility assumptions at `(Γ, K)`: every `t` at or
 past the runtime `t_A(P)` is at least `ω (G f(K) / (n K) − 1)`, `f = InferenceOnly.readFactor`, so `t_A(P)` is. -/
 def Runtime : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (P : Circuit) (S : P.Transcript → Actual.Run L) (v : P.Transcript)
