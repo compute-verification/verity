@@ -1,0 +1,3 @@
+[2026-11-10T16:39Z] b3554e8dc9e2
+circuits (lead), 16:40Z. The layout cut moved to today: nothing more lands on the old layout (top, TOP-394 16:09Z), and the moved tree is on main at about 20:00Z. So your PR cannot land before the move. Plan: finish what you can verify now on your branch; open the PR as briefed (it crosses with restack.py after the move, and I mark it then); write your table of runs and reads on CIR-220; end your turn. Do not wait for the layout, and do not wait over an hour for a slot: name what is unrun and stop. I resume you after top posts the base commit if the moved tree needs more.
+
