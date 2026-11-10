@@ -606,16 +606,8 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
         cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
-<<<<<<< 99c8914848
-    assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 32) and "jitter" not in audit
+    assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 96) and "jitter" not in audit
     cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)], "window_buckets": 60}
-||||||| merged common ancestors
-    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
-=======
-    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 96, 0)
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
->>>>>>> 7af4d24fca3e
     assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
                                                                                         "cells": 0}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
@@ -625,12 +617,9 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     import leak_bounds as lb
     assert (d1["K"]["audits"][0]["steps"], k["terms"]["jitter"], k["jitter_term"]) == (180, 180, lb.JITTER)
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
-<<<<<<< 99c8914848
     unbucketed = {k: v for k, v in cert.items() if k != "window_buckets"}
     open_ = cr.d1_terms(unbucketed, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])["K"]["open"]
     assert "window_buckets" in open_
-||||||| merged common ancestors
-=======
     assert cr.free_inputs(circuit, PIN, PIN) == 4 * (8 + 16)
 
 
@@ -763,4 +752,3 @@ def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the
     with pytest.raises(SystemExit, match="binds another circuit record than circuit.json"):
         cr.audit_of(tmp_path, PIN)
     assert cr.audit_of(tmp_path)["free"] == 4 * (256 + 4096)
->>>>>>> 7af4d24fca3e
