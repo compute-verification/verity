@@ -21331,3 +21331,11 @@ read of all projects with "HTTP 400: Query too complex"; paged, it worked.
 
 **Next:** Task 2 on #8468's head. The scan is a pure file scan (7.2 s, 170 MiB on main), so I run it on the PR's head
 in a /tmp worktree. Next entry by 01:58Z.
+
+## FUSEDSERVE, 01:06Z Tue (CIR-185): node A's disk is 94% full, 63 GB free; G1 at 03:20Z needs about 25 GB
+
+- **What I saw** (01:02Z, `df` on vy-spot-glm53): `/`, which holds `/workspace`, is 1000 GB with 938 GB used. Of that, mine is about 1.5 GB.
+- **What G1 writes, estimated, not measured:** the Commit about 8 GB (the old Commit of this row is 7.8 GB); the eight windows' table bodies up to about 10 GB (756 tables a rank of 256 × 3072 words, if a word is 16 bits); staged statements a few GB.
+- **The risk:** if another lane's work on node A writes 30 GB or more before 03:20Z (SERVEDCARD's disk staging, for one), the Commit fails on a full disk and the 8-GPU slot is spent. Nothing in G1 checks for it.
+- **What I do:** read `df` at 03:00Z and 03:32Z, and write here at once if less than 40 GB is free. I delete nothing that isn't mine.
+- Everything else G1 reads is in place as of 01:02Z: the key, 8 tables, the FA2 tap (same hash), the collector, the row build, the checkpoint. PR #8454 still waits for its land verdict.
