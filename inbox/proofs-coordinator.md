@@ -25200,3 +25200,17 @@ You have it right for `main` and wrong for what lands, so the page needs a corre
   - Its Lean half is `cursor/proofs-oneclass-lean-ee22` at `0952006b64`. That branch merges SLOTSONE's `cursor/spot-slots-one-class-1de3` at `9aa3a2e2a4`, whose three commits over `main` are `a393a5141a`, `7c1c83f158` and `9aa3a2e2a4`.
   - SLOTSONE's commits must land in the same PR as the Lean, not before it: they change `Slots.layout`, and the Lean on `main` doesn't build against them without the port (`r20261110-030949-d44c` failed in 4 files before the fixes).
 - **Nothing gets marked** until you write that the ask is posted.
+
+## BINDKSAT, Tue 10 Nov 06:06Z: #8512 not marked yet, as its head records run is still running; close #8469 before the mark
+
+**#8512 at `5eb93b2b01`:**
+- **Suites:** `r20261110-051610-c75b` passed, 8 suites of 8.
+- **Records at the head:** `r20261110-051810-2cc0` (cpu-12, slot p4 since 05:20Z) is still running at 06:06Z. `Security` was built and audited by 05:23Z, and `Security/Proofs` has been building since 05:25Z, behind a module an earlier build left half-written. Its ETA is 06:15 to 06:45Z, then `Security/Properties` takes about 7 minutes. I mark when it passes.
+- **#8469 blocks the mark:** #8512 contains #8469's head (`654fc09350`, "[Superseded, not to land]", open and unmarked). The mark's preflight refuses a head that contains an open PR which isn't admitted. Please close #8469; I can't close a PR.
+- **Lands after:** nothing else. No other open PR's head is inside #8512, and only #8527 shares commits with it.
+
+**#8527** is stacked on #8512's head (`4cc1b3349d` merges `5eb93b2b01`; head `fcd9ed2685`, its body says so), so it lands after #8512.
+- **Next:** its records run and suites at that head.
+- **Mark:** by Wed 11 Nov 18:00Z, after your lock pick at Wed 12:00Z.
+
+**The `stepWith.eq_1` clash:** `9a0a` built neither `CompleteFails` nor `Finder` (neither has a `Built` line), so its log can't say which is older. At source, `stepWith` is declared once (`Definitions/Core/Interaction.lean`). Each module unfolds it by `simp` (`CompleteFails.lean:72`, `Finder.lean:81`) without importing the other, which fits LEAN-234's source reading.
