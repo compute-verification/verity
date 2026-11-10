@@ -2,7 +2,7 @@
 
 The guarantees take these inside their statements: after a `let`, packed in `∃` or a field at a hypothesis, or named in
 an Assumptions module (`Assumptions/Finders.lean`, `Assumptions/CustodyZk.lean`, `Claims/Recursion/Assumptions/`). The
-Lean check reads premises through each, and each of these has its record in `Security/lean-audit.json`'s `assumptions`. Each is one of `ASSUMPTIONS.md`'s
+Lean check reads premises through each, and each of these has its record in `security/lean-audit.json`'s `assumptions`. Each is one of `ASSUMPTIONS.md`'s
 assumptions at the guarantee's own finders or inputs, an obligation on our code, or a scope condition on the statement.
 None adds a hash premise beyond `cr/sha-512` and `ecr/sha-512`. Each docstring states its record.
 
