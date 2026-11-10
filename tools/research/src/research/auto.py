@@ -26,7 +26,8 @@ the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it lat
 Node 2 takes no `--on auto` job while it is held: until the time in its HOLD_FILE, which infra writes with the reason when one
 lane has the whole node. `choose` then treats it as a node 2 that is down, and the launcher is told until when and why (`off`).
 A stopped node 2 costs a launch NODE_CONNECT_S: its probe's ssh gives up connecting after that long, beside the pools' probes,
-and the placement says once that node 2 is down.
+and the placement says once that node 2 is down. A GPU or quiet job, which the queue alone books and no pool runs, asks node 2
+alone and is refused while it is held or down (`closed`).
 """
 from __future__ import annotations
 
@@ -192,15 +193,24 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
     return subprocess.run(argv, input=data, capture_output=True, timeout=READ_TIMEOUT_S)
 
 
-def off(n2: Any) -> str | None:
-    """Why node 2 takes no `--on auto` job, from its answer to `read`: it is down, HOLD_FILE holds it, or its share wasn't read.
-    None when its share was read."""
+def closed(n2: Any) -> str | None:
+    """Why node 2 is closed to every `--on auto` job, a GPU or quiet one included, from its answer to `read`: it is down, or
+    HOLD_FILE holds it. None otherwise."""
     if isinstance(n2, str) and n2.startswith(NO_SSH):
         return f"{AUTO_NODE} is down: {n2}"
     share = n2.get("share") if isinstance(n2, dict) else None
     if isinstance(share, dict) and isinstance(hold := share.get("hold"), dict):
         until = f"until {hold['until']}" if hold.get("until") else f"while it carries {HOLD_FILE}"
         return f"{AUTO_NODE} takes no `--on auto` job {until}" + (f": {hold['why']}" if hold.get("why") else "")
+    return None
+
+
+def off(n2: Any) -> str | None:
+    """Why node 2 takes no job `choose` places, from its answer to `read`: it is `closed`, or its share wasn't read. None when
+    its share was read."""
+    if (why := closed(n2)) is not None:
+        return why
+    share = n2.get("share") if isinstance(n2, dict) else None
     if not isinstance(share, dict) or "error" in share:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
         return f"{AUTO_NODE}'s share wasn't read ({why})"
@@ -208,13 +218,13 @@ def off(n2: Any) -> str | None:
 
 
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
-         now: float | None = None) -> dict[str, dict | str]:
+         now: float | None = None, node_only: bool = False) -> dict[str, dict | str]:
     """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be. Node
-    2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`)."""
+    2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). With `node_only`, node 2 alone is asked."""
     reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
-    for machine, pool in SPILL:
+    for machine, pool in () if node_only else SPILL:
         asks.setdefault(machine, []).append(pool)
 
     def one(item: tuple[str, list[str]]) -> dict | str:

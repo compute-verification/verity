@@ -1037,13 +1037,17 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
 def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
+    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`, or a GPU or
+    quiet job while AUTO_NODE is down or held, `auto.closed`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
     mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
+    if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
+        print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
+        return None
     if why is None:
         try:
             target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)

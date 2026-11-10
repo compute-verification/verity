@@ -233,7 +233,7 @@ def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monke
 
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):
     placed = []
-    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r0"))})
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: {N2: share(waiters=56), CPU1: pool(slot("r0"))})
     monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
     monkeypatch.chdir(_auto_repo(tmp_path))
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
@@ -267,6 +267,7 @@ def test_a_stopped_node_2_costs_its_probe_a_few_seconds_and_the_placement_says_o
     ssh = "import sys; print({!r}, file=sys.stderr); sys.exit(255)"
     dead = [sys.executable, "-c", ssh.format("ssh: connect to host h port 22: Connection timed out")]
     assert auto.read(tmp_path, 4, reach=lambda name: dead)[N2] == DOWN
+    assert auto.read(tmp_path, 4, reach=lambda name: dead, node_only=True) == {N2: DOWN}
     target, why = auto.choose({N2: DOWN, CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.startswith(f"{N2} is down: its ssh doesn't answer (Connection timed out); {CPU1}'s ")
     with pytest.raises(auto.Unplaceable) as refused:
@@ -337,6 +338,26 @@ def test_on_auto_tells_the_launcher_until_when_and_why_node_2_is_held(tmp_path, 
     assert main([*runs, "--cpus", "64", "--mem-gb", "300", "--", "pytest"]) == 2
     assert len(launched) == 1 and placed == []
     assert f"research run --on auto: refused: {said}; " in capsys.readouterr().err
+
+
+def test_on_auto_refuses_a_gpu_job_while_node_2_is_down_or_held_and_asks_node_2_alone(tmp_path, monkeypatch, capsys):
+    """A GPU or quiet job never reached `choose`: on a stopped node 2 it waited on the node's deadline and was refused on a stale
+    admission window, and a hold would not have kept it off the node."""
+    asked, placed = [], []
+    held = {"share": {"hold": {"until": "2030-02-01T00:00Z", "why": "one lane has the whole node"}}}
+    unread = {"share": {"error": "RuntimeError: /etc/vy/runs-via-slot: its launcher takes a run only through a check slot"}}
+    answers = iter([DOWN, held, unread, share(free=48)])
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: asked.append(kw) or {N2: next(answers)})
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    gpu = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]
+    nowhere = ", and a GPU or quiet job runs on no other node"
+    assert main(gpu) == 2 and placed == []
+    assert f"research run --on auto: refused: {N2} is down: its ssh doesn't answer (Connection timed out){nowhere}" in capsys.readouterr().err
+    assert main(gpu) == 2 and placed == []
+    assert f"refused: {N2} takes no `--on auto` job until 2030-02-01T00:00Z: one lane has the whole node{nowhere}" in capsys.readouterr().err
+    assert main(gpu) == 3 and main(gpu) == 3, "a node 2 unread for another reason, or read: the queue decides"
+    assert [s["node"] for s in placed] == [N2, N2] and asked == [{"node_only": True}] * 4
 
 
 @pytest.mark.parametrize("text, n", [("8-19", 12), ("0", 1), ("48-51,56-63", 12)])
