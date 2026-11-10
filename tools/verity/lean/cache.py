@@ -29,6 +29,9 @@ hashes aren't cryptographic. A module whose input hash
 has no checked file is built from source, as is every module after a mismatch, when the kill switch (the docs site's
 `/api/lean-cache/state`) is disabled, quarantines the scope or can't be reached, or when `LEAN_CACHE=off`. Lake's input
 hashes don't depend on where a checkout is, so a build published from `/build/verity` restores in any checkout.
+A development machine restores the newest published build that is an ancestor of its `HEAD` (`cache.py get`, after
+`setup.sh`), so a fresh machine compiles none of ArkLib; a missing read credential (the `LEAN_CACHE_*` variables, else
+`~/.config/verity/lean-cache-read.env`) means building from source too.
 
 The publisher signs its uploads directly with the bucket-scoped key, as root, outside the sandbox the build ran in; no
 broader credential sits on the machine to mint a shorter-lived one. Every write is conditional (`If-None-Match: *`). A
