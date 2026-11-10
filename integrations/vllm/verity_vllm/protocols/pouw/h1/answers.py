@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.ml.circuits.codec import canonical_json
 
 __all__ = ["Answers", "key", "verdict"]

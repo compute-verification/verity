@@ -25,7 +25,7 @@ from verity.core.protocols.pouw.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.commitments.merkle import tree_levels
 from verity_vllm.program.predict.window_class import PearlTables
 from verity_vllm.protocols.pouw import pearl_c as PPD

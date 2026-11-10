@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 
 from verity_vllm.config import RowEngine
-from verity_vllm.pipeline.source_identity import TREE, core_dirs
+from verity_vllm.pipeline import research_tools
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
@@ -96,12 +96,6 @@ def code_version(repo: Path) -> dict:
     code = [f":/{d}" for d in research_tools.CODE_DIRS]   # outside the try: its refusal without the run store is no "unknown" version
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
-<<<<<<< 99c8914848
-        code = [f":/{d}" for d in core_dirs(TREE)]
-||||||| merged common ancestors
-        code = [f":/{d}" for d in research_tools.CODE_DIRS]
-=======
->>>>>>> 7af4d24fca3e
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}

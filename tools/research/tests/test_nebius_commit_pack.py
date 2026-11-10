@@ -31,11 +31,9 @@ def _load(path: Path, name: str, monkeypatch):
 
 
 def _tree(root: Path, deferred: bool = True) -> Path:
-    """A tree with the deferred replay; without it, an older tree whose research_tools.py declares no vllm.replay."""
-    pipeline = root / "integrations/vllm/verity_vllm/pipeline"
-    pipeline.mkdir(parents=True)
-    if not deferred:
-        (pipeline / "research_tools.py").write_text("VLLM_COMMIT = 'vllm.commit'\n")
+    tools = root / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    tools.parent.mkdir(parents=True)
+    tools.write_text("VLLM_REPLAY = 'vllm.replay'\n" if deferred else "VLLM_COMMIT = 'vllm.commit'\n")
     return root
 
 
@@ -118,10 +116,6 @@ def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay
     assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", 1)
     assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", 1)
     assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
-    (tmp_path / "older" / "integrations/vllm/verity_vllm/pipeline").mkdir(parents=True)
-    (tmp_path / "older" / "integrations/vllm/verity_vllm/pipeline/research_tools.py").write_text("VLLM_REPLAY = 'vllm.replay'\n")
-    assert dispatch.packable(_item(tmp_path / "older"), "lane/c1", 1) is None
-    assert "no " in dispatch.packable(_item(tmp_path / "absent"), "lane/c1", 1)
 
 
 def test_a_leased_commit_mounts_its_queues_lease_pool_and_requests_no_gpu(dispatch, tmp_path, monkeypatch):

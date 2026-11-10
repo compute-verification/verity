@@ -1,12 +1,12 @@
-"""`research` Tool declarations for the vLLM integration's row stages.
+"""`research` Tool declarations for the vLLM integration sweep stages.
 
 Five Tools — ``vllm.build``, ``vllm.plan`` (the Commit's plan, on CPU, before the GPU), ``vllm.match``,
-``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a row.  Each stage runs as one ``research run --tool vllm.<stage>
+``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
 -- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
 (``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
 consumes).
 
-Rules encoded here:
+Rules encoded here (Phase 5a of the v2 plan):
 
 * ``key_params`` is the row configuration — model id, dtype, hw family, tp,
   batch, input/output lengths, arrival mix, sampling, execution mode, the
@@ -18,22 +18,6 @@ Rules encoded here:
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
-<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
-  plus Verity core, the root package ``verity`` (``package_dirs(tree, "verity")``
-  of a source tree, which ``tests/test_store_vllm_tools.py`` holds it to).  It is
-  stated rather than derived because this module also loads from the runner's
-  tool snapshot, which is no workspace.
-||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
-  plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
-  ``verity``, or each member's part of the namespace).
-  ``source_identity.code_identity`` is the one code identity over it (the
-  hot Commit worker's key, the TP Commit's tree of record).
-
-This module imports nothing beyond the standard library, ``research.store.tool``
-and ``research.pythonpath``, so it is loadable from any interpreter that can see
-``tools/research/src`` (``research`` loads it by dotted path or, failing
-that, by file — see ``research.store.tools_registry``).
-=======
   plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
   ``verity``, or each member's part of the namespace).
   ``source_identity.code_identity`` is the one code identity over it (the
@@ -43,7 +27,6 @@ This module imports only the standard library, so it is loadable from any interp
 failing that, by file — see ``research.store.tools_registry``).  The names that read ``research.pythonpath`` and
 ``research.store.tool`` (``FROM_RESEARCH``: the closure and the Tools) are computed when first read; where the tree leaves
 ``research`` out, reading one is refused by name (``config.run_store``).
->>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 """
 
 from __future__ import annotations
@@ -55,17 +38,9 @@ from pathlib import PurePosixPath
 from types import ModuleType
 from typing import Any
 
-<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
-from research.store.settings import workload_python
-from research.store.tool import Tool
-||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
-from research.pythonpath import package_dirs, workspace_root
-from research.store.tool import Tool
-=======
 STAGES = ("build", "plan", "match", "commit", "replay")
 #: The names computed from ``research`` on first read (``__getattr__``).
 FROM_RESEARCH = frozenset({"CORE_DIRS", "CODE_DIRS", "CLOSURE", "TOOLS", *(f"VLLM_{s.upper()}" for s in STAGES)})
->>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 DEFAULT_PY = "/workspace/venv312/bin/python"
@@ -74,18 +49,6 @@ COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"
 _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
-<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
-CLOSURE = ["integrations/vllm/**", "verity/**"]
-
-||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
-#: Each directory of this file's tree that ships Verity core, relative to the repository root.
-CORE_DIRS = package_dirs(workspace_root(__file__), "verity")
-#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and the verifiers in it.
-CODE_DIRS = [*CORE_DIRS]
-CLOSURE = ["integrations/vllm/**", *(f"{d}/**" for d in CODE_DIRS)]
-
-=======
->>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>
 _ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")
@@ -287,10 +250,9 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
 
     Uses ``importlib.metadata`` so vLLM is never imported.  ``None`` when the
     interpreter is absent (e.g. on the control laptop) — such a derivation
-    legitimately differs from one probed on a pod — and, with ``error`` naming
-    why, when the probe fails.
+    legitimately differs from one probed on a pod.
     """
-    py = workload_python(DEFAULT_PY)
+    py = os.environ.get("PY") or DEFAULT_PY
     out: dict[str, Any] = {"torch": None, "vllm": None, "py": py}
     if not os.path.exists(py):
         return out
@@ -302,8 +264,7 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     try:
         r = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        out["error"] = f"{type(e).__name__}: {e}"
+    except (OSError, subprocess.TimeoutExpired):
         return out
     for line in r.stdout.splitlines():
         parts = line.split(None, 1)
