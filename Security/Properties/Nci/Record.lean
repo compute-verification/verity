@@ -47,10 +47,10 @@ not whole words has bits past its writer's and lays out no circuit.
 the record's text. The text states no template's rows or outputs, which are the Program's (`Templates`), and the
 wiring's order is left free: under any order `Spot.Wires.check` accepts only wires without a cycle
 (`Spot.Wires.check_acyclic`). That the slots and the held rows are the text's (`RowsOfText`) is stated against readers
-SPOT's Lean does not have (`Readers`): one of the record's inference blocks, giving each unit's slot, and one of its
-registered reads, table reads and openings, giving what each row is declared to hold. With the readers left free it
-says only that the text fixes the slots and each held row's reason, which any such check meets at readers of its own;
-it is a premise once they are SPOT's.
+SPOT's Lean does not have (`Readers`), each given the Program beside the text: one of the record's inference blocks,
+giving each unit's slot, and one of its registered reads, table reads and openings, giving what each row is declared
+to hold. With the readers left free it says only that the Program and the text fix the slots and each held row's
+reason, which any such check meets at readers of its own; it is a premise once they are SPOT's.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
@@ -330,18 +330,20 @@ def Held.declared : Held → Declared
   | .table name p root => .table name p root
   | .opened name p _ => .opened name p
 
-/-- Readers of a record's text: of the parsed text, `slot` the block of each unit, and `declared` what the text
-declares each row to hold. -/
+/-- Readers of a record's text, given the Program: of the parsed text, `slot` the block of each unit, and `declared`
+what the text declares each row to hold. -/
 structure Readers where
-  slot : Json → String → ℕ → Option ℕ
-  declared : Json → Row → Option Declared
+  slot : Prog → Json → String → ℕ → Option ℕ
+  declared : Prog → Json → Row → Option Declared
 
-/-- **The slots and the held rows are the record's text's**, by the readers `R`: the slots of a record the check reads
-are the ones `R` reads of its text, and each row it holds is one the text declares, for the reason it declares. -/
+/-- **The slots and the held rows are the record's text's**, by the readers `R`: where the instance's Program decodes,
+the text of a record the check reads parses, its slots are the ones `R` reads of that text, and each row it holds is
+one `R` reads the text to declare, for the reason it declares. -/
 def RowsOfText (F : Form) (R : Readers) : Prop :=
-  ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∃ doc,
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ F.slot c = R.slot doc ∧
-    ∀ r h, F.held c r = some h → R.declared doc r = some h.declared
+  ∀ (j tr : Json) (c : F.Case) (P : Prog), F.read j tr = .ok c →
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → ∃ doc,
+      Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ F.slot c = R.slot P doc ∧
+      ∀ r h, F.held c r = some h → R.declared P doc r = some h.declared
 
 /-! ## The rate rule -/
 
