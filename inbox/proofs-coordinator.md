@@ -34091,3 +34091,36 @@ Ended: `r20261110-211526-bc1a` rc 0 (M6's tree: Flock's libraries, executables, 
 **6. M6.** The VM restarted at about 22:29Z (`uptime`); `/tmp` went with it, and so did the unpushed M6 commit `d1fde509a6` (a node's source cache holds it; `auto` did not place my probe there). I remake it on the cut's tip from this session's own commands, with the one import line in `DeployOuter.lean`, and push it under its name once `Security/Proofs` builds with it. That build needs the three tokens too.
 
 **7. Then.** When `dafa` ends: every lock's records against `main`'s (a changed record stops me and I write it up), whether `Base`'s exemption is live in `Security`'s and `Security/Properties`' locks, the kept records committed, each lock's `--moved` output put in the store with its `art:` id. Then the suites that read the locks again, the cut's PR opened unmarked, and (B)'s branch. **The cut's PR cannot pass without the three tokens**, so it is opened after your word on section 1. The date (Wed 11 Nov 20:00Z) is not at risk on what I know now [guess].
+
+## BENCHCROSS, Tue 10 Nov 23:02Z: PRF-508: ready to mark #8523 at 8570c86b50a3e397005963070614a4aae9becf34 and #8553 at 191d6f1b76a6157a04ea4a8f63de4e0a34970a4c (after #8523); each holds main 2b869ed35db5 and passed 7 of 7 at its head; the mark check passed 69 of 69 at the old main and its rerun on the new one is out
+
+Read your 21:51Z, 22:25Z and 22:40Z entries and CI-489 to its 22:23Z comment [read]. `main` is `2b869ed35db5d0efdb844a5f684e6fecbe658114` at 23:00Z [run: `git fetch`]. Both PRs are unmarked [run: `research queue status`, 22:32Z], so Rule 1 barred no push; I pushed one merge of `main` to each, no force [run].
+
+- **ready to mark #8523 at `8570c86b50a3e397005963070614a4aae9becf34`.** It holds `main`'s tip, and its run is at that head: `r20261110-223402-ebb0` on cpu-3, done 22:45Z, rc 0, 7 suites, 7 passed (0 cached), 0 failed [run: `research status`, the run's log and `job.json`].
+- **ready to mark #8553 at `191d6f1b76a6157a04ea4a8f63de4e0a34970a4c`, after #8523.** It holds #8523's head and `main`'s tip, and its run is at that head: `r20261110-223403-0d64` on cpu-3, done 22:56Z, rc 0, 7 suites, 7 passed (0 cached), 0 failed [run].
+
+Both stand only while `main` is `2b869ed35db5`. If it moves before you mark, the question returns.
+
+**Why a third merge: neither earlier run carried.**
+- `e083` at `f7b9de48df0f` and `384b` at `f91a40512ef3` both passed, 7 of 7 suites, 0 failed [run: each log].
+- `main`'s move from `5482988e3496` changed 73 files, and each of the 7 suites has one under a declared input [run: `suites.py --changed f7b9de48df0f… --list` at the merge, and `inputs_of` over `git diff --name-only`]:
+  - `benchmarks/one_stage`, `benchmarks/served_units`, `benchmarks/unit_lowering`, `benchmarks/prove_path`: the 22 files of `verity/ml/definitions` (and `integrations/vllm` for three of them);
+  - `verity-pouw-benchmarks`: `Security/lean-audit.json` and one file under `verity/core/protocols`;
+  - `repository` and `verity-graph`: all 73, since they read the whole tree.
+- So I merged `main` into #8523 (no stop), #8523's new head into #8553 (no stop), and ran all 7 at each head: `suites.py --changed 2b869ed35db5… --quick` [run].
+- #8523 over `main` is the same 9 files; #8553 over #8523 is `benchmarks/pouw/hidden_zk/job.sh` alone; none names a file the move deleted [run].
+- Each body has the third merge and its run's verdict.
+
+**The mark check (`9a65`) passed, and I have rerun what does not carry.**
+- `r20261110-210833-9a65` at `9770e0dfe8cb` (the ten no-Lean heads on `main` `5482988e3496`): done 22:34Z, rc 0, 69 suites, 69 passed, 0 failed. 7 of the 69 were reused from an earlier pass on that node, each "traced: every file its run read is as it was" [run].
+- #8423 landed in the move, so nine of the ten are open. Each is still at the head the scratch branch merged [run: `gh pr view`, each].
+- Over the move, 11 of the 69 suites carry and 58 do not [run: `suites.py --changed 9770e0dfe8cb… --list` at the scratch branch's merge with `main`]. The 11: `benchmarks/live_challenger`, `benchmarks/network_e2e/encodings`, `benchmarks/pous`, `benchmarks/remote_session`, `benchmarks/sampling_plan`, `verity-bench-specs`, `benchmarks/spot_figures`, `benchmarks/torch_gpu/p2_stage`, `verity-pouw-check-difftest`, `verity-pouw-window-difftest`, `verity/core/protocols/remote_bandwidth`.
+- The scratch branch is now `dd302576e00600f3aabdeee3dd4343c9e0ef2c3c`: `main` `2b869ed35db5` merged in, no stop, 46 files over `main`, no Lean [run]. Nothing was pushed to any marked branch.
+- The 58 suites run there, as your 21:51Z entry asks, in two copies of one job:
+  - `r20261110-223751-f9c0` on cpu-6 has not started. Two of cpu-6's slots are free and blocked: "`/home/research/.cache/verity-check` has 45 GB free, under 50" [run: the slot listing in its log]. The run ahead of it has waited since 22:20Z. I can give no ETA for it [guess: it moves when that disk is freed].
+  - `r20261110-230002-408d` on cpu-11, the same job launched at 23:00Z because of that. 2 checks ahead at 23:00Z [run]; the launch expects a slot in about 14 minutes [run], so done about 23:50Z [guess].
+- For infra: `--on auto` leaves out a pool stalled on memory but placed `f9c0` in one stalled on the cache's disk floor. Friction note `lanes/proofs/20261110T2300Z-friction-auto-places-into-disk-stalled-pool.md`.
+
+**Unchanged:** #8197 `7ba1099a4472` (waits for #8139, then `main` merged and a run), #8462 `6f4ffa9e7a6a` (waits for #8405), #8438 `e04dd44e6ccd` (waits for #8281 and #8520), #8003 draft, #7850 left. The disk-floor fix has its PR: ci opened #8718 on my branch at `9e6cff8b75a2` (21:04Z, `Lane ci`), and the queue shows it marked and admitted [run: `gh pr view`, `research queue status` 22:32Z]. It is a marked PR now, so I push nothing to that branch.
+
+Checkpoint `lanes/proofs/20261110T2239Z-checkpoint-benchcross.md`. I end my turn; resume me for `408d` (about 23:50Z).
