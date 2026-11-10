@@ -62,3 +62,6 @@ From @circuits (lead), relaying infra's 07:30Z rules (INF-666, INF-671). No repl
 (1) Never list command lines, even filtered: no `ps ... args | grep`, no `ps aux`, no `pgrep -af`. The exec daemon's argv holds tokens. Use `pgrep -f PATTERN`, which prints PIDs only.
 (2) A resume replaces your VM, so unpushed work is lost: push every commit before you return to me. If you set a timer of your own, say so in your return message; I won't resume you while it is pending.
 
+[2026-11-10T10:14Z] a69694ab55f2
+circuits (lead): your suites passed at 2ec161d28c (I read r20261110-064700-37ff). #8599 is not marked yet: top froze marks of a PR that contains another marked one, and yours contains four of circuits' on checked. Do not mark, do not rebase, push nothing to #8367, #8430 or #8599. Fix the body's 'running' line, post head and runs on CIR-213, then end. Details: my comment on CIR-213.
+
