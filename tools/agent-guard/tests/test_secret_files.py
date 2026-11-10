@@ -149,6 +149,9 @@ ALLOWED = [
     "cat tools/research/tests/fixtures/dummy.pem",
     "head -3 tests/data/sample.env",
     "grep -n KEY /agent/repos/verity/tools/x/tests/creds/credentials.json",
+    # a module or a doc named for what it handles
+    "sed -n 1,40p tools/research/src/research/store/credentials.py",
+    "rg -n mint tools/research/src/research/store/credentials.py docs/credentials.md",
     # the names-only reader, however it is run
     "python3 tools/agent-guard/envnames.py /root/.config/verity/*",
     "ssh n1 python3 - '/root/.config/verity/*' '/data/state/secrets/*' < tools/agent-guard/envnames.py",

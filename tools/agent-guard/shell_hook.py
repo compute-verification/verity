@@ -23,8 +23,8 @@ POD --`, in a quoted string handed to a wrapper script. A glob over a secrets di
 files, and a filter that cuts each line at its `=` prints every line of a key. `envnames.py FILE...` lists an env file's
 variable names instead and prints nothing of a file that isn't one. What shows no contents passes (`ls`, `stat`, `wc`,
 `sha256sum`, `cp`, writing or sourcing the file, `sed -i`, `openssl pkey -pubout`, `ssh-keygen -l`), as do public halves
-(`*.pub`, `*-pub.pem`, `authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files and the fixtures
-under a `tests/` directory. `AGENT_GUARD_LOCAL_OK=1` does not lift it.
+(`*.pub`, `*-pub.pem`, `authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc
+(`credentials.py`) and the fixtures under a `tests/` directory. `AGENT_GUARD_LOCAL_OK=1` does not lift it.
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -299,8 +299,8 @@ QUIET_GREP = {"--files-with-matches", "--files-without-match", "--count", "--cou
 #: what a file's name, written out or as a glob, says it holds
 SECRET_FILES = {"a private key": ("*.pem", "*.key", "id_rsa*", "id_ed25519*", "id_ecdsa*"),
                 "an env or credentials file": ("*.env", ".netrc", "credentials", "credentials.*")}
-#: names that hold no secret: a key's public half, ssh's public files, a template
-PUBLIC_FILES = ("*.pub", "*-pub.pem", "authorized_keys*", "known_hosts*", "*.example", "*.template")
+#: names that hold no secret: a key's public half, ssh's public files, a template, a module or a doc (`credentials.py`)
+PUBLIC_FILES = ("*.pub", "*-pub.pem", "authorized_keys*", "known_hosts*", "*.example", "*.template", "*.py", "*.md")
 #: directories where every file counts, so a glob over one does (`/root/.config/verity/*` matches the key beside the env files)
 SECRET_DIRS = re.compile(r"(^|/)(\.ssh|\.config/verity|secrets)(/|$)")
 #: what a reader's line names when the parse itself fails: cruder, and it errs toward refusing
