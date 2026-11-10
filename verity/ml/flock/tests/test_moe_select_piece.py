@@ -11,9 +11,9 @@ import random
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

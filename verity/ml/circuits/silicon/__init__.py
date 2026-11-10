@@ -9,7 +9,7 @@
     total_fp8     the same total rules for the Hopper E4M3 k32 step (wgmma m64nNk32 f32.e4m3.e4m3; measured on H100)
     cast          FP32 <-> BF16 word casts
     fp32          IEEE binary32 add, mul, fma, div and sqrt on words, ties to even, no FTZ (the scalar FP32 pipe)
-    tc_step       one ``GroupSum`` step as an exact GF(2) circuit over `verity.ml.circuits.boolean.forms`
+    tc_step       one ``GroupSum`` step as an exact GF(2) circuit over `verity.circuits.boolean.forms`
     fp4           one NVFP4 ``BlockScaledAlignAdd`` step as an exact GF(2) circuit
     fp            exact f32 / bf16 arithmetic as GF(2) circuits
     errors        ``InvalidArtifact``, which the step raises
@@ -17,7 +17,7 @@
 The step is `model.step(acc_word, a_words, b_words) -> acc_word'` (`total.tc_dot_total` on every encoding), with `model`
 one of `models.MODELS`, e.g. `models.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`; the FP8 step is
 `total_fp8.tc_dot_total_e4m3(total_fp8.HOPPER_E4M3_WGMMA_K32, ...)`.  The semantics import nothing but the standard library;
-the GF(2) circuits (`tc_step`, `fp4`, `fp`) build on `verity.ml.circuits.boolean.forms`.
+the GF(2) circuits (`tc_step`, `fp4`, `fp`) build on `verity.circuits.boolean.forms`.
 """
 from .cast import bf16_to_f32_word, f32_is_nan, f32_to_bf16_hw_word, f32_to_bf16_word  # noqa: F401
 from .errors import InvalidArtifact  # noqa: F401

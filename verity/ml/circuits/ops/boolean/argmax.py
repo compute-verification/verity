@@ -16,11 +16,11 @@ then branch, as the word Definitions have it.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, add, const_bits, mux
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, add, const_bits, mux
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
 
 from .. import argmax as A
 from .elementwise import specialized

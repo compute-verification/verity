@@ -8,11 +8,11 @@ from typing import Any
 
 
 def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
-    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ml.circuits.codec.encode_program` of a one-node
+    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.circuits.codec.encode_program` of a one-node
     Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
-    from verity.ml.circuits.codec import SCHEMA_V0, encode_program
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import SCHEMA_V0, encode_program
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.program import Program
     if isinstance(fn, PrimitiveDefinition):
         return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
     params, ret = fn.signature()

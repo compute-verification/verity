@@ -20,12 +20,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.types import Array
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, coll_concat
+from verity.circuits.types import Array
 from verity.ml.private_circuits import universal as U
 
 from verity_flock import class_statement as CS

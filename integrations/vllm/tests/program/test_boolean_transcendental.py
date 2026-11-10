@@ -8,10 +8,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.evaluation import bits as BS
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import boolean_transcendental as BT
 from verity.ml.definitions.registry import ref_prims as RP

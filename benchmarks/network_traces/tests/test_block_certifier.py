@@ -21,7 +21,7 @@ from types import SimpleNamespace
 import jsonschema
 import pytest
 
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]

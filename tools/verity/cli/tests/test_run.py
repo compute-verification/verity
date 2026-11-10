@@ -167,7 +167,7 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 
 def test_the_canonical_form_is_verity_canonical_json():
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     cfg = K.check(config(), REG.components, REG.workloads)
     assert K.canonical(cfg) == canonical_json(cfg)

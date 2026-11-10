@@ -52,7 +52,7 @@ import stream as ST
 from pool_ram import RP
 
 from verity.core.protocols.certifier.head_check import ands
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.commitments.gates import block_key as BK
 from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5, compile_slice_v6 as V6
 

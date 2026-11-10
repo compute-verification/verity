@@ -9,7 +9,7 @@ from typing import Any
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`StopCheck_v1` at small classes on each finish (4 outputs and one stop id on a stop, 5 and two at max_tokens, 4 and none
     running on, 3 and one at the model's length), and at GLM-5.3's served class (32 outputs, its three EOS ids) at max_tokens."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import stop_check as X
 
     return [("StopCheck_v1:4:1:stop", lambda: bind(X.StopCheck, T=4, STOP=(3,), MAX_TOKENS=8, PROMPT_LEN=8, MAX_MODEL_LEN=64,

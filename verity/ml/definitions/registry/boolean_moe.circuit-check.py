@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     chunks and a remainder of 8, OLMoE's router at 8 experts, 2 slots, 4 values per thread, and GLM-5.3's sigmoid `noaux_tc`
     router and its one-field-a-slot form at 8 experts, 2 slots, on both of its kernels, on bits (their word views are
     `registry.moe.MoeRouterSigmoidBias_v1` and `MoeRouterSigmoidBiasSlots_v1`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_moe as BMOE
     from verity.ml.definitions.registry import moe as M
 

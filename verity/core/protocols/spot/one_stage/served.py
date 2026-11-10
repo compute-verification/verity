@@ -60,8 +60,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from . import partition as P, registered as G, registration as R
 

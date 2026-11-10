@@ -79,7 +79,7 @@ from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.spot import challenger as Ch
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain

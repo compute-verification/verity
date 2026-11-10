@@ -34,8 +34,8 @@ from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
 from verity.core.protocols.spot.one_stage import draw as D
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

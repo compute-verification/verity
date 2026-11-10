@@ -8,9 +8,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.types import Array
 from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import cublas_bf16 as CB

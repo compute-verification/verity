@@ -9,11 +9,11 @@ import json
 
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.check.match import program_compare as CMP
 from verity_vllm.check.match.canonical_operands import as_progression
 from verity.ml.definitions.registry import b1, b1_tp2

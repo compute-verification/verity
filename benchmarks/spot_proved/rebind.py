@@ -50,11 +50,11 @@ def main() -> int:
     a = ap.parse_args()
     import a11
     import a11_kinds as K
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.spot.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
-    from verity.ml.circuits.codec import decode_program
+    from verity.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
 
     src, out = Path(a.values), Path(a.out)

@@ -133,7 +133,7 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     import gzip
     import resource
     import time
-    from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+    from verity.circuits.codec import canonical_json, encode_program, program_digest
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
     from tests.protocols.pouw_h1_gpu import layout_of

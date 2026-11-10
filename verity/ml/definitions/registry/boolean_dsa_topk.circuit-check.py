@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `DsaTopKOneHot_v1`, `DsaTopKVerdict_v1` and `DsaTopKAscending_v1`); the Waksman read at small statics shaped as GLM-5.3's
     (an odd N, K = N - 1), with a pick (N 6, K 3), and its index routing; and one switch at GLM-5.3's row width (576 bf16), the
     network's unit."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsa_topk
 
     return [

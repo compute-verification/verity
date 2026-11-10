@@ -10,7 +10,7 @@ def _network_served_tie_roots() -> list[Any]:
     request ids of 6 bits, and the port's i64 ids and positions
     (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`), as one proof block (G = P) and as
     seven (G = 1, the block's selection), with the step and its slots, routing and scan."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.certifier.served_tie import (ServedTieScan, ServedTieSelect, ServedTieSlots, ServedTieStep,
                                                             unit)
 

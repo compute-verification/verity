@@ -12,7 +12,7 @@ floats only: arithmetic in the range serving sees) or a uniform word.  ``E`` is 
 keeps room for random vectors (`circuit_check.checks.Options.random_floor`).
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is in no vector: every vector reads the program's
-own table as one `verity.ml.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
+own table as one `verity.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
 first and last of each region (`probe_entries`), never all of them; the record says how many words the vectors read.
 
 An operand over the input budget (a weight, `circuit_check.targets.LAZY_OPERANDS`) is sampled as `vectors` samples a parameter, its
@@ -26,9 +26,9 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import RegisteredTable
-from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity.ml.circuits.types import Type
+from verity.circuits.evaluation import RegisteredTable
+from verity.circuits.evaluation.batch import type_dtype, type_shape
+from verity.circuits.types import Type
 
 BF16 = (0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0x3F80, 0xBF80)
 FP16 = (0x7C00, 0xFC00, 0x7E00, 0x7D00, 0x7BFF, 0xFBFF, 0x03FF, 0x0400, 0x3C00)
@@ -124,8 +124,8 @@ def wide_words(pt: Type, i: int, edge_vectors: int, seed: int, param: int) -> Ca
 
 
 def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) -> list:
-    """Vector ``i`` as `verity.ml.circuits.evaluation.evaluate` takes it: an int per ``Value``, a flat int list per aggregate."""
-    from verity.ml.circuits.types import Value
+    """Vector ``i`` as `verity.circuits.evaluation.evaluate` takes it: an int per ``Value``, a flat int list per aggregate."""
+    from verity.circuits.types import Value
 
     args = []
     for pt, a in zip(params, arrays):

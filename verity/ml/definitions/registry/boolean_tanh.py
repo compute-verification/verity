@@ -30,13 +30,13 @@ from __future__ import annotations
 from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
 from functools import lru_cache
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import (NOT, ONE, ZERO, add, compress_columns, const_bits, lzc, multiply, mux, or_reduce,
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import (NOT, ONE, ZERO, add, compress_columns, const_bits, lzc, multiply, mux, or_reduce,
                                               shl_window, sub)
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import dense as D
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.tables import TANH_RN_HI, TANH_RN_LO

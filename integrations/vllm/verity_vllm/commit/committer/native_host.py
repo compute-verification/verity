@@ -2066,7 +2066,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                             "rule": "derived-row rule (candidate, NOT verified here): phi = registry exact model of the pinned norm kernel over the bound "
                                     "source row (R2e residual / R2b embedding bf16 row) + registered weight row; opening = source-row leaf + weight "
                                     "opening + replay; verifier + binding/value tests not implemented in this lane",
-                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.ml.circuits registry (row-4 work)"})
+                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.circuits registry (row-4 work)"})
         for src in self.sources:
             classes.extend(src.declaration_classes())
         notes = ["binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "

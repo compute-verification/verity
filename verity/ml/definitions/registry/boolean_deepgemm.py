@@ -16,10 +16,10 @@ The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.boolean.forms import NOT, and_reduce, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
+from verity.circuits.boolean.forms import NOT, and_reduce, or_reduce, sub
+from verity.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG

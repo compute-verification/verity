@@ -26,9 +26,9 @@ and the last LAST, are its `MoeExpertFp8Coordinate_v1` word (`fp8_moe.triton_blo
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import fp8_moe as FM
 from verity.ml.definitions.registry import prims as P

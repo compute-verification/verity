@@ -1540,7 +1540,7 @@ class PostSeedVerdict(Protocol):
 class RequirementLink(Protocol):
     """The served circuit's requirement, linked to a session's passes (Lean's `Accounting.Requirement`), as `ledger`
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
-    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
+    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
     the proof blocks have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit: PlanMatch, or

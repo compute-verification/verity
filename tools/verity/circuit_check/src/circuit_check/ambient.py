@@ -121,7 +121,7 @@ def text(target: Any, junk: int = 0) -> str:
     """``target``'s flat lowering as ``flock-ir-unit/v2`` text, lowered into a circuit that holds ``junk`` other bits first."""
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     from . import structural as ST
 
@@ -223,7 +223,7 @@ def ambiguous_words() -> dict[str, list[str]]:
 
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     from . import targets as TG
 

@@ -17,11 +17,11 @@ import itertools
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate
 from verity.ml.definitions.numerics import mhc_twin as W
 from verity.ml.definitions.registry import boolean_mhc as BM
 from verity.ml.definitions.registry import mhc as M

@@ -26,17 +26,17 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import Program
-from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, bind, composite
+from verity.circuits import Program
+from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
-from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
 from verity.ml.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from verity.ml.definitions.numerics import serve3_reference as ref
 from verity.ml.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.types import Array, Tuple, Value
 
 I32 = Value(32)
 CAP = D_MAX + 1

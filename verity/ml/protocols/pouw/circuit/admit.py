@@ -27,11 +27,11 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import primitive
+from verity.circuits.types import Array, Value
 
 #: slots one unit admits, the 16-bit output limit
 SLOTS = 16

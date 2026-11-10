@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Units of `GumbelTopPTokenSelect_v1{V=64}`'s cut (`sampling.CUTS`) at S = 4, and the carried forms (a slice's later stats
     block, a later step block, a middle select chunk) that its slices of one block reach only at a larger V."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import topp_stages as T
 
     return [

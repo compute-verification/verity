@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     and over a partial second chunk, its head dim and decode tile for RoPE and the split head (two splits, the second partial);
     the q/k norm-RoPE at Qwen3's head dim in its combo kernel's two autotune candidates (one chunk of four columns a thread, two
     chunks of two) and in cc 12.0's winner (two chunks of eight columns over eight lanes a row)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import hopper, inductor
 
     one = {"N": 512, "EPS": 1e-5, "XBLOCK": 2, "R0_BLOCK": 512, "NUM_WARPS": 4}

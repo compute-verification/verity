@@ -12,7 +12,7 @@ def _embedding_roots() -> list[Any]:
     and fill a small V or H doesn't reach. The deployed read repeats these parts at their widths (a full row-seg segment, the
     read's 17 levels), each checked at its smallest binding here and in its own module's bindings, and its gates are pinned
     in the tests (``READS``)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.commitments.gates.embedding import EmbeddingReadSelect, read
 
     return [read(2, 1), bind(EmbeddingReadSelect, V=128256, H=2048), bind(EmbeddingReadSelect, V=128256, H=4096)]

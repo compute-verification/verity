@@ -602,7 +602,7 @@ SAMPLES: dict[str, Callable[[], Callable[..., list[np.ndarray]]]] = {
 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_norm as DN
     from verity.ml.definitions.registry import dsv4_compressor as C
     from verity.ml.definitions.registry import dsv4_decode_indices as DI

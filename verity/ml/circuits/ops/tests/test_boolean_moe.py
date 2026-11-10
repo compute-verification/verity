@@ -9,12 +9,12 @@ import re
 import numpy as np
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import statics_of
+from verity.circuits import codec
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import statics_of
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import moe as M
 from verity.ml.circuits.ops import prims as P

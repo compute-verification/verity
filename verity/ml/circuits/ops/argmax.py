@@ -22,8 +22,8 @@ XOR one AND each, so the scan lowers to a circuit linear in C.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import composite, primitive
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import composite, primitive
+from verity.circuits.types import Array, Value
 
 from . import prims as P
 from . import scalar as SC

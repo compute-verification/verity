@@ -148,7 +148,7 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray], dot_id
 
 
 def check_targets(rng=None) -> list:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import fa2_softcap, hopper
     from verity.ml.definitions.registry import prims as P
 

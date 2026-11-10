@@ -20,7 +20,7 @@ from verity.ml.protocols.certifier import compile_slice_v2 as V2, compile_slice_
 from verity.ml.protocols.certifier import compile_slice_v4 as V4, compile_slice_v5 as V5
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.head_check import ands
-from verity.ml.circuits import boolean as BL
+from verity.circuits import boolean as BL
 
 
 def _x(f, f3):

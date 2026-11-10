@@ -12,7 +12,7 @@ def _network_io_request_roots() -> list[Any]:
     lane, whose verdict is its one lane's; the frame at B = 4,096, the served cell size, and the proof block at the
     served link's class, one lane of one 4,096-byte cell; the proof block at the gate's network certifier schedule
     (`warden-rehearse --scan`), 4 lanes of r = 4 512-byte cells; and the step and the end."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.core.protocols.certifier.io_request import (IoTieRequest, IoTieRequestEnd, IoTieRequestFrame,
                                                             IoTieRequestStep)
 

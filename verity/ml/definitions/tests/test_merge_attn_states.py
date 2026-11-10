@@ -7,8 +7,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics.moe_twins import nv_expf_bits
 from verity.ml.definitions.registry import merge_attn_states as M

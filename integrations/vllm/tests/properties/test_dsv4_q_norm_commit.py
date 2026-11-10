@@ -12,8 +12,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import rows
 from verity.ml.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows

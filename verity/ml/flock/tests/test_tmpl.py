@@ -5,7 +5,7 @@ flat text written out there. Both are in the row order ``Tmpl.ordered`` checks, 
 check refuses only for straddling two input groups into ones it accepts, unrolling to the same rows."""
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import forms as F
+from verity.circuits.boolean import forms as F
 from verity_flock import ir_lower as IL
 from verity_flock import tmpl as T
 

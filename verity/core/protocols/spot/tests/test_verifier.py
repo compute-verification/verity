@@ -13,7 +13,7 @@ import pytest
 
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.core.protocols.spot import challenger as C, coins as T, service as S
 from verity.core.protocols.spot.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
                                                             verifier as V)

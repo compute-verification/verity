@@ -1,9 +1,9 @@
-"""A traced gate circuit (`verity.ml.circuits.boolean.trace.Traced`) cut by what its gates read, and replayed over forms; laid
+"""A traced gate circuit (`verity.circuits.boolean.trace.Traced`) cut by what its gates read, and replayed over forms; laid
 out as `trace.definition` lays out its own (wires 0 and 1 the constants, then the inputs, then one wire per gate)."""
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ONE, ZERO
 
 __all__ = ["replay", "split", "sub"]
 

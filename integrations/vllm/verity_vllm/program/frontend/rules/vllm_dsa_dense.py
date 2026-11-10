@@ -12,8 +12,8 @@
 
 from __future__ import annotations
 
-from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Strided, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Affine, Coll, Concat, PartLog, Strided, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape

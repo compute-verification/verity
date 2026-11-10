@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity_vllm.program.prune import COLUMNS, dead_free_versions
 
 from .common import Unexpressible, _Launch, in_launch, kind, launch_batch, request_passes

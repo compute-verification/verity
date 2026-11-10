@@ -209,7 +209,7 @@ def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
 def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     _prog, root = IL.standalone(target)
     args = list(root.args)
@@ -342,7 +342,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
     ``refused``), the counts on both sides, the bound on a wrong verdict (`error_bound`), and why the forms differ when they
     do."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     t = resolve(target)
     return _check(tmpl, lambda: _lowered(t), label or t.id, {"definition": t.id}, ("the Definition's", "input leaves"),
@@ -359,7 +359,7 @@ def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tm
     stager lays out."""
     from verity_flock import class_statement as CS
 
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     t = resolve(definition)
 

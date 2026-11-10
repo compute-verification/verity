@@ -37,7 +37,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/pouw/lean/check/models.json",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/spot/__init__.py", "verity/core/protocols/spot/challenger.py",
-          "verity/core/protocols/spot/remote.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/core/protocols/spot/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/difftest/python",
           "verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",

@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value
+from verity.circuits.types import Array, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.errors import FrontendError
 
 @dataclass(frozen=True)

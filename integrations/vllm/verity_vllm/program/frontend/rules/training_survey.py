@@ -15,7 +15,7 @@ from typing import Any, Sequence
 
 import torch
 
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 from verity_vllm.program.frontend.derive import _no_rule
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, Refuse, Unsupported

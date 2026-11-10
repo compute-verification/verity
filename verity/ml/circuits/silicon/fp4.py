@@ -24,7 +24,7 @@ floor binding, sums leaving binary32 or falling below its subnormal grid), the M
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import (ONE, ZERO, Circuit, NOT, OR, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
+from verity.circuits.boolean.forms import (ONE, ZERO, Circuit, NOT, OR, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                     or_reduce, shl_window, shr, sub)
 
 K, GROUP, GROUPS = 64, 16, 4

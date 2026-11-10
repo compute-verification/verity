@@ -13,13 +13,13 @@ import random
 
 import pytest
 
-from verity.ml.circuits import ports as PT
-from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.ports import In, Out, Ports
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, coll_concat
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits import ports as PT
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ports import In, Out, Ports
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, coll_concat
+from verity.circuits.types import Array, RecordType, Value
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr

@@ -57,9 +57,9 @@ negated, as the decode's block does.  `FLASHMLA_PREFILL_DSV4` holds DeepSeek-V4-
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.fp32 import F32DivV2
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16

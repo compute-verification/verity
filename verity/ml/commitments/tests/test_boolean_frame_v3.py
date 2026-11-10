@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.frame_v3.vectors_sha512 import domain
 from verity.ml.commitments.gates import frame_v3 as F
 from verity.ml.commitments.gates.sha512 import words_be

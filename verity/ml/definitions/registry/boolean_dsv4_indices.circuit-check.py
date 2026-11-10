@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definition at ratio 128's narrowest row (`active_topk_width` 128, window 128) and at a small one (top-k 8,
     ratio 4, window 4, row 16); the served ratio-4 row is over `targets.MAX_GATES`, so it is the word Definition's
     (`dsv4_indices.circuit-check.py`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsv4_indices as BX
 
     return [

@@ -21,12 +21,12 @@ from tests.program.predict.test_predict import FIX, TINY, _phi
 from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.ml.circuits.census import PRODUCTS, SILICON, NoBooleanWork, census, family, step_ends
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program, is_input
+from verity.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.program.predict.build import build_program, model_shape
 from verity.ml.definitions.boolean import boolean_version, lift

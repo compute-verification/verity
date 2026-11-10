@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.training_emit import _DT, BF16, F32, _batch, _shape, _TrainRule, aten

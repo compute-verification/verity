@@ -24,12 +24,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import const_bits, mux, or_reduce
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.boolean.trace import definition, word_of
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import const_bits, mux, or_reduce
+from verity.circuits.boolean.gather import gather
+from verity.circuits.boolean.trace import definition, word_of
+from verity.circuits.defs import bind, composite
+from verity.circuits.types import Array
 
 from .. import gemm as G
 from .. import moe as W

@@ -33,9 +33,9 @@ DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", 
 def _digest(fn) -> str | None:
     """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
     a one-Call wrapper (which is not registered)."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.ml.circuits.program import Program
+    from verity.circuits import codec
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.circuits.program import Program
 
     if isinstance(fn, SpecializedDefinition):
         return codec.program_digest(codec.encode_program(Program(fn)))
@@ -49,7 +49,7 @@ def _digest(fn) -> str | None:
 
 def _family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family Definition module defines (not one it imports), by that module."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out: dict[str, str] = {}
     for name in DEFINITION_MODULES:

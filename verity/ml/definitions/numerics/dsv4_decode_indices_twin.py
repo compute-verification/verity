@@ -68,7 +68,7 @@ def _sample(rng, n, params, *, TOPK, BS, NB):
 
 def _targets(defs: dict) -> list:
     """The served row at max_model_len 4096, and two small ones (one of odd widths)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     statics = [dict(TOPK=1024, BS=64, NB=16), dict(TOPK=8, BS=4, NB=8), dict(TOPK=5, BS=2, NB=3)]
     return [bind(defs["Dsv4GlobalTopk_v1"], **st) for st in statics]

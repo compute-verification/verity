@@ -52,9 +52,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import prims as P

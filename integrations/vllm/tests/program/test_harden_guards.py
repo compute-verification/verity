@@ -33,11 +33,11 @@ import sys
 
 import pytest
 
-import verity.ml.circuits
+import verity.circuits
 from verity_vllm.program.frontend.target_profile import ArtifactIdentity, TargetProfile, reuse_mismatches
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # integrations/vllm
-CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.ml.circuits.__file__)))  # the repository root
+CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.circuits.__file__)))  # the repository root
 
 RESULTS: list[dict] = []
 

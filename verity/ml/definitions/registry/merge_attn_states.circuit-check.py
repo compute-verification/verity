@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import merge_attn_states
 
     return [

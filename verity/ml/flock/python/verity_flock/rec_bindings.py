@@ -22,9 +22,9 @@ import sys
 from functools import cache
 from pathlib import Path
 
-from verity.ml.circuits.codec import canonical_json, decode_program, descriptor_id, program_digest
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json, decode_program, descriptor_id, program_digest
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.program import Program
 
 from . import rec_open as _rec_open  # registers RecOpen
 from . import rec_residuals as _rec_residuals  # registers InnerRepCheck

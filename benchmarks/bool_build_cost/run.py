@@ -52,7 +52,7 @@ WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 
 
 def definitions(specs: list[str], ir: str) -> list:
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.defs import CompositeDefinition, bind
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
@@ -68,10 +68,10 @@ def definitions(specs: list[str], ir: str) -> list:
 
 def program(fns: list):
     """One Program calling each Definition once, on parameters of its own."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Tuple
     sigs = [fn.signature() for fn in fns]
     params = tuple((f"a{i}_{n}", t) for i, (ps, _r) in enumerate(sigs) for n, t in ps)
 
@@ -87,7 +87,7 @@ def program(fns: list):
 
 
 def descriptor(fns: list) -> dict:
-    from verity.ml.circuits.codec import canonical_json, descriptor_size, encode_program, program_digest
+    from verity.circuits.codec import canonical_json, descriptor_size, encode_program, program_digest
     t = time.time()
     d = encode_program(program(fns))
     secs = time.time() - t

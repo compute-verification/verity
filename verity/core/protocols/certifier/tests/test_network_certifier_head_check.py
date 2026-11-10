@@ -6,8 +6,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest

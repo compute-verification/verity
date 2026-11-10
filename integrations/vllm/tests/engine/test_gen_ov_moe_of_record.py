@@ -8,8 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 
 from tests.engine.test_gen_ov_moe import OV, TOPK, C, E, H, I, _eval
 from verity_vllm.observe.fold.resolver import Compute, Unsupported

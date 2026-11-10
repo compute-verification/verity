@@ -25,8 +25,8 @@ from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
 from verity_vllm.query.program_view import spec_statics
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import sampling_rows as SR

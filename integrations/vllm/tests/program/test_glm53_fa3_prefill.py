@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.numerics import derived_rows as DR

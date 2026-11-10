@@ -15,16 +15,16 @@ import sys
 import verity.ml.circuits.ops as OPS
 import verity.ml.circuits.ops.gemm  # registers the steps
 import verity.ml.circuits.ops.boolean.s8  # noqa: F401  (binds the u8 x s8 step)
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits.boolean.trace import word_of
 from verity.ml.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census
-from verity.ml.circuits.codec import descriptor_id, encode_program
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits.codec import descriptor_id, encode_program
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 
 DOT = re.compile(r"Dot(\d+)_v\d+$")
 
@@ -80,8 +80,8 @@ import verity.ml.circuits.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
 from verity.ml.circuits.census import COUNTERS, census
-from verity.ml.circuits.codec import decode_program
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.codec import decode_program
+from verity.circuits.defs import REGISTRY
 try:
     totals = census(decode_program(json.load(open(sys.argv[1])), REGISTRY))["totals"]
     print(json.dumps({k: totals[k] for k in COUNTERS}))
@@ -147,8 +147,8 @@ import verity.ml.circuits.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
 from verity.ml.circuits.census import census
-from verity.ml.circuits.codec import decode_program
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.codec import decode_program
+from verity.circuits.defs import REGISTRY
 try:
     print(json.dumps(census(decode_program(json.load(open(sys.argv[1])), REGISTRY), boolean=True)["totals"]["work"]))
 except ValueError as e:

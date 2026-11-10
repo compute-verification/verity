@@ -10,7 +10,7 @@ def _network_served_statics_roots() -> list[Any]:
     request ids of 6 bits (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`), as one proof
     block (G = P) and as seven (G = 1), with the step; and at the sealed served run's class (R 8, IW 16, L 512, T 2048)
     at G = 16, its ZK run's proof block."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.certifier.served_statics import ServedStaticsStep, unit
 
     return [

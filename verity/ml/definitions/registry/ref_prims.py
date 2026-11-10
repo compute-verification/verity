@@ -59,10 +59,10 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ml.circuits.codec import register_lazy_family
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
-from verity.ml.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.codec import register_lazy_family
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
+from verity.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P

@@ -45,8 +45,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 from verity.ml.circuits.silicon import fp
 
 from .. import fp32 as W

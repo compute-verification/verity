@@ -183,7 +183,7 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/ml/protocols/pouw/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,
-  PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
+  PoUW as `verity.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.

@@ -18,18 +18,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits import ports as PT
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits import ports as PT
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import mufu as M
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import softmax_row as SR
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 
 from test_boolean_rowwise import BF16_SPECIALS, _const, _ev, _f32, _first_greatest, _rows, _scores, _ties
 

@@ -78,7 +78,7 @@ COMMANDS = {"build": BuildOptions, "node": NodeOptions, "node-registration": NR.
 def node_main(a: NodeOptions) -> int:
     """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the body
     Definition's nodes (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then one Call of the body)."""
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     from .node import build_node_program, check_ranks
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):
         raise UsageError(f"--out {a.out} looks like a Build row or Build dir: a prediction is never written into one")
@@ -120,7 +120,7 @@ def main(a) -> int:
             f.write(gzip.compress(data) if a.out.endswith(".gz") else data)
         print(f"[predict] inventory: {len(inv['rows'])} rows -> {a.out}", file=sys.stderr)
         return 0
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     from .build import build_program
     from .phi import load_phi
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):

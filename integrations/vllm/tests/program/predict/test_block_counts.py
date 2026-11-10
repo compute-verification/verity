@@ -18,9 +18,9 @@ from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
-from verity.ml.circuits import codec, partition_v2 as PV2
-from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.population import population_program
+from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits.defs import REGISTRY
+from verity.circuits.population import population_program
 from verity.ml.definitions.boolean import gate_table
 from verity.ml.windows import interface as IF
 

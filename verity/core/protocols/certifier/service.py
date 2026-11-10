@@ -201,12 +201,12 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain

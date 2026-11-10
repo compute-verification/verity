@@ -29,7 +29,7 @@ the job reads into one file (`bundle`), ships it (`research run --send FILE`), a
 bundle=...)`), each digest checked against the record as from the store.
 
     from verity_vllm.pipeline import circuit_db
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
     rec = circuit_db.record(row)                      # the config record
     progs = circuit_db.programs(row, ranks=[0], part=["workload"])   # {rank: {part: DecodedProgram}}, each digest checked
     p = progs[0]["workload"]                          # the Program the Commit binds; "build_step", "build_request_LP*_T*" beside it

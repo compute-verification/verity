@@ -53,7 +53,7 @@ from verity.ml.protocols.pouw.circuit import plan as CPL
 from verity.ml.protocols.pouw.circuit.ncp2 import D
 from verity.core.protocols.pouw.protocol import DomainError
 
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity.ml.definitions.numerics.kernel_registry import Declined
 from verity_vllm.protocols import pouw

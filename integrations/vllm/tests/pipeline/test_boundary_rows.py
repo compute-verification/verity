@@ -13,11 +13,11 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.population import population
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.population import population
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
 from verity.ml.windows import rows as CS
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR

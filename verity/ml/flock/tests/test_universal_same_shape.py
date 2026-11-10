@@ -32,9 +32,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.ml.circuits.defs import bind
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import bind
 from verity.ml.private_circuits import universal as U
 
 from verity_flock import circuit as FC

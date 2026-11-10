@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.ml.circuits.defs import SpecializedDefinition
+from verity.circuits.defs import SpecializedDefinition
 from verity_vllm.config import UsageError, option
 from verity.ml.definitions.numerics.twins import LIBRARIES, SCHEMA, U64, check_families, check_spec
 
@@ -25,7 +25,7 @@ def _captured_providers(result, vals, store, spec_id: str, rng: np.random.Genera
     """Callables yielding (node, args, expected words) for real instances of `spec_id` at snapshot steps: operands by
     provenance exactly as tier a resolves them (`compare.Values`), expected from the instance's own output snapshot."""
     from verity_vllm.check.fold_compare import _component_ranges
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
     steps = set(store.steps)
     metas = [m for m in result.instances if m["spec"] == spec_id and m["step"] in steps]
     idx = list(range(len(metas)))

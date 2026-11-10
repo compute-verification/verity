@@ -158,8 +158,8 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_detectors_on_examples() -> None:
     bad = (
         "import verity.program.codec as codec\n"
-        "from verity.ml.circuits import defs\n"
-        "from verity.ml.circuits.defs import _check, primitive\n"
+        "from verity.circuits import defs\n"
+        "from verity.circuits.defs import _check, primitive\n"
         "codec._LAZY_PRIMITIVE_FAMILIES = tuple(codec._LAZY_PRIMITIVE_FAMILIES) + ('x',)\n"
         "setattr(defs, 'REGISTRY', {})\n"
         "defs.REGISTRY['Gemm_v1'] = None\n"
@@ -167,14 +167,14 @@ def test_detectors_on_examples() -> None:
     )
     got = {(v.kind, v.detail) for v in file_violations(bad, "verity_vllm/a.py")}
     assert got == {
-        ("core-private", "verity.ml.circuits.defs._check"),
+        ("core-private", "verity.circuits.defs._check"),
         ("core-private", "verity.program.codec._LAZY_PRIMITIVE_FAMILIES"),
         ("core-patch", "verity.program.codec._LAZY_PRIMITIVE_FAMILIES"),
-        ("core-patch", "setattr(verity.ml.circuits.defs, REGISTRY)"),
-        ("core-patch", "verity.ml.circuits.defs.REGISTRY[...]"),
-        ("core-patch", "verity.ml.circuits.defs.REGISTRY.update()"),
+        ("core-patch", "setattr(verity.circuits.defs, REGISTRY)"),
+        ("core-patch", "verity.circuits.defs.REGISTRY[...]"),
+        ("core-patch", "verity.circuits.defs.REGISTRY.update()"),
     }, got
-    good = "from verity.ml.circuits.defs import primitive, CompositeDefinition\nx = CompositeDefinition('A', 1, (), None, None)\nx.doc = 'd'\n"
+    good = "from verity.circuits.defs import primitive, CompositeDefinition\nx = CompositeDefinition('A', 1, (), None, None)\nx.doc = 'd'\n"
     assert file_violations(good, "verity_vllm/a.py") == []
     tree = ast.parse("@primitive('Bf16ToF32', 1, [], None)\ndef f(a): return a\n"
                      "G = CompositeDefinition('G', 2, (), None, None, register=False)\n"

@@ -46,13 +46,13 @@ from importlib import resources
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 
 from .. import mufu as M
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
 from .softmax import _eq_const
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 
 __all__ = ["QUADRATIC", "TANH_QUADRATIC", "DivFullRcp", "DivFullScaleA", "Fit", "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz",
            "MufuTanh", "RsqrtApprox", "TanhFit", "div_full_scale_a_gpu", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]

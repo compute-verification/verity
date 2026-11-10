@@ -54,7 +54,7 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
              warp tree and fold are checked where they show).
   words      every word of every auto launch against the twin (`kernels.marlin_moe_rows.launch`) at its kernel's config, and of every
              accepted forced launch at its own.
-  reference  on each auto launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of `MarlinMoeSchedule_v1`
+  reference  on each auto launch, the plain-integer reference (`verity.circuits.evaluation.evaluate`) of `MarlinMoeSchedule_v1`
              at the served statics on its first blocks, `MarlinMxfp4Coordinate(W)_v1` on sampled coordinates, and for the w2 launch
              `MarlinMoeExpertCoordinateW_v1{E=384}` on one column through the 384-expert gather, which the twin must equal.
   bind       `MarlinMoeExpertGemm(W)_v1` bind at every served config, and each names its Boolean version.
@@ -880,8 +880,8 @@ def reference_job(spec: dict[str, Any], statics: list[int]) -> dict[str, Any]:
 def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     """The plain-integer reference against the twin at the launch's statics: the schedule on its first four blocks, two pairs' sampled
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
     from verity.ml.definitions.registry import marlin_moe as MM
 
@@ -960,9 +960,9 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
 def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     """`MarlinMoeExpertGemm(W)_v1` bind at every served (kind, TK, TN, GRID): the weight slabs [E][N][K] and [E][N][K / 32], and the
     Boolean version each names."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.batch import type_shape
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
     from verity.ml.definitions.boolean import boolean_version
     from verity.ml.definitions.registry import marlin_moe as MM
 

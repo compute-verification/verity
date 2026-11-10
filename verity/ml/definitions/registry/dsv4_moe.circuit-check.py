@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """DeepSeek-V4's routers at 8 experts, x2.5 (the hash router's six table ids and the Triton router's six slots), and the
     clamped SwiGLU row at I = 4, limit 10 (its element `SiluMulClampBf16_v1{LIMIT=10.0}` with it); the word views of
     `boolean_dsv4_moe`'s.  `MufuLg2Mantissa_v1`, `Ex2Approx_v1`, `Dsv4HashWeight_v1` and `Dsv4SqrtSoftplus_v1` are static-free."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsv4_moe as D
 
     return [

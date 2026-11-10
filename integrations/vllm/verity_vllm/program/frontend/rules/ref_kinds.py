@@ -10,10 +10,10 @@ vocabulary's names.
 
 from __future__ import annotations
 
-from verity.ml.circuits.defs import Builder, CompositeDefinition
-from verity.ml.circuits.refs import Coll
+from verity.circuits.defs import Builder, CompositeDefinition
+from verity.circuits.refs import Coll
 from verity.ml.definitions.registry import prims as P
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 
 F32 = Value(32)
 BF16 = Value(16)

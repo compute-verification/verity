@@ -9,9 +9,9 @@ import hashlib
 
 import pytest
 
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.defs import bind
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.defs import bind
 from verity.ml.commitments.gates import embedding as E, frame_v3 as F, hm96 as H, rowleaf as R
 from verity.ml.commitments.gates.sha512 import IV, Sha512CompressFolded
 from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole

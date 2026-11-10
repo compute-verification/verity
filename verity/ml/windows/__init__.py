@@ -6,7 +6,7 @@ such hand-over. Any integration hands it over the same way, without touching `ve
 `Circuit`, the `Window` it records each unit's values into, closes and writes, and the verifier's window from the records,
 `of_records`).
 
-It imports `verity.ml.circuits` and `verity.ml.commitments` and never `verity.core`: what core's records need from it
+It imports `verity.circuits` and `verity.ml.commitments` and never `verity.core`: what core's records need from it
 (the registration record, the Lean verifier's registered-reads format) comes from the caller, who passes core's module.
 Nothing in core imports it, so it is off the soundness path: the verifier recomputes every domain, partition and root it
 checks from the registration and its own Program.

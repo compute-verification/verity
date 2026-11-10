@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics in Llama-3.2-1B's decode tile on sm_120 (head dim 64, the split kernel's 256
     keys a block): T = 300 in three splits, the last one empty, and in two (a full block, then the partial one); eight splits
     combined."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import fa2_split, hopper
     from verity.ml.definitions.registry import prims as P
 

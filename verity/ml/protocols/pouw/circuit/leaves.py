@@ -128,9 +128,9 @@ from typing import Sequence
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_seg_word_digest, sha512_row_v2_digest)
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, Value
 
 from ..schemes import pearl_c as C
 from . import hashes as H

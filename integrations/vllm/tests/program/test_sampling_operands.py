@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.properties.admission import evaluate_spec
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import sampling as S
 from verity.ml.definitions.registry.sampling import (
     GumbelArgmaxBf16,

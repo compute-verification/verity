@@ -42,7 +42,7 @@ def instance_rows(program) -> Iterator[dict]:
     progressions form (instances v2, `compact.file_items_from_refs`, the fold writer's): O(rows) for a scattered Strided where `runs()`
     is O(leaves) — the GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand.  Every reader expands back to the
     per-leaf run lists, bit-identically (`compact.expanded_file_args` at `program_view.iter_instance_rows` and the raw doc loaders)."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.program.compact import file_items_from_refs
     for k, n in enumerate(program.fn.body.nodes):
         yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [file_items_from_refs(a.refs) for a in n.args]}
@@ -137,7 +137,7 @@ SCATTERED_MEMO_BYTES = 1 << 30
 
 def _value_key(r) -> tuple:
     """`r`'s references as a hashable value: equal keys are equal references, so equal stored items."""
-    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.circuits.refs import Affine, Concat, Explicit, Strided
     tr = type(r)
     if tr is Strided:
         return ("s", r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
@@ -152,7 +152,7 @@ def _value_key(r) -> tuple:
 
 def _reads_scattered(r) -> bool:
     """`r` reads a `Strided` whose rows are not contiguous: one progression per row (`compact._scattered_strided`)."""
-    from verity.ml.circuits.refs import Concat, Strided
+    from verity.circuits.refs import Concat, Strided
     tr = type(r)
     if tr is Strided:
         return r.inner != 1 and r.inner_stride != 1 and r.count > r.inner
@@ -173,7 +173,7 @@ class RowTexts:
         self.scattered_bytes = 0
 
     def operand(self, r) -> str:
-        from verity.ml.circuits.refs import Concat
+        from verity.circuits.refs import Concat
         from verity_vllm.program.compact import file_items_from_refs
         if type(r) is Concat and r.prefix is not None:
             log, j = r.prefix
@@ -194,7 +194,7 @@ class RowTexts:
         return text
 
     def rows(self, program, names: dict[int, str | None] | None = None) -> Iterator[str]:
-        from verity.ml.circuits.codec import descriptor_id
+        from verity.circuits.codec import descriptor_id
         dumps, specs = json.dumps, self.specs
         for k, n in enumerate(program.fn.body.nodes):
             spec = specs.get(id(n.fn))

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.circuits.codec import canonical_json, encode_program
 from verity_flock import circuit as FC
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.spot.one_stage import partition as P, registered as G

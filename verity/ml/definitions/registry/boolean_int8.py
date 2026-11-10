@@ -27,12 +27,12 @@ I32ToF32_v2.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import table as BT
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import table as BT
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean import int8 as BI
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.ml.definitions.boolean import sigma_lift
 from verity.ml.definitions.registry import int8_exact as IE
 

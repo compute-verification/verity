@@ -68,11 +68,11 @@ from verity.core.protocols.spot.challenger import COIN_BYTES, NO_CLOSE, NO_TREE,
 from verity.core.protocols.spot.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
 from verity.core.protocols.spot.one_stage.proofs import order_why
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, input_id, is_input
-from verity.ml.circuits.refs import array_of, record_of, tuple_of
-from verity.ml.circuits.types import Array, RecordType, Tuple, Value
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program, input_id, is_input
+from verity.circuits.refs import array_of, record_of, tuple_of
+from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.ml.commitments.window import window_binding
 
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
@@ -4954,7 +4954,7 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     """At `n` units of `REAL_TEMPLATES`, whose Definitions call one another as the catalog's do (the toy's call nothing),
     Lean's unit gates laid out a range at a time are its walk's unit by unit. Python's `partition.unit_gates` isn't asked:
     its partition over these templates takes more memory than a suite has."""
-    from verity.ml.circuits.population import mixed_population_program
+    from verity.circuits.population import mixed_population_program
     from verity.ml.definitions.registry.catalog import load
     from verity.ml.windows import interface as IF
 

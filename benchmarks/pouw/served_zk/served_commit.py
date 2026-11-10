@@ -118,12 +118,12 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import numpy as np
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
 from verity.core.protocols.certifier.active import RUN_ID_BYTES
 from verity.core.protocols.pouw import core_check as CC

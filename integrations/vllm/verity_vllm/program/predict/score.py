@@ -170,7 +170,7 @@ def _workload_task(task: dict) -> dict:
 def request_component(r):
     """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
     whose definitions are this process's, so nothing is decoded."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.program import workload as W
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
     fn = getattr(r.program, "program_fn_id", None) or descriptor_id(r.program.fn)
@@ -262,8 +262,8 @@ def first_divergence(pred: dict, traced: dict) -> dict:
 
 
 def equivalence(pred_program, traced_desc: dict) -> dict:
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import decode_program
+    from verity.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
     from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()

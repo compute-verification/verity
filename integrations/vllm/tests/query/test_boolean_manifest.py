@@ -19,7 +19,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
+from verity.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.correspondence.runtime import correspondence_digest  # noqa: E402
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
@@ -149,7 +149,7 @@ def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(ro
     digest still the dir's recorded one.  A word descriptor that is not the recorded word digest is refused."""
     import shutil
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
 
     _word, bits, dirs, digests = row

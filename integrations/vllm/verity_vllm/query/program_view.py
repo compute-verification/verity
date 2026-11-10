@@ -2,7 +2,7 @@
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
-* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`) as `verity.ml.circuits.codec.decode_program` decodes it: the
+* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`) as `verity.circuits.codec.decode_program` decodes it: the
   program function's body nodes give every Call's Definition, output type and operand references; the annotations' `node_hints` its name.
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
@@ -510,8 +510,8 @@ class _Builder:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def ports_of_type(t) -> tuple[Port, ...]:
-    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    from verity.ml.circuits.types import RecordType, Tuple as TupleT
+    """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
+    from verity.circuits.types import RecordType, Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -541,7 +541,7 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     hit = _PORTS_CACHE.get(spec)
     if hit is not None:
         return hit
-    from verity.ml.circuits.codec import lookup_primitive
+    from verity.circuits.codec import lookup_primitive
     from verity.ml.definitions.registry.catalog import load
     reg, errors = load()
     base = spec_base(spec)
@@ -711,12 +711,12 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.ml.circuits.codec import decode_program, descriptor_id
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.codec import decode_program, descriptor_id
+    from verity.circuits.refs import runs
     if registry is None:
         from verity.ml.definitions.registry.catalog import load
         registry, _errors = load()
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
     decoded = decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}
     fn = decoded.defs.get(decoded.program_fn_id)
@@ -739,7 +739,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
         b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
               ([remap(r) for r in runs(a.refs)] for a in n.args))
     ret = [remap(r) for r in runs(body.ret)]
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits.codec import program_digest
     return b.view(b.outputs(ret), program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
 
 

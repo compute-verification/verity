@@ -1,4 +1,4 @@
-"""Query API (`verity.ml.circuits.query_ast`, `query.parse`, `query_codec`) on small-statics b1 Programs.
+"""Query API (`verity.circuits.query_ast`, `query.parse`, `query_codec`) on small-statics b1 Programs.
 
 Every family is checked for `count == len(list(iter))`, `by_index(i) == list[i]`, `index_of(by_index(i)) == i`; sets are
 compared with the intervals the layout gives (`FunctionCall` regions / `Scope` offsets); partition properties are
@@ -9,15 +9,15 @@ import json
 
 import pytest
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind
-from verity.ml.circuits.layout import FunctionCall
-from verity.ml.circuits.parts import Part, n_members
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import PrimitiveDefinition, bind
+from verity.circuits.layout import FunctionCall
+from verity.circuits.parts import Part, n_members
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import b1
-from verity.ml.circuits import query_ast as G
-from verity.ml.circuits.query_ast import GateSet, QueryError, evaluate
-from verity.ml.circuits.query import parse, query
-from verity.ml.circuits.query_codec import from_json, query_id, to_json
+from verity.circuits import query_ast as G
+from verity.circuits.query_ast import GateSet, QueryError, evaluate
+from verity.circuits.query import parse, query
+from verity.circuits.query_codec import from_json, query_id, to_json
 
 GEMM = 'members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")'
 ATTN = '''each("//AttentionHead_v3{*}",

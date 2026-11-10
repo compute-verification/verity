@@ -65,7 +65,7 @@ def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it()
 def opening(once, m: int) -> list[Path]:
     """`stage_opening`'s circuit file of each part at claims 2 (`rec_residuals.statement` over one instance) at m, staged once
     on the machine (`once`; `test_rec_vstar_checks` reads it too), with its partition object and program beside it."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     def make(d):
         for j, p in enumerate(RR.parts(RR.spec(_shape(m, 2)))):

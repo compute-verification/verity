@@ -1,7 +1,7 @@
 """The sampling policy is a structural input of the Bet A construction and an applicability condition; a workload whose sampler
 the builder cannot bind is REFUSED, never built as the greedy Program (that would be a fail-open Build).
 
-GPU-free and vLLM-free: the refusal happens in `derive_step.run` before any vLLM import, so these tests run anywhere `verity.ml.circuits`
+GPU-free and vLLM-free: the refusal happens in `derive_step.run` before any vLLM import, so these tests run anywhere `verity.circuits`
 imports.  Covered: policy parsing from `--sampling` and from the two manifest formats (sweep/workload.py `sweep.*`, legacy
 `variants` + per-request `variant`/`seed`), disagreement between the two sources, the refusal record (`reason: "sampler"`,
 `structural_inputs.sampling` = the declared policy, no artifact), applicability carrying the sampler, and greedy-by-omission recorded

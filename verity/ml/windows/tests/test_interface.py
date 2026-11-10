@@ -24,14 +24,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain

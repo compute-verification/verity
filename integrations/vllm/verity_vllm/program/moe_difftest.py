@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import struct
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
 from verity.ml.definitions.registry.prims import BF16, F32, I32

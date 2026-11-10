@@ -40,7 +40,7 @@ def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list
                 load(scope, child, errors)
         return None
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     out: list[str] = []
     for s in (scope,) if isinstance(scope, str) else scope:
         if s not in _LOADED:

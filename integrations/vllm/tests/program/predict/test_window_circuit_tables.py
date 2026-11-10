@@ -26,7 +26,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV
 from verity.core.protocols.pouw import credit
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.spot.one_stage import registered as CR
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF
 
 TABLES = Tables(64, 8, 6)

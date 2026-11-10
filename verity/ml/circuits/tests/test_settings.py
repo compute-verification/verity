@@ -15,7 +15,7 @@ import pytest
 from verity import settings as S
 
 REGISTRY = Path(S.__file__)
-AREA = Path(__file__).resolve().parents[1]
+AREA = (Path(__file__).resolve().parents[3] / "circuits")
 TOKEN = re.compile(r"\bVERITY_ML_[A-Z0-9_]*[A-Z0-9]\b")
 #: the attributes of ``os`` that touch the environment
 OS_ENV = frozenset({"environ", "environb", "getenv", "getenvb"})

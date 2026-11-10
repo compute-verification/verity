@@ -9,8 +9,8 @@ import pytest
 from verity_vllm.engine import served_seed
 from verity_vllm.program.predict import seed_rule as SR
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_words
 from verity.ml.definitions.registry import boolean_io_shell as BX
 from verity.ml.definitions.registry import io_shell as X
 

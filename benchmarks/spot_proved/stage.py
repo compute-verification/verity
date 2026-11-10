@@ -1680,7 +1680,7 @@ def main() -> int:
     a = ap.parse_args()
     import a11
     import a11_kinds as K
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.spot.one_stage import partition as P
     from verity_vllm import TargetProfile
 

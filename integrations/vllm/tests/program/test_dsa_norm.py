@@ -13,9 +13,9 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.boolean import trace as TR
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import dsa_norm_rows as NR

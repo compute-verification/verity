@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from verity.ml.commitments.gates import merkle as M
-from verity.ml.circuits.boolean.forms import Circuit
+from verity.circuits.boolean.forms import Circuit
 
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL

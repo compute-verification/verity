@@ -22,7 +22,7 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_boundaries.py", "tests/test_census_products.py"]
-paths = ["verity/ml/circuits"]
+paths = ["verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_trace_cache.py"]

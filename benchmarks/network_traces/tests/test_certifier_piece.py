@@ -48,7 +48,7 @@ import chain_record as CR  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"

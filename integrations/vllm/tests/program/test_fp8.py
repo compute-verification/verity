@@ -8,7 +8,7 @@ Data (`tests/program/data/`, recorded on an H100):
   positions 0, 63, 130; layer 0 qkv_proj): the bf16 norm output `x`, the captured `x_q` and `s_x` (fp8_quant ports 0/1),
   the captured output row, plus eight committed e4m3 weight rows, the committed f32 weight scale and the bf16 bias.
 
-The tests evaluate the registered functions gate by gate (`verity.ml.circuits.evaluation`) and compare words.  Python >= 3.12
+The tests evaluate the registered functions gate by gate (`verity.circuits.evaluation`) and compare words.  Python >= 3.12
 (`veritor.core.silicon_total_fp8`).
 """
 
@@ -23,9 +23,9 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind
+from verity.circuits import Program, bind
 from verity_vllm.correspondence.capture_identities import _coll_range
-from verity.ml.circuits.evaluation import evaluate_region
+from verity.circuits.evaluation import evaluate_region
 from verity.ml.definitions.registry import fp8 as F
 from verity.ml.definitions.numerics import fp8_twins
 from verity.ml.definitions.registry import prims as P
@@ -53,7 +53,7 @@ def _evaluate(program: Program, arrays: list[np.ndarray]) -> list[list[int]]:
 def _evaluate_returns(program: Program, arrays: list[np.ndarray]) -> list[int]:
     """Like `_evaluate`, but returns the program function's OWN return words (its body's `ret` refs resolved to root gates),
     whatever the root-call order of its children."""
-    from verity.ml.circuits.layout import resolve
+    from verity.circuits.layout import resolve
     circ = program.circuit
     t: dict[int, int] = {}
     for i, arr in enumerate(arrays):

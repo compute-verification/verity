@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """One binding per family at small statics (one warp's 32 elements, a 16-wide quant block): every one is flat and over
     `targets.MAX_GATES` (a head is 120,000 to 160,000 ANDs, the insert of one head and its pad 380,000), so `select` keeps a
     family's smallest whatever is listed."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsv4_qnorm_insert as BQ
 
     return [

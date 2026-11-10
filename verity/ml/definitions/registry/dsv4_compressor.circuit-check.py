@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at DeepSeek-V4-Pro's statics (`dsv4_compressor.DSV4_COMPRESSOR`): the ratio-4 column over 8 rows
     and over the 4 at position 3, the ratio-128 column over 8 warps of 16, each kernel's RMSNorm and row at head 512, one group
     of 64, the rotary group, and both compressors' rows."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsv4_compressor as C
 
     S = C.DSV4_COMPRESSOR

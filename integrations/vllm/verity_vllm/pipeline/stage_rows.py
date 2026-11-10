@@ -36,7 +36,7 @@ BITS = {"top_p": 32, "seed": 64, "pos": 64, "temp": 32, "splits": 32}
 
 @cache
 def _places(V: int) -> dict[str, tuple[int, ...]]:
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity.ml.definitions.registry.topp_stages import plan
 
     out: dict[str, list[int]] = {}

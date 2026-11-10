@@ -43,7 +43,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     K = N - 1; reaching `DsaButterflyTagBits_v1` and `DsaButterflyCtl_v1`) and with picks (N 33, K 8); the rows' read likewise
     (N 9, K 8; N 7, K 3) and at GLM-5.3's row width (576 bf16) over 5 rows; and 6 rows padded to 9, and 9 padded to 16, a long
     row's shape (T >= K, N = 2K)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [

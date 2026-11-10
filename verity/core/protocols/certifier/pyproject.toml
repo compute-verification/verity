@@ -19,7 +19,7 @@ inputs = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_network_certifier_blocks.py"]
-paths = ["verity/ml/circuits", "verity/ml/kernels"]
+paths = ["verity/circuits", "verity/ml/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = [

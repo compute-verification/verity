@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     warps of 2, each kernel's RMSNorm and row at D = 16 in groups of 8, a group of 8, a rotary group of 4, and both compressors'
     rows at D = 16.  Every column and norm is over `targets.MAX_GATES` (each ex2 and rsqrt is a MUFU piece), so `select` keeps a
     family's smallest; the served widths are the word Definitions' (`dsv4_compressor.circuit-check.py`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsv4_compressor as BC
 
     row = {"D": 16, "QB": 8, "EPS": 1e-6}

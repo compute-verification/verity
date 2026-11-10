@@ -9,11 +9,11 @@ Every other shape takes the run path unchanged, bit-identically — the pinned d
 the fast path was added."""
 from __future__ import annotations
 
-from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, concat, runs, strided_view
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, concat, runs, strided_view
+from verity.circuits.types import Array, Value
 from verity.ml.definitions.replay import _substitute_scattered, replayer, substitute
 
 V32 = Value(32)

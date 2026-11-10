@@ -392,8 +392,8 @@ def observe(work: Path, case: str, ops: dict[str, Any], c128a: dict[str, Any] | 
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_combine(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each row and length against the twin, the reference `Dsv4CombineTopkSwa_v1` on every ref_every-th."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -414,8 +414,8 @@ def compare_combine(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_c128a(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Rows [lo, hi): each against `short_rows`, the reference `Dsv4ShortContextTopK_v1{K,ratio}` on every ref_every-th."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -489,7 +489,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     targets = {}
     for case in CASES_L:

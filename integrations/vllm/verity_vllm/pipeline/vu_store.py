@@ -17,7 +17,7 @@ its rows (`gemm_coords_per_row`, sampled from the selection key at the evaluatio
 checkpoint field and hash.  `extract(weights=...)` reads the full weight from a checkpoint when one is given (any rows); without
 one it cuts the stored rows.
 
-`extract(store, where=, module=)`: `where` is a Definition selector in the IR query grammar (`verity.ml.circuits.query_ast.NameSel`:
+`extract(store, where=, module=)`: `where` is a Definition selector in the IR query grammar (`verity.circuits.query_ast.NameSel`:
 `Gemm_v1`, `Gemm_v1{K=2048,*}`, `Attention_v3{D=64,*}`), matched against each evaluation's Definition and statics; `module`
 keeps the units whose module is that node or below it (a module path, as `program_graph` names the nodes).  The selected
 evaluations go through `vu_export.decompose` unchanged and are written as flat sets.
@@ -34,7 +34,7 @@ from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from verity.ml.circuits.query_ast import NameSel
+from verity.circuits.query_ast import NameSel
 
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore

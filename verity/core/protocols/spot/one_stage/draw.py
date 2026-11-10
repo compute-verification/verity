@@ -56,8 +56,8 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from . import partition as P
 from .verdict import Verdict, _Collect

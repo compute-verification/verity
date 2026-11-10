@@ -13,15 +13,15 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.cut import separable
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
 from verity.ml.definitions.numerics import rows
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import sampling as SM
@@ -214,7 +214,7 @@ def test_one_logit_is_index_0() -> None:
 
 
 @pytest.mark.xfail(strict=True, reason="TokenSelect_v1{V=1} returns logits[0], not 0: its scan has no iterations, and "
-                   "verity.ml.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
+                   "verity.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
 def test_word_view_at_one_logit() -> None:
     x = SPECIALS[:, None]
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()

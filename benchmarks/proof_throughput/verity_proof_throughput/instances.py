@@ -68,7 +68,7 @@ def units(w: Workload) -> Any:
 
 def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
     """The population's first ``n`` instances (default all), as the point job stages them: lane t's words depend on t alone."""
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits.codec import program_digest
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
 
@@ -88,7 +88,7 @@ def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
 def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any]:
     """The ``verity/partition/v1`` object the workload's statement binds, derived from its own program as the verifier must
     (``flock-verify --partition``), refused unless it is the one the circuit's META names."""
-    from verity.ml.circuits import partition_object as PO
+    from verity.circuits import partition_object as PO
 
     us = units(w)
     obj = PO.build(us.program, us.query)
@@ -101,7 +101,7 @@ def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any
 
 def program_file(w: Workload) -> bytes:
     """The program as the verifier reads it (``flock-verify --program``): its canonical descriptor encoding."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     return canonical_json(encode_program(w.population()))
 

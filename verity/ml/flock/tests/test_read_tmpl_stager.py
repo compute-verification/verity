@@ -16,11 +16,11 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import TOY, TOY_ROWS
 from test_tmpl_statement import _tmpl
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
 from verity.ml.commitments import row_table
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain

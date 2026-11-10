@@ -9,11 +9,11 @@ __models__ = ("unsloth/Llama-3.2-1B", "Qwen/Qwen3-8B")
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import fa2_split_twins as TW

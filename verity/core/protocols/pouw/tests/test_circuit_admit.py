@@ -8,8 +8,8 @@ import struct
 
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.types import Array
+from verity.circuits.evaluation import evaluate
+from verity.circuits.types import Array
 from verity.ml.protocols.pouw.circuit import admit as A
 
 #: a live row's scale, as the u32 of its f32

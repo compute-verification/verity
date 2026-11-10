@@ -9,10 +9,10 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity.ml.circuits.evaluation.reference import signature_of, statics_of
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.batch import type_dtype, type_shape
+from verity.circuits.evaluation.reference import signature_of, statics_of
 from verity.ml.definitions.numerics import dsv4_rows, rows
 from verity.ml.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
 from verity.ml.definitions.numerics.kernel_registry import Declined

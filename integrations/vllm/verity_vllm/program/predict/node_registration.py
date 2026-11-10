@@ -81,7 +81,7 @@ def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
 
 def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
     """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode)."""
-    from verity.ml.circuits.program import input_id
+    from verity.circuits.program import input_id
 
     callees = desc.get("callees") or []
     out = []
@@ -112,8 +112,8 @@ def theta_nodes(desc: dict[str, Any], params, theta: tuple[str, ...]) -> list[in
 
 def descriptor_theta(path: str, params: list[tuple[str, Any]], theta: tuple[str, ...]) -> tuple[str, list[int]]:
     """The descriptor's Program digest and θ (`theta_nodes`), `params` as `[(name, type JSON)]`."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits import codec
+    from verity.circuits.types import type_from_json
 
     desc = load_descriptor(path)
     return codec.program_digest(desc), theta_nodes(desc, [(n, type_from_json(t)) for n, t in params], theta)
@@ -187,7 +187,7 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
 def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
     committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits.types import type_from_json
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.commit import registered_rows as RR
     from verity_vllm.pipeline import cpu_replay as CPU

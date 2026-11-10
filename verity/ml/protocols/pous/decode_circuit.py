@@ -44,10 +44,10 @@ two `sq` are 28,147,478 (each 14,040,852 for the square and 32,887 for the negat
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
-from verity.ml.circuits.boolean.trace import part
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat
+from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
+from verity.circuits.boolean.trace import part
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, concat
 from verity.ml.commitments.gates.sha512 import IV, pad_tail
 from verity.ml.commitments.scheme import DIGEST_BYTES
 

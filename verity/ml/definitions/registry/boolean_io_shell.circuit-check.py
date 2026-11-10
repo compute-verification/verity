@@ -9,7 +9,7 @@ def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: 
     """`ScanSlots_v2` over the network certifier's scan state row at the scan's cells of record
     (`verity.ml.protocols.certifier.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
     and ids bit offsets (``firsts``), the lane ``stride``, at ``lanes`` lanes of ``np_`` prompt ids."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_io_shell as BX
 
     occ, lp, mx, ids = (tuple(f + stride * j for j in range(lanes)) for f in firsts)
@@ -21,7 +21,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     128,256-entry vocabulary, 6-character fields); `IngressSampled_v1` at the same two with a 6-byte and a 16-byte id;
     `ScanSlots_v2` at TINY's class's scan state row (2 lanes, KO 2, 4 prompt ids) and the class of record's (4 lanes, KO 64,
     1,024)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_io_shell as BX
 
     return [

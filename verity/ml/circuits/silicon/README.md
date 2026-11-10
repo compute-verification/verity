@@ -12,7 +12,7 @@ The semantics import nothing but the standard library. The package's docstring l
 - `term`, `fp32` and `cast`: the operand formats' exact decoders and products, IEEE binary32 on words, and the word
   casts to and from FP32.
 - `tc_step`, `fp4` and `fp`: a `GroupSum` step, an NVFP4 `BlockScaledAlignAdd` step and f32 / bf16 arithmetic as exact
-  GF(2) circuits over `verity.ml.circuits.boolean.forms`.
+  GF(2) circuits over `verity.circuits.boolean.forms`.
 
 The models are held to the hardware: [`captures/`](captures/README.md) holds replicas of evidence measured on silicon
 elsewhere, [`../ops/tests/fixtures/`](../ops/tests/fixtures/README.md) the captures the tests replay, `hawkeye/PIN.json`

@@ -49,10 +49,10 @@ from verity.ml.definitions.registry import stop_check as SC
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 import verity.core.protocols.certifier.advice as I1
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.partition_object import calls
-from verity.ml.circuits.refs import runs
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.partition_object import calls
+from verity.circuits.refs import runs
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -627,9 +627,9 @@ def test_partial_refuses_request_by_request():
 def _dead_gates(compiled) -> dict:
     """Each compiled Program's dead gates as circuit-check counts them (`liveness.dead_gates`, transitive: gates no output depends
     on), with the unread inputs apart, and the dead gates under each of the root's nodes by definition (its id up to `{`)."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.intervals import full, total
-    from verity.ml.circuits.liveness import Liveness, dead_gates
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.intervals import full, total
+    from verity.circuits.liveness import Liveness, dead_gates
     out = {}
     for digest, program in sorted(compiled.programs.items()):
         rep = dead_gates(program, limit=0, transitive=True)
@@ -659,7 +659,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     prompt rows before the last narrowed to its keys and values), so a request Program's only dead gates are inputs no gate reads:
     `_dead_gates` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
-    from verity.ml.circuits.liveness import dead_gates
+    from verity.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
@@ -1163,7 +1163,7 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
     a Commit window neither drops nor repeats nor adds a call, nor moves a sample's position. The seeded case takes about
     two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler state (the seed,
     each sample's position) across the window."""
-    from verity.ml.circuits.types import field_types
+    from verity.circuits.types import field_types
     reg = _class_g(tmp_path, engine=CACHE_ON, layers=4)
     ingress = {"a": {**body, "prompt": [1, 2, 3]}}
     calls_of, params, wls = [], [], []

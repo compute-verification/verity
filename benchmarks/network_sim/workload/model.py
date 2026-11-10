@@ -6,7 +6,7 @@ signed `bias_bits`-bit words. Output row j of a layer is
     y_j = clamp((b_j + sum_i w_ji * x_i) >> shift, 0, 2^act_bits - 1)
 
 that is, a ReLU and a requantization. The weights and biases are registered inputs (what the program brings), the requests'
-activations are run inputs, and the Program holds only gates (`verity/ml/circuits/PROTOCOL.md` §5.3).
+activations are run inputs, and the Program holds only gates (`verity/circuits/PROTOCOL.md` §5.3).
 
 One root Call computes `d / groups` rows of one layer for one request (`dense_rows`, a Boolean Definition traced from a
 `forms` builder, so its gates are `And2`, `Xor2` and `Not`). The root body lists the Calls round by round, request r's
@@ -21,15 +21,15 @@ import random
 from dataclasses import dataclass
 from functools import cached_property
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import forms as F
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.reference import evaluate_region
-from verity.ml.circuits.layout import Circuit, Gate
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import forms as F
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.layout import Circuit, Gate
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 
 BIT = BL.BIT
 

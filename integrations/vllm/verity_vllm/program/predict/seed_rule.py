@@ -23,12 +23,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, Explicit
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, Explicit
+from verity.circuits.types import Array
 from verity.ml.commitments.gates import sha512 as H
 from verity.ml.commitments.gates.lms import Sha512Compress
 from verity_vllm.engine import served_seed

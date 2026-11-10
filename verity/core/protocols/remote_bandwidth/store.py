@@ -86,7 +86,7 @@ def store_salt(key: bytes, label: bytes, c: int) -> bytes:
 
 
 def canonical_json(obj) -> bytes:
-    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import."""
+    """`verity.circuits.codec.canonical_json`'s bytes, which this protocol may not import."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 

@@ -23,8 +23,8 @@ import math
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of

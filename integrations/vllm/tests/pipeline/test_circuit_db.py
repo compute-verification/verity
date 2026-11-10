@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 
 from research.store.local import LocalStore
-from verity.ml.circuits import encode_program, program_digest
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits import encode_program, program_digest
+from verity.circuits.codec import canonical_json
+from verity.circuits.evaluation.reference import evaluate
 from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError

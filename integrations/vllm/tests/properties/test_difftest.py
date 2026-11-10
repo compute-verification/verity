@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.properties import admission as difftest
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import b1
 
 

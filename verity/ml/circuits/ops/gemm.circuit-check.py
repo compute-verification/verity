@@ -5,7 +5,7 @@ from typing import Any
 
 
 def _core_roots() -> list[Any]:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.circuits.ops import gemm as G
     from verity.ml.circuits.ops import prims as P
 

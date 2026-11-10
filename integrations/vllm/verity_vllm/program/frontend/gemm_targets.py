@@ -166,7 +166,7 @@ class GemmTarget:
             return None
         import hashlib
 
-        from verity.ml.circuits.codec import canonical_json
+        from verity.circuits.codec import canonical_json
         return hashlib.sha256(canonical_json({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()})).hexdigest()
 
     def describe(self) -> dict:

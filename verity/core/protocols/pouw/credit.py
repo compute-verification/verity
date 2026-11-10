@@ -216,10 +216,10 @@ from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.one_stage import produced as PR
 from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits.codec import _checked_refs
-from verity.ml.circuits.defs import _Widths
-from verity.ml.circuits.refs import Coll, Concat, refs_from_json
-from verity.ml.circuits.types import type_from_json
+from verity.circuits.codec import _checked_refs
+from verity.circuits.defs import _Widths
+from verity.circuits.refs import Coll, Concat, refs_from_json
+from verity.circuits.types import type_from_json
 from verity.ml.commitments import domains
 
 #: the verifier over a statement's proof files (`proofs.verify`)

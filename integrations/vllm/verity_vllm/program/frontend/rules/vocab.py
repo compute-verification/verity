@@ -11,7 +11,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.ml.circuits.defs import bind as ir_bind
+from verity.circuits.defs import bind as ir_bind
 from verity.ml.definitions.registry import act as _act
 from verity.ml.definitions.registry import b1, gemm_bias as _gemm_bias
 from verity.ml.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk_mask as _dsa_topk_mask

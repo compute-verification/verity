@@ -9,8 +9,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as EB
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as EB
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.sha512 import pad_tail
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix

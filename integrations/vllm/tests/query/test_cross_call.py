@@ -8,10 +8,10 @@ import copy
 import numpy as np
 import pytest
 
-from verity.ml.circuits.cut import separable
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.cut import separable
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions import cross_call as X
 from verity.ml.definitions import word as W

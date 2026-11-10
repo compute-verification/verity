@@ -33,9 +33,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import composite
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 
 from . import fp32 as F
 from . import prims as P

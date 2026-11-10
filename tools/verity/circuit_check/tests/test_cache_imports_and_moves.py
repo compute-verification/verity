@@ -52,7 +52,7 @@ PLAIN = {
     "lib/consts.py": "MASK = 0xFFFF\nBITS = 16\n",
     "syn/pkern.py": """
 import lib.consts
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from syn.prims import V
 
@@ -62,7 +62,7 @@ def SynPx(a, b):
     return (a ^ b) & lib.consts.MASK
 """,
     "syn/pdef.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.pkern import SynPx
 from syn.prims import V
@@ -133,7 +133,7 @@ def test_an_edit_to_a_module_an_enumerated_package_lists_is_no_move(tmp_path):
 #: the function registered, which `syn/krows.py` names from `syn/kimpl.py`
 WRAPPED = {
     "syn/kreg.py": """
-from verity.ml.circuits.evaluation import register_kernel
+from verity.circuits.evaluation import register_kernel
 
 
 def _batch(fn):
@@ -184,7 +184,7 @@ MOVED = {
     "lib/__init__.py": "",
     "lib/lconsts.py": "MASK = 0xFFFF\nBITS = 16\n",
     "syn/lkern.py": """
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from lib.lconsts import MASK
 from syn.prims import V
@@ -195,7 +195,7 @@ def SynLx(a, b):
     return (a ^ b) & MASK
 """,
     "syn/ldef.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.lkern import SynLx
 from syn.prims import V
@@ -232,7 +232,7 @@ def test_an_entry_stored_again_after_a_move_holds_the_package_the_module_moved_i
 GUARDED = {
     "syn/wide.py": "MASK = 0xFFFF\nWIDE = True\n",
     "syn/okern.py": """
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from syn.prims import V
 
@@ -249,7 +249,7 @@ def SynOx(a, b):
     return (a ^ b) & MASK
 """,
     "syn/odef.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.okern import SynOx
 from syn.prims import V

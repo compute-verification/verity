@@ -23,8 +23,8 @@ import pickle
 from collections import Counter
 from typing import Any, Callable, Iterator
 
-from verity.ml.circuits.codec import canonical_json, program_digest
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json, program_digest
+from verity.circuits.program import Program
 from verity.core.protocols.spot.one_stage import verifier as V
 from verity.core.protocols.spot.one_stage.verdict import Verdict
 

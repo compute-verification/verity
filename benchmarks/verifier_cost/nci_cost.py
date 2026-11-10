@@ -163,7 +163,7 @@ def serve(args) -> int:
 def called_once(fn):
     """A Definition of `fn`'s signature whose body is one Call of `fn`: a Program of it has a root of `fn`'s inputs and that
     Call."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.defs import CompositeDefinition, bind
 
     params, ret = fn.signature()
     return bind(CompositeDefinition("NciCostOnce", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
@@ -175,8 +175,8 @@ def peak_gb() -> float:
 
 
 def glm(args) -> int:
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.program import Program
+    from verity.circuits import codec
+    from verity.circuits.program import Program
     from verity.ml.definitions import boolean as BB
 
     import lift

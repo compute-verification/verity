@@ -29,7 +29,7 @@ import pytest
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern

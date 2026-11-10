@@ -7,7 +7,7 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The final-logit softcap's tanh row at N = 8."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_activation as BA
 
     return [

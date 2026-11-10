@@ -45,8 +45,8 @@ from __future__ import annotations
 
 import math
 
-from verity.ml.circuits.defs import composite, primitive
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import composite, primitive
+from verity.circuits.types import Array
 
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P

@@ -7,8 +7,8 @@ Each takes the f32 word the kernel reads (an `eps` argument; FA2's `scale_softma
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import composite
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, ref_prims as RP
 from verity.ml.definitions.registry.prims import BF16, F32
 

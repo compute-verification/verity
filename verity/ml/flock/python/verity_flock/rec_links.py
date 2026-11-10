@@ -5,7 +5,7 @@ Every row of the inner population is committed under its own salt, so no two com
 and which unit reads which is private. A link says that input row ``port`` of unit ``reader`` holds, word for word, output
 row ``out`` of unit ``writer``. The table holds one link a row of `ROW_BYTES` bytes (`KIND_LINK`, ``reader``, ``port``,
 ``writer``, ``out``, each a u32 little-endian, then zeros), the links first, then all-zero filler rows, ``grid(L)`` rows in
-all (`table`; `verity.ml.circuits.partition_v2.grid` at `GRID_BITS`). `register` commits them before any coin as V*'s
+all (`table`; `verity.circuits.partition_v2.grid` at `GRID_BITS`). `register` commits them before any coin as V*'s
 registered value `VALUE` at the link part's program (`one_stage.registered`: each row its 64 u16 words, `words`, under a
 fresh salt, ``hm96-sha512/row/v1`` hiding leaves in one ``frame-v3-sha512`` tree), the value the part's ``trow`` reads
 (`rec_vstage.stage_links`, `Flock.RecLinkPart.checkTable`), so what is public of the table is ``grid(L)`` and the root
@@ -20,7 +20,7 @@ import struct
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from verity.ml.circuits.partition_v2 import grid as _grid
+from verity.circuits.partition_v2 import grid as _grid
 
 FORMAT = "verity/rec-links/v1"
 #: the registered value the link part's ``trow`` reads (`Flock.RecLinkPart.LINKS_VALUE`)

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import bind
+from verity.circuits.types import Array, Value
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, WeightField, WitnessParam
 from verity.ml.definitions.registry import b1

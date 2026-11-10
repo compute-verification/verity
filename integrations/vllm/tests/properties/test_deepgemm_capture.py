@@ -13,8 +13,8 @@ import pytest
 import torch
 
 from tests.properties import deepgemm_capture_gpu as X
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.ml.definitions.numerics import deepgemm_twins as T
 from verity.ml.definitions.numerics import derived_rows as R
 from verity.ml.definitions.registry import fp8 as F

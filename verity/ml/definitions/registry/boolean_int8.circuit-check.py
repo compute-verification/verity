@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """σ of each `int8_exact` composite with statics, at `int8_exact.circuit-check.py`'s statics or smaller: the linear at K = 32
     over two output rows, one KV head's 3-key window at d = 32, and one row of 33 keys (two k steps, the second zero-padded)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_int8 as X
 
     scale = 32 ** -0.5

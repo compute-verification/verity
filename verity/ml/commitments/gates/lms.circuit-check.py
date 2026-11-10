@@ -15,7 +15,7 @@ def _lms_roots() -> list[Any]:
     under the constant 1 as node numbers, and the side each level's swap takes. The parts are also bound at N = 64, a
     compression or two each, so production's layout keeps its own checks (its message hash and its tree nodes are two blocks,
     which no N below 26 and 45 reaches)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.commitments.gates.lms import LmsChainStep, LmsEqual, LmsLeaf, LmsMessage, LmsNode, verifier
     from verity.ml.crypto.lms import TOY_N
 

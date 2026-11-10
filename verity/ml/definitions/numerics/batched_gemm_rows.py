@@ -65,7 +65,7 @@ def batched_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str
 
 def check_targets(rng: np.random.Generator) -> list:
     """Two members, K = 32 (two k16 steps), N = 3, at the Ampere and the Hopper step (the circuit-check binding's statics)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import b1, cublas_bf16, hopper
     return [bind(cublas_bf16.BatchedGemmWord, B=2, K=32, N=3, DOT=d) for d in (b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)]
 

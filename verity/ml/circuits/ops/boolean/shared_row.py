@@ -62,13 +62,13 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, const_bits, or_reduce, sub
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, OR, const_bits, or_reduce, sub
+from verity.circuits.boolean.gather import gather
+from verity.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
+from verity.circuits.ports import In, Ports
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 
 from .elementwise import specialized
 

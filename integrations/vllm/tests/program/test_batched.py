@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Strided, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.refs import Affine, Coll, Concat, PartLog, Strided, concat
+from verity.circuits.types import Array, Value
 from verity.ml.definitions.registry import dense
 from verity.ml.definitions.replay import replayer
 from verity_vllm.correspondence.runtime import SCHEMA, RuntimeCorrespondence

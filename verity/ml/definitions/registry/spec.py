@@ -25,9 +25,9 @@ Naming: static parameters in CAPITALS; `Coll` arguments in lower case; composite
 
 from __future__ import annotations
 
-from verity.ml.circuits.defs import Coll, bind, composite
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import Coll, bind, composite
+from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import (Attention, DotBf16, Embedding, Final, LayerPost, LayerPre, ZERO16, ZERO32, _lane, scale_log2_bits, const, kv_type,
                  weights_type)

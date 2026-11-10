@@ -18,12 +18,12 @@ import math
 
 import numpy as np
 
-from verity.ml.circuits.defs import Coll, bind, composite, primitive
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.defs import Coll, bind, composite, primitive
+from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import ZERO16, ZERO32, DotBf16, _butterfly, _lane, const, f32c
 from verity.ml.definitions.registry.prims import A16
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.types import Array, Tuple, Value
 
 BF16, F32 = Value(16), Value(32)
 

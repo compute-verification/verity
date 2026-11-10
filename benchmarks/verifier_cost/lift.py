@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import re
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import forms as F
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import forms as F
+from verity.circuits.boolean.trace import definition
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.definitions import boolean as BB
 
 _CONST = re.compile(r"Const(\d+)\[0x([0-9a-f]+)\]")

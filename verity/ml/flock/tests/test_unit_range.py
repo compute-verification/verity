@@ -9,10 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 from test_class_statement_unit_stager import STATEMENTS, TOY, TOY_ROWS
-from verity.ml.circuits.boolean import AND, BIT, and_gate
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean import AND, BIT, and_gate
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
@@ -105,7 +105,7 @@ def test_the_block_read_off_a_definition_is_composes():
 def test_rows_push_a_unit_whose_slot_fits_past_the_block():
     """A gate-free unit copying a row of 2^17 words: its slot is 2^23, in range, but its two 256 KiB rows take 1,366 sha512x3
     slots, so its block is 2^29 and `past_block` names it with the breakdown, where `past_range` passes it."""
-    from verity.ml.circuits.types import Value
+    from verity.circuits.types import Value
 
     d = bind(CompositeDefinition("UnitRangeRows", 1, (), lambda S: ((("x", Array(1 << 17, Value(16))),), Array(1 << 17, Value(16))),
                                  lambda B, S, x: x, register=False))

@@ -9,7 +9,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import torch
 
-from verity.ml.circuits.refs import array_of
+from verity.circuits.refs import array_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.patterns import Consumed

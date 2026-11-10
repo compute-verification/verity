@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics, the schedule, the align and the w2 pair coordinate also at DeepSeek-V4-Pro's
     served shapes on one TP8 rank (w13 at one token: TK 128, TN 64, two CTAs per SM of 132; one token's 6 pairs over 384 experts
     in blocks of 8; w2's K = 384 over its 384 experts)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import marlin_moe as MM
 
     D = MM.DOT

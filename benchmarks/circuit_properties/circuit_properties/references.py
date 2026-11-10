@@ -15,11 +15,11 @@ no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's 
 
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import bit_type
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import bit_type
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 
 from .ops import Designation, Site
 

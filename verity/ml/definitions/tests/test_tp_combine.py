@@ -18,8 +18,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.registry import b1, b1_tp2, dead_free
 from verity.ml.definitions.registry import boolean_tp_combine as BC

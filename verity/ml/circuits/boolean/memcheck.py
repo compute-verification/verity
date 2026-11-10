@@ -47,11 +47,11 @@ from __future__ import annotations
 
 from typing import NamedTuple, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, const_bits, or_reduce, sub
-from verity.ml.circuits.boolean.gf128 import mul, mul_forms
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, OR, ZERO, const_bits, or_reduce, sub
+from verity.circuits.boolean.gf128 import mul, mul_forms
+from verity.circuits.types import Array, Tuple
 
 __all__ = ["Access", "Entry", "Widths", "MemAccess", "MemCheck", "MemEntry", "access", "consistent", "element", "entry",
            "memcheck", "pack"]

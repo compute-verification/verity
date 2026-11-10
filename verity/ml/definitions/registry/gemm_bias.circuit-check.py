@@ -7,7 +7,7 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The biased linear at K = 32, N = 16 (the frontend's `gemm_bias` instance), and on the Ampere k16 step (`gemm_bias_dot`'s)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import gemm_bias as GB
     from verity.ml.definitions.registry import prims as P
 

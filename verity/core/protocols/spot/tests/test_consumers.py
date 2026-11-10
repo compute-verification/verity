@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.partition import Level
+from verity.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 from verity.core.protocols.spot.consumers import (UNCERTIFIED_COMPUTE, compute_bound, exfiltration_bound,
                                                             infiltration_bound, location_bits)

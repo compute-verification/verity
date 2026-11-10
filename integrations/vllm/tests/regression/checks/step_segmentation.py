@@ -92,7 +92,7 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import global_program as GP  # the registry set build_workload decodes components with
     from verity_vllm.program import sampling_event as SE
     from verity_vllm.program import workload as W

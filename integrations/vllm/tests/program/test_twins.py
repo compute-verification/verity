@@ -13,8 +13,8 @@ import pytest
 from verity.ml.definitions.numerics import kernel_registry as KR
 from verity.ml.definitions.numerics import twins as TW
 from verity_vllm.pipeline import cli
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 
 FAMILIES = sorted(TW.FAMILIES)
 

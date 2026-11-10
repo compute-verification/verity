@@ -10,14 +10,14 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import bind
 from verity.ml.commitments.gates import merkle as M
 from verity.ml.commitments.gates import sha512 as S
-from verity.ml.circuits.boolean.forms import ONE, Circuit
+from verity.circuits.boolean.forms import ONE, Circuit
 
 #: (ARITY, D) -> (And, Xor, Not gates, standalone program digest)
 PINS = {

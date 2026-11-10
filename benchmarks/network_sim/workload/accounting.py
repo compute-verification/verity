@@ -1,5 +1,5 @@
 """The workload in the accounting layer's terms (`benchmarks/datacenter`, `import datacenter`): its `run`, `audit` and
-`account` read the MLP's Program and verity_vllm's serving Program themselves, as they read any `verity.ml.circuits`
+`account` read the MLP's Program and verity_vllm's serving Program themselves, as they read any `verity.circuits`
 Program.
 
 - `parameters(model, seed)`: each parameter's words, the requests' (run) and the weights' (registered), in leaf order.
@@ -29,7 +29,7 @@ from collections import Counter
 
 import datacenter as D
 from datacenter.logical import binding, gates, layout
-from verity.ml.circuits.program import REGISTRATION, RUN
+from verity.circuits.program import REGISTRATION, RUN
 
 from . import model as M
 from . import placement as P

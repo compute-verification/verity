@@ -100,7 +100,7 @@ def test_the_unit_sums_each_residuals_products_leaf_by_leaf():
 @pytest.mark.slow
 def test_the_definition_computes_the_reference():
     """``InnerRepCheck{S_SMALL}`` evaluated bit-sliced from its descriptor, on the unit's cases."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     cases = _cases(random.Random(7), 3)
     bits = lambda ws: np.array([[(w >> j) & 1 for j in range(16)] for w in ws], dtype=np.uint8)

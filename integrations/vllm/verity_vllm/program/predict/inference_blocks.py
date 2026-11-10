@@ -35,8 +35,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Sequence
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits import partition_v2 as PV2
+from verity.circuits import partition_object as PO
+from verity.circuits import partition_v2 as PV2
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
 from verity_vllm.records import inference_blocks as RIB

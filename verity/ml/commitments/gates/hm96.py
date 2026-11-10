@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.types import Array
 
 from .. import hm96
 from .sha512 import commit, compress_gadget, midstate, pad_tail, words_be

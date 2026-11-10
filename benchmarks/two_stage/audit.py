@@ -234,7 +234,7 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
     registered reads the params ``proofs`` give."""
     from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
 
     replay = T.boundary_window(int(brec["population"]), len(sample)).program
     verdicts = record.get("verdicts") or {}

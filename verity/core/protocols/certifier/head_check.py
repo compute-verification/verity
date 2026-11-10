@@ -60,16 +60,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import and_reduce
-from verity.ml.circuits.boolean.trace import part as _part
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import and_reduce
+from verity.circuits.boolean.trace import part as _part
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import FrameV3Read, root_ref
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf

@@ -17,7 +17,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
+from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.ml.definitions.registry import tp_allreduce as TA  # noqa: E402
 from verity.ml.definitions.registry import tp_allreduce_check as K  # noqa: E402
 

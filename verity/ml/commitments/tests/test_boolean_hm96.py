@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates import frame_v3 as F
 from verity.ml.commitments.gates import hm96 as H

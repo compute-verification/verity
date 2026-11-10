@@ -38,7 +38,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
-from verity.ml.circuits.types import RecordType
+from verity.circuits.types import RecordType
 
 from .build import BuildResult, _Decoder, build_program, decoder
 from .common import Unexpressible
@@ -276,7 +276,7 @@ def write_build(out: str, program: Any, named: Named) -> str:
     `named`'s Call and parameter names, its `result.json` (the Program's function, digest and correspondence digest, the
     request's shape, the declared target and `attention_impls_declared`) and its `prefix_cache.json` with a cached prefix ->
     the Program's digest."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.correspondence.runtime import NAMESPACE, correspondence_digest
     from verity_vllm.pipeline.build_instances import write_instances
     desc = encode_program(program)

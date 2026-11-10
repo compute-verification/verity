@@ -103,7 +103,7 @@ def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None
 
 
 def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None:
-    """The Program's digest (`verity.ml.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
+    """The Program's digest (`verity.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither.  A Build recorded before the SHA-512 re-baseline
     (ad58900df) names its Program by SHA-256 under `digest` and by today's digest under `sha512`; its `digest` is not read."""
     prog = res.get("program") or {}
@@ -114,7 +114,7 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
     if not os.path.exists(p):
         return None
     import gzip
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits.codec import program_digest
     with gzip.open(p, "rt") as f:
         return program_digest(json.load(f))
 

@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics: v20 with a first block of 16 keys below kBlockN 32 over one unguarded
     block, and its head also at a first block of 8 keys (whose V rows `AttnBlockFirst_v1` pads to a k-step)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import fa3_check_inf, hopper
 
     fa3 = {"D": 16, "BN": 32, "MASKED_FROM": 1, "DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

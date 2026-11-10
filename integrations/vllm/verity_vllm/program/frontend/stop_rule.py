@@ -11,9 +11,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, Value
 from verity.ml.definitions.registry import stop_check as SC
 from verity.ml.definitions.registry import stop_rule as X
 

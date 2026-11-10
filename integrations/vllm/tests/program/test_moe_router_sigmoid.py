@@ -11,11 +11,11 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import codec
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import moe
 from verity.ml.definitions.numerics import moe_twins
 from verity.ml.definitions.registry import prims as P

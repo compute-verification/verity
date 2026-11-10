@@ -38,7 +38,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import act as _ACT
 from verity.ml.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T

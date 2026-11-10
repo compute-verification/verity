@@ -12,8 +12,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import evaluate
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import rmsnorm_fused_split as NS
 from verity.ml.windows import interface as IF

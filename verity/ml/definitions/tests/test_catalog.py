@@ -82,7 +82,7 @@ REPLACED = {
 def _registered(code: str) -> list[str]:
     """The ids `REGISTRY` holds, in registration order, once ``code`` has run in a process of its own: the test modules beside
     this one import registry modules as they are collected, which reorders this process's registry."""
-    p = subprocess.run([sys.executable, "-c", code + "from verity.ml.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
+    p = subprocess.run([sys.executable, "-c", code + "from verity.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-2000:]
     return p.stdout.split()

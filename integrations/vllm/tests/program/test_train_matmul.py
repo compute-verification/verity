@@ -9,7 +9,7 @@ import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import CC, _bits, _data, _meta, _program
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits.boolean.trace import word_of
 from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import cublas_bf16 as CB

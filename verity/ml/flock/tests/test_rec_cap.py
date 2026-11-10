@@ -43,7 +43,7 @@ def test_the_unit_is_the_reference_with_no_and():
 
 
 def test_the_definition_is_the_reference():
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     rows = _rows(random.Random(3))
     bits = np.array([[[(w >> j) & 1 for j in range(16)] for w in r] for r in rows], dtype=np.uint8)

@@ -248,7 +248,7 @@ paths = ["verity/flock/verifier/Flock/Draw.lean", "verity/flock/verifier/Flock/H
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_circuits.py"]
-paths = ["verity/ml/circuits", "verity/ml/flock/python/verity_flock"]
+paths = ["verity/circuits", "verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_inner_stage.py"]

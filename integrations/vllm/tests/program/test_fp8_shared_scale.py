@@ -12,10 +12,10 @@ import types
 
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.cut import call_scope
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.layout import resolve
+from verity.circuits.evaluation import evaluate
+from verity.circuits.cut import call_scope
+from verity.circuits.defs import bind
+from verity.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity.ml.definitions.registry import fp8
 from verity.ml.definitions.registry import fp8_vocab

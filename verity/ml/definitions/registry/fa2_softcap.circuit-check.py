@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """Soft-capped FA2 at CAP = 30 on the Ampere k16 step: the frontend's `attention_dot` instance with a CAP (T = 5, two query
     heads on one KV head, D = 16, one block of 16 under Check_inf), and one head over 17 keys in blocks of 16 at MASKED_FROM 0
     and 1, which reach the second block with and without Check_inf."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import fa2_softcap as FS
     from verity.ml.definitions.registry import prims as P
 

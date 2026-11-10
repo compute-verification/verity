@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 
 pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_flock import circuit as FC  # noqa: E402
