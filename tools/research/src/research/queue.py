@@ -4469,7 +4469,8 @@ class Preflight:
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
-    ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Before
+    ``python`` stands in for its interpreter), under `budget_s` together (`math.inf`: unbounded), and the worktree is
+    removed whatever happens.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
@@ -4775,15 +4776,16 @@ class Preflight:
                 f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
 
     def _run(self, argv: list[str], cwd: Path, deadline: float) -> tuple[subprocess.CompletedProcess | None, str]:
-        """``argv`` in ``cwd`` with what's left of the budget, outside the caller's environment (`quick_tier.CALLER_ENV`,
-        pytest's own variables); and why it didn't finish."""
+        """``argv`` in ``cwd`` with what's left of the budget (no timeout under an unbounded one), outside the caller's
+        environment (`quick_tier.CALLER_ENV`, pytest's own variables); and why it didn't finish."""
         left = deadline - self.clock()
         if left <= 0:
             return None, "the budget was spent before it started"
         env = {k: v for k, v in os.environ.items() if k not in quick_tier.CALLER_ENV and not k.startswith("PYTEST_")}
         env["COLUMNS"] = "300"                                         # pytest's summary lines, whole
         try:
-            return subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors="replace", timeout=left), ""
+            return subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors="replace",
+                                  timeout=left if math.isfinite(left) else None), ""
         except subprocess.TimeoutExpired:
             return None, f"still running when the {self.budget_s:g} s budget ran out"
         except OSError as e:
