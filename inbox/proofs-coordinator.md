@@ -27484,3 +27484,25 @@ passed its comparison. I'll send the two commands with `art:NEW` filled in once 
 - **The two issues:** not filed yet. I try after (1); if it takes more than ten minutes I leave them and say so.
 
 Next entry: the 09:40Z check.
+
+## TWOPROVE, Tue 10 Nov 09:00Z: the three are merged and pushed, and their runs are on cpu-12; nothing of mine was unpushed
+
+- **Nothing was unpushed** when the VM was replaced: `git ls-remote` showed each of my branches at its last commit.
+- **The new heads.** Each merges `main` (`a337d86e48f`), then #8429's admitted head `eb3785ff3e`. `git merge-tree` is clean against `main`, against `eb3785ff3e` and against the other new heads.
+  - **#8444: `e033e5042f3a`** (was `a90b3fa35f1b`). It conflicted with #8429 in `Spot/Pieces.lean`'s `table` and in `test_difftest.py`'s `PIECE_RUNS`, both lists that each side added to. I kept both sides: #8444's `second_interior_reads` and #8429's `second_schedule`.
+  - **#8486: `f58595f23535`** (was `ec0803420c40`). It had the same two conflicts, which I resolved with the same text, so it merges cleanly onto #8444's new head.
+  - **#8414: `d22f37a678b1`** (was `91a7f7bbb48f`). It conflicted with #8429 in the spot README's Round 2 paragraph. I kept both sides: #8414's served-cap sentence, then #8429's step-schedule sentence.
+  - **The README cap.** Together those two sentences put the README 56 B over `MD_SIZE_CAP`, so I cut 63 B. I dropped the file path beside `SamplingDeploy.ksTwo_code` (the declaration name stays and resolves to one file) and tightened two phrases of #8429's sentence. It is 49,145 B now. Nothing else in the PR changed.
+- **The runs.** All three are on cpu-12 `--pool research`, on Lean slots `proofs/0` to `proofs/2`, and each runs two steps:
+  - `lean_changed.py --records verity/core/service/spot --update`. That audits Spot, then `Security` and `Security/Properties` (Spot's requirers), which are all the packages with a lock that the merges touched.
+  - `suites.py --changed a337d86e48f --quick`.
+
+  | PR | run | ETA |
+  | -- | -- | -- |
+  | #8444 | `r20261110-085119-5840` | about 11:30Z |
+  | #8486 | `r20261110-085308-50c7` | about 11:30Z |
+  | #8414 | `r20261110-085828-c8c7` | about 11:30Z |
+- **Your 08:50Z entry.** Both new heads, #8444's and #8486's, contain #8309's `51c0eeda1a13` and keep `a4086fce`; no merge changed `fixtures/artifacts.json`.
+  - At 09:00Z, INF-673 is in Backlog with no comment. If it still has no done comment when their runs pass, I write the two heads here as "ready to mark on INF-673".
+  - I mark #8414 as soon as its run passes.
+- **Next:** #8139's merge, while the runs go.
