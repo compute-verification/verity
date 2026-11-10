@@ -5,9 +5,10 @@ the replay blocks, which are the class's spans the replay side replays. `resume`
 the same point, for its interior registration and the second stage (`First.second`).
 
 * **The Spec** (`spec_of`): the values ``b.ingress`` and ``b.egress`` (phase ``serve``), the interior values (phase
-  ``interior``: the check template's ports as the replay side commits them, `interior_values`) and the values the
-  verifier supplies in the interior registration (`Rule.supplied`: a table read's root and domain, an index, each with
-  its rows a sampled span and a row's leaf type, which the stream takes as its per-span values); the selection
+  ``interior``: the check template's ports as the replay side commits them, `interior_values`) and the replay block's
+  parameters the interior registration registers as values (`Rule.span_values`: those the verifier supplies, a table
+  read's root and domain or an index, and those the replay gives, a picking unit's scores or a read's opening, each
+  with its rows a sampled span and a row's leaf type, which the stream takes as its per-span values); the selection
   `TwoStage(grain, replay, k)` over the class's replay block; the check, its templates' programs and their query
   (`Layout.templates`, `Layout.query`: the check template's instances, or, inlined, the templates its body calls) with
   its proof deadline; and the public items both registrations show.
@@ -28,10 +29,10 @@ check whose body calls several templates needs core's two-stage over a window of
 Usage::
 
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --interior FILE.json \\
-        --challenger local --main FILE --out OUT [--advice REGISTRATION.json] [--proof-deadline S] [--supplied SUPPLIED.json]
+        --challenger local --main FILE --out OUT [--advice REGISTRATION.json] [--proof-deadline S] [--span-values VALUES.json]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window; FILE.json the interior values,
-``[[name, schema], ...]``; SUPPLIED.json the values the verifier supplies in the interior registration,
+``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior registration registers as values,
 ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`); REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows
 name. A ``local`` session's challenger reads its coins through ``sampled-proofs-verifier``, which must be built first
 (``lake build sampled-proofs-verifier`` in ``verity/core/service/spot``): building it on first use outlasts the
@@ -73,16 +74,16 @@ def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
 class Rule:
     """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law ``rate:NUM/DEN[:T]``), the
     proof blocks ``k`` the second stage samples of each check template in each sampled span, the interior values the replay
-    side commits, the proof deadline, and the values the verifier supplies in the interior registration (``supplied``:
-    the replay block's parameters as round 2 names them, each ``(name, rows a sampled span, leaf type)``, the stream's
-    per-span values, `interior_rows.span_values`). A fixed count
+    side commits, the proof deadline, and the replay block's parameters the interior registration registers as values
+    (``span_values``: as round 2 names them, each ``(name, rows a sampled span, leaf type)``, the stream's per-span
+    values, `interior_rows.span_values`: those the verifier supplies and those the replay gives). A fixed count
     ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
 
     replay: str
     k: int
     interior: tuple[tuple[str, str], ...]
     proof_deadline: float = PROOF_DEADLINE_S
-    supplied: tuple[tuple[str, int, tuple[int, ...]], ...] = ()
+    span_values: tuple[tuple[str, int, tuple[int, ...]], ...] = ()
 
     def __post_init__(self) -> None:
         if D.parse_rate(self.replay) is None:
@@ -92,34 +93,34 @@ class Rule:
     def to_json(self) -> dict[str, Any]:
         return {"replay": self.replay, "k": self.k, "interior": [list(v) for v in self.interior],
                 "proof_deadline": self.proof_deadline,
-                "supplied": [[n, rows, list(leaf)] for n, rows, leaf in self.supplied]}
+                "span_values": [[n, rows, list(leaf)] for n, rows, leaf in self.span_values]}
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> Rule:
         return cls(d["replay"], int(d["k"]), tuple((str(n), str(s)) for n, s in d["interior"]), float(d["proof_deadline"]),
-                   _supplied(d["supplied"]))
+                   _span_values(d["span_values"]))
 
 
-def _supplied(values: Any) -> tuple[tuple[str, int, tuple[int, ...]], ...]:
+def _span_values(values: Any) -> tuple[tuple[str, int, tuple[int, ...]], ...]:
     return tuple((str(n), int(rows), tuple(int(x) for x in leaf)) for n, rows, leaf in values)
 
 
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
     served = layout.schemas()
-    supplied = [n for n, _rows, _leaf in rule.supplied]
+    linked = [n for n, _rows, _leaf in rule.span_values]
     names = [*served, *(n for n, _ in rule.interior)]
     values = (tuple(S.Value(p, s, "serve") for p, s in served.items())
               + tuple(S.Value(n, s, "interior") for n, s in rule.interior)
-              + tuple(S.Value(n, None, "interior", registered=True) for n in supplied))
+              + tuple(S.Value(n, None, "interior", registered=True) for n in linked))
     public = (S.Public("population", "structure", "the class's spans N; then the sampled spans' proof blocks Q n_rho"),
               S.Public("window", "structure", "provenance: the serve's run, the window, the class, the check, the index's leaf"),
               S.Public("leaf_layer", "structure", "the interior registration's public bodies' digest"),
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}, from the class and its spans") for v in names
                 for k in ("leaves", "domain")),
-              *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: the verifier's own rows, from the sample")
-                for v in supplied for k in ("leaves", "words", "domain")))
+              *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: a replay-block parameter's rows, from the sample")
+                for v in linked for k in ("leaves", "words", "domain")))
     digests = tuple(P.program_digest(Program(t)) for t in layout.templates)
-    window = len(digests) > 1 or bool(supplied)
+    window = len(digests) > 1 or bool(linked)
     check = S.Check(digests if window else digests[0],
                     P.template_instances_query(layout.templates) if window else layout.query,
                     proof_deadline=rule.proof_deadline)
@@ -128,10 +129,10 @@ def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
 
 def stream_of(layout: BR.Layout, rule: Rule, coins: CC.ChallengerCoins, *, delta: float = 0.5, **kwargs: Any) -> S.Stream:
     """The class's two-stage stream on ``coins``: its units the check's templates (`Layout.templates`), its replay block
-    the layout's, its per-span values the rule's supplied ones (a window of its templates then, even of one)."""
+    the layout's, its per-span values the rule's (a window of its templates then, even of one)."""
     ts = layout.templates
-    return S.Stream(spec_of(layout, rule), ts[0] if len(ts) == 1 and not rule.supplied else ts, budget=1, delta=delta,
-                    challenger=CHALLENGER, coins=coins, replay=layout.replay, span_values=rule.supplied, **kwargs)
+    return S.Stream(spec_of(layout, rule), ts[0] if len(ts) == 1 and not rule.span_values else ts, budget=1, delta=delta,
+                    challenger=CHALLENGER, coins=coins, replay=layout.replay, span_values=rule.span_values, **kwargs)
 
 
 class Recorded(CC.ChallengerCoins):
@@ -308,8 +309,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--interior", required=True, help="the interior values, a JSON list of [name, schema]")
     f.add_argument("--advice", help="the window's advice registration, whose binding the records' windows name")
     f.add_argument("--proof-deadline", type=float, default=PROOF_DEADLINE_S)
-    f.add_argument("--supplied", help="the values the verifier supplies in the interior registration, a JSON list of "
-                                      "[name, rows a sampled span, leaf type]")
+    f.add_argument("--span-values", help="the replay block's parameters the interior registration registers as values, "
+                                         "a JSON list of [name, rows a sampled span, leaf type]")
     f.add_argument("--delta", type=float, default=0.5)
     f.add_argument("--challenger", required=True, help="local, loopback:HOST:PORT or gate:USER@HOST (a5_coins.start)")
     f.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
@@ -324,7 +325,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None
     check = template_fn(a.check)
     rule = Rule(a.replay, a.k, tuple((str(n), str(s)) for n, s in json.loads(Path(a.interior).read_text())),
-                a.proof_deadline, _supplied(json.loads(Path(a.supplied).read_text())) if a.supplied else ())
+                a.proof_deadline, _span_values(json.loads(Path(a.span_values).read_text())) if a.span_values else ())
     out = Path(a.out)
     for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window), strict=True):
         dest = out / Path(d).name

@@ -146,8 +146,9 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
-    """A class whose spans' tables an interior's reads open: its Spec declares the values its rule says the verifier
-    supplies registered interior values, its stream takes them a sampled span and sizes them by the sample, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
+    """A class whose spans' tables an interior's reads open: its Spec declares the replay block's parameters its rule
+    names (the reads' root and domain, which the verifier supplies, and their row, salt and path, which the replay gives)
+    registered interior values, its stream takes them a sampled span and sizes them by the sample, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
     under the class record's root for it, each holding the class's C strings, so `history.roots_of` recomputes the served
     root and domain from the strings the prover publishes."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
@@ -158,15 +159,17 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
         hs[t].append(BT.fill(np.ones((3, BT.WORDS), dtype=np.uint16), layout.prompt, layout.outputs, layout.capacity))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
-    rule = replace(RULE, supplied=(("root", 1, IR.DIGEST), ("domain", 1, IR.DIGEST)))
+    opening = tuple(IR.Operand("Read_v1", p, p, 2, (0, 1), w) for p, w in (("row", BT.WORDS), ("salt", 96), ("path", 128)))
+    rule = replace(RULE, span_values=(("root", 1, IR.DIGEST), ("domain", 1, IR.DIGEST), *IR.span_values(opening)))
     assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
     got = TS.first(pub, PAIR, rule, FC.Challenger("first"))
-    supplied = [v for v in got.stream.spec.values if v.registered]
-    assert [(v.name, v.phase) for v in supplied] == [("root", "interior"), ("domain", "interior")]
-    assert got.stream.span_values == rule.supplied
+    linked = [v for v in got.stream.spec.values if v.registered]
+    assert [(v.name, v.phase) for v in linked] == [(p, "interior") for p in ("root", "domain", "row", "salt", "path")]
+    assert got.stream.span_values == rule.span_values
     for q in (1, 3):
         sig = dict(got.stream.interior_program(q).fn.signature()[0])
         assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
+        assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
     assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
     names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
     bodies = {"m0": b"the interior's public body"}

@@ -4,7 +4,9 @@
 leaves, `boundary_tables.class_rows`), its rows past its length L zero rows (`boundary_tables.fill`). The interior commits no
 table: each read's ``root`` and ``domain`` rows are rows of two supplied values, named as round 2 names the replay
 block's ``root`` and ``domain`` parameters, which the challenger resolves through its own `history`, each sampled span's
-table named from its own sample under round 1's root and read from the strings the prover publishes. An interior is
+table named from its own sample under round 1's root and read from the strings the prover publishes. Its key and its
+opening (``tok``, ``row``, ``salt``, ``path``) are the block's parameters too, which the replay gives: values the
+interior registers as its own, a row a read. An interior is
 refused before anything is committed where a read doesn't open its table, where a table isn't the one round 1 registered
 under its name, and where a table holds other than C strings."""
 
@@ -56,6 +58,10 @@ BLOCK = _block()
 #: 2 gives the block's parameters where the boundary record names its ports by template
 SUPPLIES = tuple(IR.Supply(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", 1, (0,) * CELLS) for p in IR.TABLE)
 MEMBER = IR.named(SRW.unit_member(P.template_id(RD), CELLS))
+#: the reads' key and opening, the replay's: a row a read, of its port's words
+OPERANDS = tuple(IR.Operand(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", CELLS, tuple(range(CELLS)), w)
+                 for p, w in MEMBER.rows if p not in IR.TABLE)
+LINKS = (*SUPPLIES, *OPERANDS)
 BOUNDARY = CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 PROGRAM = P.program_digest(BOUNDARY.program)
@@ -77,13 +83,13 @@ def _tables(lengths=LENGTHS, seed: int = 0, fill: bool = True) -> list[HT.Histor
 
 
 def _spec() -> S.Spec:
-    """The served values (the boundary's and each span's table) and the interior's: its ports, and the reads' two
-    supplied values, registered."""
+    """The served values (the boundary's and each span's table) and the interior's: its ports, and the block's
+    parameters, registered: the reads' two supplied values and the four the replay gives."""
     names = {m.port(p): (m.schema(p), "serve") for m in BOUNDARY.members for p in CS.port_leaves(m)}
     names |= {n: (HT.SCHEMA, "serve") for n in NAMES}
-    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.supplied_values(SUPPLIES, Q))
+    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.link_values(LINKS, Q))
     names |= {m.port(p): (m.schema(p), "interior") for m in w.members for p in CS.port_leaves(m)}
-    supplied = tuple(x.value for x in SUPPLIES)
+    supplied = tuple(x.value for x in LINKS)
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -100,7 +106,7 @@ def _first(tables):
     """A window stream over `RD` taking the reads' values a sampled span (`interior_rows.span_values`), and round 1, a stand-in boundary
     whose record registers each span's table as a port, registered and its first stage drawn (spans 0 and 2)."""
     draws = iter([[0, 2]])
-    stream = S.Stream(_spec(), [RD], span_values=IR.span_values(SUPPLIES), replay=BLOCK, budget=1, delta=DELTA,
+    stream = S.Stream(_spec(), [RD], span_values=IR.span_values(LINKS), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
     c = CS.commit(BOUNDARY, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
@@ -129,7 +135,7 @@ def _spans(tables) -> list[IR.Span]:
 
 def _interior(reg, first, rec, drawn, spans=None, **kw) -> IR.Interior:
     return IR.interior(_spans(drawn) if spans is None else spans, CELLS, reg.digest, first.units, row=ROW, salt_key=SALT,
-                       **{"tables": drawn, "served": rec, "positions": C, "supplies": SUPPLIES, **kw})
+                       **{"tables": drawn, "served": rec, "positions": C, "links": LINKS, **kw})
 
 
 def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
@@ -146,17 +152,18 @@ def _history(rec, first, it) -> dict:
 
 
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
-    """The interior registers only the two supplied values, the block's ``root`` and ``domain`` as round 2 names them, and
+    """The interior registers the block's parameters as round 2 names them, the two supplied values ``root`` and
+    ``domain`` and then the reads' key and opening, a row a read, the replayed ones (`Operand`), and
     publishes each sampled span's table's C strings. From the challenger's `history` alone (its own sample's names, round 1's record and
     the published strings) `history.roots_of`, the verifier's mirror, recomputes round 1's root and domain for each, and
     `history.resolve` turns the reads' sources into those bytes, which are `supplied`'s rows. The reads' ``root`` and
-    ``domain`` rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows
-    given in full under the values' salts makes. The stream takes the interior's roots, names and history (the
+    ``domain`` rows are given by reference, rows (0, 0, 1, 1) of those values, the key's and the opening's rows
+    (0, 1, 2, 3) of theirs, and the commitment is the one the same rows given in full under the values' salts makes. The stream takes the interior's roots, names and history (the
     public-items rule and R7-history pass), and its interior program takes each value a `Digest` a row a sampled span, so
     its verifier reads each resolved source in a `Digest` port's order: its 512 leaves packed into u16 words are the
     row the interior registers. It refuses the values' rows (`R7-leaves`, `R7-domain`, `R7-supplied`): it counts and
     commits a supplied value's rows as row/v1 rows of 32 one-bit leaves, where the reads hold a `Digest` a row under their
-    port's row/v2 (`supplied_schemas`)."""
+    port's row/v2 (`link_schemas`); the replay's own values pass."""
     tables = _tables()
     stream, reg, first, rec = _first(tables)
     drawn = [tables[u] for u in first.units]
@@ -165,7 +172,9 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     prog, names = P.program_digest(w.program), [NAMES[u] for u in first.units]
     assert P.program_digest(stream.interior_program(Q)) == prog
     got = it.record["registered"]
-    assert [e["value"] for e in got] == [x.value for x in SUPPLIES] == [f"{descriptor_id(BLOCK)}/{p}" for p in IR.TABLE]
+    assert [e["value"] for e in got] == [x.value for x in LINKS]
+    assert [x.value for x in SUPPLIES] == [f"{descriptor_id(BLOCK)}/{p}" for p in IR.TABLE]
+    assert [x.port for x in OPERANDS] == ["tok", "row", "salt", "path"]
     assert it.published == {t.value: [bc.hex() for bc in t.bcs] for t in drawn}
     assert all(len(v) == C for v in it.published.values())
     hist = _history(rec, first, it)
@@ -183,11 +192,16 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
         assert [[sum(b << j for j, b in enumerate(r[16 * k:16 * k + 16])) for k in range(32)] for r in bits] == \
             [list(r) for r in v.rows]
     assert IR.span_values(SUPPLIES) == tuple((x.value, 1, IR.DIGEST) for x in SUPPLIES)
-    assert IR.supplied_schemas(MEMBER, SUPPLIES) == {x.value: w.members[0].schema(x.port) for x in SUPPLIES}
+    assert IR.link_schemas(MEMBER, LINKS) == {x.value: w.members[0].schema(x.port) for x in LINKS}
     m = w.members[0]
-    by_ref = {p: c.given[m.port(p)] for p in ("root", "domain")}
-    assert all(v.positions == (0, 0, 1, 1) for v in by_ref.values())
+    by_ref = {x.port: c.given[m.port(x.port)] for x in LINKS}
+    assert all(by_ref[p].positions == (0, 0, 1, 1) for p in IR.TABLE)
     spans = _spans(drawn)
+    for x in OPERANDS:
+        v = by_ref[x.port]
+        assert v.positions == (0, 1, 2, 3) and v.value.entry() == next(e for e in got if e["value"] == x.value)
+        assert np.array_equal(np.asarray(v.value.rows, np.uint16), np.concatenate([s.data["rows"][x.port] for s in spans]))
+        assert IR.span_values([x]) == ((x.value, CELLS, (dict(MEMBER.rows)[x.port], 16)),)
     data = [{"rows": {p: np.concatenate([s.data["rows"][p] for s in spans]) for p, _ in m.rows},
              "outs": {p: np.concatenate([s.data["outs"][p] for s in spans]) for p, _ in m.outs},
              "refs": np.repeat(np.arange(m.n)[:, None], len(m.rows), axis=1)}]
@@ -195,8 +209,8 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                                                        for p, v in by_ref.items()})
     assert full.roots == c.roots
     with pytest.raises(S.Refused) as refused:
-        IR.register(stream, first, it, history=hist, registered=IR.supplied_words(SUPPLIES),
-                    supplied=IR.sources(SUPPLIES, Q, names))
+        IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                    supplied=IR.sources(LINKS, Q, names), schemas=IR.link_schemas(MEMBER, OPERANDS))
     assert refused.value.verdict.codes == ("R7-leaves", "R7-domain", "R7-supplied")
 
 
@@ -225,8 +239,8 @@ def test_a_table_round_1_did_not_register_is_refused():
     with pytest.raises(ValueError):
         HT.roots_of(it.leaf_layer, hist)
     with pytest.raises(S.Refused) as refused:
-        IR.register(stream, first, it, history=hist, registered=IR.supplied_words(SUPPLIES),
-                    supplied=IR.sources(SUPPLIES, Q, names))
+        IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                    supplied=IR.sources(LINKS, Q, names), schemas=IR.link_schemas(MEMBER, OPERANDS))
     assert refused.value.verdict.codes == (R.HISTORY,)
 
 
@@ -312,7 +326,7 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
     with pytest.raises(ValueError, match="a replay block of table reads commits on the host"):
         _interior(reg, first, rec, drawn, spans=spans, device=IR.DeviceCommit({}, {}, {}))
     with pytest.raises(ValueError, match="give the `Supply` of each"):
-        _interior(reg, first, rec, drawn, spans=spans, supplies=SUPPLIES[:1])
+        _interior(reg, first, rec, drawn, spans=spans, links=(SUPPLIES[0], *OPERANDS))
 
 
 def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
