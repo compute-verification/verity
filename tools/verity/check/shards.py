@@ -15,7 +15,7 @@ flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that bu
 again, beside its parts, on each shard that holds a part reading it and not the build's own part (`builds`), until a shared
 artifact cache exists; the plan says so and charges it.  A costlier one holds its readers on its own shard (`units`).  A spec
 package's audit, which audits the packages its `proved_in` names beside it from one build of theirs (`lean-audit:Security`
-and `lean-audit:Security/Properties` audit `Security/Proofs`), is held on their shard whatever they cost, so they build once
+and `lean-audit:security/Properties` audit `security/Proofs`), is held on their shard whatever they cost, so they build once
 a run.  The build's part is in exactly one shard, so a combine takes each part once.
 
 Units are packed longest first (own cost and builds) onto the shard where they end soonest, the builds a shard lacks counted
