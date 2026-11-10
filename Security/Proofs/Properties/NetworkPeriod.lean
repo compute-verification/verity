@@ -439,9 +439,10 @@ the slot audit and whose answer names a second tied Input, which no check wires.
 statement of a guarantee reading no definition of this module: the answer is `tiedAnswer`'s, the audit, schedule,
 registration and link-window `slotAudit`, `slotSchedule`, `slotReg` and `tiedWindow`. -/
 theorem rowsTiedInputWired_nontrivial :
-    ¬ (tiedInputWired { protocol := oneStage, verdict := .accept, reason := none, digest := none,
-          published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr #[.str progParam, .str "state"])]),
-          profile := none } = true ∧
+    ¬ (tiedInputWired
+          { protocol := oneStage, verdict := .accept, reason := none, digest := none,
+            published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr #[.str progParam, .str "state"])]),
+            profile := none } = true ∧
       wired #[⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩] ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
         #[Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
           [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])]]
