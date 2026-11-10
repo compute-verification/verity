@@ -1,12 +1,12 @@
 """Which finished entries of this machine's check cache `verdicts.entries` leaves out, and why: a measuring script, not part of check.
 
-    python tools/verity/check/cache_probe.py [--no-store]      writes $OUT/cache-probe.json
+    python tools/verity/check/cache_probe.py [--no-store] [--target ID]      writes $OUT/cache-probe.json
 
 It reads the caches a run on this machine sees (`verdicts.roots`), lists what is at the check cache's top (names, link status and
 device numbers only), counts the entries `verdicts.entries` finds against a walk that follows links under the same skip rules, and
 says for the ones left out which rule left them out.  Then it stores one circuit-check target (`F32Add_v1`) through circuit-check
 itself, once into this machine's cache and once into a temporary cache whose top has this machine's shape (a link where it has a
-link), and says whether `verdicts.changed` and a pack written from it hold the stored entry.
+link), and says whether `verdicts.changed` and a pack written from it hold the stored entry, and how long the snapshot took.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -87,16 +88,30 @@ def census() -> dict:
 
 
 def store(cache: Path) -> tuple[dict, dict]:
-    """circuit-check's own store of one target into ``cache``, whether `verdicts.changed` sees it, and what changed."""
+    """circuit-check's own store of one target into ``cache``, whether `verdicts.changed` sees it, what changed, and the pack
+    `verdicts.export` writes of that (its members by family, the pack itself not kept)."""
+    t0 = time.monotonic()
     before = verdicts.snapshot()
+    t1 = time.monotonic()
     files = set(followed())
     r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", TARGET, "--cache", str(cache), "-j", "1", "-q"],
                        capture_output=True, text=True)
     new = sorted(set(followed()) - files)
+    t2 = time.monotonic()
     changed = verdicts.changed(before)
-    return {"cache": str(cache), "rc": r.returncode, "tail": (r.stdout + r.stderr).strip().splitlines()[-3:],
+    t3 = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="cache-probe-pack-") as t:
+        pack = Path(t) / "verdicts.tar.gz"
+        n = verdicts.export(pack, new=changed)
+        with tarfile.open(pack) as tar:
+            names = tar.getnames()
+        size = pack.stat().st_size
+    return {"cache": str(cache), "target": TARGET, "rc": r.returncode, "tail": (r.stdout + r.stderr).strip().splitlines()[-3:],
+            "snapshot_entries": len(before), "snapshot_s": round(t1 - t0, 1), "changed_s": round(t3 - t2, 1),
             "stored": new, "changed": len(changed), "stored_in_changed": [k for k in new if k in changed],
-            "changed_by_family": dict(collections.Counter(family(k) for k in changed))}, changed
+            "changed_by_family": dict(collections.Counter(family(k) for k in changed)),
+            "pack_entries": n, "pack_bytes": size, "pack_by_family": dict(collections.Counter(family(k) for k in names)),
+            "stored_in_pack": [k for k in new if k in names]}, changed
 
 
 def replica(shape: dict[str, bool], top_link: bool) -> dict:
@@ -136,6 +151,9 @@ def replica(shape: dict[str, bool], top_link: bool) -> dict:
 
 
 def main() -> int:
+    global TARGET
+    if "--target" in sys.argv:
+        TARGET = sys.argv[sys.argv.index("--target") + 1]
     out = Path(os.environ.get("OUT") or ".")
     out.mkdir(parents=True, exist_ok=True)
     roots = verdicts.roots()
