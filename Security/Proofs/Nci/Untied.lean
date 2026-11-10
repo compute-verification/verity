@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Accounting.Actual
 public import Definitions.Nci
 public import Proofs.Nci.Cut
 public import Mathlib.Data.Finset.Sort
@@ -17,10 +18,11 @@ gate a tied word can be:
 
 * **A tied word is computed in the circuit**, and untied it is a free input of whatever reads it:
   `RegisteredCircuit.asInputs`, where `E`'s gates become input gates outside `θ` and read nothing. The gates that
-  computed the word stay in their blocks, each block is what is left of it without `E` (`Partition.asInputs`), and the
+  fed the word stay in their blocks, each block is what is left of it without `E` (`Partition.asInputs`), and the
   charged work is a `Work` of the circuit with the words as inputs: no MAC is charged there for an output that lies in
   the words (`y_not_subset_asInputs`). It is also the circuit without a set of blocks, whose gates the kept blocks then
-  read as input.
+  read as input, and at the complement of a set `S` it is `Accounting.Placed.cut S`, outputs aside
+  (`Accounting.Placed.cut_eq_asInputs`).
 * **A tied word is a registered input**: `RegisteredCircuit.untie`, where `E`'s gates leave `θ`. The circuit, its
   blocks and any charged work on it stay as they are. At a computed gate it changes nothing (`unregistered_untie`), so
   it says nothing about a word the circuit computes.
@@ -97,6 +99,31 @@ is `C`'s. -/
     · rw [ite_eq_right hT, ite_eq_right hT]
       exact C.op_congr g v v' fun a ha => h' a (by rw [ite_eq_right hT]; exact ha)
   outputs := C.outputs
+
+/-- Circuits with the same gates and widths are equal when their input gates, reads, operations and outputs are. -/
+theorem Circuit.mk_congr {N : ℕ} {w : Fin N → ℕ} {isInput isInput' : Fin N → Bool}
+    {reads reads' : Fin N → Finset (Fin N)} {op op' : (g : Fin N) → ((a : Fin N) → BitVec (w a)) → BitVec (w g)}
+    {outputs outputs' : Finset (Fin N)} {h₁ : ∀ g, ∀ a ∈ reads g, a < g} {h₁' : ∀ g, ∀ a ∈ reads' g, a < g}
+    {h₂ : ∀ g, isInput g = true → reads g = ∅} {h₂' : ∀ g, isInput' g = true → reads' g = ∅}
+    {h₃ : ∀ g (v v' : (a : Fin N) → BitVec (w a)), (∀ a ∈ reads g, v a = v' a) → op g v = op g v'}
+    {h₃' : ∀ g (v v' : (a : Fin N) → BitVec (w a)), (∀ a ∈ reads' g, v a = v' a) → op' g v = op' g v'}
+    (hi : isInput = isInput') (hr : reads = reads') (hop : op = op') (ho : outputs = outputs') :
+    Circuit.mk N w isInput reads h₁ h₂ op h₃ outputs = Circuit.mk N w isInput' reads' h₁' h₂' op' h₃' outputs' := by
+  subst hi hr hop ho
+  rfl
+
+/-- **`Accounting.Placed.cut` is `Circuit.asInputs`.** A set `S` of an actual circuit's gates as a circuit whose inputs
+are what it reads is that circuit with every gate outside `S` as an input, and `S` as its outputs. -/
+theorem _root_.Accounting.Placed.cut_eq_asInputs {L : Type*} (A : Accounting.Placed L) (S : Finset (Fin A.N)) :
+    A.cut S = { A.toCircuit.asInputs Sᶜ with outputs := S } := by
+  unfold Accounting.Placed.cut
+  refine Circuit.mk_congr (funext fun g => ?_) (funext fun g => ?_) (funext fun g => funext fun v => ?_) rfl
+  · show _ = (A.isInput g || decide (g ∈ Sᶜ))
+    by_cases h : g ∈ S <;> simp [h]
+  · show _ = if g ∈ Sᶜ then ∅ else A.reads g
+    by_cases h : g ∈ S <;> simp [h]
+  · show _ = if g ∈ Sᶜ then (0 : BitVec (A.w g)) else A.op g v
+    by_cases h : g ∈ S <;> simp [h]
 
 /-- `d` with the gates `T` as **inputs outside `θ`**: its circuit with `T`'s gates as input gates
 (`Circuit.asInputs`), none of them registered, each computed gate its own block. -/
