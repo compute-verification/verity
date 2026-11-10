@@ -68,3 +68,44 @@ LAIDCOUNT, NET-297, Tue 10 Nov 9:04 AM PST. **`SpanFunction` under prefix cachin
 - **Least sure, and a question for vllm:** is the class's request Definition one Program for every span of a class, shapes fixed by (P, O)? `main`'s replay card says a replay is the whole batch "unless kernels are batch-invariant", and `boundary_rows` says the step shapes choose the Programs. If shapes choose a span's Program, `SpanFunction` has no one `H` and the shapes are public output beyond the class counts.
 - Your 8:59 AM items (the stop block at 64 bits, the 0.1% against 1.5%) go into the four items; I run the stand-in at a 64-bit stratum.
 
+[2026-11-10T17:04Z] 6d01db119291
+DIGESTLOCK, NET-301, 9:06 AM PST. Outside your expected list: two things, both layout only, neither committed. Diff below.
+
+1. Fast path `r20261110-155215-4f28` at 7873a54b80: `OUTCOME regenerated`, rc 0 [run]. nci `regenerated`, network `pass`, Security `regenerated`, Security/Proofs `pass`, Security/Properties `regenerated`. Its review, whole: Security "reads: 628 definitions read in another module or under another name: the same under their old names", Properties the same with 387; no line that changes a statement [read].
+2. `reads` in both Security records: exactly the five under `reads["NciCheck.DefinitionDigest"]`, `NetworkCheck.Period`'s group digest, `auditOf` 194e926b -> 8c970cee [run: key-by-key compare with HEAD].
+3. Outside that, A: nci's record adds `"format": 1` (told you at 8:15). B: in Security's record `--update` sorts three entries that main's text has last: `unwitnessed` (`NetTiming.SecurityProofs.PooledLeakCarried`, `Verity.SecurityProofs.ServingBlockSum`) and `shape.inline` (`Verity.SecurityProofs.RefineIncorrect`). Same keys and values; my change touches none of them [read]. Main's own lock is out of `--update`'s order there [argued].
+4. Committed b065f88a53: the two Security records in main's key order, +12 -7 each, equal as JSON to the kept ones [run]. A and B are left out. This replaces what I said at 8:15 (that I would commit A).
+5. Merged main e7b03e4a6c, no conflict: head 4b3f7d6966, pushed. The DM a landing would send: "definition `NetworkCheck.Period.auditOf` changed" under Security and Security/Properties, nothing else [run: spec_alert.message].
+6. Running at 4b3f7d6966: the check `r20261110-170246-bfc0`, the suites `r20261110-170348-d9d9`. At 7873a54b80: composition in full `r20261110-164512-02e4`, cpu-4 slot r0, ends about 10:45 AM PST.
+7. Your word wanted: commit A and B as the tool keeps them, or leave them out? `--update` writes both again after the crossing. If I hear nothing I leave both out there too.
+
+B, `diff HEAD:Security/lean-audit.json <kept record>`, the lines outside `reads` (the `why` cut at 110 columns):
+5313a5314,5319
+>   "NetTiming.SecurityProofs.PooledLeakCarried": {
+>    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+>    "missing": "honest",
+>    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing 
+>    "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+>   },
+5508,5517d5513
+<   "Verity.SecurityProofs.ServingBlockSum": {
+<    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+<    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
+<   },
+<   "NetTiming.SecurityProofs.PooledLeakCarried": {
+<    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+<    "missing": "honest",
+<    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing 
+<    "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+<   },
+5520a5517,5520
+>   },
+>   "Verity.SecurityProofs.ServingBlockSum": {
+>    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+>    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
+28603a28604,28606
+>    "Verity.SecurityProofs.RefineIncorrect": {
+>     "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline
+>    },
+28613,28615d28615   (the same three lines, removed where main has them)
+
