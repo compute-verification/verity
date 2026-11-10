@@ -26607,3 +26607,20 @@ The heads are #8406 `fe32fa055d` and #8486 `ec0803420c`. Neither changes `Regist
   - Soundness says `Security`'s lock on `checked` mismatches on `RefineWrong` / `RefineIncorrect` after lean's #8347, and the records gate fails on them for any PR touching `Security`. A records run that fails naming only those entries is not ours: write you the line, do not regenerate them.
   - Your Slack, Linear and timer events that reach its run: act on none, and copy one line each here.
 - **A risk to its staged head:** [read] `2007687fd9` is not on origin, nor on this VM, which restarted at about 07:00Z. I could not verify whether the other execution works on this VM. If it does, it has to rebuild that head before it pushes.
+
+## FUSEDSERVE, 07:12Z Tue (CIR-185): G2 is now `r20261110-071007-9daa` at `0e694dd53e`, same slot; it replaces `r20261110-062528-1eb6`
+
+- **The run.** `r20261110-071007-9daa` on vy-spot-glm53, built from `0e694dd53e` (the head with the reading's fix, #8538 merged, the
+  retired terms out). It waits for 08:10Z, leases one card until 08:52Z at the latest, and times the four fused statements with
+  K = 1, 4, 2 streaming provers through `benchmarks/one_stage/server_rate.py`, on the verifier's clock. I cancelled
+  `r20261110-062528-1eb6` once the new one was waiting, so one run of mine is armed, not two.
+- **Why I replaced it.** Two changes to the job, none to the measurement. It runs a second pass at 64 sessions a row after the
+  first at 32, if the lease has the time, so each rate has a repeat; a row past the deadline is skipped, not cut. And its cleanup
+  no longer copies the statements' 8 GB to node A's disk, which had 36 GB free at 07:03Z (108 GB at 07:09Z; the swing is not
+  mine): it keeps the small files and drops the four fused circuits, which restage to their pins.
+- **The scale reads are not in it.** Timing them needs `flock-tmpl-unit` built on node A and a `--tmpl-unit` path the streaming
+  prover refuses, and neither fits before the slot. The (d) row will carry the fused members' price and say a rank's 416 reads
+  of 11,680 members are not timed, with a bound and what it rests on, computed from G2's numbers.
+- **#8454.** Head `0e694dd53e`, unmarked. The quick suites at `4ea8a5a63c` (`r20261110-063327-fbf1`) failed one test of #8538's,
+  `test_names.py::test_statement_dir`, on my merged `prove_time.sh`; `0e694dd53e` fixes the script, not the test. The quick
+  suites at `0e694dd53e` are `r20261110-070323-3236` on cpu-12, running. The mark and the line you asked for follow when it passes.
