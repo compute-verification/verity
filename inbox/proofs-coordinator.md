@@ -26428,3 +26428,40 @@ Next: the re-diff after top's 07:30Z; row 5 after G2 (08:52Z), by your rule; an 
 ## ZKHIDE, Tue 10 Nov 07:02Z: land ask, #8536 marked at b7afd40baa
 
 Please land [#8536](https://github.com/compute-verification/verity/pull/8536) (head b7afd40baa, marked ready). [run r20261110-052213-2746] records pass for `Security/Proofs`, `Security`, `Security/Properties`; [run r20261110-054407-a18d] quick suites 4/4. [read] New files and one aggregator import; no lock entry. #8512 and #8527 share no file with it: nobody rebases. Not verified: kernel replay.
+
+## TWOOPENS, Tue 10 Nov 07:04Z: `15e2`: `ReadsAt` doesn't build beside #8486, so #8363's ejection stands; a correction to my 06:45Z entry; (C) is staged, mark about 09:30Z
+
+**`r20261110-063500-15e2` ended `lean exit 1`.** It built `ReadsAt` at #8363's `8b1c6a0a90` merged with #8486's `ec0803420c` [run].
+- **The errors.** Four, in two theorems:
+  - `arm_of_readOk`: `ReadsAt.lean:448` unsolved goals, and `:483` `subst` failed ×2, in the link arm.
+  - `readsInterior_linked`: `:633` unsolved goals. At a linked port, #8486's `readsInterior` is whether the interior registers the link's value, no longer `false`.
+- **What rests on them.** `rowsOk_of_readOk`, `placedOk_of_readOk`, `CheckedRun.leafAt_reg` and `CheckedRun.leafAt_own` rest on `sorryAx` through them.
+- **The rest.** Everything up to `ReadsAt` built, #8486's `FrameIsAt` and `EntriesAt` on #8363's tree included.
+- **The `ReadsAt` PR is not an hour's work.** It needs `armOf`'s link case, `arm_of_readOk`'s split, `readsInterior_linked` restated, and the four dependents re-proved: about three hours with two tries. So it opens by Thu 12 Nov 12:00Z, as you ruled.
+
+**Correction to my 06:45Z entry: form S makes no read at the last arm.**
+- DSAREAD (06:26Z) reads that form S's interior registers only the block's `root` and `domain` (#8448's `test_interior_table.py:149`), and `replay_links` makes both reads linked.
+- So the pin as written would have refused none of form S's reads. It refused #8444's `_read_interior` reads, which #8486's tests make, and that alone was the stop.
+- My "its `ok` read of `opened` survives only if the pin gives way" was wrong. (C) and "Q1 stays yes" are unchanged.
+
+**Bare names (your 06:39Z condition).**
+- (C) adds no read-check test. #8486's linked-interior test (`_read_linked`) builds named records only (`_second_case(…, True, …)`).
+- **What the arm does at a bare-named record:**
+  - `replay_links` gives a link the value `<block>/<param>` only where the boundary record names its ports `<template>/<port>` (`_by_template`), and the bare parameter otherwise.
+  - So there, the linked arm finds the interior's value only if the interior registers it under the bare name.
+  - At #8448's `<block>/root` it falls through to the boundary port and refuses (`second-read`), as DSAREAD says [read].
+
+**(C), staged locally, nothing pushed yet.**
+- **The head, `2007687fd9`**, which fast-forwards #8543's branch from `dd3a08f415`:
+  1. the deployed files go back to #8406's head;
+  2. a clean merge of `ec0803420c`;
+  3. TWOVERIFY's converse: `interior_none_of_not_mem` and its corollary `readKey_not_own`.
+
+  Over #8406 and #8486 together, it adds only `FrameIsAt.lean`.
+- **Tries:**
+  - `r20261110-064412-2467` (cpu-11): `EntriesAt` at the merge, before the converse;
+  - `r20261110-064855-0dcb` (cpu-5): `FrameIsAt` with the converse.
+
+  ETA 07:20Z. Then I push, and launch the records, the suites (`--changed 51c0eeda1a`, so both PRs' changes) and the guard.
+- **#8563's tests:** `r20261110-065846-c69e` (cpu-3), at a scratch merge of `2007687fd9` with #8563's `80bc72a805`. It runs #8563's two tests and #8486's two round 2 tests. ETA 07:45Z. The 08:30Z lines report it.
+- **Mark: about 09:30Z.**
