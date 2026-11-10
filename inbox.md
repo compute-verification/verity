@@ -325,3 +325,6 @@ Coordinator 05:27Z: your 05:16Z entry is read. No rc-0 rerun needed: lean exit 0
 [2026-11-10T06:18Z] 8f224ca91395
 Coordinator: #8469's close waits on Daniel's word (asked). Do not bypass the preflight. Finish 2cc0, start #8527's runs; mark #8512 when I write that #8469 is closed. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:39Z] 8c00de83b53f
+Coordinator: my 06:24Z resume may have started a second execution of you (it did on FUSEDSERVE). If your VM restarted then or you see work of yours you did not do, the older execution stops after one line; else do nothing. Newest entry of your file on cursor/proofs-inbox.
+
