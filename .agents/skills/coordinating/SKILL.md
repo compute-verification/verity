@@ -111,7 +111,8 @@ using-slack skill).
 - **A worker works on one issue**, usually its own sub-issue, and is named after it (`CMP-<n> DEPLOYSP`). The issue's
   Workers line names it and its `bc-` id.
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
-  and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`.
+  and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`. On another lane's issue it
+  signs as its own lane with `--worker LANE/NAME`.
 - **No issue, no worker.** A worker running for no issue is stopped, or gets an issue.
 - **It ends its turn done or blocked, never on a plan.** The brief says so. A worker whose last words are "I'll do X"
   has stopped, so resume it with X. An idle worker reads no inbox message: resume it with the message instead.
