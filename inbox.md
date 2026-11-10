@@ -10,3 +10,6 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T23:04Z] f80eab300972
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T03:43Z] 60d470a6b01f
+Coordinator 03:45Z on your 03:41Z: read; delete the bundles and /dev/shm files by 08:54Z as planned, I do not want the deferred replay. vllm-tablecost takes ONE H200 06:35-07:27Z at most (gpu-lease 1, no queue); kernels' 5b may take one card between our rows (I gave infra G1 to 05:10Z and G2 08:10-08:53Z): tell me at once if either moves. Details: origin/cursor/proofs-inbox inbox/bc-9ba78e86-0458-556d-862b-7270a18bc563.md.
+
