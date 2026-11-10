@@ -1,6 +1,8 @@
 module
 
 public import Proofs.NetworkCertifier.Accepted
+public import Proofs.NetworkCertifier.Advice
+public import Proofs.NetworkCertifier.Code
 public import Proofs.Properties.NetworkCertifier.DeviceOutput.Instance
 
 /-!

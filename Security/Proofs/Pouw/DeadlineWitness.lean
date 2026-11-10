@@ -40,7 +40,7 @@ theorem honest_cost_le (H : D1.M1Q → D1.M1R) (s : Salt) :
 theorem honest_honestClock :
     Assumptions.HonestClock ((outputPriced D1.M1Q D1.M1R Salt).adversaries M1.sixteen)
       (pricedHonest (D1.m1 D1.m1Wref)) honestRun 1 :=
-  ⟨pricedHonest (D1.m1 D1.m1Wref), rfl, fun H s =>
+  Pouw.CostModel.honestClock_iff.2 ⟨pricedHonest (D1.m1 D1.m1Wref), rfl, fun H s =>
     ⟨fun _ => ⟨rfl, fun _ hm => hm⟩, (honest_cost_le H s).trans (honestRun_spentIn H s).ge, le_rfl⟩⟩
 
 theorem honest_boundedBy :
