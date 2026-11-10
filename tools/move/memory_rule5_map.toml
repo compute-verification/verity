@@ -1,0 +1,108 @@
+# PoUB's and PoUS's provers, PoUS's reference verifier and the onsite pieces out of `benchmarks/`: what
+# `tools/move/layout.py --map tools/move/memory_rule5_map.toml` moves and rewrites. These are the files that code outside
+# `benchmarks/` loads (the vLLM integration by path, the verifiers' difftests and the live verifier's host by name or by
+# path); the harness stays in `benchmarks/` and loads them from where they land.
+#
+# - PoUB's prover goes to `verity/protocols/poub/prover/`, each file under the harness directory it came from
+#   (`remote_session/`, `word_codec/`, `codec_tensor/`, `vllm_encoded/`), so the four stay siblings and
+#   `../codec_tensor/reader.cu` and `HERE.parent / "word_codec"` keep their meaning. They are not a package: each is still
+#   loaded by path or with its directory on `sys.path`, under its own name (`prover`, `device`, `kv`, `paged`).
+# - PoUS's prover (`p2_v1/`'s store with its toy store, GPU library and its wrapper, `p2_gpu/`'s decode) goes to
+#   `verity/protocols/pous/prover/`, the two directories still siblings. It keeps the package name `p2_v1` and is loaded
+#   by path: the harness's `benchmarks/pous/p2_v1/__init__.py` adds the prover's directory to its `__path__`.
+# - PoUS's reference verifier (`reference.py`, `wire.py` and the vectors that pin them) goes to
+#   `verity/protocols/pous/verifier/p2_v1/`, a package loaded by name: [aliases] rewrites every `from p2_v1 import
+#   reference` and `wire` to it, so one module holds the reference wherever it is imported from.
+# - The bandwidth session's registration over the P2 store goes to PoUB's verifier, which reads it.
+# - The onsite pieces' two scripts go to `workloads/onsite_served/`.
+#
+# Three files of the same directories stay, because each reaches what stays by a path the move does not carry:
+# `benchmarks/pous/p2_v1/vectors.py` (`ROOT = HERE.parents[2]`), `benchmarks/pous/streamed_wipe/served_wipe.sh`
+# (`$HERE/demo.sh`, `ROOT=$(cd "$HERE/../../.." && pwd)`) and `benchmarks/pous/served_piece.py` (it imports the harness).
+# So do `benchmarks/remote_session/inplace.py` and `benchmarks/vllm_encoded/paged.cu`.
+#
+# The load sites name each moved file by its path from the root before the move, so the move rewrites them and nothing
+# else changes. Nothing is split, edited or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "verity/hardware/machine_model/verity_machine_model", datacenter = "verity/composite/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "verity/hardware/machine_model/verity_machine_model", datacenter = "verity/composite/datacenter/datacenter" }
+
+[paths]
+"benchmarks/remote_session/prover.py" = "verity/protocols/poub/prover/remote_session/prover.py"
+"benchmarks/remote_session/device.py" = "verity/protocols/poub/prover/remote_session/device.py"
+"benchmarks/remote_session/session.cu" = "verity/protocols/poub/prover/remote_session/session.cu"
+"benchmarks/word_codec/cuda_lib.py" = "verity/protocols/poub/prover/word_codec/cuda_lib.py"
+"benchmarks/word_codec/kv.cu" = "verity/protocols/poub/prover/word_codec/kv.cu"
+"benchmarks/word_codec/kv.py" = "verity/protocols/poub/prover/word_codec/kv.py"
+"benchmarks/word_codec/kv_bench.py" = "verity/protocols/poub/prover/word_codec/kv_bench.py"
+"benchmarks/codec_tensor/reader.py" = "verity/protocols/poub/prover/codec_tensor/reader.py"
+"benchmarks/codec_tensor/sketch_receipt.py" = "verity/protocols/poub/prover/codec_tensor/sketch_receipt.py"
+"benchmarks/codec_tensor/sketching.py" = "verity/protocols/poub/prover/codec_tensor/sketching.py"
+"benchmarks/codec_tensor/reader.cu" = "verity/protocols/poub/prover/codec_tensor/reader.cu"
+"benchmarks/codec_tensor/sha512.cuh" = "verity/protocols/poub/prover/codec_tensor/sha512.cuh"
+"benchmarks/vllm_encoded/paged.py" = "verity/protocols/poub/prover/vllm_encoded/paged.py"
+"benchmarks/pous/p2_v1/store.py" = "verity/protocols/pous/prover/p2_v1/store.py"
+"benchmarks/pous/p2_v1/gpu.py" = "verity/protocols/pous/prover/p2_v1/gpu.py"
+"benchmarks/pous/p2_v1/p2v1.cu" = "verity/protocols/pous/prover/p2_v1/p2v1.cu"
+"benchmarks/pous/p2_v1/p2sq.cuh" = "verity/protocols/pous/prover/p2_v1/p2sq.cuh"
+"benchmarks/pous/p2_v1/p2keys4.cuh" = "verity/protocols/pous/prover/p2_v1/p2keys4.cuh"
+"benchmarks/pous/p2_v1/p2keys.cuh" = "verity/protocols/pous/prover/p2_v1/p2keys.cuh"
+"benchmarks/pous/p2_v1/store-toy/" = "verity/protocols/pous/prover/p2_v1/store-toy/"
+"benchmarks/pous/p2_v1/.gitignore" = "verity/protocols/pous/prover/p2_v1/.gitignore"
+"benchmarks/pous/p2_v1/Makefile" = "verity/protocols/pous/prover/p2_v1/Makefile"
+"benchmarks/pous/p2_gpu/p2dec.cu" = "verity/protocols/pous/prover/p2_gpu/p2dec.cu"
+"benchmarks/pous/p2_gpu/CGBN.commit" = "verity/protocols/pous/prover/p2_gpu/CGBN.commit"
+"benchmarks/pous/p2_v1/reference.py" = "verity/protocols/pous/verifier/p2_v1/reference.py"
+"benchmarks/pous/p2_v1/wire.py" = "verity/protocols/pous/verifier/p2_v1/wire.py"
+"benchmarks/pous/p2_v1/vectors.json" = "verity/protocols/pous/verifier/p2_v1/vectors.json"
+"benchmarks/pous/p2_v1/audit-vectors.json" = "verity/protocols/pous/verifier/p2_v1/audit-vectors.json"
+"benchmarks/pous/p2_v1/audit-negative-vectors.json" = "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json"
+"benchmarks/pous/p2_v1/bandwidth-mem69-v2.json" = "verity/protocols/poub/verifier/p2_v1/bandwidth-mem69-v2.json"
+"benchmarks/pous/served_piece.sh" = "workloads/onsite_served/served_piece.sh"
+"benchmarks/pous/onsite_pieces.sh" = "workloads/onsite_served/onsite_pieces.sh"
+
+[aliases]
+"p2_v1.reference" = "verity.protocols.pous.verifier.p2_v1.reference"
+"p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
+
+# A moved file whose `HERE = Path(__file__).resolve().parent` must stay its own directory, because what it reaches through
+# `HERE` moved with it: `device.py` finds `codec_tensor/` beside its directory, `paged.py` finds `word_codec/`,
+# `reference.py` finds its vectors beside itself, and `store.py` finds its toy store and writes its layout beside itself
+# (its `parents[1]` stays the directory that holds its own package). The other three (`prover.py`, `reader.py`,
+# `kv_bench.py`) climb from `HERE` to the root, which the move does not recount, so their `HERE` is rewritten to name the
+# harness directory they left: the climb still ends at the root, and `kv_bench.py` still reads the KV vectors there.
+# `kv_bench.py`'s docstring keeps the vectors' name as written.
+[rewrite.keep_in]
+"verity/protocols/poub/prover/remote_session/device.py" = ["benchmarks/remote_session"]
+"verity/protocols/poub/prover/vllm_encoded/paged.py" = ["benchmarks/vllm_encoded"]
+"verity/protocols/pous/verifier/p2_v1/reference.py" = ["benchmarks/pous/p2_v1"]
+"verity/protocols/pous/prover/p2_v1/store.py" = ["benchmarks/pous", "benchmarks/pous/p2_v1"]
+"verity/protocols/poub/prover/word_codec/kv_bench.py" = ["benchmarks/word_codec/tests/kv_vectors.json"]
+
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.codec_tensor.reader" = "verity.protocols.poub.prover.codec_tensor.reader"
+"benchmarks.codec_tensor.sketch_receipt" = "verity.protocols.poub.prover.codec_tensor.sketch_receipt"
+"benchmarks.codec_tensor.sketching" = "verity.protocols.poub.prover.codec_tensor.sketching"
+"benchmarks.pous.p2_v1.gpu" = "verity.protocols.pous.prover.p2_v1.gpu"
+"benchmarks.pous.p2_v1.reference" = "verity.protocols.pous.verifier.p2_v1.reference"
+"benchmarks.pous.p2_v1.store" = "verity.protocols.pous.prover.p2_v1.store"
+"benchmarks.pous.p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
+"benchmarks.remote_session.device" = "verity.protocols.poub.prover.remote_session.device"
+"benchmarks.remote_session.prover" = "verity.protocols.poub.prover.remote_session.prover"
+"benchmarks.vllm_encoded.paged" = "verity.protocols.poub.prover.vllm_encoded.paged"
+"benchmarks.word_codec.cuda_lib" = "verity.protocols.poub.prover.word_codec.cuda_lib"
+"benchmarks.word_codec.kv" = "verity.protocols.poub.prover.word_codec.kv"
+"benchmarks.word_codec.kv_bench" = "verity.protocols.poub.prover.word_codec.kv_bench"
