@@ -1,15 +1,18 @@
 import Flock
+import Spot.HistoryTable
 
 /-!
 `table-root-time [--tables T] [--lengths L,...]`: the Lean verifier's SHA-512 (`Flock.Sha512.hash`) and the frame-v3
-pieces a table root at a pinned capacity of `2^17` rows is made of, each timed, one `PHASE {json}` line each on stdout.
+pieces a history table's root at its pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` rows) is made of, each
+timed, one `PHASE {json}` line each on stdout.
 
 * `sha512`: the bare hash at a message length (`bytes`): a node frame's 277 bytes, a leaf frame's, a `b ‖ c` tree leaf's,
   and 1 MiB for the bulk rate;
-* `node`, `leaf`, `tree_leaf`: `FV3.Sha512.node`, `FV3.Sha512.leafAs` and `Hm96.Default512.treeLeaf`, framing included;
+* `node`, `leaf`, `tree_leaf`: `FV3.Sha512.node`, `FV3.Sha512.leafAs` under the table's `SCHEMA` and
+  `Hm96.Default512.treeLeaf`, framing included;
 * `root`: `FV3.root` over `2^17` frame leaves (its `2^17 - 1` nodes);
-* `table`: one table's root from its rows' `b ‖ c` at a length `len ≤ 2^17`: each row's tree leaf and frame leaf, a
-  placeholder `b ‖ c`'s frame leaf at each rank from `len` up, and the root, `--tables` times.
+* `table`: `Spot.HistoryTable.rootAt`, one table's root from its rows' `b ‖ c` at a length `len ≤ 2^17`: each row's
+  tree leaf and frame leaf, the placeholder's frame leaf at each rank from `len` up, and the root, `--tables` times.
 
 Each phase's input varies with its loop index and its outputs fold into a checksum it prints, so no hash is hoisted out of
 the timing. `table_root.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
@@ -17,8 +20,7 @@ the timing. `table_root.sh` builds it against the checkout's verifier and runs i
 
 open Lean Flock
 
-def CAP : Nat := 2 ^ 17
-def SCHEMA : String := "hm96-sha512/row/v2"
+def CAP : Nat := Spot.HistoryTable.CAPACITY
 
 def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"
@@ -75,7 +77,7 @@ def benchLeaf (calls : Nat) : IO Unit := do
   let t0 ← nsNow
   let mut acc : UInt64 := t0.toUInt64
   for i in [0:calls] do
-    acc := fold acc (FV3.Sha512.leafAs SCHEMA dom i v)
+    acc := fold acc (FV3.Sha512.leafAs Spot.HistoryTable.SCHEMA dom i v)
   let t1 ← nsNow
   emit ([("phase", Json.str "leaf")] ++ rate calls (t1 - t0) ++ [("check", toJson acc.toNat)])
 
@@ -97,20 +99,13 @@ def benchRoot : IO Unit := do
   emit ([("phase", Json.str "root"), ("leaves", toJson CAP)] ++ rate (CAP - 1) (t1 - t0)
     ++ [("check", toJson (fold 0 r).toNat)])
 
-/-- One table's root at capacity `CAP`: rows `0 … len-1` the `b ‖ c` strings `bcs`, the rest the placeholder's. -/
-def tableRoot (dom : ByteArray) (bcs : Array ByteArray) (placeholder : ByteArray) : ByteArray :=
-  let ph := Hm96.Default512.treeLeaf placeholder
-  let leaves := (Array.range CAP).map fun i =>
-    FV3.Sha512.leafAs SCHEMA dom i (if h : i < bcs.size then Hm96.Default512.treeLeaf bcs[i] else ph)
-  FV3.root dom leaves
-
 def benchTable (len tables : Nat) : IO Unit := do
   let rows := (Array.range tables).map fun t => (Array.range len).map fun i => msg 128 (t * CAP + i)
   let placeholder := msg 128 0 0
   let t0 ← nsNow
   let mut acc : UInt64 := t0.toUInt64
   for t in [0:tables] do
-    acc := fold acc (tableRoot (Sha512.hash (msg 8 (t + 7))) rows[t]! placeholder)
+    acc := fold acc (Spot.HistoryTable.rootAt CAP (Sha512.hash (msg 8 (t + 7))) rows[t]! placeholder)
   let t1 ← nsNow
   let calls := tables * (len + CAP + (CAP - 1) + 1)
   emit ([("phase", Json.str "table"), ("len", toJson len), ("tables", toJson tables),
