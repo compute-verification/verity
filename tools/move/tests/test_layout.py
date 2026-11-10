@@ -106,7 +106,7 @@ def test_a_tracked_file_a_gitignore_matches_stays_tracked_where_it_moves(moved):
 
 def test_the_maps_paths_as_a_trie_match_what_the_list_of_them_longest_first_matches():
     """`_paths` finds the map's old paths with one regex over every file. Written as a list, `re` tries each path at every
-    character: nine of a run's ten minutes on a draft of the one map (LEAN-258). `alternation` writes the same set as a
+    character: nine of a run's ten minutes on a draft of the one map. `alternation` writes the same set as a
     trie, and a branch crosses a move only if both find the same spans: the longest path that matches, or a shorter one
     where what follows refuses the longer (`a/b/c.py` before `a/b/c`, and `a/b` in `a/b/c-d`)."""
     words = ["a/b", "a/b/c", "a/b/c.py", "a/bc", "a.b", "a", "x-y", "x-y/z", "tools/x+y", "tools/x", "census", "(odd)/[p]"]
