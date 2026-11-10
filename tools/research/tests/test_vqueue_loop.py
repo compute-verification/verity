@@ -2408,17 +2408,20 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
 #: allowance covers; one whose process died
 HEAD, ROPE, DEAD, BIG = "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}", "RopeHead_v1{D=128}", "Callee_v1", "Big_v1{N=4}"
 #: `main`'s tree for what a check fails off the merge gate: its policy takes circuit-check and ratchet-gate off the gate and
-#: allows `DEAD`'s failure, ci.toml gives each job an owner, the registry holds the PRs' lanes and heads, who owns the head
-#: check's sidecar, whose pins file pins `HEAD`
+#: allows `DEAD`'s failure, drive.toml makes two steps warn steps, ci.toml gives each job but lean-audit an owner, the registry
+#: holds the PRs' lanes, heads, who owns the head check's sidecar, whose pins file pins `HEAD`, and the owner of a fixture
+#: naming `HEAD` that is no pins file
 OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
                                               '[[allow]]\nid = "circuit-check lowering/dead Callee_v1"\nowner = "circuits"\n'
                                               'expires = "2030-06-01T00:00:00Z"\nreason = "red until its fix lands"\n',
+            "tools/verity/check/drive.toml": 'warn_steps = ["flock-rust-tests", "lean-audit"]\n',
             "tools/verity/check/ci.toml": "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n' for j, o in (
-                ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"))),
+                ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
-                {"handle": "heads", "owns": ["verity/core/protocols/certifier/"]}]}),
-            "verity/core/protocols/certifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n"}
+                {"handle": "heads", "owns": ["verity/core/protocols/certifier/"]}, {"handle": "artifacts", "owns": ["fixtures/"]}]}),
+            "verity/core/protocols/certifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
+            "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
 CIRCUITS, OTHER = {"verity/ml/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
 
@@ -2435,15 +2438,17 @@ def _ratchet(*failed: int) -> str:
             + "  #3 (000000000003): passed: grows nothing\n")
 
 
-def _off(env: Env, monkeypatch, *changes: dict[str, str], **kw) -> tuple[Loop, Runs, str, str]:
+def _off(env: Env, monkeypatch, *changes: dict[str, str], decide=None, **kw) -> tuple[Loop, Runs, str, str]:
     """`main` at `OFF_TREE`, a PR of each of ``changes`` (#1, #2, ...), and a loop whose check gates, which built a candidate of
-    them and holds it, deciding nothing more: (the loop, its runs, `main`, the candidate)."""
+    them and holds it, deciding nothing more (unless ``decide``): (the loop, its runs, `main`, the candidate)."""
     _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change(OFF_TREE))
     main = env.main()
     env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
     for n, files in enumerate(changes, 1):
         env.put(n, files)
-    loop, runs = _check(env, monkeypatch, lambda s: [] if s.candidates else policy(s), **kw)
+    loop = env.loop(decide or (lambda s: [] if s.candidates else policy(s)), slim=vqueue_slim, gate="check", **kw)
+    loop.world.fetch()                                              # as a tick does before its slim driver reads drive.toml
+    runs = Runs(env, loop, monkeypatch)
     _, built, _ = loop.tick()
     return loop, runs, main, built["sha"]
 
@@ -2525,6 +2530,60 @@ def test_under_gate_check_what_a_candidate_fails_off_the_gate_waits_for_its_base
     logged = loop.tick()
     assert _acts(logged) == ["slim", *(["ring"] if base == "passed" else [])]
     assert len(env.posts) == (base == "passed") and loop.tick() == []
+
+
+@pytest.mark.parametrize("verdict", [FAIL, INFRA])
+def test_under_gate_check_a_red_off_the_gate_rings_beside_a_failed_verdict_and_not_until_an_infra_one_is_run_again(
+        env, monkeypatch, verdict):
+    """A candidate whose check failed on the gate is rung about what it failed off the gate too; one whose check ended in
+    infra errors (its shard killed) rings nothing until its check runs again."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER)
+    runs.end(main)
+    runs.end(sha, 3, "pytest", "error: no\n", also={"ratchet-gate": _ratchet(1)})
+    if verdict == INFRA:
+        runs.state["c-6"] = ("done", 137, None)
+    logged = loop.tick()
+    assert logged[1]["record"]["verdict"]["state"] == verdict
+    assert [r["to"] for r in logged if r["action"] == "ring"] == ([["@lane-1", "@vllm"]] if verdict == FAIL else [])
+
+
+def test_under_gate_check_a_candidate_on_another_is_rung_about_what_that_one_s_check_passed_once_it_is_logged(env, monkeypatch):
+    """A candidate built on another is judged off the gate against that candidate's check, as its log holds it: the red both
+    fail rings only about the lower one, against `main`'s check, which passed."""
+    def stack(s: Snapshot) -> list:
+        return [Build((len(s.candidates) + 1,), s.candidates[0].sha if s.candidates else s.main, 5)] if len(s.candidates) < 2 else []
+
+    loop, runs, main, low = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, decide=stack, batch=1)
+    (high,) = [r["sha"] for r in loop.tick() if r["action"] == "build"]
+    failed = _circuit(f"lowering/pin-mismatch {HEAD}")
+    runs.end(main)
+    runs.end(low, also={"circuit-check": failed})
+    runs.end(high, also={"circuit-check": failed})
+    assert [(r["sha"], r["base"], r["to"]) for r in loop.tick() if r["action"] == "ring"] == [(low, main, ["@heads"])]
+    assert [r for r in loop.tick() if r["action"] == "ring"] == [] and len(env.posts) == 1
+
+
+def test_under_gate_check_a_warn_step_s_red_rings_its_owner_in_ci_toml_else_ci(env, monkeypatch):
+    """drive.toml's warn steps are off the gate as policy.toml's are: the red of one whose log names nothing of it rings the
+    step's owner in ci.toml (flock-rust-tests', proofs), else `CI` (lean-audit, which ci.toml here gives none)."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER)
+    runs.end(main)
+    runs.end(sha, also={"flock-rust-tests": "error: test failed\n", "lean-audit": "AUDIT: FAIL\n"})
+    rings = {r["step"]: (r["to"], r["failures"]) for r in loop.tick() if r["action"] == "ring"}
+    assert rings == {"flock-rust-tests": (["@proofs"], ["flock-rust-tests"]), "lean-audit": (["@ci"], ["lean-audit"])}
+
+
+def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_log_s_order_each_cut_short(env, monkeypatch):
+    monkeypatch.setattr(L, "OFF_SAID", 2)
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER)
+    runs.end(main)
+    said = [f"lowering/pin-mismatch {ROPE} " + "y" * 300, f"lowering/pin-mismatch {HEAD} it differs", "lowering/dead Other_v1"]
+    runs.end(sha, also={"circuit-check": "".join(f"FAIL {x}\n" for x in said)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert ring["failures"] == [f"lowering/pin-mismatch {ROPE}", f"lowering/pin-mismatch {HEAD}", "lowering/dead Other_v1"]
+    assert ring["to"] == ["@heads", "@circuits"]
+    assert ring["text"] == _off_said(sha, "#1", "circuit-check", main, said[0][:200], said[1]).replace(
+        ". Nothing", "; and 1 more. Nothing")
 
 
 def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env, monkeypatch):

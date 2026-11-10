@@ -499,21 +499,23 @@ def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_o
 
 def test_failures_of_a_sharded_run_are_those_of_each_shard_that_failed_the_step_which_a_twin_s_pass_answers_for(
         world, monkeypatch, tmp_path):
-    """Of the check that gates, a step is failed in a shard where no twin passed it; with no live record a shard's steps are
-    those its steps.jsonl names, every shard having ended."""
+    """Of the check that gates, a step is failed in a shard where no twin passed it, and what it failed is what each twin
+    that failed it to its end names (not one that skipped it, or that a SIGTERM stopped); with no live record a shard's steps
+    are those its steps.jsonl names, every shard having ended."""
     h, base, sha, _ = _harness(world, monkeypatch)
+    twins = {"r-1": ({"status": "failed", "rc": 1}, "A_v1"), "r-1b": ({"status": "passed"}, None),
+             "r-2": ({"status": "failed", "rc": 1}, "B_v1"), "r-2b": ({"status": "skipped"}, None),
+             "r-2c": ({"status": "failed", "rc": SIGTERM_RC}, "C_v1")}
     h.evidence = []
-    for rid, target in (("r-1", "A_v1"), ("r-1b", None), ("r-2", "B_v1")):
+    for rid, (st, target) in twins.items():
         (d := tmp_path / rid).mkdir()
-        st = {"step": "circuit-check", "status": "passed"} if target is None else {
-            "step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}
-        (d / "steps.jsonl").write_text(json.dumps(st) + "\n")
+        (d / "steps.jsonl").write_text(json.dumps({"step": "circuit-check", **st, "log": "circuit-check.log"}) + "\n")
         (d / "circuit-check.log").write_text(f"FAIL lowering/dead {target}\n" if target else "")
         h.evidence.append(d)
-    rec = {"ids": ["r-1", "r-1b", "r-2"], "groups": [["r-1", "r-1b"], ["r-2"]], "tip": sha, "base": base, "gate": CHECK,
+    rec = {"ids": list(twins), "groups": [["r-1", "r-1b"], ["r-2", "r-2b", "r-2c"]], "tip": sha, "base": base, "gate": CHECK,
            "verdict": {"state": PASS}}
     assert failures(h.d, rec, "circuit-check") == {"lowering/dead B_v1": "lowering/dead B_v1"}
-    rec = {**rec, "ids": ["r-1", "r-2"], "groups": [["r-1"], ["r-2"]]}
+    rec = {**rec, "groups": [["r-1"], ["r-2", "r-2b", "r-2c"]]}
     assert failures(h.d, rec, "circuit-check") == {"lowering/dead A_v1": "lowering/dead A_v1",
                                                    "lowering/dead B_v1": "lowering/dead B_v1"}
 

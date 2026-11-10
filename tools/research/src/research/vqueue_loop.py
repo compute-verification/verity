@@ -716,16 +716,14 @@ class World:
 
     def pins(self, sha: str, targets: Iterable[str]) -> dict[str, list[str]]:
         """The circuit-check sidecars' pins files in ``sha``'s tree (`*.circuit-check.json`) that pin each of ``targets``, a
-        key of theirs, by target; a target none pins has none."""
-        if not (want := sorted(set(targets))):
-            return {}
-        r = _git(self.repo, "grep", "-F", "-o", *(a for x in want for a in ("-e", f'"{x}"')), sha, "--", "*.circuit-check.json",
-                 check=False)
-        out: dict[str, set[str]] = {}
+        key of theirs, by target (one at least); a target none pins has none."""
+        r = _git(self.repo, "grep", "-F", "-o", *(a for x in targets for a in ("-e", f'"{x}"')), sha, "--",
+                 "*.circuit-check.json", check=False)
+        out: dict[str, list[str]] = {}
         for line in r.stdout.splitlines():
             path, _, hit = line.removeprefix(f"{sha}:").partition(':"')
-            out.setdefault(hit.removesuffix('"'), set()).add(path)
-        return {x: sorted(ps) for x, ps in out.items()}
+            out.setdefault(hit.removesuffix('"'), []).append(path)
+        return out
 
     def refs(self) -> dict[str, str]:
         """origin's `queue/*` branches as fetched: {name under `queue/`: sha}."""
@@ -2106,19 +2104,19 @@ class Loop:
         ejected for it.  A post that fails is rung again by the next tick; with --shadow it is only logged."""
         recs, rung, d = [], t.past.rung(), self.world.slim_driver()
         for c in t.snap.candidates:
-            rec = t.judged[c.sha].record
-            if rec is None or rec.get("gate") != CHECK_GATE or (rec.get("verdict") or {}).get("state") not in (PASS, FAIL):
+            if (j := t.judged[c.sha]).slim is None or j.slim.state not in (PASS, FAIL):
                 continue
             base = t.below if c.base == t.main else t.past.slim(c.base)[1]
             for step in sorted({*d._policy(c.base).off_gate, *d.warn_steps}):
-                if (c.sha, why := f"off the gate: {step} failed") in rung or not (new := self._off_new(d, c, rec, base, step)):
+                if (c.sha, why := f"off the gate: {step} failed") in rung or not (
+                        new := self._off_new(d, c, j.record, base, step)):
                     continue
                 to, said = self._off_owners(c, step, new), [f"`{x[:200]}`" for x in new.values()]
                 text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) failed {step}, "
                         f"off the merge gate, where its base {c.base[:12]} doesn't: {'; '.join(said[:OFF_SAID])}"
                         + (f"; and {len(said) - OFF_SAID} more" if len(said) > OFF_SAID else "")
                         + ". Nothing is held or ejected for it: fix it forward")
-                line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, step=step, failures=sorted(new),
+                line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, step=step, failures=list(new),
                             text=text, to=list(to))
                 if self.shadow:
                     recs.append(self.record(t, "ring", **line, done=False))
