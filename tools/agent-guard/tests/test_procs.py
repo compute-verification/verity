@@ -145,7 +145,7 @@ def test_the_names_and_the_userinfo_are_the_ones_the_other_guards_hold(procs):
 def held():
     """A process with a dummy of each kind among its arguments, and a mark no other process has: (pid, mark, the tail of its
     masked line). It waits on its input, so it ends when the test does."""
-    mark = f"mark{os.getpid()}"
+    mark = f"mark{os.getpid()}x"                          # closed by a letter: no other test's mark starts with this one
     proc = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", mark, "--auth-token", HEX,
                              f"--pty-auth-token={HEX}", "--trace-auth-token", JWT, WITH_PASSWORD, OPAQUE, "serve"],
                             stdin=subprocess.PIPE)
@@ -161,24 +161,49 @@ def run(*command, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run([str(c) for c in command], capture_output=True, text=True, **kwargs)
 
 
+def listed(*command, **kwargs) -> str:
+    """What the lister prints, without the seconds each process has run: the one column that differs between two runs."""
+    return re.sub(r"^( *\d+) +\d+ ", r"\1 ", run(*command, **kwargs).stdout, flags=re.M)
+
+
 def test_the_lister_prints_a_process_masked_and_matches_a_pattern_against_the_masked_line(held):
     pid, mark, tail = held
     by_pattern = run(sys.executable, PROCS, mark)
     assert by_pattern.returncode == 0 and by_pattern.stdout.endswith(tail) and by_pattern.stdout.count("\n") == 1
     assert re.match(rf" *{pid} +\d+ python\S* +\S*python\S*$", by_pattern.stdout[:-len(tail)])     # pid, seconds, name, the program
-    assert run(sys.executable, PROCS, "-p", pid).stdout == by_pattern.stdout
-    assert run(sys.executable, PROCS, mark, "-p", f"1,{pid}").stdout == by_pattern.stdout
+    line = listed(sys.executable, PROCS, mark)
+    assert line.endswith(tail) and line.split()[0] == str(pid)
+    assert listed(sys.executable, PROCS, "-p", pid) == line
+    assert listed(sys.executable, PROCS, mark, "-p", f"1,{pid}") == line
     with PROCS.open() as source:                          # as it runs on a machine without a checkout: `ssh HOST python3 - PATTERN`
-        assert run(sys.executable, "-", mark, stdin=source).stdout == by_pattern.stdout
+        assert listed(sys.executable, "-", mark, stdin=source) == line
     # a pattern that is the start of a masked value, or matches only the line as it was, finds nothing
     for pattern in (HEX[:8], JWT[:12], OPAQUE[:6], "user:dummy", f"{mark} --auth-token 0123"):
         hidden = run(sys.executable, PROCS, pattern, "-p", pid)
         assert (hidden.returncode, hidden.stdout) == (1, ""), pattern
-    assert run(sys.executable, PROCS, "auth-token .REDACTED", "-p", pid).stdout == by_pattern.stdout
+    assert listed(sys.executable, PROCS, "auth-token .REDACTED", "-p", pid) == line
     assert run(sys.executable, PROCS, f"no-such-{mark}").returncode == 1
     for usage in (["-x"], ["a", "b"], ["("], ["-p", "self"]):
         refused = run(sys.executable, PROCS, *usage)
         assert refused.returncode == 2 and refused.stdout == "" and "usage:" in refused.stderr
+
+
+def test_a_process_that_ended_is_left_out_and_one_that_cant_be_read_is_named(procs, monkeypatch, capsys):
+    """Between the listing of /proc and the read a process can end: it is left out, as it is no process any more. Any other
+    failure to read one would leave the listing short without a word, so it is said, on stderr, with the pid."""
+    gone, ended, unreadable = (2**22 + n for n in (1, 2, 3))             # above any pid the kernel gives out
+    errors = {gone: FileNotFoundError(2, "No such file or directory"), ended: ProcessLookupError(3, "No such process"),
+              unreadable: PermissionError(13, "Permission denied")}
+
+    def refusing(path, *args, **kwargs):
+        if str(path).endswith("/cmdline"):
+            raise errors[int(str(path).split("/")[2])]
+        return open(path, *args, **kwargs)
+    listdir = os.listdir
+    monkeypatch.setattr(procs.os, "listdir", lambda path: [*map(str, errors), "self"] if path == "/proc" else listdir(path))
+    monkeypatch.setattr(procs, "open", refusing, raising=False)
+    assert list(procs.processes()) == []
+    assert capsys.readouterr().err == f"procs: process {unreadable} is not listed: Permission denied\n"
 
 
 @real_ps

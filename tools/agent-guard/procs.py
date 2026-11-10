@@ -113,7 +113,8 @@ def masked(argv: list[str]) -> str:
 
 
 def processes():
-    """(pid, seconds running, name, arguments) of every process but this one, by pid; one that ends meanwhile is left out."""
+    """(pid, seconds running, name, arguments) of every process but this one, by pid. One that ended meanwhile is no process
+    any more and is left out; one that can't be read is named on stderr, so a listing that lacks it says so."""
     with open("/proc/uptime") as f:
         up = float(f.read().split()[0])
     for pid in sorted(int(d) for d in os.listdir("/proc") if d.isdigit()):
@@ -124,7 +125,9 @@ def processes():
                 argv = [a.decode("utf-8", "replace") for a in f.read().split(b"\0")]
             with open(f"/proc/{pid}/stat", "rb") as f:
                 name, _, rest = f.read().decode("utf-8", "replace").partition("(")[2].rpartition(")")
-        except OSError:
+        except OSError as e:
+            if not isinstance(e, (FileNotFoundError, ProcessLookupError)):
+                print(f"procs: process {pid} is not listed: {e.strerror}", file=sys.stderr)
             continue
         while argv and not argv[-1]:
             argv.pop()
