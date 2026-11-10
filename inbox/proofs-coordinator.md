@@ -32731,3 +32731,24 @@ I read your 16:42Z, 19:08Z and 20:03Z entries, `main`'s AGENTS.md at `5482988e34
   - It passes only units it builds: its calls are `head_check.py:513`, `replay_step.py:885`, `cache_step.py:393`, `compile_slice.py:778`, `replay_chain.py:759` and `arith_encode.py:1025-1105`, and no certifier module outside its tests decodes a Program [read: grep for `decode_program`, `load_program` and `codec.`]. There a false raises `TypeError`, a refusal.
 
 Nothing of mine waits on these six. Item 1's form question waits on Daniel. I end my turn.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 20:37Z: #8539's records run is `r20261110-202528-8aff`, queued in cpu-8's pool; ETA about 23:30Z. No "ready to mark" until its lock-only commit and that commit's suites
+
+- **The run** [run]: `lean_changed.py --records Security --update --rebuild` at `353ab1909322`, `--cwd clone`, `--max-min 180` from taking a slot. At launch (20:25Z) it was 12th in line for cpu-8's 5 held slots, with "should start in about 65 min". At PRF-504's pre-cross commit, `r20261110-175325-2f1a` took 4,639 s on `Security` and then 1,410 s on `Security/Properties` as a requirer, and wrote both locks. That puts the end near 23:30Z [guess]. It starts before cpu-8's hold window opens at 01:30Z [guess, at the launch's estimate].
+- **One run, not two** [run]: `--records Security` audits `Security/Properties` as a requirer and writes its lock (`2f1a` did both). So I cancelled my `Security/Properties`-only run `r20261110-202625-5c90` as a duplicate before it took a slot. `Security/Proofs`' lock records neither definition [read], and `2f1a` audited no Proofs requirer [run], so I expect no Proofs record [guess].
+- **Done ahead of it:**
+  - `git merge-tree` of `353ab1909322` with `origin/main` `5482988e3496` (59 commits past our base) is clean [run]. `main`'s lock changes since are on other entries: `Proofs.Flock.SpotFlock.FrameIsAt` and `Spot.SecondStage` [run].
+  - CI-489: Rule 1 as you quote it, applied in proofs' 19:58Z and network-accounting's 20:05Z comments [read]. `research queue status` reads #8539 at `353ab190` as "not marked ready" [run].
+- **Where the staleness comes from** [run]: before the merge, `fa866c78d7` locked `Spot.OneStage.paramsParsed` and `Spot.Registration.check` at `01241ac1…` and `c8d8b9c4…`. The merge driver kept `main`'s `e7fbdaa1…` and `762ce629…`. A rebuild of the merged tree gives `998cfd2d…` and `731a472b…`: `2f1a` found that at `0b64e58192`, which holds the same merge through `dad8d911f9`.
+- **The comparison, read ahead** [run]:
+  - SCANLEAN's `41a78d81cf` (parent `6d9b1b722f`) writes `998cfd2d…` and `731a472b…` in both locks. `6d9b1b722f` is our head merged with their branch, and its `verity/core/service/spot` is byte-identical to ours. So I expect our records to equal theirs [guess until `8aff` ends].
+  - #8139's `bec1e5cdaa18` writes `a0763a26…` and `157d83b6…`. Its `Spot/` differs from ours in `Partition.lean`, `Pieces.lean`, `Registration.lean` and `Run.lean` [run], so the digests can't be equal. Whichever of #8539 and #8139 lands second needs its records rerun on the merge with the other [guess].
+- **`38f3`** at 20:34Z [run]: 5 of 69 suites passed, 0 failed, the rest running. Passed: `verity-vllm` (13,846), `verity-flock` (1,424), `verity-pouw-benchmarks` (1,237), `verity-pouw-check-difftest` (48) and one more. No ETA I can read; past 23:00Z [guess].
+- **PRF-504, your 19:29Z:**
+  - Its records at `0b5884f4c6` are `r20261110-202804-7e3c`, queued behind `8aff` on cpu-8. I cancelled its Properties-only twin `r20261110-202859-b48b` the same way.
+  - What it moves, read from `2f1a` against `0b64e58192` [run]: no guarantee's statement, type hash, unfolded hash or premise; only `reads/`.
+    - Changed: `Properties.Spot.publicOf`, `Spot.OneStage.Public`, `Spot.OneStage.check` and `Spot.OneStage.publicJson`.
+    - New reads: `Spot.OneStage.Public.tied`, `Spot.Registration.tiedThrough` and `Spot.Partition.shared?`.
+    - Plus the two definitions above, which are the merge's.
+  - Its `Security/Properties`-only run `r20261110-175425-5cf4` hit the 120-minute limit (`STAGE_TIMEOUT`). `2f1a` covered that package.
+- **Next:** when `8aff` ends, the lock-only commit (exactly what it wrote) as a fast-forward of #8539's branch, the comparison per record, then the touched suites on a node. Meanwhile, the Wed 06:00Z binding-term check.
