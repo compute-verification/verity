@@ -40,15 +40,6 @@ namespace Verity.Game.Pos
 
 variable {α V ι : Type} {g : Game α} {σ : Strategy g}
 
-/-- **The next stop from a stop is the stop.** -/
-theorem toStop_toStop (p : Pos g σ V ι) : p.toStop.toStop = p.toStop := by
-  rcases p.toStop_stops with h | ⟨a, ha⟩
-  · exact walk_here p.toStop.g' p.toStop.s' p.toStop.Ks p.toStop.x p.toStop.back h
-  · have key : ∀ q : Pos g σ V ι, q.g' = .ret a → q.toStop = q := fun ⟨_, _, _, _, _⟩ hg => by
-      subst hg
-      rfl
-    exact key p.toStop ha
-
 /-- **The position `r` is past the position `p`**: `p` itself, or a later position than `p`'s next stop. A walk on
 from `p` goes to its next stop first, so each position it passes is past `p`. -/
 def Past (p r : Pos g σ V ι) : Prop := r = p ∨ p.toStop.Le r

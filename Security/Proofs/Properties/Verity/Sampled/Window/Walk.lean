@@ -35,6 +35,31 @@ that stop, which the next session starts from.
 
 @[expose] public section
 
+namespace Verity.Game.Pos
+
+variable {α V ι : Type} {g : Game α} {σ : Strategy g}
+
+/-- **A stop is its own next stop**: the walk from a node at which a cut is fixed, or from the play's end, stays
+there. -/
+theorem toStop_of_stops (q : Pos g σ V ι) (h : (∃ i, (q.Ks i).isHere) ∨ ∃ a, q.g' = .ret a) : q.toStop = q := by
+  obtain ⟨g', s', Ks, x, back⟩ := q
+  show walk g' s' Ks x back = _
+  cases g' with
+  | ret a => rfl
+  | send M k =>
+    rcases h with h | ⟨a, ha⟩
+    · rw [walk, ite_eq_left_of_eq_true _ _ (eq_true h)]
+    · cases ha
+  | coin C k =>
+    rcases h with h | ⟨a, ha⟩
+    · rw [walk, ite_eq_left_of_eq_true _ _ (eq_true h)]
+    · cases ha
+
+/-- **The next stop's next stop is itself.** -/
+theorem toStop_toStop (p : Pos g σ V ι) : p.toStop.toStop = p.toStop := toStop_of_stops _ p.toStop_stops
+
+end Verity.Game.Pos
+
 namespace Verity.Sampled
 
 open Verity.Game
