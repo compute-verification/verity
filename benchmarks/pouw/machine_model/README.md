@@ -421,10 +421,11 @@ at no fewer units of the same resource. `data/cover/` is its evidence on the H20
 evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
 a card, with the counts by mark and every hole.
 
-- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes and formats, and each card's numbers (ρ a SM-clock,
-  format weights) are its card file's (`verity/hardware/cards/`, read by `cover.load`): `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`,
-  `red`, `branch` and none. What the table needs that `Accel` lacks is marked `proposed`: the `collective` op and
-  resource, `tex`, and the formats `e3m2`, `e2m3`, `mxf8` and `mxf6`.
+- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode on
+  a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers (ρ
+  a SM-clock, format weights) are its card file's (`verity/hardware/cards/`, read by `cover.load`). What the table
+  needs that `Accel` lacks is marked `proposed`: the `collective` op and resource, `tex`, and the formats `e3m2`,
+  `e2m3`, `mxf8` and `mxf6`.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
   charges only the issue slot every instruction takes (coarse, and sound on any pipe).
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in

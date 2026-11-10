@@ -5,10 +5,9 @@ import shutil
 
 import pytest
 
-from verity.hardware import load
 from verity_machine_model import theta as T
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, device
+from verity_machine_model.model import DATA, card, device
 
 SM120, SM90 = DATA, device("sm_90")
 
@@ -163,13 +162,13 @@ def test_the_rules_refuse_an_unsourced_or_wrong_rate(tmp_path):
 
 
 def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
-    for data, sku in ((SM120, "rtx-pro-6000-server"), (SM90, "h200-sxm-141gb")):
-        t, card = T.theta(data), load(sku)
-        assert t.sms == card["sm"]["count"]["value"] and t.clocks["fmax"].mhz == card["clock"]["sm"]["value"]
-        assert t.rates["tensor.tf32.k8"].sheet == card["rate"]["tensor"]["value"] / card["weight"]["tf32"]["value"]
-        assert t.rates["smem.read"].sheet == 4 * card["rate"]["smem"]["value"]
-        assert t.capacities["hbm"].value == card["store"]["dram"]["value"]
-        assert f"{sku}.toml, rate.tensor: " in t.rates[T.INT8].source
+    for data in (SM120, SM90):
+        t, c = T.theta(data), card(data)
+        assert t.sms == c["sm"]["count"]["value"] and t.clocks["fmax"].mhz == c["clock"]["sm"]["value"]
+        assert t.rates["tensor.tf32.k8"].sheet == c["rate"]["tensor"]["value"] / c["weight"]["tf32"]["value"]
+        assert t.rates["smem.read"].sheet == 4 * c["rate"]["smem"]["value"]
+        assert t.capacities["hbm"].value == c["store"]["dram"]["value"]
+        assert f"{c['sku']}.toml, rate.tensor: " in t.rates[T.INT8].source
     shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
     p = tmp_path / "d" / T.THETA
     text = p.read_text()

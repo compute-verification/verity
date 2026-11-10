@@ -140,8 +140,8 @@ def device(name: str = DEVICE) -> Path:
 
 
 def card(data: Path = DATA) -> dict:
-    """The device's card file (`verity.hardware.load`), the one source of its ceilings: the SKU `model.toml` names."""
-    from verity.hardware import load   # here: only a reader of the card needs verity
+    """The device's card file (`verity.hardware.cards`), the one source of its ceilings: the SKU `model.toml` names."""
+    from verity.hardware.cards import load   # here: only a reader of the card needs verity
 
     sku = tomllib.loads((data / "model.toml").read_text()).get("card")
     if sku is None:

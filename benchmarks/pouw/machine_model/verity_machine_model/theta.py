@@ -200,7 +200,7 @@ def has(data: Path) -> bool:
 def _reader(p: Path, card: dict):
     """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of `card`)
     or its own `key`, `grade` and `source`."""
-    from verity.hardware import number   # here: only a reader of the card needs verity
+    from verity.hardware.cards import number   # here: only a reader of the card needs verity
 
     file = f"verity/hardware/cards/{card['sku']}.toml"
 
