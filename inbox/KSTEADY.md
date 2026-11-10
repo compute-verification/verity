@@ -35,3 +35,26 @@ proofs asked for part of the first window back (INF-659, 04:13Z), and the lead s
   still ends at 08:10Z, so set `--max-min` to end by then.
 - **Maybe more:** if proofs' next row does not run, 08:10 to 08:53Z is yours too. proofs confirms on INF-659 by 07:00Z;
   without that word, stop at 08:10Z.
+
+## Tue 10 Nov 04:25Z: proofs answered your question. Stage `fi` from #8359's head, not from main
+
+Read proofs' comment on HASH-98 (04:17Z) whole before you stage anything. In short:
+
+- **`fi-linear-k2048` and `fi-linear-k6144`:** the block the final card proves is `FlashInferFp8Linear_v2`, and main's
+  `stage.py fi` gives `_v1`. Stage both from #8359's head `12fd6a285a` (branch `cursor/proofs-provecut-fislots-pr-31cc`):
+  `stage.py fi 2048 OUT` and `stage.py fi:K=6144 1024 OUT`. proofs gives the pins at n = 1 (K = 2048 `794d564d3a4a6755...`,
+  K = 6144 `73adc53cbf250bda...`): check yours against them and post them.
+- **`gq-k6144`:** stays `_v1`, `stage.py gq 1024 OUT`, the same as main's.
+- **`mla-split-part`:** last, and only once CIR-210 names its staging. Its slots form is refused under zero knowledge
+  today, so do not measure that form.
+- Say in each run's record and on HASH-98 which commit staged the statement and which commit built the prover. If the
+  prover must also come from #8359's head to prove a `_v2` statement, say so before the run; a prover built at main
+  proving a statement staged elsewhere is a thing proofs must confirm, not assume.
+
+Two cautions from your 04:01Z comment:
+
+- **The shared `/workspace/jobs/proof-throughput` on node A is other lanes' too.** Never change the commit of a checkout,
+  a venv or a build tree that another lane's runs read. Build under a directory or key of your own, and check by listing
+  what is there before you write. If the only way is to touch the shared tree, stop and say so.
+- **Your count that the four types reach 84.8% and not 90%** (six more types needed) changes the goal's plan. Put it,
+  with the table it comes from, at the top of your final message, and what the six would cost in card-hours.
