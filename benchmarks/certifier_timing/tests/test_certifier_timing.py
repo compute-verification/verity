@@ -363,9 +363,10 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
 
 
 def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
-    """`halts` sums the entries of every core's idle states but the polling one, and is None where there are none
-    to read; a case's `halted` is its certifier's count after less before, and a row's the sum of its cases'."""
-    assert parties.halts(tmp_path) is None
+    """`halts` sums the entries of every core's idle states but the polling one, and says why where it has no count:
+    no state to read, or one that went while it was read. A case's `halted` is its certifier's count after less
+    before, None where either is no count, and a row's the sum of its cases'."""
+    assert "no cpuidle driver" in parties.halts(tmp_path)
     for cpu, (polls, stops, deeper) in enumerate([(5, 7, 1), (9, 3, 0)]):
         for k, (name, usage) in enumerate([("POLL", polls), ("haltpoll idle", stops), ("C2", deeper)]):
             state = tmp_path / f"cpu{cpu}" / "cpuidle" / f"state{k}"
@@ -379,6 +380,8 @@ def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
         for k in (1, 2):
             (tmp_path / f"cpu{cpu}" / "cpuidle" / f"state{k}" / "name").write_text("POLL\n")
     assert parties.halts(tmp_path) == 0
+    (tmp_path / "cpu1" / "cpuidle" / "state2" / "name").unlink()
+    assert "could not be read (FileNotFoundError" in parties.halts(tmp_path)
     cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
     plan = parties.plan_of(cfg)
 
@@ -391,9 +394,10 @@ def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
         (case / "certifier.json").write_text(json.dumps(record))
         return bench.score(case)
 
-    held, more, unread, older = (halted("held", [40, 40]), halted("more", [40, 44]), halted("unread", [None, None]),
-                                 halted("older", None))
-    assert [c["halted"] for c in (held, more, unread, older)] == [0, 4, None, None]
+    held, more, unread, gone, older = (halted("held", [40, 40]), halted("more", [40, 44]),
+                                       halted("unread", ["no driver", "no driver"]),
+                                       halted("gone", [40, "could not be read"]), halted("older", None))
+    assert [c["halted"] for c in (held, more, unread, gone, older)] == [0, 4, None, None, None]
     assert bench.summarize([held, more])["rows"][0]["halted"] == 4
     assert bench.summarize([held, unread])["rows"][0]["halted"] is None
     assert bench._table([bench.result([held, more])]).splitlines()[2].split(" | ")[-1] == "4 |"

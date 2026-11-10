@@ -273,15 +273,19 @@ def stamping(tries: int = STAMP_TRIES) -> tuple[socket.socket | None, str]:
     return None, f"this host's kernel stamped none of {tries} loopback reads"
 
 
-def halts(root: Path = CPUIDLE) -> int | None:
+def halts(root: Path = CPUIDLE) -> int | str:
     """How many times this host's cores have entered an idle state that stops them, since boot: the entries the
-    kernel counts for every cpuidle state of every core but the polling one's (`POLL`). None where the kernel counts
-    none: a host with no cpuidle driver, whose cores stop in the kernel's default idle uncounted."""
+    kernel counts for every cpuidle state of every core but the polling one's (`POLL`). Where there is no count, why:
+    a host with no cpuidle driver, whose cores stop in the kernel's default idle uncounted, or one whose driver left
+    while its states were read."""
     states = list(root.glob("cpu[0-9]*/cpuidle/state[0-9]*"))
     if not states:
-        return None
-    return sum(int((state / "usage").read_text()) for state in states
-               if (state / "name").read_text().strip() != "POLL")
+        return "this host has no cpuidle driver, so its kernel counts no idle state's entries"
+    try:
+        return sum(int((state / "usage").read_text()) for state in states
+                   if (state / "name").read_text().strip() != "POLL")
+    except (OSError, ValueError) as e:
+        return f"an idle state's count could not be read ({type(e).__name__}: {e})"
 
 
 def wall_less_monotonic(reads: int = 5) -> int:

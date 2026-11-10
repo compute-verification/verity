@@ -321,9 +321,9 @@ def score(case: Path, observed: Path | None = None) -> dict:
     configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
     (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`:
     a paced one's write ends, else its ticks' lateness), how many times the certifier's host's cores entered an idle
-    state that stops them while it ran (`halted`; None where the host counts none, `parties.halts`), and what makes
-    it no measurement (`problems`). A record
-    whose certifier is none of `CERTIFIERS` is another benchmark's, and is refused."""
+    state that stops them while it ran (`halted`; None where the host gave no count, `parties.halts`), and what
+    makes it no measurement (`problems`). A record whose certifier is none of `CERTIFIERS` is another benchmark's,
+    and is refused."""
     cfg, server, certifier = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
     if cfg["certifier"] not in CERTIFIERS:
         raise SystemExit(f"{case}: its certifier is {cfg['certifier']!r}, none of {', '.join(CERTIFIERS)}: score it "
@@ -335,6 +335,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
     coins = {t: bit for t, bit, _ in server["rows"]}
     sender = late_releases = gated = None
     halts = certifier.get("halts") or [None]
+    counted = all(isinstance(count, int) for count in halts)
     if cfg["certifier"] == "network":
         if cfg["paced_ms"]:
             times = {r[0]: r[3] / 1e6 for r in certifier["releases"]["rows"]}
@@ -365,7 +366,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
         "observer_host": observer.get("host", cfg.get("host")), "observer_run": observer.get("run", cfg.get("run")),
         "client": channel.measure(pairs), "kernel": kernel, "unstamped": observer.get("unstamped") or None,
-        "sender": sender, "halted": None if None in halts else halts[1] - halts[0],
+        "sender": sender, "halted": halts[1] - halts[0] if counted else None,
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
         "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],
