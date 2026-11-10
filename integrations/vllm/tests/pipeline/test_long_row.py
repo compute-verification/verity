@@ -69,7 +69,11 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
     assert _members(nodes) == [descriptor_id(d) for _, d in us]
 
 
+@pytest.mark.slow
 def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_operands() -> None:
+    """The check template registered inline at small statics, and round 2's own derivation run on the replay block it
+    registers: every unit's operand gets a link or a wire. About a minute, nearly all of it building the template's body (its
+    units' gates, the picks' most); no cheaper test runs `second_stage` on the registered descriptor, which round 2 reads."""
     t = _small()
     nodes = t.body.nodes
     assert _members(nodes) == [descriptor_id(d) for _, d in LR.units(t)]
