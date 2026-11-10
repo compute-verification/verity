@@ -354,7 +354,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - all six root bindings;
 - per domain kind, one accepted opening and one with a changed value that is rejected, with domain digests.
 
-`test_sha512_framings.py` checks them.
+`test_vllm_v1.py` checks them.
 
 **Cost.** Native compressions per message:
 

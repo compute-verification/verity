@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_vllm.pipeline.advice_code import derived as DC
 
 HERE = Path(__file__).parent
 
@@ -88,7 +89,7 @@ def test_a_collision_in_the_key_derives_the_same_advice(case, monkeypatch) -> No
     advice: a spurious key match names a request only if its tokens match, so it can't lengthen a hit or move a source."""
     cfg, adv, order, held, res = case
     assert D.rebuild(res, cfg, held, ()) == adv
-    monkeypatch.setattr(D, "unit_key", _collide)
+    monkeypatch.setattr(DC, "unit_key", _collide)
     assert _collisions(adv, cfg, held, order) > 0
     assert D.residual(adv, cfg, held, order=order) == res
 
@@ -98,5 +99,5 @@ def test_a_verifier_on_a_different_key_accepts_the_provers_residual(case, monkey
     A verifier whose key collides differently still rebuilds the prover's residual into the same advice: what is
     derived depends on the tokens, never on the key's collisions."""
     cfg, adv, order, held, res = case
-    monkeypatch.setattr(D, "unit_key", _collide)
+    monkeypatch.setattr(DC, "unit_key", _collide)
     assert D.rebuild(res, cfg, held, ()) == adv

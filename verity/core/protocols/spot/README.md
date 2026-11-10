@@ -136,7 +136,9 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs.
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of positions of its requests), which round 2
+refuses unless it covers the replay blocks in order and each request's positions in order (`second-schedule`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -272,7 +274,7 @@ from verity.core.protocols.spot.costfit import fit
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
     challenger's coins (or a sampler) under the expanded design, with a work sample's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
-  the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `window_domain` is a
+  the verifier's copies (R1 to R7), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
 - `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the registration and the verifier's sampling design, and `check_proved`
@@ -283,8 +285,8 @@ from verity.core.protocols.spot.costfit import fit
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
-- `served`: `register_served`, the one form in which a served path registers its served trees (`ServedTree`s) as ports
-  of the verifier's own `--registered` file: the record's `registered` entries, R7's copies and the file.
+- `served`: `register_served`, how a served path registers its `ServedTree`s as ports
+  of the verifier's `--registered` file: the record's `registered` entries, R7's copies and the file.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
