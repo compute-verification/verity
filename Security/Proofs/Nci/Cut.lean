@@ -29,7 +29,7 @@ inputs outside `θ` (`ReadsAtMost`); a block's **entries** (`entries`) are those
    discrete Loomis–Whitney inequality (`Nci.SecurityProofs.loomis_whitney`) and Cauchy–Schwarz over the matmuls give
    `(MACs in the block)² ≤ π(its words) · (outputs it feeds)`, and Cauchy–Schwarz over the blocks gives
    `V² ≤ m Π(k) F` for the `V` unsplit MACs and the `F` pairs of a block and an output it feeds (`counts`).
-4. **Outputs** (`card_fedBy_le`, `sum_card_hit_le`, `bY_mul_card_clear_le`): an output a block feeds has a wire in the
+4. **Outputs** (`card_fedBy_le`, `outOn_le`, `bY_mul_card_clear_le`): an output a block feeds has a wire in the
    block, at most `O` such pairs in all, or lies in `E(block)`. The block's gates that another block reads (`leaving`)
    separate it from `E(block)` (`meets_exits`), so `b_y |E(block)| ≤ |leaving|`, and each leaving gate is an entry of
    the block reading it (`sum_card_leaving_le`): `b_y ∑ |E| ≤ m k`.
@@ -51,8 +51,8 @@ share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, 
 its own, and the entries of all the blocks together at most a total `T`. The split MACs and the leaving gates are
 entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block
 (`card_held_sq_le`), so they need the cap on `G` alone and count only the outputs with a wire in a block of `G`
-(`outOn`, at most `O`: `outOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates
-(`sum_card_inBlock_le`). `counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and
+(`outOn`: at most the output wires in the blocks of `G`, `wiresOn`, themselves at most `O`; `outOn_le_wiresOn`,
+`wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`). `counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and
 `HE`'s bound over `G` (`real_step_on`).
 -/
 
@@ -338,27 +338,41 @@ theorem card_fedBy_le {ι : Type} [Fintype ι] [DecidableEq ι] (P : Partition C
         · exact mem_union_left _ (mem_filter.2 ⟨mem_univ _, h⟩)
     _ ≤ _ := card_union_le _ _
 
-/-- Each output wire lies in at most one block: at most `O` pairs of a block and an output with a wire in it. -/
-theorem sum_card_hit_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) :
-    ∑ u, (hit P W u).card ≤ W.O := by
-  calc ∑ u, (univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card
-      = ∑ u, ∑ o : W.Out, if ¬ Disjoint (W.y o) (P.gates u) then 1 else 0 :=
-        sum_congr rfl fun u _ => card_filter _ _
-    _ ≤ ∑ u, ∑ o : W.Out, (W.y o ∩ P.gates u).card := by
-        refine sum_le_sum fun u _ => sum_le_sum fun o _ => ?_
+/-- A block has at most as many outputs with a wire in it as output wires in it. -/
+theorem card_hit_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) :
+    (hit P W u).card ≤ ∑ o : W.Out, (W.y o ∩ P.gates u).card := by
+  calc (univ.filter fun o : W.Out => ¬ Disjoint (W.y o) (P.gates u)).card
+      = ∑ o : W.Out, if ¬ Disjoint (W.y o) (P.gates u) then 1 else 0 := card_filter _ _
+    _ ≤ ∑ o : W.Out, (W.y o ∩ P.gates u).card := by
+        refine sum_le_sum fun o _ => ?_
         by_cases h : Disjoint (W.y o) (P.gates u)
         · rw [ite_eq_right (not_not.2 h)]
           exact Nat.zero_le _
         · rw [ite_eq_left h]
           exact card_pos.2 (not_disjoint_iff_nonempty_inter.1 h)
+
+/-- `O` over the blocks of `G`, in wires: the output wires in the blocks of `G`, as `O` counts all of them. -/
+def wiresOn {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) : ℕ :=
+  ∑ u ∈ G, ∑ o : W.Out, (W.y o ∩ P.gates u).card
+
+/-- The pairs of a block of `G` and an output with a wire in it are at most the output wires in the blocks of `G`. -/
+theorem outOn_le_wiresOn {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) :
+    outOn P W G ≤ wiresOn P W G :=
+  sum_le_sum fun u _ => card_hit_le P W u
+
+/-- Each output wire lies in at most one block: the blocks of `G` hold at most `O` output wires between them. -/
+theorem wiresOn_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) :
+    wiresOn P W G ≤ W.O := by
+  calc ∑ u ∈ G, ∑ o : W.Out, (W.y o ∩ P.gates u).card
+      ≤ ∑ u, ∑ o : W.Out, (W.y o ∩ P.gates u).card := sum_le_sum_of_subset (subset_univ G)
     _ = ∑ o : W.Out, ∑ u, (W.y o ∩ P.gates u).card := sum_comm
     _ ≤ ∑ o : W.Out, (W.y o).card := sum_le_sum fun o _ => sum_card_inter_gates_le P (W.y o)
     _ = W.O := rfl
 
-/-- The blocks of `G` have at most `O` such pairs between them. -/
+/-- The blocks of `G` have at most `O` pairs of a block and an output with a wire in it between them. -/
 theorem outOn_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) :
     outOn P W G ≤ W.O :=
-  (sum_le_sum_of_subset (subset_univ G)).trans (sum_card_hit_le P W)
+  (outOn_le_wiresOn P W G).trans (wiresOn_le P W G)
 
 /-- **Steps 2 and 3 at one block.** The MACs a block reading at most `k` gates outside `θ` holds, squared, are at most
 `Π(k)` times the outputs with a wire in the block and those in `E(block)`. -/
