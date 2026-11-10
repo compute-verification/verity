@@ -7,7 +7,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import catalog  # noqa: E402
-import slowdown as S  # noqa: E402
+import bracket as S  # noqa: E402
 
 BASE = {"kappa": 0.667, "b_w": 4.0, "b_a": 4.0, "d": 3072.0, "e": 7168.0, "c": 2.0, "n_updated": 1e11,
         "U_bits": 4e11, "U_token_bits": 4e11, "decode_flops": 0.0, "w_cut": 49152.0, "crossings": 2.0,
