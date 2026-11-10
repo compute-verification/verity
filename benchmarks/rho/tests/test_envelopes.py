@@ -10,6 +10,8 @@ from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
 
@@ -395,9 +397,11 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
-    assert d.coin == pytest.approx(2**-40 / remote.pouw.eps_agg, rel=1e-2)
-    assert d.crypto == pytest.approx(2 * d.coin, rel=1e-2)
-    assert d.coin + d.crypto == pytest.approx(3 * 2**-40 / 1e-4, rel=1e-2)
+    window = float(WINDOW_DELTA)
+    assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
+    assert d.crypto == pytest.approx(2 * d.coin)
+    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)

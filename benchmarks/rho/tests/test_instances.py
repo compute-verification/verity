@@ -1,7 +1,7 @@
 import math
 
 import pytest
-from rho import instances
+from rho import instances, params
 from rho.instances import RUN_KINDS, Run
 from rho.params import Registry
 
@@ -92,6 +92,15 @@ def test_a_run_of_an_unknown_kind_or_no_size_is_refused():
     with pytest.raises(ValueError, match="tokens or compute"):
         Run("x", "kimi-k2", "pretrain")
     assert Run("x", "kimi-k2", "pretrain", tokens=1e12).target(instances.model(REG, "kimi-k2")) == 6 * 3.2e10 * 1e12
+
+
+def test_the_reference_run_is_the_census_models_and_the_work_reference_is_that_run():
+    """`run.v4-pretrain`'s ruled size is `6 · n_active · tokens` at the census's active parameters, to the digits it
+    is stated at, and the work reference `work.v4-pretrain` is the same run."""
+    run = instances.run(REG, "v4-pretrain")
+    assert run.model == params.WORLD_MODEL
+    whole = 6 * REG[f"model.{params.WORLD_MODEL}.n_active"] * REG["run.v4-pretrain.tokens"]
+    assert math.isclose(run.compute, whole, rel_tol=1e-3) and run.compute == REG["work.v4-pretrain.flops"]
 
 
 def test_every_instance_number_says_where_it_comes_from_and_how_sure_it_is():

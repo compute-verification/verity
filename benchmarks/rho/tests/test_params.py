@@ -1,13 +1,22 @@
+import json
 import numbers
+import re
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 import pytest
 from rho import params
 from rho.params import Param, Registry
 
+from verity.core.protocols import profile, reporting
 from verity.ml.circuits import partition_v2
 
 REG = Registry.load()
+BENCHMARKS = Path(__file__).resolve().parents[2]
+
+
+def entries(path: str) -> dict[str, dict]:
+    return {e["id"]: e for e in json.loads((BENCHMARKS / path).read_text())}
 
 
 def test_every_number_says_where_it_comes_from():
@@ -36,6 +45,44 @@ def test_a_blocks_output_bits_are_veritys_and_no_file_restates_them(tmp_path):
         restated = tmp_path / f"{table}.toml"
         restated.write_text(f'[{table}]\n{leaf} = {{ value = {widest}, unit = "bit" }}\n')
         with pytest.raises(ValueError, match=f"{key} is set twice"):
+            Registry.load([restated])
+
+
+def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_path):
+    """Each parameter of `params.sourced` is the value its source states: core's monitoring periods, per-window δ (once
+    for a window's coins and for the sampled proofs' draw, twice for the window's cryptography) and reporting δs; the
+    census's reference datacenter's machines and the world's active parameters; the calibrations' `K`, `Γ`, and the
+    least and greatest `K` as the range. A file under `data/` that sets one of their keys is refused."""
+    window, deltas = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
+    dc = entries("census/deployments.json")["dc-12500-machines-600s"]
+    world = entries("census/adversary.json")["world-inference-2027"]
+    calibrations = entries("nci/calibrations.json")
+    raw, ks = calibrations["kimi-k2-1m-raw"], [c["K"] for c in calibrations.values()]
+    k = (raw["K"], min(ks), max(ks))
+    session = raw["K"] / raw["b_tok"] * world["flop_per_active_param_per_token"] * world["active_params"]
+    widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
+    want = {f"horizon.{name}.seconds": (seconds, None, None) for name, seconds in reporting.PERIODS}
+    want |= {key: (widest, smallest, widest) for key in params.BLOCK_OUTPUT_BITS}
+    want |= {f"fleet.{fleet}.count": (dc["machines"], None, None) for fleet in params.DATACENTER_FLEETS}
+    want |= {
+        "regime.remote.window_delta_coin": (window, None, None),
+        "regime.remote.window_delta_crypto": (2 * window, None, None),
+        "regime.remote-sampled.p_evade": (window, 1e-15, 2.0 ** -20),
+        "incorrect.delta": (min(deltas), min(deltas), max(deltas)),
+        "policy.kimi-k2-1m-raw.gamma": (raw["Gamma"], None, None),
+        "policy.kimi-k2-1m-raw.k": k,
+        "policy.v4-pro-session.gamma": (session, None, None),
+        "policy.v4-pro-session.k": k,
+        f"model.{world['model'].lower()}.n_active": (world["active_params"], None, None),
+    }
+    sourced = params.sourced()
+    assert {p.key: (p.value, p.low, p.high) for p in sourced} == want
+    for p in sourced:
+        assert REG.param(p.key) == p and p.source and p.status in params.STATUSES, p.key
+        table, _, leaf = p.key.rpartition(".")
+        restated = tmp_path / f"{table}.toml"
+        restated.write_text(f"[{table}]\n{leaf} = {{ value = {p.value!r} }}\n")
+        with pytest.raises(ValueError, match=f"{re.escape(p.key)} is set twice"):
             Registry.load([restated])
 
 
