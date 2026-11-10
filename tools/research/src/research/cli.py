@@ -1030,7 +1030,8 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
             pres = f"  local only ({out.get('preserve_skipped', 'no remote')}; `research data push {run_dir.name}` with credentials preserves it)"
         print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}{pres}", file=sys.stderr)
     else:
-        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
+        retry = f"research data custody {run_dir} --publish" if run_record else "research data attempt publish"
+        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `{retry}` retries)",
               file=sys.stderr)
 
 

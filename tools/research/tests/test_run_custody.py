@@ -130,6 +130,28 @@ def test_a_machine_runs_workload_writes_to_out_and_its_record_holds_all_of_it(tm
     assert "out/deep/kept.bin" in {f.path for f in m.payload.files} and not m.meta.get("trimmed")
 
 
+def test_a_run_whose_cwd_is_removed_while_it_runs_still_publishes_its_attempt_and_run_record(tmp_path, monkeypatch):
+    """A `--cwd source` run's shipped tree can be removed under it; the runner then has no working directory at its end, and every
+    step of custody must work without one."""
+    vault = tmp_path / "vault"
+    work = tmp_path / "root" / "src" / ("5" * 40)
+    work.mkdir(parents=True)
+    req, runs = _request(tmp_path, RID, ["sh", "-c", f"rm -rf {work}"], vault)
+    doc = json.loads(req.read_text())
+    doc["cwd"] = str(work)
+    req.write_text(json.dumps(doc))
+    monkeypatch.delenv("RESEARCH_REPO", raising=False)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert not work.exists() and not (d / "store_publish_error.json").exists(), (d / "store_publish_error.json").read_text()
+    assert marker["preserved"] is True, marker
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    att = st2.get_attempt(RID)
+    assert att["status"]["rc"] == 0 and att["outputs"]["run_record"]
+    assert "stdout.log" in {f.path for f in st2.get_manifest(att["outputs"]["run_record"]).payload.files}
+
+
 def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
     """A runner killed before it published leaves the run dir as the workload left it; `research data custody --publish` takes its
     record later."""
@@ -261,6 +283,35 @@ def test_an_attempt_published_without_a_run_record_is_not_run_custody(tmp_path, 
     assert pub["published"] and pub["preserved"] and "run_record" not in pub["outputs"], "the default publish is unchanged"
     rep = CU.verify(st, d)
     assert not rep["preserved"] and "names no run record" in rep["error"] and not (d / CU.MARKER).exists()
+
+
+@pytest.mark.parametrize("signal", ["marker", "launcher-record", "request"])
+def test_attempt_publish_refuses_a_custody_run_and_names_custody_publish_which_then_works(tmp_path, monkeypatch, capsys, signal):
+    """`attempt publish` on a run with run custody would publish its write-once attempt without the run record, after which `custody
+    --publish` refuses it for good; so it refuses, naming the command that publishes both."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    if signal == "marker":
+        (d / CU.MARKER).write_text(json.dumps({"schema": CU.SCHEMA, "preserved": False, "error": "FileNotFoundError"}))
+    elif signal == "launcher-record":
+        (d / CU.LAUNCHER_RECORD).write_text(json.dumps({"machine": "m", "phase": "running", "custody": {"schema": CU.SCHEMA}}))
+    else:
+        req = tmp_path / "root" / "requests" / FIXTURE_RID / "request.json"
+        req.parent.mkdir(parents=True)
+        req.write_text(json.dumps({"run_id": FIXTURE_RID, "custody": {"schema": CU.SCHEMA}}))
+        job = json.loads((d / "job.json").read_text())
+        job["run"]["remote"] = {"machine": "m", "request": str(req)}
+        (d / "job.json").write_text(json.dumps(job))
+    assert data_main(["attempt", "publish", FIXTURE_RID, "--runs-dir", str(runs)]) == 1
+    out = capsys.readouterr().out
+    assert "NOT published" in out and f"research data custody {d} --publish" in out
+    assert LocalStore().get_attempt(FIXTURE_RID) is None
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish", "--keep-local"]) == 0
+    assert LocalStore().get_attempt(FIXTURE_RID)["outputs"]["run_record"]
+    assert data_main(["attempt", "publish", "--all", "--runs-dir", str(runs / "none")]) == 0, "--all over no custody run is unchanged"
 
 
 def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_the_run_dir(tmp_path, monkeypatch):

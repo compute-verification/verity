@@ -412,8 +412,11 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   and writes the attempt manifest (write-once). One line reports it:
   `research: attempt published: N outputs drv=... reuse=...`. A publish failure
   never changes the run's exit status: it is written to
-  `store_publish_error.json` and `research data attempt publish RUN` retries
-  (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
+  `store_publish_error.json` and `research data attempt publish RUN` retries;
+  a run whose attempt names its run record (run custody, `--run-record`)
+  retries with `research data custody RUN --publish`, since an attempt is
+  write-once and `attempt publish` leaves the record out (it refuses a run with
+  run custody) (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
   root and prints `published / already present / refused (not terminal) /
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt

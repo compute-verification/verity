@@ -891,7 +891,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
         "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
-        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
+        "err = {'error': os.environ['FAKE_STORE_ERROR']} if os.environ.get('FAKE_STORE_ERROR') else {}\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src, **err}))\n"
         "sys.exit(1)\n")
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
     (bin_dir / "df").chmod(0o755)
@@ -916,6 +917,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_ERROR": "another pass holds /workspace/research/src/.evict.lock"},
                        capture_output=True, text=True)
     assert r.returncode == 0 and "nothing more deleted: another pass holds" in r.stdout, "an overlapping pass is not a fault"
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_STORE_ERROR": "store pass: OperationalError: readonly"},
+                       capture_output=True, text=True)
+    assert "src trees: deleted 2 (31.0 GB, 812345 inodes)" in r.stdout and "; FAILED store pass: OperationalError: readonly" in r.stdout
+    assert r.returncode == 1 and "the source-tree pass ran without it" in r.stderr, "a store it can't open fails the unit, after the trees"
     assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
     (tool / "research" / "store" / "cli.py").unlink()
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
