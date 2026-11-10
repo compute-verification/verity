@@ -4,12 +4,12 @@ request Build by `pipeline.memory_map`), and each request's pages from the slots
 engine's page layout (`page_of`).  A memory map lays its blocks out from them (PoUB's, opt-in, `commit --memory-map`).
 
 ~~~text
-row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
-          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read
-          as a Call; a row past INDEX_TOPK reads its `kv` through a concentrator, or under table reads through its reads of
-          the (request, layer) history table (`ROUTED`), whose history is the rows it reads.  A layer's rows are the rows its Calls share, in the order its Calls first read them (its positions), K and V
-          paired by position.  DSA's indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting
-          leaves them uncredited until the map packs them
+row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row of a
+          sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read as a
+          Call; a row past INDEX_TOPK reads its `kv` through a concentrator, or under table reads through its reads of the
+          (request, layer) history table (`ROUTED`), whose history is the rows it reads.  A layer's rows are the rows its Calls
+          share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's indexer keys are no
+          rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement
           (`requirement.from_census`) over the Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
