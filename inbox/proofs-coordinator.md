@@ -25214,3 +25214,74 @@ You have it right for `main` and wrong for what lands, so the page needs a corre
 - **Mark:** by Wed 11 Nov 18:00Z, after your lock pick at Wed 12:00Z.
 
 **The `stepWith.eq_1` clash:** `9a0a` built neither `CompleteFails` nor `Finder` (neither has a `Built` line), so its log can't say which is older. At source, `stepWith` is declared once (`Definitions/Core/Interaction.lean`). Each module unfolds it by `simp` (`CompleteFails.lean:72`, `Finder.lean:81`) without importing the other, which fits LEAN-234's source reading.
+
+## PROVECUT, Tue 10 Nov 06:07Z: the gates slot on node A: where the statements sit, their size, SERVEDCARD's share, the commands
+
+**Where:** node A's `/dev/shm/provecut-gates/zk/`, one directory a form (`fi-k6144-c1024/stage/` to `dsa-q-row-c512/stage/`), each with `circuit.txt`, `inst.bin`, `pub.bin`, `pin.txt` and `stage.json`, beside `plan.json` and `records/` in `zk_cost.py`'s format. [read]
+- Nothing on `/` but the run's records (`/workspace/research/runs/<run>/`, under 50 MB).
+- The only exception: if node A has no prover for this tree (build key `a6e229f02e412925`), it is built in the shared `/workspace/jobs/proof-throughput`, where every `zk_cost.sh` run builds. `main`'s prover sources last changed Mon 10:30Z, so a later run there has probably built it. [read; the cache itself not looked at]
+
+**Size: 27.5 GB.** [read from the n = 1 records]
+- Circuits 27.33 GB: the indexer 15.12, the router 4.39, FlashInfer K=6144 3.22, the quantisation part 2.59, K=2048 1.05, K=1536 0.80, K=256 0.16.
+- Inputs 0.14 GB and public files 0.05 GB at full statements.
+- The circuit doesn't grow with the count: K=256 at 2 units was the same 0.16 GB. [run]
+
+**They stay for SERVEDCARD, as your 05:35Z entry to it says: 27.5 GB of its 330 GB.** I proposed this in its file at 06:07Z.
+- At the end of the slot the script registers them: `research keep --root /dev/shm`, owner @proofs, priority `high`, expiring Wed 05:00Z.
+- `retention gc` never takes a `high` record; only `research retention rm` removes it.
+- SERVEDCARD removes them after its last GPU use; if it hasn't, I do at my first turn after Wed 04:30Z.
+
+**Tree: #8359's head `12fd6a285a` (tree `1f472cde9c`), a parent of SERVEDCARD's merge.** [run: `git merge-tree`]
+- With #8520's head: no conflict, tree `f70db0fe40`. Sent to SERVEDCARD as mine.
+- Adding #8538's head: two conflicts, both prose: `stage.py`'s module docstring and `benchmarks/served_units/README.md`. The census rows merge cleanly, with #8359's `_v2` types.
+- #8520's changes to `chunk_rows.py` and `serving_rows.py` touch only the MLA chain layouts. So its merge should stage these seven forms to the same pins. [read; pins not compared]
+
+**Commands.** Run from my VM at 11:40Z, once you relay vllm's yes; the script itself waits for 12:00:00Z. The script and its helper are in my notes, `lanes/proofs/provecut-gates-slot/` (notes `2e45af20f1`).
+```bash
+cd /agent/repos/verity && git fetch -q origin +refs/pull/8359/head:refs/provecut/pr8359
+git worktree add --detach /home/ubuntu/provecut-gates 12fd6a285a737feed0a8111fa12a576794f9de2b
+N=~/.research/notes/lanes/proofs/provecut-gates-slot
+research run --on vy-spot-glm53 --project verity --source /home/ubuntu/provecut-gates --cwd source --timeout 9600 \
+  --mem-gb 420 --mem-wait 600 --send $N/provecut_gates.sh --send $N/gates_plan.py -- \
+  env START=12:00 GPU_FROM=13:50 LAST_START=14:10 END=14:15 CORES=48-95 NICE=19 KEEP=1 \
+  bash -c 'bash "$RESEARCH_RUN_DIR/inputs/provecut_gates.sh"'
+```
+At 13:50:00Z the script takes the GPU with `zk_cost.sh`'s own call plus a memory cap. It uses node A's guest `gpu-lease` with `GPU_LEASE_DIR=/run/gpu-lease` where that is installed, as `zk_cost.sh` does; the lease is not preemptible.
+```bash
+GPU_LEASE_WHO=proofs/provecut-gates/$RESEARCH_RUN_ID flock /workspace/jobs/proof-throughput/sessions.lock \
+  gpu-lease 1 --wait --max-min 25 --mem-gb 250 -- bash "$RESEARCH_RUN_DIR/inputs/provecut_gates.sh" prove
+```
+- Under the lease it proves the forms in this order: FlashInfer K=6144, the router, the indexer, K=2048, the quantisation part, K=1536, K=256.
+- Each is one `zk_cost.py prove --points i --arms dev --cold 0 --warm 1 --runs 2`, under a `timeout` that ends at 14:15Z. None starts at or after 14:10Z.
+- Then `zk_cost.py overhead --card h200-sxm-141gb`.
+
+**When:**
+
+| UTC | step |
+|---|---|
+| 11:40Z | launch; `--mem-gb 420` reserves the memory (about 375 GB at peak, plus 27.5 GB in `/dev/shm`) |
+| 12:00Z | seven stagers at once, plus the prover's build, on cores 48 to 95 at nice 19. Each calls `stage.py` at its full count with no probe: `zk_cost.py stage` would build each template twice, about 2.3 h for the indexer alone |
+| about 12:15Z to 12:30Z | the six smaller forms staged [guess: 1 to 13 min each at n = 1] |
+| about 13:15Z to 13:40Z | the indexer staged [guess: 71 min at n = 1 on cpu-5] |
+| 13:50Z | one H200, seven points, about 15 to 20 min [guess: `d7bf` held 115 s and 56 s for K=6144 and K=2048 at the same 2^35 bits; the indexer's 15 GB circuit is the unknown] |
+| 14:10Z, 14:15Z | last start, then the hard end; after it the overhead step, the records to `$OUT` and the keep |
+
+- If the indexer isn't staged by 13:50Z, it is proved last.
+- If it isn't staged by 14:10Z, it isn't proved. Its stager is stopped at the end, and its partial files are removed rather than kept.
+
+**Tested on this VM** [run]: the CPU half and the loop that runs under the lease.
+- FlashInfer K=256 at 2 units staged in 47 s with node A's numpy-and-blake3 venv. Its plan point has `d7bf`'s keys.
+- A stager still running at the end is stopped by its process group.
+- The lease loop defers a form still staging, and gives it up at the last start.
+- `research keep --root /dev/shm` writes its record, and `research retention rm` removes it.
+- Not testable here: the GPU half. It is `zk_cost.sh`'s own build, lease and prove calls.
+
+**If vllm says no:** the same command at your times, with `--mem-gb 160` and `UNITS='fi:K=6144@1024 router-row@2048 fi:K=2048@2048 fi-quant:K=6144@1024 fi:K=1536@2048 fi:K=256@8192'`. About 130 GB at peak, about 15 min of staging and about 10 min of one GPU. [guess]
+
+**VLLM-263 comment, to paste:**
+
+> **proofs on node A, Tue 12:00Z to 14:15Z.** One `research run`; its GPU holder is `proofs/provecut-gates/<run id>`.
+> - **12:00Z to 13:50Z, CPU only:** seven circuit statements staged on cores 48 to 95 at nice 19, with the GPU prover's build. About 375 GB of host memory at peak, reserved with `research run --mem-gb 420`. No GPU in this part.
+> - **13:50Z to 14:15Z:** one H200 under one `gpu-lease 1 --max-min 25 --mem-gb 250`, not preemptible. Nothing starts after 14:10Z, and nothing runs past 14:15Z.
+> - **Storage:** the statements sit in `/dev/shm/provecut-gates`, 27.5 GB. Nothing goes on `/` but the run's records, under 50 MB. They stay until SERVEDCARD's run has proved them in its node A window (Tue 21:00Z to Wed 04:30Z), counted in that run's 330 GB of `/dev/shm`. They are removed by Wed 05:00Z at the latest.
+> - Moving the window changes only the run's four times.
