@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from circuit_check import cache as CC
 from circuit_check import checks as CK
 from circuit_check import shard as SH
 from conftest import git, toy_tree
@@ -190,6 +191,8 @@ def test_the_runners_say_what_circuit_check_and_check_say():
     assert 'READS = Path(__file__).resolve().parents[2] / "reads"' in cli and F.READS == f"{F.CHECKER}/reads"
     assert f'READS_SCHEMA = "{F.READS_SCHEMA}"' in cli
     assert f"for part in ({', '.join(json.dumps(p) for p in F.READS_PARTS)}):" in cli
+    assert set(CC.DECLARED) <= set(CB.PATHS) and 'out["untracked"] = ' in (ROOT / F.SOURCE / "cache.py").read_text()
+    assert 'u["loaded"] = beyond' in cli and 'u["registries"] = drift' in cli and 'u["unrecorded"] = missing[name]' in cli
     check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
     assert f'print(f"{CB.REFUSED}{{e}}", file=sys.stderr)' in (ROOT / F.SOURCE / "cli.py").read_text()
@@ -321,14 +324,17 @@ def _failure(name: str) -> dict:
     return found.failures[0]
 
 
-def _report(*targets: tuple[str, list[str]], hits: int = 0, others: tuple[dict, ...] = ()) -> dict:
+def _report(*targets: tuple[str, list[str]], hits: int = 0, others: tuple[dict, ...] = (),
+            undeclared: dict | None = None) -> dict:
     """The report `circuit-check --binding` writes of its Definition ``targets`` (each a name and its failures' names) and the
     records ``others``: unjoined, as a shard's (`shard.unjoined`, whose summary is `checks.summarize`'s), with the cache's
-    counts `cli.run` adds."""
+    counts and the read sets `cli.run` adds, and what each binding read beyond ``reads/`` (``undeclared``, by binding)."""
     records = [*({"kind": "definition", "target": t, "failures": [_failure(n) for n in fs], "warnings": []} for t, fs in targets),
                *others]
     return {**SH.unjoined(records, CK.Options()), "peaks": [],
-            "cache": {"hits": hits, "stored": 0, "untraced": [], "errors": [], "changed": []}}
+            "cache": {"hits": hits, "stored": 0, "untraced": [], "errors": [], "changed": []},
+            "reads": {"registries": {k: [] for k in CC.DECLARED}, "loaded": [], "bindings": {B_ROOTS: {}}},
+            "undeclared": undeclared or {}}
 
 
 @pytest.mark.parametrize(("rc", "report", "say", "status", "detail"), [
@@ -398,6 +404,58 @@ def test_a_binding_s_output_is_each_failure_of_its_definition_targets_by_check_c
         {"check": "partition", "code": "gate-recomputed", "definition": "B_v1{n=2}"},
         {"check": "partition", "code": "gate-recomputed", "definition": "B_v1{n=3}"}]}
     assert res["status"] == "fail" and res["outputs"] == {"failures": contract.file_digest(out)}
+
+
+#: what ``reads/`` declares of ``B_ROOTS`` in the cases below
+DECLARED = {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["tools/config/verity_vllm", "verity/ml/y.py"],
+            "registry": False}
+
+
+@pytest.mark.parametrize(("read", "beyond"), [
+    ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/y.py", "tools/config/verity_vllm"]}, []),
+    ({"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["verity/ml/x.py"]}, []),
+    ({"files": ["verity/ml/x.py"], "probes": ["tools/config/numpy"]}, ["tools/config/numpy"]),
+    ({"probes": ["queue.py", "verity/ml/y.py"]}, ["queue.py"]),
+    ({"files": ["verity/ml/x.py"], "listed": ["other", "verity/ml"]}, ["verity/ml"]),
+    ({"files": ["verity/ml/x.py", "verity/ml/z.py"]}, ["verity/ml/z.py"]),
+    ({"files": ["verity/ml/x.py"], "untracked": ["verity/ml/_built.so"]}, ["verity/ml/_built.so"])])
+def test_a_binding_s_run_that_looks_beyond_what_reads_declares_of_it_is_an_error_naming_each_path(tmp_path, monkeypatch, read,
+                                                                                                   beyond):
+    """A read beyond ``reads/`` as circuit-check finds it (`cache.undeclared`): a probe or listing the task's ``lookups`` doesn't
+    hold, so the task is an error and never a result; a run within ``reads/`` passes."""
+    _machine(tmp_path, monkeypatch)
+    u = CC.undeclared({**{k: [] for k in CC.DECLARED}, **read}, DECLARED)
+    res, _ = _binding_run(tmp_path, monkeypatch, 0, _report(("A", []), undeclared={B_ROOTS: u} if u else {}))
+    assert (res["status"], res["undeclared_reads"]) == ("error" if beyond else "pass", beyond), res
+    assert ("error" in res["detail"]) == bool(beyond)
+    if beyond:
+        assert f"beyond what reads/ declares of {B_ROOTS}" in res["detail"]["error"] and "--update-reads" in res["detail"]["error"]
+
+
+def test_the_registries_and_the_loaded_modules_reads_beyond_reads_count_another_binding_s_don_t(tmp_path, monkeypatch):
+    _machine(tmp_path, monkeypatch)
+    drift = CC.undeclared({"files": ["verity/ml/reg.py"], "listed": [], "probes": ["infra/ops/verity_vllm"]},
+                          {k: [] for k in CC.DECLARED})
+    mine = {"loaded": ["integrations/vllm/numpy.py"], "registries": drift, "unrecorded": ["A"]}
+    rep = _report(("A", []), undeclared={B_ROOTS: mine, GONE: {"probes": ["elsewhere"]}})
+    res, _ = _binding_run(tmp_path, monkeypatch, 0, rep)
+    assert res["status"] == "error" and res["detail"]["unrecorded"] == ["A"]
+    assert res["undeclared_reads"] == ["infra/ops/verity_vllm", "integrations/vllm/numpy.py", "verity/ml/reg.py"]
+    res, _ = _binding_run(tmp_path, monkeypatch, 0, _report(("A", []), undeclared={GONE: {"probes": ["elsewhere"]}}))
+    assert (res["status"], res["undeclared_reads"]) == ("pass", []), "another binding's reads are its own task's"
+
+
+def test_a_binding_s_report_with_no_read_set_is_an_error(tmp_path, monkeypatch):
+    _machine(tmp_path, monkeypatch)
+    rep = {k: v for k, v in _report(("A", [])).items() if k not in ("reads", "undeclared")}
+    res, _ = _binding_run(tmp_path, monkeypatch, 0, rep)
+    assert res["status"] == "error" and "no read set" in res["detail"]["error"] and res["outputs"] == {}
+
+
+def test_on_the_tree_every_binding_the_family_lists_has_a_read_set_in_reads():
+    names = {t["vars"]["binding"] for t in F.tasks(ROOT, graph.tracked(ROOT)) if "binding" in t.get("vars", {})}
+    have = json.loads((ROOT / F.READS / "bindings.json").read_text())["bindings"]
+    assert sorted(names - set(have)) == [], f"bindings with no read set in {F.READS}, whose tasks would fault: {CB.DECLARE}"
 
 
 #: what the stand-in's ``--slices`` writes: B_ROOTS' slice and the shared part, none of GONE's
