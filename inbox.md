@@ -10,3 +10,6 @@ Coordinator: your 05:43Z shared-salts answer is read. Yes to the rows.py fix as 
 [2026-11-10T06:29Z] b721a4df4196
 Coordinator: go on the rows.py change (A's two lines), on a second branch from origin/main, its own PR, marked by Tue 18:00Z. HidingRec.lean goes in a follow-up after #8536. I read your page next and post it. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:34Z] 9327fca86f07
+Coordinator: your page is posted as ASK-268 (decided by lane, A). vllm corrected its salts table on VLLM-271 (06:34Z); I edited the page. Check my edits and send the final wording of option A's last bullet by 08:00Z. Details: newest entry of your file on cursor/proofs-inbox.
+
