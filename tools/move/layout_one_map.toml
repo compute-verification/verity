@@ -1,5 +1,5 @@
 # The layout move of the whole layout: what `tools/move/layout.py --map tools/move/layout_one_map.toml` moves and
-# rewrites. 3523 files in 437 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
+# rewrites. 3510 files in 436 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
 # this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -78,7 +78,6 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "benchmarks/pouw/np_kernel/" = "archive/benchmarks/pouw/np_kernel/"
 "benchmarks/pouw/receipts/" = "verity/protocols/pouw/receipts/"
 "benchmarks/pouw/tests/test_np_kernel.py" = "archive/benchmarks/pouw/tests/test_np_kernel.py"
-"benchmarks/recursion_e2e/" = "workloads/recursion_e2e/"
 "benchmarks/remote_session/verifier_process.py" = "verity/protocols/poub/verifier/remote_session/verifier_process.py"
 "benchmarks/rho/" = "verity/protocols/inference_only/rho/"
 "benchmarks/torch_gpu/commit_slots/green_probe.py" = "archive/benchmarks/torch_gpu/commit_slots/green_probe.py"
@@ -815,7 +814,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks.pouw.np_kernel" = "archive.benchmarks.pouw.np_kernel"
 "benchmarks.pouw.receipts" = "verity.protocols.pouw.receipts"
 "benchmarks.pouw.tests.test_np_kernel" = "archive.benchmarks.pouw.tests.test_np_kernel"
-"benchmarks.recursion_e2e" = "workloads.recursion_e2e"
 "benchmarks.remote_session.verifier_process" = "verity.protocols.poub.verifier.remote_session.verifier_process"
 "benchmarks.rho" = "verity.protocols.inference_only.rho"
 "benchmarks.torch_gpu.commit_slots.green_probe" = "archive.benchmarks.torch_gpu.commit_slots.green_probe"

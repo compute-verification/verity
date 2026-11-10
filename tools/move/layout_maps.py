@@ -190,6 +190,8 @@ KEEP = {
                 "scripts would read `benchmarks/census` by path",
     "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
                 "and one of them loads `benchmarks/sampling_plan`",
+    "bench:30": "the recursion end-to-end run stays in `benchmarks/`: `verity bench NAME` runs `benchmarks/NAME`'s runner, "
+                "which its `run.py` is, and a directory under `workloads/` is a demo with a `demo.toml`, which it has not",
     "benchmarks/network_traces/":
         "its files find each other by bare name, with the directory on `sys.path`, and a move leaves a bare name as "
         "written: the directory stays whole, its archived files too, until its owner imports by package name and splits it",
@@ -270,7 +272,7 @@ MOVES = [
     ("difftest", "the difftest harness, to `verity/difftest`"),
     ("verity", "the claims' ids and the reporting grid, to `verity`"),
     ("vllm", "the commitment scheme named for vLLM and the window-advice compiler, to `integrations/vllm`"),
-    ("workloads", "the demos and the recursion end-to-end run, to `workloads`"),
+    ("workloads", "the demos, to `workloads`"),
     ("benchmarks", "the GPU probes that are Definitions today, to `benchmarks`"),
     ("archive", "what the layout archives, to `archive`"),
 ]
