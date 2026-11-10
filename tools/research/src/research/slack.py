@@ -668,8 +668,8 @@ def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) ->
         return json.load(r)
 
 
-# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py, sha256
-# 34ea37fb0126e20a22160649e502565d7b443d6bfd9feb438528bff3163a7886) reads it in `oidc_token()`.
+# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py) reads it
+# in `oidc_token()`.
 class _UnixHTTP(http.client.HTTPConnection):
     def __init__(self, path: str):
         super().__init__("cursor-agent", timeout=10)
