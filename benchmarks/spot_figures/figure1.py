@@ -4,10 +4,10 @@ detection with probability above δ, against proof overhead, at each share of co
 itself plots the same model against total cost (`total_cost.py`).
 
 Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
-census and rho's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
+census and the slowdown calculator's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
 the console reads.
 
-**Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
+**Workload.**  A scope's compute is its GPUs (the world: the slowdown calculator's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
@@ -56,7 +56,7 @@ sets' form, and request-level sampling (`MAIN`), and an appendix figure every de
 card's request.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  Each
-panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are rho's reference objects
+panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are the slowdown calculator's reference objects
 (`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the served model's parameters where its `workload`
 card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figure 1 and
 Figures 2 and 3.
@@ -127,9 +127,9 @@ TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resista
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
-#: rho's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
+#: the slowdown calculator's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
 REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
-#: the reference objects rho's reference rules, as cards: (table, key, field)
+#: the reference objects the slowdown calculator's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
 #: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
@@ -180,7 +180,7 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
 
 
 def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCard]:
-    """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
+    """Every input: the model's slot cards', those read from the census and the slowdown calculator's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
     the census's mean or, under `request="workload"`, the `workload` card's."""
     if request not in REQUESTS:
@@ -523,8 +523,8 @@ def overheads(c: dict[str, InputCard], points: int) -> list[float]:
 
 
 def references(c: dict[str, InputCard], model: str, refs: list[dict] = ()) -> dict[str, list[dict]]:
-    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): rho's reference objects, the
-    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  rho's
+    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): the slowdown calculator's reference objects, the
+    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  the slowdown calculator's
     references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
     model's where its `workload` card gives them."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
