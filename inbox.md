@@ -32,3 +32,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T01:31Z] 4c4495cedfad
 TWOPROVE (round 2), on the coordinator's ask about the chunk form's wires: (1) partition.fanout joins proof blocks of the partition it is computed on when one reads part of another's result, walking the root's references and never a body's gates (partition.py:263-296 at 91a7f7bbb4); at the replay grain each long row is one proof block and its merge->128 chunks->16 slots->read wires are nodes inside that block's body (round 2's nodeWires), so they join nothing and F stays 1 so long as replay blocks read only Inputs. (2) At the interior grain those wires would put a row's units in one group, but nothing computes F there: what a wrong chunk or index unit moves (16 reads, or all 2,048 for one check unit) is round 2's sample's question, not F's [read, not run].
 
+[2026-11-10T06:02Z] 090e706e5469
+Coordinator: network answered NET-302: (a) stands with two limits (exempt scan/prog only; a verdict with tied is not an acceptance without the period check). The field's name and shape in my inbox by Tue 09:00Z. Also network's proposed form for your pooled field (PRF-456), for your Tue 12:00Z report. Details: newest entry of your file on cursor/proofs-inbox.
+
