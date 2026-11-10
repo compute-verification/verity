@@ -10,12 +10,13 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
-| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`) |
+| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`) |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
-says which and how to label it. A steady-state run that is superseded, or that holds no `RATES`, is left out and listed
-under "Refused", as is a row that names no staged Definition (one that failed or was skipped). A row is a steady-state
+says which and how to label it. A steady-state run or art that is superseded, a run that holds no `RATES` and an art
+that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
+failed or was skipped). A row is a steady-state
 measurement when every session it ran was accepted and none refused, it isn't void, every process exited 0 and its
 statement cache's hit rate was flat (`row_why`); one that isn't, or that lacks a field, is named with its reason on its
 block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only.
@@ -44,6 +45,8 @@ CARD_SCHEMA = "spot-card/v1"
 PLAN_FILE = "mix.json"
 #: the proof server's rate in a run's files: `benchmarks/one_stage/server_rate.py`'s rows, one a staged type and prover count
 RATES = "out/rate/rate.json"
+#: the same rows in an art that holds them itself: its one run's, as completed or corrected after the run
+ART_RATES = "rate.json"
 #: what a row holds for the command to read it, by the script's names (`stage.definition` names its block type; `void`,
 #: the reasons a row has no rate, is there only when it has none, and `verify_s` only where the verifier was timed)
 ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "refused_n", "exits", "flat", "gpus",
@@ -194,10 +197,10 @@ def row_why(row: Mapping[str, Any]) -> str | None:
     return None
 
 
-def steady_row(row: Mapping[str, Any], run: str) -> P.Steady | str:
+def steady_row(row: Mapping[str, Any], run: str, art: str | None = None) -> P.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count: a statement's GPU-seconds are the GPUs its
     provers held over its statements a second. A row that names no staged Definition can't be put on a block type's
-    row, and is its reason instead."""
+    row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files don't."""
 
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
@@ -209,10 +212,12 @@ def steady_row(row: Mapping[str, Any], run: str) -> P.Steady | str:
     stage = row["stage"]
     blocks, full, provers = (x if _count(x) else 0 for x in (stage.get("blocks"), stage.get("full"), row.get("provers")))
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
+    held = RATES if art is None else ART_RATES
     if why:
-        return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, RATES, refused=why, provers=provers)
-    return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, RATES, row["gpus"] / row["statements_per_s"],
-                    row.get("verify_s"), provers=provers)
+        return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
+                        art=art)
+    return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
+                    row.get("verify_s"), provers=provers, art=art)
 
 
 def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
@@ -227,32 +232,59 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
         return [], ["kept no run files"]
     if not store.listing(files, [RATES]):
         return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes)"]
-    doc = json.loads((Path(store.fetch(files, paths=[RATES])) / RATES).read_text())
+    return _rows(json.loads((Path(store.fetch(files, paths=[RATES])) / RATES).read_text()), run)
+
+
+def _rows(doc: Any, run: str, art: str | None = None) -> tuple[list[P.Steady], list[str]]:
+    """A rate file's rows as `run`'s: those that name a staged Definition, and why the rest (or the file) can't be read."""
+
     if not isinstance(doc, list) or not all(isinstance(row, Mapping) for row in doc):
-        return [], [f"its `{RATES}` isn't a list of rows"]
-    read = [steady_row(row, run) for row in doc]
+        return [], [f"its `{RATES if art is None else ART_RATES}` isn't a list of rows"]
+    read = [steady_row(row, run, art) for row in doc]
     return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
 
 
+def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list[str]]]:
+    """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
+    and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
+    those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
+    one run in `runs`, which the rows are ordered by and which isn't read. Any other art stands for the runs its meta
+    names. A superseded target gives nothing."""
+
+    if superseded := _superseded(store, target):
+        return {target: ([], [f"superseded by {', '.join(superseded)}"])}
+    if not target.startswith("art:"):
+        return {target: rates(store, target)}
+    manifest = store.get_manifest(target)
+    if not manifest.meta.get("runs"):
+        return {target: ([], [f"its meta names no `runs`: the run its `{ART_RATES}` is of, or the runs it stands for"])}
+    runs = [run for run, _ in record_runs(store, [target])]
+    if manifest.payload is None or not store.listing(target, [ART_RATES]):
+        return {run: found for named in runs for run, found in steady_rows(store, named).items()}
+    if len(runs) != 1:
+        return {target: ([], [f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
+                              "one run's, so each run's go in an art of their own"])}
+    return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
+
+
 def flock(store: Any, workload: Workload, provers: int = 1) -> tuple[P.Flock, list[dict], list[dict]]:
-    """Flock's prover at `provers` provers from the workload's records: the steady-state runs' rows, the single-session
-    card's; the inputs, and the steady-state runs and rows left out with why."""
+    """Flock's prover at `provers` provers from the workload's records: the steady-state runs' and arts' rows
+    (`steady_rows`), the single-session card's; the inputs, and the steady-state runs, arts and rows left out with why."""
 
     art = of_record(store, workload.record(SINGLE), "single-session card")
     value = card(store, art, "proof_overhead", workload)
     sessions = tuple(P.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
                      for b in value["blocks"])
     steady, runs, refused = [], [], []
-    labelled = record_runs(store, records(store).get(workload.record(STEADY), []))
-    for run in sorted({run for run, _ in labelled}, reverse=True):
-        if superseded := _superseded(store, run):
-            found, whys = [], [f"superseded by {', '.join(superseded)}"]
-        else:
-            found, whys = rates(store, run)
-        refused += [{"target": run, "record": workload.record(STEADY), "why": why} for why in whys]
+    read: dict[str, tuple[list[P.Steady], list[str]]] = {}
+    for target in records(store).get(workload.record(STEADY), []):
+        read |= steady_rows(store, target)
+    for target in sorted(read, reverse=True):
+        found, whys = read[target]
+        refused += [{"target": target, "record": workload.record(STEADY), "why": why} for why in whys]
         if found:
             steady += found
-            runs.append(run)
+            runs.append(target)
     measured = len({s.definition for s in steady if s.measured and s.provers == provers})
     count = f"{provers} prover{'' if provers == 1 else 's'}"
     return P.Flock(tuple(steady), sessions, art, provers=provers), [

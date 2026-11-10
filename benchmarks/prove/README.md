@@ -55,7 +55,7 @@ Every input is a record of the store, named there by a label and never in code: 
 | --- | --- |
 | `census` | the workload's block census (`benchmarks/one_stage/block_census.py`'s art) |
 | `cut` | the `partition` card that recuts it |
-| `flock-steady` | each run of `benchmarks/one_stage/server_rate.py`, or an art naming them in its `runs` |
+| `flock-steady` | each run of `benchmarks/one_stage/server_rate.py`, an art naming them in its `runs`, or an art holding one run's rows as its `rate.json` |
 | `flock-single` | the `proof_overhead` card |
 | `spot-sampling` | the sampling plan's art, for `--system spot` |
 
@@ -65,8 +65,9 @@ research data label OLD superseded_by NEW --by LANE                       retire
 ```
 
 An input that isn't labelled or is superseded is refused, by name and with the label that would fix it; so is a slot
-two unsuperseded targets claim, and a sampling plan and a census that don't cover each other. A steady-state run that is
-superseded or holds no `out/rate/rate.json` is left out and listed under "Refused".
+two unsuperseded targets claim, and a sampling plan and a census that don't cover each other. A steady-state run or
+art that is superseded, a run that holds no `out/rate/rate.json` and an art that names no run are left out and listed
+under "Refused".
 
 ## A steady-state row
 
@@ -89,6 +90,12 @@ row is a steady-state measurement when every session it ran was accepted (`accep
 `sessions`), none was refused, it isn't void, every exit is 0 and `flat` is true. One that isn't, or that lacks a
 field, prices nothing and is named with its reason (the field, by name) on its block type's row. A row with no
 `stage.definition`, one that failed or was skipped, is listed under "Refused".
+
+A run's rows completed or corrected after the run go in an art that holds them as `rate.json`, the same list of rows,
+with the run in its meta's `runs`. Labelled, the art gives those rows in place of the run's own: they are ordered as
+that run's, each type's row names the art as its record and the run that measured it, and the run's files aren't
+read. Such an art holds one run's rows: one that names several runs is listed under "Refused". An art that holds no
+`rate.json` stands for the runs it names, each read from its own files.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
 serving MFU (`benchmarks/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).

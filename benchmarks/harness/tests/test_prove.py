@@ -56,8 +56,9 @@ SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}",
 
 
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
-           verify: float | None = None, refused: str | None = None, provers: int = 1) -> P.Steady:
-    return P.Steady(type_, definition, k_log, blocks, full, run, R.RATES, gpu, verify, refused, provers)
+           verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None) -> P.Steady:
+    return P.Steady(type_, definition, k_log, blocks, full, run, R.ART_RATES if art else R.RATES, gpu, verify, refused,
+                    provers, art)
 
 
 def test_a_census_counts_a_request_over_its_tokens_and_a_cut_replaces_its_kinds():
@@ -161,6 +162,29 @@ def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_onl
                                  "type at 4")
     assert "at 2 provers priced at" in P.Flock(rows, SESSIONS, "art:card", provers=2).table(census).range_basis
     assert [r["provers"] for r in P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)["rows"]] == [1, None, None]
+
+
+def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
+    """A row an art holds in place of its run's own is ordered as that run's, and the type's row names the art as its
+    record and the run that measured it."""
+
+    census = P.Census.of(CENSUS)
+    gemm, norm = P.definition_id(GEMM64), P.definition_id(NORM)
+    art = "art:" + "ab" * 32
+    rows = (
+        steady("gemm64", gemm, "r20260101-000000-0001", 8, 16.0),
+        steady("gemm64", gemm, "r20260102-000000-0002", 8, 8.0, art=art),                      # the newer run's, in an art
+        steady("norm", norm, "r20260101-000000-0001", 8, 24.0, k_log=22),
+        steady("norm", norm, "r20260102-000000-0002", 8, None, k_log=22, art=art, refused="its row lacks `flat`"),
+    )
+    cost = {r.block: r.cost for r in P.Flock(rows, SESSIONS, "art:card").table(census).rows}
+    assert (cost[GEMM64].source, cost[GEMM64].seconds, cost[GEMM64].record) == (P.STEADY, 1.0, art)
+    assert cost[GEMM64].note == "`gemm64`, 1 prover, full statements (rate.json of art:abababababab, measured in r20260102-000000-0002)"
+    # the art's row of the norm isn't a steady-state measurement, so the older run's own prices it
+    assert (cost[NORM].source, cost[NORM].seconds, cost[NORM].record) == (P.STEADY, 3.0, "r20260101-000000-0001")
+    tried = {r.block: r.cost for r in P.Flock(rows[3:], SESSIONS, "art:card").table(census).rows}[NORM]
+    assert tried.source == P.MODELED and tried.note == (
+        "steady state tried as `norm` at 1 prover in r20260102-000000-0002 (rate.json of art:abababababab): its row lacks `flat`")
 
 
 def test_a_single_session_prices_its_definition_and_k_at_another_size():
@@ -740,6 +764,66 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [newest]}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
     assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926)
+
+
+def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path):
+    """A run's rows completed after the run are an art's `rate.json`, with the run in its `runs`: labelled, the art
+    prices the types the run's own rows can't, each row naming the art. An art that names no run or several, one whose
+    file isn't rows and a superseded one are left out and listed."""
+
+    newest, older = RUNS[-1], RUNS[1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    s = Store(tmp_path)
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s.record(s.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s.record(census_art(s), R.CENSUS)
+    # the run's own rows lack `flat`, as the script's did before it wrote the field
+    bare = tmp_path / "bare-run"
+    (bare / "out" / "rate").mkdir(parents=True)
+    (bare / "out" / "rate" / "rate.json").write_text(json.dumps([{k: v for k, v in row.items() if k != "flat"} for row in whole]))
+    s.ran(newest, bare)
+    s.record(newest, R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
+    assert sum("its row lacks `flat`" in r["note"] for r in doc["rows"]) == 8
+
+    art = s.record(s.tree("evidence/v1", R.ART_RATES, whole, {"runs": [newest]}), R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh("second"), root=REPO)
+    assert doc["inputs"][2]["targets"] == [newest, art] and doc["refused"] == []
+    assert doc["inputs"][2]["what"] == "8 staged types measured at steady state at 1 prover"
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-12)
+    steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
+    assert len(steady_rows) == 8 and {r["record"] for r in steady_rows} == {art}
+    assert all(r["note"].endswith(f"(rate.json of {art[:16]}, measured in {newest})") for r in steady_rows)
+    assert f"| {art[:16]} |" in R.render(doc, rows=150)
+
+    # the art alone, its run in no store: the rows are the art's, and the run isn't read. A file art holds them as well
+    s2 = Store(tmp_path / "second-store")
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s2.record(s2.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s2.record(census_art(s2), R.CENSUS)
+    alone = s2.record(s2.doc("evidence/v1", R.ART_RATES, whole, {"runs": {"only": newest}}), R.STEADY)
+    doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
+    assert doc["inputs"][2]["targets"] == [alone] and doc["refused"] == []
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-12)
+
+    # what can't be read is listed: no run named, two named, a file that isn't rows; a superseded art gives nothing,
+    # whether it holds rows or names runs
+    unnamed = s2.record(s2.tree("evidence/v1", R.ART_RATES, whole), R.STEADY)
+    two = s2.record(s2.tree("evidence/v1", R.ART_RATES, whole, {"runs": [older, newest]}), R.STEADY)
+    notlist = s2.record(s2.tree("evidence/v1", R.ART_RATES, {"rows": whole}, {"runs": [newest]}), R.STEADY)
+    s2.ran(older, run_files(tmp_path, older))
+    stands = s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [older]}), R.STEADY)
+    for old in (alone, stands):
+        s2.label(old, R.SUPERSEDED_BY, notlist)
+    doc = R.build("flock", "glm53", store=s2.fresh("second"), root=REPO)
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {
+        unnamed: "its meta names no `runs`: the run its `rate.json` is of, or the runs it stands for",
+        two: f"holds `rate.json` and names 2 runs ({older}, {newest}): an art's rows are one run's, so each run's go in "
+             "an art of their own",
+        notlist: "its `rate.json` isn't a list of rows",
+        alone: f"superseded by {notlist}", stands: f"superseded by {notlist}"}
+    assert doc["inputs"][2]["targets"] == [] and {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
 
 # ---- the command ---------------------------------------------------------------------------------------------------------------

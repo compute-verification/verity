@@ -210,7 +210,9 @@ class Session:
 class Steady:
     """One row of a proof server's rate, a staged type at a prover count: the Definition it staged (by its id), its
     statements of `blocks` blocks where a full one holds `full`, the GPU-seconds and the verifier's seconds a statement,
-    the provers that proved them, and why the row isn't a steady-state measurement (`refused`, None when it is one)."""
+    the provers that proved them, and why the row isn't a steady-state measurement (`refused`, None when it is one).
+    `run` is the run that measured it and `report` the file that holds it: in the run's own files, or in `art` where
+    an art holds the run's rows in their place."""
 
     type: str
     definition: str
@@ -223,10 +225,23 @@ class Steady:
     verifier_seconds: float | None = None
     refused: str | None = None
     provers: int = 1
+    art: str | None = None
 
     @property
     def measured(self) -> bool:
         return self.refused is None and self.gpu_seconds is not None
+
+    @property
+    def record(self) -> str:
+        """What holds the row: its art, else its run."""
+
+        return self.art or self.run
+
+    @property
+    def held(self) -> str:
+        """The file that holds the row, with the art it is in where the run's own files don't hold it."""
+
+        return self.report if self.art is None else f"{self.report} of {self.art[:16]}"
 
     @property
     def fill(self) -> str:
@@ -270,7 +285,7 @@ def _family(block: str) -> tuple[str, int | None]:
 class Flock:
     """Flock's prover with every block proved, each type priced at `provers` provers. A type takes its steady-state
     measurement from the rows at that prover count alone: the fullest statement any of them measured, the newest such
-    run's; else `card`'s single-session one: its own block's, or its Definition and K's at 2^Δk the seconds and 2^-Δk
+    run's (a row an art holds is its run's); else `card`'s single-session one: its own block's, or its Definition and K's at 2^Δk the seconds and 2^-Δk
     the statement, Δk between the two k_logs as the census holds them; else the k_log model fitted on the card's types.
     A type no row at that count measured names its newest attempt at it, and the other counts that measured it."""
 
@@ -299,14 +314,15 @@ class Flock:
         for b in census.blocks:
             spelled = definition_id(b.name)
             if s := measured.get(spelled):
-                cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.run, f"`{s.type}`, {s.at}, {s.fill} ({s.report})", s.type,
+                where = s.held if s.art is None else f"{s.held}, measured in {s.run}"
+                cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record, f"`{s.type}`, {s.at}, {s.fill} ({where})", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
                             provers=s.provers)
             else:
                 cost = single(b)
                 why = []
                 if s := tried.get(spelled):
-                    why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.report}): {s.refused}")
+                    why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.held}): {s.refused}")
                     cost = replace(cost, staged=s.type)
                 if others := elsewhere.get(spelled):
                     why.append(f"measured at steady state at {', '.join(map(str, sorted(others)))} provers, which "
