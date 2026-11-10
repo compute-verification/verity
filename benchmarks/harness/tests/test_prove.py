@@ -21,6 +21,7 @@ import json
 import runpy
 import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -424,6 +425,82 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
         plan([*cells[:2], bare[2]])
     # a priced cell that takes no block has no seconds a block, and doesn't void the others'
     assert plan([*cells, {"block": "Idle_v1{N=1}", "type": "", "taken": 0.0, "prove_s": 0.0}]).priced["Idle_v1{N=1}"] == 0.0
+
+
+def test_a_priced_plans_totals_where_the_table_has_no_price_a_higher_one_or_the_same():
+    """The edges of a plan's own prices beside the table's. A block type the table has no figure for is in the plan's
+    total and in neither side of the comparison. The block type that holds most of the difference is the largest in
+    size, whichever price is the higher. Where the two prices agree, or the table prices nothing, no block type is
+    named; and a source the plan prices at 0 has no ratio."""
+
+    census = P.Census.of(CENSUS).recut(CUT)
+    half, bare = "Half_v1{N=4}", "Bare_v1{N=4}"
+    flock = P.Flock((steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),), SESSIONS, "art:card")
+    serving = P.Serving(0.5, 4000.0, "stated")                    # 800 tokens in the plan's period
+    cells = [{"block": GEMM64, "type": "gemm64", "taken": 4.0, "prove_s": 2.0}, {"block": GEMM32, "type": "", "taken": 2.0, "prove_s": 0.25},
+             {"block": half, "type": "", "taken": 1.0, "prove_s": 0.5}, {"block": bare, "type": "", "taken": 0.8, "prove_s": 0.2}]
+    got = plan(cells)
+    assert got.priced == pytest.approx({GEMM64: 0.5, GEMM32: 0.125, half: 0.5, bare: 0.25})
+    own = {r.block: r.cost.seconds for r in flock.table(census).rows}
+    assert own[GEMM64] == 1.0 and own[bare] is None and 0.25 < own[GEMM32] < 0.2501 and 1.0 < own[half] < 1.001
+
+    def page(out: dict) -> str:
+        return R.render({"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9,
+                         **out, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+                         "periods": {"gates_basis": "stated", "only": None, "rows": []}})
+
+    def priced(at: dict[str, float]) -> dict:
+        return P.report(P.Spot(flock, replace(got, priced=at), serving).table(census), 1.0)
+
+    # a block type with no figure: the plan's total holds it, the table's leaves it out, and the comparison is over
+    # the three the table prices
+    out = P.report(P.Spot(flock, got, serving).table(census), 1.0)
+    t, its = out["totals"], out["totals"]["planned"]
+    assert t["status"] == "partial" and [m["block"] for m in t["missing"]] == [bare]
+    assert t["gpus_per_serving_gpu"] == pytest.approx((40 + 20 * own[GEMM32] + 10 * own[half]) / 800)
+    assert its["gpus_per_serving_gpu"] == pytest.approx((20 + 2.5 + 5 + 2) / 800)
+    assert [(x["source"], x["block_types"]) for x in its["sources"]] == [(P.STEADY, 1), (P.MODELED, 2)]
+    assert sum(x["planned_gpu_seconds_per_token"] for x in its["sources"]) == pytest.approx((20 + 2.5 + 5) / 800)
+    gaps = {GEMM64: 40 * 0.5, GEMM32: 20 * (own[GEMM32] - 0.125), half: 10 * (own[half] - 0.5)}
+    assert its["largest"] == {"block": GEMM64, "seconds": 1.0, "planned_seconds": 0.5,
+                              "difference_share": pytest.approx(20 / sum(gaps.values()))}
+    text = page(out)
+    assert "| `Bare_v1{N=4}` | — | 0.01 | — | 250 | missing |" in text          # no ms per block here, the plan's beside it
+    assert "- the same blocks at the sampling plan's own prices: 0.0369 prover GPUs per serving GPU." in text
+
+    # the plan prices the K=64 GEMM higher than the table and the rest lower: it is still the block type named, by
+    # the size of its difference, and its share is of the net difference, which the others offset
+    its = (higher := priced(got.priced | {GEMM64: 3.0}))["totals"]["planned"]
+    net = 40 * (1.0 - 3.0) + gaps[GEMM32] + gaps[half]
+    assert its["gpus_per_serving_gpu"] > higher["totals"]["gpus_per_serving_gpu"]
+    assert its["largest"] == {"block": GEMM64, "seconds": 1.0, "planned_seconds": 3.0,
+                              "difference_share": pytest.approx(-80 / net)}
+    assert its["largest"]["difference_share"] > 1
+    text = page(higher)
+    assert "measured at steady state 0.333x (1 block types), modeled from k_log" in text
+    assert f"alone is {-80 / net:.1%} of the difference, 1,000 ms per block here and 3,000 ms in the plan" in text
+
+    # the plan's prices are the table's: both totals, and no block type holds a difference
+    same = priced({block: 0.25 if seconds is None else seconds for block, seconds in own.items()})
+    its = same["totals"]["planned"]
+    assert its["largest"] is None
+    assert [x["gpu_seconds_per_token"] for x in its["sources"]] == [x["planned_gpu_seconds_per_token"] for x in its["sources"]]
+    assert its["gpus_per_serving_gpu"] == pytest.approx(same["totals"]["gpus_per_serving_gpu"] + 8 * 0.25 / 800)
+    assert "sampling plan's own prices" in (text := page(same)) and "where the two differ" not in text
+
+    # a table that prices no block type has the plan's total alone
+    its = P.report(P.Spot(P.Flock(), got, serving).table(census), 1.0)["totals"]["planned"]
+    assert its == {"gpu_seconds_per_token": pytest.approx(29.5 / 800), "gpus_per_serving_gpu": pytest.approx(29.5 / 800),
+                   "sources": [], "largest": None}
+
+    # a source whose block types the plan prices at 0 has no ratio; the others keep theirs
+    free = P.report(P.Spot(flock, plan([c | {"prove_s": 0.0} if c["block"] in (GEMM32, half) else c for c in cells]),
+                           serving).table(census), 1.0)
+    its = free["totals"]["planned"]
+    assert [(x["source"], x["planned_gpu_seconds_per_token"]) for x in its["sources"]] == [(P.STEADY, 20 / 800), (P.MODELED, 0.0)]
+    text = page(free)
+    assert "by this table's source: measured at steady state 2x (1 block types); `" in text
+    assert "modeled from k_log" not in text[text.index("- where the two differ"):].split("\n")[0]
 
 
 REFUSALS = json.loads((FIXTURES / "refusals" / "rate" / "rate.json").read_text())
