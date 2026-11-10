@@ -11,7 +11,7 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
 gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. What it publishes holds a
@@ -527,7 +527,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    """The network certifier's answer as its piece writes it when the network certifier ran on the gate's host and its checks, draws
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
     accept isn't read as the auditor's devices having placed it."""
     premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "

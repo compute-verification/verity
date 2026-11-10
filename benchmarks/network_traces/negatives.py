@@ -36,9 +36,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
-  row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
+  row of the network certifier's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
   carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
-  from the advice's prompt lengths and the warden's release; its verdict on every window, under the advice's digest
+  from the advice's prompt lengths and the network certifier's release; its verdict on every window, under the advice's digest
   and with the release giving `received`, is the tie, `tie_service.IoTieVerdict`),
   ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress link-window,
   `io_tie.reference_parts`: the network certifier's cells open under their root, the Commit's port rows of sampled ids
@@ -68,11 +68,11 @@ negative the tie reads refused by its part, `TIE_PARTS` or, for a shim tamper on
 `stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
 verdict and none is `ok` false, else 1.
 
-**The ingress tie on a fake upstream** (`advice_suite`): the warden's own ingress of the advice's requests, id
+**The ingress tie on a fake upstream** (`advice_suite`): the network certifier's own ingress of the advice's requests, id
 requests at the link's cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and what it
 brought), each window's arriving whole so their request cells are the honest `received`'s (`certified_ingress`), under
-the warden's framing (`link_framing`). Each advice negative is IoTieRequest's reference on every bucket row on the
-verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict the verifier of record takes
+the network certifier's framing (`link_framing`). Each advice negative is IoTieRequest's reference on every bucket row on the
+verifier's lanes from its advice and the network certifier's release (`request_tie`), whose verdict the verifier of record takes
 from its own tie source (`tie_service.Ties`).
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs. `table` renders the registry.
@@ -736,7 +736,7 @@ def io_request_module():
 
 def link_framing(frame_bytes: int, longest: int) -> tuple[int, ...]:
     """The link's public framing at `frame_bytes`-byte cells (`tie_service.AdvisedProfile.request_frames`): entry
-    n − 1 the request cells the warden cuts an id request of an n-token prompt into (`tie_service.framing`, the framing
+    n − 1 the request cells the network certifier cuts an id request of an n-token prompt into (`tie_service.framing`, the framing
     the ingress tie holds the profile to), for prompts of 1 to `longest` tokens."""
     return TS.framing(frame_bytes, max(1, longest))
 
@@ -834,7 +834,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
                  records: dict[str, dict] | None = None, model: str = "") -> dict[str, dict]:
     """Every advice negative made from a run's `advice` (I1's): whether it applies to it, whether it's valid advice that
     round-trips through I1's codec, its bits, and the ingress tie's verdict on it by window (``request_tie``):
-    IoTieRequest's reference (`request_tie`) on the warden's ingress at `frame_bytes`-byte cells, whose framing
+    IoTieRequest's reference (`request_tie`) on the network certifier's ingress at `frame_bytes`-byte cells, whose framing
     `request_frames` must be (`link_framing`), of the honest advice's id requests (`id_requests`, from `records` and
     `model`), each window's the honest `received`'s (`certified_ingress`), since a tampering of the advice leaves the
     certified ingress; ``IoTieRequest`` is among its codes when a window is refused. `ok`: the codes are exactly those

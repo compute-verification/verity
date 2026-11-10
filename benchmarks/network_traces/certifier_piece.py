@@ -21,7 +21,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   the scan at the tick MS instead (the gate's `auditor.SCAN_BUCKET_MS`, 100 to 4000: D·τ = 108 s at 4000), each
   sampling block T·τ long, and the minutes are counted there. ``--warmup N`` (none by default: an endpoint that
   readies its first window before it listens needs none) first sends N plain completions straight to PORT (`warmup`:
-  no warden, no release header), one at a time, each of the group's shape and awaited, so the endpoint's first window
+  no network certifier, no release header), one at a time, each of the group's shape and awaited, so the endpoint's first window
   (H1's first reservation, the kernels' first compile) is behind it; it then waits until serve-openai records each in
   `served_session.USERS`, which it does only once the request's window has closed. So each warm-up is a window of one
   request, closed before the gate is asked, which the pick passes over for the group's whenever the group's window
@@ -30,7 +30,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
-  tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
+  tree's gate in this process, a `relay` to PORT its tunnel): a network certifier on the prover's node is no auditor's device,
   so it never stands for the gate.
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
@@ -49,7 +49,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
-  5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
+  5. The period check: `scan_period.rows_case` of the network certifier run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
@@ -57,7 +57,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
   endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
   DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
-  DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
+  DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the network certifier run's
   witness, DIR declared to hold those files and the piece's log alone (`PIECE_FILES`), moves what holds a piece of it
   or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files
   it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment",
@@ -119,7 +119,7 @@ SESSION = "session.json"
 #: endpoint's report (each Commit window's request, carried, step and output counts, its opening time and its advice's
 #: bits), of which only a padded count may be public, report.md and the report's other keys (the certified I/O's
 #: counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions and response lengths, the
-#: tie's prompt lengths and releases, the warden's check of its witness).
+#: tie's prompt lengths and releases, the network certifier's check of its witness).
 PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear"),
           "scan/answers.json": ("format", "delta", "registration", "windows")}
@@ -552,7 +552,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
 
 
 def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
-    """The record's leak guard on DIR and the hold against the warden run's witness, DIR declared to hold only
+    """The record's leak guard on DIR and the hold against the network certifier run's witness, DIR declared to hold only
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)

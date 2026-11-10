@@ -1,7 +1,7 @@
 """scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
-(`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
+(`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the network certifier's ingress row
 t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
-(`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
+(`egress.EgressBucket`) reads that view and computes the network certifier's egress row t. A group of link-windows is one
 registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
@@ -14,16 +14,16 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
   network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
-  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
+  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network certifier at `PARAMS`, 32-bucket
   link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
   4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); and ``test``
   (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
   link-windows, whose units a CPU proves in minutes.
-* **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
+* **The run** (`scan_traffic.serve`: the network certifier's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
   in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
   (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
-  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
+  three (the third in the first's slot past its egress). Each link-window of each link is committed by the network certifier and
   its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
 * **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory
@@ -62,20 +62,20 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
   unit, whose o1 has no leaf to open), every unit drawn by the verifier's Lean. `program` refuses a Program whose
-  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
+  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the network certifier's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
   `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
   committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and
-  ``o1``, the row it computes, committed as the warden's egress row t. Each output row but o0 is a registered read of
+  ``o1``, the row it computes, committed as the network certifier's egress row t. Each output row but o0 is a registered read of
   the row it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's
   PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t
-  computes and egress t reads, and the egress row the one the warden signed: the chains are wires through the
+  computes and egress t reads, and the egress row the one the network certifier signed: the chains are wires through the
   registered roots, not the prover's word. `Registered.checkPort` holds every instance of a registered port, so the
   last unit's o1, S_{G·T−1}, is a member's own unregistered output, committed and never opened. Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
   which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
+  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each network certifier row registration a member's network certifier port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
@@ -84,17 +84,17 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o0 is the
   scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
   slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
-* **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
-  reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
-  alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
+* **A void run** (a network certifier run whose network certifier failed a connection closed, its `FAIL` in the egress row it signed, its
+  reason in the ``fails`` record): the scan renders the connection's end where the network certifier wrote `FAIL`, and that bucket
+  alone differs from the network certifier's row. Its block round and its honest round are proved, the honest one expected
   refused by Lean's registered reads ("does not open") at the egress members of its FAIL buckets (`rounds_of`,
   `targets`), every other member held, and its answer is that refusal, so the period check rejects the link-windows by
   name.
 * **Negatives**, chain's and tampered's refused by Lean's registered reads ("does not open"), unread's by its unit's ok
   bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A + 1 and A + 2): ingress unit
   A's o1, the S_A it computes, doesn't open leaf A + 1, nor units A + 1's and A + 2's theirs. ``tampered``: an
-  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a warden that
-  saw a byte the scan doesn't render; a warden run's
+  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a network certifier that
+  saw a byte the scan doesn't render; a network certifier run's
   re-signed by the driver's own key, under which the verifier reads it): egress unit t's o1, the row its view renders,
   doesn't open the signed row t. ``unread`` (`_unread`): a Program of one ingress unit, at the first bucket U ≥ 1 where
   a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for that slot's entry at U's
@@ -111,7 +111,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   not, an output port's table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
   K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
-  (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
+  (`window_root`: the network certifier's session and the group's signed registrations), and the round's `service.Stream`
   (`spec_of`) on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
   registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the session has
   ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
@@ -598,7 +598,7 @@ def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace |
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
-    link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
+    link registered by the network certifier and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
     egress link-window (`_tamper`)."""
@@ -674,7 +674,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     the salts its rows, inputs and outputs but o0, are committed under, its header's `registered` entries and the
     verifier's own ports, the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's
     order, inputs then outputs), each unit's o0 word and its output rows as the references compute them (``made``,
-    None where the ingress reference gives none), and the warden's row registration each warden port reads
+    None where the ingress reference gives none), and the network certifier's row registration each network certifier port reads
     (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`),
     since a timestep's units read their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the
     group's last unit's none (its o1 a fresh salt's, `stage`). The block's unit k reads ``x``, slot entry k, its free
@@ -742,7 +742,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
     """The rounds a run is proved in, each with its templates and outcome: `ROUNDS`, the unread round where a request
-    is anchored in the group past bucket 0; a void run's (the warden failed a connection closed, a `FAIL` in the
+    is anchored in the group past bucket 0; a void run's (the network certifier failed a connection closed, a `FAIL` in the
     egress row it signed) the block and its honest round alone, refused by Lean's registered reads ("does not open")
     at the egress members of its FAIL cells, where the scan renders the connection's end."""
     if at.void:
@@ -1013,9 +1013,9 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
-    registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is sampled once."""
+    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the network certifier's session and the group's
+    registrations, each link's in link-window order, whose heads the network certifier signed. The gate opens a root once, ever,
+    so a network certifier run's group is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()
@@ -1159,8 +1159,8 @@ def _free_port() -> int:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    instance or a shared port's table row; the scan's registrations' roots; and the network certifier's row registrations its
+    network certifier ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
     on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
     on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
     held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
@@ -1400,7 +1400,7 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
 
 def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: dict | None = None) -> dict:
     """``answers.json`` (`ANSWERS`) of the honest round's audit (``res``, its files under ``out / "honest"``): its
-    registration and, for each link-window W of the group, the scan's answer for W and the warden's ingress and egress
+    registration and, for each link-window W of the group, the scan's answer for W and the network certifier's ingress and egress
     row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit

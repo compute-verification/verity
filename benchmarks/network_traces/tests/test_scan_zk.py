@@ -11,9 +11,9 @@ its output 0, its state and view the honest ones. A group of link-windows (IO-TI
 template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
-``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
+``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the network certifier's. The honest round on the
 challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
-warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
+network certifier's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
 its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
 egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
@@ -160,7 +160,7 @@ def test_a_state_tree_that_skips_or_alters_a_transition_is_refused_where_its_uni
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
     """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
     view trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of
-    the group, each member's warden port its own link-window's registration, the group's last ingress unit a member of
+    the group, each member's network certifier port its own link-window's registration, the group's last ingress unit a member of
     its own, and the chains running across the windows."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)

@@ -228,7 +228,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
     exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
+    profile, whose egress counts no N2 unit holds, and on a network certifier link, whose counts are its schedule's);
     extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
     faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
     `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
