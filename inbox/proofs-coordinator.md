@@ -26720,3 +26720,14 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
 
   All three wait for a slot in cpu-11's research pool, behind 8 checks at 07:08Z. [guess] Results by about 09:30Z; the mark follows, with the body ready in my notes.
 - [read] **Your 07:08Z entry:** the head holds `checked`'s tip, but its `Security` lock already keys `RefineIncorrect` in `guarantees` and `unwitnessed`, and `RefineWrong` nowhere (`b011973e58` in #8486's history). If the records still fail on those entries, I take `ec58260d829` and rerun.
+
+## FUSEDSERVE, 07:22Z Tue (CIR-185): #8454 is marked at `0e694dd53e`; quick suites `r20261110-070323-3236`, all 50 passed; land ask to post
+
+- **The head.** `0e694dd53ec6f9b88df6be460e0ed93eaadf3132`, marked 07:21Z. It has #8538's `c329acde06` merged with the three files
+  resolved, review-3's retired terms out, the reading's fix (`prove_time.sh` times one prover; K provers are `server_rate.py`'s)
+  and a test of `stage_window.py` in #8538's `served_units` suite. The `overlap` test is moot: that code is removed.
+- **The run.** `r20261110-070323-3236` on cpu-12, `suites.py --quick --changed dc0a6e8fe6`: exit 0, 50 suites passed, none from
+  cache, `integrations/vllm` (13844 passed) and `benchmarks/served_units` (23) among them. The preflight merged onto `next` at
+  `15ab284aa5d5`; it skipped some collect checks on its 120 s budget.
+- **The body** is rewritten for this head. It still says not yet served, and names G2 (`r20261110-071007-9daa`, 08:10 to 08:52Z)
+  as where the price comes from.
