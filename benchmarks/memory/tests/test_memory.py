@@ -451,7 +451,8 @@ def test_the_command_takes_exactly_one_way_in(store, capsys, argv):
 
 
 class Local:
-    """`research.store.local.LocalStore` as `run.Store` uses it: attempts, the withdrawn label and fetches."""
+    """`research.store.local.LocalStore` as `run.Store` uses it: attempts, the withdrawn label, a record's listing and
+    fetches. Its record holds every path but `nothing`, and `lost` is a file whose bytes the store no longer has."""
 
     def __init__(self, root: Path, withdrawn: dict) -> None:
         self.root, self.gone, self.fetched = root, withdrawn, []
@@ -462,10 +463,13 @@ class Local:
     def withdrawn(self, target: str) -> str | None:
         return self.gone.get(target)
 
+    def listing(self, art: str, paths: list[str]) -> list[dict]:
+        return [{"path": p} for p in paths if p != "nothing"]
+
     def fetch(self, art: str, paths: list[str]) -> Path:
         self.fetched.append(art)
-        if paths == ["nothing"]:
-            raise KeyError(art)
+        if paths == ["lost"]:
+            raise OSError(f"{art}: blob is not local and not on the remote")
         return self.root
 
 
@@ -475,10 +479,13 @@ def test_a_withdrawn_run_is_refused_before_any_of_it_is_fetched(tmp_path, target
     refuses the run, and its files are never asked for."""
     pulled = []
     s = M.Store.__new__(M.Store)
-    s.store, s.error, s.absent = Local(tmp_path, {target: "'held a secret', by someone"}), OSError, KeyError
+    s.store, s.error = Local(tmp_path, {target: "'held a secret', by someone"}), OSError
     s.sync = SimpleNamespace(read_through=lambda store, targets, warn: pulled.append(targets))
     with pytest.raises(M.Unreadable, match="was withdrawn .*held a secret.*: nothing of it is fetched"):
         s.files(RUN, ["out/verifier.json"])
     assert s.store.fetched == [] and pulled == [[RUN, f"art:{RUN}"]], "the remote's labels are pulled first"
     s.store.gone = {}
-    assert s.files(RUN, ["out/verifier.json"]) == tmp_path and s.files(RUN, ["nothing"]) is None
+    assert s.files(RUN, ["out/verifier.json"]) == tmp_path
+    assert s.files(RUN, ["nothing"]) is None and s.store.fetched == [f"art:{RUN}"], "a file the record lacks isn't asked for"
+    with pytest.raises(M.Unreadable, match="record can't be fetched: .*blob is not local"):
+        s.files(RUN, ["lost"])

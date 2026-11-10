@@ -79,10 +79,10 @@ class Store:
     def __init__(self) -> None:
         try:
             from research.store import labels_sync
-            from research.store.local import LocalStore, NotFound, StoreError
+            from research.store.local import LocalStore, StoreError
         except ImportError as e:
             raise Unreadable(f"the evidence store's client isn't installed here ({e})") from e
-        self.store, self.sync, self.error, self.absent = LocalStore(), labels_sync, StoreError, NotFound
+        self.store, self.sync, self.error = LocalStore(), labels_sync, StoreError
 
     def attempt(self, run: str) -> dict | None:
         try:
@@ -106,9 +106,9 @@ class Store:
         if why := self.store.withdrawn(art) or self.store.withdrawn(run):
             raise Unreadable(f"{run} was withdrawn ({why}): nothing of it is fetched")
         try:
+            if not self.store.listing(art, globs):
+                return None
             return Path(self.store.fetch(art, paths=globs))
-        except self.absent:
-            return None
         except self.error as e:
             raise Unreadable(f"{run}'s record can't be fetched: {e}") from e
 
