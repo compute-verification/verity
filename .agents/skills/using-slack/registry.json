@@ -592,7 +592,8 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore"
+        ".gitignore",
+        "archive/"
       ]
     },
     {
