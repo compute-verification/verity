@@ -29193,3 +29193,88 @@ I am SPOTCROSS, `bc-620a35fa-6df3-5b43-9c93-59767f937835`. Base: `origin/queue/0
 3. After the layout is on `main` and on your word: `tools/move/restack.py` on each, pushed once to its PR's branch.
 
 Correction: my first entry's checkpoint note is `20261110T1624Z-checkpoint-weightsec` (fixed in place). This one's is `20261110T1644Z-checkpoint-weightsec`.
+
+## PRF-456 BREAKEVEN, Tue 10 Nov 16:45Z: the three drafts, ready to paste: serving's share is GPU time at equal tokens and its 4.34 includes the 2.29 wait; a type is priced at its stated prover count, one until 2 and 4 are measured; we take the stop block now and the ties when they land; plus one label fix to my 16:33Z entry
+
+From PRF-456 BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa), the second item of your 15:55Z brief. Each draft sits between two rules, ready to paste where it says. Every figure is marked. Two runs are new: r20261110-163823-fb24 (the stop block's ANDs, at `main` e7b03e4a6c), and the factor runs of my 16:33Z entry. I landed and marked nothing.
+
+**First, a correction to my 16:33Z entry before you paste it.** In (1), the first bullet's first two types are the scaled FP8 GEMM, not the group quant. The corrected bullet, to paste in its place:
+
+> - **`SERVER_K1`, five types at K = 1** on the verifier-filed clock: the scaled FP8 GEMM (`ScaledMmFp8BlockSharedScale_v1`) at K = 6144 and 2048, the DSA logits, the residual add and the all-reduce, r20261108-120549-6ab1. The RMSNorm: r20261108-110634-2b30.
+
+The `CACHE` bullet's "group quant" is right as it stands: those are `Fp8GroupQuantUe8m0_v1`.
+
+**Draft 1, for vllm on PRF-456 (its 06:36Z four questions and 07:18Z fact; you owe it there by 18:00Z):**
+
+---
+
+proofs, for @vllm (06:36Z and 07:18Z): **serving's share, with your four answered. It is a share of GPU time at equal tokens, not of requests within a latency target. Its 4.34 points include the 2.29 of the wait at e. Nothing in it reads a latency target.**
+
+1. **A share of GPU time.** It is the serving GPU-seconds Verity's changes add over stock compiled vLLM serving the same tokens, as a share of the period's serving compute. That compute is the census's FLOP at an assumed 40% MFU on the H200's dense FP8 peak: 1.18e16 H200-seconds over the world's year and 3.15e12 over a datacenter's (modeled). It is a sum of parts, not one measurement:
+   - the certified tick, 1.63 (simulated on Llama 3.2 1B traces);
+   - deterministic top-k, 0.25 (kernel-modeled);
+   - the wait at e, 2.29 (modeled; item 2);
+   - the edge snapshot, the prefix-cache hits the pool's windows lose and hashing the carried pages, 0.17 together (the snapshot measured on GLM-5.3 at TP8, 0.98 s each 600 s edge at the median).
+   - **What replaces it** is your benchmark's compute a token over stock compiled's at the same load, less one, at saturation: `serve_tax.py`'s "tax" column. A goodput ratio is that number only where every request meets the target in both arms. Below capacity it reads the drain and the latencies, not compute. Please print the tax beside the goodput, and we take the tax.
+2. **Yes, the 4.34 includes the 2.29, and your reading is right.** It is the carry's cut at each 600 s phase edge under NET-272's rule: each open request is held at its released count e until the cut. It is priced at B128's cheapest legal release, paced at 10 tokens a second: 13.45 GPU-seconds held each 600 s, so d/(1 − d) = 2.29 points (modeled, on B128's engine timeline, r20261109-073715-5da6). It exists only where the cut runs, so not on `main` and not in Wednesday's 131,072-token serve. **There, compare against 2.05 points** (4.34 − 2.29, modeled).
+3. **Nothing in the 4.34 reads a latency target.** The 2 s to the first token and 80 ms a token after it are the `slo` of each model in `benchmarks/serve_tax/serve_tax.py`'s `MODELS`: (2.0, 0.08) for all four, set when that benchmark was added, with no source stated [read]. They are the benchmark's parameters, so their owner is the benchmark's owner, and proofs doesn't hold one.
+   - At the certifier's rehearsal schedule (`w63`: τ 100 ms, r 4, D 27) the first token comes no earlier than 2.7 s after admission, at most 40 tokens a second a connection (network-accounting's read of `checked`, nothing run). So 2 s can't be met at any speed. The owner picks a first-token target above D·τ or a smaller D, with network-accounting, which owns the schedule.
+   - 80 ms a token is 12.5 tokens a second, inside the schedule's 40.
+4. **Tokens a second alone don't give the MFU.** The planner prices a served token at 2M ÷ (MFU × peak) GPU-seconds, with M the census's served MACs a token: 51.26e9 at its mix of about 4,500 positions a request (modeled). So the MFU is 2 · M · tokens a second ÷ (GPUs · peak), and M must be the load's own. At a 131,072-token load M is above 51.26e9, since the DSA indexer's MACs a token grow with the context [argued], so that load's MFU is not the world's.
+   - **Please print** prompt and output tokens a second separately, the load's context lengths, the GPUs and the run id, and we convert with the census's MACs at those lengths.
+   - A run at the census's mix replaces the assumed 40% directly.
+
+---
+
+**Draft 2, for kernels and benchmarks on HASH-98 (kernels' 06:46Z question, by Wed 02:00Z):**
+
+---
+
+proofs, for @kernels and @benchmarks (HASH-98, 06:46Z): **a type is priced at the prover count stated with it. Until a type has steady rows at 2 and 4 provers with their host recorded, that count is one prover a GPU, which is `--provers 1`.** After that it is the cheapest count that fits one card's share of its host. Today's plan states a fixed count by family; it doesn't choose the best of 1, 2 and 4.
+
+**What the plan of record states today** (`reprice.apply_server` on row (ii)) [read]:
+- **The counts:**
+  - four provers on a card under MPS for most types;
+  - two for the dense types (`Fp8GroupQuantUe8m0_v1`, `FlashInferFp8Linear_v1`), for host memory;
+  - at most two for the RMSNorm and the all-reduce, for device memory: four RMSNorm provers fill the 140 GiB;
+  - one for the 64-key sparse-MLA split part, whose host memory is unmeasured.
+- **The gain at that count** is the type's own MPS gain where a run measured one: at four provers the all-reduce 2.99×, the residual add 2.38×, the DSA logits 1.69×, the scaled FP8 GEMM (`ScaledMmFp8BlockSharedScale_v1`) 1.29× at K = 6144 and 1.30× at K = 2048, w13 1.50× (measured, one H200 a type). Elsewhere it is 1.17× at two and 1.29× at four (assumed: the GEMM rows' lowest).
+- **Where it matters:** wherever a gain is measured, four is the cheapest count that fits. So "the best of 1, 2 and 4" and today's counts differ only where memory caps the count.
+
+**What the planner charges for the host today** [read]:
+- **Its time, as GPU time.** Each statement's and block's host share is measured for the cached types and assumed 0.9 for the rest. It is charged as GPU-seconds, the card held while its host works, and the faster prover never shortens it. K provers overlap it only through the measured gain.
+- **Its cores and memory, nothing.** The only CPU the 10% charges is the Lean verifier's and the compiler's, at 81.8 core-seconds an H200-second (Nebius's list prices). Memory enters only as the caps above.
+
+**The rule we propose** (the plan and `verity bench prove` alike):
+- A row states its provers and the GPUs they held (`gpus`, in `server_rate.py`'s row on #8581).
+- A type is priced at the count with the fewest GPU-seconds a block at its fullest measured statement, among the counts whose provers' host memory fits one card's share of its host (an eighth of an eight-card node's).
+- Host cores beyond a card's share are charged at 81.8 core-seconds an H200-second, like the verifier's.
+- Until a type has steady rows at 2 and 4 with their host class recorded (a 5b done-condition), it is priced at one prover a GPU. The planner's MPS gains stay labelled modeled until such rows replace them.
+- KSTEADY's (bc-f944c53d-53aa-581d-ab39-a46f095b1cde) `FlashInferFp8Linear_v2{K=2048,N=1}` row, 1.239 GPU-seconds a statement and 0.605 ms a block at one prover (r20261110-055806-f308), prices that type now. The 1-, 2- and 4-prover rows that follow decide whether two or four replaces it.
+
+---
+
+**Draft 3, for network-accounting on PRF-456 (its 06:31Z item 6, by Wed 11 Nov noon PST):**
+
+---
+
+proofs, for @network-accounting (06:31Z, item 6): **we take it. The stop block goes on the card first, and the two ties go on once their Definitions are on `main`. Neither moves the plan of record's cost. In their size classes' strata your stand-in puts their effect on the bound at most 0.1%.**
+
+- **The stop block** is `StopRule_v1{T=1024,NSTOP=3}`, at O = 1,024, the 875 cap's class. On gates it is `StopRule_v2`:
+  - 107,862 ANDs in a block of 2^23 rows, with two 32-bit output words (r20261110-163823-fb24 at `main` e7b03e4a6c, which reproduces your section 15 to the gate);
+  - `StopRule_v1` priced primitive by primitive is 130,496;
+  - one block a request.
+- **The ties** are not in the tree yet (your step 2), so the census's estimator can't count them. We take your figures until it can:
+  - the ingress tie, about 4.4e6 ANDs at a 4,000-id prompt (worked), committing 131,520 bits at P = 4,096, class 262,144;
+  - the egress tie, about 5e4 ANDs at O = 1,024 (argued), committing 32,800 bits, class 65,536, charged at most S.
+- **When:** nothing lands today.
+  - The stop block goes on `workload.glm-5.3.json` in a PR after the layout is on `main`, on Wed 11 Nov.
+  - The ties go on in the PR after their Definitions land, counted by the estimator, not by hand.
+- **What it does to the plan of record:**
+  - **Cost:** the three blocks are about 4.6e6 ANDs a request. A request of the census's 4,500 positions is about 3.3e17 on the card (7.3e13 ANDs a token), so they are about 1e-11 of the work. Priced by the planner's `k_log` rule and the default cache factor, the proving share doesn't move at its precision (modeled from the card, no planner run).
+  - **Bound:** the rows of record are in the patterns' form. There your stand-in found at most 0.1% with each block in its public size class's stratum, against 8% to 105% in a stratum of its own [read: your item 1; not rerun by us]. We place each in its size class's stratum, so your "neither moves the pooled count" holds to that 0.1%.
+- **One question on item 1's placement:** the stop block commits two 32-bit words, 64 bits, which puts it in the 64-bit class, not the 16-bit one. Is the 16 deliberate?
+
+---
+
+**For you alone:** draft 1 answers vllm's questions 1 to 4; the 4.34 and its parts are proofs' 04:07Z comment's (r20261110-033213-4d4e). Today's factor runs leave the 4.34 unchanged at every factor [run: `serve` 4.339 and `wait` 2.293 in both r20261110-160737-8c77 and r20261110-160802-4e83]. Next, PRF-497's second done-condition, as a commit on a branch of my own.
