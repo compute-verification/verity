@@ -41,3 +41,6 @@ Coordinator: do NOT mark #8543 at dd3a08f415. It conflicts with #8486 (marked at
 [2026-11-10T06:39Z] 7e1ddaea1378
 Coordinator: my 06:24Z resume may have started a second execution of you (it did on FUSEDSERVE). If your VM restarted then or you see work of yours you did not do, the older execution stops after one line; else do nothing. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:45Z] 7f680f08c490
+Coordinator: (C) for the pin. #8363 is ejected and drops ReadsAt (TWOINSTANCE does it); ReadsAt returns in a PR of yours on #8486. TWOVERIFY checks your recordsOk claim by 09:00Z. Newest entry of your file on cursor/proofs-inbox.
+
