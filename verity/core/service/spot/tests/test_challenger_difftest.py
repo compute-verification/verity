@@ -1741,14 +1741,18 @@ class Drawn:
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
     default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
-    by default).  Its key is the key of `seed` at one of `params`."""
+    by default).  Its key is the key of `seed` at one of `params`.  When `seeded`, the session's window (`window`) has a
+    seed salt (`salt`, `salt_segment`: `T.draw_seed_salt`'s, before the sample's coins) and `after` is `seeded(salt)`,
+    the digest of a registration of that window.  The ledger opens the session for `window` when it is given, else for
+    one of its own."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest",
+                 seeded: Callable[[bytes], bytes] | None = None, window: dict | None = None) -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
-        s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
+        s.ch = _challenger(rng, [("other", 2), ("draw", 12), *([(T.SEED_SALT_FAMILY, 2)] if seeded else [])])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         c = s.ch.commitment
         s.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]
@@ -1759,6 +1763,12 @@ class Drawn:
         draw = self.records["draw"]
         self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
                       for _ in range(rng.randint(1 if before else 0, 2))]
+        self.window = window if window is not None else _window(rng) if seeded else None
+        if seeded:
+            salted = T.ChallengerCoins(self.records[T.SEED_SALT_FAMILY])
+            self.salt = self._step(T.SEED_SALT_FAMILY, lambda: T.draw_seed_salt(salted, self.window["root"]))
+            self.salt_segment = salted.segments[0]
+            after = seeded(self.salt)
         self.after = rng.randbytes(64) if after is None else after
         coins = T.ChallengerCoins(self.records["draw"])
         self.segment = coins.commit(self.after)
@@ -1774,7 +1784,7 @@ class Drawn:
                       for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
         s.lines = _release_log(rng, s.lines, cut, [t.lines for t in self.trees], order)
         s.close = s.signed(None)
-        self.ledger = Ledger(rng, s, withheld=withheld)
+        self.ledger = Ledger(rng, s, withheld=withheld, window=self.window)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):

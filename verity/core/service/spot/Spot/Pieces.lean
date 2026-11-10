@@ -10,7 +10,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
   walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
-* `registration`: R1–R7's failure codes for a record against the parameters;
+* `registration`: R1–R7's failure codes for a record against the parameters and the seed salt its caller read;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -194,9 +194,17 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"params", "record"}` to R1–R7's codes. -/
+/-- `{"params", "record"}`, and the window's seed salt `seed_salt` when its caller read one (lowercase hex of 64 bytes,
+which needs the parameters' `window_root`), to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
-  return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
+  let v := (← params (getD j "params")).verifier
+  let salt ← match getD j "seed_salt" with
+    | .null => pure none
+    | .str s => if s.length == 128 && isHex s then pure (some s) else throw "a seed salt is lowercase hex of 64 bytes"
+    | _ => throw "a seed salt is lowercase hex of 64 bytes"
+  if salt.isSome && v.windowRoot.isNone then
+    throw "a seed salt is read on the window's session: it needs the window's open root (window_root)"
+  return codes (Registration.check (getD j "record") v salt)
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
@@ -593,12 +601,13 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
 hex source, `check_public`'s values and declared items, the challenger's name and the log's length at the receipt
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
-with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
-that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
-"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
-same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming each template's
-circuit file, reference header and registered reads (`Run.templateCircuits`), and no `links` or `wires`, which the
-verifier derives; null otherwise.
+with the proved units and instances null for the sample's own, the coins' evidence (`coins_reason`'s, which a sample
+that read coins must carry), and `seed_salt`, the evidence of the window's seed salt in the same form (`Run.seedSaltOf`),
+null or absent only when the parameters name no window root; under a two-stage rule, `interior` (`Run.Interior`):
+`{"params", "replay", "values", "record", "received", "source", "coins", "proved_units", "instances", "served",
+"session_roots", "statements", "seed_salt"}` in the same forms, `replay` one replay block's program object, its params'
+`proofs` the auditor's naming each template's circuit file, reference header and registered reads
+(`Run.templateCircuits`), and no `links` or `wires`, which the verifier derives; null otherwise.
 The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
@@ -662,11 +671,12 @@ def run (j : Json) : V Json := do
         throw "an interior names no rows: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
-                    statements, circuits } : Run.Interior))
+                    statements, circuits, seedSalt := getD it "seed_salt" } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
-            served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
+            served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins",
+            seedSalt := getD j "seed_salt", interior }
 
 /-- `second_stage.check`'s input, read: the two-stage form allowed or not (`allow`), the first stage's replay sample,
 the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
