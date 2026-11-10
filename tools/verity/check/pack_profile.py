@@ -372,6 +372,93 @@ def history(since: str, scratch: str, out_dir: str) -> dict:
     return doc
 
 
+def _raw(pack: Path):
+    """The pack's tar stream, gunzipped, in 4 MiB pieces."""
+    d = zlib.decompressobj(31)
+    with open(pack, "rb") as f:
+        while chunk := f.read(4 << 20):
+            yield d.decompress(chunk)
+    yield d.flush()
+
+
+def codec(pack: str, how: str, scratch: str) -> dict:
+    """One pass over the pack's tar stream: its bytes, the bytes ``how`` writes it in, and this process's CPU seconds and peak
+    memory.  ``none`` only gunzips, which every other pass's seconds include."""
+    import resource
+
+    t0, c0 = time.monotonic(), time.process_time()
+    raw = out = 0
+    res: dict = {"how": how}
+    if how.startswith("gzip-"):
+        z = zlib.compressobj(int(how[5:]), zlib.DEFLATED, 31)
+    elif how == "xz":
+        z = lzma.LZMACompressor(format=lzma.FORMAT_XZ, filters=XZ_FILTERS)
+    else:
+        z = None
+    kept = Path(scratch) / "codec.tar.xz"
+    with open(kept, "wb") if how == "xz" else contextlib.nullcontext() as f:
+        for piece in _raw(Path(pack)):
+            raw += len(piece)
+            if z is not None:
+                got = z.compress(piece)
+                out += len(got)
+                if f is not None:
+                    f.write(got)
+        if z is not None:
+            got = z.flush()
+            out += len(got)
+            if f is not None:
+                f.write(got)
+    res.update(raw=raw, out=out or None, wall_s=round(time.monotonic() - t0, 1), cpu_s=round(time.process_time() - c0, 1))
+    if how == "xz":
+        t1, c1, back = time.monotonic(), time.process_time(), 0
+        with lzma.open(kept, "rb") as f:
+            while piece := f.read(4 << 20):
+                back += len(piece)
+        res.update(read_back=back, read_wall_s=round(time.monotonic() - t1, 1), read_cpu_s=round(time.process_time() - c1, 1))
+        kept.unlink()
+    res["peak_rss_mib"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    return res
+
+
+def codecs(rid: str, scratch: str, out_dir: str) -> dict:
+    """What writing ``rid``'s pack costs gzipped at three levels and as xz with the dictionary, one pass each in its own process."""
+    from research.store.local import LocalStore
+
+    store = LocalStore(root=Path(scratch) / "store" / rid)
+    art, files = run_files(store, (store.get_attempt(rid) or {}).get("outputs") or {})
+    pack = store.fetch(art, Path(scratch) / "packs" / rid, paths=[NAME]) / NAME
+    log(f"{rid}: fetched {pack.stat().st_size / 2**20:.1f} MiB")
+    hows = ["none", "gzip-9", "gzip-6", "gzip-1", "xz"]
+    with ProcessPoolExecutor(len(hows)) as ex:
+        got = list(ex.map(codec, [str(pack)] * len(hows), hows, [scratch] * len(hows)))
+    doc = {"run": rid, "pack_bytes": files.get(NAME), "passes": got}
+    (Path(out_dir) / f"codecs-{rid}.json").write_text(json.dumps(doc, indent=1) + "\n")
+    for g in got:
+        log(f"{rid}: {g}")
+    pack.unlink()
+    return doc
+
+
+def probe(out_dir: str) -> dict:
+    """Whether this machine's check cache, or a directory at its top, is a link or on another filesystem (`verdicts.entries`
+    walks without following links): names, link status and device numbers only."""
+    import socket
+
+    base = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    doc: dict = {"host": socket.gethostname(), "set": bool(os.environ.get("CHECK_CACHE")), "exists": base.is_dir(),
+                 "link": base.is_symlink(), "top": {}}
+    if base.is_dir():
+        dev = base.stat().st_dev
+        for p in sorted(base.iterdir()):
+            if p.is_dir() and not p.name.startswith("."):
+                doc["top"][p.name] = {"link": p.is_symlink(), "same_filesystem": p.stat().st_dev == dev,
+                                      "children": sum(1 for _ in p.iterdir())}
+    (Path(out_dir) / "probe.json").write_text(json.dumps(doc, indent=1) + "\n")
+    log(f"probe: {doc}")
+    return doc
+
+
 def mib(n: int | None) -> str:
     return "-" if n is None else f"{n / 2**20:.1f}"
 
@@ -440,9 +527,19 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--history-since")
     ap.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
+    ap.add_argument("--codecs", metavar="RUN", help="what writing RUN's pack costs gzipped and as xz, instead of the profiles")
+    ap.add_argument("--probe", action="store_true", help="whether this machine's check cache holds links, instead of the profiles")
     ap.add_argument("runs", nargs="*")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.probe:
+        probe(str(a.out))
+    if a.codecs:
+        with store_access() as how:
+            log(f"store read with {how}")
+            codecs(a.codecs, str(a.scratch), str(a.out))
+    if a.probe or a.codecs:
+        return 0
     with store_access() as how:
         log(f"store read with {how}; {a.jobs} processes")
         packs, hist = [], None
