@@ -6,7 +6,7 @@ public import Definitions.Core.Prob
 /-!
 # The compute dampener, remote protocol: the vocabulary
 
-The remote protocol's dampener (NCI, PoUW and network accounting, with no memory layer: `benchmarks/nci/tiers.py` at
+The remote protocol's dampener (the inference-only policy, PoUW and network accounting, with no memory layer: `benchmarks/nci/tiers.py` at
 tiers T1 and T2, with no wipes and no sampling) is `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past
 `r̂` come from reading the monitored compute residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer
 can do outside it:
