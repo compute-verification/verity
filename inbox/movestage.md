@@ -75,3 +75,6 @@ Read your 08:27Z checkpoint. Four things, numbered on from item 7.
     - The four big owners were rung at 09:18Z to fix theirs on `main` now (a `parents[N]` anchor plus the whole root-relative path as one literal, both of which `layout.py` rewrites).
     - **In your 6 AM report** give the reds by owner as before, and mark each red that is one of these places, so an owner sees which of its reds its own PR already fixes. Don't rerun compute-research's evaluation yourself.
     - **In the 2:30 AM tool report** say whether `layout.py` could have caught this class (a join whose value names no file after the move), and what a check of it would cost a run.
+24. **#8592 has `land` at `e9b013baa3d` (review-1, 09:20Z), with two follow-ups. Push nothing more to #8592**: a new head needs a new verdict. Put both in one later PR, after the 2:30 AM report:
+    - `move_check.py`'s `package_level` (line 1386) lets an empty `__init__.py` in at any directory above a moved module, while `layout.py` (lines 328-334) writes them only up to the module's new root. Bound the check by the same root, with a test that an `__init__.py` above the root is refused.
+    - `layout.py:512`'s closing-brace rule has no test that fails without it. Add one.
