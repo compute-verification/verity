@@ -166,7 +166,8 @@ class Tie:
         """The tie's circuit: each chain's first unit reads its start state, every other unit's state is wired from the unit
         before (``cv`` from ``o0``, ``carry`` from ``o1``), each unit's ``data`` reads its row of its parameter, and the last
         unit's ``o0`` reads the chain's digest; the patterns coalesced to their runs. An embedding's table is declared a table
-        of its parameter's every row, so its reads are row-seg rows (`interface.seg_ports`)."""
+        of its parameter's every row, so its reads are row-seg rows (`interface.seg_ports`). A chain steps from template to
+        template and back, so the circuit states its order (`interface.ordered`), each unit a range."""
         templates, plan = self._plan()
         wires, reads = [], []
         for c, steps in zip(self.chains, plan):
@@ -186,8 +187,14 @@ class Tie:
         params = {**{p: e["leaves"] * e["words"] for p, e in self.entries.items()},
                   **{n: len(row) for c in self.chains for n, row in c.supplied().items()}}
         tables = tuple(IF.Table(p, p, 0, e["words"], e["leaves"]) for p, e in self.entries.items() if _table(p))
-        return IF.Circuit(NAME, tuple(templates), wires=tuple(IF.coalesce(wires)),
-                          registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))))
+        wires = tuple(IF.coalesce(wires))
+        starts: dict[str, list[int]] = {}
+        for steps in plan:
+            for _fn, tid, i, _h, _p, _j in steps:
+                starts.setdefault(tid, []).append(i)
+        return IF.Circuit(NAME, tuple(templates), wires=wires,
+                          registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))),
+                          order=IF.ordered({IF.descriptor_id(fn): n for fn, n in templates}, wires, starts) if wires else None)
 
     def window(self, law: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
         """The tie's window under ``law`` in members of at most ``cap`` units, ``values`` the committed weights (the
