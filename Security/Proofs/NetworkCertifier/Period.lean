@@ -117,7 +117,7 @@ theorem periodLeak_of_checked (hsrc : Guarantees.PeriodLeakChecked) : Guarantees
       rcases hw : (D.E.eval H P m s.1 s.2.1 s.2.2).1 with _ | w
       · rw [hw] at hc
         simp [Rel.ext] at hc
-      · rw [hw] at hc ⊢
+      · rw [hw] at hc
         exact rLeakCertifier_of_rLeakCertifierChecked hc
     exact (hmono.trans h).trans (le_of_eq (by simp))
   · set G := {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
