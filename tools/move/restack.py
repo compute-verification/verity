@@ -36,8 +36,10 @@ A branch that already contains M skips to step 3. A branch that doesn't but shar
 report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
 restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
-id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
-output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
+id), `up-to-date`, `conflicted` (the step and the files), `no-row` (the branch holds tracked files under a path the move's
+map retires, and no row moves them: each file, and the fix, a row for it in the rows file the branch commits beside the
+map, `NAME.rows.toml`, which `layout.py` reads after the map and deletes, so no result holds one), `script-failed` (the
+script's exit code and the tail of its output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
 and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
 conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
@@ -68,6 +70,11 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 #: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
 #: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
+#: layout.py's exit when tracked files under a path its map retires have no row (its `NO_ROW`): its stderr then holds the
+#: fix in its first line and each file on a line of its own, indented by two spaces
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map (layout.py's `ROWS_SUFFIX`): the script deletes the one it read
+ROWS_SUFFIX = ".rows.toml"
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
@@ -99,6 +106,14 @@ DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd()
 
 class ScriptFailed(Exception):
     pass
+
+
+class NoRow(ScriptFailed):
+    """layout.py stopped on tracked files with no row (`NO_ROW`): what it said, and the files it named."""
+
+    def __init__(self, said: str):
+        super().__init__(said)
+        self.files = [line[2:] for line in said.splitlines()[1:] if line.startswith("  ")]
 
 
 def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
@@ -264,7 +279,7 @@ def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
     change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
-    script's output."""
+    script's output. A rows file the script deleted is spent, and the branch's copy of it is not put back."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
@@ -280,9 +295,12 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
+            if p.returncode == NO_ROW and SCRIPT == LINE_SCRIPT["Layout-move"]:
+                raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
             git("add", "-A", cwd=wt)
+            restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
                     git("checkout", merged, "--", path, cwd=wt)
@@ -449,6 +467,8 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             r["steps"].append({"step": "base", "commit": tip})
         try:
             tree, restored, output = run_script(tip, base, python, cwd)
+        except NoRow as e:
+            return {**r, "status": "no-row", "step": "script", "files": e.files, "error": str(e)}
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
@@ -541,8 +561,8 @@ def line(r: dict) -> str:
             plain += f"; stopped at the move {r['move'][:12]}"
     if r["status"] in ("clean", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
-    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after", "no-moves"):
-        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after", "no-moves") else ""
+    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "based-after", "no-moves"):
+        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "no-row", "based-after", "no-moves") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
     return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
 

@@ -97,7 +97,8 @@ Once the moves have landed, each open branch crosses all of them with one comman
 It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
-own, a script that failed, or pins or Lean locks to regenerate. Its first step merges each move's base into the branch, so
+own, files of the branch with no row (`no-row`, below), a script that failed, or pins or Lean locks to regenerate. Its
+first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
 is what its script writes on its base, which takes as long as the script. With `--kept` a check that passed is kept in the
@@ -105,5 +106,24 @@ check's cache (under `~/.cache/verity-check/restack-generated/`), so on one mach
 runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints.
+
+A layout map is written from `main`'s tree, so a file only a branch has gets a row only where a directory row carries it.
+Where the branch holds such a file under a path the map retires (`[retired]`: a directory the map empties, which
+`layout_maps.py` lists), `restack.py` stops as `no-row` and names each file, which would otherwise stay at its old path.
+The fix is the branch's own rows file: `tools/move/<name>.rows.toml` beside the map `tools/move/<name>.toml`, committed
+on the branch, with `[paths]` alone in the map's format:
+
+~~~toml
+[paths]                                   # a file, or a directory ending in "/": every file under it
+"old/place/added.py" = "new/place/added.py"
+"old/place/added/" = "new/place/added/"
+~~~
+
+`layout.py` reads it after the map. A row there moves its file and rewrites each reference to it as a row of the map
+does; the module renames it implies are derived. The script deletes the rows file once read, so no restacked result
+holds one, and it keeps the rows out of `moves.json`, which records the move's own. It refuses a rows
+file that would change what the map says (a row for a path the map sends elsewhere or deletes, a directory row over a
+path the map names, a module the map renames another way) and a row no tracked file is at or under. A file under a
+directory the map does not retire is not stopped: it stays unless a directory row or a row of the rows file moves it.
 
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
