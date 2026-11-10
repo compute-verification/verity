@@ -6,6 +6,20 @@ codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
 `step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
+| `bash benchmarks/codec_tensor/run.sh`, with `FIELDS`, `RECEIPT=1` and `BENCH_ARGS` as its header lists them | `wt.cu` built for each field, then `bench.py`'s gates and timings on one GPU. It writes `codec-tensor.json` and `bench.log` to `$RESEARCH_RUN_DIR/out`. |
+| `bash benchmarks/codec_tensor/reader.sh` | The device reader on one GPU (`reader.py`): `reader.cu` built, gated byte for byte against PoUB's driver, then one pass timed. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
+| `bash benchmarks/codec_tensor/step.sh`, with `MODEL` and `BATCH` | One decode step at HBM exhaustion on one GPU (`step.py`), after the codecs' tests and `reader.cu`'s gate. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
+
+Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
+`benchmarks/remote_session/session.cu`'s build.
+
 **Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
 `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
