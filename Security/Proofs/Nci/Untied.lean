@@ -36,22 +36,26 @@ blocks that read at most `k` gates outside `θ` and at most `w` words of `E` rea
 `b = 32` for a word of 32 gates, `readsAtMost_untie_32`). Each lemma holds on every registered circuit, so the step
 from words `U` already untied to `U ∪ E` is the lemma on the circuit untied at `U`.
 
-The two readings differ in who pays for a word:
+The two readings differ in who pays for what leaves `θ`:
 
-* **A computed word is paid for by the block that held it.** Another block that read it read a computed gate outside
-  itself, which its `k` counted already. So with computed gates `T` as inputs a block newly reads only the gates of
-  `T` it held (`unregistered_asInputs_subset_held`; in bits, `novelReads_asInputs_held_le`), at most `k + |T ∩ block|`
-  (`card_unregistered_asInputs_held_le`, `readsAtMost_asInputs_held`), and all the blocks together read at most
-  `m k + |T|`, whoever reads a word (`sum_card_unregistered_asInputs_held_le`).
+* **A computed gate is paid for by the block that held it**, gate by gate. Another block that read it read a computed
+  gate outside itself, which its `k` counted already. So with computed gates `T` as inputs a block newly reads only
+  the gates of `T` it held (`unregistered_asInputs_subset_held`; in bits, `novelReads_asInputs_held_le`), at most
+  `k + |T ∩ block|` (`card_unregistered_asInputs_held_le`, `readsAtMost_asInputs_held`), and all the blocks together
+  read at most `m k + |T|`, whichever blocks read those gates (`sum_card_unregistered_asInputs_held_le`). Where two
+  blocks hold gates of one word, each pays for the gates it held and neither for the word.
 * **A registered-input word is paid for by each block that reads it.** When each word is read by at most one block
   (`OneReader`), all the blocks together read at most `m k + b |E|` (`sum_card_unregistered_untie_le`), at most
   `|E| / (w + 1)` blocks read more than `w` words (`readersOver`, `card_readersOver_le`), and every other block reads
   at most `k + b w` (`card_unregistered_untie_of_notMem_readersOver`).
 
-(H) carries over from `d`: `κ(S)` is counted from the unregistered inputs, which both readings only add to, so (H) at
-`d` gives (H) untied at any `E` and with any gates as inputs, at the same cap (`hardness_untie`, `hardness_asInputs`),
-and `Π` untied is at most `Π` at `d` (`piMax_untie_le`). (E) with gates as inputs is a premise at that circuit: it
-does not follow from (E) at `d`.
+(H) and `Π` are taken at the circuit a statement is about, the untied one, never at `d`. `κ(S)` is counted from the
+input gates outside `θ`, which both readings only add to, so (H) at `d` gives (H) untied at any `E` and with any gates
+as inputs, at the same cap (`hardness_untie`, `hardness_asInputs`), and `Π` untied is at most `Π` at `d`
+(`piMax_untie_le`). (H) at `d` is not what a bound asks: a word inside `θ`, or one `d` computes from `θ` alone, has
+`κ = 0` at `d`, so (H) at `d` fails at every positive cost for a work that multiplies by such a word
+(`Nci.Cut.SecurityProofs.untie_hH_false`, `asInputs_hH_false`), which is the work an untied word is for. (E) with
+gates as inputs is a premise at that circuit: it does not follow from (E) at `d`.
 
 `HE` quantifies over a `Partition` of every computed gate of the circuit, each block within the cap, so it takes no
 subset of a partition's blocks. The form it can take is the circuit with the other blocks' gates as inputs and the
@@ -64,8 +68,8 @@ the entries of all the blocks as a total. So on the untied circuit with every bl
 `G` is counted under its own cap (`k` and the gates of `T` it held, or `k` and `b` for each word it reads) against the
 pairs of a block of `G` and an output with a wire in it, all the blocks together read `m k + |T|` (or `m k + b |E|`),
 and the MACs a block outside `G` holds are counted apart, at most its gates (`counts_asInputs`, `counts_untie`). Under
-(H) at `d`, at each block of `G`'s own cap, and (E), the squared caps are summed over `G`: `bound_asInputs_he`,
-`bound_untie_he`.
+(H) at that untied circuit, at each block of `G`'s own cap, and (E), the squared caps are summed over `G`:
+`bound_asInputs_he`, `bound_untie_he`.
 -/
 
 @[expose] public section
@@ -507,8 +511,9 @@ theorem sum_card_unregistered_untie_le {m : ℕ} (d : RegisteredCircuit) (P : Pa
 
 /-! ### (H) carries over
 
-`κ(S)` is counted from the unregistered inputs, and both readings only add to them, so (H) at `d` gives (H) untied at
-any `E`, and with any gates as inputs, at the same arrays, costs and cap. -/
+`κ(S)` is counted from the input gates outside `θ`, and both readings only add to them, so (H) at `d` gives (H) untied
+at any `E`, and with any gates as inputs, at the same arrays, costs and cap. The counts and bounds below take (H) and
+`Π` at the untied circuit; these lemmas give that premise wherever (H) at `d` holds. -/
 
 /-- `κ` grows with the set the paths start from. -/
 theorem kappa_mono_left {C : Circuit} {X X' Y : Finset (Fin C.N)} (h : X ⊆ X') : kappa C X Y ≤ kappa C X' Y := by
@@ -517,7 +522,7 @@ theorem kappa_mono_left {C : Circuit} {X X' Y : Finset (Fin C.N)} (h : X ⊆ X')
   have hsep' : Separates C Z X Y := fun x hx y hy => hsep x (h hx) y hy
   exact Nci.Cut.SecurityProofs.kappa_le hsep'
 
-/-- An unregistered input stays one when gates leave `θ`. -/
+/-- An input gate outside `θ` stays one when gates leave `θ`. -/
 theorem unregisteredInputs_subset_untie (d : RegisteredCircuit) (E : Finset (Fin d.D.N)) :
     unregisteredInputs d ⊆ unregisteredInputs (d.untie E) := by
   intro g hg
@@ -560,7 +565,7 @@ theorem feedsWithin_asInputs {C : Circuit} (T R : Finset (Fin C.N)) {x y : Fin C
         exact hgh
     · exact Or.inr ⟨g', hg', ih⟩
 
-/-- An unregistered input stays one when gates become inputs. -/
+/-- An input gate outside `θ` stays one when gates become inputs. -/
 theorem unregisteredInputs_subset_asInputs (d : RegisteredCircuit) (T : Finset (Fin d.D.N)) :
     unregisteredInputs d ⊆ unregisteredInputs (d.asInputs T) := by
   intro g hg
@@ -569,7 +574,7 @@ theorem unregisteredInputs_subset_asInputs (d : RegisteredCircuit) (T : Finset (
   show (d.D.isInput g || decide (g ∈ T)) = true
   rw [hi, Bool.true_or]
 
-/-- A gate made an input is an unregistered input. -/
+/-- A gate made an input is an input gate outside `θ`. -/
 theorem mem_unregisteredInputs_asInputs (d : RegisteredCircuit) (T : Finset (Fin d.D.N)) {g : Fin d.D.N}
     (hg : g ∈ T) : g ∈ unregisteredInputs (d.asInputs T) := by
   refine mem_filter.2 ⟨mem_univ g, ?_, fun h => (mem_sdiff.1 (show g ∈ d.θ \ T from h)).2 hg⟩
@@ -602,34 +607,36 @@ theorem hardness_asInputs {ρ V : Type} [Fintype ρ] [DecidableEq V] (d : Regist
 
 /-- **The counts with untied words, each block at its own cap.** Untied at the words `𝒲`, registered inputs of at
 most `b` gates each, read by at most one block, on the circuit itself with every block kept. For any set `G` of
-blocks: a block of `G` is under its own cap, `k` and `b` for each word it reads, with `Π` that of `d`; all the blocks
-together read at most `m k + b |𝒲|` gates outside `θ`; and the MACs a block outside `G` holds are counted apart
-(`Nci.Cut.SecurityProofs.counts_on`). -/
+blocks: a block of `G` is under its own cap, `k` and `b` for each word it reads, with `Π` at the untied circuit,
+`d.untie (𝒲.biUnion id)`; all the blocks together read at most `m k + b |𝒲|` gates outside `θ`; and the MACs a block
+outside `G` holds are counted apart (`Nci.Cut.SecurityProofs.counts_on`). `Π` at `d` is at least `Π` untied
+(`piMax_untie_le`), so the count holds with it too. It is not the one stated: a word of `θ` has `κ = 0` at `d`, so `Π`
+at `d` counts a work that multiplies by an untied word as if that word cost nothing. -/
 theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
     (W : Work d.D ι) {k b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b)
     (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲) (G : Finset (Fin m)) :
     ∃ V F E : ℕ,
       W.N ≤ m * k + b * 𝒲.card + V + ∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card ∧
-      V ^ 2 ≤ (∑ u ∈ G, piMax d W (k + b * (wordsRead d.D 𝒲 (P.gates u)).card)) * F ∧
-      F ≤ outOn P W G + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
-  obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
-    counts_on (d := d.untie (𝒲.biUnion id)) W P G (fun u => k + b * (wordsRead d.D 𝒲 (P.gates u)).card)
-      (fun u _ => (card_unregistered_untie_words_le d 𝒲 h𝒲 (P.gates u)).trans (Nat.add_le_add_right (hk u) _))
-      (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
-  exact ⟨V, F, E, hN,
-    hV.trans (Nat.mul_le_mul_right F (sum_le_sum fun u _ => piMax_untie_le d (𝒲.biUnion id) W _)), hF, hbE, hb⟩
+      V ^ 2 ≤ (∑ u ∈ G, piMax (d.untie (𝒲.biUnion id)) W (k + b * (wordsRead d.D 𝒲 (P.gates u)).card)) * F ∧
+      F ≤ outOn P W G + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) :=
+  counts_on (d := d.untie (𝒲.biUnion id)) W P G (fun u => k + b * (wordsRead d.D 𝒲 (P.gates u)).card)
+    (fun u _ => (card_unregistered_untie_words_le d 𝒲 h𝒲 (P.gates u)).trans (Nat.add_le_add_right (hk u) _))
+    (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
 
 /-- **The bound with untied words, under (H) and (E), each block at its own cap.** `HE`'s premises on the values, with
-(H) at `d` itself, at each block of `G`'s own cap, `k` and `b` for each word the block reads, and (E) at `e > 0`. For
-any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps over `G`, and `O_G` the pairs of a
-block of `G` and an output with a wire in it: `N` is at most the MACs the other blocks hold, plus
-`T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
+(H) at the untied circuit, `d.untie (𝒲.biUnion id)`, at each block of `G`'s own cap, `k` and `b` for each word the
+block reads, and (E) at `e > 0`. For any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps
+over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most the MACs the other
+blocks hold, plus `T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x e))`
+(`Nci.Cut.SecurityProofs.bound_on_caps_he`). (H) at `d` gives the premise, at the same caps (`hardness_untie`). It is
+not what is asked: a word of `θ` has `κ = 0` at `d`, so (H) at `d` fails at every cap and every positive cost for a
+work that multiplies by an untied word (`Nci.Cut.SecurityProofs.untie_hH_false`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b) (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲)
     (G : Finset (Fin m)) (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val)
     (hshare : NoSharedPair W val)
-    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx]
+    (hH : ∀ u ∈ G, Assumptions.Hardness (d.untie (𝒲.biUnion id)) ![W.allW, W.allX] val ![βw, βx]
       (k + b * (wordsRead d.D 𝒲 (P.gates u)).card))
     (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + (m * k + b * 𝒲.card : ℕ) +
@@ -637,8 +644,7 @@ theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq 
       1 / 2 * √((∑ u ∈ G, (k + b * (wordsRead d.D 𝒲 (P.gates u)).card) ^ 2 : ℕ) * (m * k + b * 𝒲.card : ℕ) /
         (βw * βx * e)) :=
   bound_on_caps_he (d := d.untie (𝒲.biUnion id)) (W := W) P G
-    (fun u => k + b * (wordsRead d.D 𝒲 (P.gates u)).card) hw hx he hval hshare
-    (fun u hu => hardness_untie d (𝒲.biUnion id) _ val _ _ (hH u hu)) hE
+    (fun u => k + b * (wordsRead d.D 𝒲 (P.gates u)).card) hw hx he hval hshare hH hE
     (fun u _ => (card_unregistered_untie_words_le d 𝒲 h𝒲 (P.gates u)).trans (Nat.add_le_add_right (hk u) _))
     (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
 
@@ -747,8 +753,8 @@ theorem readsAtMost_asInputs_held {m : ℕ} (d : RegisteredCircuit) (P : Partiti
     (hh : ∀ u, (T ∩ P.gates u).card ≤ h) : ReadsAtMost (d.asInputs T) (P.asInputs T) (k + h) := fun u =>
   (card_unregistered_asInputs_held_le d P T hT u).trans (Nat.add_le_add (hk u) (hh u))
 
-/-- **All blocks together, whoever reads a word.** With computed gates `T` as inputs, the blocks read at most
-`m k + |T|` gates outside `θ` between them: each gate of `T` is newly read by the one block that held it. -/
+/-- **All blocks together, whichever blocks read `T`.** With computed gates `T` as inputs, the blocks read at most
+`m k + |T|` gates outside `θ` between them: each gate of `T` is newly read by the one block that held that gate. -/
 theorem sum_card_unregistered_asInputs_held_le {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k : ℕ}
     (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false) (hk : ReadsAtMost d P k) :
     ∑ u, ((d.asInputs T).unregistered ((P.asInputs T).gates u)).card ≤ m * k + T.card :=
@@ -799,22 +805,25 @@ theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d :
     (sum_card_unregistered_asInputs_held_le d P T hT hk)
 
 /-- **The bound with computed gates as inputs, under (H) and (E), each block at its own cap.** `HE`'s premises on the
-values, with (H) at `d` itself, at each block of `G`'s own cap, `k` and the gates of `T` the block held, and (E) at the
-circuit with `T` as inputs, at `e > 0`. For any set `G` of blocks, with `T' = m k + |T|`, `Q` the sum of the squared
-caps over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most the MACs the other
-blocks hold, plus
-`T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
+values, with (H) and (E) at the circuit with `T` as inputs, `d.asInputs T`: (H) at each block of `G`'s own cap, `k` and
+the gates of `T` the block held, and (E) at `e > 0`. For any set `G` of blocks, with `T' = m k + |T|`, `Q` the sum of
+the squared caps over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most the
+MACs the other blocks hold, plus `T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))`
+(`Nci.Cut.SecurityProofs.bound_on_caps_he`). (H) at `d` gives the premise, at the same caps (`hardness_asInputs`). It
+is not what is asked: a word that `d` computes from `θ` alone has `κ = 0` at `d`, so (H) at `d` fails at every cap and
+every positive cost for a work that multiplies by such a word of `T`
+(`Nci.Cut.SecurityProofs.asInputs_hH_false`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) {k : ℕ} {βw βx e : ℝ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false)
     (W : Work (d.D.asInputs T) ι) (val : Finset (Fin d.D.N) → V) (hk : ReadsAtMost d P k) (G : Finset (Fin m))
     (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
-    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] (k + (T ∩ P.gates u).card))
+    (hH : ∀ u ∈ G, Assumptions.Hardness (d.asInputs T) ![W.allW, W.allX] val ![βw, βx] (k + (T ∩ P.gates u).card))
     (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock (P.asInputs T) W u a).card : ℕ) + (m * k + T.card : ℕ) +
       1 / 2 * √((∑ u ∈ G, (k + (T ∩ P.gates u).card) ^ 2 : ℕ) * outOn (P.asInputs T) W G / (βw * βx)) +
       1 / 2 * √((∑ u ∈ G, (k + (T ∩ P.gates u).card) ^ 2 : ℕ) * (m * k + T.card : ℕ) / (βw * βx * e)) :=
   bound_on_caps_he (d := d.asInputs T) (W := W) (P.asInputs T) G (fun u => k + (T ∩ P.gates u).card) hw hx he hval
-    hshare (fun u hu => hardness_asInputs d T _ val _ _ (hH u hu)) hE
+    hshare hH hE
     (fun u _ => (card_unregistered_asInputs_held_le d P T hT u).trans (Nat.add_le_add_right (hk u) _))
     (sum_card_unregistered_asInputs_held_le d P T hT hk)
 
