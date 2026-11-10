@@ -43,7 +43,8 @@ def signer(host):
 
 def hooks(host, signer, token="ab12", active=lambda s: False, now=T0):
     return dict(now=now, token=token, own=lambda d: None, start=lambda s: None, active=active, secret=SECRET,
-                ready=lambda s: None,
+                ready=lambda s: None, seal=lambda p: None,
+                register_policy=lambda args: A.policy_register(host, args, pinned=PIN, now=now),
                 reserve=lambda s: A.reserve(host, s, signer=signer, pinned=PIN, now=now),
                 admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=now, active=active),
                 period=lambda args: A.period(host, args, signer=signer, pinned=PIN, now=now, active=active))
@@ -482,6 +483,99 @@ def test_a_period_open_refuses_a_policy_or_a_registration_it_cant_read(host, sig
     rc, doc = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} {' '.join(args.values())}", "hash")
     refused((rc, doc), f"{flag} {shlex.split(value)[0][:200]!r}: ")
     assert "\n" not in doc["refused"] and A.read_ledger(host.ledger) == []
+
+
+REGISTER = f"policy-register --name llama-1b --policy {V0} --alpha 3/1000 --gamma 4096"
+
+
+def test_a_period_open_that_names_a_registered_policy_signs_the_auditors_policy_under_its_name(host, signer):
+    """vy-admin registers an inference-only policy once under a name, before any lane's open; an open that names it
+    signs the registry's id, α and Γ and the name, so the line says the policy is the auditor's whoever opened the
+    period (`by`). An open that gives its own α and Γ carries no name, and the ledger's check reads both."""
+    line = ok(admin(host, signer, REGISTER))
+    assert line == {"name": "llama-1b", "policy": V0, "alpha": [3, 1000], "gamma": 4096, "by": "vy-admin",
+                    "pinned": PIN, "registered_utc": "2026-10-20T09:30:00Z"}
+    most = 10 ** 39 - 1
+    ok(admin(host, signer, f"policy-register --name wide.2 --policy {V0} --alpha 2/4 --gamma {most}"))
+    rc, out = A.gate(["--ssh", "policies", "--key", "hash"], host, **hooks(host, signer))
+    assert rc == 0 and [json.loads(x) for x in out.splitlines()][0] == line and f'"gamma":{most},'.encode() in out
+    body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --policy-name llama-1b "
+                                f"--registration {REGISTRATION}", "hash"))["body"]
+    assert {f: body[f] for f in (*A.POLICY_FIELDS, "policy_name", "by")} == {
+        "policy": V0, "alpha": [3, 1000], "gamma": 4096, "registration": REGISTRATION, "policy_name": "llama-1b",
+        "by": "hash"}
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} "
+                                  f"--registration {REGISTRATION} --policy-name wide.2"))["body"]
+    assert (body["alpha"], body["gamma"], body["policy_name"], body["by"]) == ([2, 4], most, "wide.2", "vy-admin")
+    own = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())}",
+                 "hash"))["body"]
+    assert "policy_name" not in own and own["by"] == "hash"
+    assert sorted(checked(host)) == ["k1", "p1", "p2"]
+
+
+def test_only_vy_admin_registers_a_policy_and_a_name_is_registered_once(host, signer):
+    """The registry is the auditor's: a lane's key registers nothing, a name means one policy for good, and a line is
+    written only for an id, α and Γ a period-open would itself sign."""
+    refused(ssh(host, signer, REGISTER, "hash"), "a policy is registered by vy-admin alone")
+    assert not host.policies.exists()
+    ok(admin(host, signer, REGISTER))
+    refused(admin(host, signer, f"policy-register --name llama-1b --policy {V0} --alpha 1/1000 --gamma 1"),
+            "the registry holds a policy llama-1b already")
+    with pytest.raises(A.Refused, match="llama-1b already"):
+        A.policy_register(host, ["llama-1b", V0, "1/1000", "1"], pinned=PIN, now=T0)
+    for args, why in [(["b", "nci/v1", "3/1000", "4096"], "--policy 'nci/v1': "), (["b", V0, "3/0", "4096"], "--alpha"),
+                      (["b", V0, "3/1000", "-1"], "--gamma "), (["a/b", V0, "3/1000", "4096"], "--policy-name ")]:
+        with pytest.raises(A.Refused, match=why):
+            A.policy_register(host, args, pinned=PIN, now=T0)
+    for words, why in [("--name b --policy nci/v1 --alpha 3/1000 --gamma 4096", "--policy 'nci/v1': "),
+                       (f"--name 'a b' --policy {V0} --alpha 3/1000 --gamma 4096", "--policy-name 'a b': "),
+                       (f"--name b --policy {V0} --alpha 3/0 --gamma 4096", "--alpha '3/0': "),
+                       (f"--name b --policy {V0} --alpha 3/1000 --gamma 4e3", "--gamma '4e3': "),
+                       (f"--name b --policy {V0} --alpha 3/1000", "policy-register: "),
+                       (f"--name b --policy {V0} --alpha 3/1000 --gamma 4096 --by hash", "policy-register: ")]:
+        refused(admin(host, signer, f"policy-register {words}"), why)
+    assert [json.loads(x)["name"] for x in host.policies.read_text().splitlines()] == ["llama-1b"]
+    assert A.read_ledger(host.ledger) == []
+
+
+def test_the_step_run_as_auditor_registers_a_policy_from_its_command_line(host, monkeypatch, capsys):
+    """`auditor.py policy-register NAME POLICY ALPHA GAMMA`, what the gate runs as `auditor`: it appends the line it
+    prints, at the pinned commit, and exits 3 with its reason on a name the registry holds."""
+    monkeypatch.setattr(A, "Host", lambda: host)
+    monkeypatch.setattr(A, "pinned_commit", lambda: PIN)
+    A.seal_registry(host.policies, own=lambda p: None, seal=lambda p: None)
+    assert A.main(["policy-register", "llama-1b", V0, "3/1000", "4096"]) == 0
+    line = json.loads(capsys.readouterr().out)
+    assert {k: line[k] for k in ("name", "policy", "alpha", "gamma", "by", "pinned")} == {
+        "name": "llama-1b", "policy": V0, "alpha": [3, 1000], "gamma": 4096, "by": "vy-admin", "pinned": PIN}
+    assert [json.loads(x) for x in host.policies.read_text().splitlines()] == [line]
+    assert A.main(["policy-register", "llama-1b", V0, "1/2", "1"]) == 3
+    assert "llama-1b already" in capsys.readouterr().err and len(host.policies.read_text().splitlines()) == 1
+
+
+@pytest.mark.parametrize("flags, why", [
+    (f"--policy-name llama-1b --policy {V0} --registration {REGISTRATION}", "not with --policy, --alpha or --gamma"),
+    (f"--policy-name llama-1b --alpha 1/2 --registration {REGISTRATION}", "not with --policy, --alpha or --gamma"),
+    (f"--policy-name llama-1b --gamma 1 --registration {REGISTRATION}", "not with --policy, --alpha or --gamma"),
+    (f"--policy-name llama-1b {' '.join(POLICY.values())}", "not with --policy, --alpha or --gamma"),
+    ("--policy-name llama-1b", "--registration SHA512 missing"),
+    (f"--policy-name llama-2b --registration {REGISTRATION}", "holds no policy llama-2b"),
+    (f"--policy-name 'a b' --registration {REGISTRATION}", "--policy-name 'a b': "),
+])
+def test_a_period_open_refuses_a_registered_policys_name_beside_values_of_its_own_or_one_not_registered(
+        host, signer, flags, why):
+    """The name is signed only over the registry's own values: an open that names a registered policy and gives an id,
+    α or Γ of its own is refused, by the step that signs, as is a name the registry lacks or one without the
+    registration, so no lane's values go out under the auditor's name."""
+    ok(admin(host, signer, REGISTER))
+    for key in ("hash", None):
+        lane = "" if key else " --lane hash"
+        refused(call(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT}{lane} {flags}", key), why)
+    with pytest.raises(A.Refused, match="not with --policy, --alpha or --gamma"):
+        A.period(host, ["period-open", "p1", "hash", "hash", "2", CIRCUIT, "policy_name=llama-1b", "alpha=1/2",
+                        f"registration={REGISTRATION}"], signer=signer, pinned=PIN, now=T0, active=lambda s: False)
+    assert A.read_ledger(host.ledger) == []
 
 
 @pytest.mark.parametrize("args", [
