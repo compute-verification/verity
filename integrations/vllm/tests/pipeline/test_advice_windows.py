@@ -12,7 +12,7 @@ import pytest
 
 from verity.protocols.certifier.verifier import advice as A
 from verity.spot.verifier.one_stage import registration as R
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 

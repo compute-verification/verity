@@ -3,7 +3,7 @@ format (``verity_flock.circuit``'s statement rows), with the registration, Flock
 labels the one-stage audit binds (``verity.spot.verifier.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
-counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its
+counts (``verity.windows.population``, over the builders core's ``one_stage.partition`` names too), its
 query the template query over them, so the partition (``verity/partition/v1``, ``partition_object``) and its digest are core's
 over that program, and the registration is core's ``verity/registration/v1`` record with ``window = {"kind": "served" |
 "stand-in", "run": <the record's run root>, ...provenance}`` (``registration``), made by the ``registrar`` the caller passes
@@ -82,7 +82,7 @@ from verity.ml.commitments.window import WINDOW_DOMAIN, window_binding, window_d
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.circuits.codec import canonical_json
-from verity.ml.windows.population import population_program, template_partition
+from verity.windows.population import population_program, template_partition
 
 from . import wiring as WI
 from .hiding import HidingLeaves

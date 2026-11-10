@@ -17,7 +17,7 @@ from verity.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.spot.verifier import service as S
 from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R
-from verity.ml.windows import rows as CS, tables as TB
+from verity.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 

@@ -180,7 +180,7 @@ from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_
 from verity.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import edge as E  # noqa: E402

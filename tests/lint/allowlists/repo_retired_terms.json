@@ -5885,11 +5885,11 @@
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c_debit.py", "count": 35},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c_device.py", "count": 22},
     {"file": "verity/ml/randomness/tests/test_randomness.py", "count": 8},
-    {"file": "verity/ml/windows/interface.py", "count": 72},
-    {"file": "verity/ml/windows/rows.py", "count": 9},
-    {"file": "verity/ml/windows/tests/test_blocks.py", "count": 17},
-    {"file": "verity/ml/windows/tests/test_interface.py", "count": 91},
-    {"file": "verity/ml/windows/wiring.py", "count": 10},
+    {"file": "verity/windows/interface.py", "count": 72},
+    {"file": "verity/windows/rows.py", "count": 9},
+    {"file": "verity/windows/tests/test_blocks.py", "count": 17},
+    {"file": "verity/windows/tests/test_interface.py", "count": 91},
+    {"file": "verity/windows/wiring.py", "count": 10},
     {"file": "Security/Proofs/Pouw/Window/Flock.lean", "count": 6},
     {"file": "verity/flock/tests/test_backend_bench.py", "count": 1}
   ]

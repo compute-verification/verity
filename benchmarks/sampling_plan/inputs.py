@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
-from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
 from verity.spot.costfit import Observation
 from verity.spot.optimize import SHA512_ANDS
 

@@ -36,7 +36,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import embedding as E
 from verity.definitions.registry import io_shell as IO
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}

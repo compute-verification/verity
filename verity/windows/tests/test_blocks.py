@@ -1,4 +1,4 @@
-"""A circuit's blocks (`verity.ml.windows.interface.Blocks`, ``verity/blocks/v1``) and output-row reads: the inference entries
+"""A circuit's blocks (`verity.windows.interface.Blocks`, ``verity/blocks/v1``) and output-row reads: the inference entries
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
 network certification's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
@@ -17,7 +17,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.windows import interface as I, rows as CS
+from verity.windows import interface as I, rows as CS
 
 GID, RUN = TI.GID, TI.RUN
 

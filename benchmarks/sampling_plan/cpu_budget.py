@@ -27,7 +27,7 @@ from math import ceil, log, log2
 from pathlib import Path
 
 from verity.core.protocols import reporting
-from verity.ml.windows.interface import K_MAX
+from verity.windows.interface import K_MAX
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)
 DELTAS = tuple(map(float, reporting.DELTAS))

@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.ml.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
@@ -138,8 +138,8 @@ from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR

@@ -404,7 +404,7 @@ def test_refused_strings(pieces, name, j):
 def _roots(unbound: str | None = None, **change) -> dict:
     """`_strings`' table `k_hist` at capacity 16, its writer's two members and a reader's body under the leaf layer
     `rows.leaf_layer` makes of all three (of all but `unbound`), the window registering the root over its rows."""
-    from verity.ml.windows import rows as CS
+    from verity.windows import rows as CS
     s = _strings()
     members = [dict(m, key=f"W/{i}") for i, m in enumerate(s["members"])]
     publics = {m["key"]: bytes.fromhex(m["body"]) for m in members if m["key"] != unbound} | {"R/0": b"the reader's body"}
@@ -421,7 +421,7 @@ def _roots(unbound: str | None = None, **change) -> dict:
 def test_roots_from_the_bodies_the_leaf_layer_binds(pieces):
     """Each table's root is recomputed from its writer's bodies, which the leaf layer over every member's body binds, and
     the root and domain its reads open against are the registered root, held to it, and the table's domain."""
-    from verity.ml.windows import rows as CS
+    from verity.windows import rows as CS
     j = _roots()
     dom = H.domain("p", "k_hist", 64, 16).domain_id.hex()
     want = {"roots": {"k_hist": {"domain": dom, "root": j["registered"]["k_hist"]}}}

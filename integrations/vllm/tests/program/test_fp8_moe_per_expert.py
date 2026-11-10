@@ -47,7 +47,7 @@ from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import moe as MOE
-from verity.ml.windows import interface as WI
+from verity.windows import interface as WI
 
 
 # --- the cut computes the gather form --------------------------------------------------------------------------------------------

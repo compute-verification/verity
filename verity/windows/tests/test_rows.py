@@ -13,7 +13,7 @@ import pytest
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-from verity.ml.windows import rows as SR
+from verity.windows import rows as SR
 
 KEY = bytes(range(32))
 SALTS = {

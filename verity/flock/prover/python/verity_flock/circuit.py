@@ -66,7 +66,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -615,7 +615,7 @@ def _block_ranges(n_sha: int, n_hm: int, unit_log: int, units: int, unit_packed:
 
 
 def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
-    """``definition``'s rows as `UnitStager` takes them (`verity.ml.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
+    """``definition``'s rows as `UnitStager` takes them (`verity.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
     per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
     from verity.circuits.evaluation.reference import resolve
 

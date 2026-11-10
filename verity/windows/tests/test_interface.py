@@ -1,4 +1,4 @@
-"""What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
+"""What an integration hands Verity (`verity.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
 the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
@@ -39,7 +39,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
                                            row_leaf)
-from verity.ml.windows import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
+from verity.windows import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -1272,7 +1272,7 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
 
 
 def _loop_turns(f) -> int:
-    """The jumps Python makes in `verity.ml.windows`' modules while ``f()`` runs (`sys.monitoring`'s JUMP events: every
+    """The jumps Python makes in `verity.windows`' modules while ``f()`` runs (`sys.monitoring`'s JUMP events: every
     turn of a loop, a comprehension's included, is one): the work a window does in Python, counted, not timed."""
     mon, here, ours = sys.monitoring, str(Path(I.__file__).parent), {}
     tool, turns = next(t for t in range(6) if mon.get_tool(t) is None), 0

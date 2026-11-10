@@ -22,7 +22,7 @@ from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.predict.tp_steps import at_rank, compile_tp
 
 from verity.circuits.codec import descriptor_id
-from verity.ml.windows import interface as I
+from verity.windows import interface as I
 
 ROOT = Path(__file__).resolve().parents[3]
 ONCE = {**GREEDY, "max_tokens": 2, "ignore_eos": True}

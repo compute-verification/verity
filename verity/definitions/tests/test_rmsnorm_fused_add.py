@@ -16,7 +16,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import b1
 from verity.definitions.registry import rmsnorm_fused_split as NS
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 #: (N, EPS, C): the norm after Llama-3.2-1B's down_proj in its 8 parts, and whole as one; 18 warps of one stride in 9 parts;
 #: N = 1536's half-filled second stride in 3; four strides (three FFMAs a thread) in 16; a lone partial warp in 4

@@ -2381,6 +2381,11 @@
         "verity/core/deploy/": "verity/configuration/deploy/",
         "verity/core/wire/": "verity/configuration/wire/"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/windows/": "verity/windows/"
+      }
     }
   ]
 }

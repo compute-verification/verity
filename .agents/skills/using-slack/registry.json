@@ -603,7 +603,7 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "verity/ml/windows/",
+        "verity/windows/",
         "integrations/vllm/",
         "examples/vllm/",
         "benchmarks/replay_determinism/",

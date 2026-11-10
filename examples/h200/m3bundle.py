@@ -61,7 +61,7 @@ from verity.definitions.ops.boolean import rmsnorm as RN  # noqa: E402
 from verity.definitions.ops.boolean import rows as BR  # noqa: E402
 from verity.definitions.ops.boolean import rowwise as RW  # noqa: E402
 from verity.definitions.ops.boolean import softmax_row as SR  # noqa: E402
-from verity.ml.windows import interface as IF, rows as CS  # noqa: E402
+from verity.windows import interface as IF, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/e2e-h200/m3-drawn-blocks/v1"

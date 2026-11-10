@@ -14,7 +14,7 @@ import pytest
 
 from verity.circuits.defs import REGISTRY, bind
 from verity.spot.verifier.one_stage import draw as DR, partition as P, registration as R
-from verity.ml.windows import interface as IF, rows as CS
+from verity.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU

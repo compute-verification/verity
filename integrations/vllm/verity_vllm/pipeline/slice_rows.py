@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline.serving_templates import SLICES, Template, _bind, template
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")

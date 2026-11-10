@@ -38,8 +38,8 @@ from verity.spot.verifier.one_stage import partition as P
 from verity.spot.verifier.one_stage import registered as G
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.registry import io_shell as IO
-from verity.ml.windows import interface as IF
-from verity.ml.windows import wiring as WI
+from verity.windows import interface as IF
+from verity.windows import wiring as WI
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)

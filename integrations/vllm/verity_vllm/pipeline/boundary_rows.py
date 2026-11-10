@@ -60,7 +60,7 @@ from verity.circuits.types import Array
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2

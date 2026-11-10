@@ -2015,7 +2015,7 @@
     "verity/protocols/pouw/prover/circuit/h1device.py",
     "verity/protocols/pouw/prover/schemes",
     "verity/ml/randomness",
-    "verity/ml/windows"
+    "verity/windows"
    ]
   },
   {

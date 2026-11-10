@@ -27,7 +27,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from verity.ml.windows.interface import K_MAX
+from verity.windows.interface import K_MAX
 
 #: the statement limit the brief measures against
 LIMIT_LOG = 26
