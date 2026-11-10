@@ -6,7 +6,8 @@ import torch.nn.functional as F
 from synthetic import tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import config, run, starts
+from training_slowdown import config, policy, run, starts
+from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
@@ -172,21 +173,80 @@ def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, mon
         config.route("sneaky")
 
 
-def test_the_route_loop_trains_scores_and_encodes_from_the_config(tmp_path):
+def job(tmp_path, *more: str, **over):
+    """A search job of the tiny start's config (`over` its keys) run here: its record, its config and the registry."""
     reg = tiny_registry(tmp_path / "reg")
-    path = write_config(tmp_path / "a.toml")
+    path = write_config(tmp_path / "a.toml", **over)
     cfg = config.load(path, starts.registry(reg))
     out = tmp_path / "out"
     rc = run.main(["--config", str(path), "--seed", "0", "--split", "search", "--out", str(out), "--starts", str(reg),
-                   "--device", "cpu"])
+                   "--device", "cpu", *more])
     rec = json.loads((out / "run.json").read_text())
     assert rc == 0, rec["invalid"]
+    return rec, cfg, reg
+
+
+def test_the_route_loop_trains_scores_and_encodes_from_the_config(tmp_path):
+    rec, cfg, _ = job(tmp_path)
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
         assert (cp["format"], cp["changed"]) == ("full", 3) and cp["e_bytes"] > 0
+
+
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+
+
+def test_the_job_traces_its_routes_step_and_a_retrace_writes_the_same_record(tmp_path):
+    """The record's `trace` is the capture's measurement of the route's last step at the job's batch and the start's
+    context, the tokens the counter counted a step, with the rows unpriced and nothing the formalism derives; the
+    rows price where they are read. `--retrace` takes a record's trace again and changes nothing else, and refuses a
+    record whose config this tree reads as another digest."""
+    rec, _, reg = job(tmp_path)
+    tr = rec["trace"]
+    assert set(tr) == {"capture", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k", "p_match", "at",
+                       "elementwise_products", "data_dependent", "carried_scalars"}
+    assert (tr["capture"], tr["torch"], tr["step"]) == (products.CAPTURE, torch.__version__, 2)
+    assert tr["axes"] == {"batch": 2, "seq": 1024} and {s["tokens"] for s in rec["steps"]} == {tr["tokens"]} == {2048}
+    assert tr["data_dependent"] == tr["carried_scalars"] == [] and tr["k"] == policy.CONSOLE[1]
+    assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
+    for block in (tr, *tr["at"].values()):
+        assert block["rows"] and all(set(r) == RAW for r in block["rows"])
+    # the three trained matrices of block 0's MLP: each one's forward product reads it, and their MACs a token add up
+    trained = [u for u in tr["updated"] if u[2:] == [u[2], tr["tokens"], 32]]
+    assert len(tr["updated"]) == len(trained) >= 3
+    priced = [products.priced(r) for r in tr["rows"]]
+    assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
+    assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
+
+    stale = tmp_path / "stale.json"
+    stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
+    assert run.main(["--retrace", str(stale), "--out", str(tmp_path / "again"), "--starts", str(reg),
+                     "--device", "cpu"]) == 0
+    assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
+    stale.write_text(json.dumps(rec | {"config": rec["config"] | {"digest": "0" * 64}}))
+    with pytest.raises(SystemExit, match="retrace in a clone at the record's commit"):
+        run.main(["--retrace", str(stale), "--out", str(tmp_path / "other"), "--starts", str(reg)])
+
+
+def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
+    """A step that reads a tensor's value into Python is no fixed graph: the trace says so, with the capture's reason
+    and op, and holds nothing else."""
+    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+    model, optimizers = route.build(cfg.start.shape, cfg.dials)
+
+    class Branching:
+        @staticmethod
+        def step(model, rows, optimizers, dials, t, n):
+            if float(model(rows[:, :-1]).sum()) > 0:
+                route.step(model, rows, optimizers, dials, t, n)
+
+    tr = run.trace_step(cfg, Branching, model, optimizers, "cpu")
+    assert set(tr) == {"refused"} and set(tr["refused"]) == {"reason", "op", "message"}
+    assert tr["refused"]["reason"] == "dynamic_control_flow" and "reads a tensor's value" in tr["refused"]["message"]
 
 
 def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):

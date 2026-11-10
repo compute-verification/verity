@@ -3,6 +3,7 @@ computes through torch is counted (flops.py).
 
     python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
         [--starts starts.toml] [--starts-root DIR] [--device cuda] [--tier 0]
+    python -m training_slowdown.run --retrace RUN_JSON --out OUT [--starts starts.toml] [--device cpu]
 
 The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
 into the model and registers it, and runs the budget's steps, each the route's `step` on the next batch of the start's
@@ -13,8 +14,14 @@ library's code runs) and checked to rebuild them bit for bit. Tokens computed ou
 make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs per token (`block_c`), measured on
 the registered model.
 
+After the last step, outside the count, the job traces its route's step once for the grade (`trace_step`): the
+record's `trace` is what the capture measures of it, the product rows unpriced, and a step the capture refuses is
+recorded as refused and leaves the job valid. `--retrace` takes a record's trace again with this tree's capture, from
+the record's own config text, for a record whose trace a later grade doesn't read.
+
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
-digest and the job's label) and the last checkpoint's weights (`--keep-checkpoints`, tier 2: every checkpoint's). Torch
+digest, the trace and the job's label) and the last checkpoint's weights (`--keep-checkpoints`, tier 2: every
+checkpoint's). Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
 invalid when it uses an op the counter can't price (flops.py), reads token data out of torch, starts a thread or a
 process, or imports a module that names a way around the dispatcher or that was written during the run (`Imports`).
@@ -456,9 +463,8 @@ def no_bytecode():
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, write
 
 
-def train(te: Harness, cfg: config.Config, route, stream: Stream) -> None:
-    """The route loop (module docstring)."""
-    model, optimizers = route.build(cfg.start.shape, cfg.dials)
+def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers) -> None:
+    """The route loop (module docstring) on the route's `build`."""
     te.load(model)
     te.encode_with(route.plan(cfg.dials))
     n, batch = cfg.budget["steps"], cfg.budget["batch"]
@@ -468,11 +474,70 @@ def train(te: Harness, cfg: config.Config, route, stream: Stream) -> None:
             route.step(model, te.batch(stream.next(batch).to(te.device)), optimizers, cfg.dials, t, n)
 
 
+def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dict:
+    """The record's `trace`: the route's `step` at the run's last step, on its model and fresh copies of its
+    optimizers, at the job's batch and the start's context, as the capture measures it (`capture_fn`,
+    `capture.products.raw_on_dial`): the capture's and torch's versions, the step and the token axes it was traced
+    at, the forward's updated MAC nodes (`StepGraph.structure`'s `updated`), the product rows with their operands'
+    dtypes and no price at each k of the console's dial, the ops that break P-match, the products written with
+    elementwise ops, and the read-backs the capture lists (`data_dependent`, `carried_scalars`; a step the capture
+    takes as one function has none, since it refuses one). Nothing the formalism derives is in it. A step the capture
+    refuses gives {"refused": {"reason", "op", "message"}}.
+
+    The batch is traced as its inputs and each window's last target apart, so the token axes are the batch and the
+    context, the tokens the counter counts a step."""
+    from .capture import CaptureRefused, capture_fn, products
+
+    n, batch, ctx = cfg.budget["steps"], cfg.budget["batch"], int(cfg.start.shape["ctx"])
+    t = n - 1
+
+    def step(m, rows, opts):
+        route.step(m, torch.cat(rows, dim=1), opts, cfg.dials, t, n)
+
+    example = (torch.zeros(batch, ctx, dtype=torch.long), torch.zeros(batch, 1, dtype=torch.long))
+    try:
+        g = capture_fn(step, model, example, optimizers=optimizers, token_dims=((0, 1), (0,)), device=device)
+    except CaptureRefused as e:
+        return {"refused": {"reason": e.reason, "op": e.op, "message": str(e)}}
+    raw = products.raw_on_dial(g)
+    read_backs = (g.circuit.read_backs if g.circuit is not None else None) or {}
+    return {"capture": raw["capture"], "torch": torch.__version__, "step": t, "axes": g.axes, "tokens": g.tokens,
+            "order": raw["order"], "updated": g.structure()["updated"], "rows": raw["rows"], "k": raw["k"],
+            "p_match": raw["p_match"], "at": raw["at"], "elementwise_products": raw["elementwise_products"],
+            "data_dependent": list(read_backs.get("data_dependent", [])),
+            "carried_scalars": list(read_backs.get("carried_scalars", []))}
+
+
+def retrace(a: argparse.Namespace) -> int:
+    """`--retrace RUN_JSON --out DIR`: the record with its `trace` taken again by this tree's capture and nothing else
+    changed, in `DIR/run.json`. The config is the record's own text; a tree whose route, start or data isn't the
+    record's (another digest) is refused, since the step it would trace isn't the one that ran."""
+    rec = json.loads(a.retrace.read_text())
+    a.out.mkdir(parents=True, exist_ok=True)
+    path = a.out / f"{rec['config']['name']}.toml"
+    path.write_text(rec["config"]["text"])
+    with no_bytecode():
+        cfg = config.load(path, starts.registry(a.starts))
+        if cfg.digest != rec["config"]["digest"]:
+            raise SystemExit(f"retrace: this tree reads {a.retrace}'s config as digest {cfg.digest[:16]}, and the "
+                             f"record's is {rec['config']['digest'][:16]} (its route's VERSION, its start or its "
+                             f"data moved): retrace in a clone at the record's commit, {rec.get('commit')}")
+        route = config.route(cfg.route)
+        model, optimizers = route.build(cfg.start.shape, cfg.dials)
+        rec["trace"] = trace_step(cfg, route, model.to(a.device), optimizers, a.device)
+    (a.out / "run.json").write_text(json.dumps(rec) + "\n")
+    print(json.dumps({"retraced": str(a.retrace), "capture": rec["trace"].get("capture"),
+                      "refused": rec["trace"].get("refused")}))
+    return 0
+
+
 def parse(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--config", type=Path, required=True, help="an attack config (training_slowdown.config)")
-    ap.add_argument("--seed", type=int, required=True, help="the job's seed: torch's and the data stream's")
-    ap.add_argument("--split", choices=SPLITS, required=True, help="the held-out split each checkpoint is scored on")
+    ap.add_argument("--config", type=Path, help="an attack config (training_slowdown.config)")
+    ap.add_argument("--seed", type=int, help="the job's seed: torch's and the data stream's")
+    ap.add_argument("--split", choices=SPLITS, help="the held-out split each checkpoint is scored on")
+    ap.add_argument("--retrace", type=Path, metavar="RUN_JSON",
+                    help="instead of a job: write RUN_JSON to OUT/run.json with its trace taken again (`retrace`)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry (default starts.toml)")
     ap.add_argument("--starts-root", type=Path, default=None,
@@ -487,11 +552,16 @@ def parse(argv=None) -> argparse.Namespace:
                     help="where counterexample families are written (default OUT/families; their verdicts are in run.json)")
     ap.add_argument("--peak-macs-per-s", type=float, default=0.0, help="the device's peak, for the unexplained-GPU flag")
     ap.add_argument("--meta", default="{}", help="JSON merged into the record")
-    return ap.parse_args(argv)
+    a = ap.parse_args(argv)
+    if a.retrace is None and (missing := [f"--{k}" for k in ("config", "seed", "split") if getattr(a, k) is None]):
+        ap.error(f"a job needs {', '.join(missing)}")
+    return a
 
 
 def main(argv=None) -> int:
     a = parse(argv)
+    if a.retrace is not None:
+        return retrace(a)
     torch.cuda.graphs.CUDAGraph.replay = lambda self: (_ for _ in ()).throw(
         RuntimeError("training_slowdown: CUDA graph replay runs work the counter can't see"))
     reg = starts.registry(a.starts)
@@ -516,21 +586,27 @@ def main(argv=None) -> int:
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
         "peak_macs_per_s": a.peak_macs_per_s}
     stopped = ""
-    with no_bytecode(), te.counter:
-        try:
-            train(te, cfg, route, stream)
-        except BudgetExceeded as e:
-            stopped = str(e)
+    with no_bytecode():
+        with te.counter:
+            model, optimizers = route.build(cfg.start.shape, cfg.dials)
+            try:
+                train(te, cfg, route, stream, model, optimizers)
+            except BudgetExceeded as e:
+                stopped = str(e)
+        # after the last checkpoint and outside the count: nothing the trace runs reaches the record's count or scores
+        meta["trace"] = trace_step(cfg, route, model, optimizers, a.device)
     if stopped:
         meta["stopped"] = stopped
     return report(te.finish(meta, imports.problems()))
 
 
 def report(rec: dict) -> int:
+    tr = rec.get("trace") or {}
     print(json.dumps({"macs": rec["totals"]["macs"], "steps": len(rec["steps"]), "checkpoints": [
         {k: cp.get(k) for k in ("step", "macs", "bpb", "e_bytes", "source")} for cp in rec["checkpoints"]],
         "flags": rec["flags"], "invalid": rec["invalid"], "families": [
-            {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]]}))
+            {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]],
+        "trace": {"refused": tr["refused"]} if "refused" in tr else {k: tr.get(k) for k in ("capture", "tokens")}}))
     return 1 if rec["invalid"] else 0
 
 
