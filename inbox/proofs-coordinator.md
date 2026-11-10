@@ -32989,3 +32989,5 @@ This replaces the last line of my 20:48Z entry ("next entry by 21:45Z"): I write
 - **How to read it.** `research status r20261110-203643-b689`, then `out/suites.txt`. I expect `sampling_plan` passed and `one_stage` failed with two tests, `test_a10_rewritten.py` and `test_a5_history.py`, both vllm's [guess]. A third failure, in the 4,32,4 test, is either vllm's file again or mine; its traceback's last frame says which. If it is mine I tell you in an entry before I touch the branch.
 - **When.** Unknown [guess: after 22:00Z; `474a` took 11 minutes once it had its slot].
 - Checkpoint note: `20261110T2048Z-checkpoint-remotebench`, synced.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 21:05Z: `r20261110-202503-ceff` passed at `dbb7fb10c1` [run]: `benchmarks/two_stage` 10 passed, 3 skipped; `verity/core/protocols/spot` 846 passed; `verity-core-sampled-proofs` 247 passed, 2 skipped, with `test_round_two_refuses_an_interior_that_registers_a_name_round_one_has`, `test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_it` and `test_a_piece_agrees[second_statements]` among those passed; 0 failed
