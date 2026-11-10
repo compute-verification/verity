@@ -4,6 +4,7 @@ import gzip
 import json
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -205,14 +206,48 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
     assert not bad["reached"] and bad["why"] == "no scored checkpoint: invalid: foreign op"
 
 
-def test_the_bound_of_record_stands_beside_s_and_the_periods_are_the_calculators():
-    """The bound of record is the calculator's or absent with the reason, never a number of the grade's. The run's AND
-    gates at S are C·ρ at a bf16 GEMM's gates an AND, and each share is over a fleet of the calculator's at its
-    peak for the census's window and core's periods."""
+def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
+    """Where the calculator has `rho.min_cut`, the bound of record is its `bound` at the policy's (c, k) on the traced
+    step's N, O, β_w, β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without the module, or without a traced
+    step, it is not available, with the reason."""
+    runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
+    calls = []
+
+    def stub(c, k, n, **kw):
+        calls.append((c, k, n, kw))
+        return SimpleNamespace(slowdown=7.5, blocks=3.0, statement="HE", rests_on="given (H) and (E)")
+
+    monkeypatch.setattr(calculator, "_min_cut", lambda: SimpleNamespace(bound=stub))
+    s = graded(runs, ref)
+    work, got = s["rho"]["work"], s["bound_of_record"]
+    assert calls == [(*policy.CONSOLE, None, {"N": work["N"], "O": work["O"], "size": work["C_gates"],
+                                              "beta_w": work["beta_w"], "beta_x": work["beta_x"], "b": work["b_y"],
+                                              "F": work["F"]})]
+    assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, 7.5, 3.0, "HE")
+    assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * s["rho"]["rho"])
+    assert "pays at least 7.5x (HE: at least 3 blocks" in G.text(s) and "rests on: given (H) and (E)" in G.text(s)
+    untraced = graded([job([UNDER])], ref)["bound_of_record"]
+    assert not untraced["available"] and "gives none" in untraced["why"] and len(calls) == 1
+    monkeypatch.setattr(calculator, "_min_cut", lambda: None)
+    s = graded(runs, ref)
+    absent = s["bound_of_record"]
+    assert not absent["available"] and absent["why"].startswith("not available: ") and calculator.THEOREM in absent["why"]
+    assert (absent["c_gates"], absent["k_bits"]) == policy.CONSOLE and "bound of record   not available: " in G.text(s)
+
+
+def test_the_bound_call_fits_the_calculator_as_it_is():
+    """On the calculator as the tree has it: available exactly where it has the module, and then a slowdown of at
+    least 1 from the grade's own call."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
-    bound = s["bound_of_record"]
-    assert not bound["available"] and bound["why"].startswith("not available: ") and calculator.THEOREM in bound["why"]
-    assert (bound["c_gates"], bound["k_bits"]) == policy.CONSOLE
+    got = s["bound_of_record"]
+    assert got["available"] == (calculator._min_cut() is not None)
+    assert got["slowdown"] >= 1 if got["available"] else got["why"].startswith("not available: ")
+
+
+def test_the_periods_and_fleets_are_the_calculators():
+    """The run's AND gates at S are C·ρ at a bf16 GEMM's gates an AND, and each share is over a fleet of the
+    calculator's at its peak, for the census's window and core's periods."""
+    s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     per = s["per_period"]
     assert per["run_and_gates"] == pytest.approx(2 * STEP_GATES * s["rho"]["rho"] / gates.per_and("gemm/bf16"))
     assert [(x["over"], x["period"]) for x in per["rows"]] == [
@@ -222,10 +257,11 @@ def test_the_bound_of_record_stands_beside_s_and_the_periods_are_the_calculators
     for x in per["rows"]:
         assert x["share"] == pytest.approx(per["run_and_gates"] / (fleets[x["over"]]["and_per_s"] * periods[x["period"]]))
     dc = fleets["one datacenter"]
-    assert dc["and_per_s"] == pytest.approx(dc["flop_per_s"] / 2 * 9128 / 32) and set(per["parts"]) == {
+    e4m3 = gates.per_mac("gemm/e4m3") / gates.per_and("gemm/e4m3")
+    assert dc["and_per_s"] == pytest.approx(dc["flop_per_s"] / 2 * e4m3) and set(per["parts"]) == {
         "measured", "proved", "scaled"}
     block = G.text(s)
-    assert "bound of record   not available: " in block and "per period        the run at S: " in block
+    assert "per period        the run at S: " in block
     assert block.startswith("SLOWDOWN attack   start s, gain 1.1x, policy console (rule relative to the start: ")
 
 

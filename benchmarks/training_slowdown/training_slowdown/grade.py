@@ -27,7 +27,8 @@ writes `OUT/slowdown.json` (`SCHEMA`):
   search record, at its first checkpoint reaching the gain on the search split, else at its last, which the block
   says. An untraced search record has no ρ, and then there is no S;
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
-- **the bound of record** at the same policy (`calculator.bound`), beside S and never mixed into it;
+- **the bound of record** at the same policy (`calculator.bound`): what every partition of the attack's traced
+  circuit pays at the least, beside S, what this attack pays, and never mixed into it;
 - **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
   world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
   measured, proved and scaled parts named.
@@ -411,8 +412,11 @@ def text(s: dict) -> str:
     add("rests on", f"rho: {r['rho'] or 'nothing: it is unmeasured'}",
         f"capture: {r['capture'] or 'none'}, its code {r['capture_code'] or 'unrecorded'}", f"p: {r['p']}",
         f"gain: {r['gain']}")
-    add("bound of record", bound["why"] if not bound["available"] else
-        f"{bound['theorem']} at the same policy: {bound['why']}")
+    add("bound of record", *([bound["why"]] if not bound["available"] else [
+        f"every partition of the attack's traced circuit into the policy's blocks pays at least "
+        f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",
+        f"rests on: {bound['rests_on']}", "a lower bound for any attack with this circuit, beside S, which this attack "
+                                          "pays; the two are never combined"]))
     if per is None:
         add("per period", "none: no S")
     else:

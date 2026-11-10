@@ -8,13 +8,14 @@ What the calculator states is read from it through its public functions, never r
 - the monitoring periods (`periods`): its `PERIODS`, core's, with the window of the census's reference deployment
   before them;
 - the bound of record at a policy (`bound`): the lower bound on a circuit's slowdown that `Nci.Cut.Guarantees.HE`
-  proves, as the calculator prices it; where the calculator has no function that gives it, why not.
+  proves, from the calculator's `rho.min_cut.bound`; where the calculator has no such module, why not.
 
 The calculator counts in FLOP and in its own gates (`units.gates_per_flop`); training's slowdown code counts in the
 gates of the circuits' Definitions (`training_slowdown.gates`). A figure crosses in FLOP, two a MAC, never in gates.
 """
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from functools import cache
@@ -83,16 +84,30 @@ def fleets() -> list[dict]:
     return out
 
 
-def bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
-    """The bound of record at the policy (c, k) on a circuit's `work` (the theorem's N, O, β_w, β_x, b_y and F on M,
-    and |C|, as `formalism.he_products` reads them from a traced step): not `available`, with exactly what is missing,
-    while the calculator has no function that gives it."""
+def _min_cut():
+    """The calculator's module for the bound of record, `rho.min_cut`; None where it has none."""
     _calculator()
-    from rho import classes
+    try:
+        return importlib.import_module("rho.min_cut")
+    except ModuleNotFoundError:
+        return None
 
-    citing = [name for name, a in classes.CLASSES.items() if THEOREM in a.cites]
-    return {"available": False, "theorem": THEOREM, "c_gates": c_gates, "k_bits": k_bits, "why": (
-        f"not available: {CALCULATOR.name} has no function from a policy (c, k) and a circuit's N, O and |C| to the "
-        f"bound {THEOREM} proves, and "
-        + (f"its class {', '.join(citing)} cites it" if citing else
-           f"its classes ({', '.join(classes.CLASSES)}) hold none that cites it"))}
+
+def bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
+    """The bound of record at the policy (c, k) on a circuit's `work` (the theorem's N in MACs, O in wires, β_w, β_x,
+    b_y and F on M, and |C| in gates, as `formalism.he_products` reads them from a traced step): what every partition
+    of that circuit into the policy's blocks pays, `rho.min_cut.bound`'s `slowdown`, with its least `blocks`, its
+    `statement` and what it `rests_on`. A policy here states no output bits a block, so the function's n is None. Not
+    `available`, with exactly what is missing, where the calculator has no such module or the circuit no `work`."""
+    out = {"available": False, "theorem": THEOREM, "c_gates": c_gates, "k_bits": k_bits}
+    mod = _min_cut()
+    if mod is None:
+        return out | {"why": f"not available: {CALCULATOR.name} has no `rho.min_cut`, the module whose `bound` gives "
+                             f"{THEOREM}'s bound at a policy (c, k) on a circuit's N, O and |C|"}
+    if work is None:
+        return out | {"why": "not available: the bound reads a traced step's N and O on M, and the config's search "
+                             "record gives none"}
+    b = mod.bound(c_gates, k_bits, None, N=work["N"], O=work["O"], size=work["C_gates"], beta_w=work["beta_w"],
+                  beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
+    return out | {"available": True, "theorem": b.statement, "slowdown": b.slowdown, "blocks": b.blocks,
+                  "rests_on": b.rests_on, "work": work}
