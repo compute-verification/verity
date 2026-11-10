@@ -43,14 +43,15 @@ Every bit of a wired row lies in a leaf of its writer (`Filled`), so none is rea
 holds a reader row to its writer's words, an output row's bits rounded up, so a row wired to an output row that is
 not whole words has bits past its writer's and lays out no circuit.
 
-**The record's text** (`WiresOfText`): the wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of
-the record's text. The text states no template's rows or outputs, which are the Program's (`Templates`), and the
-wiring's order is left free: under any order `Spot.Wires.check` accepts only wires without a cycle
-(`Spot.Wires.check_acyclic`). That the slots and the held rows are the text's (`RowsOfText`) is stated against readers
-SPOT's Lean does not have (`Readers`), each given the Program beside the text: one of the record's inference blocks,
-giving each unit's slot, and one of its registered reads, table reads and openings, giving what each row is declared
-to hold. With the readers left free it says only that the Program and the text fix the slots and each held row's
-reason, which any such check meets at readers of its own; it is a premise once they are SPOT's.
+**The record's text.** A record lays out a circuit only where its wiring is its text's (`Served`): the text parses,
+and the wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of it (`wiresOf`). The text states no
+template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
+order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). Nothing ties the slots and
+the held rows to the text. `RowsOfText` is the shape of that tie, against readers SPOT's Lean does not have
+(`Readers`), each given the Program beside the text: one of the record's inference blocks, giving each unit's slot,
+and one of its registered reads, table reads and openings, giving what each row is declared to hold. With the readers
+left free it says only that the Program and the text fix the slots and each held row's reason, which any such check
+meets at readers of its own.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
@@ -75,9 +76,10 @@ counting, and a statement that offered it would say nothing.
 that pin, and the reader has the reference's roles, up to such a collision. It follows from `DigestPins`,
 `Provenance` and a layout that reads a Definition's signature alone (`LayoutReads`).
 
-What these do not say: that a unit's verdict output is 1 (a statement about the committed values, the proof block's);
-that equal roots hold equal rows, or that the data the log's first record registers was public
-(`Nci.Assumptions.ThetaRegistered`).
+What these do not say: that the slots and the held rows are the record's text's, which nothing says until the two
+readers have one definition that SPOT's audit also reads; that a unit's verdict output is 1 (a statement about the
+committed values, the proof block's); that equal roots hold equal rows, or that the data the log's first record
+registers was public (`Nci.Assumptions.ThetaRegistered`).
 -/
 
 @[expose] public section
@@ -112,7 +114,8 @@ structure Roles where
 
 /-- Why the check holds a row in θ: it is a registered read of the parameter `param`; a table read of the root
 (`root`), else the domain id, of the table `name` over `param`; or a port of an opening of that table by a reader
-whose closure digest is the pin `pin`. -/
+whose closure digest is the pin `pin`. This file imports no check of a circuit record, so `Held` is its own until a
+module of `nci_check` that is not such a check's holds it, with `wiresOf` and the readers of `RowsOfText`. -/
 inductive Held where
   | read (param : String)
   | table (name param : String) (root : Bool)
@@ -288,14 +291,25 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
   ∀ x, D.isInput x = false → ∃ tid u sc s, UnitAt P rs tid u sc ∧ sc.off ≤ at_ x ∧
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
-/-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes; the record's wiring passes
+/-- What `Spot.Wires.Wiring.ofJson` is given of the record `doc`: its `cuts`, none where it states none, and its
+`wires`, with no template. Like `Held`, it is this file's own until a module of `nci_check` that is not a record
+check's holds it. -/
+def wiresOf (doc : Json) : Json :=
+  Json.mkObj [("templates", Json.mkObj []), ("cuts", (doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])),
+    ("wires", getD doc "wires")]
+
+/-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes; the record's text parses, and the
+wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of it (`wiresOf`); the wiring passes
 `Spot.Wires.check`, and its templates are the Program's: the root's nodes (`Flock.TemplateQuery.evaluate`), with
 their units, rows and outputs (`Templates`); every unit's rows are its own input gates, every wire lands whole, and
 every bit of a wired row is its writer's; no row the check holds has a writer; and `d` is the wired circuit, θ the
 rows the check holds and `𝓘` the slots. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
-  ∃ (P : Prog) (S : Spot.Wires.Summary) (rs : Array TRange) (at_ : Fin d.D.N → ℕ),
-    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧ Spot.Wires.check (F.wiring c) = .ok S ∧
+  ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
+      (at_ : Fin d.D.N → ℕ),
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W ∧
+    (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ Spot.Wires.check (F.wiring c) = .ok S ∧
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
     Templates P rs (F.wiring c) ∧ OwnRows P rs (F.wiring c) ∧ Aligned P rs (F.wiring c) S ∧
@@ -303,20 +317,7 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
     LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
 
-/-! ## The record's text -/
-
-/-- What `Spot.Wires.Wiring.ofJson` is given of the record `doc`: its `cuts`, none where it states none, and its
-`wires`, with no template. -/
-def wiresOf (doc : Json) : Json :=
-  Json.mkObj [("templates", Json.mkObj []), ("cuts", (doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])),
-    ("wires", getD doc "wires")]
-
-/-- **The wiring is the record's text's.** The text of a record the check reads parses, and the wiring's cuts and
-wires are the ones `Spot.Wires.Wiring.ofJson` reads of it. -/
-def WiresOfText (F : Form) : Prop :=
-  ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∃ doc W,
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W ∧
-    (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires
+/-! ## The slots and the held rows, of the record's text -/
 
 /-- What a record's text declares a row to hold: `Held`'s reasons, an opening's without its pin, which is the
 check's. -/
