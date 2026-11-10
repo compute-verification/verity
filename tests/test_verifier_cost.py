@@ -35,7 +35,7 @@ ALLOWED: dict[str, str] = {
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
     "verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Check.lean":
         "InferenceOnlyCheck.check, the gate-by-gate reference InferenceOnlyCheck.Desc is difftested against (runs InferenceOnlyCheck.DescDifftestMain); "
-        "`nci-check` runs it only with --unrolled",
+        "`inference-only-check` runs it only with --unrolled",
     "verity/core/service/flock/Flock/AnnotExpand.lean":
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
