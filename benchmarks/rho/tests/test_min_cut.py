@@ -1,13 +1,17 @@
-"""The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, and the bound at a
-policy."""
+"""The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, and
+the class in `CLASSES`."""
 
 import itertools
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from rho import min_cut
+from rho import instances, lean, min_cut
+from rho.classes import CLASSES, FlopBudget, Outside, premise_status, premises
+from rho.families import family
 from rho.params import Registry
+from rho.scenario import build
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -156,3 +160,48 @@ def test_past_the_last_row_or_on_no_work_the_bound_says_nothing():
     assert (r.slowdown, r.blocks, r.cap, r.beta_x) == (1, 0, math.inf, None) and "no bound at k = 1e+09" in r.rests_on
     assert min_cut.bound(C, 1e9, N_OUT, N=MACS, O=MACS / 128, size=C, beta_x=0.3).cap < math.inf
     assert min_cut.bound(C, 1e6, N_OUT, N=0, O=0, size=C).slowdown == 1
+
+
+def test_the_class_reads_the_files_rows_so_other_rows_in_the_registry_are_refused():
+    with pytest.raises(ValueError, match="edit the file"):
+        premises(REG.override({"premise.training-cut-hardness.beta": [[1e5, 16.0], [1e9, 1.0]]}))
+    with pytest.raises(ValueError, match="edit the file"):
+        build(REG.override({"premise.training-cut-hardness.beta": [[1e5, 16.0]]}), "reference-remote-h200")
+
+
+def reference_profile():
+    s = build(REG, "reference-remote-h200")
+    return s, s.families[0].profile(s.model, s.run)
+
+
+def test_the_class_is_the_cap_at_the_profiles_costs_and_shape():
+    """A weight value at the profile's `b_w`, an activation value at `β(k)` and at most its `b_a` bits, an output at
+    `b_a` bits and wires, over the model's own outputs a product; no cap past the last row."""
+    arg = CLASSES["min-cut"]
+    assert arg.cites == (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS) and arg.counts == "kappa"
+    assert lean.status(arg.cites[0]) == "proved" and lean.weakest(arg.cites) == "conditional"
+    assert premise_status(arg.cites, 2e7) == "assumed" and premise_status(arg.cites, 1e9) == "contested"
+    _, p = reference_profile()
+    a = arg.allowance(p)
+    assert min_cut.beta(4e8) < p.b_a < min_cut.beta(2e7)
+    for k, beta in ((1e5, p.b_a), (2e7, p.b_a), (4e8, min_cut.beta(4e8))):
+        assert a(FlopBudget(1e30, k)) == min_cut.cap(k, p.outputs_per_product * p.b_a, p.b_w * beta, p.b_a)
+    assert a(FlopBudget(1e30, 8e8)) < math.inf and a(FlopBudget(1e30, 8.1e8)) == math.inf
+    with pytest.raises(Outside, match="outputs_per_product"):
+        arg.allowance(replace(p, outputs_per_product=None))
+
+
+def test_outputs_per_product_is_the_models_shape():
+    """A matrix's forward product gives `d_out` values a token and its input gradient `d_in`, the head's among them,
+    over the products `κ` counts; a kind that doesn't count whole matrices' products states none, and is outside."""
+    s, p = reference_profile()
+    layers = [m for g in instances.LAYERED for m in s.model.matrices.get(g, ())]
+    head = list(s.model.matrices.get("head", ()))
+    products = 2 * sum(m.size * m.active for m in layers) + sum(m.size * m.active for m in head)
+    values = sum((m.d_out + m.d_in) * m.active for m in layers) + sum(m.d_in * m.active for m in head)
+    assert p.outputs_per_product == pytest.approx(values / products, rel=1e-12)
+    assert 1 / max(m.d_in for m in layers) < p.outputs_per_product < 1 / min(m.d_out for m in layers)
+    lora = family(REG, "lora-r16").profile(s.model, s.run)
+    assert lora.outputs_per_product is None
+    with pytest.raises(Outside, match="outputs_per_product"):
+        CLASSES["min-cut"].allowance(lora)
