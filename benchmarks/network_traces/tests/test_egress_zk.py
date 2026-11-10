@@ -1,7 +1,7 @@
 """egress_zk's host side: the execution phase it reads (each bucket's state renders the network certifier's row, its
 registration read under the test key) and each member's host read (`egress_zk.refused`, as Lean's registered reads make it, of the
-rows the units compute) as the member's: honest accepted with every o0 1 and every row the warden's, lying's changed
-unit's row not the warden's, moved's at the other unit's position. Lean's statement setup (`flock-verify statement`,
+rows the units compute) as the member's: honest accepted with every o0 1 and every row the certifier's, lying's changed
+unit's row not the certifier's, moved's at the other unit's position. Lean's statement setup (`flock-verify statement`,
 `Registered.checkComplete` among its checks) holds each staged member to the verifier's registered reads of every
 port. Nothing here proves (`egress_zk.prove` does, on a node)."""
 
@@ -17,7 +17,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))
-from test_warden_zk import needs_lean, reads_of, statement  # noqa: E402
+from test_certifier_zk import needs_lean, reads_of, statement  # noqa: E402
 
 
 def _load():
@@ -79,7 +79,7 @@ def staged(tmp_path_factory):
 @needs_lean
 def test_lean_holds_every_port_of_each_members_statement_to_the_verifiers_registered_reads(staged, tmp_path):
     """Lean's statement setup, `Registered.checkComplete` with it: honest passes under the verifier's file, which names
-    every port (``o1`` at the warden's root, ``state`` at the member's committed states, ``o0`` at the verifier's own
+    every port (``o1`` at the certifier's root, ``state`` at the member's committed states, ``o0`` at the verifier's own
     known words 1); lying fails at ``o1``'s rows and moved at its positions; honest's ``o0`` fails a verifier whose
     known words are 0, as a unit whose state renders no row would; and honest shaped as before every port was
     registered (only ``o1``) fails for the first port it leaves out. The host reads above only mirror Lean: this holds

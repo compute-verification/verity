@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's egress bucket in zero knowledge (egress_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, as warden_zk.sh runs warden_zk.py.
+# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, as certifier_zk.sh runs certifier_zk.py.
 # From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env EZ_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/egress_zk.sh

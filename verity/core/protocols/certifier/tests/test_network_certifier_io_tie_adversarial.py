@@ -25,7 +25,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER
 
-from test_network_certifier_io_tie import (BIG, V, _cell_tampers, _content_ok, busiest, busy, commit, serve, wardens,
+from test_network_certifier_io_tie import (BIG, V, _cell_tampers, _content_ok, busiest, busy, commit, serve, certifiers,
                                            with_cells)
 
 B = BIG.B
@@ -77,7 +77,7 @@ def test_a_variable_length_response_has_its_map():
     lengths = [1, 2, 17, 40, 9, 0]
     rng = random.Random(12)
     responses = [[rng.randrange(V) for _ in range(n)] for n in lengths]
-    link = serve(BIG, wardens(BIG, 2, 2), [0, 0, 1, 2, 2, 3], responses, 5 * BIG.T)
+    link = serve(BIG, certifiers(BIG, 2, 2), [0, 0, 1, 2, 2, 3], responses, 5 * BIG.T)
     windows = [commit(BIG, link, w) for w in range(5)]
     assert all(IT.reference(inst) for inst in windows)
     counts = {}
@@ -100,7 +100,7 @@ def test_a_buckets_order_carries_nothing():
     its own connection's, so a bucket whose slots are all held has distinct cells and exactly one order accepted, and
     the only other orders accepted swap byte-identical cells (the zero cells of unheld slots)."""
     one = IT.Shape(B, 2, 4, P=4, S=4, DS=4)
-    link = serve(one, wardens(one, 1, 1), [0, 0, 0, 0], [[10, 11], [12], [], [13, 14, 15]], 3 * one.T)
+    link = serve(one, certifiers(one, 1, 1), [0, 0, 0, 0], [[10, 11], [12], [], [13, 14, 15]], 3 * one.T)
     full = 0
     for w in range(3):
         inst = commit(one, link, w)

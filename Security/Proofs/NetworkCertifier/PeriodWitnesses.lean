@@ -75,8 +75,8 @@ theorem PeriodLeakAccepted_nontrivial :
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
 theorem PooledLeakAccepted_honest :
-    (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
-      ∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
+    (∀ s ∈ ({fxQueueSched} : Set (CertifierSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
+      ∀ s ∈ ({fxQueueSched} : Set (CertifierSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
   refine ⟨fun s hs => ?_, fun s hs c => ?_⟩
   · rw [Set.mem_singleton_iff.1 hs]
     exact fxQueue_fits

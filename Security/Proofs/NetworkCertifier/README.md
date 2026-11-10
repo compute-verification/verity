@@ -26,10 +26,10 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                decisions, n_hits, the hits, n_resumes, n_order, the order entries, n_lag), each integer
                                a bin and a uniform offset (binned, uniform), counted in one segment (window), the carry
                                the decisions' and the last order entry's position and rank, a run's charges (charges)
-../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
-                               (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
-                               wardenCode), the fail cell (failCell) and the client's view (clientView)
-../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
+../../Definitions/NetworkCertifier/Certifier.lean  trusted: the certifier (design v3): its cells (CellView), its public schedule
+                               (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
+                               certifierCode), the fail cell (failCell) and the client's view (clientView)
+../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the certifier and the certifier as one auditor device on a
                                server's uplink: its record format (TapRecord: on a schedule it holds, every cell its
                                code sends reads back from its record) and its one code run giving the cells and the
                                record (tapCode)
@@ -67,15 +67,15 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bit
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
                                          over the first `m` periods of `T` buckets: the factor per block and per period
-Warden.lean     the warden's code is the client view: its lane is the client view of its first late
-                                         cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
+Certifier.lean     the certifier's code is the client view: its lane is the client view of its first late
+                                         cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
                                          Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
                                          committed gate at one bit leaves every step's egress as it was
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
-Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
+Tap.lean        what the tap's certifier saw is what its certifier sent: under trusted-host, on a schedule its
                                          record format holds, its cells read back from the record its same run writes
                                          (tap_cells_read), and each data cell its lane sends before the fail cell is
                                          in it (tap_data_read)
@@ -289,7 +289,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
-  the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`):
+  the server's uplink, and it functions as an active certifier (`Definitions/NetworkCertifier/Tap.lean`):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
   the audits read, its record of those cells, so on every schedule its record format holds (`TapRecord.fits`) the
   cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The format the Python network

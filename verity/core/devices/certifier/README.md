@@ -9,9 +9,9 @@ across the link on a public, constant-rate schedule and signs a network certific
 blocks it carried (the code's *link-window*). Its protocol, its Python and its README are in
 `verity/core/protocols/certifier/`. The auditor's checks of what it signs are in `verity/core/protocols/network/`.
 
-This package models the proxy. The relay form, `verity/core/protocols/certifier/warden.py`, is the one
+This package models the proxy. The relay form, `verity/core/protocols/certifier/certifier.py`, is the one
 `benchmarks/network_traces/` runs, and it has no executable Lean yet. Its analysis is in `Security/`
-(`Security/Proofs/NetworkCertifier/Warden.lean`).
+(`Security/Proofs/NetworkCertifier/Certifier.lean`).
 
 ## What is in it
 

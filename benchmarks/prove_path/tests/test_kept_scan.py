@@ -1,6 +1,6 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network certifier's run the certifier front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
-boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden_serve.Publisher` publishes a served one
+boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `certifier_tcp_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import certifier as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Issuer, LmsSigner
 from verity.ml.crypto import lms
@@ -43,8 +43,8 @@ import prove_path as PP  # noqa: E402
 
 with PP.network_traces():
     import certifier_piece as CP
-    import warden_chain as WCH
-    import warden_serve as WS
+    import certifier_chain as WCH
+    import certifier_tcp_serve as WS
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/core/protocols/certifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
@@ -62,7 +62,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
     """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
     served through the network certifier over 2 link-windows at `CLASS`'s scan schedule."""
     scan = CLASS.scan
-    params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
+    params = W.CertifierParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
                             egress_cells=scan.KO + 1, every=scan.EVERY)
     reqs = [id_request(model="org/m", user=u, prompt=list(p), max_tokens=4, seed=i, temperature=0.0, top_p=1.0,
@@ -152,7 +152,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = PP.kept_scan(serve_dir, CLASS, USERS[3:])
-    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or link-window"):
+    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another certifier run or link-window"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
@@ -163,7 +163,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
         PP.kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
     with pytest.raises(ValueError, match="link-windows are 32 buckets, not a window of class .*'s 16"):
         PP.kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
-    with pytest.raises(ValueError, match="doesn't serve the warden at these parameters"):
+    with pytest.raises(ValueError, match="doesn't serve the certifier at these parameters"):
         PP.kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         PP.kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
@@ -176,7 +176,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_re
     record kept as link-window 2 leaves its ingress link-windows 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
-    with pytest.raises(ValueError, match="the certifier front's kept run: 2 warden runs kept"):
+    with pytest.raises(ValueError, match="the certifier front's kept run: 2 certifier runs kept"):
         PP.kept_scan(two, CLASS, USERS[:3])
     undigested = _kept(tmp_path / "digest", _served(), deployment=lambda dep: dep | {"digest": "00" * 64})
     with pytest.raises(ValueError, match="the certifier front's kept run: .*deployment.json's digest isn't its param"):
@@ -193,7 +193,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_re
 
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
     """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
-    hold. No kept run whose certified I/O `warden_chain.io` accepts has either: an accepted request is a whole id
+    hold. No kept run whose certified I/O `certifier_chain.io` accepts has either: an accepted request is a whole id
     request, whose last bytes the network certifier sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""
