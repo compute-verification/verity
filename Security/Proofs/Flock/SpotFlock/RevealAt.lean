@@ -4,26 +4,26 @@ public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.LayoutAt
 
 /-!
-# The base frame: a reveal that opens each gate's row at its site
+# The base frame: a reveal that opens each gate's row at its address
 
-`revealCode h site c₀` is a frame for `frameAt`: `c₀` but for its reveal, its own ports and how it reads an opening.
-Gate `g`'s site (`site g`, a `Site`) names the value's place in its row, the port that holds the row in each unit's
-session and the frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`.
+`revealCode h addr c₀` is a frame for `frameAt`: `c₀` but for its reveal, its own ports and how it reads an opening.
+Gate `g`'s address (`addr g`, an `Address`) names the value's place in its row, the port that holds the row in each
+unit's session and the frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`.
 
 * **An opening's data** (`dataOf`): the row's bits, its salt and its path, each escaped (`esc`) so that the three
   read back (`unesc_esc`). `bitsOf`, `saltOf` and `pathOf` are the frame's `bits`, `salt` and `π`.
 * **The unit's instance** (`rankAt`): a checked unit's instance in its session is the first unit of the session's
   sample that the registration maps to it (`RegTwo.blockAt`, over the replay blocks the interior record lists).
   `layoutFor h` is `layoutAt` at that rank and `pickAny`.
-* **The opening** (`openingOf`, `siteOp`): at gate `g` of unit `u`, under the roots the program opens it under
+* **The opening** (`openingOf`, `addressOp`): at gate `g` of unit `u`, under the roots the program opens it under
   (`Reveal.rootsAt`), the session witness's bit at the unit's block and the layout's column (`bitAt`). Its data are
-  the row of the site's port at the unit's instance in the session's first table (`rowBitsAt`), that row's salt and its
-  path (`pathAt`): the session header's path for the registered read named like the port where there is one, else the
-  path in the port's published tree (`pubPath`). The reveal is the program's (`Reveal.reveal`) at that opener.
+  the row of the address's port at the unit's instance in the session's first table (`rowBitsAt`), that row's salt and
+  its path (`pathAt`): the session header's path for the registered read named like the port where there is one, else
+  the path in the port's published tree (`pubPath`). The reveal is the program's (`Reveal.reveal`) at that opener.
 * **The opening facts**, at a checked unit of an accepted run (`CheckedRun`, `CheckedRun.Ok`): the code's opening at
-  a gate the unit needs, its value and data the base frame's first opening there (`Reveal.frameAt`), is the site's
+  a gate the unit needs, its value and data the base frame's first opening there (`Reveal.frameAt`), is the address's
   (`openAt_revealCode`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
-  (`row_opening`) where the site's port is an unsegmented bit row of its place's width whose bit at the place is the
+  (`row_opening`) where the address's port is an unsegmented bit row of its place's width whose bit at the place is the
   one the layout reads (`RowAt`, with the row's format a hypothesis); its salt is that row's (`salt_opening`) and its
   path `pathAt`'s (`path_opening`).
 
@@ -169,13 +169,13 @@ noncomputable abbrev layoutFor : Layout := layoutAt h (rankAt h) (pickAny h)
 /-- **Where gate `g`'s value sits**, fixed before the run: the port whose row holds it in unit `u`'s session
 (`port u`: a gate one block writes and another reads sits in each one's own port), its place in that row (the row's
 bits and the value's bit), and the frame's slot for the row. -/
-structure Site where
+structure Address where
   port : ℕ → ℕ
   place : (w : ℕ) × Fin w
   slot : Slot
 
-/-- **Gate `g`'s place**: its site's; a one-bit row where it has none. -/
-def sitePlace (site : ℕ → Option Site) (g : ℕ) : (w : ℕ) × Fin w := ((site g).map Site.place).getD ⟨1, 0⟩
+/-- **Gate `g`'s place**: its address's; a one-bit row where it has none. -/
+def addressPlace (addr : ℕ → Option Address) (g : ℕ) : (w : ℕ) × Fin w := ((addr g).map Address.place).getD ⟨1, 0⟩
 
 /-- **Row `q` of instance `n` of a session's first table, as bits**: bit `8 i + t` is bit `t` of the row's byte `i` as
 the row hash reads it (`rowBytes`, after its prefix). -/
@@ -202,10 +202,10 @@ noncomputable def pathAt (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt)
     | .ok pop => pubPath sts[0]!.c pop q (rowAt sts[0]!.c pop q (unitOf ins.read.draw n))
     | .error _ => ByteArray.empty
 
-/-- **Gate `g`'s opening at site `S` for unit `u`**, at the round-1 and round-2 messages `m₁` and `m₂` and the unit's
+/-- **Gate `g`'s opening at address `S` for unit `u`**, at the round-1 and round-2 messages `m₁` and `m₂` and the unit's
 session's setup (the module's docstring). -/
 noncomputable def openingOf (s : AuditStatement) (v : Seen) (wF : Claims.Flock.Wit) (u : ℕ) (m₁ m₂ : Msg)
-    (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt) (S : Site) (g : ℕ) : List Msg × Opening Bool :=
+    (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt) (S : Address) (g : ℕ) : List Msg × Opening Bool :=
   let xS := unitStmt h m₂ u
   let n := rankAt h [] m₁ xS u
   (Reveal.rootsAt (partition h) (two h) (iroots []) s u v g,
@@ -216,40 +216,40 @@ noncomputable def openingOf (s : AuditStatement) (v : Seen) (wF : Claims.Flock.W
         (_root_.Flock.InnerRows.salt { ins.read with sts } wF 0 n (S.port u)).data.toList
         (pathAt ins sts n (S.port u)).data.toList })
 
-/-- **The opener at a site map**: gate `g`'s opening for unit `u` at its site (`openingOf`), at a transcript whose
-rounds 1 and 2 sent `m₁` and `m₂`; an empty opening at `g` where `g` has no site or the unit's session statement
-doesn't set up. -/
-noncomputable def siteOp (site : ℕ → Option Site) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit)
+/-- **The opener at an address map**: gate `g`'s opening for unit `u` at its address (`openingOf`), at a transcript
+whose rounds 1 and 2 sent `m₁` and `m₂`; an empty opening at `g` where `g` has no address or the unit's session
+statement doesn't set up. -/
+noncomputable def addressOp (addr : ℕ → Option Address) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit)
     (g : ℕ) (_ : List Msg) : Opening Bool :=
   match v.msgs with
   | _ :: (m₁, _) :: (m₂, _) :: _ =>
-    match site g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
+    match addr g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
     | some S, some (ins, _, sts) => (openingOf h s v wF u m₁ m₂ ins sts S g).2
     | _, _ => ⟨g, false, []⟩
   | _ => ⟨g, false, []⟩
 
-theorem siteOp_seenAt {site : ℕ → Option Site} {S : Site} {s : AuditStatement} {u g : ℕ} {m₀ m₁ m₂ : Msg}
+theorem addressOp_seenAt {addr : ℕ → Option Address} {S : Address} {s : AuditStatement} {u g : ℕ} {m₀ m₁ m₂ : Msg}
     {c₀ c₁ : FlockDeploy.Coin} {rest : List (Msg × Out)} {wF : Claims.Flock.Wit} {ins : FlockDeploy.Ins} {spec}
-    {sts : Array _root_.Flock.Stmt} (hs : site g = some S)
+    {sts : Array _root_.Flock.Stmt} (hs : addr g = some S)
     (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts)) (R : List Msg) :
-    siteOp h site s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g R =
+    addressOp h addr s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g R =
       (openingOf h s (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF u m₁ m₂ ins sts S g).2 := by
-  simp only [siteOp, seenAt, hs, hset]
+  simp only [addressOp, seenAt, hs, hset]
 
-/-- **The base frame**: `c₀` with the program's reveal at the sites' opener (`siteOp`), the own ports `revealOwn`,
-each gate's place its site's, and an opening's bits, salt and path read off its data. -/
-noncomputable def revealCode (site : ℕ → Option Site) (c₀ : Code) : Code :=
+/-- **The base frame**: `c₀` with the program's reveal at the addresses' opener (`addressOp`), the own ports
+`revealOwn`, each gate's place its address's, and an opening's bits, salt and path read off its data. -/
+noncomputable def revealCode (addr : ℕ → Option Address) (c₀ : Code) : Code :=
   { c₀ with
-    reveal := Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site)
+    reveal := Reveal.reveal (partition h) (two h) (iroots []) (addressOp h addr)
     own := revealOwn
     ownAt := fun _ _ => revealOwn
     ownAt_depth := fun _ _ => le_rfl
-    place := sitePlace site
+    place := addressPlace addr
     bits := bitsOf
     salt := saltOf
     π := pathOf }
 
-theorem depth_revealCode (site : ℕ → Option Site) (c₀ : Code) : depth (revealCode h site c₀).own = 64 :=
+theorem depth_revealCode (addr : ℕ → Option Address) (c₀ : Code) : depth (revealCode h addr c₀).own = 64 :=
   depth_revealOwn
 
 /-! ## The opening facts -/
@@ -313,17 +313,17 @@ noncomputable abbrev wire (g : ℕ) : ℕ := (layoutFor h).wire [] r.m₁ (r.xS 
 /-- The unit's instance in its session. -/
 abbrev n : ℕ := rankAt h [] r.m₁ (r.xS h) r.u
 
-/-- **Gate `g`'s opening at site `S`** (`openingOf`). -/
-noncomputable abbrev opening (S : Site) (g : ℕ) : List Msg × Opening Bool :=
+/-- **Gate `g`'s opening at address `S`** (`openingOf`). -/
+noncomputable abbrev opening (S : Address) (g : ℕ) : List Msg × Opening Bool :=
   openingOf h r.s r.seen r.wF r.u r.m₁ r.m₂ r.ins r.sts S g
 
 /-- The roots the program opens gate `g` of the unit under (`Reveal.rootsAt`). -/
 abbrev roots (g : ℕ) : List Msg := Reveal.rootsAt (partition h) (two h) (iroots []) r.s r.u r.seen g
 
-/-- **The site's place reads the row the row hash reads**, at gate `g`: its width is the `16 w` bits of the site's
+/-- **The address's place reads the row the row hash reads**, at gate `g`: its width is the `16 w` bits of the address's
 port of the session's first table, and the bit the row holds at the place, at the unit's instance, is the one the
 layout reads. -/
-def RowAt (S : Site) (g : ℕ) : Prop :=
+def RowAt (S : Address) (g : ℕ) : Prop :=
   S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words ∧
     _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g)
       (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u) (S.place.2 / 8) (S.place.2 % 8)) =
@@ -331,63 +331,64 @@ def RowAt (S : Site) (g : ℕ) : Prop :=
 
 variable {h r}
 
-/-- **The sites' opener opens gate `g` at its site**: the program's opening there (`Reveal.openAt`) at `siteOp` is
-`openingOf`'s, where `g` has site `S`. -/
-theorem openAt_siteOp {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h) (hs : site g = some S) :
-    Reveal.openAt (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF g = r.opening h S g := by
+/-- **The addresses' opener opens gate `g` at its address**: the program's opening there (`Reveal.openAt`) at
+`addressOp` is `openingOf`'s, where `g` has address `S`. -/
+theorem openAt_addressOp {addr : ℕ → Option Address} {S : Address} {g : ℕ} (hr : r.Ok h) (hs : addr g = some S) :
+    Reveal.openAt (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF g = r.opening h S g := by
   obtain ⟨Pt, d, spec, -, -, -, -, -, -, -, -, -, -, hset⟩ := hr
-  show (r.roots h g, { siteOp h site r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) = r.opening h S g
+  show (r.roots h g, { addressOp h addr r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) = r.opening h S g
   exact congrArg (fun o : Opening Bool => ((r.roots h g, { o with pos := g }) : List Msg × Opening Bool))
-    (siteOp_seenAt h hs hset _)
+    (addressOp_seenAt h hs hset _)
 
-/-- **The code's opening at a gate the unit needs is the site's** (the module's docstring): the base frame's reveal is
-the program's at `siteOp`, whose opening at gate `g` is the site's (`openAt_siteOp`), under `g`'s roots
+/-- **The code's opening at a gate the unit needs is the address's** (the module's docstring): the base frame's reveal
+is the program's at `addressOp`, whose opening at gate `g` is the address's (`openAt_addressOp`), under `g`'s roots
 (`Reveal.openAt_mem`); every opening it holds is at its own gate, so its first at `g` under those roots is that one. -/
-theorem openAt_revealCode {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h) (hs : site g = some S)
+theorem openAt_revealCode {addr : ℕ → Option Address} {S : Address} {g : ℕ} (hr : r.Ok h) (hs : addr g = some S)
     (hg : r.s.prog.Needs r.b g) (c₀ : Code) :
-    Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt (revealCode h site c₀)) r.s r.u r.seen r.wF g =
+    Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt (revealCode h addr c₀)) r.s r.u r.seen r.wF g =
       r.opening h S g := by
-  have hop := openAt_siteOp hr hs
+  have hop := openAt_addressOp hr hs
   obtain ⟨Pt, d, spec, -, hP, -, -, -, -, -, hb, -, -, -⟩ := hr
-  have hmem := Reveal.openAt_mem (partition h) (two h) (iroots []) (siteOp h site) (v := r.seen) (wF := r.wF) hP hb hg
-  have hfind : (Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+  have hmem := Reveal.openAt_mem (partition h) (two h) (iroots []) (addressOp h addr) (v := r.seen) (wF := r.wF)
+    hP hb hg
+  have hfind : (Reveal.reveal (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF).find?
       (fun q => q.2.pos == g && q.1 == r.roots h g) =
-        some (Reveal.openAt (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF g) := by
-    cases hf : (Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+        some (Reveal.openAt (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF g) := by
+    cases hf : (Reveal.reveal (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF).find?
       (fun q => q.2.pos == g && q.1 == r.roots h g) with
     | none =>
       refine (List.find?_eq_none.1 hf _ hmem ?_).elim
       simp only [Bool.and_eq_true, beq_iff_eq]
       exact ⟨rfl, rfl⟩
     | some q =>
-      obtain ⟨g', -, rfl⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (siteOp h site)).1
+      obtain ⟨g', -, rfl⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (addressOp h addr)).1
         (List.mem_of_find?_eq_some hf)
       have hp := List.find?_some hf
       simp only [Bool.and_eq_true, beq_iff_eq] at hp
       obtain rfl : g' = g := hp.1
       rfl
-  have hf : Reveal.frameAt (revealCode h site c₀) r.s r.u r.seen r.wF g (r.roots h g) = (r.opening h S g).2 := by
-    show (((Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+  have hf : Reveal.frameAt (revealCode h addr c₀) r.s r.u r.seen r.wF g (r.roots h g) = (r.opening h S g).2 := by
+    show (((Reveal.reveal (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF).find?
       fun q => q.2.pos == g && q.1 == r.roots h g).map Prod.snd).getD ⟨g, false, []⟩ = _
     rw [hfind]
     exact congrArg Prod.snd hop
-  show (r.roots h g, { Reveal.frameAt (revealCode h site c₀) r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) =
+  show (r.roots h g, { Reveal.frameAt (revealCode h addr c₀) r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) =
     r.opening h S g
   exact congrArg (fun o : Opening Bool => ((r.roots h g, { o with pos := g }) : List Msg × Opening Bool)) hf
 
-theorem roots_opening (hr : r.Ok h) (S : Site) (g : ℕ) :
+theorem roots_opening (hr : r.Ok h) (S : Address) (g : ℕ) :
     (r.opening h S g).1 = if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots := by
   obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
   exact Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
 
-theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : ℕ} (hs : site g = some S)
+theorem row_opening {addr : ℕ → Option Address} {c₀ : Code} {S : Address} {g : ℕ} (hs : addr g = some S)
     (hv2 : (r.sts[0]!.c.ports[S.port r.u]!).v2 = true) (hseg : (r.sts[0]!.c.ports[S.port r.u]!).segs = none)
     (hR : r.RowAt h S g) :
-    row (revealCode h site c₀).place (revealCode h site c₀).bits (r.opening h S g).2 =
+    row (revealCode h addr c₀).place (revealCode h addr c₀).bits (r.opening h S g).2 =
       _root_.Flock.InnerRows.rowBytes r.p r.wF 0 (r.n h) (S.port r.u) := by
   obtain ⟨hw, hcopy⟩ := hR
-  have hplace : (revealCode h site c₀).place g = S.place := by
-    show ((site g).map Site.place).getD ⟨1, 0⟩ = S.place
+  have hplace : (revealCode h addr c₀).place g = S.place := by
+    show ((addr g).map Address.place).getD ⟨1, 0⟩ = S.place
     simp [hs]
   have hlen : (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).length = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words := by
     show (List.ofFn fun i : Fin (8 * (2 * (r.sts[0]!.c.ports[S.port r.u]!).words)) => _).length = _
@@ -396,12 +397,12 @@ theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : �
   have hlt : (S.place.2 : ℕ) < (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).length := by
     rw [hlen, ← hw]
     exact S.place.2.isLt
-  have hrow : rowBits (revealCode h site c₀).place (revealCode h site c₀).bits (r.opening h S g).2 =
+  have hrow : rowBits (revealCode h addr c₀).place (revealCode h addr c₀).bits (r.opening h S g).2 =
       rowBitsAt r.p r.wF (r.n h) (S.port r.u) := by
     apply rowBits_eq_of
-    · show ((revealCode h site c₀).place g).1 = _
+    · show ((revealCode h addr c₀).place g).1 = _
       rw [hplace, hlen, hw]
-    · show (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).getD ((revealCode h site c₀).place g).2 false =
+    · show (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).getD ((revealCode h addr c₀).place g).2 false =
         _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h g)
       rw [hplace, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hlt, Option.getD_some, ← hcopy]
       simp only [rowBitsAt, List.getElem_ofFn]
@@ -422,14 +423,14 @@ theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : �
     (2 * (r.sts[0]!.c.ports[S.port r.u]!).words)
     (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u))
 
-theorem salt_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
-    (revealCode h site c₀).salt (r.opening h S g).2 =
+theorem salt_opening (addr : ℕ → Option Address) (c₀ : Code) (S : Address) (g : ℕ) :
+    (revealCode h addr c₀).salt (r.opening h S g).2 =
       (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) (S.port r.u)).data.toList := by
   show saltOf (r.opening h S g).2 = _
   rw [saltOf_dataOf (r.opening h S g).2 _ _ _ rfl]
 
-theorem path_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
-    bytes ((revealCode h site c₀).π (r.opening h S g).2) = pathAt r.ins r.sts (r.n h) (S.port r.u) := by
+theorem path_opening (addr : ℕ → Option Address) (c₀ : Code) (S : Address) (g : ℕ) :
+    bytes ((revealCode h addr c₀).π (r.opening h S g).2) = pathAt r.ins r.sts (r.n h) (S.port r.u) := by
   show bytes (pathOf (r.opening h S g).2) = _
   rw [pathOf_dataOf (r.opening h S g).2 _ _ _ rfl]
   exact bytes_bs _

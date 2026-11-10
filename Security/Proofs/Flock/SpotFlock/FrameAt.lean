@@ -367,7 +367,7 @@ among the round-1 record's, where it counts any units. -/
 theorem leafAt_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) {s : Slot} (hs : s.sized = true)
     (hu : 0 < unitsAt (irootsOf m₁ ρ) s) (e : Entry) :
     leafAt (irootsOf m₁ ρ) s e = s.pos + (blocksOf rec).idxOf ρ * s.stride := by
-  rw [leafAt, if_neg (Nat.pos_iff_ne_zero.1 hu), leavesAt, if_pos hs, Nat.div_self hu, Nat.mul_one,
+  rw [leafAt, ite_eq_right (Nat.pos_iff_ne_zero.1 hu), leavesAt, ite_eq_left hs, Nat.div_self hu, Nat.mul_one,
     placeOf_irootsOf hm]
 
 /-- **A slot's leaf under the statement's roots** is `pos`, where it counts no units of its own: the statement's roots
@@ -375,6 +375,6 @@ count no replay blocks. -/
 theorem leafAt_decode {x : Msg} {st : Roots} (hx : decode x = some st) {s : Slot} (hu : s.units = 0) (e : Entry) :
     leafAt st.roots s e = s.pos := by
   have h0 : unitsAt st.roots s = 0 := by rw [unitsAt, hu, qOf_decode hx, Nat.zero_mul, Nat.add_zero]
-  rw [leafAt, if_pos h0]
+  rw [leafAt, ite_eq_left h0]
 
 end SpotFlock

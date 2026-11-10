@@ -6,8 +6,8 @@ public import Proofs.Flock.SpotFlock.SlotsAt
 /-!
 # `FrameIs` at SPOT's own frame
 
-`frameIs_built`: where the registration's frame is SPOT's own, the base frame over the sites (`Built`), and every
-gate's value has one site (`Sites`), `FrameIs` holds at SPOT's own layout `layoutFor h`. The slots hold
+`frameIs_built`: where the registration's frame is SPOT's own, the base frame over the addresses (`Built`), and every
+gate's value has one address (`Addresses`), `FrameIs` holds at SPOT's own layout `layoutFor h`. The slots hold
 (`slotsAt_slotMap`), the base frame's own ports are 64 levels deep (`depth_revealCode`), and `frameIs_of` gives
 `FrameIs` from those two.
 
@@ -26,18 +26,18 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **The registration's frame is SPOT's own**: the base frame over the sites, `frameAt` at the slot map and
-`revealCode` at the site map, from some code `c₀` for the fields the base frame doesn't set. -/
-def Built : Prop := ∃ c₀ : Code, h.frame = frameAt (slotMap h) (revealCode h (siteMap h) c₀)
+/-- **The registration's frame is SPOT's own**: the base frame over the addresses, `frameAt` at the slot map and
+`revealCode` at the address map, from some code `c₀` for the fields the base frame doesn't set. -/
+def Built : Prop := ∃ c₀ : Code, h.frame = frameAt (slotMap h) (revealCode h (addressMap h) c₀)
 
 /-- **`FrameIs` at SPOT's own frame and layout** (the module's docstring). -/
-theorem frameIs_built (hB : Built h) (hS : Sites h) : FrameIs h (layoutFor h) := by
+theorem frameIs_built (hB : Built h) (hS : Addresses h) : FrameIs h (layoutFor h) := by
   obtain ⟨c₀, hf⟩ := hB
-  exact frameIs_of h hf (slotsAt_slotMap h hS c₀) (Nat.le_of_eq (depth_revealCode h (siteMap h) c₀).symm)
+  exact frameIs_of h hf (slotsAt_slotMap h hS c₀) (Nat.le_of_eq (depth_revealCode h (addressMap h) c₀).symm)
 
-/-- **Every registration whose frame is set to SPOT's own is built**: the slot map and the site map don't read the
+/-- **Every registration whose frame is set to SPOT's own is built**: the slot map and the address map don't read the
 frame. -/
-theorem built_spot (c₀ : Code) : Built { h with frame := frameAt (slotMap h) (revealCode h (siteMap h) c₀) } :=
+theorem built_spot (c₀ : Code) : Built { h with frame := frameAt (slotMap h) (revealCode h (addressMap h) c₀) } :=
   ⟨c₀, rfl⟩
 
 /-- **SPOT's own layout embeds the statement** (the module's docstring). -/
