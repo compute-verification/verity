@@ -62,7 +62,8 @@ theorem TransportPassiveZk : Verity.Guarantees.TransportPassiveZk := by
   unfold ViewIsRecord
   rw [value_bind_draw]
   by_cases hr : ∃ o, outside s c.party C o ∧ c.readsPrivate o
-  · rcases hprem with hp | hh
+  · unfold WitnessPathPrivateOrChannelHides at hprem
+    rcases hprem with hp | hh
     · exact absurd hr (not_read_of_pathPrivate C hp)
     · have h := hh (fun w => E (some w))
       simp only [ChannelHides, value_map_draw] at h

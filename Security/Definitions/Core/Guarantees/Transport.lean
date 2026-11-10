@@ -18,11 +18,12 @@ open scoped ENNReal
 outside its ends (`outside`) is within `η` of what a simulator makes from the public record alone (`record m`, the
 declared sizes), when no node outside the ends can read the channel's private frames (`WitnessPathPrivate s c`) or the
 channel's keys hide the traffic against every test (`ChannelHides`, with `fill (record m)` the blank traffic of those
-sizes). The simulator runs the channel on that blank traffic under fresh randomness of its own. -/
+sizes): `WitnessPathPrivateOrChannelHides`, the name of that one-or-the-other. The simulator runs the channel on that
+blank traffic under fresh randomness of its own. -/
 def TransportPassiveZk : Prop :=
   ∀ {Node Ω M W Rec : Type} [Fintype Ω] [Nonempty Ω] (s : Roles Node) (c : Channel Node) (C : Node → Prop)
     (wire : M → Ω → W) (record : M → Rec) (fill : Rec → M) (η : ℝ≥0∞) (m : M),
-    (WitnessPathPrivate s c ∨ ∀ E, ChannelHides wire (fun m => fill (record m)) E η m) →
+    WitnessPathPrivateOrChannelHides s c wire (fun m => fill (record m)) η m →
     ∀ E : Option W → Prop,
       ViewIsRecord (Ω' := Ω) (fun ω => seen (outside s c.party C) c.readsPrivate (wire m ω)) (fun _ => record m)
         (fun r ω' => seen (outside s c.party C) c.readsPrivate (wire (fill r) ω')) E η

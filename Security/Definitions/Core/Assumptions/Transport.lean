@@ -5,8 +5,10 @@ import Definitions.Core.Transport
 
 The premises on a channel between an auditor party and the prover (`verity.ml.crypto.transport`). The two placement
 premises say who can read a channel's bytes in transit, and nothing proves them; the two cryptographic ones are what the
-key schedule and the record layer give, and are theorem targets from the claims their docstrings name. They sit apart
-from `Assumptions` so that the other named assumptions elaborate without the transport's vocabulary.
+key schedule and the record layer give, and are theorem targets from the claims their docstrings name.
+`WitnessPathPrivateOrChannelHides` names the one hypothesis a guarantee takes when either of two of them serves, and is
+no premise of its own. They sit apart from `Assumptions` so that the other named assumptions elaborate without the
+transport's vocabulary.
 -/
 
 namespace Verity.Assumptions
@@ -36,6 +38,15 @@ session, whose key XORs in an ML-KEM-1024 secret, from `ind-cca/ml-kem-1024` in 
 def ChannelHides {Ω M W : Type} [Fintype Ω] [Nonempty Ω] (wire : M → Ω → W) (blank : M → M) (E : W → Prop)
     (η : ℝ≥0∞) (m : M) : Prop :=
   Close (Game.value E ((Game.draw Ω).map (wire m))) (Game.value E ((Game.draw Ω).map (wire (blank m)))) η
+
+/-- **`witness-path-private` or `channel-hides`**, the one hypothesis of a channel's passive zero knowledge
+(`Guarantees.TransportPassiveZk`): no node outside `c`'s ends can read its private frames (`WitnessPathPrivate s c`), or
+its keys hide the private traffic `m` from `blank m` against every test `E`, within `η` (`ChannelHides`). It is those two
+premises and nothing more, so it has no claim of its own: a channel on the server's own uplink or reached in-region
+meets the first, and a channel across a network the prover doesn't own the second. -/
+def WitnessPathPrivateOrChannelHides {Node Ω M W : Type} [Fintype Ω] [Nonempty Ω] (s : Roles Node) (c : Channel Node)
+    (wire : M → Ω → W) (blank : M → M) (η : ℝ≥0∞) (m : M) : Prop :=
+  WitnessPathPrivate s c ∨ ∀ E, ChannelHides wire blank E η m
 
 /-- **`channel-authentic`**: in every run, the frames a receiver accepts are a prefix of the frames its peer sent, or the
 run holds a forgery: an LMS signature on a new handshake message (`euf-cma/lms-sha512-n64`), or a tag under the
