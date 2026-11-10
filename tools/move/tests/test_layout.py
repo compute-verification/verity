@@ -609,6 +609,27 @@ def test_a_path_below_a_split_directory_that_names_no_tracked_file_follows_the_t
     assert bare.returncode != 0 and "job.sh: lib/flock (" in bare.stderr and "tests/test_gate.py: lib/flock (" in bare.stderr
 
 
+def test_an_import_split_in_two_keeps_its_lines_comment_and_the_lines_it_went_on_over(tmp_path):
+    """`lib.spot` goes two ways, so one `from lib.spot import` becomes two. Each keeps the comment that ended the line. An
+    import that went on over more lines, in brackets or after a backslash, keeps those lines as they were, under the
+    statement that has their names, which goes last; its comment stays where it was, after the last line. Where the names
+    on those lines go two ways no statement has them, and the import is written again, one statement a line."""
+    use = ("from lib.spot import coins as CC, service as S  # noqa: E402\n"
+           "from lib.spot import (coins as C2, second as SS,\n                      service as S2)  # the rest\n"
+           "from lib.spot import coins as C3, service as S3, \\\n    second as S4\n"
+           "from lib.spot import (second as S5,\n                      service as S6, coins as C6)\n")
+    r, p = _run(tmp_path, {"lib/spot/__init__.py": "", "lib/spot/coins.py": "C = 1\n", "lib/spot/service.py": "S = 1\n",
+                           "lib/spot/second.py": "T = 1\n", "use.py": use},
+                '[roots]\nold = { lib = "lib" }\nnew = { verity = "verity" }\n\n[paths]\n"lib/spot/coins.py" = "verity/device/coins.py"\n'
+                '"lib/spot/" = "verity/verifier/"\n\n[modules]\n"lib.spot" = "verity.verifier"\n"lib.spot.coins" = "verity.device.coins"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "use.py").read_text() == (
+        "from verity.device import coins as CC  # noqa: E402\nfrom verity.verifier import service as S  # noqa: E402\n"
+        "from verity.device import coins as C2\nfrom verity.verifier import (second as SS,\n                      service as S2)  # the rest\n"
+        "from verity.device import coins as C3\nfrom verity.verifier import service as S3, \\\n    second as S4\n"
+        "from verity.verifier import second as S5, service as S6\nfrom verity.device import coins as C6\n")
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]

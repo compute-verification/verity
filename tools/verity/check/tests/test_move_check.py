@@ -1307,6 +1307,40 @@ def test_a_path_after_a_variable_a_shell_script_sets_to_its_own_directory_is_rec
         assert [f["path"] for f in r["refusals"]] == ["examples/wipe/demo.sh"] and "anchor" not in r["rules"], case
 
 
+SPOT = {"pkg/app/__init__.py": "", "pkg/app/spot/__init__.py": "", "pkg/app/spot/coins.py": "C = 1\n",
+        "pkg/app/spot/service.py": "S = 1\n", "pkg/app/spot/second.py": "T = 1\n", "pkg/app/spot/one/draw.py": "D = 1\n"}
+SPOT_USE = ("from app.spot import coins as CC, service as S  # noqa: E402\n" + SH_BODY
+            + "from app.spot import (coins as C2, second as SS,\n                      service as S2)\n" + SH_BODY
+            + "from app.spot import coins as C3, service as S3\nfrom app.spot.one import draw as D, \\\n    draw as D2\n")
+SPOT_SPLIT = ("from app.device import coins as CC  # noqa: E402\nfrom app.verifier import service as S  # noqa: E402\n" + SH_BODY
+              + "from app.device import coins as C2\nfrom app.verifier import (second as SS,\n                      service as S2)\n"
+              + SH_BODY + "from app.device import coins as C3\nfrom app.verifier import service as S3\n"
+              "from app.verifier.one import draw as D, \\\n    draw as D2\n")
+
+
+def _spot(tmp_path: Path, use: str) -> dict:
+    """`app.spot` goes two ways, `coins` to `app.device` and the rest to `app.verifier`, and `use.py` imports from both."""
+    repo, base = _repo(tmp_path, {**SPOT, "use.py": SPOT_USE})
+    _move(repo, "pkg/app/spot/coins.py", "pkg/app/device/coins.py")
+    for name in ("__init__.py", "service.py", "second.py", "one/draw.py"):
+        _move(repo, f"pkg/app/spot/{name}", f"pkg/app/verifier/{name}")
+    _write(repo, {"use.py": use})
+    return _check(repo, base)
+
+
+def test_an_import_split_in_two_keeps_its_lines_comment_and_the_lines_it_went_on_over(tmp_path):
+    """One `from` import whose names now come from two modules becomes two (`tools/move/layout.py`): each keeps the
+    comment that ended the line, and where the import went on over more lines, in brackets or after a backslash, those
+    lines stay as they were under the statement that has their names. Refused: a line that lost the comment, and a
+    continued line whose module is not where its names went."""
+    r = _spot(tmp_path / "split", SPOT_SPLIT)
+    assert r["certified"], r["refusals"]
+    for case, use in (("comment", SPOT_SPLIT.replace("coins as CC  # noqa: E402", "coins as CC")),
+                      ("bracket", SPOT_SPLIT.replace("from app.verifier import (second", "from app.other import (second")),
+                      ("backslash", SPOT_SPLIT.replace("from app.verifier.one import", "from app.other.one import"))):
+        assert [f["path"] for f in _spot(tmp_path / case, use)["refusals"]] == ["use.py"], case
+
+
 def test_relative_import_rewritten_absolute_is_certified(tmp_path):
     body = "".join(f"\n\ndef f{i}():\n    return put({i})\n" for i in range(8))
     files = {"pkg/app/options/__init__.py": "", "pkg/app/options/pearl.py": "from .pearl_host import put\n" + body,

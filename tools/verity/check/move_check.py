@@ -471,18 +471,20 @@ FROM = re.compile(rf"^{_OPEN}from\s+([\w.]+)\s+import\s+([\w\s,]+?)\s*{_CLOSE}$"
 IMPORT_AS = re.compile(rf"^{_OPEN}import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*{_CLOSE}$")
 #: `from a import (x, y,`, its names continued on lines the move may leave as they were, or `from a import (x, y)`
 FROM_PAREN = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+\(([\w\s,]*?),?\s*\)?\s*(#.*)?$")
+#: `from a import x, y, \`, its names continued likewise
+FROM_SLASH = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+([\w\s,]*?),?\s*\\()$")
 
 
 def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
     """Each name the import lines bind, as (indent, comment, the dotted name it binds, the name), or None if a line isn't
-    one such import. A parenthesized `from a import (` also binds `a` itself, under the name `(`: its continuation lines
-    may be unchanged context, so `a`'s rewrite must be checked even when the line names nothing."""
+    one such import. A parenthesized `from a import (`, or one continued after `\\`, also binds `a` itself, under the name
+    `(`: its continuation lines may be unchanged context, so `a`'s rewrite must be checked even when the line names nothing."""
     out = []
     for line in lines:
-        if (m := FROM.match(line)) or (m := FROM_PAREN.match(line)):
-            if m.re is FROM_PAREN:
+        if (m := FROM.match(line)) or (m := FROM_PAREN.match(line)) or (m := FROM_SLASH.match(line)):
+            if m.re is not FROM:
                 out.append((m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
-            for part in filter(str.strip, m.group(3).split(",")) if m.re is FROM_PAREN else m.group(3).split(","):
+            for part in filter(str.strip, m.group(3).split(",")) if m.re is not FROM else m.group(3).split(","):
                 name, _, alias = (w.strip() for w in part.partition(" as "))
                 if not name.isidentifier() or (alias and not alias.isidentifier()):
                     return None

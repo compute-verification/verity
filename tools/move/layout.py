@@ -1240,7 +1240,11 @@ class Run:
                     if isinstance(node, ast.ImportFrom) else _replace_names(src, old_mod, new_mod)
             else:
                 indent = " " * node.col_offset
-                new_src = ("\n" + indent).join(_wrap(s, indent) for s in rep)
+                # each statement a one-line import splits into keeps the comment that ended the line (`# noqa: E402`), which
+                # the last already has; the lines an import went on over stay with the statement that has their names
+                comment = re.match(r"[ \t]*#[^\n]*", text[b:]) if "\n" not in src else None
+                parts = _continued(src, rep, indent) or [_wrap(s, indent) for s in rep]
+                new_src = ((comment[0] if comment else "") + "\n" + indent).join(parts)
             if new_src != src:
                 edits.append((a, b, new_src))
         out = text
@@ -1610,6 +1614,25 @@ def _wrap(stmt: str, indent: str, width: int = 120) -> str:
     head, _, names = stmt.partition(" import ")
     inner = indent + "    "
     return f"{head} import (\n" + "".join(f"{inner}{n.strip()},\n" for n in names.split(",")) + f"{indent})"
+
+
+def _continued(src: str, stmts: list[str], indent: str) -> list[str] | None:
+    """The statements `stmts` that the `from` import `src` splits into, where `src` goes on over more lines (in brackets
+    or after `\\`): those lines are kept as they were, after the one statement whose names end with theirs as written,
+    which goes last. None when `src` is one line or no one statement has them."""
+    first, _, rest = src.partition("\n")
+    names = [n.strip() for line in rest.split("\n") for n in re.sub(r"#.*|[()\\]", "", line).split(",") if n.strip()]
+    bracket = first.count("(") == 1 and ")" not in first
+    if len(stmts) < 2 or not names or "#" in first or bracket == first.rstrip().endswith("\\"):
+        return None
+    for i, stmt in enumerate(stmts):
+        head, _, mine = stmt.partition(" import ")
+        mine = [n.strip() for n in mine.split(",")]
+        if mine[-len(names):] == names:
+            lead = ", ".join(mine[:-len(names)])
+            line = f"{head} import ({lead}{',' * bool(lead)}" if bracket else f"{head} import {lead}{', ' * bool(lead)}\\"
+            return [*(_wrap(t, indent) for t in stmts[:i] + stmts[i + 1:]), f"{line}\n{rest}"]
+    return None
 
 
 def _replace_names(src: str, old: str, new: str) -> str:
