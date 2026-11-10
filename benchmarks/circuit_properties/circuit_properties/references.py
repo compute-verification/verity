@@ -1,8 +1,8 @@
 """Reference circuits: the declared Boolean circuits the properties are measured on, and the designation of their counted
 products.
 
-* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.ml.circuits.ops.boolean.gemm`), one GEMM on bits.
-* `layer`: one transformer layer of the served b1 registry (`verity.ml.definitions.registry.b1`) at T positions, on bits:
+* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.definitions.ops.boolean.gemm`), one GEMM on bits.
+* `layer`: one transformer layer of the served b1 registry (`verity.definitions.registry.b1`) at T positions, on bits:
   σ(`LayerPre_v1`), the Boolean `Attention_v3` (`Attention_v6`), σ(`LayerPost_v1`), wired as `_forward_positions_v4` wires
   one layer (not layer 0: the fused add+RMSNorm with the residual). The GEMMs are σ(b1's `Gemm_v1`), `Gemm_v4`, whose dot
   steps are `AmpereBF16TcDot16_v3`: a counted product is one lane of such a step under a `Gemm` (the activation `a`, the
@@ -15,11 +15,11 @@ no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's 
 
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import bit_type
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import bit_type
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 
 from .ops import Designation, Site
 
@@ -29,7 +29,7 @@ GEMM_PRODUCTS = Designation(sites=(Site(op=r"AmpereBF16TcDot16_v3", x="a", w="b"
 
 
 def boolean_gemm(K: int, N: int) -> Program:
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 
@@ -41,7 +41,7 @@ def _config(base: dict, **kw) -> dict:
 
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
     qwen7 = _config(b1.B1_CONFIG, model="Qwen/Qwen2.5-7B", H=3584, NL=28, NH=28, KVH=4, D=128, I=18944, V=152064,
                     QKV=3584 + 2 * 4 * 128, GU=2 * 18944)
     llama = _config(b1.B1_CONFIG, model="meta-llama/Llama-3.1-405B", H=16384, NL=126, NH=128, KVH=8, D=128, I=53248,
@@ -58,8 +58,8 @@ def configs() -> dict[str, tuple[dict, str]]:
 def on_bits(word: CompositeDefinition, version: int, **bindings):
     """σ(``word``) at ``bindings`` (`boolean.lift_body`: each Call the Boolean version of its Definition), with the QKV bias
     add, `BiasAdd_v1`, which has no registered Boolean version, as σ(`BiasAdd_v1`) (its `Bf16Add`s on bits)."""
-    from verity.ml.definitions import boolean as BB
-    from verity.ml.definitions.registry import b1
+    from verity.definitions import boolean as BB
+    from verity.definitions.registry import b1
     bias = BB.sigma_lift(b1.BiasAdd, 2, register=False)
 
     def override(fn):
@@ -74,8 +74,8 @@ def on_bits(word: CompositeDefinition, version: int, **bindings):
 
 def layer_fn(C: dict, T: int = 1):
     """One b1 layer (not layer 0) at T positions on bits, as an unregistered root Definition."""
-    from verity.ml.definitions import boolean as BB
-    from verity.ml.definitions.registry import b1
+    from verity.definitions import boolean as BB
+    from verity.definitions.registry import b1
     BB.load()
     H, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]
     pre = on_bits(b1.LayerPre, 3, C=C, L0=False)

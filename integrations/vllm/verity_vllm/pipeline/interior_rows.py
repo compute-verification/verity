@@ -40,9 +40,9 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.ml.windows import rows as CS
+from verity.spot.verifier.one_stage import registration as R
+from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs

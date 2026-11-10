@@ -5,7 +5,7 @@ public import Spot.OneStage
 /-!
 # Sampled proofs' one-stage audit: what its Lean verdict means (`Spot.OneStage.check`)
 
-The property of the executable audit (`verity/core/service/spot/`, the port of `one_stage.audit.audit_record`
+The property of the executable audit (`verity/spot/verifier/lean/`, the port of `one_stage.audit.audit_record`
 with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
 decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
 

@@ -8,7 +8,7 @@
 #     -- bash benchmarks/bandwidth/run_write_host.sh
 set -uxo pipefail
 O=${OUT:?run under research run}; mkdir -p "$O"
-BW=$PWD/benchmarks/bandwidth
+BW=$PWD/archive/benchmarks/bandwidth
 B=$(mktemp -d /tmp/bwwrite-host.XXXXXX); trap 'rm -rf "$B"' EXIT
 { date -u +%FT%TZ; lscpu; numactl -H; taskset -pc $$; grep -H . /proc/self/cgroup; head -20 /proc/meminfo
   cat /sys/kernel/mm/transparent_hugepage/enabled; sudo -n dmidecode -t memory | grep -E "Speed|Type:|Size" | sort | uniq -c

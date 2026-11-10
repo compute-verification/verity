@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.ml.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.windows.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -152,11 +152,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.circuits.codec import program_digest  # noqa: E402
+from verity.windows import interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -169,7 +169,7 @@ REFUSED = 2
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
 
     _, errors = load()
     try:
@@ -746,7 +746,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
-    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    sys.path.insert(0, str(HERE.parents[1] / "verity" / "flock" / "agreement"))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))

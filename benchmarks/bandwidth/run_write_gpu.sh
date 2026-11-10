@@ -8,7 +8,7 @@
 #     -- bash benchmarks/bandwidth/run_write_gpu.sh
 set -uxo pipefail
 export O=${OUT:?run under research run}; mkdir -p "$O"
-BW=$PWD/benchmarks/bandwidth
+BW=$PWD/archive/benchmarks/bandwidth
 export B=$(mktemp -d /tmp/bwwrite.XXXXXX); trap 'rm -rf "$B"' EXIT
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 if ! "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/bwwrite" "$BW/write.cu" > "$O/build.txt" 2>&1; then

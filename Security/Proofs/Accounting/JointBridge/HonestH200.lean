@@ -86,7 +86,7 @@ no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `
 * The period (`honestRun`): one coin coordinate, PoUW's, which is H1's paths; one account; the empty circuit; a window
   of one tick, in which the compute account runs `512·128·n` tensor-core multiply-adds and nothing else, the device's
   whole rate (`device`). PoUW's verdict is the deployed check's (`checkedAccepts`): the compiled PoUW check,
-  `PouwCheck.protocol.check` (`verity/core/protocols/pouw/lean/check`, held to the Python verifier by its difftest),
+  `PouwCheck.protocol.check` (`verity/protocols/pouw/verifier/lean/check`, held to the Python verifier by its difftest),
   accepts every window of the period, as `Properties.Pouw.Period.Accepts` reads it. The period's play
   (`checkedPlay`) is H1's honest play with that acceptance, so PoUW's verdict on the run is the play's at the run's
   coin by definition. No other subprotocol runs in the period, so none accepts. The network certifier's claim at

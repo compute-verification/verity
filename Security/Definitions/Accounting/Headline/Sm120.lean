@@ -5,7 +5,7 @@ public import Definitions.Accounting.Headline.Encoding
 /-!
 # sm_120's headline instance: DS-120 and H1 + fx1 (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`verity/hardware/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 

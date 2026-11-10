@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.refs import Refs
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.refs import Refs
 
 
 @dataclass
@@ -185,7 +185,7 @@ def _same_id(fa, fb) -> bool:
 def _statics_diff(fa, fb) -> dict:
     """The binding records of two paired specialisations, as JSON: keys on one side only and keys whose values differ
     (function references by id, records/tuples expanded)."""
-    from verity.ml.circuits.defs import _plain_static
+    from verity.circuits.defs import _plain_static
     a = fa.bindings if isinstance(fa, SpecializedDefinition) else {}
     b = fb.bindings if isinstance(fb, SpecializedDefinition) else {}
     out: dict = {}

@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.protocols.pouw.verifier import core_check as CC
 
 
 @dataclass(frozen=True)

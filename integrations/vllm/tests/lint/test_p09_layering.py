@@ -81,7 +81,7 @@ PACKAGE_OF = {
 def _package(m: str) -> str:
     if m in LEAF_MODULES:
         return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
-    if I.in_group(m, ("verity.ml.definitions",)):
+    if I.in_group(m, ("verity.definitions",)):
         return "program"          # moved from program/, and held to its package cycles as they stood
     if hit := max((p for p in PACKAGE_OF if m == p or m.startswith(p + ".")), key=len, default=None):
         return PACKAGE_OF[hit]

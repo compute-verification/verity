@@ -39,21 +39,21 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ml.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.defs import bind as ir_bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.refs import runs as _refs_runs
-from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.refs import runs as _refs_runs
+from verity.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity_vllm.program import inputs
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 from verity_vllm.program.frontend import stop_rule as SR
-from verity.ml.definitions.replay import replayer
+from verity.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
@@ -109,7 +109,7 @@ class WeightLeaf:
 # ---------------------------------------------------------------------------------------------------------
 
 
-_runs = _refs_runs  # `verity.ml.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
+_runs = _refs_runs  # `verity.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
 
 
 def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, int, int]]) -> bool:
@@ -353,7 +353,7 @@ class Ctx:
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity.ml.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        """The registered table `name` (`verity.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
         return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
     def _registered(self, node, what: str, read) -> Coll:
@@ -835,7 +835,7 @@ def _translate(ctx: Ctx) -> Coll:
 
 
 def _concat_refs(parts):
-    from verity.ml.circuits.refs import concat
+    from verity.circuits.refs import concat
     return concat(list(parts))
 
 

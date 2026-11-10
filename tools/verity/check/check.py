@@ -30,7 +30,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
-                                                            upstream build and inputs when the commit changes verity/ml/flock/
+                                                            upstream build and inputs when the commit changes verity/flock/
                                                             against --base REF (default origin/main; also ratchet-gate's base
                                                             unless --ratchet-base REF is given), and presigned URLs for
                                                             the pinned Lean dependency bundles; with --on, in a free check slot of M
@@ -157,7 +157,7 @@ doesn't name:
     pytest          every test suite (`tools/verity/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
                     outcomes (`suites.json`) beside the run's result
-    circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
+    circuit-check   first flock-circuit-build, `verity/flock/prover/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
@@ -170,10 +170,10 @@ doesn't name:
                     its report beside the run's result (off the gate: a recorded check skips it, and the after-landing
                     run, `--deferred` with every job, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
-    lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
-                    `verity.ml.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
-                    the upstream build stored once and pinned by hash (`verity/ml/flock/verifier/upstream.json`), when the run has
-                    it; skipped by name without it.  `research merge` requires it for a change under verity/ml/flock/ (`tool.py`)
+    lean            `lake build` of the Lean verifier (`verity/flock/verifier`), then its partition check against
+                    `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
+                    the upstream build stored once and pinned by hash (`verity/flock/agreement/upstream.json`), when the run has
+                    it; skipped by name without it.  `research merge` requires it for a change under verity/flock/ (`tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -216,7 +216,7 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     replay
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
-    lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/ml/flock/verifier/'s
+    lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/flock/agreement/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
                     the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
@@ -277,10 +277,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
-FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
+FLOCK_VERIFIER = ROOT / "verity" / "flock" / "agreement"
 #: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
-FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
+FLOCK_LEAN = ROOT / "verity" / "flock" / "verifier"
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
@@ -807,22 +807,22 @@ def requires_outside(lean: Path) -> list[str]:
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                regenerate: bool = True, bookkeeping: bool = False) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
-    conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
+    conformance with `verity.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
-        return [("lean", "skipped: verity/core/service/flock is not on this tree", ROOT)]
+        return [("lean", "skipped: verity/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
-                                  "verity/core/service/flock/ requires this step: `check.py --record` sends it)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/flock/ or "
+                                  "verity/flock/verifier/ requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
         if len(got) == 2:
@@ -941,7 +941,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
         return (f"the pinned upstream build needs glibc {need}; this machine has {have or 'none'}: record check on a newer "
-                f"machine, or rebuild on this glibc (verity/ml/flock/verifier/upstream-build.sh) and re-pin")
+                f"machine, or rebuild on this glibc (verity/flock/agreement/upstream-build.sh) and re-pin")
     for b in bins:
         try:
             r = subprocess.run([str(b)], capture_output=True, text=True, timeout=60)
@@ -1596,7 +1596,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if held := circuit_shards(only):
         each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
         cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
-    build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
+    build = ["bash", str(ROOT / "verity" / "flock" / "prover" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
@@ -2127,9 +2127,9 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
-    """What the agreement job reads: the tracked files `agreement_closure` names (verity/ml/flock/verifier/: `ci.py` and the scripts
+    """What the agreement job reads: the tracked files `agreement_closure` names (verity/flock/agreement/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/core/service/flock/, its sources and
+    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/flock/verifier/, its sources and
     toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
@@ -2144,14 +2144,14 @@ def agreement_key(e: dict[str, str]) -> str | None:
 def rust_tests_inputs(files: list[str]) -> list[str]:
     """What `check_build.sh test` reads of the tree: the script (which pins the Flock commit and the order the patches go on in),
     the patches, and the live crate it links in."""
-    pre = "verity/ml/flock/"
+    pre = "verity/flock/"
     return [f for f in files if f == pre + "check_build.sh" or f.startswith(pre + "live/")
             or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
 
 
 def rust_toolchain() -> str | None:
     """The Rust toolchain `check_build.sh` pins: its `RUST_TOOLCHAIN` default (check passes no `RUST_TOOLCHAIN` of its own)."""
-    p = ROOT / "verity" / "ml" / "flock" / "check_build.sh"
+    p = ROOT / "verity" / "flock" / "prover" / "check_build.sh"
     m = re.search(r"^RUST_TOOLCHAIN=\$\{RUST_TOOLCHAIN:-([^}]+)\}$", p.read_text(), re.M) if p.is_file() else None
     return m and m.group(1)
 
@@ -2193,11 +2193,11 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: verity/ml/flock/verifier/, less any Lake package nested in its Lean package
+    """The tracked files the agreement job can read: verity/flock/agreement/, less any Lake package nested in its Lean package
     (Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
     requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
     `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
-    pre, lean = "verity/ml/flock/verifier/", "verity/core/service/flock/"
+    pre, lean = "verity/flock/agreement/", "verity/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
@@ -2674,7 +2674,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
 
 #: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
 #: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
-PREBUILD = "import json\nfrom verity.ml.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
+PREBUILD = "import json\nfrom verity.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
 #: the prebuild's output, in the output directory beside the steps' logs
 PREBUILD_LOG = "prebuild.log"
 

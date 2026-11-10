@@ -1,6 +1,6 @@
 // L1 + (a)'s seed path on the host (no CUDA): the byte-level reference ssn.cu's kernels are checked against, and the
 // per-call constants (templates and midstates) those kernels read. l1_ref.py computes the same values from the tree's
-// Python (verity.ml.commitments' frame-v3-sha512 and hm96-sha512, pouw's call seed and noise blocks); l1_check.cpp
+// Python (verity.commitments' frame-v3-sha512 and hm96-sha512, pouw's call seed and noise blocks); l1_check.cpp
 // prints this header's.
 //
 // A call's seed path (L1 + (a)), everything SHA-512, call j of forward f in a window with salt and ks:
@@ -133,7 +133,7 @@ inline void midstate(const u64* block, u64* st) {
   hsha::compress(st, block);
 }
 
-// frame-v3-sha512 (verity.ml.commitments.merkle)
+// frame-v3-sha512 (verity.commitments.merkle)
 inline Bytes frame_message(const char* tag, std::initializer_list<Bytes> parts) {
   Bytes m = str("veritor/protocol/merkle/frame/v3", 33);
   const size_t tl = strlen(tag);
@@ -168,7 +168,7 @@ inline Bytes root(const Bytes& dom, std::vector<Bytes> level) {
   return level[0];
 }
 
-// hm96-sha512/v1 (verity.ml.commitments.hm96)
+// hm96-sha512/v1 (verity.commitments.hm96)
 inline Bytes hm96_key() {
   const Bytes label = str("verity/hm96-sha512/key/v1", 26);
   Bytes k;
@@ -203,7 +203,7 @@ inline Bytes leaf_prefix(const Bytes& key) {
   return b;
 }
 
-// pouw (verity.ml.protocols.pouw.circuit.seeds)
+// pouw (verity.protocols.pouw.prover.circuit.seeds)
 inline Bytes call_seed_tag() { return str("verity/pouw/call-seed/v1", 24); }
 inline Bytes noise_tag() {
   Bytes t = str("verity/pouw/noise/v1");
