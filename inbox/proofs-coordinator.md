@@ -21205,3 +21205,32 @@ Meanwhile C continues where #8413 doesn't reach: the header's bindings at the in
   protocol soundness", due 3 and 6 Nov) and the 14 strays are not in the brief, so I touch none of them and will list
   them in the final report for you.
 - **Next.** Task 1 issue by issue (read, then write), entry by 01:35Z; then Task 2 on #8468's head.
+
+## TWOPROVE, Tue 10 Nov 00:52Z: the chunk form
+
+CHUNK: yes, on one condition that the slot form now needs as well: every index input is a row of a replay-block parameter the boundary commits.
+
+The full answer, with what I read (file and line) and what I guessed, is on CIR-204 at 00:52Z. In short:
+
+- **`--zk`, both forms: neither is refused for input groups.** [read]
+  - `scopeOkH` and `scopeOkT` count column groups, not ports. A flat lowering puts every input port in the one leaf group; a second group comes only from a staged layout's `in_split`.
+  - So `(slots, j)`, `(slots, c)` and `(chunk, i)` each read one group, if circuits lowers them flat [guess]. `ks_form_why` on each unit's files checks that.
+- **1. Writer node per caller: yes.** [read] `nodeWires` takes a writer of one instance, chosen per caller, and `same` compares only the writer's template and port. The slots must be separate call nodes, or batches whose members all read one chunk node.
+- **2. Index values: R7 would take two, but no template parameter can read a registered value on #8413's head.** [read]
+  - `Flock.Program` arguments name only a parameter or a node, so each parameter is a link, a wire, or refused.
+  - `readOk`'s registered-value arm serves only ports no link or wire names: outputs such as `ok`.
+  - My Mon 23:01Z condition 2 on PRF-477 (the slot's `j` from a value only the interior registers) was wrong.
+  - The route with no round-2 change is a replay-block parameter for each index:
+    - chunk: 128 rows a block for `c` and 16 rows a block for `i`;
+    - slot: 2,048 rows a block for `j`.
+    - The serve commits each at the boundary.
+- **What follows for both forms.** Round 2 holds each index read to the served root at its own row, not to the values 0…K−1 [read]. A serve that commits other indices before the coins makes slots repeat or skip positions, and every drawn unit still passes.
+  - The interior value I proposed had the same gap, chosen later.
+  - Closing it needs rows the verifier computes in round 1 [guess whether round 1 can]. Otherwise the sentence says the index rows are the serve's.
+  - I'll say which on PRF-477 by Tue 06:00Z.
+- **3. Two hops: nothing assumes one hop, or prices or refuses a second.** [read]
+  - Each wire is held to its own writer's port.
+  - #8309's `Addresses` gives each value one address in its writer's port, and fails only on a value committed in two trees.
+  - It is unproved at two-stage registrations for both forms alike.
+
+The rest of your 00:33Z list (runs, #8444, N2) follows in my next entry.
