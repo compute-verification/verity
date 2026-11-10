@@ -29396,3 +29396,41 @@ since 16:30Z [read]. The proving runs' and the planner's readers wait for the tw
 - `free` in 14a1's `check.json` is read by its field name; I did not read the checker.
 - FUSEDSERVE's agent id is not in my brief or its entries, so it is named without one.
 - The layout tonight moves every path the ledger cites. I re-map them in the next pass, after it is on `main`.
+
+## BENCHCROSS, Tue 10 Nov 16:52Z: PRF-508 first entry: #8523, #8553, #8197 and #8003 are crossed on scratch branches with runs up; #8398, #7228 and #7503 should be closed; #7850 is regenerated, not merged; #8462 and #8438 are open
+
+My bc id: `bc-a2ed3339-f7fe-5509-a52c-e9034483e8dc`. Read your 16:30Z message [read]: no push to a PR's head, runs detached, I end my turn when this is written down. Candidate: `origin/queue/034a1702664b` = `034a1702664bff0ac1f8b416b4715f00f84b15d0` [run]. `origin/main`'s AGENTS.md equals my checkout's [run].
+
+The ten:
+
+| PR | Verdict | Where | Why, in one line |
+|---|---|---|---|
+| #8523 (marked, refused) | merged | `cursor/proofs-cross-8523-5393` @ `aead498cb8b1` | one hunk, the README's opening paragraph [run] |
+| #8553 (marked) | merged | `cursor/proofs-cross-8553-e0dc` @ `803d8b916593` | its head holds #8523's; merged with #8523's scratch, no conflict [run] |
+| #8197 | merged | `cursor/proofs-cross-8197-4e11` @ `a01443cce919` | five hunks in `benchmarks/one_stage/a5.py`; it needs #8139 first (its base, not in its head) [run] |
+| #8398 | close | | #8420 replaces it (`effeabb07c94`, in the candidate as `2a7a2f3d49`; its title says so) [read] |
+| #8438 | open, leaning close | local only | #8359 landed its router and DSA rows in another form (`b8aefb10e4`, in gates), #8520 its sparse MLA; detail next entry |
+| #8462 | merging | local only | six hunks in four `benchmarks/spot_figures/` files, not yet read |
+| #8003 (draft) | merged | `cursor/proofs-cross-8003-46b8` @ `9cdab87ed7b4` | its registered-reads half is on `main` as #8020 (`41715db2fc`); the harness is what's left [run] |
+| #7228 | close | | #8036 is on `main` (`7e7ed0b74b`) and says it supersedes #7228 [read]; `main`'s lean-proofs and smell-check skills hold its text [run: grep] |
+| #7850 | keep, regenerate | | a `Move:` request: one generated commit, rerun on the base by `tools/move/stage.py tools/move/spot_term_map.toml`, never merged. The rename is not on the candidate: "sampled proofs" 559 times in 227 files there [run] |
+| #7503 (draft) | close | | `main` refuses the recursive form by name (`Verity.Sampled.recursiveForm_refused`, `bb185dee73`), so the bound it states holds there with no hypothesis; its base `cursor/soundness-assemble-5e54` has no PR and the candidate has no `RecursiveForm` [run: grep] |
+
+One line a hunk:
+
+- **#8523**, `benchmarks/served_units/README.md`: the candidate's two lines on the loopback run (it renamed the prover), then this PR's four on the refusal (`ProvedScope.NO_PROGRAM`, `lean_refused_no_program`). No reader of the keys it renames is on the candidate's side [run: grep].
+- **#8197**, `benchmarks/one_stage/a5.py`: in each of the five (`coins_draw`, `coins_outcome`'s signature and its negatives, `audit`'s registration check and its call) the PR's seed salt (`AC.RankCoins`, `seeded(a, salt)`) stays beside the candidate's history tables (`history=`). One line no conflict showed: the candidate's new history negative now also passes `**seeded(a, salt)`, since after a challenger's draw `rec` is the salted record.
+- **#8003**: `verity/ml/windows/rows.py` (three) and `verity/ml/windows/tests/test_interface.py` (one) are the candidate's, whole: that half landed as #8020 and has moved on. `benchmarks/spot_proved/pyproject.toml`: both comments, the PR's PoUW inputs, less the two `verity/core/protocols/sampled_proofs/` paths the list driver kept. A second commit, which no conflict showed: the PR's two new files spelled `verity.core.protocols.sampled_proofs` and `D.parse_law`, which the candidate renamed (`spot`, `parse_design`) [run: a static check of every name they read off a module of the tree, 0 unresolved after].
+
+Runs, each `suites.py --changed 034a1702664b… --quick` on a node:
+
+| Run | Holds | State at 16:51Z | ETA |
+|---|---|---|---|
+| `r20261110-162957-a5de` | #8553 and #8523 (`803d8b916593`) | waiting for a slot on cpu-8 | about 17:40Z |
+| `r20261110-163426-8bd6` | #8197 (`a01443cce919`) | done, cpu-1: 8 of 9 suites pass, `benchmarks/one_stage` fails | |
+| `r20261110-165036-549f` | control: `benchmarks/one_stage` on #8197's own head `4de6f2a3d59c` | waiting on cpu-11 | about 17:25Z |
+| `r20261110-164808-8a5b` | #8003 (`9cdab87ed7b4`) | waiting on cpu-11 | about 17:30Z |
+
+#8197's failure [run]: 492 passed, 3 failed, 4 errors, all in `tests/test_a5_salt.py` and `tests/test_a5_reserve.py`. The one traceback the log prints is `fake_challenger.Challenger(..., window=…)`: `TypeError`, a keyword only #8139's branch has; the same tests read `coins.seed_salt_in`, which is also only #8139's [read]. So I take them as #8139 missing, not the merge; the control run says whether the PR's own head fails the same seven. Next: #8197's scratch merged with SPOTCROSS's `cursor/proofs-cross-8139-bd99`, so the stack is tested as it would land.
+
+Left before I end: #8462's hunks and run, #8438's verdict, #7850's regeneration on a node. Left for after the layout, on your word: `tools/move/restack.py` on each kept PR, one push each.
