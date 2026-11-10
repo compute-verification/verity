@@ -9,7 +9,7 @@ public import Definitions.InferenceOnly.Transfers
 For a division `P` of a circuit into machines, what `R_b` reads from outside itself is its transfers in and the input
 gates it reads, `in(R_b) = transfersInto b ∪ inputsRead b` (`into_eq`), two disjoint sets, and a transfer gate is
 computed, so never in a baseline. So `freshInput d R_b` is the width of `(transfersInto b ∪ inputsRead b) \ θ`
-(`freshInput_eq`): the bits on the wire into `b`, plus the width of the novel input gates `b` reads itself
+(`freshInput_eq`): the bits on the wire into `b`, plus the width of the fresh input gates `b` reads itself
 (`freshInput_eq_add`). In the Boolean profile, where every gate is one bit (`∀ g, d.D.w g = 1`, which
 `Verity.Boolean.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`freshInput_eq_card`,
 `freshInput_eq_card_add`).
@@ -17,7 +17,7 @@ computed, so never in a baseline. So `freshInput d R_b` is the width of `(transf
 So compliance with the inference-only policy is a ratio of two certified numbers. Machine `b`'s inference-block condition, `CompliesRate`'s condition on one inference block, holds
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
 `|transfersInto b|` network accounting's certified count of the bits into `b` and `size R_b` compute credit's total for
-`b`. When every novel input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
+`b`. When every fresh input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
 (`iu_iff_wire`). That is the form a server needs among clients and the auditor's warden, which needn't comply as inference blocks: the
 warden reads every bit it relays. When each machine is one inference block and every machine meets its condition, the whole
 declaration complies (`complies_of_counts`).
@@ -159,12 +159,12 @@ theorem disjoint_transfersInto_θ (b : Fin n) : Disjoint (transfersInto P b) d.�
   intro g h1 h2
   exact Bool.false_ne_true (((mem_transfersInto P).1 h1).2.symm.trans (d.θ_input g h2))
 
-/-- **Novel reads from transfers**: `freshInput d R_b = width((transfersInto b ∪ inputsRead b) \ θ)`. -/
+/-- **Fresh input bits from transfers**: `freshInput d R_b = width((transfersInto b ∪ inputsRead b) \ θ)`. -/
 theorem freshInput_eq (b : Fin n) :
     freshInput d (P.gates b) = d.D.width ((transfersInto P b ∪ inputsRead P b) \ d.θ) := by
   rw [freshInput, into_eq]
 
-/-- **Novel reads are the bits on the wire and the novel inputs read**: `freshInput d R_b` is the width of
+/-- **Fresh input bits are the bits on the wire and the fresh inputs read**: `freshInput d R_b` is the width of
 `transfersInto b` plus the width of `inputsRead b \ θ`. -/
 theorem freshInput_eq_add (b : Fin n) :
     freshInput d (P.gates b) = d.D.width (transfersInto P b) + d.D.width (inputsRead P b \ d.θ) := by
@@ -172,20 +172,20 @@ theorem freshInput_eq_add (b : Fin n) :
   unfold Circuit.width
   exact sum_union (disjoint_of_subset_right sdiff_subset (disjoint_transfersInto_inputsRead P b))
 
-/-- **Novel reads in the Boolean profile**: `freshInput d R_b = |(transfersInto b ∪ inputsRead b) \ θ|`. -/
+/-- **Fresh input bits in the Boolean profile**: `freshInput d R_b = |(transfersInto b ∪ inputsRead b) \ θ|`. -/
 theorem freshInput_eq_card (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     freshInput d (P.gates b) = ((transfersInto P b ∪ inputsRead P b) \ d.θ).card := by
   rw [freshInput_eq, width_eq_card hw]
 
-/-- **Novel reads in the Boolean profile, as two counts**: `freshInput d R_b = |transfersInto b| + |inputsRead b \ θ|`,
-the bits on the wire into `b` and the novel input gates `b` reads. -/
+/-- **Fresh input bits in the Boolean profile, as two counts**: `freshInput d R_b = |transfersInto b| + |inputsRead b \ θ|`,
+the bits on the wire into `b` and the fresh input gates `b` reads. -/
 theorem freshInput_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     freshInput d (P.gates b) = (transfersInto P b).card + (inputsRead P b \ d.θ).card := by
   rw [freshInput_eq_add, width_eq_card hw, width_eq_card hw]
 
 /-- **One machine's inference-block condition from its counts** (the Boolean profile): `CompliesRate`'s condition on the inference block `R_b`
-(at most `Γ` gates, at most `α` bits of novel information per gate) holds exactly when `size R_b ≤ Γ` and
-`|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`: network accounting's certified bits into `b`, plus the novel
+(at most `Γ` gates, at most `α` fresh input bits per gate) holds exactly when `size R_b ≤ Γ` and
+`|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`: network accounting's certified bits into `b`, plus the fresh
 input gates `b` reads itself, against compute credit's total for `b`. It is stated for one machine because the others
 need not comply as inference blocks: a server's session is one inference block, while the clients and the auditor's warden, which reads every bit
 it relays, are not inference blocks of the server's workload. -/

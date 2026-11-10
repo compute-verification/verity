@@ -12,7 +12,7 @@ public import Proofs.InferenceOnly.Lemmas.Reads
 # Proofs of the partial-sum rule on a reference circuit
 
 Pull a compliant division of the containing declaration back to `c` (`pull`): each piece has no more gates than its inference block
-and reads no more novel information (`freshInput_pull`), so the pieces form a division of `c` into inference blocks of at most `Γ`
+and reads no more fresh input (`freshInput_pull`), so the pieces form a division of `c` into inference blocks of at most `Γ`
 gates reading at most `αΓ` each. The reads form of the sampling design (`UpdatedMatMulReads`), applied to `c` with that division,
 bounds the pieces' total reads from below by `G · f(αΓ)`; the inference blocks read at least as much, and at most `α size(d)` in total
 (`containedMatMul_of_reads`).
@@ -146,7 +146,7 @@ theorem card_products_le_dark (M : PartialContainment c d) (ch : Chain c.D) :
 end Dark
 
 /-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its inference block and reads
-no more novel information. -/
+no more fresh input. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
