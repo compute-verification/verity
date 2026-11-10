@@ -68,7 +68,8 @@ against `T = 1`. `PeriodLeakCharged_nontrivial` is that count alone.
 **The premises together** (`PeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
 connection, where `PeriodLeakChecked_honest` has `PeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
 one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the period has no
-window and no connection, so it shows nothing about a failure, a window's check or a run that passes.
+window and no connection, so it shows nothing about a failure, a window's check or a run that passes, and where a
+window is placed and a run is accepted every premise but the weights' sum is still to be shown.
 
 `posL` rejects every run, so no lemma at it is about a run that passes: each shows what the count does where the
 premises hold. Its period has no checked input and one window, so none shows anything about a checked input or about
@@ -264,8 +265,11 @@ set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
 `PeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
 finite set, and the weights `2^-(j+1)` on the number of failures, which sum to at most one (`kraftWeights_halves`).
-The premises hold together there, and the lemma shows nothing more: the period has no window and no connection, so
-nothing about a failure, a window's check or a run that passes. -/
+The premises hold together there, and the lemma shows nothing more. The period has no window and no connection: it
+covers no run with a failure, and holds no window's placement, check or registration to anything. Where a window is
+placed and a run is accepted, the window's placement (`WindowsPlaced`), its check's pinning (`CheckedUnique`), the
+read-back of a format with a connection (`RecordFormat.ReadsBy`) and its channel (`PeriodChannelReg`) are not shown
+here, with or without a failure; the weights' sum alone is shown at every number of connections. -/
 theorem PeriodLeakCharged_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
