@@ -268,7 +268,7 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarante
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `pooledIncorrectBlocks` and `pooledLeak`). All 25 are under `shape.frozen` as
+last two by `pooledIncorrectBlocks` and `pooledLeak`). All 28 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
@@ -289,7 +289,7 @@ forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the f
 hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
 given the run before it have no Lean statement for the check: the queue and the hand ticks carry across windows.
 
-The other 22 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 25 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
