@@ -667,7 +667,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
 
     def run(cmd, **kw):
@@ -782,7 +782,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -888,7 +888,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -912,7 +912,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
