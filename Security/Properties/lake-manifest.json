@@ -90,7 +90,7 @@
    "name": "nci_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/core/protocols/network/nci/lean",
+   "dir": "../../verity/protocols/inference_only/verifier/nci/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

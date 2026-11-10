@@ -2348,6 +2348,13 @@
         "verity/core/protocols/network/tests/": "verity/protocols/certifier/verifier/network/tests/",
         "verity/ml/protocols/certifier/": "verity/protocols/certifier/prover/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/": "verity/protocols/inference_only/nci/",
+        "benchmarks/rho/": "verity/protocols/inference_only/rho/",
+        "verity/core/protocols/network/nci/": "verity/protocols/inference_only/verifier/nci/"
+      }
     }
   ]
 }

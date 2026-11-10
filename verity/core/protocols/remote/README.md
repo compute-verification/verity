@@ -28,7 +28,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 - `RemoteChallenger` (`verity/spot/device/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/protocols/certifier/verifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
+  `Nci`) and `verity/protocols/inference_only/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
@@ -58,7 +58,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 |---|---|---|---|
 | Sampled proofs ([README](../../../spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/spot/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../protocols/pouw/verifier/README.md)) | the period's credited work, in live words, is the registered circuit's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/pouw/verifier/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../../../protocols/inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/protocols/inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
 [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`. The policy and sampled
@@ -247,7 +247,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` ta
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`); once composed, the
+  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/protocols/inference_only/verifier/nci/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
@@ -525,10 +525,10 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator, `benchmarks/rho` (`verity bench rho`).
+calculator, `verity/protocols/inference_only/rho` (`verity bench rho`).
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
-(`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
+(`uv run python verity/protocols/inference_only/rho/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|

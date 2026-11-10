@@ -28,7 +28,7 @@ import verity_difftest as D
 from verity_difftest import Reject
 from verity_difftest import protocol as P
 
-LEAN = Path(__file__).resolve().parents[5] / "core" / "protocols" / "network" / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "nci" / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 ID = "verity/inference-only/v0"

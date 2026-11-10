@@ -13,7 +13,7 @@
    "name": "nci_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../network/nci/lean",
+   "dir": "../../../protocols/inference_only/verifier/nci/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
