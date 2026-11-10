@@ -38,6 +38,8 @@ TREE = {
     "old/lib/__init__.py": "",
     "old/lib/mod.py": "from . import deep\n",
     "old/lib/deep.py": "",
+    "app/pyproject.toml": '[project]\nname = "app"\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "app/tests/test_app.py": "def test_app():\n    pass\n",
     "docs.md": "Read old/lib and old/lib/mod.py, then every old/lib/*.py. The suite is old/pkg.\n",
 }
 ROOTS = '[roots]\nold = { old = "old" }\nnew = { new = "new" }\n'
@@ -146,6 +148,17 @@ def test_a_test_file_goes_to_archive_with_the_code_it_tests(repo: Path) -> None:
     r = suites(repo, WHOLE + tests)                                 # archived alone: the code they test stays
     assert r["orphans"] == [] and r["archived_with_code"] == []
     assert [x["lands"] for x in r["parted"]] == ["archive/old/pkg/tests/test_extra.py", "archive/old/pkg/tests/test_tool.py"]
+
+
+def test_a_test_file_goes_into_another_suite_with_the_code_it_tests(repo: Path) -> None:
+    test = ROOTS + '[paths]\n"old/pkg/tests/test_a.py" = "app/tests/test_a.py"\n'
+    alone = suites(repo, test)
+    assert alone["orphans"] == [] and [x["test"] for x in alone["parted"]] == ["old/pkg/tests/test_a.py"]
+    r = suites(repo, test + '"old/lib/mod.py" = "app/app/mod.py"\n')
+    assert r["orphans"] == r["parted"] == []
+    assert [(x["test"], x["into"]) for x in r["sent_with_code"]] == [("old/pkg/tests/test_a.py", "app/pyproject.toml")]
+    # it is the other suite's now: what it imports, and its own suite's inputs covered, must be in that suite's inputs
+    assert [(x["suite"], x["module"]) for x in r["inputs"]] == [("app/pyproject.toml", "old/lib/deep.py")]
 
 
 def test_a_directory_emptied_by_file_rows_is_counted_until_a_tokens_row_names_it(repo: Path) -> None:
