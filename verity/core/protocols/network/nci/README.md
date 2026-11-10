@@ -5,9 +5,8 @@
 The inference-only policy's check, in Lean only. This directory is `lean/` and this file: it has no Python package
 and no console script.
 
-- **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at
-  `verity/protocols/certifier/verifier/lean`, `verity/composite/verifier/onsite`, `verity/composite/verifier/remote`
-  and `security/Properties` require by path.
+- **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../lean`,
+  `verity/core/protocols/onsite`, `verity/core/protocols/remote` and `Security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
@@ -18,15 +17,17 @@ and no console script.
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
-  `integrations/vllm`, by `workloads/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `integrations/vllm`, by `examples/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
-  `verity/flock/prover` load `desc_difftest_vectors.py` by path.
+  `verity/ml/flock` load `desc_difftest_vectors.py` by path.
 - **Documents**: it reads registration records (`verity/registration/v2`), which `integrations/vllm` writes as the
   check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
-- **Loads from**: the packages at `verity/flock/verifier` and its `interface`, and nothing of the certifier.
-- **Not here**: its tests. They are in the suite `verity/protocols/certifier/verifier/network`, with the tests of
-  the certifier's Lean check (`test_nci_*.py` and `test_inference_only_protocol.py` in its `tests/`).
+- **Loads from**: the packages at `verity/core/service/flock` and `verity/core/protocols/interface`, and nothing of
+  the certifier.
+- **Not here**: its tests. They are in the suite `verity/core/protocols/network`, with the tests of the certifier's
+  Lean check: `test_nci_*.py` and `test_inference_only_protocol.py` in `../tests`, the second of which the tests of
+  `verity/core/protocols/composition` load by path.
 
 ## Overview
 
@@ -98,16 +99,15 @@ nothing else but Lean core and the core interface (`core_protocol`).
   - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
     for some codes).
   - Not public: the rows (each block Definition's gates, fresh bits and blocks), the total and which block failed.
-    `nci-check --count --detail` prints that whole verdict (`NciCheck.Count.checkDetail`) for the private record
-    only.
+    `--count --detail` prints that whole verdict (`NciCheck.Count.checkDetail`) for the private record only.
 
   `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that a published `complies` means
-  `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
+  `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. The count's difftest holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/nci_reference.py`), run by
   `../tests/test_nci_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
-  format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
-  provenance, which is what `benchmarks/verifier_cost` measures.
+  format is in `NciCheck.Check`'s docstring. `--policy` runs the policy's check alone, without θ's provenance, which
+  is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to

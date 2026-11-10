@@ -16,8 +16,9 @@
   keeps what it prints. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
-- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.hardware`,
-  `verity.protocols.poub.verifier` and `verity.spot`. Its tests also load `benchmarks/pouw/proved_ticks.py` by path.
+- **Loads from**: `verity.ml.circuits`, `verity.ml.commitments`, `verity.ml.definitions`, and under
+  `verity.core.protocols`, `registration`, `spot` and PoUB's `timing` and `codec`. Its tests also load
+  `benchmarks/pouw/proved_ticks.py` by path.
 
 ## Overview
 
