@@ -174,7 +174,7 @@ def severalRun (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (e : 
 
 /-- The check at the coins `ξ` of a sample the rule cuts into several parts: the sessions' run (`severalRun`), then
 v1's `checkAt` at `ξ` on its verdicts, as `checkBlobsAt` ends. Where every session accepts and v1 accepts, the refusal
-`SPLIT_REFUSED`: it never accepts (`severalAt_rejects`). -/
+`SPLIT_REFUSED`; what v1 refuses or leaves undecided stays v1's outcome. It never accepts (`severalAt_ne_accept`). -/
 def severalAt (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
   match severalRun bound p c e bs with
@@ -184,6 +184,7 @@ def severalAt (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (ξ : 
     | .accept _ _ =>
       if r.all then .reject s!"proofs: {SPLIT_REFUSED}" else .reject "proofs: a session's verifier did not accept"
     | .reject why => .reject why
+    | .undecided why => .undecided why
 
 /-- The check at the coins `ξ` under the bound `bound`, beside `checkBlobsAt`: a bound that is no power of two refuses
 (`boundHeld`); where the rule cuts the evidence's proved proof blocks into one part the check is `checkBlobsAt`; where
@@ -205,14 +206,16 @@ theorem checkBlobsSplitAt_one (bound : Option Nat) (p : Params) (c : OneStage.Co
   simp [checkBlobsSplitAt, hb, h]
 
 /-- A sample in several parts is never accepted. -/
-theorem severalAt_rejects (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
-    (bs : Core.Blobs) : ∃ why, severalAt bound p c ξ e bs = .reject why := by
+theorem severalAt_ne_accept (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
+    (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
+    severalAt bound p c ξ e bs ≠ .accept pub prof := by
   unfold severalAt
   split
-  · exact ⟨_, rfl⟩
+  · exact nofun
   · split
-    · split <;> exact ⟨_, rfl⟩
-    · exact ⟨_, rfl⟩
+    · split <;> exact nofun
+    · exact nofun
+    · exact nofun
 
 /-- The check accepts only what today's accepts, whatever the bound. -/
 theorem accept_of_checkBlobsSplitAt (bound : Option Nat) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
@@ -222,9 +225,7 @@ theorem accept_of_checkBlobsSplitAt (bound : Option Nat) (p : Params) (c : OneSt
   split at h
   · cases h
   · split at h
-    · obtain ⟨why, hw⟩ := severalAt_rejects bound p c ξ e bs
-      rw [hw] at h
-      cases h
+    · exact absurd h (severalAt_ne_accept bound p c ξ e bs pub prof)
     · exact h
 
 private def refusal : V Unit → String
