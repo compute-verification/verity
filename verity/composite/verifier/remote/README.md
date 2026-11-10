@@ -58,7 +58,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 |---|---|---|---|
 | Sampled proofs ([README](../../../spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/spot/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../protocols/pouw/verifier/README.md)) | the period's credited work, in live words, is the registered circuit's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/pouw/verifier/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../protocols/inference_only/verifier/inference_only/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/inference_only/verifier/inference_only/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../../../protocols/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
 [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`. The policy and sampled
@@ -247,7 +247,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` 
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/inference_only/verifier/inference_only/lean`); once composed, the
+  own, as `nci-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/inference_only/verifier/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.

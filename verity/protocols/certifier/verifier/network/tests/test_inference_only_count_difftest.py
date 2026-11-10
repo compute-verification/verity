@@ -1,6 +1,6 @@
 """The count of `(c, k)`-inference blocks (`InferenceOnlyCheck.Count`) against the Python reference: the Python half.
 
-`verity/protocols/inference_only/verifier/inference_only/lean/scripts/count_difftest_vectors.py` writes 1,669 instances of the count (1,500
+`verity/protocols/inference_only/verifier/lean/scripts/count_difftest_vectors.py` writes 1,669 instances of the count (1,500
 random, 6 on each distinct descriptor of the circuits fixtures, 7 worked by hand) and, on each,
 `scripts/inference_only_reference.py`'s `check_count_detail` (the whole verdict, for the private record) and `check_count` (what
 the count publishes, the judgment against n). `check` runs the Lean half in its Lean audit (`runs` in that package's
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

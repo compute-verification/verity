@@ -27,7 +27,7 @@ from tests.pipeline.test_cpu_replay import _shard
 from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
-    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/lean/scripts/inference_only_reference.py")
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 

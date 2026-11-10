@@ -24,7 +24,7 @@ from verity.circuits.population import population_program
 from verity.definitions.boolean import gate_table
 from verity.windows import interface as IF
 
-REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py"
+REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/lean/scripts/inference_only_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"

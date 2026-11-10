@@ -32,7 +32,7 @@ path = "../../verity/protocols/pouw/verifier/lean/commit"
 
 [[require]]
 name = "inference_only_check"
-path = "../../verity/protocols/inference_only/verifier/inference_only/lean"
+path = "../../verity/protocols/inference_only/verifier/lean"
 
 [[require]]
 name = "certifier_device"

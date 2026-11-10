@@ -5,7 +5,7 @@ public import InferenceOnlyCheck.Protocol
 /-!
 # What the inference-only policy's core protocol's acceptance means
 
-`InferenceOnlyCheck.Protocol.check` (`verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Protocol.lean`, package `inference_only_check`) is the
+`InferenceOnlyCheck.Protocol.check` (`verity/protocols/inference_only/verifier/lean/InferenceOnlyCheck/Protocol.lean`, package `inference_only_check`) is the
 inference-only policy as a core protocol, `verity/inference-only/v0`, a subprotocol of both composites
 (`Core.Onsite.protocol`, `Core.Remote.protocol`): once the run's record names the declared circuit (`names`), it runs the
 check of record, `InferenceOnlyCheck.Theta.evaluate`, on the instance its params and evidence give (`instanceOf`) and the
