@@ -1,0 +1,8 @@
+Round 11, Tue 10 Nov 13:29Z: the two open PRs whose restack the pins step should change (each changes TRUSTED.sha256 and a
+file it records, and merges main clean), across cursor/top-layout-staged-48da at 07acba4f5220, main's slow copy, carrier ed0da8ffe036.
+r20261110-132849-9662  pr8510 320038ecf05d  cpu-1
+r20261110-132936-2cb9  pr8139 1e44e2237bd9  cpu-1
+Evidence so far: art:3b03635aff9b27a3fccc7fbdf0e6bdc058bda1462a2a30b72b865e0989d313f0 (LEAN-251),
+art:f8c96f0872ae95833a8147117eb7f76bd71d5fba4d1dcb8cd0fd9e3db9a9e172 (LEAN-258 (c)); note lean/20261110T1326Z-report-lean251-restack.
+Comments: LEAN-251 ff461bed (report, 12:56Z), 58a88520 (48da's rows, 13:15Z), 8dd25711 (done-when, 13:27Z);
+LEAN-258 bd02e95d (mark, 12:46Z), ce625188 ((c), 13:22Z).
