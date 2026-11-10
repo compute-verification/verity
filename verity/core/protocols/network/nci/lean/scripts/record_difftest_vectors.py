@@ -564,7 +564,8 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
     """The case on circuit `c`: its instance (the Program, the record, `Γ`, `α` and the pins), the trusted input
     (`trusted`), the wires as SPOT reads them, up to six of its units' input rows and the count's limits; with what it
     was made from. The limits are at, just under or just over what the circuit's blocks hold; or `policy`'s, which an
-    empty `policy` is first filled with: a table of every primitive and exactly what the blocks hold."""
+    empty `policy` is first filled with: a table of every primitive and exactly what the blocks hold; a primitive a
+    later circuit computes that the policy's table lacks costs nothing."""
     text, digest = c.program()
     record = IF.circuit_bytes(c.doc(digest)).decode()
     inside = [all(s == t for s, t in _slots(c, w)) for w in c.wires]
@@ -574,20 +575,18 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
             raise AssertionError(f"{c.name}: the search doesn't decide wire {w.doc()} within its fuel")
     reference.desc_program(text)
     prims = sorted({p for fn, _ in c.templates for p in ref.template_gates(fn)})
-    every = {p: 3 + 2 * k for k, p in enumerate(prims)}
     if policy is None:
         table = {p: rng.choice([0, 1, 2, rng.randint(0, 40)]) for p in prims}
         if rng.random() < 0.1:
             del table[rng.choice(prims)]
     else:
-        table = every | policy.get("count", {}).get("table", {})
+        table = dict.fromkeys(prims, 0) | policy.get("table", {p: 3 + 2 * k for k, p in enumerate(prims)})
     inst = {"program": text, "record": record, "gamma": BIG, "alpha": [BIG, 1], "pins": pins,
             **({"order": order} if order is not None else {})}
     tr = trusted(rng, digest, record, held, roots, before, after)
     probe = ref.check_detail(inst, tr)
     assert "error" not in probe, (c.name, probe)
-    bools = ref.count(inst, tr, {"table": every, "c": 0, "k": 0, "n": 0})["bool_gates"] if policy is not None else \
-        ref.count(inst, tr, {"table": table, "c": 0, "k": 0, "n": 0}).get("bool_gates", 0)
+    bools = ref.count(inst, tr, {"table": table, "c": 0, "k": 0, "n": 0}).get("bool_gates", 0)
 
     def near(x: int) -> int:
         return x if policy is not None else max(0, x + rng.choices([0, -1, 1, rng.randint(-3, 3)], [5, 2, 2, 1])[0])
@@ -595,7 +594,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
     limits = {"gamma": near(probe["gates"]), "alpha": [near(-(-probe["fresh"] * den // max(probe["gates"], 1))), den],
               "count": {"c": near(bools), "k": near(probe["fresh"]), "n": near(probe["blocks"])}}
     if policy is not None:
-        limits = policy if policy else policy.update(limits) or policy
+        limits = policy if policy else policy.update(limits, table=table) or policy
     inst.update(gamma=limits["gamma"], alpha=limits["alpha"])
     rows = [(codec.descriptor_id(fn), p, u, r) for fn, n in c.templates for p, _ in fn.signature()[0]
             for u in range(n) for r in range(c.cuts.get(codec.descriptor_id(fn), {}).get(p, 1))]
