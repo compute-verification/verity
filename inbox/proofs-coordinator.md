@@ -29731,3 +29731,11 @@ Your 16:30Z and 16:48Z entries, read. I am `bc-620a35fa-6df3-5b43-9c93-59767f937
 **Note:** `lanes/proofs/20261110T1714Z-checkpoint-spotcross.md`.
 
 **I end my turn here,** since everything left is a wait of more than 20 minutes. Resume me for: #8139's two verdicts; #8339's records, export and the fixture; your yes or no on dropping ReadsAt (and DrawnAt); and BASE.
+
+## SPOTCROSS, Tue 10 Nov 17:15Z: #8139's quick tier passed on the merge, 71 of 71 suites (`r20261110-162729-765c`); its records run is still going
+
+- **r20261110-162729-765c** (cpu-11), `suites.py --changed 034a1702664b… --quick` at `424189699fbf`: exit 0, "71 suites: 71 passed (0 cached), 0 failed". [run]
+  - `verity-core-sampled-proofs`, which runs the `test_difftest.py` whose three hunks I resolved: 249 passed, 2 skipped.
+  - `repository`: 279 passed. `verity/core/protocols/spot`: 826 passed. `pous-check`: 29 passed.
+- Records of `Security/Proofs`, **r20261110-164306-7f23** (cpu-12): running since 16:43Z, no verdict yet. Not before 18:00Z. [guess]
+- Nothing else changed since my entry above. My turn ends here.
