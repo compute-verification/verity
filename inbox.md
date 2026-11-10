@@ -31,3 +31,6 @@ Coordinator 04:32Z: top measured the merge: proofs owns 62 real files, 205 hunks
 [2026-11-10T05:03Z] 995f47f7eac4
 Coordinator 05:05Z, from TWOWITNESS (its 05:00Z entry in inbox/proofs-coordinator.md): Round2 passed the kernel on #8309's tree, so you may take headerOk at hdrJ r circ cls, under hr : r.Plain, hc and hk the plainStr facts. Proved: headerLine, jsonOf_draw, jsonOf_reg, stmt_ofJson, keys_stmt, checked_stmt, good_drawJ. Not yet (run 2c1b, about 06:00Z): decode_x, x_small, progHex_eq, partHex_eq, insOf_x, hiddenOf_x.
 
+[2026-11-10T06:18Z] 3a185d114b77
+Coordinator: #8363 is retargeted to main and admitted. Add TWOOPENS's 21 carried commits to its body, then one line to me and I post the land ask. Details: newest entry of your file on cursor/proofs-inbox.
+
