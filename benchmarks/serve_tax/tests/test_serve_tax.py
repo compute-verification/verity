@@ -1113,6 +1113,10 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     # six reps give the cost its interval, a Commit window shorter than a pass puts the commits inside the passes, and
     # the cost is written as the run's result
     assert 'REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}' in sh and '"${cost[@]}" --out "$OUT" --result' in sh
+    # a budget's time left is shared equally by the arms still to serve: the measured arm is served last, and a cost
+    # compares only the reps both of its arms have
+    assert 'left=$(((BUDGET_MIN * 60 - ($(date +%s) - t_leased)) / to_serve))' in sh
+    assert sh.count("to_serve=$((to_serve - 1))") == 1 and 'to_serve=$(wc -w <<< "${ARMS:-}")' in sh
     # --arms all is every arm vLLM's client can drive from stock up to the launch line, each after the arm it is over
     every = re.search(r'ARMS = all \] && ARMS="([^"]+)"', sh.replace("\"$ARMS\"", "ARMS")).group(1).split()
     assert every[:2] == ["compiled", "compiled-again"] and every[-1] == S.OURS and set(every) <= set(S.ARMS)

@@ -38,9 +38,9 @@
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
-# linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that still fit
-# (serve_tax.py fit, from the arm before it), and one if none does, since reps are cut and never an arm (OUT/arms.txt says
-# what was cut).
+# linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that fit its
+# share of the minutes left, equal among the arms still to serve (serve_tax.py fit, from the arm before it), and one if
+# none does, since reps are cut and never an arm (OUT/arms.txt says what was cut).
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
@@ -172,13 +172,15 @@ if [ "${1:-}" = leased ]; then
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
-  last=
+  last=; to_serve=$(wc -w <<< "${ARMS:-}")
   for arm in ${ARMS:-}; do
     reps=$REPS
     if [ -n "${BUDGET_MIN:-}" ] && [ -n "$last" ]; then
-      left=$((BUDGET_MIN * 60 - ($(date +%s) - t_leased)))
+      # this arm's share of the time left, the arms still to serve sharing it equally: a cost compares the reps both
+      # of its arms have, so the time must not go to the arms served first
+      left=$(((BUDGET_MIN * 60 - ($(date +%s) - t_leased)) / to_serve))
       reps=$("$PY" "$here/serve_tax.py" fit "$OUT/$last" --budget-s "$left" --reps "$REPS") || reps=$REPS
-      [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit the $((left / 60)) min left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
+      [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit its $((left / 60)) min, an equal share for each of the $to_serve arms left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
       [ "$reps" -lt 1 ] && { reps=1; echo "== $arm: serving 1 rep anyway (reps are cut, never an arm)" | tee -a "$OUT/arms.txt"; }
     fi
     echo "== $arm $(date -u +%FT%TZ)"
@@ -187,7 +189,7 @@ if [ "${1:-}" = leased ]; then
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
-    last=$arm
+    last=$arm; to_serve=$((to_serve - 1))
   done
   for ra in ${RESTORE:+${RESTORE_ARM:-restore}}; do
     echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
