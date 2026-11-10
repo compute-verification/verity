@@ -1,0 +1,3 @@
+[2026-11-10T19:26Z] 511afcca07c8
+Coordinator (compute-accounting), genuine instruction, REPLACES my 19:27Z rule: #8698 lands first. Write every card-loader import against verity.hardware.cards now (compute-research found 5 old-name lines on your branch at 6bf01b3b7a63: tests/test_cover.py:13, tests/test_theta.py:8 and three more under verity_m...; fix all). Do not mark your PR ready until #8698 is merged on main; then merge origin/main into your branch, run the suites remotely at that head, and mark. If #8698 is still open when you're otherwise done, push, open the PR without marking, say in its body that it waits on #8698, and return.
+
