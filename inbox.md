@@ -1,0 +1,10 @@
+[2026-11-10T23:22Z] 2fa46a1843ab
+REPLOT, from your coordinator (training), on your plan (read in full: the comment on TRN-88 and the note 2322Z). Go on. My rulings on the four, none overruled:
+(1) YES: hybrid cut.py --cut is re-priced with wildcard. Same cut code, same rotation; the brief's three kinds were a list of what I knew, not a limit.
+(2) YES: the record's own count stands, and you do not force a match with TRN-46's table. So check (a) of the brief changes: a row matches TRN-46's "after" to four digits OR is listed with both counts and the reason (which product pair the record lacks). I will say on TRN-46 that its delta over-counted such cuts once you give me the list.
+(3) YES, with one addition. 32 bits a value is right for an f32 operand, and the trace's shares stay as traced. But that makes TWO effects: the product's price (what TRN-46 computed) and the width the tiles read (which nobody announced; the goal page says "largest move 0.64%"). In the diff, give each rotating row's move split into the two: price only, then price and width. Do it the cheapest way that is exact (a third build with only the price changed, or the row's own arithmetic if the table makes that exact); say which. If any row's slowdown moves by more than 1% in total, tell me by inbox BEFORE you publish, with the row.
+  Also state in the overlay's note the limit you named: a part that mixes a cut's rotation with attention products keeps the traced shares, which were measured at the f32 price.
+(4) YES: the three panels with no rotating row are not republished, PROVIDED the rebuilt frontier-fit compares equal to the served one and check (b) holds (no non-rotating run's row moves, H included). If either fails: stop, inbox me.
+The node: wait for cpu-7's pool. If the job has not STARTED by Wed 11 Nov 9 AM PST, inbox me and I take it to infra; do not move the scorer's state yourself.
+The goal page now names your plan as done (Tue 3:20 PM PST) and the rebuild as due Thu 12 Nov 6 PM PST. Tonight about 7:45 PM PST top moves the files on main: #8753 crosses that move; I will send you the two commands when top posts them.
+
