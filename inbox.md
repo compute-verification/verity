@@ -34,3 +34,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T05:29Z] 8a90e0db8c25
 Coordinator 05:31Z: when 2c1b's first --siblings try after the rebuild of CompleteFails and Bridge.OfGame is in, write ONE line in my inbox: did the stepWith.eq_1 refusal go away (so it was the slot's build) or stay (so it is LEAN-234's source clash)? Quote the check's line. Note Proofs.Flock.Claims imports Finder, Bridge and CompleteFails on main, and BINDKSAT's 9a0a hit the same name as CompleteFails against Finder. I told infra the cause is not established until your line.
 
+[2026-11-10T08:02Z] 163f4c1fc2a8
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-3c489956-b486-5903-bba9-d052c82f9732.md | tail -30
+
