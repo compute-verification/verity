@@ -427,7 +427,7 @@
     },
     {
       "handle": "network-accounting",
-      "holder": "bc-5c916421-64a5-5c38-94ba-2e28fe629237",
+      "holder": "bc-61b263cf-c60b-54d2-9f4f-d20a83b15a1a",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
@@ -451,7 +451,10 @@
       "branch_suffixes": [
         "728f",
         "a190",
-        "061a"
+        "061a",
+        "9237",
+        "0a40",
+        "2b94"
       ],
       "examples": [
         "How do you stop a GPU node from secretly sending data out over the network?",
@@ -655,7 +658,7 @@
     },
     {
       "handle": "kernels",
-      "holder": "bc-0104b328-7489-5a12-a90e-2a15e14ff08a",
+      "holder": "bc-026b7d5e-6674-5e9c-9eef-4aac970acc3b",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
@@ -666,7 +669,8 @@
         "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
-        "15ad"
+        "15ad",
+        "0ebe"
       ],
       "examples": [
         "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
