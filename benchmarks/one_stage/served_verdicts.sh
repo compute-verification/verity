@@ -1131,8 +1131,10 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # verity/inference-only/v0, which names the limits' form and unit to the gate), these limits and the digest of the
 # deployment's first registration record, all four or none (`pearlplus-period open --policy --alpha --gamma
 # --registration`); PEARLPLUS-PERIOD says whether the gate's answer holds them, and where the gate refuses that open
-# (a gate that takes none of the four refuses it whole) the period is opened without them and a line says so. That
-# record's roots need the loaded
+# (a gate that takes none of the four refuses it whole) the period is opened without them and a line says so. Where
+# the open signed them, the composite's inference-only case takes α and Γ from that open and not from this file
+# (`served_cases.py`'s `signed_policy`, on PoUW's piece as the record read it, POLICY_PIECE), and says whose they are.
+# That record's roots need the loaded
 # engine's tables, so the open can't come before the endpoint, and a tied window reserves its salt session only at its
 # first step, so the period is open by then.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
@@ -1158,8 +1160,8 @@ with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}")
 EOF
-) || { say "INFERENCE-ONLY LIMITS: none written, so the composite writes no inference-only case unless the gate" \
-           "signed its policy:" \
+) || { say "INFERENCE-ONLY LIMITS: none written, so the composite writes an inference-only case only at the run's" \
+           "ALPHA and GAMMA or a policy the gate signed:" \
            "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
   say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and" \
       "$(signed_limits && echo "signed by the lane's period at its open, where PEARLPLUS-PERIOD says so" \
@@ -1329,7 +1331,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" ${wt[@]+"${wt[@]}"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
-  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE POLICY_PIECE=$DEFER_DIR/pieces/pouw \
+    bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
@@ -1449,8 +1452,8 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --tree "$(tree_sha)" ${COMPOSE_TREE_ON:+--tree-on "$COMPOSE_TREE_ON"} \
     2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
-  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
-    || comp=1
+  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 POLICY_PIECE=$COMPOSE_DIR/pieces/pouw \
+    bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
@@ -2059,7 +2062,7 @@ elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; 
 comp=0
 fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
-  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  || TPY=$TPY POLICY_PIECE=$OUT/pieces/pouw bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved

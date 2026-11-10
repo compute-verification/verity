@@ -14,12 +14,12 @@
 # in the form `one-stage`) and the inference-only case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run without V3c
 # whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ as the auditor's gate signed them before the
-# serve: POLICY_LEDGER (the gate's ledger, its `ledger` verb's output, as a file), read under the challenger key
-# POLICY_KEY (a key.json or the operator's key record) pinned by H1_KEY_SHA512, POLICY_PERIOD (the period whose open
-# signed them) and POLICY_SESSION (a session of the serve, which must be a window of that period), all four
-# (`served_cases.py`'s `signed_policy`, which writes no inference-only case on some of them); with none of them a
-# development run's ALPHA and GAMMA where both are set, which nobody signed; without either no inference-only case is
-# written, and none is read off the served window's division.
+# serve, where it did: POLICY_PIECE is PoUW's piece directory as the record read it (`served_verdicts.sh` sets it beside
+# its `record --pieces`), and where it holds the gate's ledger and the serve dir Pearl+'s case's parts,
+# `served_cases.py`'s `signed_policy` reads them from the open the serve's session joined, under the key pin
+# H1_KEY_SHA512; no caller names the session or the period. Where that open signed no policy, or there is no such
+# piece, a development run's ALPHA and GAMMA where both are set, which nobody signed; without either no inference-only
+# case is written, and none is read off the served window's division.
 # Its log is the serve's H1 log through R's previous record;
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
@@ -106,12 +106,10 @@ fi
 
 if [ -f benchmarks/one_stage/served_cases.py ]; then
   ag=()
-  [ -n "${POLICY_LEDGER:-}" ] && ag+=(--policy-ledger "$POLICY_LEDGER")
-  [ -n "${POLICY_KEY:-}" ] && ag+=(--challenger-key "$POLICY_KEY")
-  [ -n "${POLICY_PERIOD:-}" ] && ag+=(--policy-period "$POLICY_PERIOD")
-  [ -n "${POLICY_SESSION:-}" ] && ag+=(--policy-session "$POLICY_SESSION")
-  if [ "${#ag[@]}" -gt 0 ]; then [ -n "${H1_KEY_SHA512:-}" ] && ag+=(--key-sha512 "$H1_KEY_SHA512")
-  elif [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ]; then ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  if [ -n "${POLICY_PIECE:-}" ] && [ -f "$POLICY_PIECE/ledger.jsonl" ] \
+     && [ -f "$D/private/pearlplus/case/parts.json" ]; then
+    ag+=(--policy-piece "$POLICY_PIECE" ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"})
   fi
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \

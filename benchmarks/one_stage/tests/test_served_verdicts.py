@@ -2575,8 +2575,9 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     rc, lines, _ = _inference_only(tmp_path / "half", "inference-policy", IO_WRITE=policy, ALPHA="1/2")
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k")
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
-    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite writes no "
-                                           "inference-only case unless the gate signed its policy:")
+    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite writes an "
+                                           "inference-only case only at the run's ALPHA and GAMMA or a policy the "
+                                           "gate signed:")
     assert not (tmp_path / "none" / "out" / "inference-only-limits.json").exists()
 
 
@@ -3951,7 +3952,7 @@ open(os.environ["ORDER"] + ".record", "w").write(json.dumps(a))
 print("RECORD " + json.dumps({"composed": "pending", "window": 7}))
 '''
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
-printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s\\n" "$SERVED_NODE" "$@" "$POLICY_PIECE" > "$ORDER.composite"
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
 
@@ -4094,7 +4095,8 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
         "--node", "vy-dc-h200"]
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
+    assert (tmp_path / "order.composite").read_text().split() == [
+        "vy-dc-h200", str(d), str(out), str(d / "private" / "deferred" / "pieces" / "pouw")]
     assert not _window_data(out, 7), _window_data(out, 7)
 
 
@@ -4538,7 +4540,7 @@ def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only
 
 
 FAKE_COMPOSE_COMPOSITE = '''echo composite >> "$ORDER"
-printf "%s\\n" "$SERVED_NODE" "$COMPOSE_HANDOFF" "$@" > "$ORDER.composite"
+printf "%s\\n" "$SERVED_NODE" "$COMPOSE_HANDOFF" "$@" "$POLICY_PIECE" > "$ORDER.composite"
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
 
@@ -4598,7 +4600,8 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
         "vy-dc-h200", "--steps", "0,3"]
     assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
                                                                          "--tree", SHA])
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
+    assert (tmp_path / "order.composite").read_text().split() == [
+        "vy-dc-h200", "1", str(d), str(out), str(d / "private" / "compose" / "pieces" / "pouw")]
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
 
@@ -5216,9 +5219,10 @@ if __name__ == "__main__":
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
     under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
-    or Γ while ALPHA and GAMMA are unset, the run's ALPHA and GAMMA where both are set, and where any of
-    POLICY_LEDGER, POLICY_KEY, POLICY_PERIOD and POLICY_SESSION is set those and the key pin H1_KEY_SHA512 instead, so
-    the gate's signed policy and never the run's own; each product gets the cases of its own subprotocols;
+    or Γ while ALPHA and GAMMA are unset, the run's ALPHA and GAMMA where both are set, and beside them PoUW's piece
+    POLICY_PIECE with the key pin H1_KEY_SHA512 where that piece holds the gate's ledger and the serve dir Pearl+'s
+    case's parts, so served_cases.py reads the policy the gate signed and names no session; each product gets the
+    cases of its own subprotocols;
     OUT/verdicts.txt gets each CASE line's protocol and verdict (and whose policy the inference-only case's α and Γ
     are), each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
@@ -5259,7 +5263,7 @@ Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
 Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
 print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
 print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
-if "--policy-ledger" in sys.argv:
+if "--policy-piece" in sys.argv:
     print("CASE " + json.dumps({{"protocol": "verity/inference-only/v0", "verdict": "accept", "dir": "{d}/private/io",
                                 "policy": "policy given by the lane, signed by the gate before the serve"}}))
 else:
@@ -5363,21 +5367,26 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
-    env |= {"POLICY_LEDGER": "/gate/ledger.jsonl", "POLICY_KEY": "/gate/key.json", "POLICY_PERIOD": "served-r1",
-            "POLICY_SESSION": "s20261020T120500Z-ab12"}
+    piece, parts = tmp_path / "pieces" / "pouw", d / "private" / "pearlplus" / "case" / "parts.json"
+    env |= {"POLICY_PIECE": str(piece)}
+    signed = ["--alpha", "1/2", "--gamma", "9", "--policy-piece", str(piece), "--key-sha512", "ab" * 64]
+    for holds, given in (((), signed[:4]), ((piece / "ledger.jsonl",), signed[:4]), ((parts,), signed[:4]),
+                         ((piece / "ledger.jsonl", parts), signed)):
+        for f in (piece / "ledger.jsonl", parts):
+            f.unlink(missing_ok=True)
+        for f in holds:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("")
+        assert run().returncode == 0
+        assert json.loads((tmp_path / "served_cases.policy").read_text()) == given
+        assert (("COMPOSITE CASE verity/inference-only/v0 accept (policy given by the lane, signed by the gate before "
+                 "the serve)") in (out / "verdicts.txt").read_text().splitlines()) is (given == signed)
+        (out / "verdicts.txt").unlink()
+        for x in (out / "composite", p, v2):
+            shutil.rmtree(x)
+    del env["H1_KEY_SHA512"], env["ALPHA"]
     assert run().returncode == 0
-    assert json.loads((tmp_path / "served_cases.policy").read_text()) == [
-        "--policy-ledger", "/gate/ledger.jsonl", "--challenger-key", "/gate/key.json", "--policy-period", "served-r1",
-        "--policy-session", "s20261020T120500Z-ab12", "--key-sha512", "ab" * 64]
-    assert ("COMPOSITE CASE verity/inference-only/v0 accept (policy given by the lane, signed by the gate before the "
-            "serve)") in (out / "verdicts.txt").read_text().splitlines()
-    (out / "verdicts.txt").unlink()
-    for x in (out / "composite", p, v2):
-        shutil.rmtree(x)
-    del env["POLICY_LEDGER"], env["POLICY_KEY"], env["POLICY_PERIOD"]
-    assert run().returncode == 0
-    assert json.loads((tmp_path / "served_cases.policy").read_text()) == [
-        "--policy-session", "s20261020T120500Z-ab12", "--key-sha512", "ab" * 64]
+    assert json.loads((tmp_path / "served_cases.policy").read_text()) == ["--policy-piece", str(piece)]
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
