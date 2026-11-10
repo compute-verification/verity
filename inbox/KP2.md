@@ -28,3 +28,22 @@ So what is left, in order, from your 20:00Z wake:
 3. the whole `verity-vllm` suite, `p2_stage`, `benchmarks/pous` and the boundary tests at the new head, one named run;
 4. then stop and say so: **the lead marks, not you**, after reading the H200 run's lines. Change nothing in
    `load.py` that memory-accounting did not read without saying so on HASH-106.
+
+## Tue 10 Nov 17:02Z: #8662 is marked only after vllm's delete (VLLM-290) is on `main`; your 20:00Z steps stand
+
+- **vllm read #8662 at 475737d29d: yes, no change asked** (HASH-99, 16:46Z; its worker ran `git grep` at your head and
+  at `main` and read the diff; it ran no suite).
+- **vllm's delete of the in-process remote session** (VLLM-290; due on `main` Wed 11 Nov 20:00Z) meets #8662 in seven
+  files [vllm's `git merge-tree` of its `2cb82d67c2` with your head, not run by the lead]: deleted there and edited
+  by you, `engine/int8_credited_env.py`, `remote_bandwidth/in_place.py`, `tests/engine/int8_store_gpu.py`; edited by
+  both, `engine/build.py`, `remote_bandwidth/remote.py`, `tests/test_boundaries.py`, `public_boundary.toml`.
+- **The lead agreed the delete lands first** (HASH-99, 17:01Z): with it on `main`, the by-name load of
+  `int8_credited_env` in `build.credited_read`, its test and its two boundary rows have nothing left to load.
+- **Tonight is unchanged:** steps 1 to 3 of the 16:22Z section (the H200 run at old `main` and at your head, the
+  restack over the layout, the suites). Do not merge vllm's branch and push nothing to it.
+- **Step 4 changes.** After step 3, say the head and the verdicts on HASH-106 and end your turn. The lead resumes you
+  when the delete is on `main`: merge `main`, drop what the delete leaves nothing for, rerun step 3's suites, and say
+  on HASH-106 which files the H200 run loaded that this merge changed. If none, tonight's run stands; if any, the
+  lead books a second hour on a card. Then the lead marks.
+- **If the delete is not on `main` by Thu 12 Nov 02:00Z,** the lead marks #8662 as it stands at step 3's head
+  (rule 5's date for the staging decode is Thu 12 Nov), and vllm's delete takes the hunks out.
