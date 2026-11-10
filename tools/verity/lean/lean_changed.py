@@ -61,7 +61,7 @@ Then it audits, the same way, every package whose guarantees' records read PKG's
 reports under `requirer-<path>/` beside PKG's. Of the facts documents, only PKG's own stays beside its reports
 (`check_argv`: `check.py --facts named`, which `trusted_size.py --run` reads); its provers' and the requirers' are not
 kept. A change to what another package's pinned guarantees read
-(`Security/Properties`' when `Security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
+(`security/Properties`' when `security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update`, so one run regenerates every lock the change
 moved; one failing for any other reason fails. With `--moved` too, each requirer's first audit takes `--update --moved`
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
@@ -696,7 +696,7 @@ def closure_inputs(pkg: str, files: list[str], read=read_here) -> list[str]:
 def inputs_key(pkg: str, files: list[str], read=read_here, locks: dict[str, bytes | None] | None = None) -> str:
     """``pkg`` and what a records run of it reads (`closure_inputs`), each file by its path and content: ``read`` gives a path's
     bytes (None: absent), and ``locks`` ({path: bytes}) stands in for some, the record a run wrote in place of the committed one.
-    Two packages can read the same files (`Security` and `Security/Properties`, each in the other's `closure`), and one's pass
+    Two packages can read the same files (`security` and `security/Properties`, each in the other's `closure`), and one's pass
     says nothing of the other's records. The same files read from a commit's objects (`keys_at`) give the same key."""
     locks = locks or {}
 

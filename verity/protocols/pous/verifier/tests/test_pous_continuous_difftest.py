@@ -1,5 +1,5 @@
 """Differential tests: `verity.protocols.pous.verifier`'s memory challengers against the Lean model of the continuous audit
-(`Security/Definitions/Pous/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
+(`security/Definitions/Pous/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
 
 Each action of a trace goes to the memory challenger and to `ClockOracle` at one reading of an injected clock, and after
 every action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed
@@ -36,7 +36,7 @@ from verity.protocols.pous.verifier.verifier import VerifierKey
 from verity.protocols.pous.verifier.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 
 ROOT = Path(__file__).resolve().parents[5]
-MODEL = "Security/Definitions/Pous/Model/Continuous.lean"
+MODEL = "security/Definitions/Pous/Model/Continuous.lean"
 
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
