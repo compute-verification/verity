@@ -207,7 +207,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
     assert "- prover GPUs per serving GPU: 1, partial: steady-state measurements cover 100.0% of the proving time it prices" in text
-    assert ("- partial: 2 block types have no figure, so every total here leaves their proving out: `Unpriced_v1{N=1}` "
+    assert ("- partial: 2 block type(s) with no figure, whose proving every total here leaves out: `Unpriced_v1{N=1}` "
             "(60.00% of the blocks, 18.75% of the blocks' MACs); `Rare_v1{N=1}` (20.00% of the blocks, 6.25% of the "
             "blocks' MACs)\n") in text
     assert "not measured at that size, and partial as that ratio is:" in text

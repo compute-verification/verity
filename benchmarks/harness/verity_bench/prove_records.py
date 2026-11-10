@@ -355,7 +355,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     if t["missing"]:
         named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
         more = len(t["missing"]) - MISSING_NAMED
-        lines.append(f"- partial: {len(t['missing'])} block types have no figure, so every total here leaves their proving "
+        lines.append(f"- partial: {len(t['missing'])} block type(s) with no figure, whose proving every total here leaves "
                      f"out: {named}" + (f"; and {more} more, which `--json` names" if more > 0 else ""))
     if t["range_basis"]:
         lines.append(f"- each range's other end: {t['range_basis']}")
