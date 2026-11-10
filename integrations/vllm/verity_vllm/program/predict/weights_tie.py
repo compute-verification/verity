@@ -56,7 +56,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as G, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as G, registration as R
 from verity.ml.commitments.gates import sha512_stream as SS
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR

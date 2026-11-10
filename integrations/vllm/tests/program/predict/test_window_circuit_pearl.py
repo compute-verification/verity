@@ -32,7 +32,7 @@ from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.schemes import SCHEMES
-from verity.core.protocols.sampled_proofs.one_stage import registered as CR
+from verity.core.protocols.spot.one_stage import registered as CR
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.types import Array, Value
