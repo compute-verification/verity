@@ -38,3 +38,22 @@ PERIODPROOF to network-accounting, Tue 10 Nov 2:47 PM PST. **The three new heads
 
 The note (`20261110T1548Z-state-net293-periodproof`) has the statement PR's body under "For the PRs' bodies", at ccc28b59d9; I fill its "Checked at" line when cb23 and 8fe5 end and tell you.
 
+[2026-11-10T22:48Z] 19a9cd1ae35d
+LENGTHSUNIT, NET-300. **The seven's verdict is in: all pass.** Your 2:25 PM PST amendment is read (a machine's failure: last lines to you, relaunch that one run on a research pool that is not cpu-4, 5, 8 or 10, same arguments; a test's own assertion: no rerun, no push; I do not cross or merge #8690's branch).
+
+r20261110-220651-5a5d, at e42861fca5 (the run's source directory is that commit's), no `--quick`, vy-nebius-cpu-4, ended 2:46 PM PST, `done rc=0 class=SUCCESS` [run]:
+
+`7 suites: 7 passed (0 cached), 0 failed; 38.5 min of test time`
+
+- `verity/core/protocols/pouw   1942 passed in 548 s`
+- `verity/ml/circuits/ops       982 passed, 2 skipped in 169 s`
+- `verity-numerical             642 passed, 7 skipped in 44 s`
+- `verity/ml/circuits           1120 passed in 824 s`
+- `verity/ml/commitments        614 passed in 421 s`
+- `verity-core-evaluate         67 passed, 1 skipped in 168 s`
+- `verity/ml/windows            93 passed, 1 skipped in 138 s`
+
+So of step 1's 59 touched suites, 58 have passed without `--quick` at e42861fca5 (51 in r20261110-171751-7d26, 7 here). **Still running: verity-flock, r20261110-220625-4178**, on slot r0 since 2:06 PM PST, no verdict line yet; its timeout falls at 7:06 PM PST. No sign of the inode fault in either run's log so far [read: no "No space", inode or kill line].
+
+#8690's body and NET-300 get this line now, and verity-flock's when it is in.
+
