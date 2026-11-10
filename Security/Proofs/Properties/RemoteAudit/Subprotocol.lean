@@ -1,9 +1,9 @@
 module
 
-public import Properties.RemoteAudit.Component
+public import Properties.RemoteAudit.Subprotocol
 
 /-!
-# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
+# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Subprotocol`)
 
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
@@ -14,7 +14,7 @@ and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `op
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Properties.RemoteAudit.Line
 
@@ -100,4 +100,4 @@ theorem publishedEps : PublishedEps := by
     try ring
   · exact .inl ⟨rfl, rfl⟩
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

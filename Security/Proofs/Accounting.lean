@@ -52,7 +52,7 @@ public import Proofs.Accounting.RemoteHeld.Sketch
 public import Proofs.Accounting.RemoteHeld.SketchLine
 public import Proofs.Accounting.RemoteHeld.SketchP2
 public import Proofs.Accounting.RemoteHeld.Line
-public import Proofs.Accounting.RemoteHeld.Component
+public import Proofs.Accounting.RemoteHeld.Subprotocol
 public import Proofs.Accounting.Requirement
 public import Proofs.Accounting.RequirementPouw
 public import Proofs.Accounting.Sanity
