@@ -1,6 +1,6 @@
 # The descriptor v1 evaluator: `verity.circuits.evaluation.reference.evaluate` on a Program, as executable Lean. It reads the
 # Program through C-Flock's verifier (`Flock.Program`: decode, layout, scope resolution) and adds the primitives' semantics;
-# it is code, so it requires nothing of `Security/` (root AGENTS.md, "Lean").
+# it is code, so it requires nothing of `security/` (root AGENTS.md, "Lean").
 name = "verity_evaluate"
 defaultTargets = ["Evaluate", "verity-evaluate"]
 

@@ -35,8 +35,8 @@ untraced = [
     "tests/test_theory_fold_wide3.py",
     "tests/test_theory_fold_wide32.py",
 ]
-# test_lean_headline compares the headline instances' Lean data (Security/Definitions/Accounting/Headline) with what
-# lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (Security/Definitions/Accounting/HeadlineDc)
+# test_lean_headline compares the headline instances' Lean data (security/Definitions/Accounting/Headline) with what
+# lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (security/Definitions/Accounting/HeadlineDc)
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
 # ε/B_♭ pair.
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through Flock's Python; harness/price_twins.py
@@ -142,10 +142,10 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "tools/research/src/research/__init__.py", "tools/research/src/research/env.py", "tools/research/src/research/record.py",
           "tools/research/src/research/result.py", "tools/research/src/research/secret_hint.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
-          "Security/Definitions/Accounting/Headline", "Security/Definitions/Accounting/HeadlineDc",
-          "Security/Definitions/Pouw/Guarantees", "Security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
-          "Security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "Security/lean-audit.json",
-          "Security/Proofs/Accounting/Gates/Rows.lean",
+          "security/Definitions/Accounting/Headline", "security/Definitions/Accounting/HeadlineDc",
+          "security/Definitions/Pouw/Guarantees", "security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
+          "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "security/lean-audit.json",
+          "security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",

@@ -2,7 +2,7 @@
 """Theorem C's per-opcode creation cap κ, from each device's census: an issue slot that writes d words per lane creates at
 most κ = 65·d incidences.
 
-The cap per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (Security/Proofs/Pouw/Eps1/ClassP.lean,
+The cap per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (security/Proofs/Pouw/Eps1/ClassP.lean,
 `created_le_65`): a class-P tuple word creates only incidences of its fields' own entries, a field's range has at least
 128|E| + 1 values, and `Π_k (128 e_k + 1) ≤ 2^32` with `e_k ≤ 32` caps `Σ_k e_k` at 65 (two 32-entry fields and a
 one-entry field). The guarantee charges a slot of d words `65·d`, so a word costs at least `1 + (32 − w)/κ` slots when a
