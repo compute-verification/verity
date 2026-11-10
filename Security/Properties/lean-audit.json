@@ -930,6 +930,7 @@
   "NciCheck.Baseline",
   "NciCheck.Desc",
   "NciCheck.Protocol",
+  "NciCheck.DefinitionDigest",
   "Flock",
   "Properties.NetworkCertifier.Device",
   "CertifierDevice",

@@ -3521,6 +3521,7 @@
   "NciCheck.Baseline",
   "NciCheck.Desc",
   "NciCheck.Protocol",
+  "NciCheck.DefinitionDigest",
   "NetworkCheck",
   "NetworkCertifier",
   "CertifierDevice",
