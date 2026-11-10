@@ -6,7 +6,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 
 | Tool | What it does |
 |---|---|
-| `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
+| `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its PR (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
@@ -55,8 +55,8 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
    ends in its move line, `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`,
    and runs the map again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
    `--certificate` writes each commit's `move_check.py --json` report;
-3. hands the lander the branch and the command `stage.py` printed for each commit, `verity check move PARENT COMMIT`
-   (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
+3. opens the move's PR from the branch, naming in its body the command `stage.py` printed for each commit, `verity check
+   move PARENT COMMIT` (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
 
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
 the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
