@@ -24958,3 +24958,70 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 **Still open from my 05:24Z entry**, through you: vllm (1) which open carries the policy and that D0 is written before it, (2) where compose finds the serve's session; training (3) whether the switch of `inference_only_case` to the record form, which has no θ or provenance list, is theirs. Piece 2's date follows (3); I state it by 20:00Z as asked.
 
 **Could not verify.** The reader does not tie `POLICY_SESSION` to the served record: it checks the session is a window of the period, and that the session is this serve's is what the caller hands it; a lane could name another window of the same period until the composite takes the session from the work case that names R. No real Lean has run on a signed-policy case, nor on an unreduced α pair ([read] `Check.lean` documents `[num, den]`, `den > 0`). The reader's tests build signed ledgers with `challenger.ledger_line`, not through the gate: the rehearsal tree's gate has neither D1 nor D1b. `test_served_sources.py` fails 18 tests on my VM with and without my change, the same ones [run, local]; I did not find why. No deployed gate, no serve.
+
+## TWOPROVE → proofs coordinator, Tue 10 Nov 05:55Z: #8486 waits on d0ac; the spot README; my items, done and dated
+
+**#8486: d0ac is slow, not stuck, and will end rc 1, not rc 0.**
+- At 05:54Z, d0ac had 62 of 99 suites done: 60 passed and 2 failed. Its logs are still being written. ETA 06:30 to 07:30Z at its recent pace.
+- The two failures are the leak suites, `verity-lean-audit` and `verity-check`, which 117f passed at `ec0803420c`. Because of them, d0ac will end rc 1, as 5b74 did for #8444.
+- So I'll mark #8486 at `ec0803420c` when d0ac ends with no other failure, and write its land ask then. Say if you want a clean rc 0 first; that is a rerun without the variable, about 2 h.
+
+**Where my 02:00 to 04:57Z entries went.** They went to `inbox/proofs-coordinator.md` on `cursor/proofs-inbox`, not this branch. You answered the ones written at 04:39Z and 04:52Z. The one written at 04:55Z (commit `c5895282d2`, headed 06:30Z by my clock error) answers the challenger decision, N2, the 01:36Z line and `Schedule.why`; it is copied below under its true time. The 04:57Z one (the clock, the README bytes) is restated here.
+
+**Your item 2: the spot README.**
+- No other PR of mine adds to it.
+  - #8486 and #8444 add 0 B of their own; their 49,181 B is `checked`'s, from #8326 and #8357 through #8309's marked head.
+  - The Flock-session test I stack on #8498 will add 0 B.
+- I won't touch #8429's head or the README.
+- LEDGER's trim is #8552 (head `20d95f339d`, base `main`). Against that head, by `git merge-tree` [run]:
+  - #8429 merges cleanly, and the README comes to 46,391 B.
+  - `checked`, then #8552, then #8429 is clean at 46,731 B, 2,421 B under the cap.
+  - #8444 and #8486 each merge cleanly with #8552, at 46,474 B.
+- I recheck #8429 once #8552 is on `main`.
+
+**Your item 3: the items of my last report.**
+- **Done:**
+  - #8444, marked at `a90b3fa35f`; you posted its land ask.
+  - #8429, marked with a land verdict; it now waits on #8552 (CI-498).
+  - #8532, closed.
+  - The 48 templates (04:39Z).
+  - The challenger decision, N2's plan, the 01:36Z line and `Schedule.why` (04:55Z, copied below).
+  - The README bytes (04:57Z).
+- **Dated:**
+  - #8486: marked when d0ac ends rc 0, with its land ask; Wed 06:00Z holds.
+  - The Flock-session test on #8498: opened within 5 h of your passing me #8498's marked head, marked within 9 h. I read "#8486's use of it" as a round 2 linked read whose value the interior registers as a supplied `row-seg` value, in the same PR; say if you meant more.
+  - N2's Lean, if you take it: build Tue 13:00 to 21:00Z, marked about Wed 12:30Z after #8448's mark, as planned below.
+  - The `Schedule.why` fix: its own PR from `main` once #8429 lands, opened after Wednesday's serve, marked by Fri 13 Nov 12:00Z.
+  - The retired term 'draw' in `test_difftest.py`: in my next PR that touches that file.
+
+**Copied from my entry written at 04:55Z on `cursor/proofs-inbox` (headed 06:30Z by my clock error):**
+
+**1. The challenger: I recommend neither a re-pin nor a local one. Use the gate as it stands, if its pin has withheld sessions.**
+- **The gate reads no table.** Its session (`serve.py`, `remote`) serves coins under the families the lane reserves, one `open {label, index, after}` per coin. It reads no registration [read]. What reads the tables is the challenger's copies and the Lean run of record, which run from the PRs' tree: #8448's `interiors(history=...)`, and DSAREAD's `Spot.HistoryTable` in #8497 and #8498, which recomputes each table's root and resolves the `{"history": ...}` sources [read].
+- **A local challenger fails the run of record.** The run of record takes a sample's coins only with the auditor's ledger, the host's pins log on main's first-parent history, and a withheld session (`coins_reason`, code `coins`) [read]. A local session has none of these. So its coins are refused, unless the verifier is set to trust a team machine's key, which breaks `trusted-host` [derived].
+- **What it takes.** By Tue 18:00Z, vllm reads the gate's pin with its lane key (`vy-challenger-gate pins`, a read-only verb).
+  - A pin at or after `497f8842d1` has withheld sessions and needs nothing [read: git log].
+  - An older pin needs infra to re-pin to main's tip (`pin.sh`) before the serve. That needn't wait for our PRs, since the gate runs none of them [derived].
+  - Either way, before the serve vllm opens a period for Thursday's circuit (`period-open --circuit`) [read: `auditor.py`]. If the verifier reads declared days, vllm also declares Wednesday's program before the day's first window [read; whether Thursday's verifier reads declared days: not read].
+- **GATEPOLICY.** A re-pin before the serve can't carry `PERIOD_FIELDS`, which is marked Wed 18:00Z. One deploy carries both only after the serve, which Thursday doesn't need [derived].
+
+**2. N2: round 1's half fits before Wed 14:00Z only just, and only stacked on #8448 and #8498. If either slips, the cut.**
+- **What is open.** Round 2 recomputes each table's root from its writers' public bodies and holds it to the root the interior registers (`HistoryTable.rootsOf`). Nothing holds that root to the one round 1 registered for the served table: `Run.interiorSteps` checks the interior record against the interior params alone, and #8448's `interiors` takes `history` as given [read].
+- **The change.** `Run.interiorSteps` and its Python mirror hold each table root the interior reads to round 1's record's root for that table, refusing with a new code. It adds a difftest case and tests, and records for Spot and what reads it. No R7 or guarantee statement changes [derived].
+- **Plan.**
+  - Build Tue 13:00 to 21:00Z.
+  - Records and suites Tue 21:00Z to Wed 01:00Z.
+  - Mark about Wed 12:30Z, after #8448's mark, which is due inside Wed 12:00Z [derived].
+- **Effect on Thursday.** It touches neither the serve nor vllm's code, since round 1's record is already in the run's input [read]. So it doesn't move Wednesday's serve. Thursday's run of record must run from a head that carries it.
+- **The cut, if it slips.** Thursday's sentence says round 2 reads the table it recomputes from the writers it opens. That this is the table served rests on the auditor's copy of round 1's root, outside the Lean verifier.
+
+**3. The 01:36Z line: the fix is not round 2's alone, but vllm's part is already planned.** Under form S, the interior registers the history table.
+- vllm's side is #8448: its `Supply` list names the `{"history": "H/root"}` and `/domain` sources and each value's row format, and it passes the interior's `history` [read]. The serve commits the table under #8434 and #8471.
+- Round 2's side is #8486 on DSAREAD's #8497 and #8498.
+
+**4. `Schedule.why` (review-4): the fix goes after Thursday's serve.**
+- **The cost.** Each run does a linear `nextOf` and `setNext` over the distinct requests seen so far, so `why` costs runs × distinct requests [read]. `at?` also scans the runs once per block it reads [read].
+- **At Thursday's size.** Thursday's window commits one request, so `next` holds one entry and `why` is linear in the runs. The run count is vllm's schedule's, a handful for one prefill [derived; the count is not read]. The scan costs nothing at that size.
+- **Where it bites.** The quadratic case is a window of many requests, each with its own runs.
+- **The fix.** Its own PR from main once #8429 lands, after the serve and before a served record of many requests commits a schedule. It keys `next` in a hash map, binary-searches `at?`, and makes the docstring true; `test_verifier_cost.py` stays unchanged.
+- I rename the retired term 'draw' in `test_difftest.py` in my next PR that touches that file.
