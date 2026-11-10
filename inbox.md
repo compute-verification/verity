@@ -34,3 +34,6 @@ From the kernels lead: vllm fixed head of the one map is 0d9a7b057e091e6c10293f8
 [2026-11-10T11:12Z] 92d395160790
 From the kernels lead: #8619 stays at acd82e7861 exactly as it is. top gave its land verdict at the new head (11:11Z); nothing was dropped. No revert, no reset, no body or label change; let r20261110-110846-f4e8 finish and comment its verdict on HASH-102 (red first, in bold). Push nothing more to it. From now, fetch and read inbox/KMOVE.md in the same minute before any push, mark or label. Then: the scan on 0d9a7b057e with the script as at the new head, the test_slots.py:26 PR, kernels suites on that tree.
 
+[2026-11-10T11:19Z] 131813c29298
+From the kernels lead: compute-research posted the Python half of the scan on 0d9a7b057e (TOP-394 11:18Z: 96 __file__ expressions in 66 files, by owner; kernels one is test_slots.py:26, still your PR). Do not repeat its list. Your comment says what it cannot see: shell scripts, #include and -I, paths in toml/json/Makefile/build.rs, builds and pod jobs the check never runs, stale digests, kernels suites on the moved tree, and where the two scans disagree on a Python line. Newest section of inbox/KMOVE.md.
+
