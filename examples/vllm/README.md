@@ -92,9 +92,12 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
 
 1. `verity demo vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle. The workload dir stays on the node, the only copy: the bundle and the Commit's records
-   under `commit/` hold values (the committed store with its salts, the weights key, the requests and served tokens),
-   so nothing stores the dir and the run's record holds no file of `commit/`. `placement.toml`'s `COMMIT_RUN` names
-   the Commit whose traced Build the endpoint's Build of record is held to.
+   under `commit/` hold values (the committed store with its salts, the weights key, the requests and served tokens)
+   and `match/spec.json` holds the prompts, so nothing stores the dir. The run's record holds only the files
+   `published.sh` lists, each with the reason it holds nothing of a request (the node and the tree's commit, each
+   stage's flags, exit code and verdict word, the sealed bundle's manifest digest, the GPU lease's times, the row's
+   target), and the run names every file it left on the node; to publish another file, give it an entry there.
+   `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
    phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
