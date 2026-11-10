@@ -332,21 +332,31 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
     os.replace(tmp, tree / LINKS)
 
 
-def carried(tree: Path, files: list[str], log=print) -> dict[str, str]:
-    """``tree``'s `LINKS`, read after each Lake package of this checkout (``files``, its tracked files) whose build
-    directory a layout move left at the package's former path in ``tree`` has had it moved along (`moved.carry`), with its
-    entry of `LINKS`. A tree is keyed by package paths and `.lake` is no tracked file: without this the first run after a
-    move would sync the package to its new path, find no build there and compile every module of it, the old build left
-    beside it. Called under the tree's lock, before `sync`."""
+def carry_builds(tree: Path, log=print) -> None:
+    """Under ``tree``'s lock, before anything reads `LINKS` or syncs a package: a build directory that a layout move left
+    in ``tree`` at its package's former path moves to where this checkout has the package (`moved.carry`), with its entry
+    of `LINKS`. A tree is keyed by package paths and `.lake` is no tracked file: without this the first run after a move
+    would sync the package to its new path, find no build there and compile every module of it, the old build left beside
+    it. It reads the tree, the checkout and the recorded moves, and starts no program. A tree that is the checkout itself
+    keeps what else its former directory holds."""
+    moves = MOVED.recorded(ROOT)
+    if not moves or not tree.is_dir():
+        return
+    built = []
+    for d, dirs, _ in os.walk(tree):
+        if ".lake" in dirs and Path(d) != tree:
+            built.append(Path(d).relative_to(tree).as_posix())
+        dirs[:] = [x for x in dirs if not x.startswith(".")]
+    pkgs = sorted({q for f in built if (q := MOVED.now(f, moves)) != f
+                   and any((ROOT / q / n).is_file() for n in MOVED.LAKEFILES)})
+    got = MOVED.carry(tree, pkgs, moves, log, prune=tree.resolve() != ROOT.resolve()) if pkgs else {}
+    if not got:
+        return
     links = read_links(tree)
-    pkgs = sorted({f.rsplit("/", 1)[0] for f in files if "/" in f and f.rsplit("/", 1)[1] in MOVED.LAKEFILES})
-    got = MOVED.carry(tree, pkgs, MOVED.recorded(ROOT), log, prune=True)
     for old, new in got.items():
         if old in links:
             links[new] = links.pop(old)
-    if got:
-        write_links(tree, links)
-    return links
+    write_links(tree, links)
 
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
@@ -454,7 +464,8 @@ _sleep, _clock = time.sleep, time.monotonic
 
 def hold_tree(held, tree: Path, log=print) -> bool:
     """Take ``held``'s lock (the tree's `.lock`), waiting up to `TREE_WAIT_S` for the run that holds it, whose id `.who`
-    beside it names; False when it is still held then."""
+    beside it names; False when it is still held then. With the lock, the builds a layout move left behind in the tree
+    are brought to their packages (`carry_builds`), before the caller reads the tree."""
     who, start, told = tree / ".who", _clock(), None
     while True:
         try:
@@ -470,6 +481,7 @@ def hold_tree(held, tree: Path, log=print) -> bool:
                 told = holder
             _sleep(TREE_POLL_S)
     who.write_text(f"{os.environ.get('RESEARCH_RUN_ID') or 'a run'} (pid {os.getpid()})\n")
+    carry_builds(tree, log)
     return True
 
 
@@ -1157,7 +1169,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return refused(None, pkg)
-            links = carried(tree, files, log)
+            links = read_links(tree)
             committed = as_found(todo)
             new: dict[str, bytes] = {}
             outcomes: dict[str, str] = {}
@@ -1381,7 +1393,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
-            t0, links, left = time.monotonic(), carried(tree, files, log), left_by(tree)
+            t0, links, left = time.monotonic(), read_links(tree), left_by(tree)
             mark(tree, package=pkg, phase="sync")
             n = sync(closure(pkg), files, tree)
             there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
@@ -1506,7 +1518,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
             if not hold_tree(held, tree, log):
                 doc["skipped"]["*"] = f"another run held {tree}"
                 return done(2)
-            links, left, sandbox, have = carried(tree, tracked, log), left_by(tree), sandboxed(), set(tracked)
+            links, left, sandbox, have = read_links(tree), left_by(tree), sandboxed(), set(tracked)
             for pkg, fs in sorted(by_pkg.items(), key=lambda kv: (rank(kv[0]), kv[0])):
                 t0 = time.monotonic()
                 mark(tree, package=pkg, phase="sync")
@@ -1648,7 +1660,8 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
-        links = carried(tree, files, log)
+        carry_builds(tree, log)
+        links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
