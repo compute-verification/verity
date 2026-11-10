@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-TRACES = (Path(__file__).resolve().parents[2] / "benchmarks/network_traces/warden_serve.py").parent
+TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
 
 import warden_serve as ws  # noqa: E402

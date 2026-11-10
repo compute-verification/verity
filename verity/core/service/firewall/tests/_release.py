@@ -28,7 +28,7 @@ PKG = HERE.parent
 ROOT = Path(__file__).resolve().parents[5]
 FLOCK = ROOT / "verity" / "ml" / "flock"
 LEAN_FLOCK = ROOT / "verity" / "core" / "service" / "flock"
-VECTORS = FLOCK / "live" / "src" / "firewall_record_vectors.json"
+VECTORS = ROOT / "verity/ml/flock/live/src/firewall_record_vectors.json"
 FIXTURES = HERE / "fixtures"
 REFUSED = "FIREWALL-REFUSED: "
 
