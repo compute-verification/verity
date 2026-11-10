@@ -1115,7 +1115,7 @@ def update_records(dest: Path, packages: list[str], out: Path, log: Path) -> dic
     with log.open("a", encoding="utf-8") as f:
         code = subprocess.run([sys.executable, str(PB.ROOT / "tools" / "verity" / "check" / "lean_slot.py"), "--",
                                sys.executable, str(dest / "tools" / "verity" / "lean" / "check.py"), "--update", "--build",
-                               "--no-replay", "--no-runs", "--out", str(out), *packages],
+                               "--no-replay", "--no-runs", "--facts", "none", "--out", str(out), *packages],
                               cwd=dest, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
     return {"exit": code, "seconds": round(time.monotonic() - t0, 1), "log": log.name}
 
