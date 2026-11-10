@@ -9,6 +9,7 @@
 #     interior values tools/interior_classG.json), waited on for at most 20 min. stage1.json lands in the first stage's
 #     run record (research fetch RUN_F --all), which (b)'s twostage_b.sh is sent. The window's advice binding
 #     (out/advice/w<W>/registration.json of RUN_C, or of ADVICE_RUN) goes with it as --advice when published;
+#     a serve that ran the advice step and published none is refused unless ADVICE=none.
 #     CHALLENGER=local runs a local session instead, from a clone (sampled-proofs-verifier built first), queued by
 #     --on auto with 8 CPUs and 32 GB (FIRST_ON=NODE: on that node), and doesn't wait.
 #   [DRY=1] NOT_BEFORE=ISO bash twostage_c.sh advice RUN_C
@@ -56,7 +57,10 @@ case ${1:-} in
       [ "$ar" = "$rc" ] || research fetch "$ar" --on vy-spot-glm53 --all > /dev/null || { echo "twostage-c: no records of $ar"; exit 2; }
       reg=~/.research/runs/$ar/out/advice/w${W:-1}/registration.json
       if [ -f "$reg" ]; then cp "$reg" "$w/advice.json"; extra+=(--send "$w/advice.json")
-      elif [ -n "${ADVICE_RUN:-}" ]; then echo "twostage-c: $ar published no w${W:-1} advice"; exit 2; fi
+      elif [ "${ADVICE:-}" != none ] && { [ -n "${ADVICE_RUN:-}" ] || [ -f ~/.research/runs/"$rc"/inputs/advice_c.py ]; }; then
+        # a gate opens a root once: a first stage without the advice its serve was to write spends the window's session
+        echo "twostage-c: $ar published no w${W:-1} advice (ADVICE=none: the first stage without it)"; exit 2
+      fi
     fi
     if [ "$ch" = local ]; then
       on=(--on "${FIRST_ON:-auto}" --cwd clone --timeout "${TIMEOUT:-40m}" --env CHALLENGER=local)
