@@ -3276,28 +3276,6 @@ def changed(repo: Path, base: str, commit: str) -> set[str]:
     return set(_out(repo, "diff", "--name-only", "--no-renames", base, commit).split())
 
 
-def built_on(repo: Path, ref: str, into: str = "origin/main") -> tuple[str, list[Member]]:
-    """(the base ``ref`` was built on, its members oldest first), whether or not ``into`` (the queue's `base`) has moved since;
-    ("", []) when ``ref`` is missing or none of its first-parent chain is in ``into``."""
-    if _git(repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
-        return "", []
-    # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
-    # (which empties the chain and cancels a disjoint check)
-    base = next((c for c in _out(repo, "rev-list", "--first-parent", ref).split()
-                 if not _git(repo, "merge-base", "--is-ancestor", c, into, check=False).returncode), "")
-    if not base:
-        return "", []
-    out = []
-    for rec in filter(None, (x.strip() for x in _out(repo, "log", "--first-parent", "--reverse",
-                                                      "--format=%H%x00%B%x1e", f"{base}..{ref}").split("\x1e"))):
-        commit, body = rec.split("\x00", 1)
-        t = dict(TRAILER_RE.findall(body))
-        if not {"PR", "Head", "Owner"} <= set(t):
-            return base, []
-        out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
-    return base, out
-
-
 def touched_by(repo: Path, members: list[Member], files: list[str], cache: dict[str, set[str]] | None = None) -> list[str]:
     """`#N` for each member whose merge changed one of ``files``; ``cache`` keeps each merge's files across calls (a sync names
     the members behind each of its conflicts)."""
