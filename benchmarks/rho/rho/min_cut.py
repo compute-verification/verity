@@ -39,7 +39,8 @@ gates holds at most `c / γ` whole, and `γ N ≤ x c + γ (T + …)` at `x` blo
 `beta(k)` is (H)'s `β` for an activation at `k`, the rows `premise.training-cut-hardness.beta` of
 `data/premises.toml`, `bound` the bound at a policy `(c, k, n)` on a circuit's own `N`, `O` and `|C|`, and
 `bound_charged` the bound over a monitoring period's blocks when some of the words they read are untied, the blocks
-that read more than a threshold of them charged whole.
+that read more than a threshold of them charged whole. `capped` is either one beside the share of the work no block
+is credited for, which no count here covers.
 """
 
 import math
@@ -59,8 +60,9 @@ HE, HE_SHARED = f"{AREA}.Guarantees.HE", f"{AREA}.Guarantees.HEShared"
 #: the count with blocks charged whole, in the same area
 HE_CHARGED = f"{AREA}.Guarantees.HECharged"
 #: what `bound_charged` takes beside (H) and (E), neither of them a Lean statement: that a monitoring period's accepted
-#: execution phases hold at most its `untied` words between them, at one δ (the sampled proofs' bound over a period);
-#: and that an untied word is at most `word` fresh bits, in the one block that reads it
+#: execution phases hold at most its `untied` words between them, fed by at most its `untied_macs` MACs, at one δ (the
+#: sampled proofs' bound, a node's: over the accepted execution phases of one node, however long the period, and over
+#: several nodes their sum); and that an untied word is at most `word` fresh bits, in the one block that reads it
 UNTIED_WORDS, WORD_BITS = "draft:period-untied-words", "draft:untied-word-bits"
 #: (H)'s `β` for an activation by block size, rows `(k, β)` in bits, `k` rising (`premise.training-cut-hardness.beta`)
 BETA: tuple[tuple[float, float], ...] = tuple(
@@ -202,6 +204,8 @@ class Charged:
     slowdown: float
     blocks: float
     untied: float
+    #: the MACs that feed the untied words, at most, in all: charged whole, whatever they compute
+    untied_macs: float
     #: the threshold, fixed before the period: a block that reads more than `w` untied words is charged whole. `inf`:
     #: no threshold, and no block is charged
     w: float
@@ -212,7 +216,8 @@ class Charged:
     charged: float
     #: the MACs the charged blocks hold whole, at most: each its whole work, `c / mac_gates`
     charged_macs: float
-    #: the MACs the period's blocks hold, at most, the charged blocks' among them; `inf` where the bound says nothing
+    #: the MACs the period's blocks hold, at most, the charged blocks' and `untied_macs` among them; `inf` where the
+    #: bound says nothing
     macs: float
     #: the statement, `HECharged`
     statement: str
@@ -258,15 +263,18 @@ class Charged:
         return (f"{self.statement}, whose standing the lock gives, at T = {self.total:.4g} bits and "
                 f"S = {self.squares:.4g}, with {threshold}; under (H) ({HARDNESS}) at k = {self.cap:.4g} bits, "
                 f"β_w = {self.beta_w:.4g} and β_x = {self.beta_x:.4g} bits a value, and (E) ({EXPORTS}) at "
-                f"b = {self.b:.4g} bits an output, conjectures one set of gates refutes; and two premises no Lean "
-                f"statement gives: the period's accepted execution phases hold at most {self.untied:.6g} untied "
-                f"words between them, at most {self.most:.6g} of them in one block ({UNTIED_WORDS}), and an untied "
-                f"word is at most {self.word:.4g} fresh bits in the one block that reads it ({WORD_BITS}); the "
-                "work's structure, the fewest gates of one of its MACs among it, is its caller's to state")
+                f"b = {self.b:.4g} bits an output, conjectures one set of gates refutes, both at the circuit with "
+                f"the untied words as inputs, whichever words they are; and two premises no Lean statement gives: "
+                f"the period's accepted execution phases hold at most {self.untied:.6g} untied words between them, "
+                f"at most {self.most:.6g} of them in one block, fed by at most {self.untied_macs:.6g} MACs, which "
+                f"are charged whole ({UNTIED_WORDS}), and an untied word is at most {self.word:.4g} fresh bits in "
+                f"the one block that reads it ({WORD_BITS}); the work's structure, the fewest gates of one of its "
+                "MACs among it, is its caller's to state; the work no block is credited for is in no term here "
+                "(`capped`)")
 
 
-def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, w: float = math.inf,
-                  most: float = math.inf, word: float = WORD, N: float, O: float, size: float,
+def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, untied_macs: float,
+                  w: float = math.inf, most: float = math.inf, word: float = WORD, N: float, O: float, size: float,
                   mac_gates: float | None = None, beta_w: float = BF16, beta_x: float | None = None,
                   b: float = BF16) -> Charged:
     """The bound over a monitoring period at the policy `(c, k, n)` when some of the words its blocks read are untied:
@@ -278,6 +286,25 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     (a block reads no more untied words than the tied words it reads); by default every untied word may be in one
     block. `N`, `O` and `size` are `bound`'s, the work's MACs, their output wires and its gates as a plain circuit;
     only `O / N` and `size / N` are read, so they may be one block's or the period's.
+
+    The untied words are the period's, over every node in it. The sampled proofs' bound is a node's: the accepted
+    execution phases of one node hold at most so many untied words, however long the period, so `untied` and
+    `untied_macs` over several nodes are the nodes' sums, and `most` is one node's.
+
+    `untied_macs` is the MACs that feed the untied words, at most, in all. The count is taken at the circuit with
+    those words as inputs, where no MAC of the work has its output among them, so it covers none of the MACs that
+    feed them: they are added whole, as if each were the work's.
+
+    Two readings, by the threshold, which a caller prints side by side with what each needs:
+
+    * a threshold `w`: `w` is fixed before the period and is a parameter of the figure, never left out of it; a
+      block over it is charged at its whole work, which takes `c` and `mac_gates`, the circuit's with every word
+      tied;
+    * none: no block is charged and nothing is added to the policy's parameters, but (H) is taken where the block
+      that reads the most untied words reads, for every block.
+
+    Both take the bound on the period's untied words as a premise, and a figure for more nodes than were measured is
+    scaled from one node's, which its caller says.
 
     The count is `HECharged`'s at the period's blocks, `G` the blocks that read at most `w` untied words:
 
@@ -291,8 +318,8 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
 
     Which blocks are charged is not the caller's to say, so each term is taken at its most: `H` at every block that
     can be charged, and `S` at `|G| = blocks`, none charged. The period's MACs `M` then satisfy
-    `M ≤ H + macs_on(T, S, (O / N) M, q, b)`, which is solved for `M`, and the slowdown is the blocks' gates over
-    those MACs' gates as a plain circuit, `blocks · c / (M · size / N)`, at least 1. With no untied word it is
+    `M ≤ untied_macs + H + macs_on(T, S, (O / N) M, q, b)`, which is solved for `M`, and the slowdown is the blocks'
+    gates over those MACs' gates as a plain circuit, `blocks · c / (M · size / N)`, at least 1. With no untied word it is
     `bound`'s slowdown, whatever `w`; with every block charged it is 1; at `w = 0` every block that isn't charged
     reads `k`.
 
@@ -315,19 +342,19 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     squares = blocks * k ** 2 + word * min(untied, blocks * over) * (2 * k + word * over)
     premises = (HARDNESS, EXPORTS, UNTIED_WORDS, WORD_BITS)
     if beta_x is None or N <= 0 or blocks <= 0:
-        return Charged(1.0, blocks, untied, w, most, word, charged, math.nan, math.inf, HE_CHARGED, premises, k, cap,
-                       total, squares, mac_gates or math.nan, beta_w, beta_x, b)
+        return Charged(1.0, blocks, untied, untied_macs, w, most, word, charged, math.nan, math.inf, HE_CHARGED,
+                       premises, k, cap, total, squares, mac_gates or math.nan, beta_w, beta_x, b)
     q = beta_w * beta_x
     held = charged * c / mac_gates
-    # M = a + d √M, with a = H + T + ½ √(S T / (q b)) and d = ½ √(S (O / N) / q)
-    a, d = held + macs_on(total, squares, 0.0, q, b), math.sqrt(squares * (O / N) / q) / 2
+    # M = a + d √M, with a = untied_macs + H + T + ½ √(S T / (q b)) and d = ½ √(S (O / N) / q)
+    a, d = untied_macs + held + macs_on(total, squares, 0.0, q, b), math.sqrt(squares * (O / N) / q) / 2
     macs = ((d + math.sqrt(d * d + 4 * a)) / 2) ** 2
-    return Charged(max(1.0, blocks * c * N / (macs * size)), blocks, untied, w, most, word, charged, held, macs,
-                   HE_CHARGED, premises, k, cap, total, squares, mac_gates, beta_w, beta_x, b)
+    return Charged(max(1.0, blocks * c * N / (macs * size)), blocks, untied, untied_macs, w, most, word, charged,
+                   held, macs, HE_CHARGED, premises, k, cap, total, squares, mac_gates, beta_w, beta_x, b)
 
 
-def best_w(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, most: float = math.inf,
-           word: float = WORD, **work) -> float:
+def best_w(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, untied_macs: float,
+           most: float = math.inf, word: float = WORD, **work) -> float:
     """The threshold at which `bound_charged` is largest for this many blocks, the least such: a choice made before
     the period, from its block count and the bounds on its untied words. It searches `0`, `⌊min(untied, most)⌋` (no
     block charged, as with no threshold), a grid of ratio 1.02 between them, the last `w` before each of `beta`'s
@@ -337,5 +364,16 @@ def best_w(c: float, k: float, n: float | None = None, *, blocks: float, untied:
     grid |= {math.floor((row_k - k) / word) for row_k, _ in BETA if row_k > k}
     grid |= {math.floor(untied / j) for j in range(1, 65)}
     return float(max((w for w in sorted(grid) if 0 <= w <= top),
-                     key=lambda w: bound_charged(c, k, n, blocks=blocks, untied=untied, w=w, most=most, word=word,
-                                                 **work).slowdown))
+                     key=lambda w: bound_charged(c, k, n, blocks=blocks, untied=untied, untied_macs=untied_macs,
+                                                 w=w, most=most, word=word, **work).slowdown))
+
+
+def capped(slowdown: float, uncredited: float) -> float:
+    """A slowdown beside the work no block is credited for: where a share `uncredited` of a block's work is checked by
+    nothing, a developer gets that share whole and the rest at one in `slowdown`, so the slowdown is at most
+    `1 / (uncredited + 1 / slowdown)`, and no more than `1 / uncredited` whatever `slowdown` is. It is the dark share
+    of `theorem.multiple_bound`, which no count of `bound` or `bound_charged` covers: a figure of theirs is quoted
+    beside this one, at a stated share, never alone."""
+    if slowdown == math.inf:
+        return max(1.0, 1 / uncredited) if uncredited > 0 else math.inf
+    return max(1.0, slowdown / (1 + uncredited * slowdown))
