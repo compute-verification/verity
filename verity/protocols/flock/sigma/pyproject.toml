@@ -14,7 +14,8 @@ inputs = ["verity/definitions", "adapters/vllm/verity_vllm", "verity/circuits", 
           "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/protocol.py",
           "verity/protocols/pouw/verifier/live_reads.py", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py",
           "verity/protocols/pouw/prover/circuit", "verity/protocols/pouw/prover/schemes", "verity/protocols/flock/verifier",
-          "verity/difftest"]
+          "verity/difftest",
+          "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]
 # Build outputs the tests run (`check` runs this suite after its Lean steps): the difftest server, and the verifier's command.
 artifacts = ["verity/protocols/flock/sigma/.lake/build/bin/sigma-difftest",
              "verity/protocols/flock/verifier/.lake/build/bin/flock-verify"]

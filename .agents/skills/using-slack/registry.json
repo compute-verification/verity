@@ -443,7 +443,7 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/",
+        "verity/protocols/inference_only/verifier/nci/",
         "verity/protocols/certifier/",
         "verity/protocols/certifier/prover/",
         "verity/protocols/certifier/device/",
