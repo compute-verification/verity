@@ -261,7 +261,7 @@ class StepHook:
 class Builder:
     """Rank 0's tables: `build` answers a class's `assignment` with each span's tables over its rows in ``latents`` filled
     to the class's C (`fill`), one a layer in slot order, each built by ``make`` (program, name, words, capacity; by default
-    a `history_tables_device.Table` on ``device``, its salts under a row key fresh for the class), and kept in ``keep``
+    a `history_tables_device.Table` on ``device``, each row's salt fresh from the operating system), and kept in ``keep``
     before its entry is given."""
 
     def __init__(self, latents: Latents, make: Callable[[str, str, int, int], Any] | None = None, device: Any = None,
@@ -273,8 +273,7 @@ class Builder:
             return self.make
         from verity_vllm.commit import history_tables_device as HTD
 
-        row_key = os.urandom(32)
-        return lambda p, n, w, c: HTD.Table(p, n, w, c, key=row_key, device=self.device)
+        return lambda p, n, w, c: HTD.Table(p, n, w, c, device=self.device)
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""
