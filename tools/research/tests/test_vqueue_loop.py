@@ -298,19 +298,133 @@ def test_a_retry_reruns_its_infra_keys_itself_while_graph2_s_own_verdict_isnt_in
     assert loop.tick() == []
 
 
-def test_a_member_that_doesnt_merge_onto_the_build_is_left_out_logged_and_its_owner_told_once(env):
+def test_a_member_that_conflicts_with_one_merged_before_it_is_left_out_naming_it_and_its_owner_told_once(env):
+    """#2 merges onto `main` but not after #1, which the build merged first: its skip names #1, not `main`, nor #3, merged
+    before it too in a file #2 doesn't touch."""
     env.put(1, {"a.txt": "1\n"})
+    env.put(3, {"d.txt": "3\n"})
     two = env.put(2, {"a.txt": "2\n"})
-    loop = env.loop(lambda s: [Drop(c.sha, "rebuilt") for c in s.candidates] or [Build((1, 2), s.main, 5)])
+    loop = env.loop(lambda s: [Drop(c.sha, "rebuilt") for c in s.candidates] or [Build((1, 3, 2), s.main, 5)])
     skip, built = loop.tick()
-    assert (skip["action"], skip["number"], skip["heads"], skip["done"]) == ("skip", 2, [two], True)
-    assert "a.txt" in skip["why"] and built["members"] == [1], (skip, built)
+    assert (skip["action"], skip["number"], skip["heads"], skip["done"], skip["by"]) == ("skip", 2, [two], True, [1])
+    assert skip["why"] == "conflicts with #1, merged before it, in a.txt (it merges onto `main`)", skip
+    assert built["members"] == [1, 3], built
     (post,) = env.posts
-    assert "#2 at" in post and "doesn't merge" in post
+    assert "#2 at" in post and "doesn't merge" in post and "conflicts with `main`" not in post, post
+    assert post.endswith("It is left out until it merges: merge `main` into it once #1 is on it"), post
     assert _acts(loop.tick()) == ["drop"]
     again, built = loop.tick()                                      # the same head onto the same base: told once
     assert (again["action"], again["text"], again["done"], built["action"]) == ("skip", None, False, "build")
     assert len(env.posts) == 1
+
+
+def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one_that_conflicts_with_main_says_main(env):
+    """Built on a candidate, a PR that merges onto `main` but not onto the candidate conflicts with the candidate's member,
+    named; one that conflicts with `main` itself is told so, whatever was merged before it."""
+    base = env.main()
+    _main_to(env, {"c.txt": "main\n"})
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"a.txt": "2\n"})
+    three = env.o.change({"c.txt": "3\n"}, base=base)
+    env.o.gh.put(3, three)
+    loop = env.loop(lambda s: [Build((2, 3), s.candidates[0].sha, 5)] if s.candidates else [Build((1,), s.main, 5)])
+    told, low = loop.tick()                                         # #3 doesn't merge onto `main`: its owner is told so
+    assert (told["action"], told["number"], low["members"]) == ("conflict", 3, [1]), (told, low)
+    skip2, skip3, none = loop.tick()
+    assert (skip2["number"], skip2["by"], none["action"], none["base"]) == (2, [1], "build", low["sha"]), (skip2, none)
+    assert skip2["why"] == "conflicts with #1, merged before it, in a.txt (it merges onto `main`)", skip2
+    assert (skip3["number"], skip3["why"], "by" in skip3) == (3, "conflicts with `main` in c.txt", False), skip3
+    assert [p.rsplit(": ", 1)[1] for p in env.posts[1:]] == ["merge `main` into it once #1 is on it", "merge `main` into it"]
+
+
+def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_then_logged_once_as_carried(env):
+    """A member whose head an earlier member's holds merges nothing: it reaches `main` with the build, so its owner isn't told
+    it doesn't merge (`held`), and while that candidate is on `main`'s chain the PR is no ready PR: no build takes it, so
+    nobody is told to merge `main` into it, and it is logged once a head and candidate (`carried`)."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    loop = env.loop(lambda s: [] if s.candidates else [Build((2, 1), s.main, 5)])
+    skip, built = loop.tick()
+    assert (skip["action"], skip["number"], skip["heads"], skip["held"], skip["done"]) == ("skip", 1, [one], True, False)
+    assert skip["why"] == f"its head {one[:12]} is already in what it merges onto: #2's head holds it" and "text" not in skip
+    assert built["members"] == [2] and env.posts == []
+    (carried,) = loop.tick()
+    assert (carried["action"], carried["number"], carried["heads"], carried["sha"]) == ("carried", 1, [one], built["sha"])
+    assert carried["why"] == f"{built['sha'][:12]} holds its head without it as a member: it reaches `main` with it"
+    assert loop.tick() == [] and env.posts == []
+    assert [r.number for r in loop.snapshot(L.Past.read(env.log, 0), 9).snap.ready] == [2]
+
+
+def test_a_pr_carried_by_a_candidate_after_its_own_mark_lands_with_it_and_is_never_built_or_told(env):
+    """A PR stacked on an unmarked PR of the same owner carries that PR's change (`Queue.entries`), so it is built alone; once
+    the PR below is marked, its head is a ready PR the candidate holds: no build takes it, nobody is told, and it reaches
+    `main` with the candidate."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one), body="Lane `lane-1`.")
+    env.o.gh.ready.discard((1, one))
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    assert (built["members"], built["heads"]) == ([2], [two]), built
+    env.o.gh.ready.add((1, one))
+    (carried,) = loop.tick()
+    assert (carried["action"], carried["number"], carried["sha"]) == ("carried", 1, built["sha"]), carried
+    assert loop.tick() == [] and env.posts == []
+    keys = env.listed(built["sha"], {"pytest:b": ["b.txt"]})
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == built["sha"]
+    assert loop.tick() == [] and env.posts == []
+
+
+def test_a_skip_for_a_head_main_holds_when_fetched_again_tells_nobody(env):
+    """`main` moved to #2's head after the tick read it: #2's skip tells nobody, and is logged with the `main` that holds it."""
+    env.put(1, {"a.txt": "1\n"})
+    two = env.put(2, {"a.txt": "2\n"})
+
+    def moved(s: Snapshot) -> list:
+        if s.candidates:
+            return []
+        _git(env.o.origin, "update-ref", "refs/heads/main", two)
+        return [Build((1, 2), s.main, 5)]
+
+    skip, built = env.loop(moved).tick()
+    assert (skip["action"], skip["number"], skip["landed"], skip["done"], "text" in skip) == ("skip", 2, two, False, False)
+    assert skip["why"] == ("conflicts with #1, merged before it, in a.txt (it merges onto `main`); "
+                           f"`main` {two[:12]}, fetched again, holds its head"), skip
+    assert built["members"] == [1] and env.posts == []
+
+
+def test_a_skip_whose_fetch_of_main_again_fails_reads_the_tick_s_main_and_is_told(env):
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"a.txt": "2\n"})
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1, 2), s.main, 5)])
+
+    def unreachable() -> str:
+        raise L.QueueError("git fetch: origin can't be reached")
+
+    loop.world.main_now = unreachable
+    skip, built = loop.tick()
+    assert (skip["number"], skip["done"], len(env.posts), built["members"]) == (2, True, 1, [1]), (skip, built)
+    assert any("fetching `main` again failed" in x for x in env.out), env.out
+
+
+def test_a_conflict_notice_for_a_head_main_holds_when_fetched_again_tells_nobody(env):
+    """A ready PR that doesn't merge onto the `main` the tick read, whose head `main` holds once fetched again (it landed
+    meanwhile), is told nothing, and is no ready PR the next tick."""
+    base = env.main()
+    _main_to(env, {"c.txt": "main\n"})
+    four = env.o.change({"c.txt": "4\n"}, base=base)
+    env.o.gh.put(4, four)
+    resolved = env.o.change({"c.txt": "resolved\n"}, base=four)
+
+    def landed(s: Snapshot) -> list:
+        _git(env.o.origin, "update-ref", "refs/heads/main", resolved)
+        return []
+
+    loop = env.loop(landed)
+    (conflict,) = loop.tick()
+    assert (conflict["action"], conflict["number"], conflict["landed"], conflict["done"]) == ("conflict", 4, resolved, False)
+    assert "text" not in conflict and env.posts == []
+    assert loop.tick() == [] and loop.world.left == {4: (four, "its head is on `main`")} and env.posts == []
 
 
 def _move(env: Env, n: int, files: dict[str, str | None], base: str = "origin/main") -> str:

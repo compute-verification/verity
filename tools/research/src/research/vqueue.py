@@ -128,8 +128,8 @@ class Snapshot:
 @dataclass(frozen=True)
 class Build:
     """Merge ``members`` in order onto ``base``, push the result to `queue/<sha12>` and enqueue `ready:<sha>` at ``priority``.
-    A member that doesn't merge onto what is built so far is left out and its owner told: the candidate's members are what
-    merged."""
+    A member that doesn't merge onto what is built so far is left out and its owner told, unless what it merges onto or
+    `main` already holds its head: the candidate's members are what merged."""
     members: tuple[int, ...]
     base: str
     priority: int
