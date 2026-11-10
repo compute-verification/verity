@@ -82,7 +82,8 @@
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Accounting.ReadUnit"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",

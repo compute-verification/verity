@@ -3,12 +3,13 @@ module
 public import Flock.ReadNet.Template
 
 /-!
-# The served expert-row read's template passes its check (`ExpertReadAccepted`)
+# The read's template check at the served expert-row read (`ExpertReadAccepted`)
 
-The one fact `TableReadBinding`'s honest lemma takes, and nothing in Lean proves yet: the template `Tmpl.parse` reads back
-from the text of `readTmpl 256 3072`, the served MoE model's expert-row read (`EmbeddingRead_v1{V=256,H=3072}`), passes
-`Flock.ReadNet.check 256 3072`. The kernel doesn't evaluate the template's generators or its text, and a proof at every
-`V` and `H` needs each part's run (`runOk`) and a bound on every generator's rows, which the root Definition's width sums.
+What `Flock.ReadNet.check` does at the served MoE model's expert-row read (`EmbeddingRead_v1{V=256,H=3072}`), stated
+against the template's code: the template `Tmpl.parse` reads back from the text of `readTmpl 256 3072` passes
+`check 256 3072`. `TableReadBinding`'s honest lemma takes it, and nothing in Lean proves it yet: the kernel doesn't
+evaluate the template's generators or its text, and a proof at every `V` and `H` needs each part's run (`runOk`) and a
+bound on every generator's rows, which the root Definition's width sums.
 
 It is what `flock-read-tmpl 256 3072` checks before it exits 0 (`ReadTmplCmd.template`): it renders `readTmpl 256 3072`,
 parses the text back, and runs `ReadNet.check 256 3072` on the template it parsed.
