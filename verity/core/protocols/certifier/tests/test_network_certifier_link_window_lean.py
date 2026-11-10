@@ -1,9 +1,9 @@
 """N2's execution phase verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on plain, served and warden link-windows, honest and tampered (the session refused, rejected, naming another
+and digest on plain, served and network certifier link-windows, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
 shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
-missing or not certificates; the declared syncs off Σ_sync or missing; a warden link under another digest).
+missing or not certificates; the declared syncs off Σ_sync or missing; a network certifier link under another digest).
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
 
