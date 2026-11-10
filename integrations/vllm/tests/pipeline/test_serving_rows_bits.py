@@ -5,7 +5,8 @@ a block's N).
 * Every unit of the long row's check template (`long_row.units`) but its table read is a ``bits`` template, at the served
   statics too: `chunk_rows.unit_rows` gives each parameter one row of its bits zero-padded to whole u16 words and each
   return field one, `chunk_rows.statement` keeps its reads inline, and the rows the verifier supplies (a chunk's ``c``, a
-  slot's ``j``) are in `chunk_rows.INDEX_SCHEMA`. `interface.layout` still refuses such a port.
+  slot's ``j``) are in `chunk_rows.INDEX_SCHEMA`. `interface.layout` still refuses such a port, and so does a served row's
+  reader (`serving_rows.row_units`), by name.
 * At small statics each unit but the pick is staged by `UnitStager` on those rows in the form the sampled audit's knowledge
   soundness covers (`one_stage.proofs.ks_form_why`), inside Flock's range (k_log, and a region a row against
   `REGIONS_MAX`), on random rows; a row whose padding is not zero is refused (slow).
@@ -31,6 +32,7 @@ from verity_flock import circuit as FC
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import long_row as LR
+from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
 
@@ -97,11 +99,14 @@ def test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_rows_of_w
             if nm == CR.INDEX_ROWS.get(spec_base(tid))] == ["c", "j"]
 
 
-def test_the_window_builders_layout_still_refuses_a_port_that_is_not_whole_words() -> None:
-    count = next(d for tid, d in _templates(_cut(64, 32, 32)).items() if tid.startswith("DsaTopKDigitCount_v1") and "K=1" in tid)
+def test_the_window_builders_layout_and_a_served_rows_reader_still_refuse_a_port_that_is_not_whole_words() -> None:
+    tid, count = next((tid, d) for tid, d in _templates(_cut(64, 32, 32)).items()
+                      if tid.startswith("DsaTopKDigitCount_v1") and "K=1" in tid)
     assert dict(count.signature()[0])["prefix"].leaves == 8
     with pytest.raises(ValueError):
         IF.layout(count)
+    with pytest.raises(ValueError, match="a bits template's rows are its ports' bits padded to whole u16 words"):
+        SRW.row_units(tid, {"statics": {}})
 
 
 @pytest.mark.slow
