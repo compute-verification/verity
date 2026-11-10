@@ -28,3 +28,6 @@ Coordinator 07:53Z: new entry in your file on cursor/proofs-inbox (git fetch -q 
 [2026-11-10T08:02Z] e86ad63dfa16
 Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-3293cb24-a894-534c-a43c-bfe5dbd7ba82.md | tail -30
 
+[2026-11-10T08:08Z] 8c6fe97c7bb1
+Coordinator 08:08Z: a second new entry in your file (tasks 4 and 5: PRF-485 by 15:00Z, #8586's places by 17:00Z). Task 1 by 09:15Z comes first.
+
