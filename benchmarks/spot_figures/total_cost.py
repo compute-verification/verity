@@ -38,7 +38,7 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   (`plancheck`), and a refused design is an error.  A point without a design (the trivial bound, or a count of every
   proof block, which samples none) has `lean` None.
 
-Lean checks each two-stage point too (`lean_two`, unless `lean` is off): its count is the bits Lean certifies
+Lean checks each two-stage point too (`figure1.lean_two`, unless `lean` is off): its count is the bits Lean certifies
 (`TwoStageCheckPatternsSound` in the patterns' form, `TwoStageCheckServedSound` in the capped sets') at the θ Lean
 finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
 error.
@@ -66,7 +66,7 @@ import re
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
-from math import ceil, expm1, floor, inf, log, log1p, log10
+from math import expm1, floor, inf, log, log1p, log10
 from pathlib import Path
 from statistics import linear_regression, median
 from textwrap import fill
@@ -75,7 +75,6 @@ import cards as spot_cards
 import figure1 as f1
 from verity.core.protocols.spot import plancheck
 from verity.core.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
-from verity.ml.circuits.partition_v2 import unit_class
 
 SCHEMA = "spot-figure1/v2"
 #: β, the share of compute for replays and proofs, from 0.01% to 1,000% at four points a decade, and the design card's:
@@ -366,17 +365,6 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
                                                "the marginal computed from staged witness bits", card["provisional"])}
 
 
-def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class")
-    return w
-
-
-def _split(cells: list[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
-    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
-
-
 def _hazard(q: float, y: float) -> float:
     """h(y) = −ln(1 − q(1 − e^{−y})): a replay block's share of Λ once its incorrect blocks have rate y."""
     return -log1p(-q * -expm1(-y)) if y < inf else -log1p(-q) if q < 1 else inf
@@ -390,7 +378,7 @@ def write_form(cells: list[Cell], row: dict, replay_blocks: float, delta: float,
     unit of h, and at most R·F.  A replay block charged c has y at least the least k_t/n_t of a block of at least c bits,
     or c times the least k_t/(n_t b) of a narrower one; c/h(y) only rises between the cells' bits, so its most is at one
     of them or at F."""
-    split = _split(cells, row["merged"])
+    split = f1.split_cells(cells, row["merged"])
     n: dict[int, float] = {}
     for c in split:
         n[c.stratum] = n.get(c.stratum, 0.0) + c.n
@@ -410,7 +398,7 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     included, that is in the cells `computed` marks: the types `priced` computes rather than measures.  A design that
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
-    split = _split(cells, row["merged"])
+    split = f1.split_cells(cells, row["merged"])
     at = (row["k"], row["q"], row["registration"])
     whole = two_stage_price(split, *at)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
@@ -445,18 +433,6 @@ def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: f
                  m.replay.cost * replays / per, boundary_bits)
 
 
-def lean_two(g: Grain, row: dict, delta: float, served: float, form: str) -> tuple[float, dict]:
-    """Lean's check of a two-stage line's point (`plancheck.two`, its replay blocks one class, in the patterns' form or
-    the capped sets'): the bits it certifies, rounded up to a float, at the θ it finds from the planner's, with the
-    planner's bits and that θ beside them; a point Lean refuses is an error."""
-    d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served,
-                      form == "patterns", row["theta"])
-    ((bits, theta),) = plancheck.check([d])
-    if bits is None:
-        raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
-    return plancheck.upper(bits), {"lean": True, "planner": row["bound"], "theta": float(theta)}
-
-
 def _plan(row: dict | None) -> dict | None:
     return None if row is None else f1._plan(row)
 
@@ -465,7 +441,7 @@ def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
     and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `lean_two`)."""
+    (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `figure1.lean_two`)."""
     name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
@@ -487,7 +463,8 @@ def _point(job: tuple) -> dict:
                                  "plan": _plan(work["row"]), **checked["work"]}}
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served, union=form == "patterns", registration=span)
-    count, checked = lean_two(g, row, m.delta, m.served, form) if lean else (row["bound"], {})
+    count, checked = (f1.lean_two(g.cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
+                      else (row["bound"], {}))
     return {"exfiltration": {"y": min(count, served), "count": count,
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG},
@@ -812,11 +789,11 @@ STEPS = 6
 def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
     """Lean's certificate that a line's exfiltration bound at a break-even's point is at most `target` bits.  `at(x)` is
     the line's point at `x` with Lean's check of its design (`_point`'s exfiltration with `lean`): its count is the
-    bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
-    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
-    above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
-    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
-    it."""
+    bits Lean certifies for the design the planner picks there (`figure1.lean_two`), rounded up to a float, so `y`, that
+    count or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's
+    bits above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising
+    in it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step
+    reached it."""
     for step in range(STEPS + 1):
         pt = at(x)
         if pt["y"] <= target:

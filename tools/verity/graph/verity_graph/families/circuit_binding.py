@@ -93,7 +93,8 @@ def _names(tree: ast.Module) -> dict[str, ast.stmt]:
 
 def entries(path: str, source: str) -> list[str]:
     """The bindings binding file ``path`` (``source``) defines, by entry: each root function ``_X_roots`` (`targets._root_names`),
-    ``_model_roots``, and ``TEMPLATE_PARAMS:<template>`` for each key of its ``TEMPLATE_PARAMS``."""
+    ``_model_roots``, and ``TEMPLATE_PARAMS:<key>`` for each key of its ``TEMPLATE_PARAMS`` (``<template>`` or
+    ``<template>@<name>``)."""
     names = _names(ast.parse(source, path))
     out = sorted(n for n in names if n.startswith("_") and n.endswith("_roots") and n != "_model_roots")
     out += ["_model_roots"] if "_model_roots" in names else []
