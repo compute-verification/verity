@@ -3,8 +3,8 @@ module
 public import Properties.Remote
 public import Proofs.Properties.Composition
 public import Proofs.Properties.Nci.DescVerdict
-public import Proofs.Properties.Nci.Baseline
-public import Proofs.Properties.Nci.BaselineSteps
+public import Proofs.Properties.Nci.Theta
+public import Proofs.Properties.Nci.ThetaSteps
 public import Proofs.Properties.Nci
 public import Proofs.Properties.Nci.Agrees
 public import Proofs.Nci.FitWitness
@@ -22,9 +22,9 @@ caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie 
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
 to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`windows_tied`). The policy's
-acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
-`NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
-`DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
+acceptance is `NciCheck.Theta.evaluate`'s with the record naming the circuit (`policy_accept`), which is
+`NciCheck.Desc.evaluate`'s and θ's provenance (`ThetaSteps.evaluate_ok`), whose verdict `DescReports`,
+`DescWitnesses` and `ThetaProvenance` read; `Nci.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
 give the `(c, k)`-partitions, of the declaration with its constants registered, which needs no assumption that it is
 Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).
 The parse, declaration and division an acceptance
@@ -171,7 +171,7 @@ record. -/
 theorem policy_accept {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment}
     {e : NciCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
     (h : NciCheck.Protocol.check p c e = .accept pub prof) :
-    NciCheck.Protocol.names p c = true ∧ ∃ out, NciCheck.Baseline.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
+    NciCheck.Protocol.names p c = true ∧ ∃ out, NciCheck.Theta.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
       out.getObjVal? "complies" = .ok (.bool true) := by
   unfold NciCheck.Protocol.check at h
   by_cases hn : NciCheck.Protocol.names p c = true
@@ -190,7 +190,7 @@ theorem policy_accept {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
 /-- The record names the circuit the program decodes to. -/
 theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment} {P : Prog}
     (hn : NciCheck.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    NciCheck.Baseline.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
+    NciCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
   unfold NciCheck.Protocol.names at hn
   rw [hP] at hn
   simpa using hn
@@ -263,13 +263,13 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
     {e : NciCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
     (h : NciCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
   obtain ⟨hn, out, hb, hc⟩ := policy_accept h
-  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
+  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
   obtain ⟨⟨j', hx⟩, hev⟩ := NciCheck.Properties.SecurityProofs.DescAgrees _ _ hd
   obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
     NciCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
   let d : RegisteredCircuit := .ofPartition D θ hθin n U
-  exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
+  exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.ThetaProvenance _ _ _ hb,
     ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
@@ -527,7 +527,7 @@ theorem acceptComplies : AcceptComplies := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
-  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
+  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
   obtain ⟨P, hP, hname, -, ⟨j', i, d, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
   refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
