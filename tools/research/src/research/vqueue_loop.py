@@ -13,9 +13,10 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 `signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
-is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
-whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the
-files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
+is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`) of a change that
+compiles (a lock's alone doesn't), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The
+owner of one that doesn't is told once a head the files it conflicts in, to rebase it onto `main` and mark the new head
+(`Loop._conflicts`); its mark stays.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -133,9 +134,9 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files, flags_at,
-                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
-                    unreviewed)
+from .queue import (LEAN_SOURCES, PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers,
+                    conflicting_files, flags_at, label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit,
+                    review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -155,7 +156,8 @@ WINDOW_S = 48 * 3600
 GATES = GRAPH2_GATE, CHECK_GATE = "graph2", "check"
 SHARDS = 3
 INTERVAL_S = 60
-#: the most members a candidate holds, candidates stacked at once and members changing Lean, a lock or a spec in a candidate
+#: the most members a candidate holds, candidates stacked at once and members of a candidate whose Lean change compiles (a
+#: spec's or Lean source's, not a lock's alone: `World._judge`)
 BATCH, DEPTH, LEAN = 16, 3, 3
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
@@ -711,12 +713,14 @@ class World:
         return self._files[key]
 
     def _judge(self, main: str, head: str, config: tuple[str, ...] | None = None) -> tuple[bool, bool]:
-        """(whether ``head`` is a Lean change, whether it doesn't merge onto ``main``), kept by (head, main).  The merge is `git
-        merge-tree`'s alone (`merged_tree`, no worktree, with ``main``'s merge drivers: ``config``, else `base_drivers`), so
-        judging every ready PR stays cheap; a build's codemod (`Queue._merge`) checks out a worktree, and a member it refuses is
-        left out of that build as one that doesn't merge."""
+        """(whether ``head`` is a Lean change that compiles, whether it doesn't merge onto ``main``), kept by (head, main): a
+        Lean change (`queue.lean_change`) whose only Lean files are locks (`lean-audit.json` records) compiles nothing.  The
+        merge is `git merge-tree`'s alone (`merged_tree`, no worktree, with ``main``'s merge drivers: ``config``, else
+        `base_drivers`), so judging every ready PR stays cheap; a build's codemod (`Queue._merge`) checks out a worktree, and a
+        member it refuses is left out of that build as one that doesn't merge."""
         if (key := (head, main)) not in self._judged:
-            self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head)),
+            self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head))
+                                 and any(f.endswith(LEAN_SOURCES) for f in self._changed(main, head)),
                                  merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
 
@@ -2216,8 +2220,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
-    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate that change Lean, a lock or a "
-                                                           f"spec (default {LEAN})")
+    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
+                                                           f"spec's or a Lean source's, not a lock's alone (default {LEAN})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")

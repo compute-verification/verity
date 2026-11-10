@@ -1190,6 +1190,21 @@ def test_the_snapshot_reads_the_clock_lean_and_pending_hours_and_a_check_pending
     assert seen[-1].candidates[0].enqueued == T0 and seen[-1].candidates[0].tries == 2
 
 
+def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(env):
+    """`--lean` caps a candidate's members whose Lean change compiles: a Lean source's of a package with a lock, the spec's,
+    or a proof's beside a lock's records.  A change to a lock's records alone (`lean-audit.json`) compiles nothing, and
+    counts no more than a change with no Lean."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/lean-audit.json": '{"records": 1}\n'})
+    env.put(2, {"pkg/A.lean": "-- b\n"})
+    env.put(3, {"Security/Definitions/D.lean": "-- d\n"})
+    env.put(4, {"pkg/lean-audit.json": '{"records": 2}\n', "Security/Proofs/P.lean": "-- p\n"})
+    env.put(5, {"a.txt": "5\n"})
+    seen: list[Snapshot] = []
+    env.loop(lambda s: seen.append(s) or []).tick()
+    assert {r.number: r.lean for r in seen[-1].ready} == {1: False, 2: True, 3: True, 4: True, 5: False}
+
+
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
@@ -2331,7 +2346,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("or a spec", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("a lock's alone", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
