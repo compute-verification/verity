@@ -1460,8 +1460,7 @@ def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, mon
 
 def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_kept_only_when_asked(tmp_path, monkeypatch):
     """`Facts.lean` writes its document and canonical forms (hundreds of MB for `Security`) in a directory of their own
-    outside the work directory a recorded run publishes, under `SCRATCH` when it is set (`lean_changed.records`' sandbox
-    shows only the package's `.lake`), and that directory is gone once they are read, or the program failed. Without
+    outside the work directory a recorded run publishes, and that directory is gone once they are read, or the program failed. Without
     ``keep`` the work directory keeps no document, and none an earlier run left there, gzipped or plain."""
     work, wrote, failing = tmp_path / "work", [], []
 
@@ -1487,10 +1486,8 @@ def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_ke
         A.facts_of(tmp_path, {"roots": ["C"]}, work)
     assert len(wrote) == 2 and not any(d.is_relative_to(work) or d.exists() for d in wrote)
     failing.clear()
-    monkeypatch.setattr(A, "SCRATCH", tmp_path / "scratch")
-    (tmp_path / "scratch").mkdir()
     A.facts_of(tmp_path, {"roots": ["C"]}, work)
-    assert wrote[-1].parent == tmp_path / "scratch" and not any((tmp_path / "scratch").iterdir())
+    assert len(wrote) == 3 and not wrote[-1].is_relative_to(work) and not wrote[-1].exists()
     assert sorted(p.name for p in work.iterdir()) == ["facts-config.json", A.FACTS]
 
 
