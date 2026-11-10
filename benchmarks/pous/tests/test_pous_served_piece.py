@@ -30,11 +30,11 @@ from pathlib import Path
 import pytest
 
 from verity.core.deploy.stream import Side
-from verity.core.devices.memory_challenger import challenger_party as CP
-from verity.core.protocols.pous import challenger_session as CS
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
+from verity.protocols.pous.device import challenger_party as CP
+from verity.protocols.pous.device import challenger_session as CS
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
 from verity.core.protocols.remote_bandwidth import p2_case, p2_lean
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
@@ -66,8 +66,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 

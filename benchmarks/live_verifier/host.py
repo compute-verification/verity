@@ -62,7 +62,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
-  run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
+  run PoUS's streamed-wipe challenger (`verity/protocols/pous/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--minutes M]` the remote bandwidth audit's P2
   party (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
@@ -139,8 +139,8 @@ PRO 6000 has 96 GB of HBM)."""
 STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/protocols/pouw/verifier/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
-PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.devices.memory_challenger.challenger_party", 47610),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.pous.verifier.wipe_party", 47611),
+           "challenger_party": ("pous", "verity.protocols.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
@@ -697,7 +697,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     return {"party": rest[0], "log": rest[1], "lines": lines}
 
 
-KEYGEN = "import sys; from verity.core.protocols.pous import period; print(period.challenger(sys.argv[1]).public_key.hex())"
+KEYGEN = "import sys; from verity.protocols.pous.verifier import period; print(period.challenger(sys.argv[1]).public_key.hex())"
 
 
 def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],

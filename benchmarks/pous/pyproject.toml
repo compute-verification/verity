@@ -13,17 +13,17 @@ untraced = [
     "tests/test_pous_served_case.py",
     "tests/test_pous_served_wipe.py",
 ]
-# tests/ checks the harness against PoUS itself (verity.core.protocols.pous) and the census's hardware ids;
+# tests/ checks the harness against PoUS itself (verity.protocols.pous.verifier) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/flock/verifier/interface",
-          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
           "verity/core/protocols/record.py", "verity/core/protocols/reporting.py",
           "verity/core/devices/__init__.py",
           "verity/flock/verifier", "verity/core/primitives/identity", "verity/core/primitives/randomness",
-          "verity/core/primitives/lms", "verity/core/difftest", "verity/core/devices/memory_challenger",
+          "verity/core/primitives/lms", "verity/core/difftest", "verity/protocols/pous/device",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's

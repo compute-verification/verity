@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes import p2 as pous_p2
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.schemes import p2 as pous_p2
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, p2, receipts, timing
 from verity.ml.randomness import frame
 

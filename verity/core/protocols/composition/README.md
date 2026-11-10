@@ -70,9 +70,9 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../../../protocols/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../spot/verifier/recursive`) | `verity/sampled-proofs/v1` |
 | the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
-| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
+| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../protocols/pous/verifier/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
-| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
+| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../protocols/pous/device/lean`) | `verity/wipe/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`.
 
@@ -157,7 +157,7 @@ Lean to:
 - PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
-  those verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_p2_case.py`).
+  those verifiers (`../../../protocols/pous/verifier/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_p2_case.py`).
 
 Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only

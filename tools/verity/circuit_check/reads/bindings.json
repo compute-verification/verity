@@ -672,19 +672,19 @@
    "groups": "0-63,97-103,106-107,113-114,124-127,155-169,194,201-206,219-237,325-356,526,581",
    "registry": true
   },
-  "verity.ml.protocols.pous.answer_circuit.circuit-check#_pous_roots": {
+  "verity.protocols.pous.prover.answer_circuit.circuit-check#_pous_roots": {
    "groups": "0-12,15-63,67-69,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-353,355,359,534,582",
    "registry": true
   },
-  "verity.ml.protocols.pous.circuit.circuit-check#_pous_roots": {
+  "verity.protocols.pous.prover.circuit.circuit-check#_pous_roots": {
    "groups": "0-13,15-63,67-69,97-103,106-107,113-114,124-126,155-170,172-174,194,201-206,219-237,325-353,355,359,527,583-584",
    "registry": true
   },
-  "verity.ml.protocols.pous.decode_circuit.circuit-check#_pous_roots": {
+  "verity.protocols.pous.prover.decode_circuit.circuit-check#_pous_roots": {
    "groups": "0-11,15-63,66-69,97-103,106-107,113-114,124-126,155-170,194,201-206,219-225,227-237,325-353,359,528,583,585",
    "registry": true
   },
-  "verity.ml.protocols.pous.verdict_circuit.circuit-check#_pous_roots": {
+  "verity.protocols.pous.prover.verdict_circuit.circuit-check#_pous_roots": {
    "groups": "0-10,12-63,67-69,97-103,106-107,113-114,124-127,155-170,172-173,194,201-206,219-237,325-353,355-356,519,586",
    "registry": true
   },
@@ -927,7 +927,7 @@
     "verity/definitions/private_circuits",
     "verity/ml/protocols",
     "verity/ml/protocols/certifier",
-    "verity/ml/protocols/pous",
+    "verity/protocols/pous/prover",
     "verity/protocols/pouw/prover",
     "verity/protocols/pouw/prover/circuit"
    ]
@@ -986,22 +986,22 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/pous/verdict_circuit.py"
+    "verity/protocols/pous/prover/verdict_circuit.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pous/decode_circuit.py"
+    "verity/protocols/pous/prover/decode_circuit.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pous/answer_circuit.py"
+    "verity/protocols/pous/prover/answer_circuit.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pous/circuit.py"
+    "verity/protocols/pous/prover/circuit.py"
    ]
   },
   {
@@ -2011,7 +2011,7 @@
     "verity/ml/protocols/certifier/egress.py",
     "verity/ml/protocols/certifier/ingress_scan.py",
     "verity/ml/protocols/certifier/window_charge.py",
-    "verity/ml/protocols/pous/__init__.py",
+    "verity/protocols/pous/prover/__init__.py",
     "verity/protocols/pouw/prover/circuit/h1device.py",
     "verity/protocols/pouw/prover/schemes",
     "verity/ml/randomness",
@@ -2086,7 +2086,7 @@
    "probes": [
     "_classes.py",
     "_ops.py",
-    "verity/core/protocols/pous/__init__.py",
+    "verity/protocols/pous/verifier/__init__.py",
     "verity/ml/commitments/advice.py",
     "verity/ml/commitments/vllm_v1"
    ]
@@ -4733,7 +4733,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pous/verdict_circuit.circuit-check.py"
+    "verity/protocols/pous/prover/verdict_circuit.circuit-check.py"
    ]
   },
   {
@@ -4773,12 +4773,12 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pous/circuit.circuit-check.py"
+    "verity/protocols/pous/prover/circuit.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pous/decode_circuit.circuit-check.py"
+    "verity/protocols/pous/prover/decode_circuit.circuit-check.py"
    ]
   },
   {
@@ -4808,7 +4808,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pous/answer_circuit.circuit-check.py"
+    "verity/protocols/pous/prover/answer_circuit.circuit-check.py"
    ]
   },
   {
@@ -5176,12 +5176,12 @@
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/PousRowDigestEnd_v1_N_264_END_tail_-5e74069c.json",
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/PousSha512Compress_v1.json",
     "verity/core/protocols/pous/answer_circuit.circuit-check.json",
-    "verity/ml/protocols/pous/answer_circuit.circuit-check.json"
+    "verity/protocols/pous/prover/answer_circuit.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pous/circuit.circuit-check.json"
+    "verity/protocols/pous/prover/circuit.circuit-check.json"
    ]
   },
   {
@@ -5237,7 +5237,7 @@
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/PousSquare_v1_N_33_-3f4cff23.json",
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/PousSquare_v1_N_64_-64482b01.json",
     "verity/core/protocols/pous/decode_circuit.circuit-check.json",
-    "verity/ml/protocols/pous/decode_circuit.circuit-check.json"
+    "verity/protocols/pous/prover/decode_circuit.circuit-check.json"
    ]
   },
   {

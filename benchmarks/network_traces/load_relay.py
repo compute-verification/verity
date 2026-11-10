@@ -99,7 +99,7 @@ from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_p
 from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
-from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
+from verity.protocols.pous.verifier.schemes import p2 as P2  # noqa: E402
 from verity.spot.verifier.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"

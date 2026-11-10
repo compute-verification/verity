@@ -126,7 +126,7 @@ class Pin:
 
 NCP = "verity/protocols/pouw/verifier/tests/ncp_lean.py"
 PINS = (
-    Pin("verity/core/protocols/pous/lean/TRUSTED.sha256", None, "verity/core/protocols/pous/lean", None),
+    Pin("verity/protocols/pous/lean/TRUSTED.sha256", None, "verity/protocols/pous/lean", None),
     Pin("verity/flock/tests/fixtures/randomness_lean.json", "inputs", "", "bash verity/flock/tests/lean/generate.sh",
         "Security/Proofs"),
     Pin("verity/spot/verifier/tests/fixtures/exfiltration_lean.json", "inputs", "",

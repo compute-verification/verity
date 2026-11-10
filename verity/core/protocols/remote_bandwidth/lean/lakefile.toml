@@ -32,7 +32,7 @@ path = "../../../difftest/lean"
 # (`PousCheck.Merkle`).
 [[require]]
 name = "pous_check"
-path = "../../pous/check"
+path = "../../../../protocols/pous/verifier/check"
 
 [[require]]
 name = "core_protocol"

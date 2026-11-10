@@ -34,7 +34,7 @@ import pytest
 
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, Issuer
-from verity.core.protocols.pous.schemes import p2 as P2
+from verity.protocols.pous.verifier.schemes import p2 as P2
 from verity.spot.verifier.one_stage import registered as G
 
 HERE = Path(__file__).resolve().parents[1]

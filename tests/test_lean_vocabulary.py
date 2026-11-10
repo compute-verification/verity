@@ -144,7 +144,7 @@ WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts
        "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
-MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
+MC, MC_PY = "verity/protocols/pous/device/lean/MemoryChallenger/", "verity/core/protocols/pous/"
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
@@ -805,7 +805,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
         "homonym, a link's online state: rename (network-accounting)",
-    "verity/core/devices/memory_challenger/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
+    "verity/protocols/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
@@ -831,36 +831,36 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
-    "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
-    "verity/core/devices/memory_challenger/challenger_party.py::Challenger":
+    "verity/protocols/pous/verifier/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
+    "verity/protocols/pous/device/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
+    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
+    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes `PousCheck.P2.Params` (deleted) (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session":
+    "verity/protocols/pous/verifier/check/PousCheck/Run.lean::PousCheck.Run.Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
+    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
+    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Verdict.lean::PousCheck.Verdict.Prog":
+    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Prog":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
-    "verity/core/protocols/pous/check/timed_audit.py::Store":
+    "verity/protocols/pous/verifier/check/timed_audit.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/layout.py::Layout":
+    "verity/protocols/pous/verifier/layout.py::Layout":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/layout.py::Placement":
+    "verity/protocols/pous/verifier/layout.py::Placement":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/period.py::Period":
+    "verity/protocols/pous/verifier/period.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case, not one per protocol (memory-accounting)",
-    "verity/core/protocols/pous/period.py::Store":
+    "verity/protocols/pous/verifier/period.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUS's view of the store entry (memory-accounting)",
-    "verity/core/protocols/pous/protocol.py::Certificate":
+    "verity/protocols/pous/verifier/protocol.py::Certificate":
         "homonym, what an accepted PoUS audit establishes: rename (memory-accounting)",
-    "verity/core/protocols/pous/streamed_wipe.py::Challenger":
+    "verity/protocols/pous/verifier/streamed_wipe.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/wipe_parties.py::Challenger":
+    "verity/protocols/pous/verifier/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/protocols/pouw/prover/circuit/anchors.py::Ledger":
         "homonym, a window's admitted calls: rename (compute-accounting)",

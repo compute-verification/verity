@@ -81,11 +81,11 @@ from typing import Any
 import torch
 
 from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import challenger_session as CS
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous import run as R
-from verity.core.protocols.pous.schemes import p2 as P2
+from verity.protocols.pous.device import challenger_session as CS
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier import run as R
+from verity.protocols.pous.verifier.schemes import p2 as P2
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO

@@ -81,7 +81,7 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
     """Onsite's one store: None when PoUB-P2's case `case` names (`store_root`) the store PoUS's run case `pous_case` is
     committed to, the root of `C*` its setup published (`pous.run.Setup.root`, in the run case's commitment), else why
     not."""
-    from verity.core.protocols.pous.run import Setup
+    from verity.protocols.pous.verifier.run import Setup
 
     try:
         ours = store_root(case)

@@ -1205,7 +1205,7 @@ inputs = ["verity/__init__.py", "verity/settings.py",
           "verity/circuits",
           # the H1 units read both.
           "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
-          "verity/ml/protocols/pous/circuit.py"]
+          "verity/protocols/pous/prover/circuit.py"]
 untraced = ["fixtures"]
 '''
 
@@ -1220,13 +1220,13 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
     merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
     import tomllib
-    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    tail = '"verity/protocols/pous/prover/circuit.py"]'
     def add(*xs):
         return PYPROJECT.replace(tail, tail[:-1] + "".join(f',\n          "{x}"' for x in xs) + "]")
     text, left = _pyproject(tmp_path, PYPROJECT, add("verity/a.py"), add("verity/b.py"))
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/ml/protocols/pous/circuit.py", "verity/b.py",
+    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/pous/prover/circuit.py", "verity/b.py",
                                                              "verity/a.py"]
     assert doc["project"] == tomllib.loads(PYPROJECT)["project"] and "# the H1 units read both." in text
     gone = PYPROJECT.replace(tail, '"verity/a.py"]')
@@ -1255,7 +1255,7 @@ def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
     pp = repo / "pyproject.toml"
-    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    tail = '"verity/protocols/pous/prover/circuit.py"]'
     git(repo, "init", "-q", "-b", "main")
     for name in ("main", "a", "b"):
         if name != "main":

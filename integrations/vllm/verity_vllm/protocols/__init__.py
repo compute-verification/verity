@@ -6,7 +6,7 @@ reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
 serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
-protocol logic is its package's (`verity.protocols.pouw.verifier`, `verity.core.protocols.pous`, `verity.spot.verifier`), never this package's.
+protocol logic is its package's (`verity.protocols.pouw.verifier`, `verity.protocols.pous.verifier`, `verity.spot.verifier`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:

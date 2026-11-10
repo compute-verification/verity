@@ -25,8 +25,8 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 from p2_v1 import bandwidth as B
 
-from verity.core.protocols.pous import verifier as V
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.verifier import verifier as V
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_party, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
