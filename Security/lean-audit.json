@@ -316,16 +316,6 @@
    "digest": "c12a6f62df4f753d7747e2fda7590a7841d3b587e77be0e6d707d48a4596339e",
    "why": "The layer below's guarantee at each run: the leak relation with checked inputs and the carried rows (LeakAtCarried) at the run's faulty set, which a live SampledLeakCarried would give."
   },
-  "NetTiming.PeriodLeaksChecked": {
-   "owner": "@proofs",
-   "digest": "3356471e618c24c8eb84b30fec7f2308b33f987293674ddafa771442d17f1f84",
-   "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
-  },
-  "NetTiming.PeriodOperator": {
-   "owner": "@network-accounting",
-   "digest": "a5e896757d0b99d80d3fc089160be6dd4b82ff1f36cbd4725b96cc257f0db714",
-   "why": "The period's operator at window i reads only the windows before i, closed by then: what the windows' counts multiply under, and what a continued response's operator meets."
-  },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
    "digest": "f17496cd6b0bcd44de69fbfce427ecc3108c8dd849bc058ad04b6c0dc706ede3",
@@ -4451,7 +4441,7 @@
    "nontrivial": "NetTiming.Witness.SampledLeakRegistered_nontrivial"
   },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
-   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest", "NetTiming.Witness.PeriodOperator_honest"],
+   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
@@ -4523,7 +4513,6 @@
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
   },
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
-   "honest": ["NetTiming.Witness.PeriodOperator_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
@@ -5302,11 +5291,17 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
   "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
-  "NetTiming.SecurityProofs.PooledLeakChecked": {
-   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
+  "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "c656dd4899030811755624e1b89ced7c6988ef9c8abdc4a078dc11808b9b9b35"
+   "why": "honest instance needs each window's escape bound and leak relation's error (its hypotheses hesc and hleak) at the deployed verifier, which SampledLeakAccepted gives one window from Compiled.KS and no lemma states at this guarantee's hypotheses",
+   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
+  },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
   },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
@@ -5502,19 +5497,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -18779,7 +18768,7 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Claims.Sampling.CommitmentScheme.Binds", "NetTiming.PeriodOperator"],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
     "open": [
      "Claims.SamplingGeneric.Compiled.KS",
      "NetTiming.CertifierRegisters",
@@ -18789,7 +18778,7 @@
     "reads": []
    },
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
-   "unfolded_hash": "422c0c2ecfa1a7fb1f1245d63793900f9015feb1362bd20f0c75e94a5f4e53b6"
+   "unfolded_hash": "a85933f2ce75db26aab088e8a818dae42c192636418a23ca8feaa065d8cf727c"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -18810,12 +18799,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["NetTiming.PeriodOperator"],
+    "domain": [],
     "open": ["Verity.Assumptions.TrustedHost"],
     "reads": []
    },
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
-   "unfolded_hash": "ed6f6777ee2b35f039bd0ea03db8b9bb7f64c51ff8c455132f30d6da8355c8d4"
+   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "owner": "@proofs",
@@ -18970,19 +18959,6 @@
     "reads": []
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
-  },
-  "NetTiming.Witness.PeriodOperator_honest": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.Witness.PeriodOperator_honest : NetTiming.PeriodOperator NetTiming.Witness.readsBefore"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "632229f0ca21419c9a97ce271418db8f92e675f0218f5fc36f9d0bfb86abc4ee",
-   "unfolded_hash": "829bb70bf2cc642d8cb1f3184c3762092c0fa999d4147472981cdbf0a3072a64"
   },
   "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
    "owner": "@network-accounting",
@@ -26504,6 +26480,7 @@
    "Verity.SecurityProofs.PackSoundComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.Compose": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.CorrectOfOpening": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.ContainsImplements": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundAnd": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundMono": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
@@ -26784,7 +26761,6 @@
    "NetTiming.SecurityProofs.SampledLeakChecked": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), on the statements whose check misses with probability at most εchk (CheckedWitness), and bounds AccSeqsChecked, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered and checked inputs (freeInputs \\ (reg ∪ chk)).",
    "WeightSecurity.SecurityProofs.TheftServedReq": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), per charge unit and with the served channel's covert capacity in bits (WeightSecurity.servedBits), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
-   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "NetTiming.SecurityProofs.PooledLeakCarried": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound with the leak relation with checked inputs over runs that carry the pool (LeakAtCarried for LeakAt), each run opening the row the record rule names (PoolChained: the previous run's closing row, or a genesis row at a restart), where serving picks the restarts (chains) and opened rows (genesis) at each secret and sample of the coins, from a registered finite set Cs wherever every audit accepts (ResetsIn), each run pinning its checked inputs (CheckedUnique) and its closing row (CheckedClosing) and, wherever every audit accepts, opening the root the record rule names at the pattern picked (CarriedRoots), conditional on the period's inputs as named hypotheses (PeriodChannel, PeriodAdaptive, PeriodEscapes, and PeriodLeaksCarried, which a live SampledLeakCarried would give at each run), not discharged; with trusted-host (TrustedHost) it bounds Pr[every run accepts ∧ ¬PooledGoodCarried at the pattern picked] by (1 − q)^Fmax + Σ e_i + Σ e'_i + Σ_i Pr[PoolColl i], the last a SHA-512 collision between two rows with one root, and counts the secrets whose audits all accept and that meet PooledGoodCarried at the pattern picked for them at each draw of the coins by #Cs · #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i ∪ prow_i)) · Dj^k_i, #Cs charging the pattern as advice (m + 1 patterns in a week's period under the public restart rule), so a restart the rule makes after a refused run is not charged; it is not a run of the sampled verifier, the challenger's draw or the network check's code. At the empty pool, with no opening or closing gate and the one pattern that restarts no run, it states the bound over windows that each hold a pool of their own, at their leak relations with a valid run (PooledGoodChecked, PeriodLeaksChecked), with no collision term, but counts only the secrets whose audits all accept; NetTiming.pooledLeakChecked_of_carried proves that bound there with the count over every secret, from NetTiming.encard_pooledCarried_le at the one pattern.",
    "NetTiming.SecurityProofs.SampledLeakCarried": "frozen (no-function): It is SampledLeakChecked for one run that reads an opened row at its opening gates (OpensAtInputs) and leaves one at its closing gates, stated over the sampled audit's statement as Definitions.NetworkCertifier states it, at every compiled sampled verifier where Claims.SamplingGeneric.Compiled.KS holds (its proof reads the proved SampledAuditAccepted), on the statements whose check misses with probability at most εchk (CheckedWitness); its relation (RLeakCarried) reads both rows off the extracted witness, and it bounds AccSeqsCarried, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run from a fixed opened row, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered, checked and opening inputs (freeInputs \\ (reg ∪ chk ∪ prow))."
   },
@@ -28020,7 +27996,7 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
@@ -28403,6 +28379,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28412,9 +28391,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -35771,7 +35747,7 @@
    }
   },
   "Definitions.NetworkCertifier.Checked": {
-   "digest": "a829c2c9fa3705e4cc7bd5ad417c35bb25d6404a1e0ff313f6531e3e6728ed12",
+   "digest": "7061b256720aa2eb4fbc754c1f64dad5d09b3a33c7110d137f1837cd3dc449bd",
    "definitions": {
     "NetTiming.AccSeqsChecked": "ac1aadc477fe573ca7ff699d4e9d8ecf33dc098a82666bd08cec8610b15af47f",
     "NetTiming.AcceptedChecked": "ebac90316af0d57620fc25928e0f8e5d597b0c036adc3dbcd6d283f30a152e3b",
@@ -35780,8 +35756,6 @@
     "NetTiming.PeriodAdaptive": "40200a70f1ec7f8e05bfe30dd7c682921b0ddd02dfa5bbb84fcac9df0f1a9302",
     "NetTiming.PeriodChannel": "8c6ab84db5822888dbb424f7714917139db8dc953d0c75f8c5a793ab68f95b53",
     "NetTiming.PeriodEscapes": "baad0537bc991640b1323abb15f816e64ccb17ca3f8d6541b3caee67d1b13522",
-    "NetTiming.PeriodLeaksChecked": "3356471e618c24c8eb84b30fec7f2308b33f987293674ddafa771442d17f1f84",
-    "NetTiming.PooledGoodChecked": "f1ddc935fe25d16059fea1c91521a1cdd3cb461323e491f7f29a9aa77e4d9166",
     "NetTiming.PrCheckMiss": "a2c296036c865c672d96cfe9f22405786267e66e72b03fbc6cbc79bf2ade1d47",
     "NetTiming.RLeakChecked": "5cdb1b525980a275b042fab84c4d8c14d5398e9e1f023c9d74028fd3d8da38de"
    }
@@ -35836,16 +35810,15 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Checked": {
-   "digest": "0784c6292a7197661a53a5bbe4f0e6b198b6e179848178b68d66e697d48bebf5",
+   "digest": "5bd152fb0219e8dbd34327846bfb25e26fee9874cc56035f91f8649f9ac5027b",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakChecked": "bfb67812e4e9d5b40e48786a80ac63dd0b8992f7cab10d6b4fcd2326ab4d6c87",
     "NetTiming.Guarantees.SampledLeakChecked": "5192aca8823e3059ad3ef655de817231a01b005ea93677c6927a6d68b0d594c5"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "b69884d9e4f051e3bc1a5cdae36551a5aa58b92048f46e5782dda32bee9fab9b",
+   "digest": "4ead6e402b6e55388a74abf4fe5a31a7cb7d00cbf9ae5c3a8bf6d422bedc45dc",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "709c0fe2b39a6c49726fbdd2d1764a6f73e26d14b671a9218677f3def715922f"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "0804ccc2658b6117fd77640b8baef1f86e0ce0ed7199405b672d6630d8012da9"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
@@ -35855,9 +35828,9 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.PooledLeak": {
-   "digest": "d1f869c2e51dd866807751828aa9db74174bbc2ca8e0259008118ea596a4436a",
+   "digest": "38ca673b31284bd8b9d0f1e7d2a2340cd75fe4902eb71c6e3a44fc3379f3a972",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakAccepted": "4508b9215a001e9dbc1893250b8f2a575a05ede1a2c0457e3d675d013bc9a9a4"
+    "NetTiming.Guarantees.PooledLeakAccepted": "3332d3b8bf69d8e7ea8921bcf37dd07fde136b69e5687c8a821179ddd80d4002"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
@@ -35890,11 +35863,10 @@
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
-   "digest": "90c07b6018d6860d6ce85fc15805b0ac898e4283e5e84093f1ae185db0e15577",
+   "digest": "feacd6c22bbf9dbfdecb6334f134465878f92bf72ed142f82ebc81e18a8c137a",
    "definitions": {
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55",
-    "NetTiming.PeriodOperator": "a5e896757d0b99d80d3fc089160be6dd4b82ff1f36cbd4725b96cc257f0db714",
-    "NetTiming.PooledGood": "e101d7874a0b215af538ccdcc4b987670ca2273955c00b1bdd01bc9a8dea960f"
+    "NetTiming.PooledGood": "2b05778a0b771484955c53e73af6c5e221e8f1e027afe8027b90b5f95237f091"
    }
   },
   "Definitions.NetworkCertifier.Run": {
@@ -36044,11 +36016,10 @@
    }
   },
   "Definitions.NetworkCertifier.Witness": {
-   "digest": "d1de08629cecd32ea8aca468bd0f7f0436ecd939fd96dd8f6ce6d9c821337b84",
+   "digest": "16dffeccf3cfbcb5fdca377e1fb7b627789cb758a5f280a6a0db9cecc2cf70b6",
    "definitions": {
     "NetTiming.Witness.certOps": "850046dee06cea45d59d052626cfd5c408fe7a94b4d3b00db74c4656ccd740d0",
     "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
-    "NetTiming.Witness.readsBefore": "3088eafc7edf69a382cc72a729364a56fa6ee28808a39f2afcd620100df34b6c",
     "NetTiming.Witness.trivLay": "5988642439af8c4776d03b25406c91ed65a4251e64c9904698e9f95f2423da53"
    }
   },
