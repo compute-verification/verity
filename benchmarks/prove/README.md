@@ -17,8 +17,10 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
 ## What it prints
 
 - **A row a block type** of the workload's census under its cut: the blocks of it proved per served token, the prover's
-  ms per block, and where that figure is from: measured at steady state (a row of the proof server's rate), measured in
-  a single session (the `proof_overhead` card), modeled from k_log (the card's types' median seconds a witness bit), or
+  ms per block, and where that figure is from: measured at steady state (a row of the proof server's rate), steady
+  state, its family's (no row of its own, so the dearest steady-state row of its Definition and K at other statics, at
+  2^Δk its seconds a block; priced, not measured, and counted in no steady-state share), measured in a single session
+  (the `proof_overhead` card), modeled from k_log (the card's types' median seconds a witness bit), or
   missing. Each row names the run or art its figure is from, and a steady-state row its prover count.
 - **A type is priced at a stated prover count**, `--provers N`, one by default: only the steady-state rows at N provers
   measure it, so its figure doesn't depend on which counts were run or in what order. Among those rows it takes the

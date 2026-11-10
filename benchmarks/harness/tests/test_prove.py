@@ -131,6 +131,33 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert {r.cost.source for r in P.Flock().table(census).rows} == {P.MISSING}
 
 
+def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_measured_for_them():
+    """A type with no row of its own takes the steady-state rows of its Definition and K at other statics: at 2^Δk
+    their seconds a block, the dearest of them, with no verifier's seconds. Another K is another family. Such a type
+    counts in the totals and in neither the steady-state share nor a measured status."""
+
+    defs = {"Head_v1{K=4,FIRST=false}": 20, "Head_v1{K=4,FIRST=true}": 20, "Head_v1{K=4,LAYER=9}": 21,
+            "Head_v1{K=8,FIRST=false}": 20}
+    census = P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": k, "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name, k in defs.items()}})
+    rows = (steady("head", "Head_v1{K=4,FIRST=False}", "r20260101-000000-0001", 8, 8.0, verify=8.0),
+            steady("head-first", "Head_v1{K=4,FIRST=True}", "r20260101-000000-0001", 8, 16.0, verify=8.0))
+    table = P.Flock(rows, (), None).table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert [(by[n].source, by[n].seconds) for n in defs] == [(P.STEADY, 1.0), (P.STEADY, 2.0), (P.FAMILY, 4.0), (P.MISSING, None)]
+    kin = by["Head_v1{K=4,LAYER=9}"]
+    assert (kin.record, kin.staged, kin.provers, kin.verifier_seconds) == ("r20260101-000000-0001", "head-first", 1, None)
+    assert kin.note == ("its Definition and K's, `head-first` (`Head_v1{K=4,FIRST=True}`), 1 prover, full statements, "
+                        "at 2^1 its seconds; the dearest of 2 measured")
+    assert kin.at_steady_rate == pytest.approx(1.5 / 2**20 * 2**21)
+    t = P.report(table, 1.0)["totals"]
+    assert t["gpu_seconds_per_token"] == 7.0 and t["steady_time_share"] == pytest.approx(3.0 / 7.0)
+    assert t["verifier_seconds_per_token"]["block_types"] == 2
+    whole = P.Flock(rows, (), None).table(P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": defs[name], "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name in list(defs)[:3]}}))
+    assert P.report(whole, 1.0)["totals"]["status"] == "modeled"
+
+
 def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_only():
     """Rows at N provers, then the fullest statement, then the newest run: a newer or fuller row at another count
     prices nothing, so a type's figure doesn't depend on which counts were run, or in what order."""
@@ -306,7 +333,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
     reports = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
     out = P.report(P.Flock(reports, SESSIONS, "art:card").table(P.Census.of(doc)), 1.0)
     t = out["totals"]
-    assert {s["source"]: s["block_types"] for s in out["sources"]} == {P.STEADY: 1, P.SINGLE: 0, P.MODELED: 0, P.MISSING: 2}
+    assert {s["source"]: s["block_types"] for s in out["sources"]} == {P.STEADY: 1, P.FAMILY: 0, P.SINGLE: 0, P.MODELED: 0, P.MISSING: 2}
     assert (t["steady_time_share"], t["gpu_seconds_per_token"], t["status"]) == (1.0, 1.0, "partial")
     assert t["missing"] == [
         {"block": "Unpriced_v1{N=1}", "per_token": 3.0, "block_share": 0.6, "mac_share": 0.1875},
@@ -684,18 +711,18 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert doc["cut"] == "per-expert-fused" and len(doc["rows"]) == 150 and doc["refused"] == []
     assert doc["macs_in_blocks"] == pytest.approx(0.98755, abs=5e-6)
     assert t["blocks_per_token"] == pytest.approx(19415356.404181186, rel=1e-12)
-    assert t["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-12)
-    assert t["tokens_per_gpu_second"] == pytest.approx(1.1324632291467292e-05, rel=1e-12)
+    assert t["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
+    assert t["tokens_per_gpu_second"] == pytest.approx(1.1324602598746884e-05, rel=1e-12)
     assert t["gpu_seconds_per_token_range"][0] == pytest.approx(27643.734264603525, rel=1e-12)
     assert t["status"] == "modeled" and t["proof_bytes_per_token"] is None
     by = {x["source"]: x for x in doc["sources"]}
-    assert [(k, x["block_types"]) for k, x in by.items()] == [(P.STEADY, 8), (P.SINGLE, 86), (P.MODELED, 56), (P.MISSING, 0)]
+    assert [(k, x["block_types"]) for k, x in by.items()] == [(P.STEADY, 8), (P.FAMILY, 59), (P.SINGLE, 27), (P.MODELED, 56), (P.MISSING, 0)]
     assert by[P.STEADY]["per_token"] == pytest.approx(10380036.348432057) and by[P.STEADY]["time_share"] == pytest.approx(
-        0.23324002390678747)
-    assert by[P.SINGLE]["per_token"] == pytest.approx(6132874.675958165) and by[P.SINGLE]["time_share"] == pytest.approx(
-        0.49572246283915494)
+        0.23323941236103127)
+    assert by[P.SINGLE]["per_token"] == pytest.approx(6132840.139372822) and by[P.SINGLE]["time_share"] == pytest.approx(
+        0.49571996911002464)
     assert by[P.MODELED]["per_token"] == pytest.approx(2902445.3797909454) and by[P.MODELED]["time_share"] == pytest.approx(
-        0.27103751325405523)
+        0.2710368026048355)
     assert doc["serving"]["gpu_seconds_per_token"] == pytest.approx(0.00012950804344665488, rel=1e-12)
 
     # each steady-state type is the newest run's, at the statement it finished; the two killed before any statement are
@@ -720,14 +747,14 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert spot == R.build("spot", "glm53", store=s.fresh("third"), root=REPO)          # the plan of record is the default
     t = spot["totals"]
     assert spot["system"] == "spot[flock]" and spot["inputs"][-1]["targets"] == [arts[R.SAMPLING]]
-    assert t["tokens_per_gpu_second"] == pytest.approx(14273, abs=0.5)
-    assert t["gpus_per_serving_gpu"] == pytest.approx(0.5409739676190373, rel=1e-12)
-    assert t["gpus_per_serving_gpu_range"] == pytest.approx([0.1860208609869626, 0.5409739676190373], rel=1e-12)
+    assert t["tokens_per_gpu_second"] == pytest.approx(14246, abs=0.5)
+    assert t["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952, rel=1e-12)
+    assert t["gpus_per_serving_gpu_range"] == pytest.approx([0.1860208609869626, 0.5420038985704952], rel=1e-12)
     assert t["tokens_per_gpu_second_range"][1] == pytest.approx(41509, abs=0.5)
-    assert t["gpu_seconds_per_token"] == pytest.approx(7.006e-05, rel=1e-4)
+    assert t["gpu_seconds_per_token"] == pytest.approx(7.019e-05, rel=1e-4)
     # the plan covers one compute and period; every block proved is the same ratio at any
     assert [(x["compute"], x["period"]) for x in spot["periods"]["rows"]] == [("world year", "year")]
-    assert spot["periods"]["rows"][0]["prover_gpus"] == pytest.approx(0.5409739676190373 * 374960000.0)
+    assert spot["periods"]["rows"][0]["prover_gpus"] == pytest.approx(0.5420038985704952 * 374960000.0)
     assert [(x["compute"].split()[0], x["period"]) for x in doc["periods"]["rows"]] == [
         (c, p) for c in ("datacenter", "world") for p in ("week", "month", "year")]
     world = doc["periods"]["rows"][-1]
@@ -760,8 +787,8 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
         R.build("flock", "glm53", provers=0, store=s.fresh("fifth"), root=REPO)
 
     text = R.render(spot)
-    assert "- prover GPUs per serving GPU: 0.541 (range 0.186 to 0.541), modeled" in text
-    assert "- served tokens covered per second per prover GPU: 14,273 (range 14,273 to 41,509)" in text
+    assert "- prover GPUs per serving GPU: 0.542 (range 0.186 to 0.542), modeled" in text
+    assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,509)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
     assert text.count("\n| `") == 150
 
@@ -774,13 +801,13 @@ def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
     s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
     spot = R.build("spot", "glm53", store=s.fresh(), root=REPO)
     t = spot["totals"]
-    assert t["gpus_per_serving_gpu"] == pytest.approx(0.5409739676190373, rel=1e-12)
+    assert t["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952, rel=1e-12)
     blocks = mix["replay_sample"] * sum(c["taken"] for c in mix["cells"])
     assert t["planned"]["gpus_per_serving_gpu"] == pytest.approx(0.002 * blocks / mix["gpu_seconds"], rel=1e-9)
     assert sum(x["block_types"] for x in t["planned"]["sources"]) == 150
     assert [r["planned_seconds"] for r in spot["rows"]] == pytest.approx([0.002] * 150)
     text = R.render(spot, rows=2)
-    assert "- prover GPUs per serving GPU: 0.541 (range 0.186 to 0.541), modeled" in text
+    assert "- prover GPUs per serving GPU: 0.542 (range 0.186 to 0.542), modeled" in text
     assert f"- the same blocks at the sampling plan's own prices: {R._n(t['planned']['gpus_per_serving_gpu'])} prover GPUs" in text
     # the plan's column is on every line of the rows' table, the rest's row included
     table = text[text.index("| block type |"):].split("\n\n")[0].splitlines()
@@ -918,7 +945,7 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     s2.ran(newest, run_files(tmp_path, newest))
     s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [newest]}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
-    assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926)
+    assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324)
 
 
 def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path):
@@ -946,7 +973,7 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
     doc = R.build("flock", "glm53", store=s.fresh("second"), root=REPO)
     assert doc["inputs"][2]["targets"] == [newest, art] and doc["refused"] == []
     assert doc["inputs"][2]["what"] == "8 staged types measured at steady state at 1 prover"
-    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-12)
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert len(steady_rows) == 8 and {r["record"] for r in steady_rows} == {art}
     assert all(r["note"].endswith(f"(rate.json of {art[:16]}, measured in {newest})") for r in steady_rows)
@@ -960,7 +987,7 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
     alone = s2.record(s2.doc("evidence/v1", R.ART_RATES, whole, {"runs": {"only": newest}}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
     assert doc["inputs"][2]["targets"] == [alone] and doc["refused"] == []
-    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-12)
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
 
     # what can't be read is listed: no run named, two named, a file that isn't rows; a superseded art gives nothing,
     # whether it holds rows or names runs
@@ -997,7 +1024,7 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
         s.record(run, R.STEADY)
     doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
     assert doc["refused"] == [] and doc["inputs"][2]["what"] == "8 staged types measured at steady state at 1 prover"
-    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926, rel=1e-9)
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-9)
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert {r["record"] for r in steady_rows} == {RUNS[-1]} and {r["provers"] for r in steady_rows} == {1}
     assert sum("out/light-va2/server-k1" in r["note"] for r in steady_rows) == 6
@@ -1034,7 +1061,7 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     assert code == 0 and json.loads(out)["provers"] == 2
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
-    assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5409739676190373)
+    assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952)
     code, _, err = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.CENSUS], "--local-only")
     assert code == 2 and f"{arts[R.CENSUS]} isn't a sampling plan of record" in err
     with pytest.raises(SystemExit):

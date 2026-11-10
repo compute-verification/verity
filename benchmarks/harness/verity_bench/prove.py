@@ -13,6 +13,9 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
   to back by that many provers, every session accepted and the statement cache's hit rate flat. A row whose staged
   Definition is no block type of the census is on no row of the table and in no figure, the range's other end
   included: the table lists it as unread (`Table.unread`);
+- `family`: no row of its own, but a steady-state row of its Definition and K at other statics, at 2^Δk its seconds a
+  block (Δk between the two k_logs), the dearest such where there are several. It is priced, not measured: the
+  steady-state share and the measured status count it as neither;
 - `single`: one warm process's sessions on the type alone, a block's marginal seconds plus its share of a full
   statement's fixed seconds;
 - `k_log`: no measurement of the type, so the single-session types' median seconds a witness bit times its 2^k_log
@@ -43,10 +46,10 @@ from dataclasses import dataclass, field, replace
 from statistics import linear_regression, median
 from typing import Any, Protocol
 
-STEADY, SINGLE, MODELED, MISSING = "steady", "single", "k_log", "missing"
+STEADY, FAMILY, SINGLE, MODELED, MISSING = "steady", "family", "single", "k_log", "missing"
 #: where a block type's proving time is from, best first, as the table words it
-SOURCES = {STEADY: "measured at steady state", SINGLE: "measured in a single session",
-           MODELED: "modeled from k_log", MISSING: "missing"}
+SOURCES = {STEADY: "measured at steady state", FAMILY: "steady state, its family's",
+           SINGLE: "measured in a single session", MODELED: "modeled from k_log", MISSING: "missing"}
 #: a full statement's witness bits: a block type's statement holds 2^35 / 2^k_log of its blocks
 STATEMENT_BITS = 2**35
 #: a MAC is a fused multiply-add, which the data sheets' rates count as two FLOP
@@ -279,10 +282,25 @@ def definition_id(spec: str) -> str:
 
 
 def _family(block: str) -> tuple[str, int | None]:
-    """A block type's Definition and K: the types a single-session measurement prices beside its own."""
+    """A block type's Definition and K: the types a single-session or steady-state measurement prices beside its own."""
 
     k = _K.search(block)
     return block.split("{")[0], int(k[1]) if k else None
+
+
+def _kin(block: Block, kin: Sequence[Steady]) -> Cost:
+    """`block` priced from the steady-state rows of its Definition and K at other statics: each at 2^Δk its seconds a
+    block, Δk from the row's k_log to the block's, and the dearest of them, so a family's cheapest member never prices
+    the rest. The verifier's seconds stay the type's own: none."""
+
+    def dk(s: Steady) -> int:
+        return 0 if block.k_log is None else block.k_log - s.k_log
+
+    s = max(kin, key=lambda s: (s.gpu_seconds / s.blocks * 2.0**dk(s), s.definition))
+    others = f"; the dearest of {len(kin)} measured" if len(kin) > 1 else ""
+    return Cost(FAMILY, s.gpu_seconds / s.blocks * 2.0**dk(s), s.record,
+                f"its Definition and K's, `{s.type}` (`{s.definition}`), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}",
+                s.type, provers=s.provers)
 
 
 @dataclass(frozen=True)
@@ -320,6 +338,9 @@ class Flock:
                 best[s.definition] = s
         rates = [s.gpu_seconds / s.blocks / 2**s.k_log for s in measured.values() if s.blocks == s.full]
         steady_rate = median(rates) if rates else None
+        families: dict[tuple[str, int | None], list[Steady]] = {}
+        for s in measured.values():
+            families.setdefault(_family(s.definition), []).append(s)
         single = self._single(census)
         rows = []
         for b in census.blocks:
@@ -330,7 +351,8 @@ class Flock:
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
                             provers=s.provers)
             else:
-                cost = single(b)
+                kin = families.get(_family(spelled), [])
+                cost = _kin(b, kin) if kin else single(b)
                 why = []
                 if s := tried.get(spelled):
                     why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.held}): {s.refused}")
