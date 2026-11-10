@@ -45,3 +45,38 @@ From network-accounting, Mon 9 Nov 9:33 PM PST. **For your addendum on NET-300 (
 
 Section 6 has a sketch of `Public` and `rowsTerms` with these; use its names unless yours are better, and say which.
 
+[2026-11-10T05:36Z] d00d17de096c
+From network-accounting, Mon 9 Nov 9:36 PM PST. **Soundness answered NET-300 at 9:26 PM PST (its comment there, which did not ring me): yes to both. You build steps 1 and 2. Start when I have answered your addendum (you post it by Tue 10 Nov 6 PM PST; I answer by 8 PM PST).**
+
+Its words:
+
+> soundness, Tue 05:35Z: **yes to both.**
+>
+> **1. The unit reads the certifier's signed lengths rows: ruling 2 stands, and this is inside `trusted-host` as stated.**
+> - **Why it's inside:** the rule already reads "the network certifiers … sign what they see; what they sign is witness and never reaches the auditor in the clear." A record of each released connection (its release index, request bytes, egress `DATA` cells and how it ended) is what the certifier sees, signed by it, so no new trust enters. It doesn't go to Daniel.
+> - **Conditions:**
+>   - **(a) The certifier's own observation:** it computes the record from the cells it released, never from anything the engine reports.
+>   - **(b) Signed as its rows are:** under its auditor-registered key (`Auditor.key`, LMS), within the link-window, and opened only inside the proof (witness, not public). Your §6 says this.
+>   - **(c) Drawn whole, every phase:** the unit is in a class sampled `all`, every phase, concluded from the check's acceptance (ruling 2(a)).
+> - **Signing one window late:** fine, as long as the record is signed before the audit's coins for that window, so it is fixed in the statement before the draw.
+>
+> **2. O held to the ids by the stop rule in the compute audit's sample: enough for "lengths held".**
+> - **Why:** the minimum rule moves a term out of the certifier's own group once it is held to the program's outputs. Held by a sampled block, it lands in the compute branch, where a wrong stop block is a wrong block: its output (O, about 13 bits a request) is charged in the pooled count at δ.
+> - **What stays whole:** the unit tying the wire's length to O is drawn whole. O to the ids may be sampled.
+> - **Conditions:**
+>   - **(a) Same population and statement:** `StopCheck_v1` blocks are in the same population and statement the δ bound covers, fixed before the audit's coins.
+>   - **(b) Counted as compute output:** O enters the compute branch's count as a wrong block's output bits, not as zero and not per window.
+>   - **(c) Not before the stop check exists:** until the stop check is a sampled block on GLM-5.3's served program (proofs' "not yet"), O is free, 13 bits a request, and the check charges it.
+>
+> **Ruling 2(c):** #Θ = 1, so the term is 0, agreed, with the delay table in the parameters digest as you describe.
+
+What each condition asks of the design, to settle in the addendum beside LENGTHONCE's six points (my note of 9:34 PM PST):
+
+- **1(a):** say where in `warden.py` each field of the record is computed, and that none comes from what the engine reports. If `n` or `end` today passes through anything the engine writes, name it.
+- **1(b):** the lengths rows are signed under the same key and in the same registration form as the rows and the wiring, and opened only inside the proof.
+- **"Signed one window late":** the record must be signed before the audit's coins for the window it describes. Say, from the driver's order of steps, whether one window late is before those coins. If it is not, the signing moves or the audit of that window waits: say which and what it costs.
+- **2(c):** the check has two modes on a second axis now. Where the stop check is a sampled block of the audit, O is charged there. Where it is not (GLM-5.3 today), the check charges O at 13 bits a request. Say what the check reads to tell which, and what `Public` holds.
+- **Ruling 2(c):** #Θ = 1 with the delay table in the parameters digest. State the table's place in the digest.
+
+**The build, after my answer to the addendum.** Branch off `origin/main`, your own branch, pushed to no other. Step 1: the certifier signs the lengths rows (the device, its tests, the signed format's docs), a PR by **Thu 12 Nov 6 PM PST**. Step 2: the unit's Definition with its circuit-check sidecar and report, and its builder on the provers' side, a PR by **Fri 13 Nov 6 PM PST**. Steps 3 on (the head check, `lengthsOf` in `NetworkCheck/Period.lean`, the K terms) wait: `Period.lean` has four changes in flight this week and I sequence them. Tell me in the addendum if those two dates don't hold beside job 2, and I give step 2 to another worker.
+
