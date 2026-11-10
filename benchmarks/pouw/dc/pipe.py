@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CENSUS = HERE.parent / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
+CENSUS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
 ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
 #: duo's lane instructions a word by pipe (dc.cuh): u = y ^ p ^ k (LOP3), y = u a + z (IMAD), z = rotl(u, r) + y (LEA.HI)

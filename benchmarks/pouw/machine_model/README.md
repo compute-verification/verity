@@ -426,11 +426,11 @@ a card, with the counts by mark and every hole.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
   charges only the issue slot every instruction takes (coarse, and sound on any pipe).
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
-  `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
+  `bu_12_9.json`, CUDA 13's in `sass_isa_tables.json`), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit the card table
-  lists (`theta.UNITS`). The three JSON tables are generated, so they are fetched fixtures (`fixtures/artifacts.json`,
-  gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
-  benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
+  lists (`theta.UNITS`). The three JSON tables, all in `data/cover/`, are generated, so they are fetched fixtures
+  (`fixtures/artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
+  fetch-fixtures benchmarks/pouw/machine_model/data/cover` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
