@@ -6,7 +6,7 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # The deployed uniform sampler on one word (trusted)
 
-`Key.uniform(N, j)` (`verity/ml/randomness`) is exact rejection sampling on the keyed SHA-512 stream at `("u", j)`: it
+`Key.uniform(N, j)` (`verity/commitments/randomness`) is exact rejection sampling on the keyed SHA-512 stream at `("u", j)`: it
 reads `w`-bit big-endian words, `w = 8 ⌈(bitlen N + 64) / 8⌉`, and returns the first word below `2^w − (2^w mod N)`, the
 largest multiple of `N` that fits, reduced mod `N`. The remote audit's opening sample (`Accounting.Remote.Draw`) takes
 each step of its partial Fisher–Yates by it.

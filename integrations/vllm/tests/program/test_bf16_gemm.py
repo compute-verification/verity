@@ -16,25 +16,25 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.batch import type_shape
-from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.definitions.boolean import boolean_version
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.evaluation.reference import evaluate, standalone_call
+from verity.definitions.ops import fp32 as W
+from verity.definitions.ops import prims as P
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
-from verity.ml.definitions.registry import bf16_gemm_check as C
-from verity.ml.definitions.registry import cublas_bf16 as CB
-from verity.ml.definitions.registry import cublas_gemv as GV
-from verity.ml.definitions.registry import ll_bf16 as LL
-from verity.ml.definitions.registry import mla
-from verity.ml.definitions.registry import mla_check as MK
-from verity.ml.definitions import word as WQ
+from verity.definitions.registry import bf16_gemm_check as C
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import cublas_gemv as GV
+from verity.definitions.registry import ll_bf16 as LL
+from verity.definitions.registry import mla
+from verity.definitions.registry import mla_check as MK
+from verity.definitions import word as WQ
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -467,8 +467,8 @@ def test_every_pin_is_a_target() -> None:
 def test_the_cublas_and_ll_bf16_conformance_cite_the_one_h200_capture_record() -> None:
     """Both registries' Definitions are established by the same `glm53_bf16_gemm_capture` record the BatchedGemm_v1 evaluator cites,
     and the FMA the words decided is the one the gate's Program binds by default."""
-    from verity.ml.circuits.defs import conformance_label
-    from verity.ml.definitions.numerics.batched_gemm_rows import PROVENANCE
+    from verity.circuits.defs import conformance_label
+    from verity.definitions.numerics.batched_gemm_rows import PROVENANCE
 
     cite = (PROVENANCE["record"][:16], PROVENANCE["art"]["record"])
     for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmWord, CB.BatchedGemm, LL.LlBf16DotprodGemmWord, LL.LlBf16SplitKGemmWord):

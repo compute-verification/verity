@@ -32,11 +32,11 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Affine, Coll, concat, runs
-from verity.ml.circuits.types import Array, Value
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits import codec
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Affine, Coll, concat, runs
+from verity.circuits.types import Array, Value
+from verity.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -46,13 +46,13 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
-from verity.ml.definitions.registry import sparse_mla
-from verity.ml.definitions.registry import sparse_mla_split
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
+from verity.definitions.registry import sparse_mla
+from verity.definitions.registry import sparse_mla_split
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.definitions.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora

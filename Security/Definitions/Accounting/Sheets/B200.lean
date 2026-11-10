@@ -48,7 +48,7 @@ tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU'
 tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
 `uv run machine-model --device sm_100 sheet --lean` prints this file from
-`benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml`, and the machine model's tests hold it to that output.
+`verity/hardware/machine_model/data/devices/sm_100/sheet.toml`, and the machine model's tests hold it to that output.
 -/
 
 @[expose] public section

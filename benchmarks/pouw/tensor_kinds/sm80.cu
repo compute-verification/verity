@@ -12,7 +12,7 @@
 // Build one binary per GROUP (0..11; 8..11 are M1c's extension and the shared-memory loads): nvcc -O3 -std=c++17
 // -arch=sm_80 -DGROUP=g sm80.cu -ldl.
 #include "../gpu_kit/bench.cuh"
-#include "../receipts/receipt_folds.cuh"
+#include "../../../verity/protocols/pouw/receipts/receipt_folds.cuh"
 
 #include <algorithm>
 #include <cstdint>

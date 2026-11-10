@@ -9,12 +9,12 @@ import math
 
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import act
-from verity.ml.definitions.registry import dsv4_moe as D
-from verity.ml.definitions.registry import prims as P
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.program import Program
+from verity.definitions.registry import act
+from verity.definitions.registry import dsv4_moe as D
+from verity.definitions.registry import prims as P
 
 NEG_INF, PINF, QNAN, GPU_NAN = 0xFF800000, 0x7F800000, 0x7FC00000, 0x7FFFFFFF
 

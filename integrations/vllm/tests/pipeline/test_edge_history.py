@@ -7,11 +7,11 @@ from __future__ import annotations
 import pytest
 
 from tests.program.test_workload_program import _edge_wl, _groups
-from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.partition_object import calls
-from verity.ml.circuits.types import Array, Value, field_starts, field_types
+from verity.spot.verifier.one_stage import partition as P, registered as REG, registration as R
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.partition_object import calls
+from verity.circuits.types import Array, Value, field_starts, field_types
 from verity_vllm.pipeline import edge as E
 from verity_vllm.program import workload as W
 

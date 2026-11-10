@@ -14,7 +14,7 @@ blocks' boundaries.
     values     each unit's commitment to the values it holds
     block      a block's process: evaluate its gates step by step, send and receive crossing values as framed streams
     run        build, place, run every block (in one process or one process each over TCP) and check the answers
-    accounting the hardware and placement as `benchmarks/datacenter`'s objects, whose audit and account read the
+    accounting the hardware and placement as `verity/composite/datacenter`'s objects, whose audit and account read the
                Program itself
     lab        the Program as the network certifier's sessions and server-sent events, for the mock datacenter
                (`../mockdc.py`)

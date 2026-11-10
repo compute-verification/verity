@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity_vllm.program.prune import COLUMNS, dead_free_versions
 
 from .common import Unexpressible, _Launch, in_launch, kind, launch_batch, request_passes
@@ -152,8 +152,8 @@ class TemplateCounts(StepNeeds):
         return out
 
     def _pass(self, launch: _Launch, m: int, p: int, sampled: bool) -> _Pass:
-        from verity.ml.definitions.registry import tp_allreduce as AR
-        from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+        from verity.definitions.registry import tp_allreduce as AR
+        from verity.definitions.registry.sparse_mla_split import launch_num_splits
         from verity_vllm.program.frontend.rules.vllm_dsa import long_row_blocks
         M, TOPK = launch.tokens(m), self.index_topk
         prefills = launch.prefills((m, p), self.threshold)
