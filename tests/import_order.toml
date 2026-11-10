@@ -1,0 +1,88 @@
+# The import order: the tree's directories, bottom first.  A file belongs to the deepest directory listed here above it,
+# "." holding the rest, and loads only what its own row or an earlier row holds: a Python import, a Lean import, a Lake
+# package required by path.  The directories of one row may load each other.  `tests/test_boundaries.py` reads this file and
+# nothing else for the order; tests are left out as loaders.  `archive` is last: nothing loads it.
+#
+# A new directory under `verity/` is in its parent's row until it is listed here.
+
+order = [
+    ["fixtures", "verity"],
+    ["verity/flock/verifier"],
+    ["verity/difftest"],
+    ["verity/circuits"],
+    ["verity/commitments"],
+    ["verity/definitions"],
+    ["verity/configuration"],
+    ["verity/hardware"],
+    ["verity/windows"],
+    ["verity/spot"],
+    ["verity/flock"],
+    ["verity/protocols/pous"],
+    ["verity/protocols/poub"],
+    ["verity/protocols/pouw"],
+    ["verity/protocols/inference_only"],
+    ["verity/protocols/certifier"],
+    ["verity/composite"],
+    ["Security"],
+    ["integrations"],
+    ["tools"],
+    ["workloads"],
+    ["benchmarks"],
+    [".", "tests"],
+    ["infra"],
+    ["archive"],
+]
+
+# The ties against the order, by pair of directories: each file that loads a file of a later row, with that file.  It only
+# shrinks: a tie leaves when its loader stops loading the file or one of the two moves, a pair leaves with its last tie,
+# and the test refuses a tie the tree no longer has and names the pair to delete.  Nothing is added: cut a new tie
+# instead (move what the loader needs down to its row, or pass it in).
+[[against]]
+loader = "benchmarks"
+loaded = "archive"
+ties = [
+    ["benchmarks/one_stage/prove_bundle.py", "archive/examples/h200/interfaces/verity_e2e_demo/__init__.py"],
+    ["benchmarks/one_stage/prove_bundle.py", "archive/examples/h200/interfaces/verity_e2e_demo/replay_bundle.py"],
+    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/commit.py"],
+    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/driver.py"],
+    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/shape.py"],
+    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/store.py"],
+    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/weights.py"],
+]
+
+[[against]]
+loader = "verity/flock"
+loaded = "tools"
+ties = [
+    ["verity/flock/agreement/tool.py", "tools/research/src/research/store/tool.py"],
+    ["verity/flock/tool.py", "tools/research/src/research/pythonpath.py"],
+    ["verity/flock/tool.py", "tools/research/src/research/store/tool.py"],
+]
+
+[[against]]
+loader = "verity/flock/verifier"
+loaded = "verity/difftest"
+ties = [
+    ["verity/flock/verifier/firewall/FirewallDifftest.lean", "verity/difftest/lean/Difftest.lean"],
+    ["verity/flock/verifier/firewall/lakefile.toml", "verity/difftest/lean/lakefile.toml"],
+    ["verity/flock/verifier/vstar/VStarDifftest.lean", "verity/difftest/lean/Difftest.lean"],
+    ["verity/flock/verifier/vstar/lakefile.toml", "verity/difftest/lean/lakefile.toml"],
+]
+
+[[against]]
+loader = "verity/protocols/certifier"
+loaded = "benchmarks"
+ties = [
+    ["verity/protocols/certifier/device/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py"],
+    ["verity/protocols/certifier/device/network_traces/certifier_serve.py", "benchmarks/network_traces/active_replay.py"],
+    ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py"],
+    ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/stall_probe.py"],
+    ["verity/protocols/certifier/verifier/network_traces/scan_period.py", "benchmarks/network_traces/scan_zk.py"],
+]
+
+[[against]]
+loader = "verity/protocols/pous"
+loaded = "Security"
+ties = [
+    ["verity/protocols/pous/lean/submissions/reference.lean", "Security/Proofs/Pous/Statements.lean"],
+]
