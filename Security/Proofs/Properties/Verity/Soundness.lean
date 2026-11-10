@@ -448,7 +448,7 @@ theorem nontrivial_network (k : Verity.Registration.Composite) (hk : Subprotocol
       exactLeaky.error a .empty #[.empty] .empty (exactLeaky.honest .empty #[.empty] .empty) = 0 :=
     Finset.sum_eq_zero fun a _ => error_exactLeaky a _ _ _ _
   exact soundness_nontrivial_of exactLeaky k .empty #[.empty] .empty (exactLeaky.honest .empty #[.empty] .empty)
-    ⟨.empty, by simp, rfl⟩ .network hk (network_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
+    ⟨.empty, by simp, rfl⟩ .network hk (fun _ _ => network_fails k _ _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
 /-- The idle files parse to nothing: `HmOut.parse` refuses the templated statement's tags before it reads a byte. -/
 theorem parsedOf_fileRead :
