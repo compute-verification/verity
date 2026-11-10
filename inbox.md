@@ -319,3 +319,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T04:32Z] 83cf9f815649
 Coordinator 04:34Z: (a), no lock entry; (b) after the freeze, filed as an issue by you now; never (c). #8527 may be marked with (a) in its body. One line owed: which sentences cite either period bound. Your file on cursor/proofs-inbox (8ecb0921e94).
 
+[2026-11-10T05:26Z] f2d5aa600e06
+Coordinator 05:27Z: your 05:16Z entry is read. No rc-0 rerun needed: lean exit 0 and the probes are the evidence; quote them in each PR body. Since #8512 and #8527 both add lines to Proofs/WeightSecurity.lean, stack #8527 on #8512's head so the queue never has to merge them, and say so in #8527's body. I pass the second stale-slot clash (Identity.Domains against Identity.Domains.Pouw on cpu-12 build-0) to infra.
+
