@@ -2809,6 +2809,42 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.Dimension.H100.Op100.WFw": {
+   "owner": "@compute-research",
+   "digest": "965dca08d3258691688feef45f0a3c16d067f982c5fa80d973176229d0233ea8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.Dimension.H100.OutputsOn": {
+   "owner": "@compute-research",
+   "digest": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.Dimension.Pointwise.Apart": {
+   "owner": "@compute-research",
+   "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.Dimension.Pointwise.Far": {
+   "owner": "@compute-research",
+   "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.Dimension.Pointwise.Held": {
+   "owner": "@compute-research",
+   "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.Dimension.Ssn.FreeInputs": {
+   "owner": "@compute-research",
+   "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.Dither.Accel.G1": {
    "owner": "@compute-research",
    "digest": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963",
@@ -3229,6 +3265,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Assumptions.ChannelAuthentic": {
+   "owner": "@memory-accounting",
+   "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Assumptions.DeviceWithinRegisteredFigures": {
    "owner": "@soundness",
    "digest": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c",
@@ -3241,6 +3283,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Assumptions.ImprintPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Assumptions.TrustedHost": {
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3",
@@ -3250,6 +3298,12 @@
   "Verity.Assumptions.VerifierReadsLog": {
    "owner": "@soundness",
    "digest": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
+   "owner": "@memory-accounting",
+   "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3348,60 +3402,6 @@
    "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
    "issue": "PRF-413",
    "due": "2026-11-17"
-  },
-  "Pouw.Dimension.H100.Op100.WFw": {
-   "owner": "@compute-research",
-   "digest": "965dca08d3258691688feef45f0a3c16d067f982c5fa80d973176229d0233ea8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dimension.H100.OutputsOn": {
-   "owner": "@compute-research",
-   "digest": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dimension.Pointwise.Apart": {
-   "owner": "@compute-research",
-   "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dimension.Pointwise.Far": {
-   "owner": "@compute-research",
-   "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dimension.Pointwise.Held": {
-   "owner": "@compute-research",
-   "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dimension.Ssn.FreeInputs": {
-   "owner": "@compute-research",
-   "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Assumptions.ChannelAuthentic": {
-   "owner": "@memory-accounting",
-   "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Assumptions.ImprintPathPrivate": {
-   "owner": "@memory-accounting",
-   "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
-   "owner": "@memory-accounting",
-   "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
   }
  },
  "trust": {
@@ -3415,7 +3415,8 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a fourth trust assumption, by the default of Daniel's card 3a8de52d applied 9 Nov 16:00Z, provisional: Daniel can reverse it"
+   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
@@ -3479,8 +3480,6 @@
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
   ],
-  "Flock.SecurityProofs.SampledKSLiveV3": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-  "Flock.SecurityProofs.SampledKSLiveV5": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Claims.ZKServer.LeanRelease.FillRoundEq",

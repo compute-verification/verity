@@ -1,0 +1,9 @@
+verity/core/periods/__init__.py	verity/periods/__init__.py
+verity/core/periods/pyproject.toml	verity/periods/pyproject.toml
+verity/core/periods/tests/test_periods.py	verity/periods/tests/test_periods.py
+verity/core/periods/tests/test_periods_difftest.py	verity/periods/tests/test_periods_difftest.py
+verity/core/protocols/network/README.md	verity/protocols/certifier/verifier/network/README.md
+verity/ml/commitments/gates/sha512_stream.circuit-check.json	verity/commitments/gates/sha512_stream.circuit-check.json
+verity/ml/commitments/gates/sha512_stream.circuit-check.py	verity/commitments/gates/sha512_stream.circuit-check.py
+verity/ml/commitments/gates/sha512_stream.py	verity/commitments/gates/sha512_stream.py
+verity/ml/commitments/keyed.py	verity/commitments/keyed.py
