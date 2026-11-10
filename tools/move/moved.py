@@ -15,7 +15,7 @@ import layout as L  # noqa: E402
 
 
 class Moved:
-    def __init__(self, maps: list[str], ref: str = "origin/main", repo: Path | None = None):
+    def __init__(self, maps: list[str], ref: str = "origin/main", repo: Path | None = None, deleted: tuple[str, ...] = ()):
         self.repo = repo or HERE.parent.parent
         self.ref = self._git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
         self.files = [p for p in self._git("ls-tree", "-r", "--name-only", "-z", self.ref).split("\0") if p]
@@ -23,7 +23,8 @@ class Moved:
         self.layouts = [L.Layout(tomllib.loads(Path(m).read_text())) for m in maps]
         self.new = {p: self._file(p) for p in self.files}
         self.old_dirs = _dirs(self.files)
-        self.new_dirs = _dirs(self.new.values())
+        #: `deleted`: files a commit after the maps deletes (an emptied package level's `__init__.py`), by today's path
+        self.new_dirs = _dirs(n for p, n in self.new.items() if p not in deleted)
         self._cat = None
 
     def _git(self, *args: str) -> str:

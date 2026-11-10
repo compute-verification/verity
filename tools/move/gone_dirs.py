@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""`tools/move/gone_dirs.py MAP... [--ref REF] [--json FILE] [--all]`: the references that name a directory no longer there.
+"""`tools/move/gone_dirs.py MAP... [--ref REF] [--deleted FILE...] [--json FILE] [--all]`: the references that name a
+directory no longer there.
 
 Reads the maps' rows (`layout.py` maps, applied in the order given) and REF's tree (default `origin/main`), moves
 nothing, and counts, in every tracked text file the maps rewrite, each root-relative path that names a directory the
@@ -11,6 +12,10 @@ A reference counts when it is the directory itself or a path below it that names
 that is not there); a path to something inside it is that thing's reference, which its own row rewrites. It exits 1
 when the count is above zero, and prints for each directory its count, where its files go and each `file:line`.
 It also fails a `[tokens]` row whose new directory holds nothing after the maps.
+
+`--deleted FILE...` names files the maps leave that a commit after them deletes (the `__init__.py` of a package level
+the maps empty), by their paths today: a directory that holds nothing else is then gone too, and the count is the one
+that holds once that commit has landed.
 
 Not seen: a directory named with no `/` (one segment), a path relative to the file that holds it, a path put together
 at run time, and a module name (`[modules]` rewrites those)."""
@@ -71,18 +76,23 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("maps", nargs="+", help="layout.py maps, in the order they run")
     ap.add_argument("--ref", default="origin/main", help="the commit whose tree the maps move (default: origin/main)")
+    ap.add_argument("--deleted", nargs="*", default=[], metavar="FILE", help="files a commit after the maps deletes")
     ap.add_argument("--json", type=Path, metavar="FILE", help="write the count and every reference here")
     ap.add_argument("--all", action="store_true", help="print every file:line (default: five a directory)")
     a = ap.parse_args(argv)
-    m = Moved(a.maps, a.ref)
+    m = Moved(a.maps, a.ref, deleted=tuple(a.deleted))
+    if unknown := sorted(set(a.deleted) - m.tracked):
+        sys.exit(f"--deleted names files {m.ref[:12]} does not hold: {', '.join(unknown)}")
     try:
         r = check(m)
     finally:
         m.close()
     if a.json:
-        a.json.write_text(json.dumps({"ref": m.ref, "maps": a.maps, **r}, indent=1) + "\n")
-    print(f"gone directories of {len(a.maps)} map(s) on {m.ref[:12]}: {r['count']} references name {len(r['directories'])} "
-          f"directories that are gone and that no row or [tokens] row rewrites")
+        a.json.write_text(json.dumps({"ref": m.ref, "maps": a.maps, "deleted": a.deleted, **r}, indent=1) + "\n")
+    print(f"gone directories of {len(a.maps)} map(s) on {m.ref[:12]}"
+          + (f", {len(a.deleted)} more files deleted" if a.deleted else "")
+          + f": {r['count']} references name {len(r['directories'])} directories that are gone and that no row or [tokens] row "
+          f"rewrites")
     for d in r["directories"]:
         print(f"  {d['directory']}/: {d['references']} references; its files go to {', '.join(d['files_go_to'][:4])}"
               + (f" and {len(d['files_go_to']) - 4} more" if len(d["files_go_to"]) > 4 else ""))
