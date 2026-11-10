@@ -268,7 +268,7 @@ noncomputable def above (Pt : Partition) (d : Claims.Sampling.Design.Two) (Y : F
 
 /-- **An outer run bad for the sets `Xs`**, its second stage `g`: the inner wait comes up short, or for some `X ∈ Xs`
 no kept inner run has a proof block of `X` good. -/
-def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (Xs : Finset (Finset ℕ))
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
   (accList (fun d => (run' (g d)).out = .acc) (L.k x) ((List.finRange (L.cap x)).map e.1)).length < L.k x ∨
@@ -277,7 +277,7 @@ def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Co
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
 candidate `Y`, every kept outer run is bad for the sets that escape no more than `Y`. -/
-def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s ∧
     ((accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
@@ -291,7 +291,7 @@ omit [Inhabited Coin] in
 /-- **One outer run's inner wait**, at sets `Xs` of proof blocks below `n_PU`, at most `2^{n_PU}` of them, each missed by
 the second stage at `r` with probability at most `esc`: `Compiled.inner_bad_le`'s union bound at the picked slot for each
 `X`, and the wait's over `Xs`. -/
-theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {Xs : Finset (Finset ℕ)}
     (hXs : ∀ X ∈ Xs, ∀ v ∈ X, v < L.nPU x) (hcard : Xs.card ≤ 2 ^ L.nPU x)
     (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -347,7 +347,7 @@ blocks with probability at most its `P_a` and the second stage misses `X` with a
 escapes, the outer wait (times its acceptance) comes up short or, for some candidate `Y`, keeps only runs bad for the
 sets that escape no more than `Y`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
 theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
-    (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
     (Pt : Partition) (d : Claims.Sampling.Design.Two) (hPU : L.nPU x = Pt.blocks.length)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
