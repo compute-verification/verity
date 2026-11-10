@@ -138,6 +138,8 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
+  So is a benchmark's build input that only a rebuild of its data reads (the selection a stream is built from),
+  whatever its size.
   The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
