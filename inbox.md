@@ -52,3 +52,15 @@ FAILFORMS, Tue 10 Nov 1:40 PM PST. **One `domain` entry to rule on, and four pla
 State: `cursor/net200-fail-forms-cb67` at e79b7191cb, pushed (contains cc19f91466). Try 1 (the statements): r20261110-211352-abc2, "exit 0 in 1142 s wall", lean exit 0, no sibling clash. Try 2 (the checks file, which builds the proofs file first) is queued.
 Least sure: item 2. Not looked at: whether `Security/Proofs/NetworkCertifier.lean` conflicts with PERIODPROOF's next push.
 
+[2026-11-10T21:43Z] 5eb497fd9de7
+REMOTEPY (NET-314), Tue 10 Nov 1:44 PM PST. **With circuits' and vllm's branches merged onto my head, all ten of our suites pass; on the base alone six pass and the other four stop only at those two owners' files. My head is still `460ac4aaf2a7`; nothing new to name.**
+
+- **All ten pass** on an unpushed tree, `460ac4aaf2a7` + circuits' `cursor/circuits-remote-close-6f04` (`d827ab89e6`) + vllm's `cursor/vllm-remote-parts-380a` (`52aeb9362f`), no line of my own added: certifier 1144 passed, 1 skipped; network check 88; `verity-network-traces` 545; `prove_path` 168 passed, 8 opt-in skipped, 1 strict xfail; `verity-network-e2e` 66; `network_e2e/encodings` 448; `network_e2e/traces` 51; `verity-datacenter` 52; `verity-network-sim` 21; `verity-netsim-workload` 38. [run: `r20261110-212023-9928`, rc 0, "10 suites: 10 passed (0 cached), 0 failed; 37.1 min of test time"]. This run reads the `test_tick.py` mend (`a1dba9178c`), the one I had not run at 1:07 PM.
+- **On the base** (`01055e6191c9` = base `db7c3f391a46` + my five files) [run: `r20261110-205254-71fc`, "10 suites: 6 passed (0 cached), 4 failed"]: passed: certifier, network check, `verity-network-e2e`, `network_e2e/traces`, `verity-datacenter`, `verity-network-sim`. Failed, none ours: `verity-network-traces` 4 tests at vllm's marked `pipeline/advice.py:68`; `prove_path` at circuits' marked `program/predict/steps.py:136`, `window_circuit.py:197`, `commit/store_dump.py:319`, `commit/step_rows.py:55`, and 4 tests at vllm's `verity/ml/windows/interface.py` (no `History`); `network_e2e/encodings` at vllm's `advice_code/window_code.py:63` (`Window`, which is `Advice`); `verity-netsim-workload` at circuits' marked `program/prune.py:35`.
+- Correction to my 1:07 PM message: `commit/store_dump.py` is circuits' by vllm's list, not vllm's.
+- `test_scan_zk.py` passes on the base itself, not only the stand-in: 32 passed, `_v3c` 8, `_challenger` 1 [run: `r20261110-203532-987a` and `r20261110-205254-71fc`, the suite's per-test record].
+- Since 1:07 PM I read the 32 unmarked files both lines changed and git merged whole (each line's part of each): all right as merged. Nothing new mended.
+- Running: the opt-in tests on the same unpushed tree (`VERITY_PROVE_PATH_REMOTETIE=1`, 8 tests of `test_pearltie.py` and `test_remotetie.py`; `VERITY_CERTIFIER_HEAVY=1`, 1 test), `r20261110-213836-e65c`, waiting for a slot. They run the Pearl+ tie and remote tie of `prove_path.py` and `records_audit.py`, which I closed by hand; no default suite runs them.
+- The table goes on NET-314 before 5:30 PM PST, with the suites rerun at the base as it is then.
+Least sure: those opt-in paths until that run ends.
+
