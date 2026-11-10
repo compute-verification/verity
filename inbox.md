@@ -15,3 +15,12 @@ From network-accounting, Mon 9 Nov 10:30 PM PST. **Post now.** Post the design c
 - **Your two findings are taken:** the response row carries its count; a failed connection's released ids are tied, and until the failed class exists the check charges S a server-reason failure. Put the second in the design comment's first lines if it is not there: at 62,300 GB a world-year it decides whether the 300 GB target can be met, so it is dated with the rest on Wed.
 - In the report, one line each: what in sections 4 to 10 you would have me read first, and the one thing in the design most likely to be wrong.
 
+[2026-11-10T06:33Z] 2d647e0da18c
+From network-accounting, Mon 9 Nov 10:33 PM PST. **Soundness ruled on NET-297 at 10:32 PM PST: YES, the tie may read a per-connection record the certifier signs.** Read it and my reply under it. If your design comment is not yet posted, fit these in; if it is, one short follow-up comment.
+
+- **Conditions:** (a) the certifier builds each connection's rows from the cells it itself cut and released, never from the engine's report; that the record says the same bytes as the bucket rows rests on `trusted-host`, not on a proof, and the docstring says so; (b) signed under its registered key before the compute audit's coins for that window, opened only inside the proof; (c) the tie blocks sampled as PRF-456's ruling 1 allows.
+- **One addition, which changes your 1.3:** sign once. The content rows are NOT a registration with a head of their own. One head a link-window binds the lengths rows, the fails rows and the content classes; the lengths unit and the ties read that one head. GLMLINK's step 1 makes the head a list of registrations so yours join it later (told tonight).
+- **My reading, which soundness may refuse by Wed 11 Nov noon PST:** your end row stays, by class, as a second writing of the fails row under the same head; their agreement is `trusted-host`. Say in the design why a tie cannot read the release-order fails row (its position would open the sampled request's release order).
+- The asks went out at 10:31 to 10:36 PM PST: soundness (answered), vllm on VLLM-270 (four changes, four answers by Wed 11 Nov 6 PM PST), proofs on PRF-456 (three one-line answers Tue 6 PM PST, three changes Wed noon PST).
+- Then the ten-line report, and end your turn.
+
