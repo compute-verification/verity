@@ -655,8 +655,6 @@ KNOWN: dict[str, str] = {
         "homonym, a protocol's served benchmark rows: rename (benchmarks)",
     "benchmarks/network_e2e/encodings/replay.py::Trace":
         "homonym, a served run's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
-    "benchmarks/network_e2e/encodings/v1.py::Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (network-accounting)",
     "benchmarks/network_sim/workload/block.py::Block":
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
@@ -777,6 +775,8 @@ KNOWN: dict[str, str] = {
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
+    "integrations/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
+        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py::Trace":
@@ -821,8 +821,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/ml/protocols/certifier/cache_step_v2.py::Op":
-        "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":

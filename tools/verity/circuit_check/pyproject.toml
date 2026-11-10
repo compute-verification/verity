@@ -55,7 +55,7 @@ worker_gb = 8
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
-# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/predict/seed_rule.py's sidecar builds the
+# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/frontend/seed_rule.py's sidecar builds the
 # served seed rule, whose domain tag and derivation are served_seed's.
 # Read only to check the catalog's records (conftest.py):
 # pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold
@@ -146,16 +146,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/spot/__init__.py",
           "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",
           "verity/core/protocols/certifier/cache_step.circuit-check.json",
-          "verity/ml/protocols/certifier/cache_step_v2.py", "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py",
-          "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json",
           "verity/ml/protocols/certifier/cache_step_v3.py", "verity/ml/protocols/certifier/cache_step_v3.circuit-check.py",
           "verity/ml/protocols/certifier/cache_step_v3.circuit-check.json",
-          "verity/ml/protocols/certifier/compile_slice_v2.py",
-          "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py",
-          "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.json",
-          "verity/ml/protocols/certifier/compile_slice_v3.py",
-          "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py",
-          "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.json",
           "verity/ml/protocols/certifier/compile_slice_v4.py",
           "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.json",
@@ -165,6 +157,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v6.py",
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v7.py",
+          "verity/ml/protocols/certifier/compile_slice_v7.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v7.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
           "verity/core/protocols/certifier/release.py"]
 

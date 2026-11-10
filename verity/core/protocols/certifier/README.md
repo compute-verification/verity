@@ -92,27 +92,18 @@ A spec-level reference for network accounting's timing channel:
   checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
   carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
   ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
-  (`protocol/compile-slice.md`), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
-  evaluator from `verity`;
-- the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
-  replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
-  each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
-  are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
-- the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
-  checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
-  lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
-  evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
-  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
-  (`free_width`), and the charge is ℓ_w;
-- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v3` with its
-  pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
-  the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
-  and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
-  shows that uniqueness, the witness counts as free input at its width, so the free
-  input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
-  `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
+  (`protocol/compile-slice.md`). It takes the circuits and their evaluator from `verity`;
+- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4` computes its schedule from the
+  advice (DA decisions and the step count), the arrivals' ingress fields and their registered output lengths and
+  tokens: the served rows and the state, window and slot rows the window leaves, each hit, evictable count and return
+  where `ReplayStep_v1` reads it, held to the registered ``srv`` and ``cout`` it reads; its one output is the 16-bit
+  verdict. Its pool calls, in vLLM's order, are records on a bus to `CacheStep_v3`'s stream, which runs in the unit
+  from the empty pool with request keys the arrivals' `BlockKey_v1` chains printed under a live coin. The hits,
+  evictable counts and returns the steps read, and the stream's slots and touched list, are checked witness, unique
+  and bound by live coins. Until a Lean lemma shows that uniqueness, the witness counts as free input at its width, so
+  the free input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the
+  pool's size. `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the
+  replay's `_KV` over whole traces;
 - the compile slice at its window's activity (`compile_slice_v5`): `CompileSlice_v5`, `CompileSlice_v4` with the
   arrivals' tokens registered in ``req`` as one ragged row of the NRK blocks the window keys (a keyed block count a
   slot, and one key a block), RB's touched list the NRB addresses the stream touches, and each running slot's request
@@ -128,6 +119,11 @@ A spec-level reference for network accounting's timing channel:
   slice's free input is the advice, the pool window's its checked rows (the left row and the stream's witness) at their
   widths until their lemma (`free_width`). `PoolChain_v1` is two windows so chained, and `parts` prices both units at any
   class, which `benchmarks/mempool/cost.py` does at a served load's;
+- the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
+  `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
+  ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
+  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
@@ -150,10 +146,6 @@ A spec-level reference for network accounting's timing channel:
   row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
-- the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
-  hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
-  leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
-  cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
 - the block pool as memory-checked RAM (`cache_step_v3`): `CacheStep_v3`, a window's pool calls as one stream of NS
   access slots over the five memories vLLM's `BlockPool` is made of (blocks, keys, key copies, request blocks, request
   keys), checked by `MemCheck_v1`'s fingerprint under live coins, with a bus product of the calls' records for
@@ -173,9 +165,10 @@ A spec-level reference for network accounting's timing channel:
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
   takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
-- the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O}` and `ChargeLink_v2{N, H, O}` charge advice
-  v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
-  `code_v1` codes them, with the order's position and rank added to the carry and chained under the value
+- the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}` charge
+  advice v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
+  `code_v1` codes them, and its length terms' tail, with the order's position and rank added to the carry and chained
+  under the value
   `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
 - the active network certifier (`warden`): a relay between any client and any server. It forwards each direction's
   bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in bucket
@@ -306,8 +299,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
-The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's

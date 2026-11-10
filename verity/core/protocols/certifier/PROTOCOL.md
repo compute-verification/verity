@@ -997,11 +997,12 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 **The advice's charge.** The advice string is the circuit's Program's content advice, so its charge is the sampled row's
 `c`. The sampled leak bound takes `c` as declared and public, with the premise that at most `2^c` advice values are
 charged `c` bits or fewer (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), as for any
-prefix-free code (Kraft). Advice v1's charge is `code_v1`'s segment length for the whole window, every count and value
-inside the arithmetic coder, and its strings are prefix-free, so at most `2^c` advice values (each window's decisions,
-hits and order entries) are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
+prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole window: its segment, every count and
+value inside the arithmetic coder, then its length terms' fixed-width tail while the registration sends them. Its
+strings are prefix-free, so at most `2^c` advice values (each window's decisions, hits, order entries and length terms)
+are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
 charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `reference_charge`,
-`Security/Definitions/NetworkCertifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O}`'s (`window_charge.py`'s
+`Security/Definitions/NetworkCertifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
 `reference_window`, `Security/Definitions/NetworkCertifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
 because it is not advice: the compile slice, its charge included, is proved on every advised window and never sampled,
 so `en` is pinned by that slice's scan, and the carry across windows is chained from the book's priors
@@ -1345,7 +1346,7 @@ comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-sha
 would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
-## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+## Advice v1 (`verity_vllm.pipeline.advice_code.codec`)
 
 v1 is the advice the compile slice's proof block takes: I1 v0 sent as only what the certified record, the scheduler
 replay and the derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record,
@@ -1408,6 +1409,11 @@ the order is the topological one that:
   the next arrival `would_admit` checks before a decision is asked. Each goes as its shortfall: the longest prefix a
   cache that never evicts holds, less the hit, in blocks. That is 0 unless the replay evicted. Every lookup is then
   derived or sent, so no prover choice goes uncharged, and the encoding is injective on the whole schedule.
+- *The lengths*, while the registration sends them (`Registered.send_lengths`, on until a proof holds both halves of
+  the length rule: the stop ids and the `max_tokens` cap). A prover who controls where a response ends chooses its
+  output_len, so each request's output_len goes in ⌈log2(max_tokens + 1)⌉ bits and its finish in 1, as the plain tail
+  of the window its body lands in (`advice_code.lengths`). Decode refuses a sent output_len that isn't the certified
+  ids' count and a finish that isn't the stop rule's, and a replay that admits a request in a window before its body's.
 
 *Not sent: the KV pool.* `num_gpu_blocks` is public and registered before the run, in `Registered.engine`, never in
 the string. It used to be a header the prover set, about 20 bits, and that undercharged: a bigger declared pool keeps
@@ -1436,7 +1442,8 @@ release order.
 + 1.
 - `code_v1` codes each window as one terminated arithmetic segment, its counts before its values. So its decoder finds
   each window's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
-- A window's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone.
+- A window's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone,
+  and its length tail's, whose widths the record's `max_tokens` fix.
 - The codebook is `Registered.book`, a `code_v1.Book` fit on other runs, never this one. Its digest (SHA-512 of its
   canonical JSON) is registered before the first window.
 - `decode` runs `code_v1.decode`, which takes only the canonical segments, then the order entries' inverse, then the
@@ -1504,7 +1511,8 @@ charge (the composition below): what the bound counts is the charge, not the com
 - *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
   `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring), and
-  `ChargeCount_v2{N, H, O}` (`window_charge`) the whole window's, its hits and order entries with their counts too.
+  `ChargeCount_v2{N, H, O, L}` (`window_charge`) the whole window's, its hits and order entries with their counts too,
+  and its length terms' tail.
 - *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and the walk's still-sent fields. After every symbol the count's
   interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
@@ -1523,8 +1531,9 @@ charge (the composition below): what the bound counts is the charge, not the com
 
 **The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
 
-**The whole window's charge** (`window_charge`, `ChargeCount_v2{N, H, O}` and `ChargeLink_v2{N, H, O}`, the coding of
-the hits, the order entries and their counts): [protocol/charge-chain.md](protocol/charge-chain.md), "The whole window".
+**The whole window's charge** (`window_charge`, `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}`, the
+coding of the hits, the order entries and their counts, and the length terms' tail):
+[protocol/charge-chain.md](protocol/charge-chain.md), "The whole window".
 
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is the walk's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
@@ -1641,6 +1650,12 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
+  - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
+    witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's
+    salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
+    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
+    stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
+    (`send_lengths` stays on until one holds it).
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
@@ -1663,7 +1678,8 @@ Its step rows are held to the committed ``srv`` row, which the verifier holds by
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
+chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice, is v1 charging the length terms too:
+`ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
 857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
 

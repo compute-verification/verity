@@ -1,4 +1,4 @@
-"""The RAM pool (`pool_ram`) against vLLM's (the replay's `_KV`) over the encodings' traces and synthetic ones, its memory
+"""The RAM pool (`pool_ram`) against vLLM's (the replay's `BlockPool`) over the encodings' traces and synthetic ones, its memory
 check on each run's log, and the fingerprint on an honest log and on tampered ones. Prints each run's operation counts.
 
     python3 difftest.py [--traces DIR] [--seeds N] [--json OUT]
@@ -20,7 +20,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "network_e2e" / "encodings" / "
 
 
 def load(path: Path) -> tuple[RP.Engine, list[RP.RequestIO], list[int]]:
-    """A step trace, or a derived-format one (`*.json.gz`), as replay input (`cache_pool_vectors.replay_input`'s)."""
+    """A step trace, or a derived-format one (`*.json.gz`), as replay input (`network_e2e/encodings/compile_slice_pool.replay_input`'s)."""
     if path.suffix != ".gz":
         tr = RP.read_any(path)
         return tr.engine, list(tr.requests), list(tr.before_step)

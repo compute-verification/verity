@@ -1,19 +1,25 @@
-"""The compile slice over the memory-checked pool: `CompileSlice_v3` (`compile_slice_v3`) with its CacheStep_v2 calls
-replaced by records on a bus to `CacheStep_v3`'s stream (`cache_step_v3`), which runs inside the unit and answers them.
+"""The compile slice over the memory-checked pool: one window of the compile slice's proof block from the empty engine
+and pool, its schedule computed from the advice and held to the registered rows it reads, each pool call a record on a
+bus to `CacheStep_v3`'s stream (`cache_step_v3`), which runs inside the unit and answers them.
 
     CompileSlice_v4{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CTW, CU, DA, NS, NM}
         (adv, ing, req, srv, cout, coin, chk) -> verdict[16]
 
-**Why.** CompileSlice_v3 derives each hit, evictable count and return by CacheStep_v2 calls that read and write the
-whole pool table, so its price grows with the pool's size. Here a step's pool
-calls are records on a bus, and one stream of NS memory-checked access slots (CacheStep_v3) runs them: a window costs
-its accesses, whatever the pool's size.
+**Why.** A unit that derives each hit, evictable count and return by calls that read and write the whole pool table
+pays for the pool's size. Here a step's pool calls are records on a bus, and one stream of NS memory-checked access
+slots (CacheStep_v3) runs them: a window costs its accesses, whatever the pool's size.
 
 **The inputs**, each a field list (elements least significant bit first):
-- ``adv`` (*advice*), ``ing`` (*ingress*), ``req`` and ``srv`` (*registered*): CompileSlice_v3's.
+- ``adv`` (*advice*, unpadded): the window's DA decision bits ``dec`` and its executed step count ``steps`` (PW =
+  bitlen(P) bits). DA is a static: the advice's length is registered and public, so each length is its own binding.
+- ``ing`` (*ingress*, unpadded): the window's K arrival slots' ``a_valid``, ``a_id`` and prompt length ``a_P``.
+- ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 whether ``a_O`` is its max_tokens),
+  and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs).
+- ``srv`` (*registered*): the served rows, each step's R rows (valid, request, kind, start, n) in slot order, as
+  `compile_slice.rows_bits` packs them, zero on an idle step: the row `served_rows` registers.
 - ``cout`` (*registered*): the state row S_{P+1} and the window row W_1 the window leaves, and its slot row: each
-  running slot's cached blocks ``nc`` (and at AS = 1 ``fl``, CompileSlice_v2's), which a later step's cache call
-  starts from.
+  running slot's cached blocks ``nc`` (and at AS = 1 ``fl``, whether the slot's last row was sampled), which a
+  later step's cache call starts from.
 - ``coin`` (the verifier's coins): α and γ, the memory check's and the bus's, and δ, the keys' print coin, each in
   GF(2^128), drawn live after the window's rows are committed.
 - ``chk`` (*checked*): each step's bus results (each running slot's returns, each candidate's hit and evictable count,
@@ -25,13 +31,16 @@ and a wrong one passes only with the fingerprints' collision probability, which 
 counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
 nondeterminism rule), so `free_width` counts the advice and the checked witness.
 
-**The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
-calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its
-call count equal to theirs. `ACCEPT` = 0x3F.
+**The output**: ``verdict``, 16 bits: bit 0 ``load`` (with ``req``'s padding), bit 1 ``steps``, bit 2 ``cache`` (the step
+side's bounds on its calls), bit 3 ``served`` (``srv`` is the computed rows), bit 4 ``carry`` (``cout`` is the computed last
+rows), and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its call count equal to theirs.
+`ACCEPT` = 0x3F.
 
-**The calls.** Request r is the arrival slot its id first occupies in ``ing``. Each step makes its calls in vLLM's order,
-each a record (seq, kind, r, a, b, x, y) that is on iff the call has an operation:
-- the running loop's events at their positions (CompileSlice_v3's): a kept slot's compute, alloc (r, ⌈comp / B⌉,
+**The calls.** The load from the empty state and window (`replay_chain._load_rows`) computes S_1 and W_1; each step u
+computes its arrivals and decision bits as the window row's at S_u's heads and runs ReplayStep_v1 on them and S_u.
+Request r is the arrival slot its id first occupies in ``ing``. Each step makes its calls in vLLM's order, each a
+record (seq, kind, r, a, b, x, y) that is on iff the call has an operation:
+- the running loop's events at their positions (`positions`): a kept slot's compute, alloc (r, ⌈comp / B⌉,
   needs) then cache (r, nc, target − nc), or a victim's free (r, ⌈comp / B⌉), its x the slot's returns;
 - each candidate the waiting loop reaches, in order: hit (r, (ntok − 1) // B), x and y its hit and evictable count,
   then if admitted take (r, 0, h), alloc (r, h, new) and cache (r, h, target − h);
@@ -55,15 +64,17 @@ calls/2^128 over α for the bus, and 3·n(n − 1)/2^129 over δ for n keys.
 ends it. Each GF(2^128) product's operands are a part's inputs, so no product reads another's uncommitted forms. At the
 demo's class (`demo`, NS = 192) the unit is 4,117,521 ANDs, two thirds of them the stream's slots.
 
-**The window** starts from the empty engine and pool, as CompileSlice_v3's does.
+**The window** starts from the empty engine and pool.
 
-**The reference** is `reference`: `scan`'s run of the slice, the load and ReplayStep_v1 a step as in CompileSlice_v3,
-each step's calls (`pool_step`) on `cache_step_v3.Stream`, hits and returns to a fixed point as
-`compile_slice_v2.scan` takes them. `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds
-`pool_step`'s hits, evictable counts and returns to the replay's `_KV` over the encodings' traces.
+**The reference** is `reference`: `scan`'s run of the slice, the load (`replay_chain.load`) and ReplayStep_v1 a step
+(`replay_step.reference`), each step's calls (`pool_step`) on `cache_step_v3.Stream`, hits and returns run to a fixed
+point (a candidate's hit can be a block an earlier row of the step caches, and a victim's returns decide the victims).
+`benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds `pool_step`'s hits, evictable counts
+and returns to the replay's `_KV` over the encodings' traces.
 
-**Statics**: CompileSlice_v3's without the CacheStep_v2 pool's (CN, CD, SW), with PC = 1; NS stream slots and NM M
-entries, from the public ladder (`cache_step_v3.size_class`). The stream's RW = bitlen(K), KW = bitlen(CU), REFW =
+**Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW) with PC = 1, the
+chain's Q, D, P, K (`replay_chain.Shape`), CTW a token id's width, CU the units of each arrival's tokens ``req`` holds,
+DA ≤ D, NS stream slots and NM M entries, from the public ladder (`cache_step_v3.size_class`). The stream's RW = bitlen(K), KW = bitlen(CU), REFW =
 bitlen(R + 1) and time width bitlen(NS) follow (`stream_statics`).
 """
 from __future__ import annotations
@@ -81,8 +92,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments.gates import block_key as BK
 from verity.core.protocols.certifier import cache_step as CST, compile_slice as CS
-from verity.ml.protocols.certifier import cache_step_v2 as C2, cache_step_v3 as V3S
-from verity.ml.protocols.certifier import compile_slice_v2 as V2
+from verity.ml.protocols.certifier import cache_step_v3 as V3S
 from verity.core.protocols.certifier import replay_chain as RC, replay_step as RS
 from verity.core.protocols.certifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
 
@@ -193,6 +203,27 @@ def _and(C, *xs):
     return and_reduce(C, list(xs))
 
 
+def _fits(C, v, w: int) -> tuple[list, object]:
+    """v's low w bits, and 1 iff a bit past them is set."""
+    return RS._pad(v, w), or_reduce(C, list(v[w:])) if len(v) > w else ZERO
+
+
+def _pick(C, sel, rows) -> list:
+    """The row a one-hot (or all-zero) `sel` selects (all-zero for none)."""
+    out = [ZERO] * len(rows[0])
+    for s, row in zip(sel, rows):
+        out = [o ^ C.AND(s, x) for o, x in zip(out, row)]
+    return out
+
+
+def _encode(sel, w: int) -> list:
+    """The index a one-hot `sel` selects, in w bits."""
+    out = [ZERO] * w
+    for e, s in enumerate(sel):
+        out = [x ^ (s if e >> b & 1 else ZERO) for b, x in enumerate(out)]
+    return out
+
+
 class _Bus:
     """The step's pool calls as bus records, made where ReplayStep_v1 reads what they return (the module's docstring).
     ``bad`` collects what refuses an active step, ``zero`` what refuses any step: a result no record carries that isn't
@@ -213,7 +244,7 @@ class _Bus:
 
     def fit(self, v, guard):
         """v in CW bits; a value past them refuses where `guard`."""
-        bits, over = V2._fits(self.C, v, self.sh.CW)
+        bits, over = _fits(self.C, v, self.sh.CW)
         self.bad.append(self.C.AND(guard, over))
         return bits
 
@@ -231,7 +262,7 @@ class _Bus:
     def rnum(self, rid):
         C, S = self.C, self.S
         m = [C.AND(self.cert["valid"][k], CST._eq(C, self.cert["id"][k], rid)) for k in range(S.K)]
-        return or_reduce(C, m), C2._encode(CST._first(C, m), self.sh.S3.RW)
+        return or_reduce(C, m), _encode(CST._first(C, m), self.sh.S3.RW)
 
     def cache(self, guard, q, nc, tg):
         """cache (q, nc, tg − nc) where `guard` and tg > nc: (whether it is on, max(nc, tg))."""
@@ -277,11 +308,11 @@ class _Bus:
             frees = [C.AND(popped[j], CST._eq(C, pos_f[j], const_bits(t, RCW))) for j in range(R)]
             sel = [a ^ b for a, b in zip(comp, frees)]
             ca, fa = or_reduce(C, comp), or_reduce(C, frees)
-            q, h0 = C2._pick(C, sel, nums), C2._pick(C, sel, held)
-            new, back = C2._pick(C, comp, news), C2._pick(C, frees, backs)
+            q, h0 = _pick(C, sel, nums), _pick(C, sel, held)
+            new, back = _pick(C, comp, news), _pick(C, frees, backs)
             self.rec(OR(C, C.AND(ca, _nz(C, new)), C.AND(fa, _nz(C, h0))), [ONE, fa.inv(), fa], q, h0,
                      RS._sel(C, ca, new), RS._sel(C, fa, back))
-            self.cache(ca, q, C2._pick(C, comp, self.nc), C2._pick(C, comp, tgts))
+            self.cache(ca, q, _pick(C, comp, self.nc), _pick(C, comp, tgts))
         for x in range(R):
             self.nc[x] = RS._sel(C, popped[x].inv(), self.cache_value(kept[x], self.nc[x], tgts[x]))
 
@@ -295,8 +326,8 @@ class _Bus:
         C, HW = self.C, self.ZR.HW
         self.settle(tap)
         self.pending = (c, rec, ntok)
-        h, o1 = V2._fits(C, self.w["hits"][c], HW)
-        ev, o2 = V2._fits(C, self.w["evs"][c], HW)
+        h, o1 = _fits(C, self.w["hits"][c], HW)
+        ev, o2 = _fits(C, self.w["evs"][c], HW)
         self.bad += [o1, o2]
         return h, ev
 
@@ -585,25 +616,34 @@ COINS = tuple(int.from_bytes(hashlib.sha512(b"compile slice v4 demo coin " + byt
               for i in range(3))
 
 
-def _from_v3(st3: dict, sl: CS.Slice, NS: int, NM: int) -> tuple[dict, CS.Slice]:
-    return {**{k: st3[k] for k in STATICS if k in st3}, "NS": NS, "NM": NM}, sl
+#: `compile_slice.DEMO_ENGINE` at two sequences of 16 tokens and six blocks (five past the null block), so the pool evicts
+DEMO_ENGINE = {**CS.DEMO_ENGINE, "max_num_seqs": 2, "max_model_len": 16, "num_gpu_blocks": 6}
 
 
 def demo() -> tuple[dict, CS.Slice]:
-    """`compile_slice_v3.demo`'s class and slice (five steps at (R 2, W 1, A 2) on six 4-token blocks, three arrivals of
-    4-bit tokens, its five decisions the advice), with the stream's class the ladder's NS = 192 slots, which holds its
-    window's 19 calls (120 slots) and every random window of the tests (to 130), and NM = 8 M entries."""
-    from verity.ml.protocols.certifier import compile_slice_v3 as V3
-
-    return _from_v3(*V3.demo(), NS=192, NM=8)
+    """The demonstration class and slice: five steps at (R 2, W 1, A 2) on `DEMO_ENGINE`'s six 4-token blocks, three
+    arrivals of 4-bit tokens, 4 units a request, its five decisions the advice (DA = 5), with the stream's class the
+    ladder's NS = 192 slots, which holds its window's 19 calls (120 slots) and every random window of the tests (to 130),
+    and NM = 8 M entries. Request 1 shares request 0's first block: it is looked up at step 0, takes that hit at step 1
+    and leaves at once, freeing three blocks one of which slot 0 still holds (the shared-block free). Both computes of
+    step 2 evict queued blocks; request 2 is preempted at step 3 and readmitted at step 4 with a hit on its own first
+    block."""
+    st = statics(2, 1, 2, DEMO_ENGINE, 3, Q=3, D=5, P=5, K=3, CTW=4, CU=4, DA=5, NS=192, NM=8)
+    tokens = ((8, 14, 9, 14, 10, 4, 3, 13, 9, 8, 11, 10, 13, 3, 2), (8, 14, 9, 14, 7, 8, 11, 12, 10, 11, 3, 10, 1),
+              (10, 1, 13, 8, 6, 8))
+    return st, CS.Slice(((0, 11, 4), (1, 12, 1), (2, 4, 2)), (0, 1, 1, 0, 0), 5, tokens)
 
 
 def demo_async() -> tuple[dict, CS.Slice]:
-    """`compile_slice_v3.demo_async`'s class and slice at AS = 1, with NS = 128 slots, which holds its window's 14 calls (86
-    slots) and every advice and random window of the tests (to 115), and NM = 8."""
-    from verity.ml.protocols.certifier import compile_slice_v3 as V3
-
-    return _from_v3(*V3.demo_async(), NS=128, NM=8)
+    """`demo`'s class at AS = 1, with NS = 128 slots, which holds its window's 14 calls (86 slots) and every advice and
+    random window of the tests (to 115), and NM = 8. Request 2 shares request 0's first block: it is looked up at step 3
+    and admitted at step 4 with that hit, its compute evicting the oldest queued block, and request 0 then leaves holding
+    the shared block; slot 0's late `cache_blocks` caches a block at step 4."""
+    st = statics(2, 1, 2, {**DEMO_ENGINE, "async_scheduling": True}, 3, Q=3, D=5, P=5, K=3, CTW=4, CU=4, DA=5, NS=128,
+                 NM=8)
+    tokens = ((6, 10, 14, 1, 8, 5, 12, 14, 11, 9, 2, 13, 8), (13, 5, 6, 1, 11),
+              (6, 10, 14, 1, 10, 9, 14, 4, 5, 10, 9, 3, 4, 9))
+    return st, CS.Slice(((0, 9, 4, 1), (1, 4, 1, 0), (2, 12, 2, 0)), (0, 1, 0, 1, 1), 5, tokens)
 
 
 # --- the specification ---------------------------------------------------------------------------------------------------
@@ -622,15 +662,106 @@ def _need(ok: bool, why: str) -> None:
         raise Refused(why)
 
 
+def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
+    """The wires of `ReplayStep_v1`'s circuit the calls bind (`replay_step._build`'s ``tap``), for a step it accepts:
+    ``run`` (the running slots, None empty), ``needs``, ``kept``, ``popped``, ``avail`` and ``upto``, ``run_n``,
+    ``cands`` (per candidate: id, ntok, reach, admit, new, c), ``post`` (the placed slots, each a dict with its
+    candidate c or None) and ``update`` (per placed slot: on, comp, sampled, leave, held, keep)."""
+    R, W, A, B, H, L, AS = S.R, S.W, S.A, S.B, S.H, S.L, S.AS
+
+    def rec(r: RS.Req, comp: int, running: bool) -> dict:
+        return {"id": r.id, "P": r.P, "O": r.O, "out": r.out, "comp": comp, "max_tokens": r.cap if AS else 0,
+                "fin": r.fin if AS and running else 0}
+
+    run = [rec(r, r.comp, True) for r in st.running] + [None] * (R - len(st.running))
+    wait = [rec(r, 0, False) for r in st.waiting]
+    arr = [{**rec(a, 0, False), "out": 0} for a in inp.arrivals]
+    if not st.running and not st.waiting and arr:
+        wait, arr = arr[:1], arr[1:]
+    wait, arr = (wait + [None] * W)[:W], (arr + [None] * A)[:A]
+    budget, ns, needs = S.T, [], []
+    for r in run:
+        n = 0
+        if r is not None and not (r["fin"] and r["max_tokens"]):
+            n = r["P"] + r["out"] - r["comp"]
+            n = H if 0 < H < n else n
+            n = min(n, budget, L - 1 - r["comp"])
+        ns.append(n)
+        needs.append(RS.cdiv(r["comp"] + n, B) - RS.cdiv(r["comp"], B) if r is not None else 0)
+        budget -= n
+    backs = [inp.ret[j] if run[j] is not None else 0 for j in range(R)]
+    avail = [st.free + sum(backs[i + 1:]) for i in range(R)]
+    upto = [sum(needs[:i + 1]) for i in range(R)]
+    kept = [run[i] is not None and avail[i] >= upto[i] for i in range(R)]
+    popped = [run[i] is not None and not kept[i] for i in range(R)]
+    run_n = [ns[i] if kept[i] else 0 for i in range(R)]
+    free = st.free + sum(b for b, p in zip(backs, popped) if p) - sum(x for x, k in zip(needs, kept) if k)
+    budget = S.T - sum(run_n)
+    cnt0 = cnt = len(st.running)
+    going, cands = not any(popped), []
+    for c in range(W + A):
+        r = wait[c] if c < W else arr[c - W]
+        reach = going and r is not None and budget > 0 and (cnt < S.M if S.M <= R else True)
+        x = {"c": c, "id": r["id"] if r else 0, "ntok": r["P"] + r["out"] if r else 0, "reach": reach, "admit": False,
+             "new": 0, "rec": r}
+        go = False
+        if reach:
+            h, ev = inp.hit[c], inp.evict[c]
+            hb, ntok = h * B, x["ntok"]
+            n = ntok - hb
+            n = H if 0 < H < n else n
+            fits = S.CH or budget >= n
+            n = min(n, budget)
+            extra = ev + (S.WM if cnt else 0)
+            full = max(RS.cdiv(min(ntok, L), B) - h, 0)
+            new = max(RS.cdiv(min(hb + n, L), B) - h, 0)
+            go = fits and (not S.FULL or free >= full + extra) and free >= new + extra
+            x.update(admit=go and bool(inp.bits[c - W]) if c >= W else go, new=new, hb=hb, n=n)
+            if x["admit"]:
+                cnt, free, budget = cnt + 1, free - new - ev, budget - n
+        going = x["admit"] if c >= W else going and (r is None or go)
+        cands.append(x)
+    post: list[dict | None] = [{**run[p], "n": run_n[p], "cand": None} if kept[p] else None for p in range(R)]
+    for k, x in enumerate(c for c in cands if c["admit"]):
+        post[cnt0 + k] = {**x["rec"], "comp": x["hb"], "n": x["n"], "fin": 0, "cand": x}
+    update = []
+    for s in post:
+        if s is None:
+            update.append(None)
+            continue
+        on, comp = s["n"] > 0, s["comp"] + s["n"]
+        sampled = on and comp >= s["P"] + s["out"]
+        sample = sampled and not s["fin"]
+        stop = sample and s["out"] + 1 == s["O"]
+        leave = bool(s["fin"]) if AS else stop
+        update.append({"on": on, "comp": comp, "sampled": sampled, "leave": leave, "held": RS.cdiv(comp, B),
+                       "keep": not leave})
+    return SimpleNamespace(run=run, needs=needs, kept=kept, popped=popped, avail=avail, upto=upto, run_n=run_n,
+                           cnt0=cnt0, cands=cands, post=post, update=update)
+
+
+def positions(S, t: SimpleNamespace) -> dict[int, tuple[str, int]]:
+    """The running loop's events by position: kept slot i's compute at i plus the victims freed before it, victim j's
+    free at (the running count − 1 − j) plus the computes before it. Victim j is freed before compute i iff
+    avail[j] < upto[i]."""
+    out = {}
+    for i in range(S.R):
+        if t.kept[i]:
+            out[i + sum(t.popped[j] and t.avail[j] < t.upto[i] for j in range(S.R))] = ("compute", i)
+        if t.popped[i]:
+            out[t.cnt0 - 1 - i + sum(t.kept[k] and not t.avail[i] < t.upto[k] for k in range(S.R))] = ("free", i)
+    return out
+
+
 def pool_step(S, stream: V3S.Stream, st: RS.State, inp: RS.Inputs, nc: Sequence[int], fl: Sequence[int],
               rnum: dict[int, int]) -> SimpleNamespace:
     """The step's pool calls (the module's docstring) on `stream`, for ReplayStep_v1's state `st` and inputs `inp` (an
     accepted step), each running slot's cached blocks `nc` and ``fl`` `fl`, and the request numbers `rnum` (id -> r);
     raises `Refused`. Returns the hits, evictable counts and returns the calls derive (0 where no call derives one, so
-    a kept slot's returns are 0), the order they were derived in, ReplayStep_v1's wires (`compile_slice_v2.tap`) and
-    the next slot row (nc, fl)."""
+    a kept slot's returns are 0), the order they were derived in, ReplayStep_v1's wires (`tap`) and the next slot row
+    (nc, fl)."""
     B, R, HW = S.B, S.R, RS.widths(CS.step_statics(S)).HW
-    t = V2.tap(S, st, inp)
+    t = tap(S, st, inp)
     hit, ev, ret = list(inp.hit), list(inp.evict), list(inp.ret)
     seen: list[tuple[str, int]] = []
     nc = list(nc) + [0] * (R - len(nc))
@@ -654,7 +785,7 @@ def pool_step(S, stream: V3S.Stream, st: RS.State, inp: RS.Inputs, nc: Sequence[
             nc[p] = tg
 
     def run() -> None:
-        events = V2.positions(S, t)
+        events = positions(S, t)
         for pos in sorted(events):
             kind, i = events[pos]
             r = t.run[i]
