@@ -44,6 +44,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
 # `benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64`: RoPE's two captured heads, which the opt-in
 # trees session's real `serve --zk --tree-from` stages (`test_a5_tree_relay`, through M0's staging, which no tracer sees).
+# network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
+# `integrations/vllm/manifests/checkpoints.json` and its int8 sibling: the pin whose config of record the inference-only
+# policy's φ reads (`served_compiler.phi_of_serve`).
 inputs = ["tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
           "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
@@ -56,12 +59,14 @@ inputs = ["tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pou
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
+          "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/core/protocols/network/nci/lean/lakefile.toml",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
-          "integrations/vllm/verity_vllm", "benchmarks/network_traces",
+          "integrations/vllm/verity_vllm", "integrations/vllm/manifests/checkpoints.json",
+          "integrations/vllm/manifests/checkpoints-int8.json", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           "benchmarks/live_verifier/host.py"]

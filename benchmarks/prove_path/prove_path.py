@@ -60,6 +60,7 @@ Two kinds of committed run:
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
         [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
         [--cap-bits L]
+    prove_path.py window-class --class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] [--scan-class w63|w63k4]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -134,7 +135,9 @@ Two kinds of committed run:
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
   the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
-  verifier's own ``window-circuit`` record is the circuit it holds it to. Each Program's Build is its own, from its
+  verifier's own ``window-circuit`` record is the circuit it holds it to. The registration's provenance names the class
+  and the scan state, never the window's number, which counts the run's windows: the registration reaches the network
+  certifier's verifier whole, in its period's commitment (`kind_scan`). Each Program's Build is its own, from its
   compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
   any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
   registration of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
@@ -146,6 +149,11 @@ Two kinds of committed run:
   taken as served, and the registration is chained right after W and registers W's values (`pearl_c.window.reuse`),
   refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
   verifier's own record of that cut circuit.
+* **window-class**: ``--class`` held to the one class whose window the chain's scan reads behind the certifier front
+  (`window_class_of_scan`): one link-window of the network certifier the gate runs at the scan class ``--scan-class``
+  (the front's w63k4 by default: 8,32,4,4,16; w63's is the class of record), at the scan class's own lanes, timestep,
+  prompt ids and outputs. It is the check of a serve's class before a serve behind the front, since window-commit's scan
+  and the chain's refuse any other class only after it.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1368,13 +1376,63 @@ def network_traces() -> Iterator[None]:
             sys.modules["replay"] = replay
 
 
+def class_arg(cls: Any) -> str:
+    """The window class ``cls`` as ``--class`` takes it: SLOTS,PROMPT,OUTPUTS,LANES,EVERY."""
+    return f"{cls.slots},{cls.prompt},{cls.outputs},{cls.lanes},{cls.every}"
+
+
+def link_window(cls: Any, params: Any) -> None:
+    """A window of class ``cls`` is one link-window of the network certifier's run at ``params`` (`WardenParams`), the
+    window its scan reads: the class's scan serves the run (`ingress_scan.Class.serves`) and the class's buckets are the
+    run's T. A ValueError naming why, and the class at ``cls``'s lanes and timestep whose window it is."""
+    cls.scan.serves(params)
+    T = params.window
+    if T != cls.buckets:
+        fit = (f", or take the class {class_arg(replace(cls, slots=cls.lanes * T // cls.every))}, whose window it is"
+               if T % cls.every == 0 else "")
+        raise ValueError(f"the network certifier's link-windows are {T} buckets, not a window of class {cls}'s "
+                         f"{cls.buckets}: serve at the class's scan schedule{fit}")
+
+
+def window_class_of_scan(a: argparse.Namespace) -> dict[str, Any]:
+    """``window-class``: ``--class`` held to the one window class whose window the chain's scan reads behind the certifier
+    front at the scan class ``--scan-class`` (the front's, `certifier_piece.V3C_SCAN_CLASS`, by default): the scan
+    class's own lanes, timestep, prompt ids and outputs (`scan_zk.SETUPS`), and slots lanes · T / every, so that its
+    window is one link-window of the network certifier the gate runs there (`certifier_piece.gate_params`,
+    `link_window`). A ValueError naming that class where ``--class`` isn't it; window-commit's scan (`kept_scan`) and the
+    chain's (`scan_zk.py --v3c`) refuse any other, after the serve. -> the class, the scan class and T."""
+    from verity_vllm.program.predict.window_circuit import WindowClass
+
+    with network_traces():
+        import certifier_piece as CP
+        import scan_zk as SZ
+
+        scan = a.scan_class or CP.V3C_SCAN_CLASS
+        if scan not in CP.SS.A.SCAN_CLASSES:
+            raise ValueError(f"--scan-class {scan}: the gate's scan classes are {', '.join(sorted(CP.SS.A.SCAN_CLASSES))}")
+        params = CP.gate_params(scan)
+    try:
+        cls = window_class_of(a.window_class)
+    except TypeError as e:
+        raise ValueError(f"--class {a.window_class}: SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] ({e})") from None
+    s = SZ.SETUPS[scan].cls
+    fit = WindowClass(s.lanes * params.window // s.EVERY, s.KI, s.KO, lanes=s.lanes, every=s.EVERY)
+    link_window(fit, params)
+    if cls != fit:
+        raise ValueError(f"the gate runs the network certifier at the scan class {scan} with link-windows of "
+                         f"{params.window} buckets, each a window of the class {class_arg(fit)} alone, the one the "
+                         f"chain's scan at {scan} reads, not of {class_arg(cls)}: set the class {class_arg(fit)}")
+    return {"class": class_arg(cls), "scan_class": scan, "window": params.window}
+
+
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
-    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    buckets (`link_window`), whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan
+    reads the network certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry
+    (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
     from verity.core.protocols.certifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
@@ -1399,10 +1457,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
         if unpacked is not None:
             CP.rm(unpacked)
     T = params.window
-    cls.scan.serves(params)
-    if T != cls.buckets:
-        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
-                         f"{cls.buckets}: serve at the class's scan schedule")
+    link_window(cls, params)
     if not io["accepted"]:
         raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by = {r["user"]: r for r in io["records"]}
@@ -1662,7 +1717,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every]},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
@@ -1870,6 +1925,11 @@ def main(argv: list[str] | None = None) -> int:
                    "after W (`pouw_h1_commit.reuse`); with --pearl-passes, Pearl+'s window record W of the window's passes")
     p.add_argument("--h1-key", help="with --window-registration: H1's prover key file (its prover dir's key), whose salts "
                    "W's tables take")
+    w = sub.add_parser("window-class", help="a window class held to the one whose window the chain's scan reads behind the "
+                       "certifier front")
+    w.add_argument("--class", dest="window_class", required=True, help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]")
+    w.add_argument("--scan-class", help="the gate's scan class the front runs the network certifier at (default the "
+                   "front's, certifier_piece.V3C_SCAN_CLASS)")
     p.add_argument("--pearl-passes", metavar="DIR", help="with --window-registration W: the window's Pearl+ passes "
                    "(serve-openai's Pearl+ epoch pearl/w<k>/, retained by retain --window-record W): the circuit is cut "
                    "at its linears (`window_class.PearlTables` under W's scheme), each cut linear's y taken as served, and "
@@ -1898,10 +1958,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "window-commit":
         a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
     if a.cmd in ("circuit", "window-circuit", "class-circuit", "serve-phi", "class-size", "window-commit",
-                 "weights-registration"):
+                 "weights-registration", "window-class"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
+                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve,
+                    "window-class": window_class_of_scan}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

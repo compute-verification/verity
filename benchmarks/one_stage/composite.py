@@ -67,8 +67,8 @@ COMPONENTS = {
 EXCEPTIONS = {
     "verity/inference-only/v0": (
         "stated exception: verity/inference-only/v0 publishes the declared division and each inference block's profile "
-        "in the clear, composed for the demos' runs until v1's private form (division committed under hiding leaves, "
-        "compliance proved, padded profile) replaces it"),
+        "in the clear, composed for the demos' runs, remote's and onsite's, rehearsals and runs of record alike, until "
+        "v1's private form (division committed under hiding leaves, compliance proved, padded profile) replaces it"),
 }
 USAGE = 64
 LEAK = 65

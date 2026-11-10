@@ -2,8 +2,8 @@
 (`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each drawn member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
-record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
-it.
+record. The compiled per-step units of an arbitrary vLLM model and its head-check units ride it, and the scan's proof
+blocks, the egress tie's among them, frame their registered ports by `frame_ports`.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]
@@ -547,8 +547,8 @@ def bf16(x: np.ndarray) -> np.ndarray:
 
 def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> list[Member]:
     """A compiled step's matmul coordinates as stand-in units: `LlBf16DotprodDot_v1` (A8's dot product) at each K in
-    ``ks``, ``n`` units each, its activation row ``x`` held by the verifier (a certified input: the I/O tie's shape) and
-    its weight row ``w`` the prover's; outputs hidden."""
+    ``ks``, ``n`` units each, its activation row ``x`` held by the verifier (a certified input: the egress tie's
+    registered read's shape) and its weight row ``w`` the prover's; outputs hidden."""
     from circuit_check import targets as TG
 
     TG.load_registries()

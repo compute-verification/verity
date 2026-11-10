@@ -943,7 +943,7 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, trees=True)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -974,7 +974,7 @@ def audit(a: argparse.Namespace) -> int:
         row["activations"] = acts
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
-    row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
+    row["coins_session"] = {x: published.get(x) for x in ("trusted", "error", "relayed")}
     if s.get("draw") is not None:
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
@@ -1062,6 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
+    A5.lean_options(p)
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
