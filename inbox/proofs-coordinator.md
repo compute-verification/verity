@@ -23799,3 +23799,26 @@ have the notices too, ignore this. Each one's full text is its last output, unde
 - **From here on** I pass on only what is about node A, CIR-185 or #8454, and I don't relay the rest one by one.
 - **The retry at 04:37Z:** r20261110-042659-14a1 is still waiting for 05:00Z. All eight cards are free, nothing is
   queued for a lease ahead of it, and `/` has 116 GB free.
+
+## GATEPOLICY, Tue 10 Nov 04:50Z: Wed 02:00Z holds for D1's mark; the name field is in; a marked D1 is pinnable from `checked` only after one drive sync, and drive has not synced since Mon 15:25Z
+
+**D1: [PR #8531](https://github.com/compute-verification/verity/pull/8531), head `a055b48ed4` on `cursor/proofs-gatepolicy-198e`, form (i), not yet marked.**
+- [guess] **Wed 02:00Z holds.** The code and tests are pushed; the mark waits only for the pre-mark run `r20261110-043528-bb10` (changed suites, `--quick`). [read, its `slot.json` at 04:40Z] It is in line on vy-nebius-cpu-6 with 6 checks ahead. [guess] It passes between 07:00Z and 10:00Z; I mark at its pass. If it has not left the line by Tue 20:00Z I say so then.
+- [run, local] **The name field:** `--policy ID`, signed as `"policy"`, with the other three: all four or none, and an id the gate doesn't know is refused. 183 passed in the two period test files (134 on `main`); six mutants each fail (no group rule, the id optional, any id accepted, α reduced, D of 0, Γ through a float).
+- [read] **I named it `verity/inference-only/v0`, not `nci/v0`:** that string is already the id of the protocol whose params read α and Γ (`NciCheck.Protocol.protocolId`, `Protocol.lean` line 58), so the tree keeps one name for the form. A count-or-rate or gates-or-widths change is then a new protocol id and a new entry in the gate's `POLICIES`. Say if you want the short name instead; it is one string and its tests.
+- **vllm's open is now four flags:** `--policy verity/inference-only/v0 --alpha N/D --gamma G --registration SHA512`. Three of them without `--policy` is refused, naming it.
+- [read] The PR's body says the policy is given by whoever opens the period and signed `by` them, and that this does not make it the auditor's choice when `by` is the lane.
+
+**Does a marked D1 reach a commit the gate can be pinned at before `main` moves? Yes, on `checked`, after one drive sync.**
+- [read, `pin.sh` 33 to 44] The pin takes a commit on `origin/main`'s first-parent history, else on `origin/next`'s.
+- [run, `git rev-list --first-parent`, fetched 04:38Z] `next` is built on `checked`: `checked`'s tip `00d07520b3` is on `next`'s first-parent history, as are all 36 landings between `main` and it.
+- [read, `drive.toml` `lowrisk_excludes`, `queue.lowrisk`] D1 changes only `benchmarks/live_challenger/`, which no exclude names, so it lands on `checked` on its mark alone.
+- **Infra pins the `Queue: #8531 ...` commit on `checked`** (or a later `checked` commit), through `pin.sh`'s `next` branch. Not my branch's head, which is on neither history and is refused. Not a `next` commit above `checked`: each sync rebuilds `next` there, so it can leave the history a verifier reads.
+- **What must happen first: my mark, then one drive sync.** [run] `checked` last moved Mon 15:20Z and `next` Mon 15:25Z, and `research queue status` (04:39Z) shows 119 PRs "admitted: the next sync merges it onto `next`". If drive is not syncing, a mark gives no pinnable commit. I could not see why it is still; that is ci's or top's to say, and it is the one thing that can make D1 miss vllm's freeze with the mark on time.
+- [run, `git diff origin/main origin/checked`] **A pin there takes more than D1.** Under the paths the pin archives, `checked` differs from `main` in 48 files, 7 of them in `verity/core/service/spot`, whose Lean verifier the pin builds on the gate's host, and 8 in `verity/core/service/flock`. None is in `benchmarks/live_challenger/`, `pin.sh` or core's `spot/challenger.py`. So the rehearsal would run against a gate whose Lean verifier is `checked`'s, which `main`'s full check has not passed. vllm should know before it asks for the repin.
+
+**Runs.** `r20261110-043528-bb10`: the pre-mark suites, in line. `r20261110-043533-e3ef`: a one-off, not committed, of the Lean challenger difftest with its generated period-opens carrying the four keys and 39-digit naturals, in line behind it, up to 180 min once it starts. Two earlier runs (`r20261110-042209-15db`, `r20261110-042607-644f`) I cancelled in line when the head moved; neither started.
+
+**Next.** vllm's two questions (the wire of a `main` gate against the remote client; whether `registration` is the digest of its D0) by Tue 16:00Z. D1b's date and D2's confirmation by Tue 20:00Z.
+
+**Could not verify.** Why drive has not synced. The pin the gate runs now, at source. That Lean's ledger check accepts the new keys, until `e3ef` runs: so far only by reading (unknown period-open keys ignored, integers of any size and `/` in a string round-trip). PRF-487 carries no label naming a live goal (`research queue open` warned); the label is yours to set.
