@@ -79,7 +79,7 @@ nothing else but Lean core and the core interface (`core_protocol`).
 - `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`
   (`NciCheck.Protocol`), the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
+  each other and to the Python reference `lean/scripts/nci_reference.py`, run by the `test_nci_*.py` of `../../../certifier/verifier/network/tests/`;
   `../../../certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
