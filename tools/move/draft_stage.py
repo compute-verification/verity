@@ -10,7 +10,8 @@ For each map, in order, on the commit the one before left:
 1. `layout.py --map MAP --dry-run --report-splits --report FILE`, timed; a refusal skips the map;
 2. the references to a split directory its dry run names are written to the map's `[split]` and committed (not a move);
 3. `stage.py`'s own `Stage.move`: the starting commit's `layout.py`, the commit, `move_check.py`, the second run, each script
-   call timed. A refusal after the commit keeps the commit, recorded as not certified, so that the next map still runs.
+   call timed. With `--token-extras`, `move_check.py` is given each `[tokens]` row of the map as `--map OLD=NEW` (the path
+   and, under `verity/`, the dotted name): a reference to a directory the map splits is otherwise no part of a pure move. A refusal after the commit keeps the commit, recorded as not certified, so that the next map still runs.
 
 `OUT/results.json` is rewritten after every map; at the end `OUT/cert.json` holds the certified moves' reports and
 `OUT/move.bundle` the branch over the starting commit.
@@ -23,6 +24,7 @@ import json
 import subprocess
 import sys
 import time
+import tomllib
 import traceback
 from pathlib import Path
 
@@ -51,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--branch", required=True)
     ap.add_argument("--no-lock", action="store_true")
+    ap.add_argument("--token-extras", action="store_true")
     a = ap.parse_args(argv)
     repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel"))
     start = git(repo, "rev-parse", "HEAD")
@@ -115,6 +118,13 @@ def main(argv: list[str] | None = None) -> int:
                     parent = git(s.wt, "rev-parse", "HEAD")
                     rec["split_commit"] = parent
                 first = len(calls)
+                s.extra = []
+                if a.token_extras:
+                    for o, n in tomllib.loads((s.wt / m).read_text()).get("tokens", {}).items():
+                        s.extra.append(f"--map={o}={n}")
+                        if o.startswith("verity/") and n.startswith("verity/"):
+                            s.extra.append(f"--map={o.replace('/', '.')}={n.replace('/', '.')}")
+                    rec["extras"] = len(s.extra)
                 try:
                     mv = s.move(m, parent)
                     rec.update(status="certified", commit=mv["commit"], summary=mv["summary"])
