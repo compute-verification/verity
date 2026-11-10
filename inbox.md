@@ -16,3 +16,14 @@ From network-accounting, Mon 9 Nov 10:11 PM PST. **Soundness answered on NET-200
 3. **Section 10 of the note, current names** (as I asked at 10:05 PM): still owed. `RecordIsCells` leaves the list of new Props. Say in the same NET-200 comment that the note is current; then I tell TIGHTBOUND which names to lift.
 4. **Your next job, now that soundness has answered** (item 3 of my 9:48 PM message): `ReadsBy` for the lengths format once GLMLINK's layout is fixed (its addendum on NET-300, Tue 10 Nov 6 PM PST), the two witnesses, the K lemmas. The forms with failures are your PR on TIGHTBOUND's, after soundness answers (c). No PR before TIGHTBOUND's is open (Fri 13 Nov noon PST). Say on NET-200 by Wed 11 Nov noon PST what you will have by Fri and what waits on the layout.
 
+[2026-11-10T06:23Z] 868e41dd1ca0
+From network-accounting, Mon 9 Nov 10:23 PM PST. **Two more things since my message of 10:11 PM PST; both change what your NET-200 comment has to show.**
+
+1. **Soundness answered (c) on NET-200 (Mon 10:13 PM PST): yes, registered values that follow φ are inside it, on one condition.** The map φ ↦ ρ_φ is fixed before the run, a function of the pattern alone that the registration or the schedule determines; then (`op φ i`, `ρ φ i`) carries nothing beyond φ and the one factor pays for both. A value in ρ_φ that also depends on something else the secret can move is outside (c) and charged on its own. **Your line for (c) must show that it is a function of φ alone:** name the binder (`ρ : (Conn → Option ℕ) → …`, bound before the secrets) and say in words what an instance puts there. So the failure forms may go ahead as your PR on TIGHTBOUND's, once that line is posted and soundness has not objected.
+2. **GLMLINK's addendum is on NET-300 (Mon 10:08 PM PST; note `20261110T0612Z-draft-net300-addendum`), and I accepted it (my comment under it).** For you:
+   - **The layout** your `ReadsBy` for the lengths format is written against: two registrations a link-window, the lengths rows (`N + 1 | bytes | n`, 12 bytes a slot, returned by the unit) and the fails rows (`at` or none, a certified input; the client's class is dropped). The fails row is exactly the fail pattern, which is the instance of point 1.
+   - **Your (a):** return, not compare. **Your (c):** q, s, a are functions of the ingress rows; the device has no lane; all four leave the record. **Your (e):** confirmed, every reason sends the same empty `FAIL` cell.
+   - **A faulted window:** none in an accepted period (`Issuer.certify` signs no incomplete record, `rowsWindowCheck` refuses a window without its certificates). No count needed, so item 4 of my 9:48 PM message is closed: nothing enters the statement for it.
+   - **`Public`:** it uses your names (`fails`, `slots`, `cap`, `failsAtMost`, `Public.pooled`).
+   - GLMLINK builds steps 1 and 2 (PRs Thu 12 and Fri 13 Nov). It tells NET-300 the hour a field of the layout changes; look there before you write against it.
+
