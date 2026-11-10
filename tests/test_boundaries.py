@@ -132,16 +132,10 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
-#: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
-#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
-#: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("flock/agreement", "flock/pod", "flock/prover", "flock/tool.py", "difftest",
-            "protocols/pous/verifier/check", "configuration/config", "hardware/machine_model", "composite/datacenter",
-            "protocols/inference_only/rho", "protocols/inference_only/nci")
-#: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
-NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
+#: Directories of ``verity`` that must stay stdlib-only, the scalar references, and within them what may use numpy.
+NUMPY_FREE = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
+              "verity/claims", "verity/hardware")
+NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
 #: (globs from ``verity/``), each with why.
@@ -290,8 +284,8 @@ TEST_ONLY = {
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
-#: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
-#: import, an attribute or a string), each with the module and why a verifier must not read it.
+#: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
+#: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
 PROVER_ONLY = {
     "trace_cache": ("verity/definitions/ops/boolean/trace_cache.py",
                     "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
@@ -302,17 +296,15 @@ MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
-def _separate(rel: Path) -> bool:
-    return any(rel.as_posix() == s or rel.as_posix().startswith(s + "/") for s in SEPARATE)
-
-
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/flock/verifier/.lake``) or a ``SEPARATE`` tree, and no circuit-check
-    sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
+    directory (a Lean package builds in its ``.lake``) or a distribution of its own (the listing's ``distribution``), and
+    no circuit-check sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no
+    module imports)."""
+    listing = _listing()
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
-                  and not _separate(p.relative_to(SRC)) and not p.name.endswith(".circuit-check.py"))
+                  and _distribution(p.relative_to(ROOT).as_posix(), listing) is None and not p.name.endswith(SIDECAR))
 
 
 def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",),
@@ -387,13 +379,14 @@ def _run_time_reads(text: str) -> list[tuple[int, str]]:
 
 
 def test_verity_reads_no_other_distribution_at_run_time() -> None:
-    """No Python file under ``verity/`` (tests, Lean scripts and sidecars included; a ``SEPARATE`` tree is a distribution of its own)
-    reads another distribution's package data or names one of its modules for an import call, so ``verity`` alone evaluates its
-    Definitions and no suite of it takes another distribution as an input."""
-    offenders = []
+    """No Python file under ``verity/`` (tests, Lean scripts and sidecars included; a directory of the listing's
+    ``distribution`` is a distribution of its own) reads another distribution's package data or names one of its modules
+    for an import call, so ``verity`` alone evaluates its Definitions and no suite of it takes another distribution as an
+    input."""
+    offenders, listing = [], _listing()
     for path in sorted(SRC.rglob("*.py")):
-        rel = path.relative_to(SRC)
-        if {".lake", "__pycache__"} & set(rel.parts) or _separate(rel):
+        rel = path.relative_to(ROOT).as_posix()
+        if {".lake", "__pycache__"} & set(path.parts) or _distribution(rel, listing) is not None:
             continue
         offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
     assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
@@ -436,9 +429,11 @@ def test_every_source_directory_is_a_package() -> None:
 
 @pytest.mark.parametrize("subtree", NUMPY_FREE)
 def test_scalar_references_are_stdlib_only(subtree: str) -> None:
-    offenders = [f"{path.relative_to(SRC)}:{line}: {name}"
-                 for path in _sources(SRC / subtree)
-                 if not any(path.relative_to(SRC).as_posix().startswith(u) for u in NUMPY_USERS)
+    files = _sources(ROOT / subtree)
+    assert files, f"{subtree} holds no Python of verity's own: remove it from NUMPY_FREE"
+    offenders = [f"{path.relative_to(ROOT)}:{line}: {name}"
+                 for path in files
+                 if not any(path.relative_to(ROOT).as_posix().startswith(u) for u in NUMPY_USERS)
                  for name, line, _ in _imports(path)
                  if name.split(".")[0] == "numpy"]
     assert not offenders, "\n".join(offenders)
@@ -951,16 +946,23 @@ def test_a_use_past_a_guard_is_found() -> None:
     assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
-def test_core_never_names_a_prover_only_module() -> None:
-    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+def test_only_its_own_package_names_a_prover_only_module() -> None:
+    """No Python file under ``verity/`` (tests and distributions of its own included) names a module of ``PROVER_ONLY``
+    from outside that module's place in the listing (``_place``: its package, with its tests), and each still exists.  So
+    no verifier and no device names one, and neither does anything they load."""
+    steps = _listing().steps
+    homes = {name: _place(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
+    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
     offenders = []
-    for path in sorted((SRC / "core").rglob("*.py")):
-        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+    for path in sorted(SRC.rglob("*.py")):
+        if {".lake", "__pycache__"} & set(path.parts) or not word.search(text := path.read_text(encoding="utf-8")):
             continue
-        hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
-        hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line in hits]
-    assert not offenders, "a verifier reads no prover-only module (PROVER_ONLY):\n" + "\n".join(offenders)
+        rel = path.relative_to(ROOT).as_posix()
+        hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
+        hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
+        offenders += [f"{rel}:{line}: {name}" for name, line in hits if _place(rel, steps) != homes[name]]
+    assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
+                           "one:\n" + "\n".join(offenders))
     missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
     assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
