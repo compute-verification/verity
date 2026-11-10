@@ -51,6 +51,19 @@ def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
         "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
 
 
+def test_a_measurement_cites_the_run_that_measured_it() -> None:
+    """A measured number nobody can check: an entry marked `measurement` whose source names a probe program, a census or
+    a document and no run's record, so a reader of the card cannot reach the output that holds its figure."""
+    measured = {f"{sku}: {key}": entry["source"] for sku in skus() for key, entry in entries(load(sku)).items()
+                if entry["mark"] == "measurement"}
+    assert measured, "no card marks a number `measurement`, so this test checks nothing"
+    uncited = sorted(at for at, source in measured.items() if not re.search(r"\bart:[0-9a-f]{12}", source))
+    assert not uncited, (
+        f"marked `measurement` with no run cited: {uncited}; add the record of the run that measured each to its "
+        "source as art:<12 hex> (`research data show RUN`: outputs.run_record), or mark it `placeholder` until a run "
+        "measures it")
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
     """A reader can take any number from any card of a kind by the same key."""
