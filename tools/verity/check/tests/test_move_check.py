@@ -1881,14 +1881,29 @@ def test_a_relative_path_is_based_again_to_where_its_file_went(tmp_path):
     assert r["rules"] == {"relative": ["benchmarks/pouw/served/legs.sh", *list(REBASED)[:3]]}
 
 
+def test_a_path_from_the_packages_root_may_be_based_where_the_directorys_row_points(tmp_path):
+    """The package's `pyproject.toml` went to `verity/circuits/prover/`, and its directory's `[tokens]` row says
+    `verity/circuits/`: the mover writes a path from the package's root from there (`pod/90-unit.sh` is still that, and
+    `tests/fixtures/unit.json` is `prover/tests/fixtures/unit.json`). The certificate takes the line with every such path
+    based so, under `relative` and `tokens`, and refuses one that bases one path at each."""
+    lean = "verity/circuits/prover/tests/lean/Unit.lean"
+    row = REBASE["verity/ml/circuits/tests/lean/Unit.lean"].replace("`tests/", "`prover/tests/")
+    r = _rebase(tmp_path / "row", {}, **{lean: row})
+    assert r["certified"], r["refusals"]
+    assert lean in r["rules"]["relative"] and r["rules"]["tokens"] == [lean]
+    r = _rebase(tmp_path / "mixed", {}, **{lean: row.replace("`pod/", "`../pod/")})
+    assert [f["path"] for f in r["refusals"]] == [lean] and "tokens" not in r["rules"]
+
+
 def test_a_relative_path_based_anywhere_else_is_refused(tmp_path):
-    """The based path is the one the move implies: one that names another place is refused; so is one written from where
-    the directory's `[tokens]` row points when the package's `pyproject.toml` went elsewhere (`tests/fixtures/unit.json` is
-    still that from `verity/circuits/prover/`); and a plain path the root also has is a path from the root."""
+    """The based path is the one the move implies: one that names another place is refused; so is one written from a
+    directory that is neither where the package's `pyproject.toml` went nor where its directory's `[tokens]` row points
+    (`circuits/prover/tests/fixtures/unit.json`, from `verity/`); and a plain path the root also has is a path from the
+    root."""
     readme, lean = "verity/circuits/prover/README.md", "verity/circuits/prover/tests/lean/Unit.lean"
     for case, extra, path, text in (
             ("elsewhere", {}, readme, REBASED[readme].replace("definitions/ops/", "definitions/")),
-            ("the row's directory", {}, lean, REBASED[lean].replace("`tests/", "`prover/tests/")),
+            ("a third directory", {}, lean, REBASED[lean].replace("`tests/", "`circuits/prover/tests/")),
             ("the root's", {"ops/README.md": "# the root's\n"}, readme, REBASED[readme])):
         (tmp_path / case).mkdir()
         r = _rebase(tmp_path / case, extra, **{path: text})

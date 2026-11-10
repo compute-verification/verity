@@ -83,7 +83,8 @@ Every path git sees changed must be one of:
   (`"old file: old directory" = { to = "..." }`), that file's references to it go there instead, borne out the same
   way. And a path the line names from its file's directory, or else from its package's
   root (the directory of the nearest `pyproject.toml` above the file), may be based again: written from where that
-  directory went (the file's new directory, the directory the `pyproject.toml` moved to) to where the path went
+  directory went (the file's new directory; the directory the `pyproject.toml` moved to, or where the package
+  directory's `[tokens]` row sends a reference to it, one of the two for the whole line) to where the path went
   (`ops/README.md` to `../definitions/ops/README.md`); a plain path the root also has is a path from the root. `--json`
   lists under `rules` the paths each of these took (`tokens`, `split`, `prefixes`, `root_prefixes`, `drop`, `relative`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
@@ -1083,8 +1084,9 @@ class Rows:
 
     A relative path based again (`relative`): a path the line names from its file's directory, else from its package's
     root (the nearest `pyproject.toml` above the file at BASE), written from where that directory went (the file's new
-    directory; where the package's `pyproject.toml` moved) to where the path went. A plain path the root also has is a
-    path from the root, and a directory the range splits with no row went nowhere one path names."""
+    directory; where the package's `pyproject.toml` moved, or, every such path of the line, where the package
+    directory's `[tokens]` row sends a reference to it, as the mover bases one) to where the path went. A plain path the
+    root also has is a path from the root, and a directory the range splits with no row went nowhere one path names."""
 
     def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree, head: Tree):
         self.pmap, self.base, self.head, self.tokens, self._went = pmap, base, head, {}, {}
@@ -1161,10 +1163,11 @@ class Rows:
             self._went[p] = (q, row) if q is not None and (q in self.head.set or self.head.has_dir(q)) else (None, False)
         return self._went[p]
 
-    def relative(self, text: str, old: str, new: str, resolved: bool = False) -> list[tuple]:
+    def relative(self, text: str, old: str, new: str, resolved: bool = False, row: bool = False) -> list[tuple]:
         """Each path ``text`` (a line of the file at ``old``, now at ``new``) names from the file's directory or its
         package's root, where based again it is written otherwise: as `references` gives one, what it becomes also as
-        `resolve_relative` reads it in ``resolved`` text."""
+        `resolve_relative` reads it in ``resolved`` text. ``row``: the package's root is where its directory's `[tokens]`
+        row sends a reference to it, where it has one."""
         def named(p: str) -> bool:
             return p != "." and not p.startswith("..") and (p in self.base.set or self.base.has_dir(p))
         out, here = [], posixpath.dirname(old)
@@ -1175,7 +1178,7 @@ class Rows:
                 t = t[:-1]
             if not t or not t.startswith(".") and named(t):
                 continue
-            at = None
+            at, by_row = None, False
             if g == "q" and named(p := posixpath.normpath(posixpath.join(here, t))):
                 at = posixpath.dirname(new)
             else:
@@ -1183,8 +1186,9 @@ class Rows:
                 while d and f"{d}/pyproject.toml" not in self.base.set:
                     d = posixpath.dirname(d)
                 if d and named(p := posixpath.normpath(posixpath.join(d, t))):
-                    at = posixpath.dirname(map_path(f"{d}/pyproject.toml", self.pmap))
-            q, row = self.went(p) if at is not None else (None, False)
+                    at, by_row = (self.tokens[d], True) if row and d in self.tokens else \
+                        (posixpath.dirname(map_path(f"{d}/pyproject.toml", self.pmap)), False)
+            q, sent = self.went(p) if at is not None else (None, False)
             if q is None:
                 continue
             to = posixpath.relpath(q, at or ".")
@@ -1192,7 +1196,7 @@ class Rows:
                 to = "./" + to
             if to != t:
                 rooted = (f"<root>/{q}",) if resolved and to.startswith(".") else ()
-                out.append((m.start(g), m.start(g) + len(t), (to, *rooted), ("relative", *(("tokens",) if row else ())), False))
+                out.append((m.start(g), m.start(g) + len(t), (to, *rooted), ("relative", *(("tokens",) if sent or by_row else ())), False))
         return out
 
     def reads(self, old: str, new: str, pair=None, resolved: bool = False, at: tuple[str, str] | None = None) -> set[str]:
@@ -1201,8 +1205,9 @@ class Rows:
         not these rows' to say. ``at``: the line's file at BASE and at HEAD, for a relative path based again, which is
         read only where the line is not explained without it."""
         refs = self.references(old, resolved, at and at[0]) if self.pmap or self.tokens or self.parts else []
-        more = [r for r in self.relative(old, *at, resolved) if not any(r[0] < e and s < r[1] for s, e, *_ in refs)] if at else []
-        for each in (refs, sorted(refs + more))[:2 if more else 1]:
+        more = [[r for r in self.relative(old, *at, resolved, row) if not any(r[0] < e and s < r[1] for s, e, *_ in refs)]
+                for row in (False, True)] if at else []
+        for each in (refs, *(sorted(refs + m) for i, m in enumerate(more) if m and m not in more[:i])):
             took = either(old, new, each)
             if took is None and pair and each and pair(rewritten(old, each), new):
                 took = each
