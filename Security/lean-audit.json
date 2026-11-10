@@ -5149,8 +5149,8 @@
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a circuit file the kernel parses (Desc.parseStmt) with its public file and draw setup (DrawSetupZHJP), which no witness builds yet: ServedFilesParseV5's files are a 56 MB circuit the kernel can't run (PRF-501, Tue 10 Nov)",
-   "unfolded_hash": "c883ae1d57bec13573fe9576451fc13958ae4c8ec6603d37df683eee2be123f9"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier (PRF-501, open to Fri 20 Nov)",
+   "unfolded_hash": "be09fddb90ee4dba3399a3e320dce315bf85a755a558e76b96fa25f10b781465"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
