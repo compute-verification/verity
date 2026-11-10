@@ -94,7 +94,8 @@ class Sent:
     `poll` reads what came since the last call, and calling it on an engine request gives its count, 0 before any."""
 
     def __init__(self, pull: Callable[[], list[dict[str, Any]]]) -> None:
-        self.pull, self.sent = pull, {}
+        self.pull = pull
+        self.sent: dict[str, int] = {}
 
     def poll(self) -> None:
         for rec in self.pull():
@@ -125,7 +126,7 @@ class SentFeed:
         key = next((v.decode("latin-1") for k, v in scope.get("headers") or () if k.lower() == b"x-request-id"), None)
         if not key:
             return await self.app(scope, receive, send)
-        sent, tail = 0, b""
+        sent, tail, fd = 0, b"", self.fd
 
         async def counted(message: dict[str, Any]) -> None:
             nonlocal sent, tail
@@ -139,7 +140,7 @@ class SentFeed:
             n = sum(len(m.group(1).split(b",")) for m in _TOKEN_IDS.finditer(events) if m.group(1).strip())
             if n:
                 sent += n
-                os.write(self.fd, (json.dumps({"key": key, "sent": sent}, separators=(",", ":")) + "\n").encode())
+                os.write(fd, (json.dumps({"key": key, "sent": sent}, separators=(",", ":")) + "\n").encode())
         return await self.app(scope, receive, counted)
 
 
