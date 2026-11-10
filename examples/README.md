@@ -91,8 +91,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
   Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
   on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
-  subprotocols), the memory wipe (onsite's) and the bandwidth audit over PoUS's store (neither composite's yet), exist
-  here as a skeleton on fixture coins, not as runs, and nothing claims them.
+  subprotocols) and the memory wipe (onsite's) exist here as a skeleton on fixture coins, not as runs, and nothing
+  claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`

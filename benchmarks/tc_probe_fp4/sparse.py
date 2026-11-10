@@ -38,12 +38,22 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import probe as P
-from verity.ml.circuits.silicon import models as M
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED
+
+from verity.ml.circuits.silicon import models as M
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Iterator, Sequence
+    from multiprocessing.pool import Pool
 
 KIND = {"sp_nvf4": 0, "sp_mxf4": 1}
 PTX = {
@@ -110,7 +120,8 @@ class TwoHalves:
     name: str
     dense: M.BlockScaledAlignAdd
 
-    def step_scaled(self, c_word: int, a_codes, b_codes, a_scales, b_scales) -> int:
+    def step_scaled(self, c_word: int, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int],
+                    b_scales: Sequence[int]) -> int:
         h, s = K_LOGICAL // 2, len(a_scales) // 2
         c_word = self.dense.step_scaled(c_word, a_codes[:h], b_codes[:h], a_scales[:s], b_scales[:s])
         return self.dense.step_scaled(c_word, a_codes[h:], b_codes[h:], a_scales[s:], b_scales[s:])
@@ -126,7 +137,8 @@ def candidates(instr: str) -> dict:
     return out
 
 
-def model_words(model, A, B, SA, SB, C) -> tuple[np.ndarray, np.ndarray]:
+def model_words(model: M.BlockScaledAlignAdd | TwoHalves, A: np.ndarray, B: np.ndarray, SA: np.ndarray, SB: np.ndarray,
+                C: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """One model's word per element on logical operands: A (n,16,128), B (n,8,128) codes, SA (n,16,s) / SB (n,8,s) model scale
     bytes, C (n,16,8) -> (D, domain-error mask)."""
     n = A.shape[0]
@@ -150,7 +162,8 @@ def _init(instr: str) -> None:
     _CTX["models"] = candidates(instr)
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     A, B, SA, SB, C = args
     outs, errs = {}, {}
     for name, model in _CTX["models"].items():
@@ -158,7 +171,8 @@ def _eval_chunk(args):
     return outs, errs
 
 
-def evaluate(pool, instr, As, B, META, SFA, SFB, C, procs: int):
+def evaluate(pool: Pool | None, instr: str, As: np.ndarray, B: np.ndarray, META: np.ndarray, SFA: np.ndarray,
+             SFB: np.ndarray, C: np.ndarray, procs: int) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """Every candidate's words for a family (the pool's workers hold the candidates; ``pool`` None evaluates in this process)."""
     A, SA, SB = expand(As, META), model_scales(SFA), model_scales(SFB)
     if pool is None:
@@ -176,7 +190,7 @@ def evaluate(pool, instr, As, B, META, SFA, SFB, C, procs: int):
 class SparseDevice:
     tcgen05 = False
 
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = ctypes.CDLL(str(so))
         V = ctypes.c_void_p
         fn = self.lib.mma_sparse_tiles
@@ -192,7 +206,8 @@ class SparseDevice:
     identity = P.Probe.identity
     clocks = P.Probe.clocks
 
-    def tiles(self, instr: str, As, B, META, SFA, SFB, C) -> np.ndarray:
+    def tiles(self, instr: str, As: np.ndarray, B: np.ndarray, META: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+              C: np.ndarray) -> np.ndarray:
         """As (n,16,64) stored codes, B (n,8,128) codes (n-major, k contiguous), META (n,16,16) nibbles, SFA (n,16,NB), SFB (n,8,NB),
         C (n,16,8) FP32 words -> D (n,16,8)."""
         n, nb = As.shape[0], NBLK[instr]
@@ -217,7 +232,7 @@ class FakeSparse:
 
     tcgen05 = False
 
-    def __init__(self, instr: str, model_name: str):
+    def __init__(self, instr: str, model_name: str) -> None:
         models = candidates(instr)
         if model_name not in models:
             raise SystemExit(f"--fake-silicon: {model_name!r} is not a candidate of {instr} ({sorted(models)})")
@@ -227,10 +242,11 @@ class FakeSparse:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
                 "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
-    def tiles(self, instr: str, As, B, META, SFA, SFB, C) -> np.ndarray:
+    def tiles(self, instr: str, As: np.ndarray, B: np.ndarray, META: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+              C: np.ndarray) -> np.ndarray:
         D, err = model_words(self.model, expand(np.asarray(As), META), np.asarray(B), model_scales(SFA), model_scales(SFB),
                              np.asarray(C, np.uint32))
         D[err] = 0x7FFFFFFF
@@ -248,7 +264,8 @@ META_READINGS = {
 }
 
 
-def exact_reference(a, b, meta, pa, pb, c) -> np.ndarray:
+def exact_reference(a: np.ndarray, b: np.ndarray, meta: np.ndarray, pa: np.ndarray, pb: np.ndarray,
+                    c: np.ndarray) -> np.ndarray:
     """C + A.B on exact values: a (n,16,64) stored values, b (n,8,128), meta (n,16,16), pa (n,16,NB) / pb (n,8,NB) scale values."""
     n, nb = a.shape[0], pa.shape[2]
     al = expand(a.astype(np.float64), meta).reshape(n, 16, nb, K_LOGICAL // nb)
@@ -256,7 +273,7 @@ def exact_reference(a, b, meta, pa, pb, c) -> np.ndarray:
     return P.f32_bits(c + np.einsum("nijg,nig,njg->nij", prod, pa, pb))
 
 
-def layout_check(dev, instr: str, debug_dir: Path | None) -> str:
+def layout_check(dev: SparseDevice | FakeSparse, instr: str, debug_dir: Path | None) -> str:
     rng = np.random.default_rng(1)
     n, nb = 64, NBLK[instr]
     vals = np.array([0, 1, 2, 3, 4, 6, -1, -2, -3, -4, -6])
@@ -286,7 +303,8 @@ def layout_check(dev, instr: str, debug_dir: Path | None) -> str:
 # --- families --------------------------------------------------------------------------------------------------------------------
 
 
-def families(rng, n_random: int, instr: str):
+def families(rng: np.random.Generator, n_random: int,
+             instr: str) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]]:
     """Yield (name, As (n,16,64), B (n,8,128), META (n,16,16), SFA, SFB, C, twins).  ``twins`` names operand sets
     (A, Bt, SFA, SFB, C, steps) for the DENSE instruction (``DENSE[instr]``) whose hardware words the sparse words are compared
     with, word for word.
@@ -302,7 +320,7 @@ def families(rng, n_random: int, instr: str):
     sk = SCALE_KIND[instr]
     nb = NBLK[instr]
 
-    def shared_meta(n):
+    def shared_meta(n: int) -> np.ndarray:
         return np.repeat(META_VALID[rng.integers(0, len(META_VALID), (n, 1, CHUNKS))], 16, axis=1)
 
     for name, A, Bt, SFA, SFB, C in P.families_nvf4(rng, n_random, sk):
@@ -312,12 +330,12 @@ def families(rng, n_random: int, instr: str):
         np.put_along_axis(B, np.broadcast_to(logical_columns(meta[:, :1, :]), (n, 8, K_STORED)), Bt, axis=-1)
         yield name, A, B, meta, SFA, SFB, C, {"dense_on_compressed": (A, Bt, SFA, SFB, C, 1)}
 
-    def scales(shape):
+    def scales(shape: int | tuple[int, ...]) -> np.ndarray:
         if sk == "ue4m3":
             return P.UE4M3_VALID[rng.integers(0, len(P.UE4M3_VALID), shape)]
         return rng.integers(107, 148, shape).astype(np.uint8)
 
-    def acc(n, lo, hi):
+    def acc(n: int, lo: int, hi: int) -> np.ndarray:
         return P.f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
     for name, atoms in (("noise_atom_single", 1), ("noise_atom_pair", 2)):
@@ -342,7 +360,7 @@ def families(rng, n_random: int, instr: str):
             twins["dense_two_atoms"] = (A, B, sa, sb, C, 2)
         yield name, As, B, meta, SFA, SFB, C, twins
 
-    def per_row(n):
+    def per_row(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         return (rng.integers(0, 16, (n, 16, K_STORED)).astype(np.uint8), rng.integers(0, 16, (n, 8, K_LOGICAL)).astype(np.uint8),
                 META_VALID[rng.integers(0, len(META_VALID), (n, 16, CHUNKS))], scales((n, 16, nb)), scales((n, 8, nb)))
 
@@ -366,13 +384,14 @@ def families(rng, n_random: int, instr: str):
 # --- driver ----------------------------------------------------------------------------------------------------------------------
 
 
-def _hexrec(acc, a, meta, b, d, sfa, sfb) -> dict:
+def _hexrec(acc: int | np.integer, a: np.ndarray, meta: np.ndarray, b: np.ndarray, d: int | np.integer, sfa: np.ndarray,
+            sfb: np.ndarray) -> dict:
     return {"acc": f"{int(acc):08x}", "a_stored": "".join(f"{int(x):x}" for x in a), "meta": "".join(f"{int(x):x}" for x in meta),
             "b": "".join(f"{int(x):x}" for x in b), "sfa": "".join(f"{int(x):02x}" for x in sfa),
             "sfb": "".join(f"{int(x):02x}" for x in sfb), "d": f"{int(d):08x}"}
 
 
-def main(args) -> int:
+def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
