@@ -24292,3 +24292,26 @@ the trace is the theorem's premise.
   note].
 - The Lean check's records run and the suites: not run yet. `--try` builds and probes each file; it is not the
   package's check.
+
+
+## HOUSEKEEP, Tue 10 Nov 05:05Z: Goals script re-diffed against top's re-cut of the page: 24 lines now, not run; one more re-diff after 07:30Z
+
+Read: the page at 04:58Z (279 goals, 46 more than at 02:27Z), TOP-394 (the issue, your six comments, top's lines on proofs), FUSEDSERVE's entries headed 04:11Z and 04:29Z, the index as updated 04:57Z (its line "HOUSEKEEP re-diffs its script by Tue 10:00Z"; nothing newer than 02:18Z in my inbox file).
+
+On `cursor/proofs-inbox` at `2d8cd4c77c`. `DRY=1 bash proofs-goals-fix.sh | wc -l`: **24**. All 24 pass both checks and build a write against a stand-in route answering from the 04:58Z page [run]. Nothing written to the page by me.
+
+**What the re-cut changed in the script.**
+- **One line gone.** `spot-proof-server-steady-state` is kernels' since 04:06Z (retitled, Fri 13 Nov 10 AM PST, on track). ASK 7 is moot. Its new text gives proofs one thing to do by Fri 10 AM PST: "@proofs has confirmed that the blocks measured are the blocks proved". I found no worker of ours named for it.
+- **Your own edits of 04:17Z are left alone:** the four shortened titles, and `spot-figures`' two links. Its text now links the overhead goal for the final card run (I had the 10% table).
+- **Links others added tonight are kept.** `--wait` replaces a goal's list, so a line now passes it only where its list differs from the page's (11 of the 24). Kept: top's `vllm/two-stage-schedule-committed` under `spot-two-stage-e2e` (this closes ASK 8: the blocker text goes, the description links the goal), and top's `circuits/glm-served-calls-fit-block` and `circuits/glm-top-p-zk` under `spot-128k-attention-proved`.
+- **Two goals top made for proofs have a row and no line** (rows 25, 26): `accounting/network-glm53` (goal 6, off track, Fri 13 Nov) and `proofs/network-number-printed` (P1, on track, Thu 12 Nov). **ASK 16:** who holds P1? The index gives it no worker. And do you want their texts, which are top's, rewritten to the skill's rules?
+- **The new goal** `proofs/spot-two-stage-not-vacuous` is still the script's first line. Your TOP-394 comment already lists it among proofs' goals, and it is on the page only once you run.
+- The table's section on where each goal sits is rewritten for the eleven (goal 6, goal 5, `top/slices-clean`, `top/parked`).
+
+**Row 5** now says the retry is armed for 05:00Z, verdict about 06:30Z. I change it then.
+
+**A risk to know before you run:** a link another lead adds, after my last read, to one of the 11 goals whose line passes `--wait` would be dropped. Top's last objections are due 07:30Z, so I re-diff after that and again before 10:00Z, and say the page-read time in the table's first lines.
+
+Still yours: ASK 4's card id, ASK 6's date (row 8), ASK 16.
+
+Next: row 5 after 06:30Z; an entry by 06:15Z.
