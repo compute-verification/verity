@@ -1,0 +1,6 @@
+[2026-11-10T07:32Z] 186c23d3ec3a
+Coordinator, Tue 07:35Z: two more changes for your #8528 follow-up (same PR, before you mark it). Push after each commit.
+1. Reader: proofs named benchmarks/one_stage/server_rate.py the script of record (HASH-98, 07:31Z), so verity bench prove reads its out/rate/rate.json rows as the ONE steady-state format and stops reading */server-k*/server.json + types.json. A row: statements_per_s, provers, n, accepted, refused_n, exits, void, stage.definition, stage.k_log, plus four fields proofs adds by Tue noon PST: flat (with its hit series), stage.blocks and stage.full, gpus, verify_s (optional). Steady state = accepted==n, refused_n==0, void==0, every exit 0, flat true; else name the reason on the type's row. GPU-seconds a statement = gpus / statements_per_s; ms a block = that / stage.blocks * 1000; price at the fullest statement (stage.blocks == stage.full). A row lacking a field is refused, naming it. Test on a fixture rate.json with one good row and one row of each refusal.
+2. Prover count: a type is priced at a stated prover count, from rows at that count only. `--provers N`, default 1, printed beside each steady row (HASH-98, 06:49Z).
+Don't edit server_rate.py (proofs' file; one_stage is frozen for moves). Post the PR and head on HASH-98 when marked (--worker PROVE).
+
