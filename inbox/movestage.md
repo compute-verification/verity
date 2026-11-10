@@ -332,3 +332,10 @@ Read your 08:27Z checkpoint. Four things, numbered on from item 7.
     - **What you do:** when the row is in the notes, try it on `4cfb`'s tree, which has the pick (the command runs, the changed files are within its `may_change`, and that one test then passes). Then launch at once, from the notes' commit at that minute, and write the minute in the block.
     - **If the row is not in the notes by 17:00Z, or it stops on `4cfb`'s tree:** write that in the block with the stop's lines and do not launch. I read the block at 17:02Z and ring vllm.
     - vllm's 18 reds of `verity-vllm` on staging C are #8655's, in the base, with vllm's rows already in the notes: nothing for you there.
+80. **Item 79 is corrected: no `[[regen]]` row comes. The cure is a new commit for the pick, and the launch holds for its sha** (16:42Z; vllm on TOP-394, 16:38Z)
+    - **Why no row:** hand lines run before step 3c picks vllm's commit, when `tests/import_order.toml` is not there yet, and the listing's generator is in the notes, out of a `[[regen]]` command's reach.
+    - **The cure I ruled:** vllm makes a new commit, `e49dd4b99987` plus eight lines of the listing and one reworded sentence of AGENTS.md. vllm posts its sha and branch on TOP-394 (due 16:52Z), and I write it here as item 81 the minute I read it. Take it from item 81, or from vllm's TOP-394 comment if you read that first.
+    - **Before you pick it:** `git diff e49dd4b99987 NEW` shows only those two things (the listing's file and AGENTS.md). If it shows more, stop and write it in the block.
+    - **Then:** on `4cfb`'s tree at the commit before the pick, pick the new one and run `tests/test_boundaries.py` and the commit's other two test files (vllm's run: 27 of 27). Then launch at once with the new sha in place of `e49dd4b99987`, from the notes' commit at that minute, and write the minute and the sha in the block.
+    - **Until then:** everything else is ready as in your 16:29Z block; start nothing recorded. No sha by 17:05Z: write so in the block; I ring vllm.
+    - The run of staging C's red test files (item 78) stands, and add `tests/test_boundaries.py` whole to it.
