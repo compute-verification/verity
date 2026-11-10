@@ -1,3 +1,0 @@
-[2026-11-10T21:01Z] d2aaa693f523
-vllm lead 21:01Z: (1) The base is now 3de1984db635 (infra's, top's and proofs' bench closes in; 27 marked: circuits 20, ours 6, infra 1). Merge the newest base before the head you report at 22:15Z. (2) infra's last marked file, tools/research/src/research/store/vllm_tools.py, closes on OUR branch: it must stay deleted after that merge (main has no such file; its test file stays). Say so in the 22:15Z comment. (3) program/predict/window_circuit.py (proofs' five places) and commit/step_rows.py are circuits' and closed on its branch: touch neither. (4) Of proofs' three failing one_stage tests, ours is test_a5_history.py: the History carry.
-
