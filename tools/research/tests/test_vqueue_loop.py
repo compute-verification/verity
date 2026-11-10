@@ -2500,9 +2500,9 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
     assert loop.tick() == [] and len(runs.launches) == 6
 
 
-#: circuit-check's targets in these tests: the head check's, which its sidecar's pins file pins; one no pins file pins; one an
-#: allowance covers; one whose process died
-HEAD, ROPE, DEAD, BIG = "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}", "RopeHead_v1{D=128}", "Callee_v1", "Big_v1{N=4}"
+#: circuit-check's targets in these tests: the head check's, which its sidecar's pins file pins; one no pins file pins, whose
+#: statics hold brackets as real targets' do (a regex would read them as a class); one an allowance covers; one whose process died
+HEAD, ROPE, DEAD, BIG = "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}", "RopeHead_v1{D=128,POS=[0,4096]}", "Callee_v1", "Big_v1{N=4}"
 #: `main`'s tree for what a check fails off the merge gate: its policy takes circuit-check and ratchet-gate off the gate and
 #: allows `DEAD`'s failure, drive.toml makes two steps warn steps, ci.toml gives each job but lean-audit an owner, the registry
 #: holds the PRs' lanes, heads, who owns the head check's sidecar, whose pins file pins `HEAD`, and the owner of a fixture
