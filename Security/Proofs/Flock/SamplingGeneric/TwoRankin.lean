@@ -36,7 +36,7 @@ replay blocks.
 * `admissibleTwo_rankin_served`: **`AdmissibleTwoRankinServed`**, at `w_ρ(U) = 2^{min(b(U), S_ρ)}`.
 * `bernoulli_Pa_le`: a Bernoulli first stage `bernoulli:NUM/DEN` on a statement in scope misses each set `T` of replay
   blocks with probability `(1 − NUM/DEN)^{|T|}`, so it meets the rates' hypothesis at `q_ρ = NUM/DEN ≤ 1`. The deployed
-  first stage meets it at `Q/N` and `1` (`Design.Two.subsetInputs_Pa_le`).
+  first stage meets it at `Q/N` (`Design.Two.subset_Pa_le`).
 -/
 
 @[expose] public section

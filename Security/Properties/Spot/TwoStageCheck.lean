@@ -11,8 +11,8 @@ Rankin's `θ`, `δ` and its replay blocks' classes. These properties say that nu
 `Claims.Sampling.CompiledTwo.Exfil` bounds the influence set by, at every deployment the point describes:
 
 * `FirstStageAt d q`: the registered first stage samples each replay block at a rate at least `q`: `bernoulli:NUM/DEN`
-  with `q ≤ NUM/DEN`, or the deployed uniform `Q`-subset of the population's `N` replay blocks with every input replay
-  block (`[subset Q, all]`) with `q N ≤ Q`;
+  with `q ≤ NUM/DEN`, or the deployed uniform `Q`-subset of the population's `N` replay blocks (`[subset Q]`, one class)
+  with `q N ≤ Q`;
 * `ClassesCover`: each replay block `ρ` is in a class `cls ρ` whose cells cover it (`Covers`), and class `i` holds at
   most its `count` replay blocks;
 * `RequestsCover`, the patterns' form: each request reads in one replay block, no two read one proof block, and at most
@@ -37,11 +37,11 @@ open Claims.Sampling
 open _root_.Spot.TwoStageCheck (Point Form checkTwoStage)
 
 /-- **The registered first stage samples each replay block at a rate at least `q`**: `bernoulli:NUM/DEN` with
-`q ≤ NUM/DEN`, or `[subset Q, all]` over the replay partition's two classes, the population `c` and the inputs, with
-`Q ≤ |c|` and `q |c| ≤ Q`. -/
+`q ≤ NUM/DEN`, or `[subset Q]` over the replay partition's one class, the population `c`, with `Q ≤ |c|` and
+`q |c| ≤ Q`. -/
 def FirstStageAt (d : Design.Two) (q : ℝ) : Prop :=
   (∃ num den : ℕ, d.replay.rules = [.bernoulli num den] ∧ q ≤ (num : ℝ) / den) ∨
-    ∃ (Q : ℕ) (c ic : List (List (List ℕ))), d.replay.rules = [.subset Q, .all] ∧ d.part.classes = [c, ic] ∧
+    ∃ (Q : ℕ) (c : List (List (List ℕ))), d.replay.rules = [.subset Q] ∧ d.part.classes = [c] ∧
       Q ≤ c.flatten.length ∧ q * c.flatten.length ≤ Q
 
 /-- **The point's classes cover the replay blocks**: replay block `ρ` is in class `cls ρ`, whose cells cover it, and

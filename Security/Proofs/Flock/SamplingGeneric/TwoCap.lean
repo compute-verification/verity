@@ -16,8 +16,8 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
   `P̄_a ≤ (1 − r₁·r₂)^{|wrongBlocks|}`.
 * `Claims.SecurityProofs.CapTwo`: the same at the two rates as the lock states them, `Claims.Guarantees.CapTwo`.
 * `Design.Two.card_wrongBlocks_lt`: so a footprint in `M̄_δ` marks fewer than every `K` with `(1 − r₁·r₂)^K ≤ δ`.
-* `Design.Two.card_wrongBlocks_lt_subsetInputs`: the same at the deployed first stage, a uniform `Q`-subset of the
-  population's `N` replay blocks and every input replay block (`Design.Two.subsetInputs_Pa_le`), at `r₁ = Q/N`.
+* `Design.Two.card_wrongBlocks_lt_subset`: the same at the deployed first stage, a uniform `Q`-subset of the
+  population's `N` replay blocks (`Design.Two.subset_Pa_le`), at `r₁ = Q/N`.
 * `footprint_le_card`: a footprint counts at most its cell, as the cap reads it.
 -/
 
@@ -26,7 +26,7 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
 namespace Claims.Sampling
 
 open Finset
-open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
+open Claims.Sampling.EndToEndDraw (SubsetDesign)
 
 /-- A footprint counts at most its cell's proof blocks. -/
 theorem footprint_le_card (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
@@ -121,11 +121,11 @@ theorem Design.Two.card_wrongBlocks_lt (d : Design.Two) (Pt : Partition) (q : �
   have hpow : (1 - r₁ * r₂) ^ (d.wrongBlocks Pt fp).card ≤ (1 - r₁ * r₂) ^ K := pow_le_pow_of_le_one hx0 hx1 hge
   linarith [d.Pa_le_pow Pt q hT hq hr₁ hr₂ hrate hcell]
 
-/-- **The cap at the deployed first stage**: a uniform `Q`-subset of the population's `N` replay blocks and every input
-replay block, with each cell sampled at `min(k_t, n_{ρ,t}) ≥ r₂·n_{ρ,t}`: a footprint in `M̄_δ` that counts at most
-each cell marks fewer than `K` replay blocks incorrect whenever `(1 − (Q/N)·r₂)^K ≤ δ`. -/
-theorem Design.Two.card_wrongBlocks_lt_subsetInputs (d : Design.Two) (Pt : Partition) {Q : ℕ}
-    (hd : SubsetInputsDesign d.replay Q) {c ic : List (List (List ℕ))} (hP : d.part.classes = [c, ic])
+/-- **The cap at the deployed first stage**: a uniform `Q`-subset of the population's `N` replay blocks, with each
+cell sampled at `min(k_t, n_{ρ,t}) ≥ r₂·n_{ρ,t}`: a footprint in `M̄_δ` that counts at most each cell marks fewer than
+`K` replay blocks incorrect whenever `(1 − (Q/N)·r₂)^K ≤ δ`. -/
+theorem Design.Two.card_wrongBlocks_lt_subset (d : Design.Two) (Pt : Partition) {Q : ℕ}
+    (hd : SubsetDesign d.replay Q) {c : List (List (List ℕ))} (hP : d.part.classes = [c])
     (hQ : Q ≤ c.flatten.length) {r₂ δ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
     (hrate : ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
       r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ))
@@ -134,11 +134,8 @@ theorem Design.Two.card_wrongBlocks_lt_subsetInputs (d : Design.Two) (Pt : Parti
     (d.wrongBlocks Pt fp).card < K := by
   have hr₁ : (0 : ℝ) ≤ (Q : ℝ) / c.flatten.length := by positivity
   have hr₁' : (Q : ℝ) / c.flatten.length ≤ 1 := div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _)
-  refine d.card_wrongBlocks_lt Pt _ (d.subsetInputs_Pa_le hd hP hQ) (fun ρ _ => ?_) hr₁ hr₁' hr₂ hr₂' hrate hK hfp
-    hcell
-  split_ifs
-  · exact ⟨le_rfl, hr₁'⟩
-  · exact ⟨hr₁', le_rfl⟩
+  exact d.card_wrongBlocks_lt Pt (fun _ => (Q : ℝ) / c.flatten.length) (d.subset_Pa_le hd hP hQ)
+    (fun _ _ => ⟨le_rfl, hr₁'⟩) hr₁ hr₁' hr₂ hr₂' hrate hK hfp hcell
 
 end Claims.Sampling
 

@@ -79,7 +79,7 @@ bound over the first `K` slots gives the compiled error.
 
 At a two-stage design whose first stage samples a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
 at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
-`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance. At a first stage below independent catches at
+`Design.Two.Pa_le_bernoulli`), the integrity profile's acceptance. At a first stage below independent catches at
 rates `q_ρ`, the admissible sets' count and their patterns' count are at most `δ^{−θ}` times a product over the replay
 blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
 At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,

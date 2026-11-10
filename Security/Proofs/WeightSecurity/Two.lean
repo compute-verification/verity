@@ -26,7 +26,7 @@ coins. Its record (`twoRec`): accepted when the run accepts; sampled incorrect w
 * `two_undetected`: under `WindowCap` (a footprint in `M̄_δ` marks fewer than `K` replay blocks), the run leaves
   `M = T·(K − 1) + 1` incorrect replay blocks undetected with probability at most `Σ_t ε_t`.
 * `TheftServedTwo`: `TheftServed` at that `M`. `windowCap_of_rates` gives `WindowCap` from the two stages' rates
-  (`Design.Two.card_wrongBlocks_lt_subsetInputs`) at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`, so the budget grows as
+  (`Design.Two.card_wrongBlocks_lt_subset`) at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`, so the budget grows as
   `T·K_δ`.
 -/
 
@@ -36,7 +36,7 @@ namespace WeightSecurity.SecurityProofs
 
 open Claims Claims.Sampling Claims.SamplingGeneric WeightSecurity.Assumptions
 open FlockSoundness.Game hiding Msg
-open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
+open Claims.Sampling.EndToEndDraw (SubsetDesign)
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
@@ -295,17 +295,17 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The cap from the two stages' rates**: where each statement in scope draws its replay sample as a uniform
-`Q`-subset of its `N` correct-class replay blocks and every input replay block, and its second stage samples at least
-`r₂` of every cell, `WindowCap` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
+`Q`-subset of its `N` replay blocks, one class, and its second stage samples at least `r₂` of every cell, `WindowCap`
+holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
 theorem windowCap_of_rates (L : CompiledTwo Coin A) {δ r₂ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
     (h : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
-      ∃ Q c ic, SubsetInputsDesign d.replay Q ∧ d.part.classes = [c, ic] ∧ Q ≤ c.flatten.length ∧
+      ∃ Q c, SubsetDesign d.replay Q ∧ d.part.classes = [c] ∧ Q ≤ c.flatten.length ∧
         (1 - (Q : ℝ) / c.flatten.length * r₂) ^ K ≤ δ ∧
         ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
           r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ)) :
     WindowCap L δ K := by
   intro x s Pt d hs hPt hd hin fp hfp hcell
-  obtain ⟨Q, c, ic, hD, hP, hQ, hK, hrate⟩ := h x s Pt d hs hPt hd hin
-  exact d.card_wrongBlocks_lt_subsetInputs Pt hD hP hQ hr₂ hr₂' hrate hK hfp hcell
+  obtain ⟨Q, c, hD, hP, hQ, hK, hrate⟩ := h x s Pt d hs hPt hd hin
+  exact d.card_wrongBlocks_lt_subset Pt hD hP hQ hr₂ hr₂' hrate hK hfp hcell
 
 end WeightSecurity.SecurityProofs

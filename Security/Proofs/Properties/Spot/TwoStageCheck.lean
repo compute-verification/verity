@@ -11,7 +11,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 `Properties.Spot.TwoStageCheckSound` (the sets' form), `TwoStageCheckPatternsSound` (the patterns') and
 `TwoStageCheckServedSound` (the capped sets'). Each composes Rankin's bound (`Claims.Sampling.admissibleTwo_rankin`,
 `admissibleTwo_rankin_patterns`, `admissibleTwo_rankin_served`) at the uniform rate `D.q`, which the registered first
-stage meets (`firstStage_le`, from `bernoulli_Pa_le` and `Design.Two.subsetInputs_Pa_le`), with each replay block's
+stage meets (`firstStage_le`, from `bernoulli_Pa_le` and `Design.Two.subset_Pa_le`), with each replay block's
 factor bound at its class (`factorUpperSound`, `factorUpperPatternsSound`, `factorUpperCappedSound` at the class's cap
 `N_c · S`): the product over replay blocks is at most `e^{Σ_c count_c max(v_c, 0)}`
 (`prod_le_exp_classes`), `δ^{−θ} ≤ e^{θ lnUpper(1/δ)}` (`rpow_neg_le`), and `e^L ≤ 2^b` at `checkTwoStage`'s `b`
@@ -184,21 +184,16 @@ theorem firstStage_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs
     (hq1 : q ≤ 1) (h : FirstStageAt d q) :
     ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ _ρ ∈ T, (1 - q) := by
   intro T hT
-  rcases h with ⟨num, den, hr, hle⟩ | ⟨Q, c, ic, hr, hP, hQ, hqQ⟩
+  rcases h with ⟨num, den, hr, hle⟩ | ⟨Q, c, hr, hP, hQ, hqQ⟩
   · obtain ⟨hpa, hle1⟩ := bernoulli_Pa_le hs hr
     exact (hpa T hT).trans (prod_le_prod₀ (fun _ _ => by linarith) fun _ _ => by linarith)
-  · refine (Design.Two.subsetInputs_Pa_le d (Q := Q) hr hP hQ T hT).trans
-      (prod_le_prod₀ (fun ρ _ => ?_) fun ρ _ => ?_)
-    · split_ifs with hρ
-      · have hN : (0 : ℝ) < c.flatten.length := by exact_mod_cast (Nat.zero_le ρ).trans_lt hρ
-        rw [sub_nonneg, div_le_one hN]
-        exact_mod_cast hQ
-      · norm_num
-    · split_ifs with hρ
-      · have hN : (0 : ℝ) < c.flatten.length := by exact_mod_cast (Nat.zero_le ρ).trans_lt hρ
-        rw [sub_le_sub_iff_left, le_div_iff₀ hN]
-        exact hqQ
-      · linarith
+  · refine (Design.Two.subset_Pa_le d (Q := Q) hr hP hQ T hT).trans
+      (prod_le_prod₀ (fun ρ _ => ?_) fun ρ hρ => ?_)
+    · exact sub_nonneg.2 (div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _))
+    · have hρN : ρ < c.flatten.length := (mem_range.1 (hT hρ)).trans_eq (EndToEndDraw.blocks_length hP)
+      have hN : (0 : ℝ) < c.flatten.length := by exact_mod_cast (Nat.zero_le ρ).trans_lt hρN
+      rw [sub_le_sub_iff_left, le_div_iff₀ hN]
+      exact hqQ
 
 theorem rankinFactor_nonneg (s : AuditStatement) (Pt : Partition) (d : Design.Two) {q : ℝ} (hq : q ≤ 1) (θ : ℝ)
     (ρ : ℕ) : 0 ≤ rankinFactor s Pt d q θ ρ :=
