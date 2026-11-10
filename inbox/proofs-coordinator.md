@@ -28311,3 +28311,60 @@ What that does not show: the prover's whole quick tier on af72. I ran it on b373
 **Still red, and whose** [as far as I ran]: of ours, nothing on af72 once the 11 rows are in. On af72 as pushed, the four tests those rows close (top's check, by your 15:02Z; I did not read that check). On a staging that holds #8404, `tests/test_verifier_cost.py` until the two rows change: top's and vllm's.
 
 Checkpoint: done but for what you send next. Notes synced 15:15Z (`03a9e63ded`); nothing pushed to any pull request or to `main`.
+
+## TWOINSTANCE, Tue 10 Nov 16:04Z: PRF-503 started on `cursor/proofs-remote-lean-9757`, cut at lean's head `05e8674d69c`. Lean's workers resolved all of proofs' 24 rows this morning, so each answer is a review. `OneStageZk` is answered with no edit.
+
+- [run] **The branch** is `cursor/proofs-remote-lean-9757`, cut at `05e8674d69c` (ASSEMBLY's `WitnessToys` mend) and pushed. It has no commit of mine yet.
+
+  For LEAN-249, ready to paste: "proofs' Lean worker (PRF-503 TWOINSTANCE) is on `cursor/proofs-remote-lean-9757`, cut from `05e8674d69c`. It answers proofs' 24 rows of art:34c80e49… and `Spot/OneStageZk.lean`. It commits only where an answer changes a file, and names each commit here."
+- [run] **The 24 rows are already resolved on lean's branch,** by 13 commits between 08:08Z and 10:11Z, and none holds a marker.
+  - Four are `main`'s file whole: `Definitions/Core/Partition`, `Definitions/Core/Site`, `Proofs/Core/Site` and `CoreProtocol/Registration`.
+  - The other 20 are `main`'s file with the side's changes carried in.
+
+  So my answer per file is a review of what is there: confirm it, or name a change.
+- **The files in import order** [run]:
+  1. `Definitions/Core/Partition`
+  2. `CoreProtocol/Profile`
+  3. `CoreProtocol/Registration`
+  4. `Attest`
+  5. `Audit/Partitioning/Model`
+  6. `Spot/Partition`
+  7. `FlockVerify`
+  8. `HiddenExec/Placed`
+  9. `Spot/Bound`
+  10. `Definitions/Core/Site`
+  11. `Audit/Partitioning/Guarantees`
+  12. `Spot/Draw`
+  13. `HiddenExec/Sites`
+  14. `Proofs/Core/Site`
+  15. `Spot/Slots`
+  16. `Spot/Record`
+  17. `Spot/Registration`
+  18. `Recursion/Assumptions/HonestFixture`
+  19. `Spot/OneStage`
+  20. `Bridge/PopMatches`
+  21. `Sampling/EndToEndDeploy`
+  22. `Recursive/KSCoinTreeWitnesses`
+  23. `Spot/OneStageZk`
+  24. `Spot/Pieces`
+  25. `vstar/recursive/lakefile.toml`
+- **`Spot/Pieces.lean`** is one of the ten files MAINMERGE closes (LEAN-249, 15:39Z). I don't edit it; I review it once MAINMERGE hands over.
+- **`Spot/OneStageZk.lean`: carried, `main`'s file whole, no edit.**
+  - [run] Lean's branch has `main`'s file byte for byte (`7af4d24fca`), with `publicHeld` (14 uses), `indicesHeld` (9) and the call in the one-statement path.
+  - [read] The side's per-member form is not carried (`Form`, `Member`, `membersHeld`, `runMembers`, `RAN_OUT`, `MULTI_REFUSED`). The side keeps it at `sampled_proofs/SampledProofs/OneStageZk.lean`, which lean's branch no longer has.
+  - [read] **The per-member path stays refused.** The side's own check rejects every per-member acceptance (its line 657), and `main`'s parser refuses that form's input before any session runs: `paramsOfJson` takes `proofs` as exactly `{"circuit", "public", "registered"}`, and the evidence's `proofs` as exactly `{"sessions"}`.
+  - [run] Rule 5: none of `main`'s names is lacking.
+  - [read] **It elaborates:** the file is unchanged since `6912ea3c347`, where lean's Lean check passed the code packages (`r20261110-143102-8dd1`, LEAN-249 14:53Z).
+  - [run] **Leftovers that aren't mine to edit:**
+    - `Security/Properties/lean-audit.json` still keys `SampledProofs.OneStageZk.MULTI_REFUSED`; ASSEMBLY's lock regeneration drops it.
+    - `Properties/Spot.lean`'s `RL` docstring names `OneStageZk.RAN_OUT`, which is gone (SPOT's file).
+    - Python docstrings name `OneStageZk.MULTI_REFUSED` (`protocols/spot/one_stage/proofs.py:39` and `benchmarks/one_stage/{a5,served_cases,v2_case}.py`). They belong to vllm's cut.
+    - [guess] Since `7af4d24fca`, `origin/main`'s copy of `OneStageZk` has grown by 87 lines and lost 3. MAINMERGE's merge should take it cleanly.
+- **Questions:**
+  1. **Where each answer goes.** I commit only where an answer changes a file. A confirmed file's line goes in my entry, ready for LEAN-249, since the tree holds no process record. Say if you want a file of answers on the branch.
+  2. **A listed statement that needs your word,** from SPOT's "For the writers" (`Properties/Spot.lean`, not one of the art's rows): `Properties.Spot.Registered`.
+     - `main`: `R1 rec v law ∧ … ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v)`.
+     - The side, [read] from SPOT's note: `… ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v) ∧ RL v`.
+     - Lean's branch keeps both: `… ∧ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ RL v`.
+
+     I'd confirm lean's form: under rule 5 it keeps `PoolChained` and `PinnedHeld`, two checks `main`'s `Registration.check` makes. Its `RL` is the side's per-member link-point check at registration, which only adds a refusal.
