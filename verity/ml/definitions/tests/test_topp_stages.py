@@ -150,14 +150,15 @@ def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V
 
 
 def test_the_served_cut_s_units():
-    """At GLM-5.3's vocabulary the Call is 3,924 units of 85 Definitions: per split count its stats blocks and their parts,
-    its step blocks' probabilities and five rounds of steps, and 605 select chunks of at most 256 lanes."""
+    """At GLM-5.3's vocabulary the Call is 8,159 units of 85 Definitions: per split count its stats blocks and their parts,
+    its step blocks' probabilities and five rounds of steps, and 4,840 select chunks of 32 lanes (`SELECT_N`)."""
     cut = T.cut(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=SERVED_V))
     by = Counter()
     for d, n in cut:
         by[d.defn.name] += n
-    assert (len(cut), sum(by.values())) == (85, 3924)
-    assert by == {"TopPStatsHead": 147, "TopPStatsExp": 268, "TopPProbs": 484, "TopPStep": 2420, "GumbelTopPSelect": 605}
+    assert (len(cut), sum(by.values())) == (85, 8159)
+    assert by == {"TopPStatsHead": 147, "TopPStatsExp": 268, "TopPProbs": 484, "TopPStep": 2420, "GumbelTopPSelect": 4840}
+    assert {d.bindings["N"] for d, _n in cut if d.defn.name == "GumbelTopPSelect"} == {T.SELECT_N} == {T.chunk(SERVED_V)}
     assert T.cut(bind(SA.GumbelTopPTokenSelect, V=SERVED_V)) == cut
     assert {SA.CUTS[f] for f in ("GumbelTopPTokenSelect_v1", "GumbelTopPTokenSelectSharedGreedy_v1")} == {T.__name__}
 

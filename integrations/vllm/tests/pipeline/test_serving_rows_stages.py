@@ -1,6 +1,6 @@
 """A stochastic top-p select row cut into its stages (`pipeline.serving_rows`' ``stage`` layout, `stage_rows`): a
 ``GumbelTopPTokenSelect_v1{V}`` or ``GumbelTopPTokenSelectSharedGreedy_v1{V}`` row holds the units `topp_stages.plan` lists (at
-GLM-5.3's V = 154,880, 3,924 of 85 Definitions; at V = 16, 392 of 59), and a window of a V = 16 row's every stage template:
+GLM-5.3's V = 154,880, 8,159 of 85 Definitions; at V = 16, 392 of 59), and a window of a V = 16 row's every stage template:
 
 * reads each unit's operands off the row (its logits lanes, the Program's constants, the sampler's seed and splits) and its
   carried words off the twin, whose token is the row's served one, so each unit's Definition on its rows, parsed as Flock's
@@ -139,14 +139,14 @@ def places(ms, tmpls, rows: int = 1, v: int = V) -> dict[int, tuple[int, tuple]]
 
 def test_a_select_row_holds_its_stages():
     """The units `topp_stages.cut` cuts the row into, each a ``stage`` template whose EX2 reads go in lookup slots; both Call
-    forms hold the same ones, and at GLM-5.3's vocabulary 3,924 of 85."""
+    forms hold the same ones, and at GLM-5.3's vocabulary 8,159 of 85."""
     plain = descriptor_id(bind(SA.GumbelTopPTokenSelect, V=V))
     cut = [(descriptor_id(d), n) for d, n in T.cut(bind(SA.GumbelTopPTokenSelect, V=V))]
     assert SRW.unit_templates(ROW) == ((ROW, 1), *cut) and SRW.unit_templates(plain) == ((plain, 1), *cut)
     assert len(cut) == 59 and sum(n for _t, n in cut) == len(T.plan(V)) == 392
     assert {(SRW.template(t).layout, SRW.template(t).word == t, CR.reads(SRW.template(t))) for t in TMPLS} == {("stage", True, "slots")}
     served = SRW.unit_templates(descriptor_id(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=SERVED_V)))[1:]
-    assert len(served) == 85 and sum(n for _t, n in served) == 3924
+    assert len(served) == 85 and sum(n for _t, n in served) == 8159
     last = descriptor_id(T.plan(V)[-1].defn)
     N = T.plan(V)[-1].lanes[1] - T.plan(V)[-1].lanes[0]
     sw = [(f"in{5 + i}", V2, 32 * T.scw(S), [f"sw{S}"]) for i, S in enumerate(K.SPLIT_COUNTS)]
@@ -267,8 +267,8 @@ def test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step
 
 
 @pytest.mark.slow
-def test_a_row_at_the_served_statics_reads_and_wires_its_3924_units():
-    """One row of GLM-5.3's vocabulary: its 3,924 units wired and read, every wired row its writer's output and the select's
+def test_a_row_at_the_served_statics_reads_and_wires_its_8159_units():
+    """One row of GLM-5.3's vocabulary: its 8,159 units wired and read, every wired row its writer's output and the select's
     last chunk the served token.  It catches what V = 16 can't reach: a stats block cut in parts, slices of thousands of lanes
     whose select chunks cross them, and the twin and wiring at those shapes; its minutes are the twin's six pipelines over
     154,880 lanes."""
@@ -277,7 +277,7 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_3924_units():
     tmpls = [t for t, _n in SRW.unit_templates(spec)[1:]]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 4096))
     WI.validate(ms)
-    assert sum(m.n for m in ms) == 3924
+    assert sum(m.n for m in ms) == 8159
     got = read(s, ms, tmpls)
     words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
     WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
@@ -298,9 +298,8 @@ def test_each_stage_on_bits_is_staged_in_the_form_verify_zk_takes(tmp_path):
     (`one_stage.proofs.ks_form_why`, the mirror of Lean's `KsScope`).  A stage's word template is staged with its table reads
     in lookup slots, the refused form.  Its Boolean version has no table to read: one unit Definition of each of the five
     families, in a partition naming every stage on bits, is staged flat, the form it takes, and its circuit on the unit's rows
-    returns the words serving commits for it (the twin's).  Minutes, all of them composing the six circuits (a select chunk's
-    one lane of Philox and two logarithms is most of it): the form is the composed circuit's (its META ``out_net``), and the
-    words are its gates', which nothing short of composing it reads."""
+    returns the words serving commits for it (the twin's).  Minutes, all of them composing the six circuits: the form is the
+    composed circuit's (its META ``out_net``), and the words are its gates', which nothing short of composing it reads."""
     refused = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
     seen = []
     for v in sorted({v for v, _name, _statics in ZK_UNITS}):

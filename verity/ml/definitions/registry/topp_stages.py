@@ -48,8 +48,10 @@ THREADS = 32 * K.NUM_WARPS
 #: the lanes of a stats block one ``TopPStatsExp_v1`` unit adds (a stats block is `PARTS` of them)
 STATS_PART = 4096
 PARTS = K.STATS_BLOCK // STATS_PART
-#: the lanes of a ``GumbelTopPSelect_v1`` chunk, at most (`Geo.chunk`)
-SELECT_N = 256
+#: the lanes of a ``GumbelTopPSelect_v1`` chunk, at most (`chunk`): as many as keep the chunk on bits, lowered flat, within the
+#: nonzeros of the largest unit proved under ``--zk`` (a lane's two logarithms and its probability at every split count are
+#: most of them)
+SELECT_N = 32
 _CONF = "exact-model-tested"
 
 
