@@ -384,14 +384,15 @@ def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping
     """Commit one class's spans in ``window``: each value's rows under its domain, every leaf's salt fresh from the OS
     unless ``salts`` gives them (`reopen`), beside each history table's root (``tables``, by name: rank 0's)."""
     t0 = clock()
-    if set(tables or {}) != set(layout.tables):
+    given: Mapping[str, bytes] = tables or {}
+    if set(given) != set(layout.tables):
         raise ValueError(f"a class with {len(layout.tables)} history tables is committed with their roots, not "
-                         f"{len(tables or {})}")
+                         f"{len(given)}")
     rows = port_rows(spans, layout)
     domains = {p: layout.domain(p) for p in PORTS}
     ys = {p: os.urandom(CS.SALT_BYTES * layout.spans) for p in PORTS} if salts is None else dict(salts)
     roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(PORTS, SCHEMA))
-    roots |= {t: bytes(tables[t]) for t in layout.tables}
+    roots |= {t: bytes(given[t]) for t in layout.tables}
     return Committed(window, layout, tuple(spans), roots, ys, os.urandom(CS.SALT_BYTES) if index_salt is None else index_salt,
                      clock() - t0)
 

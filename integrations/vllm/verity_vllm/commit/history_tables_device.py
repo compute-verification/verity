@@ -61,7 +61,7 @@ def _host() -> ctypes.CDLL:
 def _device(lib: ctypes.CDLL) -> ctypes.CDLL:
     vp = ctypes.c_void_p
     lib.rt_hist_init.argtypes = [vp, _hp, vp]
-    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32] + [vp] * 6
+    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32, vp, vp, vp, vp, vp, vp]
     lib.rt_hist_paths.argtypes = [vp, _hp, vp, vp, ctypes.c_uint32, vp]
     for f in (lib.rt_hist_init, lib.rt_hist_append, lib.rt_hist_paths):
         f.restype = ctypes.c_int
@@ -100,7 +100,7 @@ class Table:
         nodes = 8 * (2 * capacity - 1)
         if device is None:
             self._dev = None
-            self._tree = np.zeros(nodes, dtype=np.uint64)
+            self._tree: Any = np.zeros(nodes, dtype=np.uint64)       # the host's array, or the device's tensor
             self._check("rt_hist_init_host", _host().rt_hist_init_host(ctypes.byref(h), self._tree))
         else:
             import torch

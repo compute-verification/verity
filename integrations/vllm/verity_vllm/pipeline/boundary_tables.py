@@ -278,7 +278,7 @@ class Builder:
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""
-        head = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
+        head: dict[str, Any] = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
         try:
             return TableRoots(**head, tables=tuple(self._tables(TableAssignment.of(doc, ASSIGN))), error=None).dump()
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
@@ -536,7 +536,8 @@ class LocalChannel:
     """`Channel` in one process: `assign` builds at once."""
 
     def __init__(self, builder: Builder) -> None:
-        self.builder, self.done = builder, {}
+        self.builder = builder
+        self.done: dict[str, dict[str, Any]] = {}
 
     def assign(self, doc: Mapping[str, Any]) -> None:
         self.done[_stem(doc["window"], doc["run"], doc["prompt"], doc["outputs"])] = self.builder.build(doc)

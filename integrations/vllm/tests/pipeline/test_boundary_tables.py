@@ -12,7 +12,9 @@ from __future__ import annotations
 import json
 import re
 import stat
+from collections.abc import Callable
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
@@ -83,8 +85,10 @@ class Runner:
     batch as the runner pads its buffers."""
 
     def __init__(self, model: Model) -> None:
-        self.model, self.blocks, self.free, self.gen = model, {}, list(range(16)), {}
-        self.execute_model_state = None
+        self.model, self.free = model, list(range(16))
+        self.blocks: dict[str, list[int]] = {}
+        self.gen: dict[str, int] = {}
+        self.execute_model_state: NS | None = None
 
     def preempt(self, request: str) -> None:
         self.free += self.blocks.pop(request)
@@ -151,7 +155,7 @@ def test_the_step_hook_reads_each_mla_layers_rows_at_the_steps_slots_by_request_
     assert hook.latents.requests() == []
 
 
-def built(make_tables: list | None = None):
+def built(make_tables: list | None = None) -> tuple[Callable[[str, str, int, int], HT.HistoryTable], list]:
     tables = [] if make_tables is None else make_tables
 
     def make(program, value, words, capacity):
@@ -317,7 +321,8 @@ class Scheduler:
     """vLLM's V1 scheduler as `BoundaryWindows` wraps it: the step's outputs are ``outputs``."""
 
     def __init__(self) -> None:
-        self.cache_config, self.outputs = NS(enable_prefix_caching=False), {}
+        self.cache_config = NS(enable_prefix_caching=False)
+        self.outputs: dict[int, NS] = {}
 
     def add_request(self, request):
         return None
@@ -357,7 +362,8 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
     alone names and places every table, and both verifiers accept the registration against it, which lists every root
     before any coin. The class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
     try:
         finish(sched)
@@ -419,7 +425,8 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
 
 
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
-    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAPACITY, "timeout_s": 5}}
+    cfg: dict[str, Any] = {"check": "c",
+                           "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAPACITY, "timeout_s": 5}}
     bw = BR.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
     bw.stop()
     assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAPACITY, 5.0, tmp_path / "node" / "channel")
@@ -439,7 +446,8 @@ def modes(root) -> set[tuple[str, int]]:
 def kept_window(tmp_path) -> tuple[BT.Kept, list]:
     """`finish`'s window served with rank 0 keeping its tables under ``tmp_path``/node: the kept files and the tables."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     kept = BT.Kept(tmp_path / "node" / "tables")
     bw, sched, hooks = windows(tmp_path / "out", hook.latents, make, lines, kept)
     try:

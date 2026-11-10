@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -44,7 +45,7 @@ READ = descriptor_id(EMB.read(HT.CAPACITY, WORDS))
 TMPLS, CAPS = [LAT, READ], {LAT: 4, READ: 3}
 PROGRAM, RUN = "ab" * 64, "cd" * 32
 #: each window's steps: its latent rows' tokens, and its long rows, each (layer, its token, its keys)
-WINDOWS = [
+WINDOWS: list[dict[str, Any]] = [
     {"step": 0, "tokens": 5, "reads": [(3, 3, [0, 2, 3, 9]), (3, 4, [1, 3, 4, 0]), (5, 3, [3, 2, 1, 0]), (5, 4, [4, 4, 0, 7])]},
     {"step": 1, "tokens": 1, "reads": [(5, 0, [5, 0, 3, 2])]},
 ]
@@ -64,7 +65,8 @@ def build(monkeypatch) -> SimpleNamespace:
     store of their served latent rows (each its `LATENT` on its kv, the layer's norm weight and its cache row) and every latent
     row by (layer, position); the serving rows read their operands from here on."""
     rng = np.random.default_rng(0xD5A)
-    ops, held, latent, windows, i = {}, {}, {}, [], 0
+    ops, held, windows, i = {}, {}, [], 0
+    latent: dict[tuple[int, int], np.ndarray] = {}
     norm = {layer: _bf16(rng, KVL, 0.05, 1.0) for layer in LAYERS}
     for layer in LAYERS:
         ops[json.dumps([["p", layer, 0, KVL]])] = norm[layer]
@@ -181,7 +183,8 @@ def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
 def windows(served, commit=None):
     """Both windows over one committer's tables, each window's members and what it commits (`serving_rows.window_values`),
     checked as the module docstring says; ``commit`` (members, values) -> what else to check of the window."""
-    hs, held = H.Histories(PROGRAM), {}
+    hs = H.Histories(PROGRAM)
+    held: dict[str, list[bytes]] = {}
     for k, rows in enumerate(served.windows):
         plan, ms = cut(rows)
         edges = {key: hs.edge(*key) for key in plan.keys()}
