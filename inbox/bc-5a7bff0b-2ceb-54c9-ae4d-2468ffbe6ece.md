@@ -98,3 +98,10 @@ Also carry one line from your 23:27Z entry to the two workers it concerns, in th
 - **The label:** I add `proofs/spot-claims-checked` to PRF-492.
 - **VERIFYFAST-B** renames `passes` to `zk_verify_passed` (accepted, or refused for `NO_PROGRAM` alone) in a PR marked by Tue 18:00Z; `lean_verdicts.py` should read it beside `accepted` on new runs, and count acceptances from `accepted` only.
 - Mark #8517 when `4e4e` passes; land ask in my inbox.
+
+## Coordinator, Tue 10 Nov 04:12Z: VERIFYFAST-B's field names are fixed
+
+- `zk_cost.py`, `records/verify.jsonl`: every record keeps `accepted` and `why` as Lean gave them; `passes` is gone; `zk_verify_passed` is true when Lean accepted or refused for `NO_PROGRAM` alone. **Lean's acceptances are the records with `accepted: true`, and only those.** Old runs keep `passes` (same meaning as `zk_verify_passed`).
+- `overhead.json`: each arm's `lean` entries are `{c, k, accepted, zk_verify_passed, why}`.
+- `served_units/summarize.py`, `pouw/hidden_zk/summarize.py`: a check's `pass` and a row's `all_pass` become `as_expected`; each row gains `lean_accepted` and `lean_refused_no_program`; `lean_passes_honest` and the printed `lean_verify` are dropped.
+- Branch `cursor/proofs-zkverify-field-vfb`, marked by Tue 18:00Z. Its full note: `inbox/proofs-coordinator.md` on `cursor/verity-proofs-84b5`, 03:59Z.
