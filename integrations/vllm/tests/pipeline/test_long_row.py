@@ -5,7 +5,8 @@
 * at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, and each
   unit reads the window's operands and the units before it as round 2 links and wires them (`second_stage`'s node links and
   node wires);
-* where its index rows are `index_values` it computes `DsaTopKReadRows_v1`'s function (slow).
+* where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
+  kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow).
 """
 from __future__ import annotations
 
@@ -17,9 +18,10 @@ import pytest
 
 from verity.core.protocols.spot import second_stage as SS
 from verity.ml.circuits.codec import definitions, descriptor_id
-from verity.ml.circuits.defs import Builder, bind
+from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.refs import Affine, Coll
+from verity.ml.circuits.refs import Affine, Coll, concat
+from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.embedding import read
 from verity.ml.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import long_row as LR
@@ -106,11 +108,23 @@ def _random_args(rng: random.Random, t, rows: int) -> list[np.ndarray]:
                         for _ in range(rows)], dtype=np.uint8) for name, ty in params]
 
 
+def _read_rows(t):
+    """The rows the check's read units return, as a Definition of this test's: the check's own units (`long_row.read_calls`) on
+    its parameters, returning each read's row in slot order where the check returns each read's ok. They are what an interior
+    commits at the reads' output port."""
+    rows = Array(t.bindings["TOPK"], t.bindings["READ"].signature()[1].fields[0])
+    defn = CompositeDefinition("LongRowTestReadRows", 0, (), lambda S_: (t.signature()[0], rows),
+                               lambda B, S_, *args: Coll(rows, concat([r[0].refs for r in LR.read_calls(B, t.S(), *args)])),
+                               register=False)
+    return bind(defn)
+
+
 @pytest.mark.slow
-def test_it_computes_the_long_rows_function() -> None:
+def test_its_ok_and_its_reads_rows_are_the_long_rows_function() -> None:
     """The stand-in against `DsaTopKReadRows_v1` at the same small statics, its index rows `index_values`, on random operands
-    and on scores with ties at the threshold at every n: the one test that evaluates the stand-in whole, which the counts and
-    the layout don't."""
+    and on scores with ties at the threshold at every n: the check returns that Definition's ok, and its read units' rows
+    (`_read_rows`) are that Definition's kv, so the check with the rows its reads commit loses nothing of the Definition.
+    The one test that evaluates the stand-in whole, which the counts and the layout don't."""
     t = _small()
     rng = random.Random("long-row-cut")
     args = _random_args(rng, t, 6)
@@ -121,4 +135,9 @@ def test_it_computes_the_long_rows_function() -> None:
             args[0][i] = np.asarray(_i32s(words), dtype=np.uint8)
         args[1][i] = np.asarray(_i32s([n]), dtype=np.uint8)
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)), np.asarray(BS.evaluate_bits(whole, *args[:-2])))
+    kv, ok = whole.signature()[1].fields
+    assert t.signature()[1] == ok
+    want = np.asarray(BS.evaluate_bits(whole, *args[:-2])).reshape(6, -1)
+    assert want.shape[1] == kv.leaves + ok.leaves
+    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)).reshape(6, -1), want[:, kv.leaves:])
+    assert np.array_equal(np.asarray(BS.evaluate_bits(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
