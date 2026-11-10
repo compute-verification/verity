@@ -9,7 +9,7 @@ its machine failed (lost, killed, out of disk or memory) runs again once on the 
 that registered no run, never ran or was stopped is infra, which the loop launches again once; one that failed refuses.  A
 passed run passes once its Lean report (`merge.lean_report`) can be read: every package it regenerated is committed, and a
 change to what a guarantee says (the report's `statement_changes`: a guarantee's statement, a definition one reads, a listed
-premise or listed compile-time code) refuses nothing.  The records commit names each such change (`changes`), and the spec DM
+premise or listed compile-time code) refuses nothing.  The records commit names each such change (`_changes`), and the spec DM
 shows Daniel each one once it lands on `main` (`merge.caught_up`, on the loop's `on_main`): that DM is the check.
 
 A records commit is drive's lock commit (`Driver._put_locks`): the records the run regenerated (`Driver._locks`, from the
