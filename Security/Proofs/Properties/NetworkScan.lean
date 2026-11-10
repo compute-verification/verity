@@ -51,8 +51,8 @@ empty flattening (`empty_not_fits`).
 namespace Properties.NetworkScan
 
 theorem scanScopeAcc_of_scanFits (h : ScanFits) : ScanScopeAcc := by
-  intro Coin Col T _ _ _ _ _ D j program s sc c x hflat hmatch hsc hscan hc hdesc
-  have hS : Claims.Sampling.Scope D x := (hmatch x).2 hsc
+  intro Coin _ _ _ A D j program s sc c x hflat hmatch hsc hscan hc hdesc
+  have hS : D.Scope x := (hmatch x).2 hsc
   refine ⟨hS, ?_⟩
   obtain ⟨st, _, hx, _⟩ := hS
   obtain ⟨P, hP, hF⟩ := hflat x st hx
@@ -84,12 +84,12 @@ theorem scanFits_nontrivial :
   exact absurd hj (Nat.not_lt_zero j)
 
 /-- **`ScanScopeAcc`'s conclusion is not trivial**, transferred from `scanFits_nontrivial`'s instance (the transfer
-form of the two-lemma rule's `_nontrivial`): at any deployment, a statement that parses
+form of the two-lemma rule's `_nontrivial`): at any compiled sampled verifier, a statement that parses
 to a descriptor decoding to the empty Program, with the empty circuit, is not in `ScopeAcc` at that Program's
 schedule, though a scan check and a scope check accepting everything would pass it. -/
-theorem scanScopeAcc_nontrivial_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] {D : Claims.Sampling.Deploy Coin Col T} {x : Claims.Msg} {st : Claims.Sampling.AuditStatement}
-    (hx : D.parse x = some st)
+theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
+    {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
     ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩) (fun _ => 1) x := by
   rintro ⟨-, st', hx', hF⟩

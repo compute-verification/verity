@@ -9,7 +9,9 @@ exactly that: afterwards ``vars(owner).get(name)`` is the object it was, and an 
 of the same attribute installed on top of it refuses to come off, so no wrapper stops running while `live()` lists it,
 and none comes back after it was uninstalled.  `live()` lists the patches
 installed in this process and not yet uninstalled.  A `Service` is an in-process service a component starts beside its
-patches (a responder thread); it is an entry like a patch, and uninstalling it stops it.  Entries made through a
+patches (a responder thread); it is an entry like a patch, and uninstalling it stops it.  `at_import(site, then)` runs
+``then(module)`` once for a module, now or when it is imported; while it waits, its `Armed` finder is an entry, and
+uninstalling it disarms it.  Entries made through a
 ``Hooks(tag=...)`` carry its tag, so `live(tag)` finds what one component (a protocol option) installed.
 
 The patch sites keep their wrappers (they close over the component's state); this module holds the mechanism and the
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import importlib.abc
 import importlib.machinery
+import sys
 from collections.abc import Callable, Iterator, MutableSequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -197,6 +200,46 @@ class OnImport(importlib.abc.MetaPathFinder):
         return spec
 
 
+@dataclass(eq=False)
+class Armed:
+    """``finder``, an `OnImport` for ``site`` at the front of ``sys.meta_path``, waiting for the module's import.  It is
+    installed until it fires or is uninstalled."""
+
+    site: str
+    finder: OnImport
+    installed: bool = True
+    tag: str | None = None
+
+    def uninstall(self) -> None:
+        """Take the finder off ``sys.meta_path`` if it hasn't fired.  Idempotent.  What ``then`` installed once it fired
+        is its own to undo."""
+        if not self.installed:
+            return
+        self.installed = False
+        _forget(self)
+        for i, f in enumerate(sys.meta_path):
+            if f is self.finder:
+                del sys.meta_path[i]
+                break
+
+
+def at_import(site: str, then: Callable[[Any], Any]) -> Armed | None:
+    """Run ``then(module)`` once for the module ``site``: now if it is imported (returning None), else once its own code
+    has run when it is, by the `Armed` finder this returns.  Nothing is imported for it."""
+    if site in sys.modules:
+        then(sys.modules[site])
+        return None
+
+    def fire(module: Any) -> None:
+        armed.uninstall()
+        then(module)
+
+    armed = Armed(site, OnImport(site, fire))
+    sys.meta_path.insert(0, armed.finder)
+    _LIVE.append(armed)
+    return armed
+
+
 def append(seq: MutableSequence[Any], item: Any) -> Appended:
     """Append ``item`` to a library's hook list and return the entry that removes it."""
     seq.append(item)
@@ -222,7 +265,7 @@ def service(name: str, start: Callable[[], Any], stop: Callable[[Any], Any]) -> 
     return s
 
 
-def live(tag: str | None = None) -> tuple[Patch | Appended | Service, ...]:
+def live(tag: str | None = None) -> tuple[Patch | Appended | Service | Armed, ...]:
     """The entries installed in this process and not yet uninstalled, oldest first; with ``tag``, only those carrying it."""
     return tuple(e for e in _LIVE if tag is None or e.tag == tag)
 
@@ -234,7 +277,7 @@ class Hooks:
 
     def __init__(self, tag: str | None = None) -> None:
         self.tag = tag
-        self._entries: list[Patch | Appended | Service] = []
+        self._entries: list[Patch | Appended | Service | Armed] = []
 
     def _add(self, e: Any) -> Any:
         e.tag = self.tag
@@ -253,8 +296,12 @@ class Hooks:
     def service(self, name: str, start: Callable[[], Any], stop: Callable[[Any], Any]) -> Service:
         return self._add(service(name, start, stop))
 
+    def at_import(self, site: str, then: Callable[[Any], Any]) -> Armed | None:
+        armed = at_import(site, then)
+        return None if armed is None else self._add(armed)
+
     @property
-    def entries(self) -> tuple[Patch | Appended | Service, ...]:
+    def entries(self) -> tuple[Patch | Appended | Service | Armed, ...]:
         return tuple(e for e in self._entries if e.installed)
 
     def uninstall(self) -> None:

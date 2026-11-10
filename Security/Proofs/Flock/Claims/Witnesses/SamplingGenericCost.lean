@@ -99,7 +99,8 @@ theorem sksL_work (x : Msg) : (sksL Coin).work x ≤ 2 ^ 100 := by
   have hko : (sksL Coin).kOut x = 2 ^ 10 * 3 := rfl
   have hki : (sksL Coin).kIn x = 2 ^ 10 * 3 := rfl
   unfold Compiled.work
-  rw [he, hko, hki, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
+  rw [he, hko, hki, show (sksL Coin).nSess x = 1 from rfl, show (sksL Coin).nPU x = 1 from rfl,
+    show (sksL Coin).openCalls x = 0 from rfl]
   norm_num
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -198,13 +199,13 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 theorem exists_cons_of_length_pos {α : Type} {l : List α} (h : 0 < l.length) : ∃ a l', l = a :: l' :=
   List.exists_cons_of_ne_nil (List.ne_nil_of_length_pos h)
 
-theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (b : β)
+theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (b : β)
     (bs : List β) : (ownLog H run (f b)).length ≤ (ownLog H run (flatMapRP f (b :: bs))).length := by
   rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
   exact Nat.le_add_right _ _
 
 /-- A wait whose first sample is accepted keeps it first. -/
-theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
+theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Transcript) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
     (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
   rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
     List.filter_cons_of_pos (p := fun r => decide ((run r).out = .acc)) (decide_eq_true hr), List.take_cons hk,
@@ -252,17 +253,23 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- Each of `effL`'s runs' extractions makes a SHA-512 call of its own: its one slot's session finds `()` at once, and
 checking the opening it reveals makes `callCm`'s one call. -/
-theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Trace)
+theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Transcript)
     (r : Fin ((effL Coin).V.k x) → Coin) (v : Seen) (c : (effL Coin).SlotEC x) :
     0 < (ownLog H run ((effL Coin).runExt x toyStmt r v c)).length := by
   have h1 : 0 < (effL Coin).nPU x := Nat.one_pos
   obtain ⟨d, ds, hd⟩ :=
     exists_cons_of_length_pos (l := List.finRange ((effL Coin).nPU x)) (by rw [List.length_finRange]; exact h1)
+  obtain rfl : d = ⟨0, h1⟩ := Fin.ext (show d.val = 0 by
+    have := d.isLt
+    have h : (effL Coin).nPU x = 1 := rfl
+    omega)
   unfold Compiled.runExt
-  rw [hd, show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
+  rw [hd]
+  simp only [show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
-  rw [dite_eq_left h1, Compiled.unitExt, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
+  rw [dite_eq_left (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),
+    Compiled.sessExt, Compiled.sessWit, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
   dsimp only
   rw [dite_eq_left (show (findA Coin).shape x = (effL Coin).sh x 0 from rfl)]
   exact Nat.succ_pos _

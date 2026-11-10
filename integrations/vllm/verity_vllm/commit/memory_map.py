@@ -5,10 +5,11 @@ engine's page layout (`page_of`).  A memory map lays its blocks out from them (P
 
 ~~~text
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
-          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane); a layer's rows are the
-          rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
-          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited
-          until the map packs them
+          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read
+          as a Call; a row past INDEX_TOPK reads its `kv` through a concentrator (`ROUTED`), whose history is the rows it
+          reads.  A layer's rows are the rows its Calls share, in the order its Calls first read them (its positions), K and V
+          paired by position.  DSA's indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting
+          leaves them uncredited until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement
           (`requirement.from_census`) over the Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
@@ -35,7 +36,7 @@ from typing import Any
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import runs
+from verity.ml.circuits.refs import Coll, runs
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
@@ -44,6 +45,9 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 KV = ("kc", "vc")
 #: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)
 LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
+#: the concentrators, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
+#: those (`DsaButterflyRowsPad`'s pad is no row)
+ROUTED = {"DsaButterflyRows": "rows", "DsaButterflyRowsPad": "rows"}
 #: vLLM's null block, no request's page
 NULL_PAGE = 0
 
@@ -142,6 +146,31 @@ def _cut(refs, width: int, inputs: int, what: str, cached: bool = False) -> list
     return out
 
 
+def _member(nd, i: int, m: int) -> Coll:
+    """Argument `i` of member `m` of root node `nd` (a Call's own; a batch's shared one, or its slice of a mapped one)."""
+    a = nd.args[i]
+    if nd.form != "batch" or nd.axes[i] is None:
+        return a
+    if nd.axes[i] != 0:
+        raise ValueError(f"a batch of {nd.fn.id} maps its argument {i} on axis {nd.axes[i]}: memory-map/v1 reads a member's on axis 0")
+    w = a.type.elem.leaves
+    return Coll(a.type.elem, a.refs.slice(m * w, (m + 1) * w))
+
+
+def _history(nodes, a: Coll) -> Coll:
+    """`a`, or where it is the output of one concentrator (`ROUTED`, a Call or a batch member), the history it routes the rows from:
+    a row past INDEX_TOPK reads its layer's rows through it."""
+    rs = runs(a.refs)
+    if not rs or rs[0][0] != "n" or any((s, j) != rs[0][:2] for s, j, _, _ in rs):
+        return a
+    src = nodes[rs[0][1]]
+    p = ROUTED.get(getattr(src.fn, "name", None))
+    if p is None:
+        return a
+    m = rs[0][2] // (src.out.leaves // src.n) if src.form == "batch" else 0
+    return _member(src, [n for n, _ in src.fn.signature()[0]].index(p), m)
+
+
 def census_of(program: Program, digest: str | None = None) -> dict:
     """The census/v1 of a request Program over its steps, one per sampling event, naming it by `digest`."""
     return census(program, step_ends(program, SAMPLING_EVENTS), digest)
@@ -184,27 +213,30 @@ def rows(program: Program, c: Mapping | None = None, prefix: Mapping | None = No
         cached = LATENT.get(getattr(nd.fn, "name", None), KV)
         if not set(cached) <= set(names):
             continue
-        args = [nd.args[names.index(p)] for p in cached]
-        t = args[0].type
-        if nd.form != "call" or not isinstance(t, Array) or any(a.type != t for a in args) or t.elem.homogeneous_width() is None:
-            raise ValueError(f"root node {k} ({nd.fn.id}) holds its KV otherwise than as one Call's {', '.join(cached)}: Array(T, row) each")
-        here = (len(cached), t.elem.leaves, t.elem.homogeneous_width())
-        if kind not in (None, here):
-            raise ValueError(f"root node {k} ({nd.fn.id}) has rows of {here} (planes, leaves, bits), another layer's are {kind}")
-        kind = here
-        ks, *vs = (_cut(a.refs, here[1], inputs, f"root node {k}'s {p}", prefix is not None) for a, p in zip(args, cached))
-        seen = {layer_of[g] for g in ks if g in layer_of}
-        if len(seen) > 1:
-            raise ValueError(f"root node {k} ({nd.fn.id}) reads the K rows of layers {sorted(seen)}")
-        layer = seen.pop() if seen else len(layers)
-        if layer == len(layers):
-            layers.append([])
-        for kg, *vg in zip(ks, *vs):
-            if pair.setdefault(kg, tuple(vg)) != tuple(vg):
-                raise ValueError(f"root node {k} ({nd.fn.id}) reads a K row with another V row than a Call before it")
-            if kg not in layer_of:
-                layer_of[kg] = layer
-                layers[layer].append(kg)
+        if nd.form not in ("call", "batch"):
+            raise ValueError(f"root node {k} ({nd.fn.id}) holds its KV in a {nd.form}: memory-map/v1 reads a Call's or a batch member's")
+        for m in range(nd.n if nd.form == "batch" else 1):
+            args = [_history(body.nodes, _member(nd, names.index(p), m)) for p in cached]
+            t = args[0].type
+            if not isinstance(t, Array) or any(a.type != t for a in args) or t.elem.homogeneous_width() is None:
+                raise ValueError(f"root node {k} ({nd.fn.id}) holds its KV otherwise than as {', '.join(cached)}: Array(T, row) each")
+            here = (len(cached), t.elem.leaves, t.elem.homogeneous_width())
+            if kind not in (None, here):
+                raise ValueError(f"root node {k} ({nd.fn.id}) has rows of {here} (planes, leaves, bits), another layer's are {kind}")
+            kind = here
+            ks, *vs = (_cut(a.refs, here[1], inputs, f"root node {k}'s {p}", prefix is not None) for a, p in zip(args, cached))
+            seen = {layer_of[g] for g in ks if g in layer_of}
+            if len(seen) > 1:
+                raise ValueError(f"root node {k} ({nd.fn.id}) reads the K rows of layers {sorted(seen)}")
+            layer = seen.pop() if seen else len(layers)
+            if layer == len(layers):
+                layers.append([])
+            for kg, *vg in zip(ks, *vs):
+                if pair.setdefault(kg, tuple(vg)) != tuple(vg):
+                    raise ValueError(f"root node {k} ({nd.fn.id}) reads a K row with another V row than a Call before it")
+                if kg not in layer_of:
+                    layer_of[kg] = layer
+                    layers[layer].append(kg)
     if kind is None:
         raise ValueError("the Program has no attention Call with kc and vc, nor a sparse MLA Call's kv: no KV to record")
     planes, leaves, bits = kind

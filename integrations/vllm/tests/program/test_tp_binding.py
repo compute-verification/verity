@@ -25,12 +25,13 @@ N, ROWS = 16, 2
 GEMM = bind(G.Gemm, K=N, N=N, **G.GEMM_AMPERE)
 
 
-def rank_body(world: int, rank: int, whole: bool = False, peers: list[int] | None = None, combine=None):
+def rank_body(world: int, rank: int, whole: bool = False, peers: list[int] | None = None, combine=None, chain: bool = False):
     """Rank ``rank``'s request body of a ``world``-rank request: a Gemm partial per row all-reduced per row (`_Peers.rows`), and
-    with ``whole`` a second Gemm per row all-reduced over both rows at once (`_Peers.whole`); ``peers`` the order `_Peers`
-    reads its peer Inputs in, ``combine`` the per-row all-reduce's Definition."""
+    with ``whole`` a second Gemm per row all-reduced over both rows at once (`_Peers.whole`), with ``chain`` a second Gemm
+    per row reading that row's all-reduce, all-reduced per row; ``peers`` the order `_Peers` reads its peer Inputs in,
+    ``combine`` the per-row all-reduce's Definition."""
     params = (("x", Array(ROWS * N, BF16)), ("w", Array(N, Array(N, BF16))),
-              *((f"peers_{m}", Array(ROWS * N, BF16)) for m in range((1 + whole) * (world - 1))))
+              *((f"peers_{m}", Array(ROWS * N, BF16)) for m in range((1 + whole + chain) * (world - 1))))
     row = combine or bind(TP.AllReduce, WORLD=world, N=N)
     wide = bind(TP.AllReduce, WORLD=world, N=ROWS * N)
     B = Builder(params, (wide if whole else row).signature()[1])
@@ -41,7 +42,12 @@ def rank_body(world: int, rank: int, whole: bool = False, peers: list[int] | Non
 
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[2:], start=2)]
     p = _Peers(inputs if peers is None else [inputs[i] for i in peers], world, rank)
-    out = [B.call(row, Coll(row.signature()[0][0][1], parts)) for parts in p.rows(partials())][-1]
+    outs = [B.call(row, Coll(row.signature()[0][0][1], parts)) for parts in p.rows(partials())]
+    if chain:
+        w = Coll(params[1][1], Affine("p", 1, 0, N * N))
+        outs = [B.call(row, Coll(row.signature()[0][0][1], parts))
+                for parts in p.rows([B.call(GEMM, Coll(Array(N, BF16), o.refs), w).refs for o in outs])]
+    out = outs[-1]
     if whole:
         out = B.call(wide, Coll(wide.signature()[0][0][1], p.whole(partials())))
     return B.finish(out)

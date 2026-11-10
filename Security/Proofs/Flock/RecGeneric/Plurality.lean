@@ -55,8 +55,8 @@ theorem firstCoins_extend {Coin : Type} [Inhabited Coin] {m n : ℕ} (hn : m ≤
 
 /-- A view opened where it accepts, as a trace, and aborted elsewhere: what `E^rep` at the inner protocol sees of
 it. -/
-def Server.openT (S : Server) (v : Seen) : Trace :=
-  if v.out = .acc then ⟨(S.openView v).msgs, [], [], .acc⟩ else abortTrace
+def Server.openT (S : Server) (v : Seen) : Transcript :=
+  if v.out = .acc then ⟨(S.openView v).msgs, [], [], .acc⟩ else abortTranscript
 
 /-- **A view and its opening accept alike**, and an accepted view's opening is the view opened. -/
 theorem Server.openT_rel (S : Server) (v : Seen) :
@@ -65,9 +65,9 @@ theorem Server.openT_rel (S : Server) (v : Seen) :
   · have e : S.openT v = ⟨(S.openView v).msgs, [], [], .acc⟩ := ite_eq_left h
     rw [e]
     exact ⟨⟨fun _ => rfl, fun _ => h⟩, fun _ => S.openView_eq_of_acc h⟩
-  · have e : S.openT v = abortTrace := ite_eq_right h
+  · have e : S.openT v = abortTranscript := ite_eq_right h
     rw [e]
-    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
+    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTranscript, Transcript.seen] at h'⟩, fun h' => absurd h' h⟩
 
 namespace Comp
 
@@ -79,7 +79,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`replayOC` returns the replayed run's view**: from `n` rounds left, the history `hist` and the trace `t`, with as
 many prover messages sent as the history holds. -/
 theorem stepWith_replayOC (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (sent : List Msg) (t : Trace), hist.length = sent.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (sent : List Msg) (t : Transcript), hist.length = sent.length →
       ((replayOC IV xI as cs n sent t.msgs).eval H).1 =
         (stepWith H (replay as) xI () (fun as' => IV.next xI as' ((List.range as'.length).map cs)) n hist sent
           t).seen
@@ -106,7 +106,7 @@ theorem replayOC_eval (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : Li
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **The inner view's rerun program returns the inner view**, against any runs. -/
 theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin)
-    (o : Option K.WO) (run₂ : (Fin (K.V.k x) → Coin) → Trace) :
+    (o : Option K.WO) (run₂ : (Fin (K.V.k x) → Coin) → Transcript) :
     ((K.decProg IV x r o).eval H run₂).1 = K.dec IV H x r o := by
   cases o with
   | none => rfl
@@ -117,7 +117,7 @@ theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x :
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem stage_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg)
-    (run₂ : (Fin (K.V.k x) → Coin) → Trace) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+    (run₂ : (Fin (K.V.k x) → Coin) → Transcript) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ((K.stage IV x d).eval H run₂).1 = ((Claims.outerStage K.EO (K.dec IV H) x d).eval H run₂).1 := by
   rw [Comp.stage, (RP.eval_bind H run₂ _ _).1, decProg_eval, outerStage_eval]
 
@@ -230,10 +230,10 @@ noncomputable def keepDO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : 
     K.AgreesO I S H P x ω d)
 
 /-- **`P_O`'s run at a sample, as it aborts**: at the sample's inner coins, unless `keepDO` refuses it. -/
-noncomputable def innerFO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+noncomputable def innerFO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   if K.keepDO I S H P x ω d then
     run H (K.innerPO I S H P x decC) I.V (K.xI x) ω (firstCoins (I.V.k (K.xI x)) d.1)
-  else abortTrace
+  else abortTranscript
 
 /-- **`P_O`'s aborts**: a run at the inner coins `ρ` and the abort coins `a` is kept as `keepDO` keeps the sample they
 extend to. -/
@@ -243,18 +243,18 @@ noncomputable def keepAO (ω : Ω) (ρ : Fin (I.V.k (K.xI x)) → Coin) (a : (Fi
 
 open Classical in
 /-- The served run at a sample, aborted where `E_O` gives witnesses outside `R_O`. -/
-noncomputable def servedG (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
-  if K.OutRO H P x ω d then abortTrace
+noncomputable def servedG (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
+  if K.OutRO H P x ω d then abortTranscript
   else servedRun H (Claims.outerStage K.EO (K.dec (S.IVStar I.V I.ans) H) x) (run H P K.V x ω) d
 
 /-- `servedG` opened (`Server.openT`): what `E^rep` at the inner protocol sees where `E*`'s inner stage sees the served
 run. -/
-noncomputable def servedO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+noncomputable def servedO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   S.openT (K.servedG I S H P x ω d).seen
 
 open Classical in
 /-- `P_O`'s aborting run at the bad samples, `servedO` elsewhere. -/
-noncomputable def mixO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+noncomputable def mixO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   if K.BadO I S H P x ω d then K.innerFO I S H P x decC ω d else K.servedO I S H P x ω d
 
 /-- **An accepted run whose inner view rejects**, at the tape, the compiled verifier's coins and `E_O`'s: `E_O` gives
@@ -463,7 +463,7 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
   · have hseen : (run H (replay (S.opened os last)) I.V (K.xI x) () (firstCoins (I.V.k (K.xI x)) d.1)).seen =
         S.openView (K.view (S.IVStar I.V I.ans) H x ρ.1 w') := by
       rw [hov']
-      simp only [Trace.seen, h1, h2]
+      simp only [Transcript.seen, h1, h2]
       congr 1
       refine List.map_congr_left fun j hj => ?_
       rw [List.mem_range] at hj
@@ -513,16 +513,16 @@ theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c
     refine ⟨?_, fun _ => h1.symm⟩
     rw [S.openView_out]
     exact ⟨fun _ => h2, fun _ => hacc'⟩
-  · have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
+  · have e2 : K.innerFO I S H P x decC ω d = abortTranscript := by
       unfold Comp.innerFO
       rw [ite_eq_right hk]
-    have e1 : K.servedO I S H P x ω d = abortTrace := by
+    have e1 : K.servedO I S H P x ω d = abortTranscript := by
       unfold Comp.servedO Comp.servedG
       by_cases hout : K.OutRO H P x ω d
       · rw [ite_eq_left hout]
-        exact ite_eq_right (by simp [abortTrace, Trace.seen])
+        exact ite_eq_right (by simp [abortTranscript, Transcript.seen])
       rw [ite_eq_right hout, servedRun_seen, outerStage_eval]
-      change S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)) = abortTrace
+      change S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)) = abortTranscript
       refine ite_eq_right fun hacc => hk ?_
       obtain ⟨w, hw⟩ : ∃ w, K.wits H P x ω d = some w := by
         rcases hw : K.wits H P x ω d with _ | w
@@ -560,7 +560,7 @@ theorem abortRun_eqO (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω
   have hc : firstCoins (I.V.k (K.xI x)) (extendDraw t).1 = t.1 := firstCoins_extend hn t.1 t.2.1
   unfold abortRun Comp.keepAO
   show (if K.keepDO I S H P x ω (extendDraw t) = true then
-      run H (K.innerPO I S H P x decC) I.V (K.xI x) ω t.1 else abortTrace) =
+      run H (K.innerPO I S H P x decC) I.V (K.xI x) ω t.1 else abortTranscript) =
     K.innerFO I S H P x decC ω (extendDraw t)
   unfold Comp.innerFO
   rw [hc]

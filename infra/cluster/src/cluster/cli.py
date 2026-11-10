@@ -149,7 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--on", dest="node", metavar="NODE")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
-                                                               "at a GPU job's CPU weight (node 1: not idle)")
+                                                               "at a GPU job's CPU weight (node 1: not idle), with GPU_LEASE "
+                                                               "naming the node's lease tool")
     sb.add_argument("--stop", action="append", default=[], metavar="NODE=EPOCH",
                     help=f"NODE's stop as the node reports it ({model.DEADLINE_FILE}), in place of the description's stops_at")
     st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")

@@ -28,7 +28,7 @@ open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
 variable {A : Adm} {coins : Got}
 
 theorem os_start {α : Type} {p : TMW OpenM α} (h : OS A (fun g hs => g = #[] ∧ hs = []) (fun _ _ _ => True) p)
-    (t : Transcript) : ST A (fun _ _ => True) ((p.run t).run #[]) [] :=
+    (t : Flock.Transcript) : ST A (fun _ _ => True) ((p.run t).run #[]) [] :=
   h t #[] [] ⟨rfl, rfl⟩
 
 /-- A program that takes its coins from the given ones doesn't stop, nor answer anything. -/
