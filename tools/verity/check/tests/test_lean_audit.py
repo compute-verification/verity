@@ -864,7 +864,8 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
     """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
     than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
-    of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it."""
+    of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
+    the unpacking: a bundle fetched and not reached is dropped, unmarked."""
     def bundle(i: int) -> tuple[str, str]:
         f = tmp_path / f"b{i}.tar.gz"
         with tarfile.open(f, "w:gz") as t:
@@ -886,9 +887,13 @@ def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and
     assert sorted(f.name[:2] for f in (store / "artifacts").iterdir()) == ["10", "11", "30", "31", "32"], \
         "the second as far as the budget went: its entry waits for its last artifact"
     assert [f.name for f in (store / TAKEN).iterdir()] == [next(iter(urls))[len(LA.SHARED):]], "only the first is marked"
+    assert not list(store.glob(".*.part")), "the third was fetched ahead and dropped"
     assert arts.take(urls, said.append) == 2 and "left to a later run" not in said[1]
     assert len(list((store / "keys").iterdir())) == 3 and len(list((store / "artifacts").iterdir())) == 9
     assert len(list((store / TAKEN).iterdir())) == 3 and arts.take(urls, said.append) == 0 and len(said) == 2
+    more = dict(bundle(i) for i in range(1, 10))                        # more than are fetched at once
+    assert LA.AHEAD < len(more) and LA.LakeArtifacts(tmp_path / "other").take(more, said.append) == 9
+    assert "taken from 9 of 9 artifact bundle(s)" in said[2] and len(list((tmp_path / "other" / TAKEN).iterdir())) == 9
 
 
 def test_a_bundle_made_under_another_schema_is_left_for_a_build_of_that_schema_to_take(tmp_path, monkeypatch):

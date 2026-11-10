@@ -1000,6 +1000,8 @@ SHARED = "lean-artifacts/"
 BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
 #: how many of the newest recorded checks' bundles the launcher sends
 SHARED_LIMIT = 12
+#: how many bundles `LakeArtifacts.take` downloads at once, ahead of the one it unpacks
+AHEAD = 4
 
 
 class Unindexable(str):
@@ -1240,12 +1242,16 @@ class LakeArtifacts:
         and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
         never change. The URL is never logged: it grants a read until it expires.
 
-        The bundles are taken one at a time in the order ``urls`` names them, which is the launcher's, newest first
+        The bundles are unpacked one at a time in the order ``urls`` names them, which is the launcher's, newest first
         (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
         bundle holds up to `BUNDLE_CAP` and the launcher lists dozens, more than the cache's cap together; a quarter is
         what the prune that follows can make room for (it stops at three quarters, least recently used first) and still
         leave half the cap to what the node itself used last. The bundle the budget stops in, and those after it, are not
         marked: a later run takes what is left of them, when the launcher still lists them.
+
+        Downloads run ahead of the unpacking, `AHEAD` at once and no further than that past the bundle being unpacked,
+        so dozens of small bundles cost a quarter of what one at a time would (about 3 s a bundle from the store), and a
+        run that stops at its budget has fetched at most `AHEAD` - 1 bundles it then drops.
 
         A bundle is marked taken under this schema alone (`module_keys.SCHEMA`): one made under another adds nothing
         here, and a build of a tree with that schema on this node takes it for itself."""
@@ -1275,24 +1281,32 @@ class LakeArtifacts:
             part.unlink(missing_ok=True)
             return None
 
-        for h, url in want.items():
-            if stopped := stopped or size >= budget:
-                break
-            if (part := get(h, url)) is None:
-                continue
-            got += 1
-            with self._lock():
-                try:
-                    more, wrote, whole = self._unpack(part, budget - size)
-                    n, size, stopped = n + more, size + wrote, not whole
-                    if whole:
+        todo, ahead = list(want.items()), {}
+        with ThreadPoolExecutor(max_workers=AHEAD) as ex:
+            for i, (h, _) in enumerate(todo):
+                if stopped := stopped or size >= budget:
+                    break
+                for j in range(i, min(i + AHEAD, len(todo))):
+                    if j not in ahead:
+                        ahead[j] = ex.submit(get, *todo[j])
+                if (part := ahead.pop(i).result()) is None:
+                    continue
+                got += 1
+                with self._lock():
+                    try:
+                        more, wrote, whole = self._unpack(part, budget - size)
+                        n, size, stopped = n + more, size + wrote, not whole
+                        if whole:
+                            (taken / h).touch()
+                    except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as e:
+                        log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
                         (taken / h).touch()
-                except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as e:
-                    log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
-                    (taken / h).touch()
-                except OSError as e:
-                    log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
-                finally:
+                    except OSError as e:
+                        log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
+                    finally:
+                        part.unlink(missing_ok=True)
+            for f in ahead.values():
+                if (part := f.result()) is not None:
                     part.unlink(missing_ok=True)
         with self._lock():
             self.prune()
