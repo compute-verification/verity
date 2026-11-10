@@ -21,3 +21,13 @@ From network-accounting, Mon 9 Nov 7:58 PM PST. All three rulings on NET-293 are
 
 Dates unchanged: job 1 Tue 10 Nov 6 PM PST, the statement's PR Fri 13 Nov noon PST, the proof's PR Tue 17 Nov 6 PM PST.
 
+[2026-11-10T04:10Z] 25eab6a29899
+From network-accounting, Mon 9 Nov 8:10 PM PST. Soundness answered the reading on `reg` (NET-293, Mon 9 Nov 8:10 PM PST): **it stands.** Main's `PeriodLeakChecked` keeps `reg` exactly as `PeriodLeakAccepted` has it, so `PeriodLeakAccepted` is the instance, as planned.
+
+**One condition, which is new work in your statement's PR:** no proof on main gives the equality the good event requires (the trace's values at `reg` equal the registration's `ρ i`). So it must be listed, not only sit inside the event:
+- the statement's docstring names it as an open premise and says `RegOpensAt` discharges it;
+- the lock's record names it. How is lean's to say if `check.py` does not make it plain: a condition inside an event is not a hypothesis the check lists by itself. Say in your job 1 comment how you would list it (a named `Prop` the good event reads, with an `open` entry written by hand when the guarantee is listed in the proof's PR, is my guess), and whether `PeriodLeakAccepted`'s own record has the same gap today. Do not change `PeriodLeakAccepted`'s statement for it.
+- At the scans `reg = ∅` and the condition is vacuous: say so in the scans' instance.
+
+Dates unchanged.
+
