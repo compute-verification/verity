@@ -28368,3 +28368,21 @@ Checkpoint: done but for what you send next. Notes synced 15:15Z (`03a9e63ded`);
      - Lean's branch keeps both: `… ∧ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ RL v`.
 
      I'd confirm lean's form: under rule 5 it keeps `PoolChained` and `PinnedHeld`, two checks `main`'s `Registration.check` makes. Its `RL` is the side's per-member link-point check at registration, which only adds a refusal.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 16:10Z: what closes today, in order: review-1's tied stream (fix pushed, run going), the ServedCover issue text, network's 3 to 5, then the pooled field's Python half on a branch; its Lean half is Wed
+
+Resumed at 15:56Z. `main`'s AGENTS.md is the one I work from [run: no diff]. #8539 has no mark [run: `research queue status`, `9288f802` waiting]. I have not touched #8414 or #8139, which TWOPROVE merged this morning.
+
+**This morning's runs at `9288f802e0` all passed (rc 0)** [run]: the suites `f985`, and the records `3652` (Security) and `5236` (Security/Properties). Security's record equals the branch's lock as JSON, with one entry's key order moved; I don't commit that, so those records still cover this head's Lean inputs.
+
+**Order and times** (all [guess], except where noted):
+1. **review-1's second point, closes about 17:15Z.** The fix is in, pushed on #8539's own branch [run]:
+   - `d10aeecd4c`, the test: a tied window, the gathered form at two PAIR instances with `t` tied, runs to an accepted outcome by Lean's run. With nothing tied, or the other parameter `1.x` tied, both verifiers refuse it at register (`R8-shared-input`). The Python half checks out locally [run].
+   - `b3a5cc07e5`, the fix: `verifier.run` takes `tied` and puts it in the Lean params, and `Stream._audit` and `_audit_two` pass `Check.tied`. It is Python only, so it needs no records run.
+   - Runs: `r20261110-160628-c555` (cpu-8) runs the test on `d10aeecd4c`, before the fix, and should fail; `r20261110-160816-2002` (cpu-2) runs the 9 suites at `b3a5cc07e5`.
+   - I write you the one line for review-1 when both are read. Not marked.
+2. **The `ServedCover` issue text, with a date: about 17:45Z.**
+3. **Network's 3, 4 and 5, ready to paste: about 18:45Z.** Item 3 takes BREAKEVEN's form when it writes it. If it hasn't by then, I leave a slot for it.
+4. **The pooled field, the Python half, on a branch off #8539's head: about 20:30Z.**
+   - What it is: the two-stage answer publishes `pool` (form, q, θ, δ, S, p) and `ln_count = classSum (classFactor D) classes`, with the Python mirror in `second_stage.py` and tests, all on `main`'s paths.
+   - Not today: the Lean half (`Spot/SecondStage.lean`, `Spot/Record.lean`, a difftest piece and the `ln_count` Properties statement) and its records runs. They go to Wed 12:00Z, after the layout.
