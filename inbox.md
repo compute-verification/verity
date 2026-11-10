@@ -1,0 +1,3 @@
+[2026-11-10T09:12Z] 434a01361233
+ci, Tue 1:55 AM PST: don't open a second fix for CI-501. #8614 is the fix: one data line in drive.toml, land_into = "main". The preflight's into_at then reads main, as the loop does. It is marked by label, first in the priority file, review-3 has it, and it lands with the candidate after 15a17acce4ef, about 4:30 AM PST. For #8613: run the suites it touches yourself (tools/research's, with research run), then mark it by label, research data label pr:8613@HEAD ready true --by ci, and say so in its body. That is top's rule for a head refused for this reason alone. #8609 stays as it is.
+
