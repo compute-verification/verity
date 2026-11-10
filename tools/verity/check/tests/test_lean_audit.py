@@ -734,6 +734,50 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
     assert [rid for rid, _ in CHECK.gathered_packs(tmp_path, store)] == ["r-lean", "r-check"]
 
 
+def _tier(audit: bool) -> list[str]:
+    """`research queue ready`'s quick tier as the store records it (`env` runs `slot.py`, which runs the tier), with the Lean
+    audit of the merge when ``audit``."""
+    uv = "uv run --locked --all-packages --extra torch-cpu python"
+    lean = f" --lean-audit '{uv} tools/verity/lean/warm.py'" if audit else ""
+    return ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "ci", "--",
+            "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" --head {"a" * 40} --base {"b" * 40}{lean} -- '
+                        f"{uv} tools/verity/check/suites.py --quick"]
+
+
+def test_the_audit_of_a_ready_marks_merge_publishes_its_bundle_and_verdicts_as_a_recorded_check_does(tmp_path):
+    """A change's modules are built at its ready mark so that no candidate builds them: unlisted, the mark's bundle and
+    verdict pack stay on the node that ran it, and the candidate that holds the change builds it again on another. The mark's
+    run is no recorded check (its tool is `env`) and keeps the audit's files under `out/lean-audit/`, in its run record when
+    its result lists no files. Each kind of run has its own count, since a candidate's shards end by the dozen."""
+    bundle, pack = "out/lean-audit/lean-artifacts.tar.gz", "out/lean-audit/verdicts.tar.gz"
+    files = {
+        "r-mark-new": {"run_files": [("out/logs/suite.log", "0" * 64, True)], "run_record": [(bundle, "1" * 64, True), (pack, "2" * 64, True)]},
+        "r-check": {"run_files": [("lean-audit/lean-artifacts.tar.gz", "3" * 64, True), ("verdicts.tar.gz", "4" * 64, True)]},
+        # a tier whose command names no audit publishes nothing, whatever its files are called
+        "r-tier": {"run_files": [(bundle, "5" * 64, True), (pack, "6" * 64, True)]},
+        "r-mark-old": {"run_files": [(bundle, "7" * 64, True), ("out/lean-audit/lean-artifacts-2.tar.gz", "8" * 64, False),
+                                     ("lean-audit/lean-artifacts.tar.gz", "9" * 64, True), ("verdicts.tar.gz", "a" * 64, True),
+                                     (pack, "b" * 64, True)]},
+        "r-mark-running": {"run_files": [(bundle, "c" * 64, True), (pack, "d" * 64, True)]},
+    }
+    index = _attempts(tmp_path, [("r-mark-new", "env", "done", _tier(True)), ("r-check", "check", "done", ["check"]),
+                                 ("r-tier", "env", "done", _tier(False)), ("r-mark-old", "env", "failed", _tier(True)),
+                                 ("r-mark-running", "env", "running", _tier(True))])
+    store = types.SimpleNamespace(
+        remote=None, index=index, get_attempt=lambda r: {"outputs": {kind: f"{kind}:{r}" for kind in files[r]}},
+        listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in files[art.split(":")[1]][art.split(":")[0]]])
+    assert LA.shared_bundles(store) == ["3" * 64, "1" * 64, "7" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["3" * 64, "1" * 64]
+    assert [(p["run"], p["path"], p["sha256"]) for p in CHECK.verdict_packs(store)] == [
+        ("r-check", "verdicts.tar.gz", "4" * 64), ("r-mark-new", pack, "2" * 64), ("r-mark-old", pack, "b" * 64)]
+    assert [p["run"] for p in CHECK.verdict_packs(store, limit=1)] == ["r-check", "r-mark-new"]
+    spec = importlib.util.spec_from_file_location("lean_warm_for_test_lean_audit", ROOT / "tools" / "verity" / "lean" / "warm.py")
+    warm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(warm)
+    assert CHECK.MARK_PACK == LA.COMMON.MARK_AUDIT_OUT + warm.PACK == pack, "the pack is listed where the audit writes it"
+    assert LA.PUBLISHERS[1][1].fullmatch(LA.COMMON.MARK_AUDIT_OUT + "lean-artifacts.tar.gz"), "and the bundle where `--bundle` does"
+
+
 def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
     """The bundle was written only when `RESEARCH_RUN_DIR` was set, which `check.env()` never passes to a step: no recorded
     check ever wrote one. `check.py` now says so with `--bundle`, inside a recorded run alone."""
