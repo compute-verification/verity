@@ -14,7 +14,7 @@ path = "../verifier"
 
 [[require]]
 name = "verity_difftest"
-path = "../../core/difftest/lean"
+path = "../../difftest/lean"
 
 [[lean_exe]]
 name = "sigma-difftest"

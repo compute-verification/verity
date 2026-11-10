@@ -20,7 +20,7 @@ SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "verity/configuration/config", "infra/cluster/src", "infra/ops", "benchmarks/numerical/python",
               "benchmarks/harness", "integrations/vllm", "verity/flock/prover/python", "tools/verity/circuit_check/src",
-              "verity/hardware/machine_model", "tools/verity/cli", "tools/verity/graph", "verity/core/difftest/python",
+              "verity/hardware/machine_model", "tools/verity/cli", "tools/verity/graph", "verity/difftest/python",
               "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput"]
 
 

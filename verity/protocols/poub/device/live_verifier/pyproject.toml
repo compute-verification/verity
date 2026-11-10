@@ -18,7 +18,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # packages
           "verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",
-          "verity/core/primitives/randomness", "verity/core/difftest/lean", "verity/core/difftest/python",
+          "verity/core/primitives/randomness", "verity/difftest/lean", "verity/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/core/claims/__init__.py", "verity/core/protocols/spot",
           # verifier.py and its in-process harness, which the stub verifier runs

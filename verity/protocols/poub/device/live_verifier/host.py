@@ -109,7 +109,7 @@ HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 VERIFIER = TREE / "verity" / "protocols" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "protocols" / "poub" / "verifier" / "remote_bandwidth" / "lean" / "tests"
-DIFFTEST = TREE / "verity" / "core" / "difftest" / "python"
+DIFFTEST = TREE / "verity" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
 PORTS = range(7951, 7959)

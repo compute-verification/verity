@@ -539,7 +539,7 @@ corefw_build() {
     if [ ! -x $FC_CORE_FIREWALL ]; then
       C=$L/corefw-src; rm -rf $C && mkdir -p $C/service $C/protocols $C/difftest \
         && cp -r verity/flock/verifier verity/flock/verifier/firewall $C/service/ && cp -r verity/flock/verifier/interface $C/protocols/ \
-        && cp -r verity/core/difftest/lean $C/difftest/ && (cd $C/service/firewall && lake build core-firewall) \
+        && cp -r verity/difftest/lean $C/difftest/ && (cd $C/service/firewall && lake build core-firewall) \
         && mkdir -p $L/corefw-$CSHA && cp $C/service/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
     fi
   )

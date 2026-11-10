@@ -1,7 +1,7 @@
 /-
 The honest worker's requests in an inner session (live PROTOCOL.md §10.3), as a program: what an honest worker sends the
 ZK server (`Flock.Firewall.run`), from the pinned schedule and what the worker brings beyond it (`Honest`).
-`FirewallHonest` proves the ZK server finishes on them, and `firewall-honest-difftest` (`verity/core/difftest`) holds
+`FirewallHonest` proves the ZK server finishes on them, and `firewall-honest-difftest` (`verity/difftest`) holds
 `rec_live`'s requests on a real prover's recorded session to them, byte for byte
 (`verity/flock/tests/test_honest_reqs.py`).
 -/

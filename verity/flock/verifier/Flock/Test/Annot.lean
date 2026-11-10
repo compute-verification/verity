@@ -3,7 +3,7 @@
 gate (`Flock.AnnotExpand`): equal results on every term and meaning below, and the results themselves on a few. The
 programs are `TGemm{K=32,N=6}` (Input batches, a composite batch, nested calls; 248 gates, 224 of them input gates) and
 `TSynth{N=4}` (two zip-able batches, a constant, a scan; 21 gates, 4 of them input gates), as `verity.ml.circuits` encodes
-them (`verity/core/difftest/tests/test_annot.py` builds them, and holds the sets to `query_ast`'s).
+them (`verity/difftest/tests/test_annot.py` builds them, and holds the sets to `query_ast`'s).
 -/
 module
 
