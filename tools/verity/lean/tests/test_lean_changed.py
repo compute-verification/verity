@@ -565,6 +565,15 @@ def test_a_lock_that_cant_be_read_names_no_prover_and_says_so(capsys):
     assert LC.provers("s", {}.get) == [] and capsys.readouterr().err == ""
 
 
+def test_without_a_mode_it_runs_nothing_prints_its_usage_and_exits_2(capsys):
+    for argv in ([], ["--deps", "d"], ["--tree", "t"]):
+        with pytest.raises(SystemExit) as e:
+            LC.main(argv)
+        err = capsys.readouterr().err
+        assert e.value.code == 2 and err.startswith("usage: lean_changed.py"), argv
+        assert "one of --records, --try, --build and --inputs-key is required" in err, argv
+
+
 def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_path, monkeypatch, capsys):
     """`--inputs-key PKG --head SHA` (`keys_at`) reads the commit's objects alone, so in a clone with no worktree checked out
     it gives the key a records run of that commit computes in its checkout (`inputs_key`), over the package's closure (the
@@ -829,8 +838,8 @@ def trying(tmp_path, monkeypatch):
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
     calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": ""}
 
-    def link(pkg, t, deps, links, log=print, copy=False):
-        calls["link"].append((pkg, copy))
+    def link(pkg, t, deps, links, log=print):
+        calls["link"].append(pkg)
         links[pkg] = "k"
         return True
 
@@ -851,7 +860,7 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
     assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
                               ("Sec/Proofs", tree, None, False, ["env", "lean", ".lake/axiom-probe/Flock/X.lean"])]
-    assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
+    assert calls["link"] == ["Sec/Proofs"], "the owning package's dependencies, as --records takes them"
     assert calls["run"] == [], "no check.py, audit or --update"
     assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)
     assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
