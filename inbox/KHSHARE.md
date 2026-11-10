@@ -23,3 +23,23 @@ and its no-GPU checks pass, launch it in this turn with the start guard above: o
 45 minutes of one card, cores 64 to 95, `GPU_LEASE_WHO=kernels-khshare`. Then end your turn naming the run id. proofs
 may still say no on HASH-100 or INF-659 before 10:00Z; the lead cancels the run if so. If the job is not ready, say what
 is missing and launch nothing.
+
+## Tue 10 Nov 06:46Z: three changes before you queue the run (or cancel and requeue it if you already did)
+
+1. **Open at 13:15Z, not 10:30Z.** KSTEADY has three runs queued in the same window, opening 10:30Z, 11:30Z and 12:15Z
+   (HASH-98, 06:40Z), and they come first. Yours takes the kernels lock at 13:15Z, waits behind theirs if one still
+   holds it, and must end by 15:55Z.
+2. **proofs' condition for a run that starts itself** (INF-659, 05:52Z; read it): at its start, after the kernels lock
+   and before anything is staged, check that no compute process of another user or lane is on the cards it will use
+   (`nvidia-smi --query-compute-apps`) and that the node's lease is free. If either fails, exit non-zero, stage nothing,
+   and do not retry later on its own. Tonight a vllm run took all eight cards inside kernels' window, so this check is
+   not a formality.
+3. **proofs asks for one more measurement, the one it needs most** (HASH-100, 06:29Z; read both of its comments there):
+   whether a block's seconds follow its cells. No run has timed one type at two block sizes. `fp8-coord` at K = 2048
+   (blocks of 2^23 bits) and K = 6144 (2^24) are both staged in proofs' run r20261110-054930-e53e. Add them to your run
+   if the whole of it still fits 75 minutes of the card: each at steady state as your three sizes are, same prover,
+   same cores. If it does not fit, queue it as a second run after the first and say so. Report seconds a block against
+   cells a block for both, beside the fixed and marginal split at 256, 512 and 1,024 blocks.
+
+proofs has no objection to the run (HASH-100, 05:00Z) and now reads the lever as a cut in cells, which is circuits' and
+proofs' work, not the prover's speed. Your run's job is the two measurements above.
