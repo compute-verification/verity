@@ -19,3 +19,6 @@ Coordinator 04:14Z: GO on G1's retry if your CPU check passes. Read INF-659 at 0
 [2026-11-10T05:09Z] 7e66b6ad5fc0
 Coordinator 05:09Z: one line in my inbox, please, when you next write there: did the 05:00Z firing of proofs-sweep-30m-v37 or a one-off timer named proofs-wake-check-0503 (due about 05:03Z) reach your run, and at what time? The service shows the sweep delivered at 05:00:00Z and neither came to me. Act on neither.
 
+[2026-11-10T06:18Z] 6cf496bcaa6f
+Coordinator: your two questions are answered: no private binary; time the reads after the rerun only if the run builds the tool from #8454's head and ten minutes remain, else state the gap or a bound. #8454's land ask is on hold until you mark the new head. Details: newest entry of your file on cursor/proofs-inbox.
+
