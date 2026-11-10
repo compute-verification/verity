@@ -248,6 +248,27 @@ def derived_modules(layout: Layout) -> dict[str, str]:
     return out
 
 
+def alternation(words) -> str:
+    """A regex for any one of `words`, the longest that matches first, as `"|".join(map(re.escape, sorted(words, key=len,
+    reverse=True)))` is. `re` tries that list word by word at every character of every file, which with a map of hundreds
+    of rows is most of a run; this is the same set as a trie, one branch for each next character."""
+    trie: dict = {}
+    for w in words:
+        node = trie
+        for c in w:
+            node = node.setdefault(c, {})
+        node[""] = {}                               # a word ends here
+
+    def regex(node: dict) -> str:
+        longer = [re.escape(c) + regex(sub) for c, sub in node.items() if c]
+        if not longer:
+            return ""
+        if "" in node:
+            return "(?:" + "|".join(longer) + ")?"  # greedy: a longer word before the one that ends here
+        return "(?:" + "|".join(longer) + ")" if len(longer) > 1 else longer[0]
+    return regex(trie)
+
+
 # ------------------------------------------------------------------------------------------------------------- the run
 
 class Run:
@@ -513,7 +534,7 @@ class Run:
 
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
-            alts = "|".join(re.escape(p) for p in self.L.prefixes())
+            alts = alternation(self.L.prefixes())
             self._path_re = re.compile(rf"(?P<pre>[}})>]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
                                        rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
             self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
