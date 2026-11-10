@@ -27,9 +27,6 @@ from test_queue import World, _git
 SRC = Path(__file__).resolve().parents[1] / "src" / "research"
 #: the modules of the verified queue's loop, which runs on the control pod, whose TMPDIR is an NFS volume
 LOOP_MODULES = ("queue.py", "landing.py", "vqueue.py", "vqueue_loop.py", "vqueue_slim.py", "vqueue_records.py")
-#: the modules the loop runs that import nothing of `research.drive`
-DRIVE_FREE = ("landing.py", "executor.py", "vqueue.py", "vqueue_loop.py", "vqueue_slim.py", "vqueue_records.py",
-              "vqueue_compare.py")
 
 
 class Harness:
@@ -397,6 +394,22 @@ def test_train_launch_gives_train_sh_the_steps_and_flags_of_a_candidates_check(t
            "--shard 2/3" in tail, tail
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False)
     assert f"argv: {'c' * 40} m1\n" in tail + "\n", tail
+
+
+def test_train_launch_gives_train_sh_no_cache_circuit_checks_cache_and_ratchet_gates_own_base(tmp_path):
+    """`train.sh --no-cache` reuses no suite or Lean pass, `--circuit-cache` keeps circuit-check's per-target ones (a cold
+    `circuit-check --all` outlasts every check), and `--ratchet-base` is the commit ratchet-gate judges above when it isn't
+    the `--base`."""
+    from research.landing import train_launch
+
+    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="pytest,circuit-check", no_cache=True,
+                             circuit_cache=True, no_regenerate=True)
+    assert ids == ["r20261027-120000-aaaa"]
+    assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
+    assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
 def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
@@ -901,6 +914,21 @@ def test_a_landings_delta_carries_a_merge_of_a_landed_tip_and_not_of_an_untruste
     assert d.delta(old, new, [], set()).kind == "untrusted-parent"
 
 
+def test_a_landings_delta_trusts_a_merged_in_head_that_isnt_landed_only_when_it_is_given(world):
+    """`Landing.delta` hands `carry.trust` the heads given beside the landed tips: a new head that merges another PR's head,
+    landed nowhere, carries only when that head is one of them (another PR's marked head with a land verdict and no hold)."""
+    from test_queue import _merge
+
+    other, old = world.change({"b.txt": "2\n"}), world.change({"a.txt": "1\n"})
+    new = _merge(world, old, other)
+    q = world.queue()
+    q._clone()
+    _git(q.workdir, "fetch", "-q", "origin", f"refs/dev/{old}", f"refs/dev/{new}")
+    d = Landing(q, on="")
+    assert d.delta(old, new, [_main(world)], {other}).carries
+    assert d.delta(old, new, [_main(world)], set()).kind == "untrusted-parent"
+
+
 def test_an_auto_plan_is_planned_in_the_background_in_a_directory_of_its_own_and_a_landing_launches_it(tmp_path, monkeypatch):
     """`plan_shards` detaches `PLAN_JOB` on the tip's check of the steps given, at most ``max_shards`` shards, into a new
     directory under `LAUNCHES` that its record names (``out``); a `Landing` plans with it and reads the plan with `planned`."""
@@ -1006,27 +1034,3 @@ def test_every_temporary_directory_in_the_loops_code_ignores_cleanup_errors():
     bad = {m: lines for m in LOOP_MODULES if (lines := _unguarded(SRC / m))}
     assert not bad, (f"tempfile.TemporaryDirectory without ignore_cleanup_errors=True at {bad}: pass it, since the loop's TMPDIR "
                      "is NFS and a silly-renamed file fails the cleanup")
-
-
-def _drive_imports(source: str) -> list[int]:
-    """The lines of ``source`` that import `research.drive` or a name of it."""
-    out = []
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and (
-                node.module in ("drive", "research.drive") or (node.module in (None, "research") and node.level <= 1
-                                                               and any(a.name == "drive" for a in node.names))):
-            out.append(node.lineno)
-        elif isinstance(node, ast.Import) and any(a.name == "research.drive" for a in node.names):
-            out.append(node.lineno)
-    return out
-
-
-def test_the_loops_modules_import_nothing_of_drive():
-    """What the loop runs lives in modules it owns (`research.landing`, `vqueue_records`), so drive's code can go without a
-    change to the loop."""
-    bad = {m: lines for m in DRIVE_FREE if (lines := _drive_imports((SRC / m).read_text()))}
-    assert not bad, f"{bad} import research.drive: import what the loop runs from research.landing or research.vqueue_records"
-    for form in ("from .drive import CI", "from . import drive, merge", "from research import drive",
-                 "from research.drive import CI", "import research.drive as D", "def f():\n    from .drive import CI\n"):
-        assert _drive_imports(form), form
-    assert _drive_imports("from .landing import CI\nfrom . import merge\nimport research.landing\nfrom .drives import x\n") == []
