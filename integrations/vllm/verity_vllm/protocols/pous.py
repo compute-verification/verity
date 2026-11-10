@@ -1,6 +1,6 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
 point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.core.protocols.pous.period`),
-with the memory challenger a party of its own on the challenger host (`verity.core.protocols.pous.challenger_party`).
+with the memory challenger a party of its own on the challenger host (`verity.core.devices.memory_challenger.challenger_party`).
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
@@ -442,7 +442,7 @@ class PousOption(Option):
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
         returns the answer, its profile carrying where each party ran (`challenger_party.placement`).  ``schemes`` and
         ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
-        from verity.core.protocols.pous import challenger_party as CP
+        from verity.core.devices.memory_challenger import challenger_party as CP
         from verity.core.protocols.pous import memory_challenger as mc
         from verity.core.protocols.pous import period
 
