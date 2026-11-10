@@ -7,7 +7,8 @@
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  until a protocol's verifier is its Lean, its Python verifier and each
     device load and reach only the places the listing (``tests/import_order.toml``) froze for them in ``trusted``, the
-    soundness path, which only shrinks;  ml never imports core;  no unit imports
+    soundness path, which only shrinks;  under ``verity/``, outside the verifiers and the devices, only the files
+    their ``loaded_by`` lists load one, tests included, and that only shrinks too;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
@@ -18,9 +19,9 @@ An import is an import statement (a relative one resolved against its package), 
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
 a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The directories of the
-listing's ``distribution`` have import roots of their own, and only the rule that ml never imports core reads them; it
-reads ml's tests too.  No other file under ``verity/``, tests included, reads another distribution at run time: its package
-data or a module named in a string (`RUN_TIME_READ`, matched in the text, f-strings too).
+listing's ``distribution`` have import roots of their own, and only ``loaded_by`` reads them as loaders.  No other file
+under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
+string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
@@ -118,7 +119,7 @@ ALLOWED = {
     # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
     "core.protocols.reporting": set(),
     # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
-    # certifier's are stated over their protocol's parameters and records in core (`ML_IMPORTS_CORE`), and PoUW's schemes
+    # certifier's are stated over their protocol's parameters and records in core (the listing's `loaded_by`), and PoUW's schemes
     # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).
     "ml.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                           "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.spot"},
@@ -137,37 +138,6 @@ DEPENDENCIES = {"numpy"}
 NUMPY_FREE = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
               "verity/claims", "verity/hardware")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
-#: ml builds on no verifier: what a verifier's Python loads never runs the other way.  The files of
-#: ``verity/ml/`` that import core anyway
-#: (globs from ``verity/``), each with why.
-ML_IMPORTS_CORE = {
-    "ml/flock/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
-    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.claims`",
-    "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
-                                                "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
-    "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
-                                             "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
-                                             "use only verity.ml; the follow-up to T2 moves them into ml "
-                                             "(`verity/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "core imports them from there, and this entry then covers only rec_live's coin "
-                                             "server, which takes the inner session's coin tree from the challenger's device "
-                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
-                                             "its sessions to the device's release log (`challenger.coin_trees_of`)",
-    "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
-                                  "do (the rec_* entry), and moves with them in the follow-up to T2",
-    "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
-                                    "`one_stage.partition`, as rec_inner does, and moves with it in the follow-up to T2",
-    "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
-                                                        "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
-                                                        "entry), and moves with them in the follow-up to T2",
-    "ml/protocols/pouw/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
-                           "parameters, records and Python references in core (`pouw.protocol`, `registration`, `window`, "
-                           "`spot.one_stage`, ...); they shrink as those references leave core",
-    "ml/protocols/certifier/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
-                                "(`head_check`'s gates, `cache_step`, `compile_slice`, `replay_chain`, `arith_encode`, "
-                                "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
-                                "`active`, `served_rows`, ...)",
-}
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units, the
 #: trees each of whose Python files (tests included) is checked, its Lean packages and its analysis (Security's Flock and
@@ -418,29 +388,6 @@ def test_scalar_references_are_stdlib_only(subtree: str) -> None:
                  for name, line, _ in _imports(path)
                  if name.split(".")[0] == "numpy"]
     assert not offenders, "\n".join(offenders)
-
-
-def _ml_importers_of_core() -> dict[str, list[str]]:
-    """Each file under ``verity/ml/`` (its tests and ``SEPARATE`` trees included) that names a module of ``verity.core``,
-    with where."""
-    out: dict[str, list[str]] = {}
-    for path in sorted((SRC / "ml").rglob("*.py")):
-        rel = path.relative_to(SRC)
-        if {".lake", "__pycache__"} & set(rel.parts):
-            continue
-        hits = [f"{line}: {name}" for name, line, _ in _imports(path) if name.split(".")[:2] == ["verity", "core"]]
-        if hits:
-            out[rel.as_posix()] = hits
-    return out
-
-
-def test_ml_never_imports_core() -> None:
-    found = _ml_importers_of_core()
-    offenders = [f"{f}:{hit}" for f, hits in found.items() if not any(fnmatch.fnmatch(f, g) for g in ML_IMPORTS_CORE)
-                 for hit in hits]
-    assert not offenders, "\n".join(offenders)
-    stale = [g for g in ML_IMPORTS_CORE if not any(fnmatch.fnmatch(f, g) for f in found)]
-    assert not stale, f"ML_IMPORTS_CORE entries that match no importer; remove them: {stale}"
 
 
 def _reached(allowed: dict[str, set[str]], units: Iterable[str]) -> set[str]:
