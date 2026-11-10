@@ -72,7 +72,11 @@ status by context and the check runs by name, so a name is either (`World.status
 `success` is pass; a status `failure` or `error`, or a check run concluded `failure`, `cancelled`, `timed_out` or
 `action_required`, is fail, with a `Failed` for each such name holding its description and URL (`Failed.detail`), its inputs
 the whole tree, so a lone member is ejected and several are bisected; anything else (pending, queued, another conclusion,
-absent) is pending, retried and rung by `pending_s` as any check.  A read that fails leaves its names unanswered, so pending,
+absent) is pending, retried and rung by `pending_s` as any check.  A `success` whose description holds a `--skipped` text (by
+default `SKIPPED`: a build its service skipped reports so) is no pass: once no name waits, the candidate is infra, with an infra
+error for each such name saying its build was skipped (`Failed.detail`), which no member's files meet.  The policy takes it as
+any infra error: retried once, which here only logs a try, then rung to infra, and bisected or set aside behind the PRs
+waiting, ejecting nobody.  A read that fails leaves its names unanswered, so pending,
 and says why; a name the other read answers needs none of it.  With `--head-statuses`, a name a candidate's commit has none
 of is read on its lone member's head while the candidate is that head fast-forwarded: its tree is the head's
 (`World.same_tree`), as the merge of a head that holds its base is.  That is for a service that reports on PR heads alone,
@@ -179,6 +183,9 @@ VERITY_FLAGS = ("--graph2", "--frozen", "--shards", "--on", "--no-slim", "--tree
 #: the commit status states and the check run conclusions that fail a candidate where its statuses gate (`status_verdict`):
 #: `success` alone passes, and any other (pending, queued, in progress, neutral, skipped, stale) waits, as an absent one does
 STATUS_FAILS, RUN_FAILS = ("failure", "error"), ("failure", "cancelled", "timed_out", "action_required")
+#: what a status's description says of a build its service skipped, which it reports `success` (`--skipped`'s default):
+#: Vercel's, of a commit its project's ignore rule leaves unbuilt
+SKIPPED = "Canceled by Ignored Build Step"
 #: a failed status's inputs: a deployment reads the whole tree, so its failure meets every member's files (`vqueue.meets`)
 WHOLE_TREE = frozenset({"**"})
 INTERVAL_S = 60
@@ -1437,12 +1444,17 @@ def _check_run(d: dict) -> tuple[str, str, str, str]:
             str((d.get("output") or {}).get("title") or end or ""), str(d.get("details_url") or d.get("html_url") or ""))
 
 
-def status_verdict(sha: str, names: Iterable[str], got: dict[str, list[tuple[str, str, str]]]) -> tuple[Verdict, list[str]]:
+def status_verdict(sha: str, names: Iterable[str], got: dict[str, list[tuple[str, str, str]]],
+                   skipped: Iterable[str] = ()) -> tuple[Verdict, list[str]]:
     """Candidate ``sha``'s verdict on the statuses ``names``, from each one's readings (``got``: `World.statuses`), and the
     names it waits for.  Fail when any reading of a name failed, with a `Failed` for each such name (`status NAME`) holding
     each failed reading's description and URL, its inputs the whole tree (`WHOLE_TREE`), ended once no other name waits;
-    else pending while a name has no reading or one that hasn't passed; else pass: each name read, every reading a pass."""
-    failed, waits = [], []
+    else pending while a name has no reading or one that hasn't passed; else infra when a name's every reading passed and
+    one's description holds a text of ``skipped``, case and all: its service built nothing, which is no member's doing, so
+    its infra error (`Verdict.infra`, under any state) has no inputs and says so with that description; else pass: each name
+    read, every reading a pass of a build that ran."""
+    failed, erred, waits = [], [], []
+    texts = tuple(skipped)
     for name in dict.fromkeys(names):
         seen = got.get(name) or ()
         if bad := [": ".join(filter(None, said)) or "it says no more" for state, *said in seen if state == FAIL]:
@@ -1451,9 +1463,12 @@ def status_verdict(sha: str, names: Iterable[str], got: dict[str, list[tuple[str
             waits.append(f"{name} (absent)")
         elif any(state != PASS for state, *_ in seen):
             waits.append(f"{name} (pending)")
+        elif (said := next((said for _, said, _ in seen if any(x in said for x in texts)), None)) is not None:
+            erred.append(Failed(f"status {name}", f"{sha}:{name}", frozenset(),
+                                detail=f"its build was skipped ({said}): nothing was built"))
     if failed:
-        return Verdict(FAIL, tuple(failed), ended=not waits), waits
-    return Verdict(PENDING if waits else PASS), waits
+        return Verdict(FAIL, tuple(failed), tuple(erred), ended=not waits), waits
+    return Verdict(PENDING if waits else INFRA if erred else PASS, infra=tuple(erred)), waits
 
 
 def _infra(docs: Iterable[object], key: str) -> bool:
@@ -1563,13 +1578,15 @@ class Loop:
     ``gate`` is what gates a candidate (`GATES`): its graph2 check with the run beside it; the check ``slim`` runs as
     ``shards`` shards, alone; or the GitHub statuses ``statuses`` names on its commit (with ``head_statuses``, on its lone
     member's head where its own has none: `_statuses`), with no ``slim`` and ``world`` detached from verity's machinery
-    (`World.detach`)."""
+    (`World.detach`); there a `success` whose description holds a text of ``skipped`` (`SKIPPED` unless given) is a build
+    that never ran: infra, no pass."""
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
-                 gate: str = GRAPH2_GATE, shards: int = SHARDS, statuses: Iterable[str] = (), head_statuses: bool = False):
+                 gate: str = GRAPH2_GATE, shards: int = SHARDS, statuses: Iterable[str] = (), head_statuses: bool = False,
+                 skipped: Iterable[str] | None = None):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or shards < 1):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
@@ -1579,14 +1596,19 @@ class Loop:
             raise ValueError(f"gate `{STATUSES_GATE}` with {len(statuses)} status(es)"
                              f"{' and a run beside each check' if slim is not None else ''}: it judges a candidate on the "
                              "GitHub statuses it is given, one or more, and runs nothing beside them")
-        if gate != STATUSES_GATE and (statuses or head_statuses):
-            raise ValueError(f"gate {gate!r} with statuses ({', '.join(statuses) or 'on a head'}): only `{STATUSES_GATE}` "
-                             "reads GitHub's statuses")
+        if gate != STATUSES_GATE and (statuses or head_statuses or skipped):
+            what = f"statuses ({', '.join(statuses)})" if statuses else "a head's statuses" if head_statuses else \
+                "a skipped build's text"
+            raise ValueError(f"gate {gate!r} with {what}: only `{STATUSES_GATE}` reads GitHub's statuses")
+        skipped = () if gate != STATUSES_GATE else tuple(dict.fromkeys((SKIPPED,) if skipped is None else skipped))
+        if "" in skipped:
+            raise ValueError(f"gate `{STATUSES_GATE}` with an empty skipped text, which every description holds: no status "
+                             "would pass")
         if gate == STATUSES_GATE and world is not None:
             world.detach()
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
-        self.gate, self.shards, self.statuses, self.head_statuses = gate, shards, statuses, head_statuses
+        self.gate, self.shards, self.statuses, self.head_statuses, self.skipped = gate, shards, statuses, head_statuses, skipped
         self.now, self.out, self.state, self.tree_ejects = now, out, state, tree_ejects
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
@@ -1654,7 +1676,8 @@ class Loop:
         """Candidate ``sha``'s verdict where its statuses gate (`STATUSES_GATE`): `status_verdict` of the named statuses as
         read on its commit (`World.statuses`).  With `head_statuses`, each name its commit has no reading of is read on its
         lone member's head, while the candidate has that head's tree (`World.same_tree`).  Its note says what it waits
-        for, each read that failed, each name read on the head, and that the head's tree is another where it is."""
+        for, each name whose build was skipped (`skipped`), each read that failed, each name read on the head, and that the
+        head's tree is another where it is."""
         w = self.world
         got, notes = w.statuses(sha)
         if self.head_statuses and len(heads) == 1 and (absent := [x for x in self.statuses if x not in got]):
@@ -1667,8 +1690,9 @@ class Loop:
                 got.update({x: theirs[x] for x in took})
                 notes += [*unread, *([f"{', '.join(took)} read on its member's head {heads[0][:12]}, whose tree it has"]
                                      if took else [])]
-        v, waits = status_verdict(sha, self.statuses, got)
-        return Judged(v, note="; ".join([*([f"waiting for {', '.join(waits)}"] if waits else []), *notes]),
+        v, waits = status_verdict(sha, self.statuses, got, self.skipped)
+        return Judged(v, note="; ".join([*([f"waiting for {', '.join(waits)}"] if waits else []),
+                                         *(f"{f.task}: {f.detail}" for f in v.infra), *notes]),
                       statuses={x: got[x] for x in self.statuses if x in got})
 
     def _shadow_main(self, past: Past, origin: str) -> str:
@@ -2074,12 +2098,15 @@ class Loop:
         infra, or leaves it running; while graph2's verdict is another (a task still runs, or one failed), the infra keys are
         rerun here (graph2's `rerun`).  The infra results so far are set aside (`Past.since`), so it is pending until graph2
         says something newer, and a run beside it that ended in infra is started again.  Where its statuses gate, nothing
-        asks for a status again: the retry is logged as a try, so the policy rings next and never retries twice."""
+        asks for a status again: the first retry is logged as a try, so the policy rings next, and one after it is nothing
+        (a lone member's skipped build, with no PR waiting, is retried each tick)."""
         j, line = t.judged[c.sha], dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         built = t.past.built(c.sha) or {}
         priority = built.get("priority") if isinstance(built.get("priority"), int) else 0
         if self.gate == STATUSES_GATE:
-            return [self.record(t, "retry", **line, priority=priority, enqueued=True, done=True,
+            if c.tries > 1:
+                return []
+            return [self.record(t, "retry", **line, priority=priority, enqueued=True, done=True, failed=c.verdict.infra,
                                 why=f"{c.verdict.state}: {j.note or 'no status yet'}; its push asked for its statuses, and "
                                     "nothing asks again")]
         counts = self.world.counts(f.key for f in c.verdict.infra)
@@ -2265,8 +2292,9 @@ class Loop:
         text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) is {c.verdict.state} "
                 f"after {c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
         if self.gate == STATUSES_GATE:
+            waits = f"It is {t.judged[c.sha].note or 'waiting'}, and nothing" if c.verdict.state == PENDING else "Nothing"
             text = (f"the verified queue's candidate queue/{c.sha[:12]} ({' '.join(f'#{n}' for n in c.members)}) is "
-                    f"{c.verdict.state}: {a.why}. It is {t.judged[c.sha].note or 'waiting'}, and nothing asks for a status again")
+                    f"{c.verdict.state}: {a.why}. {waits} asks for a status again")
         line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
         if a.pr is not None and (held := self._outage(c, t)) is not None:
             return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
@@ -2378,6 +2406,11 @@ def main(argv: list[str]) -> int:
                     help=f"with --gate {STATUSES_GATE}, once or more: a commit status's context or a check run's name a "
                          "candidate's commit must have, each `success`, to pass; one that failed fails it, and until each "
                          "has said it is pending")
+    ap.add_argument("--skipped", action="append", default=None, metavar="TEXT",
+                    help=f"with --gate {STATUSES_GATE}, once or more: what a status's description says of a build its service "
+                         "skipped, matched as a substring, case and all; a named status that is `success` with it is no pass "
+                         "but infra (nothing was built, which is no member's doing), rung to infra and ejecting nobody "
+                         f"(default Vercel's, `{SKIPPED}`; a TEXT given replaces it)")
     ap.add_argument("--head-statuses", action="store_true",
                     help=f"with --gate {STATUSES_GATE}: a named status a candidate's commit has none of is read on its lone "
                          "member's head, while the candidate is that head fast-forwarded (its tree is the head's), for a "
@@ -2397,13 +2430,15 @@ def main(argv: list[str]) -> int:
     if statuses:
         given = [f for f in VERITY_FLAGS if (v := getattr(a, f.lstrip("-").replace("-", "_"))) is not None and v is not False]
         if why := ("it needs --status NAME, once or more: the statuses a candidate's commit must have" if not a.status else
+                   "--skipped needs a text: an empty one is in every description, so no status would pass"
+                   if "" in (a.skipped or ()) else
                    f"it runs none of verity's own check, so not with {', '.join(given)}" if given else
                    f"it needs --log: the default, {LOG}, is another instance's" if a.log is None else None):
             print(f"research queue vqueue: --gate {STATUSES_GATE}: {why}", file=sys.stderr)
             return 1
-    elif a.status or a.head_statuses:
-        print(f"research queue vqueue: --status and --head-statuses name GitHub statuses, which only --gate {STATUSES_GATE} "
-              f"reads, not --gate {a.gate}", file=sys.stderr)
+    elif a.status or a.head_statuses or a.skipped:
+        print(f"research queue vqueue: --status, --head-statuses and --skipped are of GitHub statuses, which only --gate "
+              f"{STATUSES_GATE} reads, not --gate {a.gate}", file=sys.stderr)
         return 1
     a.log = a.log or LOG
     a.lock, a.state = a.lock or (a.log.parent / LOCK.name if statuses else LOCK), a.state or (
@@ -2459,7 +2494,7 @@ def _run(a: argparse.Namespace, statuses: bool) -> int:
                       frozen_file=a.frozen)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
-                    shards=a.shards, statuses=a.status, head_statuses=a.head_statuses)
+                    shards=a.shards, statuses=a.status, head_statuses=a.head_statuses, skipped=a.skipped)
         if a.once or a.dry_run:
             loop.tick()
             return 0

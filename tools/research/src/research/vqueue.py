@@ -463,13 +463,17 @@ def _ring_why(c: Candidate) -> str:
     """Words that change with the tasks ``c``'s check erred on, not with its enqueues: the loop rings each why once."""
     if c.verdict.state == LIST_FAILED:
         return f"{c.sha[:12]}'s check failed to list"
-    tasks = ", ".join(sorted({f.task for f in c.verdict.infra}))
+    tasks = _erred(c.verdict)
     return f"{c.sha[:12]}'s check ended in infra errors" + (f": {tasks}" if tasks else "")
 
 
+def _erred(v: Verdict) -> str:
+    """The tasks ``v`` erred on, each with what its error says where it says (`Failed.detail`)."""
+    return ", ".join(sorted({f"{f.task}: {f.detail}" if f.detail else f.task for f in v.infra}))
+
+
 def _owner_why(c: Candidate) -> str:
-    erred = "failed to list" if c.verdict.state == LIST_FAILED else "ended in infra errors: " + ", ".join(
-        sorted({f.task for f in c.verdict.infra}))
+    erred = "failed to list" if c.verdict.state == LIST_FAILED else "ended in infra errors: " + _erred(c.verdict)
     return (f"#{c.members[0]}'s check, with only it merged on {c.base[:12]}, {erred}, again after it was enqueued again.  "
             "Nobody is ejected for it: it waits behind the other PRs, enqueued again, until its check passes or a push "
             "changes it (a hang, an out-of-memory kill and an undeclared read are a change's to fix)")

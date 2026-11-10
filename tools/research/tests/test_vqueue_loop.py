@@ -2405,7 +2405,7 @@ def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_be
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
     assert all(o in said for o in ("--gate {graph2,check,statuses}", "--shards", "--on", "(default 3)", "--status NAME",
-                                   "--head-statuses")), said
+                                   "--head-statuses", "--skipped TEXT", "`Canceled by Ignored Build Step`")), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check", "statuses"))
     assert vqueue_slim.CHECK == L.CHECK_GATE
@@ -2690,14 +2690,12 @@ def test_with_head_statuses_a_name_the_candidate_lacks_is_read_on_its_lone_membe
     assert gated(batch=2).tick() == [] and hub.main() == sha     # two members: no one head's statuses are the candidate's
 
 
-def test_the_statuses_gate_admits_a_pr_on_a_plain_ready_label_and_a_land_by_neither_its_owner_nor_its_marker(hub, monkeypatch,
-                                                                                                           capsys):
-    """The command itself on a repository with no queue rules, no drive.toml and no priority file: a mark is the label
-    `research data label pr:N@SHA ready true --by LANE` writes, with no preflight and no verdict record, and a land counts
-    by a handle that is neither the PR's `Lane` nor its mark's author."""
+def _command(hub: Env, monkeypatch, capsys) -> tuple:
+    """The command itself on ``hub``, in a clone of its origin with a store of its own: `research data label` on a PR's head,
+    and one tick of `research queue vqueue --gate statuses` on `WEB` and `DOCS` (with ``more`` flags), as the lines it logged."""
     from research.store.cli import cmd_label
 
-    main, gh, root = hub.main(), hub.o.gh, hub.tmp / "labels"
+    gh, root = hub.o.gh, hub.tmp / "labels"
     (cfg := hub.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{hub.tmp / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
     monkeypatch.setattr(Q, "GitHub", {INFRA_REPO: gh}.__getitem__)          # the repository --remote names, no other
@@ -2707,12 +2705,22 @@ def test_the_statuses_gate_admits_a_pr_on_a_plain_ready_label_and_a_land_by_neit
     def label(n: int, key: str, value: str, by: str) -> None:
         assert cmd_label([f"pr:{n}@{gh.prs[n].head}", key, value, "--by", by, "--store", str(root)]) == 0
 
-    def tick() -> list[dict]:
+    def tick(*more: str) -> list[dict]:
         seen = len(hub.lines())
         assert L.main(["--gate", "statuses", "--status", WEB, "--status", DOCS, "--repo", str(clone), "--store", str(root),
-                       "--log", str(hub.log), "--batch", "1", "--once"]) == 0, capsys.readouterr().err
+                       "--log", str(hub.log), "--batch", "1", "--once", *more]) == 0, capsys.readouterr().err
         return hub.lines()[seen:]
 
+    return label, tick
+
+
+def test_the_statuses_gate_admits_a_pr_on_a_plain_ready_label_and_a_land_by_neither_its_owner_nor_its_marker(hub, monkeypatch,
+                                                                                                           capsys):
+    """The command itself on a repository with no queue rules, no drive.toml and no priority file: a mark is the label
+    `research data label pr:N@SHA ready true --by LANE` writes, with no preflight and no verdict record, and a land counts
+    by a handle that is neither the PR's `Lane` nor its mark's author."""
+    main, gh = hub.main(), hub.o.gh
+    label, tick = _command(hub, monkeypatch, capsys)
     for n in (1, 2, 3, 4, 5):
         gh.put(n, hub.o.change({f"f{n}.txt": f"{n}\n"}), body="A change.\n\nLane web\nRefs INF-1\n", ready=False)
     for n, by in ((1, "web"), (2, "web"), (3, "ops"), (4, "web")):
@@ -2740,7 +2748,9 @@ def test_the_command_refuses_the_statuses_gate_without_a_status_or_with_verity_s
             *((["--gate", "statuses", "--status", WEB, *log, *flag], f"runs none of verity's own check, so not with {flag[0]}")
               for flag in (["--graph2", "graph2"], ["--frozen", "frozen"], ["--shards", "2"], ["--on", "n1"], ["--no-slim"],
                            ["--tree-ejects"])),
+            (["--gate", "statuses", "--status", WEB, *log, "--skipped", ""], "--skipped needs a text"),
             (["--status", WEB, "--shadow"], "which only --gate statuses reads, not --gate graph2"),
+            (["--skipped", "Skipped", "--shadow"], "which only --gate statuses reads, not --gate graph2"),
             (["--gate", "check", "--head-statuses"], "which only --gate statuses reads, not --gate check"),
             (["--gate", "statuses", "--status", WEB, *log, "--dry-run", "--repo", str(hub.o.dev), "--remote",
               f"https://github.com/{INFRA_REPO}"], f"--remote https://github.com/{INFRA_REPO} is another repository than the "
@@ -2750,10 +2760,125 @@ def test_the_command_refuses_the_statuses_gate_without_a_status_or_with_verity_s
     assert not (tmp_path / "v").exists()
     for kw, why in ((dict(gate="statuses"), "gate `statuses` with 0 status"),
                     (dict(gate="statuses", statuses=(WEB,), slim=vqueue_slim), "runs nothing beside them"),
+                    (dict(gate="statuses", statuses=(WEB,), skipped=("Skipped", "")), "an empty skipped text"),
                     (dict(statuses=(WEB,)), "only `statuses` reads GitHub's statuses"),
+                    (dict(skipped=("Skipped",)), "a skipped build's text: only `statuses` reads GitHub's statuses"),
                     (dict(gate="check", slim=vqueue_slim, head_statuses=True), "only `statuses` reads GitHub's statuses")):
         with pytest.raises(ValueError, match=why):
             Loop(None, tmp_path / "log", **kw)
+
+
+#: what the service says of a commit it built, and of one its project's rule left unbuilt
+BUILT, UNBUILT = "Deployment has completed", "Canceled by Ignored Build Step"
+
+
+def test_a_success_whose_description_says_its_build_was_skipped_is_infra_and_neither_a_pass_nor_a_fail(hub):
+    """A service that skips a build reports `success` with a description saying so.  Each named status that says it is an
+    infra error naming it, with no inputs: both skipped is infra, one skipped and one built too, both built pass.  The text
+    is a substring of the description, case and all; a name that still waits keeps the verdict pending and one that failed
+    fails it, the skipped one named beside; and with no text, or another's, the description counts for nothing."""
+    w, gh = _gated(hub).world, hub.o.gh
+    skip, built, other = ("success", UNBUILT), ("success", BUILT), ("success", "Skipped by its rule")
+    cases = [((skip, skip), (UNBUILT,), INFRA, [WEB, DOCS]), ((built, built), (UNBUILT,), PASS, []),
+             ((skip, built), (UNBUILT,), INFRA, [WEB]), ((built, skip), (UNBUILT,), INFRA, [DOCS]),
+             ((("success", f"Build: {UNBUILT} (docs)"), built), (UNBUILT,), INFRA, [WEB]),
+             ((("success", UNBUILT.lower()), ("success", UNBUILT[:-1])), (UNBUILT,), PASS, []),
+             ((skip, ("pending", "")), (UNBUILT,), PENDING, [WEB]), ((skip, None), (UNBUILT,), PENDING, [WEB]),
+             ((skip, ("failure", "It broke")), (UNBUILT,), FAIL, [WEB]),
+             ((("failure", UNBUILT), built), (UNBUILT,), FAIL, []),
+             ((skip, skip), (), PASS, []), ((skip, other), ("Skipped by",), INFRA, [DOCS]),
+             ((skip, other), ("Skipped by", UNBUILT), INFRA, [WEB, DOCS])]
+    for i, (said, texts, state, erred) in enumerate(cases):
+        sha = f"{i:040x}"
+        for name, one in zip((WEB, DOCS), said):
+            if one is not None:
+                gh.status(sha, name, *one, f"https://deploy/{i}")
+        v, _ = L.status_verdict(sha, (WEB, DOCS), w.statuses(sha)[0], texts)
+        assert (v.state, [f.task for f in v.infra]) == (state, [f"status {n}" for n in erred]), i
+        assert [f.task for f in v.failed] == ([f"status {WEB if said[0][0] == 'failure' else DOCS}"] if state == FAIL else []), i
+        for f, n in zip(v.infra, erred):
+            assert (f.key, f.inputs, f.tree, f.base_key) == (f"{sha}:{n}", frozenset(), False, None), i
+            assert f.detail == f"its build was skipped ({dict(zip((WEB, DOCS), said))[n][1]}): nothing was built", i
+    gh.run(sha := "e" * 40, WEB, "success", UNBUILT)             # a check run's description is its output's title
+    gh.run(sha, DOCS, "success", BUILT)
+    v, _ = L.status_verdict(sha, (WEB, DOCS), w.statuses(sha)[0], (UNBUILT,))
+    assert (v.state, [f.task for f in v.infra]) == (INFRA, [f"status {WEB}"])
+    assert L.status_verdict(sha, (WEB, DOCS), w.statuses(sha)[0])[0].state == PASS       # no text unless given
+
+
+def test_under_the_statuses_gate_a_skipped_build_is_rung_to_infra_ejects_nobody_and_lands_once_it_is_built(hub):
+    """The policy's infra: a retry, which only logs a try (and nothing after it), then the ring, whose why names each
+    status and says its build was skipped.  A lone member with no PR behind it stays; with one skipped and one built it is
+    infra still; built, it lands.  Several members are bisected, and a lone one goes behind the PR waiting, none ejected."""
+    main, gh = hub.main(), hub.o.gh
+    hub.put(1, {"a.txt": "1\n"})
+    loop = _gated(hub)
+    assert loop.skipped == (UNBUILT,) == (L.SKIPPED,)
+    sha = loop.tick()[0]["sha"]
+    said = {n: f"status {n}: its build was skipped ({UNBUILT}): nothing was built" for n in (WEB, DOCS)}
+    gh.status(sha, WEB, "success", UNBUILT, "https://deploy/web")
+    gh.status(sha, DOCS, "success", UNBUILT, "https://deploy/docs")
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["enqueued"], retry["why"]) == (
+        "retry", True, f"infra: {said[WEB]}; {said[DOCS]}; its push asked for its statuses, and nothing asks again")
+    assert [f["task"] for f in retry["failed"]] == [f"status {WEB}", f"status {DOCS}"]
+    assert hub.out[-1].endswith(f"{sha[:12]} infra: {said[WEB]}; {said[DOCS]}")
+    ring, owner = loop.tick()
+    why = f"{sha[:12]}'s check ended in infra errors: {said[DOCS]}, {said[WEB]}"
+    assert (ring["action"], ring["why"], ring["posted"]) == ("ring", why, True)
+    assert ring["failed"] == [{"task": f"status {n}", "key": f"{sha}:{n}",
+                               "detail": f"its build was skipped ({UNBUILT}): nothing was built"} for n in (WEB, DOCS)]
+    assert hub.posts[0] == (f"@infra vqueue on {INFRA_REPO}: the verified queue's candidate queue/{sha[:12]} (#1) is infra: "
+                            f"{why}. Nothing asks for a status again")
+    assert (owner["action"], owner["posted"]) == ("ring", True) and hub.posts[1].startswith(f"@ci vqueue on {INFRA_REPO}: ")
+    assert f"#1's check, with only it merged on {main[:12]}, ended in infra errors: {said[DOCS]}, {said[WEB]}" in hub.posts[1]
+    assert loop.tick() == [] and loop.tick() == [] and len(hub.posts) == 2      # told once, and no retry a tick
+    gh.status(sha, WEB, "success", BUILT)                       # one built: the other's skip is infra still
+    assert [r["why"] for r in loop.tick()][0] == f"{sha[:12]}'s check ended in infra errors: {said[DOCS]}"
+    assert hub.main() == main and hub.withdrawn == [] and hub.queued() == {branch(sha): sha}
+    gh.status(sha, DOCS, "success", BUILT)
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and hub.main() == sha
+    hub.put(2, {"b.txt": "2\n"})
+    hub.put(3, {"c.txt": "3\n"})
+    (built,) = loop.tick()
+    for name in (WEB, DOCS):
+        gh.status(built["sha"], name, "success", UNBUILT)
+    assert built["members"] == [2, 3] and _acts(loop.tick()) == ["retry"]
+    ring, drop, half = loop.tick()
+    assert (ring["action"], drop["action"], drop["outcome"]["state"], drop["outcome"]["suspects"]) == ("ring", "drop", FAIL, [2, 3])
+    assert "bisected on them, ejecting nobody" in drop["why"] and (half["action"], half["members"]) == ("build", [2])
+    for name in (WEB, DOCS):
+        gh.status(half["sha"], name, "success", UNBUILT)
+    assert _acts(loop.tick()) == ["retry", "build"]             # #3, on it
+    *rings, aside, above, other = loop.tick()                   # #3 waits behind it: #2 is set aside, and #3 is built
+    assert _acts(rings) == ["ring", "ring"] and (aside["action"], aside["outcome"]["state"]) == ("drop", INFRA)
+    assert (above["action"], above["outcome"], other["action"], other["members"]) == ("drop", None, "build", [3])
+    assert hub.withdrawn == [] and "eject" not in _acts(hub.lines()) and hub.main() == sha and hub.graph2.enqueued() == []
+
+
+def test_the_command_takes_vercel_s_skipped_text_unless_skipped_names_another(hub, monkeypatch, capsys):
+    """The command itself: with no `--skipped`, a status that is `success` with Vercel's text is infra; a `--skipped`
+    replaces it, so that text passes and the one given is infra."""
+    gh = hub.o.gh
+    label, tick = _command(hub, monkeypatch, capsys)
+    for n in (1, 2):
+        gh.put(n, hub.o.change({f"f{n}.txt": f"{n}\n"}), body="A change.\n\nLane web\n", ready=False)
+        label(n, "ready", "true", "web")
+        label(n, "reviewed", "land", "docs")
+    one = ("--depth", "1")
+    theirs = (*one, "--skipped", "Skipped by", "--skipped", "Not built")
+    (built,) = tick(*one)
+    for name in (WEB, DOCS):
+        gh.status(built["sha"], name, "success", UNBUILT)
+    (retry,) = tick(*one)
+    assert (retry["action"], retry["why"].split(":")[0]) == ("retry", "infra") and hub.main() != built["sha"]
+    advance, _, _, second = tick(*theirs)
+    assert (advance["action"], hub.main(), second["members"]) == ("advance", built["sha"], [2])
+    gh.status(second["sha"], WEB, "success", BUILT)
+    gh.status(second["sha"], DOCS, "success", "Not built: its rule ignores this branch")
+    (retry,) = tick(*theirs)
+    assert retry["why"].startswith(f"infra: status {DOCS}: its build was skipped (Not built: its rule ignores this branch)")
+    assert _acts(tick(*one)) == ["advance", "on_main", "drop"] and hub.main() == second["sha"]  # Vercel's text alone again
 
 
 def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:
