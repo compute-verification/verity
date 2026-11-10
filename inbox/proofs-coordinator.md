@@ -33863,3 +33863,83 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
   2. drop `checkPartition_X`'s `trace`;
   3. a records run and `--siblings`.
 - **Date** [guess]: counting this as one more round used, (A) still holds for Thu 12 Nov 18:00Z. All six of Setup's walks pass now, what's left has its first run going, and the date is about 43 hours away.
+
+## PRF-516 REGX, Tue 10 Nov 22:41Z: started; definitions 1 to 6 are on `cursor/proofs-regx-efe1` at `2ea94b7c36` (statements only) and elaborate (try `r20261110-223729-ac2b`, exit 0); the plan is right in its math and wrong in three places: `reg_split` cannot be reused unchanged, the lock needs three witness lemmas the list lacks, and `MissTwoX` cannot keep `MissTwo`'s binders
+
+All times are from `date -u`. [run] means I ran it, [read] that I read it, [guess] neither.
+
+**Who and where**
+
+- Agent id `bc-ba06311d-53c1-5c47-98cb-82daed1c2d02` [run: `run-info`]. No mailbox file for it on `cursor/proofs-inbox` at 22:40Z [run].
+- Branch `cursor/proofs-regx-efe1`, from `main` `2b869ed35db5`, head `2ea94b7c36`, pushed [run].
+- First try: `r20261110-223729-ac2b`, `verity lean try Security/Definitions/Claims/SamplingGenericX.lean --siblings --on auto`, on vy-nebius-cpu-3: lean exit 0 in 56 s, the sibling check found no name declared twice, 279 s wall [run].
+
+**Definitions 1 to 6**, in the new file `Security/Definitions/Claims/SamplingGenericX.lean`, imported by `Security/Definitions.lean`; `SamplingGeneric.lean` is untouched [run: the commit]. They elaborate [run: the try].
+
+~~~lean
+-- 1. the plurality over the tape, the run's coins and the extractor's coins together
+noncomputable def Compiled.regValX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω)
+    (x : Msg) (g : ℕ) : Option Bool :=
+  let p : Bool → ℝ := fun b =>
+    Pr fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.opensAt H P x q.1 q.2.1 q.2.2 g = some b
+  if p true = 0 ∧ p false = 0 then none else some (decide (p false ≤ p true))
+
+-- 2. `Freg`'s filter at `regValX`; no tape argument
+noncomputable def Compiled.FregX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω)
+    (x : Msg) : Finset ℕ :=
+  match L.parse x with
+  | none => ∅
+  | some s => (Finset.range (L.part s).blocks.length).filter fun v =>
+      ¬ ∃ b, (L.part s).blocks[v]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+        (∀ g < s.prog.gates.length, val g = L.regValX H P x g) ∧ s.prog.Correct (s.prog.refIn b val ι) b
+
+-- 3. two independent (tape, coins, extractor coins); `Bconf`'s `out` and `cost` with the second run at its own tape
+noncomputable def Compiled.BconfX (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily := fun Ω _ _ P x =>
+  match L.parse x with
+  | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+  | some s =>
+    { S := (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) × (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x))
+      out := fun q => findColl (ownLog H (run H P L.V x q.1.1) (L.runExt x s q.1.2.1 … q.1.2.2) ++
+          ownLog H (run H P L.V x q.2.1) (L.runExt x s q.2.2.1 … q.2.2.2))
+      cost := … }   -- both runs' logs, both extractions' calls, as `Bconf`
+
+-- 4.
+noncomputable def Compiled.εregX (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) : ℝ :=
+  L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) +
+    (Bconf H L Ω P x).Pr H
+
+-- 5.
+def Compiled.KSRegX (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregX H P x) ≤ L.εregX H x P ∧
+      ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          L.FregX H P x ∉ s.design.M (L.part s) δ) ≤ δ + L.εregX H x P
+
+-- 6.
+def CompilerKSRegX : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSRegX H
+~~~
+
+**The plan against the source** (at `main` `2b869ed35db5` and #8512's head `a4916e014237`)
+
+- **The line numbers hold** [read]: `regVal` 575, `Freg` 585, `Bconf` 596 to 610, `KSReg` 629; `Reg.lean`'s `bconf_of_disagree` 281 (to 308), `pr_conflict_le` 340, `regVal_eq_plur` 372, `pr_offReg_le` 387 to 441, `ksReg_of_sessionKS` 488 to 561, `compilerKSReg_of` 566; `prBad_le` at `Rewinding.lean:175` (namespace `Verity.Rewinding`, which `FlockSoundness.Rewinding` exports); `regCount_cases` at `TwoRegPeriod.lean:41`, read at `Prover Unit`; `PeriodTwoReg` at `TwoReg.lean:74`.
+- **The math holds on paper** [guess: I followed each step; no proof is elaborated]. Off-trace is the rewinding lemma on the table over tape, coins and extractor coins; a conflict between two runs at two tapes is a collision because both openings are under `s.roots`; `pr_unfound_le` applies with a selection that ignores the tape.
+- **Wrong 1: `reg_split` cannot be reused unchanged** [read: `Reg.lean:220` to `226`]. Its hypothesis is `u ∈ L.Freg H P x ω` and its conclusion `L.OffReg H P x ω r c`, both at `regVal … ω`. It needs a form at any trace. `selReg` and `selReg_some` (183 to 209), which the plan doesn't name, read `Freg … ω` the same way.
+- **Wrong 2: the lock needs witnesses the seventeen items lack** [read: `Security/lean-audit.json`, the README's claims and witnesses rules].
+  - `Compiled.KSRegX` is a predicate of a `claims.modules` module, so it needs `claims.witnesses`: a `fails` (`Compiled.KSRegX_fails`, new) and `meets` (`KSReg`'s three serve).
+  - `CompilerKSRegX` goes under `claims.generic`, and `compilerKSRegX` needs `witnesses`: `honest` (`compilerKS_honest` serves) and `nontrivial` (`compilerKSRegX_nontrivial`, new).
+  - Both new ones are `sksL`'s, as `compiledKSReg_fails` (`Witnesses/SamplingGeneric.lean:340`) with `regValX` in `sksL_regVal`, `sksL_Freg`, `sksL_notM` and `sksL_εreg`. Part 2 needs the same for its three claims.
+- **Wrong 3: `MissTwoX` cannot keep `MissTwo`'s binders** [read: #8512's `SamplingTwoReg.lean`]. `MissTwo` is at `∀ (Ω : Type) (P : Prover Ω) (ω : Ω)`. `regValX` averages over the tape, so it needs `[Fintype Ω]`, and `MissTwoX` takes it.
+- **One choice in item 4, yours to rule** [guess]. The last term can be `Pr[BconfX]` as well as `Pr[Bconf]`: one run's extractions that open a position two ways are in `BconfX`'s first run's own log too. Then `εregX` reads one finder, not two. I state the plan's form. The other is one lemma (`pr_inConf_le` at `BconfX`), and cheap to switch before the statement is locked, not after.
+
+**How I'll share with `Reg.lean`** [guess: the design, nothing built]
+
+- `Reg.lean` gets the general lemmas, and its own become instances with their statements unchanged: the split at any trace, the rewinding step at any finite table (the plurality as a function of the table), the disagreement at two tapes, the selection at any set, and the second conjunct from the first at any family of sets.
+- `RegX.lean` then holds only the instances at the joint table, `pr_conflictX_le` and the assembly.
+- If an instance costs more than a copy once it elaborates, I copy and say which.
+
+**Next:** items 7 to 12 and the three witnesses, a try of `Reg.lean` and `RegX.lean`, then the chain.
