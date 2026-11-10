@@ -44,11 +44,14 @@ import numpy as np
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import links as LK, rows as CS
+
+import references as RF
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
 H = 1024
@@ -308,37 +311,17 @@ def reads(boundary_record: Mapping, interior_record: Mapping, window: CS.Binding
     return out
 
 
-def references(q: int, out: Path) -> dict:
-    """The auditor's params (`service.template_circuits`' ``proofs``), fixed before the run: by template, in the check's
-    order, its circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
-    `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks
-    (`interior_window`, under a run of its own, whose fields round 2 places or blanks), bound to that window's partition
-    and program as the sessions' circuits are, on zero rows at the member's slots, each port's table and refs as
-    `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
-    beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
-    Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
-    port the boundary port it opens, a wired port its writer's output port, any other the member's own), its words and
-    schema."""
-    from verity_flock.class_statement import member_stager
-
-    window, names = interior_window("00" * 64, range(q)), boundary_ports(boundary_window(q, q))
-    bind = {"partition": window.partition_digest, "program": window.partition["program"]}
-    named = []
-    for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
-        d, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(defn, m, bind).stage(
-            rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
-        (d / "inst.bin").unlink()
-        with open(d / "pub.bin", "rb") as f:
-            header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": names[LINKS[k][1]] if p == link(k) else window.held(m, p), "words": int(words),
-                                   "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
-                               for p, words in m.all_rows}, registered=REG)
-        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header,
-                      "registered": reads})
-    return {"templates": named}
+def references(q: int, out: Path, boundary_digest: str = "00" * 64, sample: Sequence[int] | None = None) -> dict:
+    """The auditor's params (`service.template_circuits`' ``proofs``), fixed before the run: `references.stage` of the
+    interior window of ``q`` replay blocks (`interior_window`) under a run of its own, whose fields round 2 places or
+    blanks (``boundary_digest`` and ``sample``, default the first ``q`` spans), salted under `REFERENCE_KEY`, each link
+    port reading the boundary port it opens. Its public files are ``out``/m<k>/pub.bin, each ``circuit.txt`` beside it.
+    Both files are a function of ``q`` and the design alone, byte for byte, whatever the run: its registered reads name
+    none of the run's fields, each port the value it reads, its words and schema."""
+    window = interior_window(boundary_digest, range(q) if sample is None else sample)
+    names = boundary_ports(boundary_window(q, q))
+    links = {m.key: {link(t): names[LINKS[t][1]]} for t, m in enumerate(window.members) if t in LINKS}
+    return RF.stage(window, {descriptor_id(t): t for t in TEMPLATES}, links, out, REFERENCE_KEY)
 
 
 def write(c: CS.Committed, out, provenance: Mapping, *, previous: str | None = None,

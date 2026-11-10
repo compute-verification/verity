@@ -7,14 +7,17 @@ boundary port the design's links name, and every other port's rows open the inte
 wired port's at its writer's, as the verifier's own reads (from the two records and S alone) name them; both
 registrations pass the verifier's check; a link row one bit off, a read of another leaf and a broken wire are refused;
 and each session's public header is its template's reference statement's, which the auditor stages before the run,
-placed in the run, as round 2 holds it, at the wires the replay block's Definition makes."""
+placed in the run, as round 2 holds it, at the wires the replay block's Definition makes; the references are the same, byte
+for byte, under any run of Q replay blocks; and the stager refuses a window it can't stage one reference a template for."""
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -28,6 +31,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.windows import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import references as RF
 import toy as T
 
 N, Q = 6, 3
@@ -269,3 +273,34 @@ def test_the_link_reads_refuse_a_port_the_boundary_record_does_not_name_or_a_lea
         T.LK.reads(brec, "nobody/row", 16, T.V2, SAMPLE, 0, registered=REG)
     with pytest.raises(ValueError, match="outside"):
         T.reads(brec, run["irec"], win, (N, 0, 1))
+
+
+@pytest.mark.slow
+def test_a_reference_is_a_function_of_q_and_the_design_alone(tmp_path):
+    """The auditor's params and each reference's ``circuit.txt`` and ``pub.bin`` (`references.stage`) are the same, byte
+    for byte, from the interior window of Q replay blocks under the placeholder run of the first Q spans and under another
+    boundary digest and replay sample: nothing the first stage draws reaches them, so they can be staged once Q is fixed.
+    Slow (about 10 s): it lowers the templates twice."""
+    a = T.references(Q, tmp_path / "a")
+    b = T.references(Q, tmp_path / "b", hashlib.sha512(b"another boundary").hexdigest(), SAMPLE)
+    assert a == b
+    for k in range(len(T.TEMPLATES)):
+        for f in ("circuit.txt", "pub.bin"):
+            assert (tmp_path / "a" / f"m{k}" / f).read_bytes() == (tmp_path / "b" / f"m{k}" / f).read_bytes(), (k, f)
+        assert not (tmp_path / "a" / f"m{k}" / "inst.bin").exists()
+
+
+def test_the_stager_refuses_a_chunked_template_a_template_with_no_definition_and_a_link_port_its_member_lacks(tmp_path):
+    """`references.stage` stages one reference a template, so it refuses a window that splits a template into chunks,
+    a member whose template it is given no Definition for, and a link value for a port the member doesn't have, each
+    before it lowers anything."""
+    window = T.interior_window("00" * 64, range(Q))
+    defs, m0 = {descriptor_id(t): t for t in T.TEMPLATES}, window.members[0]
+    chunked = SimpleNamespace(members=(m0, dataclasses.replace(m0, name=f"{m0.template}/c1")))
+    with pytest.raises(ValueError, match="split into chunks"):
+        RF.stage(chunked, defs, {}, tmp_path, T.REFERENCE_KEY)
+    with pytest.raises(ValueError, match="no Definition"):
+        RF.stage(window, {t: d for t, d in defs.items() if t != m0.template}, {}, tmp_path, T.REFERENCE_KEY)
+    with pytest.raises(ValueError, match="link ports"):
+        RF.stage(window, defs, {m0.key: {"o9": "ingress"}}, tmp_path, T.REFERENCE_KEY)
+    assert not any(tmp_path.iterdir())
