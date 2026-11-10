@@ -1,10 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.Period
-public import Proofs.NetworkCertifier.SampledAuditAccepted
-public import Proofs.NetworkCertifier.SampledLeak
-public import Proofs.NetworkCertifier.Tap
-public import Proofs.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.PeriodChecked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,20 +34,23 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.NetworkCertifier.SampledCharge
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
 
-A window that meets `WindowGood`, whose observations the network certifier registers at the transfer gates
-(`CertifierRegisters`), has them among the sequences `AccSeqsSampled` counts at its registration, with the registration's values
-at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
-it sends, so the client's view reads back from them under its schedule, one its record format holds
-(`certifier_cells_read`): the views, and the secrets
-they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
-holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
-`∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
-the network certifier's rows (`sampledLeak_certifier`).
+`Guarantees.PeriodLeakAccepted` is the instance of `Guarantees.PeriodLeakChecked` at no checked input, at a check every
+run passes (`periodLeak_of_checked`); `periodLeak` is that at `periodLeakChecked`.
+
+**Each window's bound** is the checked statement's at the period of no windows, whose first part reads none of the
+period: the check misses with probability `0` (`checkedWitness_true`), and the leak relation at the network
+certifier's rows with a valid run gives the leak relation there (`rLeakCertifier_of_rLeakCertifierChecked`).
+
+**The count.** At a check every run passes, a window that meets `WindowGood` meets `WindowGoodChecked`
+(`windowGoodChecked_of_windowGood`), and with no checked input every check pins the rows where the layout fits
+(`checkedUnique_empty`), which it does at each window once one secret is good (`fits_of_windowGood`). The record
+format reads back under its own schedule as the parameter (`RecordFormat.readsBy_read`), so the registered parameters
+are the schedules `Ss`, and each window's operator reads none of the windows before it. The checked count is then
+`#Ss` times the windows' count at `reg`; the statement's `∏_c (cap_c + 1)` is room above it.
 -/
 
 @[expose] public section
@@ -59,13 +59,6 @@ namespace NetTiming
 
 open Claims Claims.Sampling Finset
 
-theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (R : Finset ℕ) {ρ ρ' : ℕ → Bool}
-    (h : ∀ g ∈ R, ρ g = ρ' g) : AsReg C lay k R ρ = AsReg C lay k R ρ' := by
-  ext a
-  constructor <;> rintro ⟨h1, h2⟩ <;> refine ⟨fun g hg hf => ?_, h2⟩
-  · rw [h1 g hg hf, h g hg]
-  · rw [h1 g hg hf, ← h g hg]
-
 section Compiled
 
 open Claims.SamplingGeneric (Arg Compiled)
@@ -73,93 +66,78 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+/-- **A window that meets its good event is registered at a layout that fits.** -/
+theorem fits_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
-    {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
-    (hP₀ : D.partition s₀ = some P₀) {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)}
-    {op : ℕ → List (Obs L K S) → List Bool} {x : Msg} {w : Wit} {o : List (Obs L K S)}
-    (htap : ∀ s, D.parse x = some s → CertifierRegisters H D.commit (lay s) (k s) op s (tops s) o)
+    {Dj : ℕ} {s₀ : AuditStatement} {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
+    {o : List (Obs L K S)} (h : WindowGood H D L K S lay k δ reg Dj s₀ ρ tops x w o) :
+    (lay s₀).Fits s₀.prog (k s₀) := by
+  obtain ⟨-, ⟨-, s₂, hs₂, hfits⟩, s, hs, ⟨hprog, -, hlay, hk, -, -⟩, -⟩ := h
+  rw [Option.some_injective _ (hs₂.symm.trans hs), hprog, hlay, hk] at hfits
+  exact hfits
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **At a check every run passes, a window's good event is its checked form.** -/
+theorem windowGoodChecked_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
+    {valid : AuditStatement → (ℕ → Bool) → Prop} (hv : ∀ s r, valid s r) {Dj : ℕ} {s₀ : AuditStatement}
+    {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit} {o : List (Obs L K S)}
     (h : WindowGood H D L K S lay k δ reg Dj s₀ ρ tops x w o) :
-    (lay s₀).Fits s₀.prog (k s₀) ∧
-      o ∈ AccSeqsSampled s₀.prog P₀ s₀.design (lay s₀) (k s₀) (AsReg s₀.prog (lay s₀) (k s₀) (reg s₀) ρ) δ op Dj := by
-  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hl⟩, ⟨-, s₂, hs₂, hfits⟩, s, hs, ⟨hprog, hdes, hlay, hk, hreg, hpart⟩, hρ, hcov,
-    hlen, hj⟩ := h
-  rw [Option.some_injective _ (hs₁.symm.trans hs)] at hP₁ hl
-  rw [Option.some_injective _ (hs₂.symm.trans hs)] at hfits
-  rw [Option.some_injective _ (hP₁.symm.trans (hpart.trans hP₀))] at hl
-  have hmem := hl op o (htap s hs) hcov hlen hj
-  beta_reduce at hmem
-  rw [asReg_congr _ _ _ _ hρ] at hmem
-  rw [hprog, hdes, hlay, hk, hreg] at hmem
-  rw [hprog, hlay, hk] at hfits
-  exact ⟨hfits, hmem⟩
-
-theorem encard_periodGood_le (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
-    (hPw : ∀ i, D.partition (sw i) = some (Pw i)) (ρ : Fin n → ℕ → Bool)
-    (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
-    (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
-    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
-    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
-    (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
-    (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (htap : ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s) (op i) s (tops s)
-      ((run tap (schedOf z, srvOf z)).2 i)) :
-    {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-        ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-      Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
-        (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
-  set G := {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-    ((run tap (schedOf z, srvOf z)).2 i)} with hG
-  rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
-  · rw [he, Set.encard_empty]
-    exact zero_le
-  let A : ∀ i : Fin n, Set (List (Obs L K S)) := fun i =>
-    AccSeqsSampled (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
-      (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) δ (op i) Dj
-  have hgood : ∀ z ∈ G, ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈ A i := fun z hz i =>
-    (mem_accSeqsSampled_of_windowGood (hPw i) (htap z hz.1 i) (hz.2 i)).2
-  have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i =>
-    (mem_accSeqsSampled_of_windowGood (hPw i) (htap z₀ hz₀.1 i) (hz₀.2 i)).1
-  let V : Set (Conn → List (ℕ × CellView Cell)) :=
-    (fun p : CertifierSchedule Conn × (Fin n → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Set.pi Set.univ A)
-  have hsub : G ⊆ dec '' V := fun z hz =>
-    ⟨(run tap (schedOf z, srvOf z)).1, ⟨(schedOf z, (run tap (schedOf z, srvOf z)).2),
-      ⟨hs z hz.1, fun i _ => hgood z hz i⟩, (certifier_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩,
-      hdz z hz.1⟩
-  have hA : (Set.pi Set.univ A).encard ≤ ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-      reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
-    calc (Set.pi Set.univ A).encard = ∏ i, (A i).encard := Set.encard_pi_eq_prod_encard
-      _ ≤ ∏ i, ((2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
-          (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) : ℕ) : ℕ∞) :=
-        Finset.prod_le_prod fun i _ => encard_accSeqsSampled_le _ _ _ _ _ (hfits i) δ _ _
-          (encard_asReg_le _ _ _ _ _) (β i) (hβ i) (op i) Dj
-      _ = _ := (Nat.cast_prod _ _).symm
-  have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
-  calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
-    _ ≤ V.encard := Set.encard_image_le _ _
-    _ ≤ (Ss ×ˢ Set.pi Set.univ A).encard := Set.encard_image_le _ _
-    _ = Ss.encard * (Set.pi Set.univ A).encard := Set.encard_prod
-    _ ≤ _ := by
-        gcongr
-        refine hA.trans ?_
-        exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
-
-/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
-`sampledLeak_certifier` with the registered inputs pinned (`adviceIn_asReg`), and `encard_periodGood_le`. -/
-theorem periodLeak : Guarantees.PeriodLeakAccepted := by
-  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
-    arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
-  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_certifier H D hks hb L K S lay k δ hδ _ Dj
-    (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
-    encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
-      schedOf srvOf hs dec hdz x wit tops⟩
+    WindowGoodChecked H D L K S lay k δ reg valid Dj s₀ ρ tops x w o := by
+  obtain ⟨hR, hsc, s, hs, hreg, hρ, hcov, hl, hj⟩ := h
+  exact ⟨rLeakCertifierChecked_of_rLeakCertifier hv hR, hsc, s, hs, hreg,
+    funext fun r => propext ⟨fun _ => hv s₀ r, fun _ => hv s r⟩, hρ, hcov, hl, hj⟩
 
 end Compiled
+
+/-- **`PeriodLeakAccepted` is `PeriodLeakChecked` at no checked input**, at the check every run passes, the record
+format's own read-back with the schedule as the parameter, and operators that read none of the windows before theirs.
+Each window's bound is the checked statement's first part at the period of no windows, which reads none of the
+period. -/
+theorem periodLeak_of_checked (hsrc : Guarantees.PeriodLeakChecked) : Guarantees.PeriodLeakAccepted := by
+  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Zt _
+    arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
+  refine ⟨fun m hm Ω _ _ P => ?_, fun htap => ?_⟩
+  · let f₀ : RecordFormat Empty Unit (Fin 0 → List (Obs L K S)) :=
+      ⟨fun _ _ _ => Fin.elim0, fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
+    have h := (hsrc (n := 0) (Conn := Empty) (Cell := Unit) (Srv := Unit) (Dev := Unit) (Z := Unit) (Par := Unit)
+      H D hks L K S lay k δ hδ reg (fun _ => ∅) (fun _ _ => True) (fun _ _ => True) (fun _ => 0) (fun _ => 0) Dj
+      Fin.elim0 Fin.elim0 Fin.elim0 ⟨fun i => i.elim0, fun i => i.elim0⟩ (fun i => i.elim0) Fin.elim0 Fin.elim0
+      (fun _ c => c.elim) f₀ () (fun _ p => recordingCode f₀ p.1 (fun c => c.elim)) (fun _ => rfl)
+      (fun _ _ c => c.elim) (fun _ _ => True) (fun _ _ _ _ _ => funext fun c => c.elim) ∅ ∅
+      (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
+      ⟨fun _ h => h.elim, fun _ h => h.elim⟩ (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1 m hm
+      (checkedWitness_true H D _ m) (checkedWitness_true H D _ m) Ω P
+    have hmono : PrBad H D.V (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ
+          (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops) D.E m P ≤
+        PrBad H D.V (RLeakCertifierChecked H D.commit D.parse D.partition L K S lay k δ
+          (fun s => AsReg s.prog (lay s) (k s) (reg s)) (fun _ _ => True ∧ True) Dj tops) D.E m P := by
+      unfold PrBad
+      refine Pr_mono fun s hs => ⟨hs.1, fun hc => hs.2 ?_⟩
+      rcases hw : (D.E.eval H P m s.1 s.2.1 s.2.2).1 with _ | w
+      · rw [hw] at hc
+        simp [Rel.ext] at hc
+      · rw [hw] at hc ⊢
+        exact rLeakCertifier_of_rLeakCertifierChecked hc
+    exact (hmono.trans h).trans (le_of_eq (by simp))
+  · set G := {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
+      ((run tap (schedOf z, srvOf z)).2 i)} with hG
+    rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
+    · rw [he, Set.encard_empty]
+      exact zero_le
+    have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i => fits_of_windowGood (hz₀.2 i)
+    have h := ((hsrc H D hks L K S lay k δ hδ reg (fun _ => ∅) (fun _ _ => True) (fun _ _ => True) (fun _ => 0)
+      (fun _ => 0) Dj sw Pw β ⟨hPw, hβ⟩ (fun i => checkedUnique_empty (Pw i) (sw i).design (hfits i) _) ρ
+      (fun i _ => op i) arr f tap run htrust f.read (fun θ s => θ = s) (RecordFormat.readsBy_read f) Ss Zs schedOf
+      srvOf dec ⟨fun z hz => ⟨hfit _ (hs z hz), schedOf z, hs z hz, rfl⟩, hdz⟩ x wit tops hb).2 htap).2
+    have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
+    refine (Set.encard_le_encard fun z hz => ?_).trans (h.trans (mul_le_mul' le_rfl ?_))
+    · exact ⟨hz.1, fun i => windowGoodChecked_of_windowGood (fun _ _ => ⟨trivial, trivial⟩) (hz.2 i)⟩
+    · simp only [windowsCount, Finset.union_empty]
+      exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
+
+/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, the instance
+of `periodLeakChecked` at no checked input (`periodLeak_of_checked`). -/
+theorem periodLeak : Guarantees.PeriodLeakAccepted := periodLeak_of_checked periodLeakChecked
 
 end NetTiming
