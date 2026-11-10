@@ -206,13 +206,17 @@ def _entry_file(base: dict[str, Path], k: str) -> Path | None:
 
 
 def _needs(k: str, data: bytes) -> list[str]:
-    """The pack paths the entry at ``k``, of bytes ``data``, names in its `NEEDS`, each in its own root."""
+    """The pack paths the entry at ``k``, of bytes ``data``, names in its `NEEDS`, each in its own root.  An entry whose bytes are
+    not JSON is packed as it is and needs none: no lookup reads it, here or where the pack goes (circuit-check counts it as no
+    entry), so nothing it names is needed, and refusing the pack for it would lose every other verdict of the run."""
     if f'"{NEEDS}"'.encode() not in data:
         return []
     try:
-        got = json.loads(data).get(NEEDS)
-    except (ValueError, AttributeError):
+        doc = json.loads(data)
+    except ValueError as e:
+        print(f"verdicts: {k} is not JSON ({e}): packed as it is, with none of what it names", file=sys.stderr)
         return []
+    got = doc.get(NEEDS) if isinstance(doc, dict) else None
     top, here = k.split("/", 1)[0], posixpath.dirname(k)
     return [p for n in got if isinstance(n, str) and (p := posixpath.normpath(posixpath.join(here, n))).startswith(top + "/")] \
         if isinstance(got, list) else []

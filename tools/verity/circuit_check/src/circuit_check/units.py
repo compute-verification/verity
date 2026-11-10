@@ -427,7 +427,8 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
             return {**got, "seconds": _took(p)}, reads
-        except (OSError, KeyError, TypeError, AttributeError, ValueError):
+        except (OSError, KeyError, TypeError, AttributeError, ValueError) as x:
+            CC._miss(p, x)
             continue
     return None
 

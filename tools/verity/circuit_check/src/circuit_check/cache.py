@@ -2451,22 +2451,40 @@ _SITED = ("modules", "units")
 #: a sited kind's reads are cut, in the order of their names, after each name whose digest is 0 modulo this: the same reads are
 #: cut the same way in every entry, so that an entry that holds a module more or less than another shares the rest of its runs
 _RUN = 16
-#: what an entry or a record that can't be read raises while it is read: it counts as none
+#: what an entry or a record that can't be read raises while it is read: it counts as none, and `unread` names it
 _UNREAD = (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError)
+#: each entry this process found under a key it looked up and could not read, with what reading it raised (`unread`)
+_MISSED: dict[str, None] = {}
+#: each record this process wrote, or found holding the bytes its name digests (`_put`)
+_PUT: set[str] = set()
 
 
 def _put(top: Path, part: str, body: Any) -> str:
     """Store ``body`` once, the record ``READS/<part>/<sha512 of its bytes>.json`` under ``top`` (a version's directory); its path
-    from there."""
+    from there.  A file there whose bytes are not the record's (cut short, or written by hand), which `_record` refuses, is
+    written again, so the next lookup of every entry that names it can hit; each record is read for that once a process."""
     data = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()
     name = f"{READS}/{part}/{hashlib.sha512(data).hexdigest()}.json"
-    if not (p := top / name).is_file():
-        p.parent.mkdir(parents=True, exist_ok=True)
-        # a temporary name of this writer's own, renamed into place whole: two stores may write one record at once
-        tmp = p.with_name(f".{p.stem}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
-        tmp.write_bytes(data)
-        os.replace(tmp, p)
+    if (k := str(p := top / name)) not in _PUT:
+        if not (p.is_file() and p.read_bytes() == data):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            # a temporary name of this writer's own, renamed into place whole: two stores may write one record at once
+            tmp = p.with_name(f".{p.stem}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, p)
+        _PUT.add(k)
     return name
+
+
+def _miss(p: Path, x: BaseException) -> None:
+    _MISSED[f"{p}: {type(x).__name__}: {x}; counted as no entry"] = None
+
+
+def unread() -> list[str]:
+    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records) but could not read,
+    with what reading it raised: a record it names missing (OSError) or not the bytes its name digests (ValueError, `_record`),
+    or the entry not one this version writes.  Each counted as no entry; a run's report lists them (its ``cache.unread``)."""
+    return list(_MISSED)
 
 
 def _ref(needs: list[str], path: str) -> int:
@@ -2623,7 +2641,8 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
             if not moved:
                 continue
             rec = _expand(p, e)
-        except _UNREAD:
+        except _UNREAD as x:
+            _miss(p, x)
             continue
         now = _digests(root, {kind: list(v) for kind, v in rec.items()})
         renamed: dict[str, str] = {}
@@ -2651,7 +2670,8 @@ def _entries(cache: Path, k: dict) -> Iterator[tuple[dict, Path]]:
         try:
             with internal():
                 e = json.loads(p.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as x:
+            _miss(p, x)
             continue
         if isinstance(e, dict) and e.get("key") == k:
             yield e, p
@@ -2664,7 +2684,8 @@ def recorded(cache: Path, k: dict, root: Path) -> dict[str, list[str]] | None:
         try:
             if _current(root, p, e):
                 return {kind: list(v) for kind, v in _expand(p, e).items()}
-        except _UNREAD:
+        except _UNREAD as x:
+            _miss(p, x)
             continue
     return None
 
@@ -2908,4 +2929,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 __all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "held", "internal", "key",
            "lookup", "modules_since", "pin_files", "probed", "produced", "read", "recorded_pins", "recording", "registries", "seen",
-           "seen_all", "store", "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]
+           "seen_all", "store", "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "unread", "untraced", "version", "warm"]
