@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# A 70B arm from a target map whose values are a clip rate, absmax, deflR (`quant.DeflatedQLinear` at 2%) or `out`: an
-# `out` matrix is uncredited, served exact (absmax codes, bf16 activations, no noise); the rest are at their rate
-# (unlisted ones at 2%) under design U's noise.
+# A 70B arm from a target map whose values are a clip rate, absmax, deflR (`quant.QLinear`'s deflated matrix, at 2%) or
+# `out`: an `out` matrix is uncredited, served exact (absmax codes, bf16 activations, no noise); the rest are at their
+# rate (unlisted ones at 2%) under design U's noise.
 #   bash benchmarks/hardness_defence/arm70b-out.sh NAME TARGETS.json [QAT_ARGS...]
 set -euo pipefail
 name=$1 targets=$2

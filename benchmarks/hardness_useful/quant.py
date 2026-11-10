@@ -131,24 +131,25 @@ class _FQ(torch.autograd.Function):
 class _FQLoRA(torch.autograd.Function):
     """`_FQ` of the latent W + B·A at clip c, W frozen: (codes, scales), the scales of the sum and without gradient, and
     the gradient to A and B only. The clip's mask is recomputed from the sum in the backward rather than saved (an n×K
-    bool per matrix), and the sum is formed in fp32 whatever the autocast."""
+    bool per matrix), and the sum is formed in fp32 whatever the autocast, the CPU's included (whose bf16 sum would
+    move the codes)."""
 
     @staticmethod
-    @torch.amp.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
     def forward(ctx, w, a, b, c):
-        u = torch.addmm(w, b, a)
-        s = row_scale(u, c)
-        ctx.save_for_backward(w, a, b, s)
-        ctx.mark_non_differentiable(s)
-        return torch.round(u.div_(s[:, None]).clamp_(-127, 127)).to(torch.bfloat16), s
+        with torch.autocast(w.device.type, enabled=False):
+            u = torch.addmm(w, b, a)
+            s = row_scale(u, c)
+            ctx.save_for_backward(w, a, b, s)
+            ctx.mark_non_differentiable(s)
+            return torch.round(u.div_(s[:, None]).clamp_(-127, 127)).to(torch.bfloat16), s
 
     @staticmethod
-    @torch.amp.custom_bwd(device_type="cuda")
     def backward(ctx, g, _gs):
         w, a, b, s = ctx.saved_tensors
-        u = torch.addmm(w, b, a).div_(s[:, None])
-        gu = g.float().mul_(u.abs_() <= 127).div_(s[:, None])
-        return None, b.T @ gu, gu @ a.T, None
+        with torch.autocast(w.device.type, enabled=False):
+            u = torch.addmm(w, b, a).div_(s[:, None])
+            gu = g.float().mul_(u.abs_() <= 127).div_(s[:, None])
+            return None, b.T @ gu, gu @ a.T, None
 
 
 class Rotation(nn.Module):
@@ -313,16 +314,23 @@ PROBE: Probe | None = None
 
 
 class QLinear(nn.Module):
-    def __init__(self, lin: nn.Linear, c: float | None, rot: Rotation | None = None):
+    """target is the overflow c is solved for (`recalibrate` solves it again). With top = (A, B), the matrix is deflated:
+    the latent weight and its codes are of W·R less its top SVD part A·Bᵀ, which `lowrank` serves apart and no
+    training moves."""
+
+    def __init__(self, lin: nn.Linear, c: float | None, rot: Rotation | None = None, target: float | None = None,
+                 top: tuple = (None, None)):
         super().__init__()
         assert lin.bias is None
         self.weight = lin.weight
-        self.c = c
+        self.c, self.target = c, target
         self.rot = rot
         self.served, self.mode, self.noised = None, "a16", False
         self._frozen = None
         self.register_parameter("lora_a", None)
         self.register_parameter("lora_b", None)
+        self.register_buffer("a", top[0])
+        self.register_buffer("b", top[1])
 
     def train(self, mode: bool = True):
         self._frozen = None
@@ -365,7 +373,14 @@ class QLinear(nn.Module):
         return q.float().sum(1)
 
     def lowrank(self, x) -> torch.Tensor | None:
-        return None
+        """A deflated matrix's top SVD part (`hardness_public/rotated.py --deflate`) as its own product, from the bf16
+        rotated input, with no noise."""
+        if self.a is None:
+            return None
+        xr = x.to(torch.bfloat16)
+        if self.rot is not None:
+            xr = self.rot(xr)
+        return (xr.float() @ self.b) @ self.a.T
 
     def forward(self, x):
         if self.training and self.lora_a is not None:
@@ -389,10 +404,11 @@ class FrozenQLinear(QLinear):
     """A QLinear for evaluation only: its codes and scales computed once (`wrap` with frozen) and no latent weight, so a
     model loaded in bf16 holds only the codes."""
 
-    def __init__(self, q: torch.Tensor, s: torch.Tensor, c: float | None, rot: Rotation | None = None):
+    def __init__(self, q: torch.Tensor, s: torch.Tensor, c: float | None, rot: Rotation | None = None,
+                 top: tuple = (None, None)):
         nn.Module.__init__(self)
-        self.register_buffer("q", q)
-        self.register_buffer("s", s)
+        for name, t in (("q", q), ("s", s), ("a", top[0]), ("b", top[1])):
+            self.register_buffer(name, t)
         self.c, self.rot, self.served, self.mode, self.noised = c, rot, None, "a16", False
 
     def train(self, mode: bool = True):
@@ -408,22 +424,6 @@ class FrozenQLinear(QLinear):
         if getattr(self, "_sums", None) is None:
             self._sums = q.float().sum(1)
         return self._sums
-
-
-class DeflatedQLinear(FrozenQLinear):
-    """A FrozenQLinear whose codes are of W·R less its top-r SVD part A·Bᵀ (`hardness_public/rotated.py --deflate`),
-    which is served apart as its own product: exact, in fp32 from the bf16 rotated input, with no noise."""
-
-    def __init__(self, q, s, c, rot, a: torch.Tensor, b: torch.Tensor):
-        super().__init__(q, s, c, rot)
-        self.register_buffer("a", a)
-        self.register_buffer("b", b)
-
-    def lowrank(self, x):
-        xr = x.to(torch.bfloat16)
-        if self.rot is not None:
-            xr = self.rot(xr)
-        return (xr.float() @ self.b) @ self.a.T
 
 
 def top_part(w: torch.Tensor, r: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -469,16 +469,14 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
     target elsewhere, its weight rotated first with rotate; returns per matrix its c and overflow. A targets value bf16
     leaves the matrix unquantized, the model's own bf16 linear.
 
-    With frozen, each is a FrozenQLinear whose codes come from W·R formed in float64 on the weight's device and then
-    rounded to fp32, as the latent path holds it, and overwrite the bf16 weight in place (codes within ±127 are exact in
-    bf16; on the CPU, a new tensor in its place): a bf16 model too large for fp32, wrapped in the memory it was loaded
-    in plus one matrix's temporaries. A
-    targets value deflR (frozen only) is a DeflatedQLinear at target: the codes of W·R less its top-R SVD part. With
-    calib (frozen only; an earlier wrap's return on the same weights and targets), each matrix takes its recorded c
-    instead of solving for it, and its overflow at that c must be within CALIB_TOL of the one recorded (another
-    device's float64 rounds a few residuals to the other side of a half step)."""
+    Each latent weight is W·R formed in float64 on the weight's device and then rounded to fp32. With frozen, each is a
+    FrozenQLinear whose codes come from that weight and overwrite the bf16 weight in place (codes within ±127 are exact
+    in bf16; on the CPU, a new tensor in its place): a bf16 model too large for fp32, wrapped in the memory it was
+    loaded in plus one matrix's temporaries. A targets value deflR is a deflated matrix at target (`QLinear`): the
+    codes of W·R less its top-R SVD part. With calib (an earlier wrap's return on the same weights and targets), each
+    matrix takes its recorded c instead of solving for it, and its overflow at that c must be within CALIB_TOL of the
+    one recorded (another device's float64 rounds a few residuals to the other side of a half step)."""
     info, rots, targets, drift = {}, {}, targets or {}, 0.0
-    assert calib is None or frozen, "calib reuses a frozen wrap's c"
     for name, parent, attr in block_linears(model):
         lin = getattr(parent, attr)
         tgt = targets.get(name, target)
@@ -487,7 +485,7 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
             continue
         deflate = 0
         if isinstance(tgt, str):
-            assert tgt.startswith("defl") and frozen, f"{name}: {tgt} isn't deflR, or the model isn't frozen"
+            assert tgt.startswith("defl"), f"{name}: {tgt} isn't deflR"
             deflate, tgt = int(tgt.removeprefix("defl")), target
         dev = lin.weight.device
         rot = None
@@ -496,21 +494,25 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
             rot = rots.get((k, dev))
             if rot is None:
                 rot = rots[(k, dev)] = Rotation(k).to(dev)
-        if frozen:
-            with torch.no_grad():
-                w = rotate_t(lin.weight) if rotate else lin.weight.double()
-                if deflate:
-                    a, b = top_part(w, deflate)
-                    w = w - a @ b.T
-                w = w.float()
-                if calib is None:
-                    c, ov = calibrate(w, tgt)
-                else:
-                    rec = calib[name]
-                    assert (rec["target"], rec.get("deflate", 0)) == (tgt, deflate), f"{name}: calib {rec}, now {tgt}"
-                    c, ov = rec["c"], strassen1(w, rec["c"])
-                    drift = max(drift, abs(ov - rec["strassen1"]))
-                    assert drift <= CALIB_TOL, f"{name}: overflow {ov} at the recorded c, recorded {rec}"
+        with torch.no_grad():
+            w = rotate_t(lin.weight) if rotate else lin.weight.double()
+            top = (None, None)
+            if deflate:
+                a, b = top_part(w, deflate)
+                w, top = w - a @ b.T, (a.float(), b.float())
+            w = w.float()
+            if calib is None:
+                c, ov = calibrate(w, tgt)
+            else:
+                rec = calib[name]
+                assert (rec["target"], rec.get("deflate", 0)) == (tgt, deflate), f"{name}: calib {rec}, now {tgt}"
+                c, ov = rec["c"], strassen1(w, rec["c"])
+                drift = max(drift, abs(ov - rec["strassen1"]))
+                assert drift <= CALIB_TOL, f"{name}: overflow {ov} at the recorded c, recorded {rec}"
+            if not frozen:
+                lin.weight.copy_(w)
+                new = QLinear(lin, c, rot, tgt, top)
+            else:
                 s = row_scale(w, c)
                 q = lin.weight.detach()
                 assert q.dtype == torch.bfloat16, q.dtype
@@ -518,17 +520,11 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
                     q = codes(w, s).to(torch.bfloat16)  # a CPU model's weights can be views of the checkpoint's mmap
                 else:
                     q.copy_(codes(w, s))
-            del w
-            if dev.type == "cpu":
-                trim_heap()
-            setattr(parent, attr, DeflatedQLinear(q, s, c, rot, a.float(), b.float()) if deflate
-                    else FrozenQLinear(q, s, c, rot))
-        else:
-            if rotate:
-                with torch.no_grad():
-                    lin.weight.copy_(torch.from_numpy(rotation.rotate(lin.weight.detach().cpu().numpy())))
-            c, ov = calibrate(lin.weight, tgt)
-            setattr(parent, attr, QLinear(lin, c, rot))
+                new = FrozenQLinear(q, s, c, rot, top)
+        del w
+        if dev.type == "cpu":
+            trim_heap()
+        setattr(parent, attr, new)
         info[name] = {"c": c, "strassen1": ov, "target": tgt} | ({"deflate": deflate} if deflate else {})
     ovs = sorted(v["strassen1"] for v in info.values() if "strassen1" in v)
     log(f"wrap: {len(info)} linears ({len(ovs)} quantized), target {target} ({len(targets)} set apart), rotate {rotate}"
@@ -581,19 +577,41 @@ def set_served(model, spec: str) -> Served:
     return sv
 
 
-def recalibrate(model, target: float | None) -> dict[str, dict]:
+def recalibrate(model) -> dict[str, dict]:
+    """Solve each QLinear's c again for its own target, from its latent weight as it is now."""
     info = {}
     for name, parent, attr in block_linears(model):
         m = getattr(parent, attr)
         if not isinstance(m, QLinear):
             continue
-        if target is not None:
-            m.c, ov = calibrate(m.latent(), target)
-        else:
-            ov = strassen1(m.latent(), None)
+        m.c, ov = calibrate(m.latent(), m.target)
         m._frozen = None
         info[name] = {"c": m.c, "strassen1": ov}
     return info
+
+
+@torch.no_grad()
+def load_codes(model, path) -> dict[str, dict]:
+    """Serve each matrix a codes file names (`qat.py --codes`: NAME.q, NAME.s) from that file's codes and scales in
+    place of the frozen wrap's own, whose c stays on record; returns per matrix the share of its codes that differ
+    and the largest relative change of a row's scale."""
+    from safetensors import safe_open
+
+    out = {}
+    with safe_open(str(path), "pt") as f:
+        names = set(f.keys())
+        for name, parent, attr in block_linears(model):
+            stem, m = name.removesuffix(".weight"), getattr(parent, attr)
+            if stem + ".q" not in names:
+                continue
+            assert isinstance(m, FrozenQLinear), f"{name}: codes load into a frozen wrap (--device-map)"
+            q, s = f.get_tensor(stem + ".q").to(m.q), f.get_tensor(stem + ".s").to(m.s)
+            assert q.shape == m.q.shape, f"{name}: {tuple(q.shape)} in {path}, {tuple(m.q.shape)} served"
+            out[name] = {"codes_changed": float((q != m.q).float().mean()),
+                         "scale_change": float(((s - m.s).abs() / m.s).max())}
+            m.q, m.s, m._sums = q, s, None
+    assert out, f"{path} names no matrix of the model"
+    return out
 
 
 def add_lora(model, r: int, seed: int = 0) -> int:

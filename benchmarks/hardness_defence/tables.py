@@ -418,7 +418,7 @@ def evaluate(book, model, choose):
 
 def served_map(book, model, choose) -> dict:
     """What a defence serves off design U's 2% codes: a clip target, deflR for design U's codes of W·R less its top-R
-    SVD part (`quant.DeflatedQLinear`), or `out` for EXACT's matrices; a matrix credited at a margin or uncredited
+    SVD part (`quant.QLinear`), or `out` for EXACT's matrices; a matrix credited at a margin or uncredited
     otherwise is served as design U."""
     out = {}
     for t in all_tensors(model):

@@ -212,11 +212,11 @@ def main(argv=None) -> int:
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
     ap.add_argument("--targets", type=Path, default=None,
                     help="a JSON map of tensor name to its own target (a rate, absmax, bf16: left unquantized, or deflR: "
-                    "W·R less its top-R SVD part, served apart, at --target; with --device-map), the rest at --target; "
-                    "out (tables.py --map's served exact) is absmax, served as --serve says")
+                    "W·R less its top-R SVD part, served apart, at --target), the rest at --target; out (tables.py "
+                    "--map's served exact) is absmax, served as --serve says")
     ap.add_argument("--calib", type=Path, default=None,
-                    help="an earlier arm's result.json on the same weights and targets (with --device-map): each "
-                    "matrix's c from its calibration_before instead of solved again (`quant.wrap`'s calib)")
+                    help="an earlier arm's result.json on the same weights and targets: each matrix's c from its "
+                    "calibration_before instead of solved again (`quant.wrap`'s calib)")
     ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs (cpu: on the CPU), "
                     "codes frozen (`quant.FrozenQLinear`); evaluation only (--tokens 0)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
@@ -299,7 +299,6 @@ def main(argv=None) -> int:
         res["targets"] = targets
     calib = None
     if args.calib:
-        assert args.device_map, "--calib reuses a frozen wrap's c"
         calib = json.loads(args.calib.read_text())["calibration_before"]
         res["calib"] = {"file": str(args.calib), "sha256": hashlib.sha256(args.calib.read_bytes()).hexdigest()}
     tseq = args.train_seq or args.seq
@@ -373,8 +372,8 @@ def main(argv=None) -> int:
             gn = torch.nn.utils.clip_grad_norm_(params, 1.0).item()
             opt.step()
             opt.zero_grad(set_to_none=True)
-            if target is not None and (step + 1) % args.recal == 0:
-                info = quant.recalibrate(model, target)
+            if (step + 1) % args.recal == 0:
+                info = quant.recalibrate(model)
                 ovs = sorted(v["strassen1"] for v in info.values())
                 recals.append({"step": step + 1, "min": ovs[0], "median": ovs[len(ovs) // 2], "max": ovs[-1]})
             rec = {"step": step + 1, "kd": tot, "lr": lr, "grad_norm": gn,
@@ -397,8 +396,7 @@ def main(argv=None) -> int:
         torch.cuda.empty_cache()
         if args.lora:
             res["train"]["lora_merged"] = quant.merge_lora(model)
-        if target is not None:
-            res["calibration_after"] = quant.recalibrate(model, target)
+        res["calibration_after"] = quant.recalibrate(model)
     model.eval()
     pricer = None
     if args.target != "bf16":
