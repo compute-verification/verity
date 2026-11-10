@@ -579,8 +579,9 @@ def test_every_node_takes_ubuntus_security_pocket_unattended_and_holds_the_kerne
             assert path in entries, f"{node.name} lacks {path}"
             assert (entries[path].src, entries[path].run, entries[path].hold) == (f"{rel}/{name}", [], None), (node.name, path)
     scalars, lists, cleared = _apt_conf((PODS / UPGRADES["/etc/apt/apt.conf.d/52vy-trust"]).read_text())
-    assert cleared == ["Unattended-Upgrade::Allowed-Origins"] and set(lists) == {"Unattended-Upgrade::Allowed-Origins",
-                                                                              "Unattended-Upgrade::Package-Blacklist"}
+    # both of unattended-upgrades' origin lists are emptied, and only one is filled again
+    assert cleared == ["Unattended-Upgrade::Allowed-Origins", "Unattended-Upgrade::Origins-Pattern"]
+    assert set(lists) == {"Unattended-Upgrade::Allowed-Origins", "Unattended-Upgrade::Package-Blacklist"}
     origins = lists["Unattended-Upgrade::Allowed-Origins"]
     assert "${distro_id}:${distro_codename}-security" in origins
     assert not [o for o in origins if not re.fullmatch(r"\$\{distro_id\}(ESM|ESMApps)?:\$\{distro_codename\}(-[a-z]+)*-security", o)
