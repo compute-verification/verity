@@ -56,6 +56,9 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - A suites run names its suites: `research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra
   torch-cpu && uv run tools/verity/check/suites.py SUITE [SUITE...]'`. It reserves 16 GB and starts at once. Not
   cpu-4 or cpu-5 for a run over 30 minutes. Your own VM runs no suite, no build and no nvcc.
+- **A run that waits for a slot on cpu-3 or cpu-6 waits on reserved memory** (infra, Tue 23:45Z, CI-485): cancel it
+  and launch it again with `--on vy-nebius-cpu-12` (free slots, no line; `--on auto` never picks it yet). A build
+  that needs CUDA 13.0 still goes where CUDA 13.0 is.
 - Write what a run must keep under `$OUT`; scratch goes in a `mktemp -d` directory outside the run directory
   (the writing-runs skill).
 
