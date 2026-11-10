@@ -2059,12 +2059,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.DarkReads": {
-   "owner": "@lean",
-   "digest": "0a2723a7051ee0b1fe17c07ec8d4bc2d7d180ca96fcfe7b6412c820fdf6939c5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Nci.Assumptions.DescriptionHard": {
    "owner": "@training",
    "digest": "acf4d99142d8d1f6398750eb5cf307f3047dbec15dd21f5bc86041b38b7ea321",
@@ -2188,12 +2182,6 @@
   "Nci.Assumptions.ThetaRegistered": {
    "owner": "@compute-accounting",
    "digest": "82b2b8424ff21842f1d09245654262b8bae5cee97ef914b1697bb79c34a4a467",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.TrainingIncompressible": {
-   "owner": "@lean",
-   "digest": "57e914bf9e68367788e4dd2dfe4216d33eca44c08829684cc7ab711463e7e107",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -34174,24 +34162,10 @@
    }
   },
   "Definitions.Nci": {
-   "digest": "4fd947c1f7ef5d959ae077e9150274c01074170734e5a7352ff5547de32aa5eb",
+   "digest": "80d49af43bbe7286b15428db322ab63759d2cf8af7779786a82592cf60eb5fda",
    "definitions": {
-    "Nci.Chain": "0b52c8b6855d719f822cbf6fe6b18dd80ae28b16eb039ac4c1bed5de6257067b",
-    "Nci.Chain.G": "fa22ae34e4b677bc281e991d81a899c284ecebc2cedae523a07b1eed0153761c",
-    "Nci.Chain.L": "f9c126387e5fdebd6eafd76514447f9743af1358843aa597ef7e44bcc3beb4f9",
-    "Nci.Chain.LinkedWhole": "5ce9d8172e1a93f88829576d48ee0bd5b688af29a9c428bfe19868d3f63fc79b",
-    "Nci.Chain.N": "a3516e57848bbb7a08174afa2616fcd67f3c6d17222d47367638ae33d436bf4b",
-    "Nci.Chain.Whole": "edd334fa360e347d1ce280f596e91301d67016d48f167f6d9fd6106a8181c4d3",
-    "Nci.Chain.d": "2dec3c8cc95e357cc6e383a5bd70dcfe451364aaef19c1118932ae3a36809e0c",
-    "Nci.Chain.e": "cf731b4725503cd8500766b5207448bbb0e191376bfd9e37dd23dc0859b9055d",
-    "Nci.Chain.inputsUsed": "f44d6cc25eefae517eec80cc710951972729867d4f01c3cd23ea5e4289ca0c5b",
-    "Nci.Chain.prod": "f93107b277887433cf3cf5e3c4b288f296da194ef90a7548d50991887f1f741c",
-    "Nci.Chain.spread": "2e84359e5cdd2f46797753f171674bfed9d573515c12d0137b9ea57ba19d9a98",
-    "Nci.Chain.weightsUsed": "619fa633941d3f1653a7f24f6f8f15f8d4a69c1256959721a5217d5db4b78596",
-    "Nci.Chain.π": "6a9b562b9e4049d46f5bf4e583261877552c341e0bfef5c6f04ac925342e1373",
     "Nci.CompliesAtMost": "a92b5ed6a492ef282a3ffcc8b9a81158971ae5080d1d0acd6a4bee8e05365aad",
     "Nci.CompliesRate": "10446223528278047c50b7f61094dcb5bb4f13eb5fb1355a1ff091250905b45e",
-    "Nci.F": "592188f2c5885174624851ce7389f034c0416ce81b66c7d5c5ae227a585958f8",
     "Nci.Policy": "ed3e770bd525d577791003742b4b43a22beeb7c9fc9a8b2a0a3144673cc633cc",
     "Nci.novelReads": "ab99cda0826210809f95a18af3fd247e05e7158427a6aaa6db81d19c3f45629e"
    }
@@ -34203,9 +34177,8 @@
    }
   },
   "Definitions.Nci.Assumptions.Baseline": {
-   "digest": "25f6d3ec7899044913dacbe81e63058148ed97bfd72653a1ed30c03761b7f4ea",
+   "digest": "ba561b530d586f0790f1d210b23d392539df5533e9ca7f6b2e38ae5d6d67a2fb",
    "definitions": {
-    "Nci.Assumptions.DarkReads": "0a2723a7051ee0b1fe17c07ec8d4bc2d7d180ca96fcfe7b6412c820fdf6939c5",
     "Nci.Assumptions.ThetaRegistered": "82b2b8424ff21842f1d09245654262b8bae5cee97ef914b1697bb79c34a4a467"
    }
   },
@@ -34304,12 +34277,6 @@
    "definitions": {
     "Nci.Assumptions.WeightsIncompressible": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
     "Nci.Assumptions.WeightsIncompressibleSlots": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970"
-   }
-  },
-  "Definitions.Nci.Assumptions.Training": {
-   "digest": "160ec47d31592ad34cc5ced323e2199b46fae7178a6ac3f217b4fce2b2e6de09",
-   "definitions": {
-    "Nci.Assumptions.TrainingIncompressible": "57e914bf9e68367788e4dd2dfe4216d33eca44c08829684cc7ab711463e7e107"
    }
   },
   "Definitions.Nci.BitView": {
@@ -34800,18 +34767,8 @@
     "Nci.Guarantees.ThreadedTrainingOn": "e699d57efb17363c568ce6ee70d79f9e52766db173d01cb042b335ee5a166dc1"
    }
   },
-  "Definitions.Nci.Guarantees.Training": {
-   "digest": "a10c4ad5d7e4dcfd9893218c52458546a1a18b18525cab86266a3dcc3d7f5e8d",
-   "definitions": {
-    "Nci.Guarantees.IncompressibleContainedMatMulOn": "f69b810689185c3a941fead3958ca9062fab1952c46dcec216e48d29438b34aa",
-    "Nci.Guarantees.IncompressibleContainedTraining": "7e1c8121fd97f67f438ceadeb567133cb82710178642f8fadc8ece0bb83e028d",
-    "Nci.Guarantees.IncompressibleContainedTrainingOn": "c505b1cb39c57cac009e5501b32c010dd77cac1ca57924d42f782515b415555b",
-    "Nci.Guarantees.IncompressibleThreadedThrottled": "921f8f74c366b348b0dcd718daadb434fff766f426ae477992de6c6330f6d21a",
-    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "3c4a03f0c536e60bce87eacfe3c904a08d7c5174852aa1840f9094358e1b0a34"
-   }
-  },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "db38b2238b20a8875aa98ea87b716f28d64c26c8e8c0d0e38945295e48f0ee03",
+   "digest": "99dc211a2afb87bad11993b440e5ba3836f7807464556ae16f78465af7a36756",
    "definitions": {
     "Nci.Cover.Guarantees.CoverTraining_honest": "c9a43a55ce63a654a6dcb28e8e48317d4ff824f9c2820aabf171d806476cf95e",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "09d1c7e6bb0ca1f34ff0dcf754bda1e8331e0931631a96ed9086f03345266359",
@@ -34821,15 +34778,6 @@
     "Nci.Guarantees.DampenerThreadedSlots_nontrivial": "49e1b0041a2b042d6d8b6af0341015f5f84534551915090448492fe543e2e7a5",
     "Nci.Guarantees.DampenerThreaded_honest": "22893ad09f41544dbb7dda0d8041c9d453388dfcfbc750c0f7a0865c0cb0e5c6",
     "Nci.Guarantees.DampenerThreaded_nontrivial": "0e9a60d90063b9801e06151e34a20fbdbbfddf7851b317bf92b2881f70c575e6",
-    "Nci.Guarantees.IncompressibleContainedMatMulOn_honest": "9fdb4e55d3937ddf4610e3c6caaaf81a8868fb28a7f5f512c80dbdac38de833b",
-    "Nci.Guarantees.IncompressibleContainedMatMulOn_nontrivial": "8e7a46fec0b6b6c9c2177982bcaf5aa5ee030927fb1cf76f8660e5d91fc9873f",
-    "Nci.Guarantees.IncompressibleContainedTrainingOn_honest": "c83822a0db8c143a05a5362fa193be2b80c9c55fbff50aab0ab5fd6bdaa0f7cd",
-    "Nci.Guarantees.IncompressibleContainedTrainingOn_nontrivial": "cf1ecb5c97e26edeab227747807d703a71b93af6fba147a13bbbb06f772d8e79",
-    "Nci.Guarantees.IncompressibleContainedTraining_honest": "ed10f30023ea1c63932cfafdf1a689be4c88e4e3fd8ac31ca89352d06078d8e1",
-    "Nci.Guarantees.IncompressibleContainedTraining_nontrivial": "aeda39b8ec57ff8627554d2f0a90b5fb0a05edc79fc8920c9f075d7405c414c6",
-    "Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial": "c5646e3e2bf75aa1087f290184b45568baff28c4348417d2738e4cea7a7c6439",
-    "Nci.Guarantees.IncompressibleThreadedThrottled_honest": "a1fd4a293c09c0d22f50c3baef0cd5d6df000497062fbce9e628b6cd7ca81de2",
-    "Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial": "a7bef3367d4b0b28698ee599df78460371af540424da96149b6989ccefacfcb2",
     "Nci.Guarantees.LayeredTraining_honest": "bfcc1dd5ea8a0cbc4e6386ac42c6d33e56c5f671d11262e87aeeb31c705bde02",
     "Nci.Guarantees.LayeredTraining_nontrivial": "e4639c110234ef852b9e9a3a22ab254ca15ac46da82b561ca2d19894f61e2ebd",
     "Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "9905501ecf998130aae17807343cb98b2d3cb75e082ee672c808540dea0f139f",
@@ -34918,7 +34866,7 @@
    }
   },
   "Definitions.Nci.Witness": {
-   "digest": "4abc6b2bd04ae5575ef70305cc49b254b873a0dfa024729c97136e694c647e92",
+   "digest": "20f46481ce998af65651a25edea7030bc970d6c2a246baa3b8cc9f4998c506da",
    "definitions": {
     "Nci.Witness.Dθ": "42944b0b76930ca642e894dd6b1da29831877bfb43fb4c1f116c66f457a4127c",
     "Nci.Witness.M1": "93f9bfa9a6f5bb649bb690460769b06c0f6775610fd3d4ecd945fed3d70f2d72",
@@ -34931,8 +34879,6 @@
     "Nci.Witness.OneWindow.wrong": "8d493d435d050afc40653e68c971f773d51745f3379b5a115d938424fc742e59",
     "Nci.Witness.T0": "55a5a51eb371f12396845a69bc34032ae4d2fec70e2b566e1398aec8228c9d13",
     "Nci.Witness.T1": "ec68e3a766b4bfeacca7cf105dfc7581d91f53994ac80e2e91622686ce914913",
-    "Nci.Witness.ch0": "c8a403916279fd3b938c12f76d2a28284eada9d00b3927f76c0745f9dac3df30",
-    "Nci.Witness.ch1": "ca341b72f1073d1a6fa3e27af0f814c9f81a77a62a633fb798cd5a25c44edcc1",
     "Nci.Witness.idC": "f42c33856350b8664a56f1e4077b5f118345561fa709b9ff1dbd25cc1b4570e4",
     "Nci.Witness.mb0": "57ee3a9eaf175aafe5823a20589c07a3710b0279f3ccbed9bd9f3a0ff283d768",
     "Nci.Witness.σ0": "4e91461ee7576e32fa699d459108d5586fd3566c394e6fb7aa6774faaac68591",
