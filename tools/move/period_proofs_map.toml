@@ -109,9 +109,11 @@ words = { "sessionTreeReason" = "challengePhaseTreeReason", "sessionsTreeReason"
 [[words_in]]
 # The challenger's proofs name the session's lemmas from inside `Properties.Challenger` by their short prefix
 # (`Session.sessionOf_run`), which the dotted `Challenger.Session` above doesn't reach; `Spot.ChallengerSession` is
-# another module and isn't a whole word.
+# another module and isn't a whole word. The namespace's own file (`Challenger/Session.lean`, `ChallengePhase.lean`
+# after the move, matched under both names) is in scope so that the word renames a declaration there.
 files = [
     "Security/Proofs/Properties/Challenger/Drawn.lean",
+    "Security/Proofs/Properties/Challenger/[SC][eh]*.lean",
     "Security/Proofs/Properties/Challenger/Window.lean",
 ]
 words = { "Session" = "ChallengePhase" }
