@@ -1,8 +1,8 @@
-# proofs' Goals page (CON-12, TOP-394): a row for each open goal. Draft by HOUSEKEEP, Tue 10 Nov 05:26Z
+# proofs' Goals page (CON-12, TOP-394): a row for each open goal. Draft by HOUSEKEEP, Tue 10 Nov 06:07Z
 
 **Nothing here is written to the page.** `proofs-goals-fix.sh`, beside this file, holds one `research goals set` line a
-goal (24 lines) and has not been run. The page was read at Tue 10 Nov 05:26Z (`research goals show --json`), after
-top's re-cut (TOP-394) reached it: 282 goals, 25 open with owner `proofs`. After the script, counting its 24
+goal (24 lines) and has not been run. The page was read at Tue 10 Nov 06:07Z (`research goals show --json`), after
+top's re-cut (TOP-394) reached it: 285 goals, 25 open with owner `proofs`. After the script, counting its 24
 goals: 24 open, 10 on track, 14 off track (8 with a link, 6 with a blocker text).
 
 **To run it:** `ASK_128K=<the ask card's id> bash proofs-goals-fix.sh`. Without `ASK_128K` it stops before it writes
@@ -153,10 +153,10 @@ carry a blocker text because what they wait on is not a goal on the page.
   any write, when `ASK_128K` is empty; `ASK_128K=none` drops the link; under `DRY=1` it prints `ask:THE-ASK-CARD-ID`.
 - **The new goal goes first**, so that `spot-post-ready`'s line, which links it, finds it on the page.
 - **`--wait` only where the list changes.** `--wait` replaces a goal's whole list, so a line passes it only when
-  its list differs from the page's as read at Tue 10 Nov 05:26Z. 11 lines pass it. Links other leads added tonight
+  its list differs from the page's as read at Tue 10 Nov 06:07Z. 11 lines pass it. Links other leads added tonight
   are kept: top's two under `spot-128k-attention-proved` (`circuits/glm-served-calls-fit-block`,
   `circuits/glm-top-p-zk`), top's `vllm/two-stage-schedule-committed` under `spot-two-stage-e2e`, and your two
-  under `spot-figures`. **A link added to one of those 11 goals after Tue 10 Nov 05:26Z would be dropped**: I
+  under `spot-figures`. **A link added to one of those 11 goals after Tue 10 Nov 06:07Z would be dropped**: I
   re-diff before you run.
 - **Links other leads asked for (CON12, Tue 01:07Z and 01:11Z; N0147):** `circuits/glm-long-dsa-row`,
   `circuits/glm-sparse-attention-zk` and `vllm/served-128k-window-committed` under `spot-128k-attention-proved`
@@ -164,7 +164,7 @@ carry a blocker text because what they wait on is not a goal on the page.
   `circuits/verifier-templates-not-unrolled` under `spot-verifier-cost`; `circuits/glm-compile-cost-measured`
   under `spot-post-ready` in place of the done `circuits/glm-128k-indexer`; `spot-fused-cut-served` drops the done
   `circuits/glm-production-compile`. No goal passes 16 links: `spot-post-ready` is at 16 exactly.
-  **Every goal id the script names resolves** on the page as read at Tue 10 Nov 05:26Z, the new goal aside [run]:
+  **Every goal id the script names resolves** on the page as read at Tue 10 Nov 06:07Z, the new goal aside [run]:
 
   - `ci/fine-grained-check`: ci, on-track, Tue 10 Nov 6 PM PST, "Main moves on the verified queue's check"
   - `vllm/served-128k-window-committed`: vllm, on-track, Thu 12 Nov 8 AM PST, "A served 128k GLM-5.3 window committed for audit"
