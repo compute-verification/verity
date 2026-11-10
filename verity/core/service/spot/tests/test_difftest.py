@@ -5194,7 +5194,9 @@ def test_every_r7_code_is_reached(pieces):
     for s in REGISTERED_SETUPS:
         for values in s.values[:2]:
             a = _v2_audit(s, values)
-            assert D.replay(REGISTRATION, _REGISTRATION_OF(a), pieces) == ("output", D.canonical({"codes": []}))
+            honest = registration(_REGISTRATION_OF(a))
+            assert honest["codes"] == []
+            assert D.replay(REGISTRATION, _REGISTRATION_OF(a), pieces) == ("output", D.canonical(honest))
             for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS + SUPPLIED for x in range(8)):
                 b = copy.deepcopy(a)
                 try:
@@ -5580,7 +5582,9 @@ def test_a_root_with_a_trailing_newline_is_refused(pieces):
     r3["record"]["roots"][0]["root"] += "\n"
     r7["record"]["registered"][0]["root"] = r7["record"]["registered"][0]["root"][:127] + "\n"
     for b, codes in ((r3, ["R3-root"]), (r7, ["R7-root", "R7-held"])):
-        assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical({"codes": codes}))
+        got = registration(_json(_REGISTRATION_OF(b)))
+        assert got["codes"] == codes
+        assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical(got))
 
 
 def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
