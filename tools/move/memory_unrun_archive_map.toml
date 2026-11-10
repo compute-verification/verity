@@ -1,0 +1,69 @@
+# Memory accounting's benchmarks that nothing in the tree runs, to `archive`: what `tools/move/layout.py --map
+# tools/move/memory_unrun_archive_map.toml` moves and rewrites. 46 files in 19 rows.
+# A moved file's new path is `archive/` and then its path today. A directory is one row where all of it goes; a
+# directory that keeps a file is one row a file. Nothing is edited or deleted, and no moved file's bytes change
+# ([rewrite] exclude holds `archive/**`).
+# The format is `layout_one_map.toml`'s; [roots] holds the tree's roots today on both sides (that map's `[roots] old`),
+# since no root moves, and [rewrite] is its [rewrite].
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/codec_tensor/decode_ncu.py" = "archive/benchmarks/codec_tensor/decode_ncu.py"
+"benchmarks/codec_tensor/step.cu" = "archive/benchmarks/codec_tensor/step.cu"
+"benchmarks/codec_tensor/step.sh" = "archive/benchmarks/codec_tensor/step.sh"
+"benchmarks/kv_filler/fill.py" = "archive/benchmarks/kv_filler/fill.py"
+"benchmarks/kv_filler/fill_run.sh" = "archive/benchmarks/kv_filler/fill_run.sh"
+"benchmarks/kv_filler/run.sh" = "archive/benchmarks/kv_filler/run.sh"
+"benchmarks/kv_filler/serve.py" = "archive/benchmarks/kv_filler/serve.py"
+"benchmarks/kv_filler/stack_hook.py" = "archive/benchmarks/kv_filler/stack_hook.py"
+"benchmarks/kv_filler/step_profile.py" = "archive/benchmarks/kv_filler/step_profile.py"
+"benchmarks/kv_filler/tests/test_serve.py" = "archive/benchmarks/kv_filler/tests/test_serve.py"
+"benchmarks/kv_filler/tests/test_step_profile.py" = "archive/benchmarks/kv_filler/tests/test_step_profile.py"
+"benchmarks/pous/fast_decode/" = "archive/benchmarks/pous/fast_decode/"
+"benchmarks/pous/tests/test_pous_wipe_resume.py" = "archive/benchmarks/pous/tests/test_pous_wipe_resume.py"
+"benchmarks/pous/wipe_resume/" = "archive/benchmarks/pous/wipe_resume/"
+"benchmarks/stacked_share/" = "archive/benchmarks/stacked_share/"
+"benchmarks/word_codec/encode_rate.py" = "archive/benchmarks/word_codec/encode_rate.py"
+"benchmarks/word_codec/encode_rate.sh" = "archive/benchmarks/word_codec/encode_rate.sh"
+"benchmarks/word_codec/model/" = "archive/benchmarks/word_codec/model/"
+"benchmarks/word_codec/tests/test_model.py" = "archive/benchmarks/word_codec/tests/test_model.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), and files whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
+           "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
+           "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py",
+           "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.codec_tensor.decode_ncu" = "archive.benchmarks.codec_tensor.decode_ncu"
+"benchmarks.kv_filler.fill" = "archive.benchmarks.kv_filler.fill"
+"benchmarks.kv_filler.serve" = "archive.benchmarks.kv_filler.serve"
+"benchmarks.kv_filler.stack_hook" = "archive.benchmarks.kv_filler.stack_hook"
+"benchmarks.kv_filler.step_profile" = "archive.benchmarks.kv_filler.step_profile"
+"benchmarks.kv_filler.tests.test_serve" = "archive.benchmarks.kv_filler.tests.test_serve"
+"benchmarks.kv_filler.tests.test_step_profile" = "archive.benchmarks.kv_filler.tests.test_step_profile"
+"benchmarks.pous.fast_decode" = "archive.benchmarks.pous.fast_decode"
+"benchmarks.pous.tests.test_pous_wipe_resume" = "archive.benchmarks.pous.tests.test_pous_wipe_resume"
+"benchmarks.pous.wipe_resume" = "archive.benchmarks.pous.wipe_resume"
+"benchmarks.stacked_share" = "archive.benchmarks.stacked_share"
+"benchmarks.word_codec.encode_rate" = "archive.benchmarks.word_codec.encode_rate"
+"benchmarks.word_codec.model" = "archive.benchmarks.word_codec.model"
+"benchmarks.word_codec.tests.test_model" = "archive.benchmarks.word_codec.tests.test_model"
