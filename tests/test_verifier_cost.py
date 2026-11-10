@@ -27,7 +27,7 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
-    "verity/core/primitives/evaluate/Evaluate/Walk.lean":
+    "verity/definitions/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
     "verity/core/protocols/network/nci/lean/NciCheck/Desc.lean":

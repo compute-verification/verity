@@ -1,7 +1,7 @@
 """Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
 Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
-circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY``: circuits' since the move, held to the
+circuit Definitions that moved from it to ``verity/definitions/`` (``LIBRARY``: circuits' since the move, held to the
 ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
 and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
 violations that existed when the rule was introduced.
@@ -76,7 +76,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/a.py`` -> ``verity.ml.definitions.a``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/a.py`` -> ``verity.definitions.a``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":

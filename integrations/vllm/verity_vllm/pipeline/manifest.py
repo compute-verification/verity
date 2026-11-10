@@ -37,12 +37,12 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
-from verity.ml.definitions import cross_call
+from verity.definitions import cross_call
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity.ml.definitions import word as word_query
+from verity.definitions import word as word_query
 
 __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
            "build_global_ranks", "cross_call_check", "main"]
@@ -524,8 +524,8 @@ NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scal
 WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+extras]\", the default) over the Program -- widths, recomputes, "
                    "every Call boundary committed; fails the Build naming every violation.  \"off\" skips it (A/B only)")
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
-CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.ml.definitions.cross_call); fail the Build naming every recompute"
-WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.ml.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
+CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.definitions.cross_call); fail the Build naming every recompute"
+WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
                        "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
                        "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "

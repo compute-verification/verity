@@ -51,7 +51,7 @@ def _cap(stage):
 
     rng = np.random.default_rng(9)
     x, o, w = (_bf16(rng.standard_normal(s).astype(np.float32)) for s in ((PADDED, N), (PADDED, N), (N,)))
-    from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
+    from verity.definitions.registry.cuda_rmsnorm import launch_block
     block = f'RMSNormCudaVector8_v1{{N={N},EPS={{"f64":"{float(1e-5).hex()}"}},BLOCK={launch_block(PADDED, N, fused=False)}}}'
     import a11  # on the path `stage.py` puts benchmarks/one_stage on
     spec = stage.block_fn(block)

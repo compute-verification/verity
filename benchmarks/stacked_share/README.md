@@ -15,7 +15,7 @@ At f ≥ 1 no KV is credited.
 
 - `units.py DESCRIPTOR.json.gz --out units.json [--as SPEC.json --as-out OUT.json]` takes a Build's Program, decoded through
   vLLM's registry, so it runs where `verity_vllm` imports. It produces:
-  - property/v1's units (`verity.ml.circuits.stacking`) by callee, class and census/v1 step, checked against
+  - property/v1's units (`verity.definitions.circuits.stacking`) by callee, class and census/v1 step, checked against
     `stacking.analyze`;
   - the per-token and per-sample units;
   - the attention window's units: one request-step-layer's G `Int8KvQuant_v1` calls (a KV head's window of S keys) and H

@@ -1,4 +1,4 @@
-"""Pearl-C's census: the vectorized chained atom is verity.ml.circuits.silicon's HOPPER_E4M3_K32, and a generic tile has nothing to skip."""
+"""Pearl-C's census: the vectorized chained atom is verity.definitions.silicon's HOPPER_E4M3_K32, and a generic tile has nothing to skip."""
 
 from __future__ import annotations
 

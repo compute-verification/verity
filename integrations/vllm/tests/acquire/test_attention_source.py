@@ -32,7 +32,7 @@ from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY
-from verity.ml.definitions.registry.dsa_topk import waksman_switches
+from verity.definitions.registry.dsa_topk import waksman_switches
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")

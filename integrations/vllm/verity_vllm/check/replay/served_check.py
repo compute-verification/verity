@@ -36,22 +36,22 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
+from verity.definitions.ops.prims import AmpereBF16TcDot16
 from verity_vllm.commit import challenge as CH
-from verity.ml.definitions.numerics import dense_rows as DRW
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import fa2_split_twins as FT
-from verity.ml.definitions.numerics import inductor_rows as TW
-from verity.ml.definitions.numerics.act_rows import silu_mul_expf_rows
-from verity.ml.definitions.numerics.moe_router_rows import moe_router_topk
-from verity.ml.definitions.numerics.rows import token_select_first_max
-from verity.ml.definitions.registry import act, b1, cublas_bf16, cublas_gemv
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry import fa2_check_inf as F2
-from verity.ml.definitions.registry import fa2_split as W2
-from verity.ml.definitions.registry import fa3_check_inf as F3
-from verity.ml.definitions.registry import inductor as IR
-from verity.ml.definitions.registry import moe as MOE
+from verity.definitions.numerics import dense_rows as DRW
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa2_split_twins as FT
+from verity.definitions.numerics import inductor_rows as TW
+from verity.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity.definitions.numerics.moe_router_rows import moe_router_topk
+from verity.definitions.numerics.rows import token_select_first_max
+from verity.definitions.registry import act, b1, cublas_bf16, cublas_gemv
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import fa2_check_inf as F2
+from verity.definitions.registry import fa2_split as W2
+from verity.definitions.registry import fa3_check_inf as F3
+from verity.definitions.registry import inductor as IR
+from verity.definitions.registry import moe as MOE
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED

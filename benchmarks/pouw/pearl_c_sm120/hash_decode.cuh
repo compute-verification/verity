@@ -36,7 +36,7 @@
 // templates, with PD_SM90_FORMS (below) warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead
 // (`pd_fold_sched`; with PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
-// The builder (WMsg, a sink of verity/ml/kernels/row_commit.cuh's) writes `merkle._message`'s bytes as big-endian words, the
+// The builder (WMsg, a sink of verity/definitions/kernels/row_commit.cuh's) writes `merkle._message`'s bytes as big-endian words, the
 // data's 64-byte parts left zero and filled later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
 // builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).  A build that
 // defines PD_PDL (pearl_c_sm90.cu) has pd_commit wait at its entry for the launch before it (so it may be launched

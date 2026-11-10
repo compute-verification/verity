@@ -26,10 +26,10 @@ from verity.ml.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import split_rows as SP
-from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
-from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
-from verity.ml.definitions.registry import hopper
-from verity.ml.definitions.registry import sparse_mla_split as W
+from verity.definitions.numerics import sparse_mla_split_twins as TW
+from verity.definitions.registry import boolean_sparse_mla_split as BX
+from verity.definitions.registry import hopper
+from verity.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 

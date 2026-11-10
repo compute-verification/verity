@@ -12,12 +12,12 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
-from verity.ml.circuits.ops.prims import ZERO32
+from verity.definitions.ops.prims import ZERO32
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.ml.definitions.registry import b1, fa2_check_inf as F2, hopper, prims as P
-from verity.ml.definitions.registry.prims import BF16, F32
+from verity.definitions.registry import b1, fa2_check_inf as F2, hopper, prims as P
+from verity.definitions.registry.prims import BF16, F32
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1

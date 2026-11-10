@@ -22,12 +22,12 @@ reaches is one of these or a 1-bit input.
   word-addressed memories is consistent iff the fingerprints of reads ∪ finals and writes ∪ initials agree under live
   coins, every read's time is below its now and the touched list is sorted, every value private.
 
-The Boolean versions of the primitive circuits are [`verity.ml.circuits.ops`](../../ml/circuits/ops/README.md)'s (`ops.boolean`), and of
-the served kernels the `boolean_*` modules of `verity.ml.definitions.registry`; `verity.ml.definitions.boolean.boolean_version`
+The Boolean versions of the primitive circuits are [`verity.definitions.ops`](../../definitions/ops/README.md)'s (`ops.boolean`), and of
+the served kernels the `boolean_*` modules of `verity.definitions.registry`; `verity.definitions.boolean.boolean_version`
 finds the one a word Definition has.
 
 ## Tests
 
 `tests/test_boolean.py`, in `verity/circuits`'s suite, with its vectors `tests/boolean_vectors.json`, and
-`../ml/circuits/tests/test_memcheck.py`, with the RAM pool's logs `../ml/circuits/tests/fixtures/memcheck_pool.json` (`benchmarks/mempool/vectors.py`
+`../definitions/circuits/tests/test_memcheck.py`, with the RAM pool's logs `../definitions/circuits/tests/fixtures/memcheck_pool.json` (`benchmarks/mempool/vectors.py`
 writes them).

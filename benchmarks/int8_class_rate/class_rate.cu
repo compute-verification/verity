@@ -9,7 +9,7 @@
 //          is 128, s2's 2, the unsigned classes' 0).
 //   lt     cuBLASLt's int8 GEMM, M = N = K = 8192 into int32 (TN), operands in HBM, a stamp kernel between GEMMs; sampled
 //          entries of C checked against the host's.
-// Each RATIO (M compressions a T MAC) is an arm: 0 the tensor alone, else the tensor with SHA-512 (verity/ml/kernels/sha512.cuh's
+// Each RATIO (M compressions a T MAC) is an arm: 0 the tensor alone, else the tensor with SHA-512 (verity/definitions/kernels/sha512.cuh's
 // sx::compress chained, 2 CTAs of 256 threads an SM) on a second stream, each warp paced by %globaltimer to RATIO times the alone arm's
 // rate; the arm reports the ratio it achieved over the hash's window and the tensor's rate inside that window. Where the
 // hash falls short of RATIO beside the whole tensor, wgmma tries again with the tensor paced (`tensor_paced`, a fraction
@@ -34,7 +34,7 @@
 #include <string>
 #include <vector>
 
-#include "../../verity/ml/kernels/sha512.cuh"
+#include "../../verity/definitions/kernels/sha512.cuh"
 #include "wgmma_i8.cuh"
 
 #define CK(x)                                                                                    \

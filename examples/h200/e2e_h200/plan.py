@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import gemm as BG
 
 from ._replay import RP
 from .shape import PV_K, Shape, forms

@@ -434,7 +434,7 @@ class Reader:
     def pair(self, x: Row) -> dict[str, Any]:
         """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
         row's served words, which the twin of the row on them must be."""
-        from verity.ml.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+        from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
         from verity_vllm.query.program_view import spec_statics
 
         rid, _pi, r, d = x

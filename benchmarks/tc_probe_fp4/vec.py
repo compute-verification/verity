@@ -1,4 +1,4 @@
-"""Vectorised forms of `verity.ml.circuits.silicon`'s NVF4 atom (``BLACKWELL_SM120_NVF4``) for f2_strassen.py and f3_lut.py,
+"""Vectorised forms of `verity.definitions.silicon`'s NVF4 atom (``BLACKWELL_SM120_NVF4``) for f2_strassen.py and f3_lut.py,
 which run it over whole tiles and chains:
 
     ue4m3_dyadic   UE4M3 scale codes as ``(mantissa, exponent)`` (``models._scale_dyadic("ue4m3", code)``)

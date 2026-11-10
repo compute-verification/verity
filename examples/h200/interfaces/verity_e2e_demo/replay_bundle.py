@@ -91,8 +91,8 @@ import numpy as np
 
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG
 from verity.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.boolean import gemm as BG
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain

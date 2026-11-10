@@ -31,7 +31,7 @@ from pathlib import Path
 
 import torch
 
-from verity.ml.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
+from verity.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
 
 HERE = Path(__file__).resolve().parent
 #: the integration's distribution, whose entry points `site` declares

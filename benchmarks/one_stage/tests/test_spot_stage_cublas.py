@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import bf16_gemm_check as BC
 
 ROOT = Path(__file__).resolve().parents[3]
 #: the gate's call is past the ll_bf16 tier (M > 16): cuBLAS's; T of its M rows are the step's real tokens

@@ -20,7 +20,7 @@ import f8_model as FM  # noqa: E402
 import f8_sm100 as S  # noqa: E402
 import k32  # noqa: E402
 from verity.errors import InvalidArtifact  # noqa: E402
-from verity.ml.circuits.silicon import models as M  # noqa: E402
+from verity.definitions.silicon import models as M  # noqa: E402
 
 PER_FAMILY = 48
 

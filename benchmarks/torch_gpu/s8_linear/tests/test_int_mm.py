@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.ops import gemm as G
+from verity.definitions.ops import gemm as G
 
 torch = pytest.importorskip("torch")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

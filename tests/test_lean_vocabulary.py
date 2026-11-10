@@ -73,7 +73,7 @@ SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
 D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/flock/verifier/Flock/"
 PROTOCOL = "verity/flock/verifier/interface/CoreProtocol/Protocol.lean"
-REQ, REQ_PY = "verity/core/primitives/requirement/CircuitRequirement.lean", "verity/ml/circuits/requirement.py"
+REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/flock/verifier/interface/CoreProtocol/Site.lean", "verity/core/site/__init__.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
@@ -105,7 +105,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": ("verity/ml/private_circuits/universal.py::Netlist",),
+    "Netlist": ("verity/definitions/private_circuits/universal.py::Netlist",),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -984,10 +984,10 @@ KNOWN: dict[str, str] = {
     "verity/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/requirement.py::Layout":
+    "verity/definitions/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
-    "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
-    "verity/ml/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
+    "verity/definitions/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
+    "verity/definitions/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
     "verity/commitments/advice.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",

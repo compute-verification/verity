@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.census import census
+from verity.definitions.circuits import stacking as P
+from verity.definitions.circuits.census import census
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.ops import prims
+from verity.definitions.ops import prims
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array, Value

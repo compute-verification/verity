@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.ops import fp32, prims, scalar
+from verity.definitions.ops import fp32, prims, scalar
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple as TupleT, Value

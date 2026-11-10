@@ -224,7 +224,7 @@ from research.store.tool import Tool
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "benchmarks/tc_probe/tc_probe.py"],
-    closure=["benchmarks/tc_probe/**", "verity/ml/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
+    closure=["benchmarks/tc_probe/**", "verity/definitions/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname

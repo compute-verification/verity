@@ -565,7 +565,7 @@ alignment = "every term, the accumulator included, rescaled to a 14-bit signific
 accumulation = "the aligned terms summed exactly, the sum normalized to 14 bits by truncation, then to FP32 by truncation (no rounding): the FP32 accumulator keeps 14 significand bits a step, which is the 'FP8 accumulation precision loss' DeepSeek-V3 reports"
 promotion = "none in silicon. Software promotes: a fresh accumulator from +0 every N_C = 128 products (4 wgmma k32 steps), added to an FP32 total on the CUDA cores by one round-to-nearest-even FADD (DeepSeek-V3 technical report, arXiv:2412.19437, §3.3.2; Pearl's H100 replay, `pearl_kw.py` Device h100, windowed, W = 13)"
 rate = "4095.6 MACs/SM/clk at N ≥ 64 (tensor.e4m3.k32); N < 64 unmeasured for FP8 (s8: N32 2729.9, N16 1637.9, N8 909.9)"
-source = "verity.ml.circuits.silicon models.HOPPER_E4M3_K32 (Hawkeye: groups (32,), width 14, floor -139) and total_fp8.HOPPER_E4M3_WGMMA_K32, pinned on an H100 80GB HBM3: 35,289 tiles × 3, 144,543,744 words, 0 mismatches, groups (32,) and width 14 unique among 3,060 candidates; E5M2 the same pipeline (HOPPER_E5M2_K32, 25,554,432 elements, 0 mismatches). NVIDIA documents state none of this"
+source = "verity.definitions.silicon models.HOPPER_E4M3_K32 (Hawkeye: groups (32,), width 14, floor -139) and total_fp8.HOPPER_E4M3_WGMMA_K32, pinned on an H100 80GB HBM3: 35,289 tiles × 3, 144,543,744 words, 0 mismatches, groups (32,) and width 14 unique among 3,060 candidates; E5M2 the same pipeline (HOPPER_E5M2_K32, 25,554,432 elements, 0 mismatches). NVIDIA documents state none of this"
 
 [[fp8]]
 form = "mma.sync m16n8k32 .f32.e4m3.e4m3 (emulated on sm_90)"

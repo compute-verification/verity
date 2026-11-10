@@ -104,7 +104,7 @@ _CODE_IMPORT = re.compile(r"""(?:["']|\\n|;)[ \t]*(?:from[ \t]+([A-Za-z_][\w.]*)
 _BUILT = re.compile(r"""[fF][rR]?["'][^"'\n]*\{[^}]+\}\.py["']|\+\s*["']\.py["']""")
 _BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
-#: a module name built in an f-string (`f"verity.ml.circuits.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`), or a name holding one
+#: a module name built in an f-string (`f"verity.definitions.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`), or a name holding one
 _FSTRING = re.compile(r"""\s*[fF](['"])([^'"\n]*\{[^'"\n]*)\1""")
 _ARG_NAME = re.compile(r"\s*([A-Za-z_]\w*)\s*[,)]")
 #: a dotted target string handed to pytest's `monkeypatch.setattr` or to `mock.patch`, which imports the module it names

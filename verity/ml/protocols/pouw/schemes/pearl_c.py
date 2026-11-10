@@ -94,7 +94,7 @@ from verity.commitments import domains
 from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity.commitments.crypto.blake3 import blake3, keyed
 from verity.commitments.crypto.turboshake import turboshake128
-from verity.ml.circuits.silicon import fp32
+from verity.definitions.silicon import fp32
 
 from verity.core.protocols.pouw.protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.core.protocols.pouw.registration import check_registration

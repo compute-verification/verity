@@ -510,7 +510,7 @@ alignment = "every term rescaled to a 26-bit significand (the BF16 pipeline's ad
 accumulation = "summed exactly, normalized to 26 bits by truncation, then to FP32 by truncation; the accumulator's 24 bits fit the 26-bit adder, so unlike Hopper's 14-bit FP8 adder it isn't truncated a step (the B200's tcgen05 kind::f8f6f4 is the same pipeline to the bit)"
 promotion = "none needed: the FP32 accumulator chains step to step (Pearl's B200 path, pearl_kw.py Device b200: W = 25, width 26)"
 rate = "1023.8 MACs/SM/clk (tensor.e4m3.k32), as every native form; MXFP8 (QMMA.SF) the same; no FP8 k16 form is timed"
-source = "verity.ml.circuits.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, fitted on 6,434,816 elements (0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), evaluated on 25,040,128 (0), and on 25,041,024 at a 2,100 MHz lock (0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32. NVIDIA documents state none of this"
+source = "verity.definitions.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, fitted on 6,434,816 elements (0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), evaluated on 25,040,128 (0), and on 25,041,024 at a 2,100 MHz lock (0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32. NVIDIA documents state none of this"
 
 # ---- B_RF writers (schema in data/devices/sm_90/theta.toml)
 # ----------------------------------------------------------------

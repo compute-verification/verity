@@ -1,7 +1,7 @@
 """The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the core reference.
 
 Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with
-the SHA-512 constants read out of `verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants
+the SHA-512 constants read out of `verity/definitions/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants
 out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then `gpu.py windows` through
 `audit.Verifier`); these catch a layout or arithmetic slip before a GPU is leased.
 """

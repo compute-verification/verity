@@ -54,8 +54,8 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import challenge as CH
-from verity.ml.definitions.numerics import derived_rows as D
-from verity.ml.definitions.numerics import rows as RK
+from verity.definitions.numerics import derived_rows as D
+from verity.definitions.numerics import rows as RK
 from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"
@@ -367,7 +367,7 @@ def _decompose_row(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
     ports.update({f"out.{k}": v.copy() for k, v in _outputs(out).items()})
     if sum(int(a.size) for a in ports.values()) > limits.max_row_words:
         return
-    rel = {"subcircuit": fam, "definition": fam, "statics": st, "rule": f"the registered row kernel of {fam} (verity.ml.definitions.numerics.rows)"}
+    rel = {"subcircuit": fam, "definition": fam, "statics": st, "rule": f"the registered row kernel of {fam} (verity.definitions.numerics.rows)"}
     yield Instance(_row_set_name(fam, st), rel, ports, {})
 
 

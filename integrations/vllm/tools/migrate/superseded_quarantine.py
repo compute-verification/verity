@@ -115,7 +115,7 @@ class Promotion:
     `edits` (exact replacements, each of which must match) applied; otherwise its statements after its imports, but for its
     `SEMANTIC_ID` and `__all__`, go into `dst` before `dst`'s `__all__` (or at its end), and the `imports` `dst` lacks join its
     imports.  A merged module's `X.name`, for an alias `X` in `unqualify`, becomes `name`, which `dst` must bind (the sampling
-    family's split left `sampling` importing each primitive by name from `verity.ml.circuits.ops`, not through `registry.prims`)."""
+    family's split left `sampling` importing each primitive by name from `verity.definitions.ops`, not through `registry.prims`)."""
     src: str                                   # under QUARANTINE
     dst: str                                   # under REGISTRY_DIR
     edits: tuple[tuple[str, str], ...] = ()

@@ -11,8 +11,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.definitions.registry import topp_split as TS
-from verity.ml.definitions.registry import topp_geometry
+from verity.definitions.registry import topp_split as TS
+from verity.definitions.registry import topp_geometry
 
 
 def test_zgroup_structure():

@@ -20,12 +20,12 @@ import pytest
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
-from verity.ml.circuits.ops import fp32 as FP
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops import s8 as S8
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import s8 as BS8
+from verity.definitions.ops import fp32 as FP
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops import prims as P
+from verity.definitions.ops import s8 as S8
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import s8 as BS8
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, RecordType, Tuple, Value

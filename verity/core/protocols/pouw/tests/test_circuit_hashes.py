@@ -10,7 +10,7 @@ import pytest
 
 from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
+from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.circuits.types import Array
 
 from verity.ml.protocols.pouw.circuit import words as W

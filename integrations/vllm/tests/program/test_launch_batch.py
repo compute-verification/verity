@@ -24,7 +24,7 @@ from verity_vllm.program.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import tp_allreduce as TA
 
 #: request steps 0 and 1 of the 65-row prompt of GLM-5.3's B8 row: its prefill beside two decoders, then six sequences
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]
@@ -103,7 +103,7 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
     from verity_vllm.program.frontend.compilations import COMPILATIONS
     from verity_vllm.program.predict.common import _Launch
-    from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+    from verity.definitions.registry.sparse_mla_split import launch_num_splits
     sizes, seqs = tuple(COMPILATIONS["breakable"]["capture_sizes"]), CLASS_G_LIMITS["max_num_seqs"]
     decode = [[[1, 300 + 37 * i] for i in range(25)]]
     assert TG.graph_launch(25, True, sizes, seqs) == ("FULL", 32)

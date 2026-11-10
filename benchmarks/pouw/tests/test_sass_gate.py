@@ -556,13 +556,13 @@ def test_another_mufu_or_another_form_of_ex2_is_still_refused(new, why):
 def test_the_exception_names_the_definition_and_table_its_runs_measured():
     """The shipped exception is MufuEx2Ftz_v1 over the library's ex2 table, the evaluator the sweep's digests came from;
     another id or table is another Definition, which needs its own run. No other toolkit excepts anything."""
-    from verity.ml.circuits import library
-    from verity.ml.circuits.ops import mufu
+    from verity.definitions.circuits import library
+    from verity.definitions.ops import mufu
 
     p = SG.load_pins()
     exc = p["toolkits"]["13.0.1-sm_90a"]["exceptions"]
     assert set(exc) == set(SG.EXCEPTABLE) == {"MUFU.EX2"}
-    assert exc["MUFU.EX2"]["definition"].startswith(f"verity.ml.circuits.ops.mufu.MufuEx2Ftz ({mufu.MufuEx2Ftz.id}, ")
+    assert exc["MUFU.EX2"]["definition"].startswith(f"verity.definitions.ops.mufu.MufuEx2Ftz ({mufu.MufuEx2Ftz.id}, ")
     assert library.table("ex2").sha512 in exc["MUFU.EX2"]["definition"] and len(mufu.table("ex2")) == 1 << 23
     assert exc["MUFU.EX2"]["numeric"]["runs"] == ["r20261026-015355-aec6", "r20261026-032225-3cee"]
     assert [tk for tk, rec in p["toolkits"].items() if rec.get("exceptions")] == ["13.0.1-sm_90a"]

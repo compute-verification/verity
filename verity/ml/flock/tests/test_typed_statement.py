@@ -17,7 +17,7 @@ from verity_flock import derive as D
 from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
-pytest.importorskip("verity.ml.definitions.registry.prims")
+pytest.importorskip("verity.definitions.registry.prims")
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
@@ -126,7 +126,7 @@ def test_gemm_is_one_instance_type(tmp_path):
 def test_attention_is_one_instance_type(tmp_path):
     """Attention's instance type (its tensor-core units as calls, its softmax stages' gates as its own rows, its ex2 and rcp
     reads of the measured tables) computes the set's outputs."""
-    from verity.ml.circuits import library
+    from verity.definitions.circuits import library
     from verity_flock import gf2
     from verity_flock import tail as TL
 

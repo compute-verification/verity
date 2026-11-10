@@ -401,7 +401,7 @@ def test_a_gathered_row_is_wired_to_the_steps_cache_write_by_slot_else_to_histor
     assert history["bits"] == 6 * KV_W * 16 and history["why"] == stage.HISTORY_WHY
     assert (table["in"], table["parts"]) == ("block_table", [[[0, 1], [4, 8]], [[1, 2], [2, 6]], [[3, 4], [0, 2]]])
     assert table["bits"] == 10 * 32, "every page-table entry a wired or history row is read through"
-    from verity.ml.definitions.registry.dsa_topk import waksman_switches
+    from verity.definitions.registry.dsa_topk import waksman_switches
     assert pick == {"kind": "selection", "rank": 0, "seq": 0, "token": 0, "via": "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}",
                     "bits": waksman_switches(10, TOPK), "why": stage.SELECTION_WHY}, "token 0's 10 keys pass a selection"
     w = stage.wiring({"S": {"gate": [{"key": [0, 2, 0], "sources": got}, {"key": [0, 2, 1], "sources": got}]}})
@@ -452,7 +452,7 @@ def test_with_the_conversion_recorded_a_row_is_wired_by_request_and_position_and
     assert history["at"] == [[0, "a", [[5, 6], [7, 9]]], [1, "b", [[2, 5]]]], "each history row's request and position"
     assert pick["via"] == "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}" and pick["seq"] == 0
     w = stage.wiring({"S": {"gate": [{"key": [0, 3, 0], "sources": got}]}})
-    from verity.ml.definitions.registry.dsa_topk import waksman_switches
+    from verity.definitions.registry.dsa_topk import waksman_switches
     assert (w["advice_bits"], w["gap_bits"], w["history_bits"], w["selection_bits"]) == (
         0, 0, 6 * KV_W * 16, waksman_switches(10, TOPK)), "the page-table entries leave the accounting"
 
