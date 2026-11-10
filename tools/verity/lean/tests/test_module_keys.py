@@ -255,6 +255,30 @@ def test_every_setting_of_a_lakefile_is_in_the_key_but_the_lists_of_what_a_build
         "a path dependency's setting moves its modules' keys, and through what they read their importers'"
 
 
+def test_where_a_required_package_is_is_in_no_key(tmp_path):
+    """A lakefile's `require` says which package and, by its `path`, where it is. Where decides nothing a compile reads
+    but that package's modules, which a key reads by their outputs' digests, each under a path from its own package's
+    directory: a required package moved, with the `path` and the manifest's `dir` rewritten, rekeys no module. Which
+    packages a lakefile requires, and each other field of a `require`, still rekeys the package's modules."""
+    req = '\n[[require]]\nname = "d"\npath = "../d"\n'
+    root = _workspace(tmp_path, {"r/lakefile.toml": LIBS + req})
+    keys = _built(MK.keys(root))
+    mine = {"R", "R.A"}
+    assert set(keys) == mine | {"D.X"}
+    assert _changed(root, keys, "r/lakefile.toml", LIBS + req.replace("../d", "../r/../d")) == set()
+    fetched = '\n[[require]]\nname = "mathlib"\ngit = "https://example.org/mathlib"\nrev = "abc"\n'
+    for other in (LIBS, LIBS + req.replace('name = "d"', 'name = "e"'), LIBS + req + fetched,
+                  LIBS + req + 'scope = "s"\n', LIBS + req + 'somethingNobodyThoughtOf = 1\n'):
+        assert _changed(root, keys, "r/lakefile.toml", other) == mine, other
+    with_fetched = _built(MK.keys(_workspace(tmp_path, {"r/lakefile.toml": LIBS + req + fetched})))
+    assert _changed(root, with_fetched, "r/lakefile.toml", LIBS + req + fetched.replace("abc", "abd")) == mine
+    (root / "lakefile.toml").write_text(LIBS + req.replace("../d", "../moved/to/d"))
+    (root / "lake-manifest.json").write_text(_manifest(root, lambda doc: doc["packages"][0].update(dir="../moved/to/d")))
+    (tmp_path / "moved" / "to").mkdir(parents=True)
+    shutil.move(tmp_path / "d", tmp_path / "moved" / "to" / "d")
+    assert _built(MK.keys(root)) == keys
+
+
 def test_a_module_that_moves_to_a_library_with_other_options_has_another_key(tmp_path):
     """A library sets its modules' options, and `roots` say which library owns a module: with `roots` out of the key, the
     key names the owner. Lake compiles a module that several targets of its package own with the settings of whichever

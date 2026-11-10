@@ -5412,6 +5412,57 @@ def test_a_dependent_that_fetches_more_than_its_dependency_stores_both_on_a_cold
     assert (one_key, stored, again) == (True, 2, (set(), set())), "D has one key under d and p, and a second tree compiles neither"
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_required_package_moved_is_compiled_by_no_build(tmp_path, monkeypatch):
+    """`p` requires `d` by path. Both are built and stored. A second tree holds `d` somewhere else, with the `path` of
+    `p`'s `require` and the `dir` of its manifest's entry rewritten and nothing else changed. A key reads neither, and
+    neither does Lake's own input hash of a module, under which the staged outputs are restored: the second tree's
+    builds compile no module."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_moved", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+
+    def tree(ws: Path, at: str) -> tuple[Path, Path]:
+        """Under ``ws``: `p`, and `d` at ``at`` from `p`'s directory."""
+        p = ws / "p"
+        d = Path(os.path.normpath(p / at))
+        for pkg, name, text, requires in ((d, "D", "def D.v : Nat := 1\n", []), (p, "P", "import D\n\ndef P.v : Nat := D.v + 1\n", [
+                {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+                 "dir": at, "configFile": "lakefile.toml"}])):
+            pkg.mkdir(parents=True)
+            (pkg / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\npath = "{r["dir"]}"\n' for r in requires)
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (pkg / "lake-manifest.json").write_text(json.dumps({
+                "version": "1.2.0", "packagesDir": ".lake/packages", "packages": requires, "name": name.lower(),
+                "lakeDir": ".lake", "fixedToolchain": False}))
+            shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+            (pkg / f"{name}.lean").write_text(text)
+        return d, p
+
+    def build(pkg: Path) -> set[str]:
+        """The modules Lake compiled in ``pkg``'s build as an audit runs it: staged from the node's cache, then built."""
+        cache = tmp_path / "staged" / str(next(stages))
+        A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)}
+
+    d, p = tree(tmp_path / "ws", "../d")
+    assert (build(d), build(p)) == ({"D"}, {"P"})
+    assert LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None) == 2
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws", "../moved/to/d")
+    assert (p / "lakefile.toml").read_text() != (p2 / "lakefile.toml").read_text() and d2.parent.name == "to"
+    assert (build(d2), build(p2)) == (set(), set()), "the moved package and the one requiring it are restored, not compiled"
+
+
 def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_audit(tmp_path, monkeypatch):
     """Where check.py's own sandbox probe fails, nothing is recompiled, so a module its build didn't compile passes only if
     a build of this run compiled it, as a dependent's path dependency's audit compiled it. One restored or kept fails,
