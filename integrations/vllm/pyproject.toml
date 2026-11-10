@@ -259,7 +259,7 @@ paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_row.py"]
-paths = ["benchmarks/remote_session", "integrations/vllm", "verity"]
+paths = ["benchmarks/remote_session", "benchmarks/remote_session/prover.py", "integrations/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -277,7 +277,8 @@ tests = [
     "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]
+paths = ["benchmarks/remote_session", "benchmarks/remote_session/prover.py", "benchmarks/remote_session/device.py",
+         "verity/protocols/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
@@ -314,7 +315,8 @@ paths = ["verity/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
-paths = ["benchmarks/pous/p2_v1"]
+paths = ["benchmarks/pous/p2_v1", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/gpu.py",
+         "benchmarks/pous/p2_v1/reference.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]

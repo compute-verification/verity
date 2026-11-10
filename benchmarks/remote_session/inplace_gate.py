@@ -41,6 +41,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/remote_session/device.py").parent))
 sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 
 from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
