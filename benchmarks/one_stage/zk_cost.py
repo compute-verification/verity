@@ -37,7 +37,7 @@ sessions.
   `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
   proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
   proof block over the GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format
-  (`verity.hardware.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
+  (`verity.hardware.cards.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -783,7 +783,7 @@ def main() -> int:
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
     ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.hardware); none: a CPU node's sessions")
+                    help="overhead: the card whose datasheet peak divides (verity.hardware.cards); none: a CPU node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

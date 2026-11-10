@@ -48,7 +48,7 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: each device's card (verity.hardware): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.rate` at the
+Sources: each device's card (verity.hardware.cards): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.cards.rate` at the
 card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no

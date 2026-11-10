@@ -1,4 +1,4 @@
-"""`zk_cost.py overhead` divides by `verity.hardware.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
+"""`zk_cost.py overhead` divides by `verity.hardware.cards.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
 132 SMs x 4096 MACs at the 1830 MHz tensor clock, the data sheet's 1,979 dense FP8 TFLOPS, and never the 1980 MHz SM clock's
 1.0705e15. Toy records of one served type, staged at two sizes and proved warm by the dev arm, give a known marginal second
 a block, so its h is fixed by the peak alone. A served type's size of 2 proves its probe's staging rather than staging the

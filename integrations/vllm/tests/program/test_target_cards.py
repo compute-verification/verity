@@ -1,4 +1,4 @@
-"""The SM counts vLLM declares for a row class are its card's (`verity.hardware`): each class in `config.TARGET_NUM_SMS` has the SM
+"""The SM counts vLLM declares for a row class are its card's (`verity.hardware.cards`): each class in `config.TARGET_NUM_SMS` has the SM
 count its card states, and the device pin of every served pin at that class's compute capability records the same count. The
 counts stay literals in config: the pipeline's top-level process, which declares a row's Build target, has no `verity` on its path."""
 from __future__ import annotations
