@@ -8,13 +8,7 @@ public import Proofs.Flock.Soundness.Audit.StratifiedProj
 /-!
 # The tile coordinate is the sampling block's stratified sample at the tile stratum
 
-<<<<<<< ours
-`TileStratumAcceptProb`, proved, and its join to the law's side:
-||||||| base
-`TileStratumEscape`, proved, and its join to the law's side:
-=======
-`TileStratumEscape`, proved, and its join to the sampling design's side:
->>>>>>> theirs
+`TileStratumAcceptProb`, proved, and its join to the sampling design's side:
 
 * `miss_eq`: a uniform permutation's `K`-prefix (`Pouw.Window.subsetDraw`) misses `B` with probability exactly
   `C(N − |B|, K)/C(N, K)`, by `Properties.Served.SecurityProofs.miss_ge`'s induction through
@@ -172,16 +166,8 @@ theorem tileStratumAcceptProb : TileStratumAcceptProb := by
 
 /-- **The tile coordinate is the stratified sample's coordinate `s_T`**: at a uniform permutation of the stratum it misses
 every `B` exactly as `Law.stratified σ k hk`'s coordinate `s_T` does (`Law.stratified_proj_escape`), so the period's
-<<<<<<< ours
-tile coin is the sampling block's draw restricted to the tile stratum. -/
-theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-||||||| base
-tile coin is the sampling block's draw restricted to the tile stratum. -/
-theorem tileStratumEscape_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-=======
 tile coin is the sampling block's sample restricted to the tile stratum. -/
-theorem tileStratumEscape_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
->>>>>>> theirs
+theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB)) :
     ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
       FlockSoundness.Game.prCoin
