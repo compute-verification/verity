@@ -1,14 +1,14 @@
-"""`research queue`: the merge queue.  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
-admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
-of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, merges onto `checked` each member
-whose merge changes no Lean, lock or soundness-path file (drive.toml's `lowrisk_lane`) on its ready mark alone, and `main` to a commit of `checked`
-only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, policy.toml's
-`off_gate`), or failed it only where an unexpired allowance of that policy covers: `main` holds only tested commits.
+"""`research queue`: the merge queue.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) merges the
+PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
+`lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate whose check, the full check, passed every step
+on the merge gate (not circuit-check, policy.toml's `off_gate`), or failed it only where an unexpired allowance of that policy
+covers: `main` holds only tested commits.  `next` (`sync`) is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
+admitted PR, one merge commit each, in the order they were admitted.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
-                                                   (`research.stale`), which drive closes at `stale_close_days`; then
+                                                   (`research.stale`); then
                                                    every open PR whose body names no Linear issue (`named_issue`: a key
                                                    after a Linear magic word, a bare key of a team main's Slack registry
                                                    lists, or an `Issue: none: REASON` line); --json gives each its `issue`
@@ -58,28 +58,6 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    head off `next` too); a check it couldn't run it names under "checks
                                                    skipped";
                                                    --no-preflight skips it (the lander's)
-    research queue drive [--on MACHINE] [--config PATH [--config-from-tree]] [--marked-after TS]
-                         [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--priority-file PATH] [--dry-run]
-                                                   one tick of the landing automation (`research.drive`): sync and land the
-                                                   reviewed prefix of `next` on `checked`, a Lean change as any other, commit
-                                                   the lock records a lock run regenerates after a Lean change, then check
-                                                   `checked` (--after-landing-no-cache: reusing no pass but circuit-check's)
-                                                   and move `main` to what passed every gated step; tell `CI` the rest.
-                                                   Its flags (`DriveFlags`) are tools/verity/check/drive.toml at `main` in the
-                                                   queue's clone, fresh each tick, so a change to them is a reviewed commit
-                                                   (`drive_flags`); a flag given here overrides its key only where drive.toml's
-                                                   `command_line` lets it (`--on`), else the tick refuses; --config
-                                                   PATH (at `main`, or with --config-from-tree in this file system) is refused,
-                                                   naming each key, unless every key it sets has main's value.  Before it syncs,
-                                                   the tick refuses, with the fix, a name its flags use that doesn't exist
-                                                   (`drive_names`: the landing branch and drive's push to it, each machine of
-                                                   `on`, each landing and warn gate at `main`); the effective flags print once
-                                                   a tick.
-                                                   --priority-file PATH: drive's priority list, the landing order: PR numbers
-                                                   separated by spaces or commas, first to land first, each in its first place
-                                                   (`priority_list`), read again at each sync (`Queue.priority`): no file is an
-                                                   empty list, and one it can't read is logged once and taken as empty; a
-                                                   --first is refused, naming this file
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
                                                    without N: the open PRs onto `main` marked at their head and not on `main`
                                                    that no land verdict there lands, oldest mark first, those the verified
@@ -92,23 +70,6 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue delegate AGENT --by LANE [--days N]
                                                    as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
                                                    land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
-    research queue baseline SHA --by ci [--steps STEP,...]
-                                                   fast-forward `main` now to SHA, a commit of `checked` known green on
-                                                   every step on the merge gate, beside drive's tick (no lock, no state written);
-                                                   drive's next tick takes it as verified, and the review landing lands on it
-                                                   (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
-    research queue promote                          fast-forward `main` to the tip of drive's after-landing run once every shard
-                                                   of it ended passing every step on the merge gate, beside drive's tick, as
-                                                   `baseline` does; nothing to do before (on the control pod, from a loop:
-                                                   `/data/infra/drive.sh queue promote`)
-    research queue accept-checked SHA --by ci       record `checked`'s tip SHA, a commit drive didn't write, as one drive takes,
-                                                   so its ticks, held on it (`Driver._unwritten`), go on from it
-                                                   (on the control pod: `/data/infra/drive.sh queue accept-checked SHA --by ci`)
-    research queue drive-shard-add TIP K RUN_ID     count RUN_ID, a run replacing shard K's twin, as one of that shard's in the
-                                                   after-landing run of `checked` at TIP (`drive_shard_add`), refused unless
-                                                   RUN_ID's own record is a check.py run of TIP's commit with --shard K/N
-                                                   (an auto plan's: auto:K/N, with that plan among its inputs)
-                                                   (on the control pod: `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID`)
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -292,14 +253,11 @@ PR, and one something else interrupted (SIGINT, SIGTERM, a restart of the pod) a
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
-Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
-as any other, by a fast-forward of `checked` (no new merge commit), commits the lock records a lock run regenerates after a
-Lean change, and checks `checked` after each landing,
-naming the culprit of what that check fails (fixed forward, else reverted on `checked` unless a warn step failed: drive.toml's
-`warn_steps`), and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
-`CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
-if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
-`main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
+Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
+candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
+(`research.vqueue_records`), and fast-forwards `main` only to a candidate whose check passed every step on the merge gate; it
+tells each owner what it refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
+changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
 
 Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, drive counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
@@ -524,17 +482,6 @@ def _worktrees_shared(repo: Path, env: dict[str, str]):
 
 def _out(repo: Path, *args: str) -> str:
     return _git(repo, *args).stdout.strip()
-
-
-def on_first_parents(repo: Path, c: str, tip: str) -> bool:
-    """Whether the commit ``c`` (full) is on ``tip``'s first-parent chain: one the branch at ``tip`` was at, not one only merged
-    into it."""
-    r = _git(repo, "rev-list", "--first-parent", "--parents", f"{c}..{tip}", check=False)
-    if r.returncode:
-        return False
-    if lines := r.stdout.strip().splitlines():
-        return lines[-1].split()[1:2] == [c]
-    return _git(repo, "rev-parse", "--verify", "-q", f"{tip}^{{commit}}", check=False).stdout.strip() == c
 
 
 def credential_args(repo: Path, remote: str) -> tuple[str, ...]:
@@ -765,24 +712,23 @@ HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 MODES = ("off", "shadow", "on")
 #: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
 CLOSE_UNLANDABLE = ("off", "log", "on")
-#: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
+#: the keys drive.toml's `command_line` may name
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "after_landing_no_cache")
-#: drive.toml keys whose code was deleted: a drive deployed ahead of `main` (`drive.sh deploy SHA`) still reads them in
-#: `main`'s drive.toml, so even a strict parse ignores them, with a note, rather than refuse every tick
+#: drive.toml keys whose code was deleted: code deployed ahead of `main` still reads them in `main`'s drive.toml, so even a
+#: strict parse ignores them, with a note, rather than refuse every tick
 DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
 #: what every command says to a `--first`, refusing it: the landing order is drive's priority list (`Queue.priority`) alone
 FIRST_RETIRED = ("--first is retired: drive's priority file (--priority-file) holds the landing order; list the PRs there, "
                  "first to land first")
 #: what `DriveFlags.signed_verdicts` keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
-                 "tools/research/src/research/drive.py")
+                 "tools/research/src/research/landing.py")
 
 
 @dataclass(frozen=True)
 class DriveFlags:
-    """`research queue drive`'s flags: the defaults, then `DRIVE_FLAGS` at `main`, read each tick (`drive_flags`: its one source,
-    so a change to them is a reviewed commit and the next tick takes it), then each flag the command line gives of those
-    `command_line` lets it set (`override`)."""
+    """The queue's flags: the defaults, then `DRIVE_FLAGS` at `main`, which the verified queue's loop reads each tick
+    (`flags_at`: their one source, so a change to them is a reviewed commit and the next tick takes it)."""
     on: str | None = None
     marked_after: str | None = None
     regenerate_locks: bool = False
@@ -819,7 +765,7 @@ class DriveFlags:
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
     after_landing_shards: int | str = 1
-    #: the keys drive's command line may override (`override`), of `COMMAND_LINE`; any other flag given there refuses the tick
+    #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
     #: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next` whose change is `lowrisk` on their
     #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
@@ -852,10 +798,9 @@ class DriveFlags:
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
-        """``text``'s flags. ``strict`` (drive loading its own flags): any key this code doesn't read refuses, so a drive that
-        lags `main` stops rather than run without a guard `main` added. Otherwise (a client reading `main`'s flags) such a
-        key is ignored with a note, so a client older than `main` keeps working; `tests/test_drive_toml.py` holds `main`'s
-        drive.toml to the strict parse, which is where a typo is caught."""
+        """``text``'s flags. ``strict``: any key this code doesn't read refuses; `tests/test_drive_toml.py` holds `main`'s
+        drive.toml to it, which is where a typo is caught. Otherwise (the verified queue's loop and every client, reading
+        `main`'s flags with `flags_at`) such a key is ignored with a note, so code older than `main` keeps working."""
         try:
             doc = tomllib.loads(text)
         except tomllib.TOMLDecodeError as e:
@@ -986,63 +931,9 @@ class DriveFlags:
                                          "`lowrisk_excludes`, or set `lowrisk_lane = false`")
         return cls(**got)
 
-    def override(self, a: argparse.Namespace, where: str = DRIVE_FLAGS) -> "DriveFlags":
-        """These flags with each one ``a`` (the command line) gives explicitly in its place; QueueError, naming each, when it
-        gives one `command_line` (these flags', from ``where``) doesn't list."""
-        given = {k: getattr(a, k) for k in COMMAND_LINE if getattr(a, k, None) is not None}
-        if barred := [k for k in COMMAND_LINE if k in given and k not in self.command_line]:
-            raise QueueError(f"{' and '.join('--' + k.replace('_', '-') for k in barred)}: {where} lets drive's command line set "
-                             f"only {', '.join(self.command_line) or 'nothing'} (its `command_line`): commit the change to "
-                             f"{DRIVE_FLAGS}, or drop the flag from drive's args")
-        return dataclasses.replace(self, **given)
-
-    def toml(self, k: str) -> str:
-        """Key ``k``'s value as drive.toml writes it; "unset" for none."""
-        v = getattr(self, k)
-        if k == "on" and v is not None:
-            v = v.split(",")
-        if v is None:
-            return "unset"
-        if isinstance(v, bool):
-            return "true" if v else "false"
-        return json.dumps(list(v) if isinstance(v, tuple) else v)
-
     def line(self) -> str:
         return " ".join(f"{k}={','.join(map(str, v)) if isinstance(v, tuple) else v}"
                         for k, v in dataclasses.asdict(self).items())
-
-
-def drive_flags(clone: Path, config: str | None = None, from_tree: bool = False) -> tuple[DriveFlags, str]:
-    """Drive's flags: `DRIVE_FLAGS` at `main` in the queue's ``clone`` (fetched), parsed strictly, the defaults when `main` has
-    none; with where they came from.  It is their one source: ``config`` (`--config PATH`: at `main`, or in this file system
-    with ``from_tree``) is accepted only while every key it sets has `main`'s value, else QueueError names each key that
-    differs, both values and the fix, so a file on drive's machine can't quietly override what `main` says."""
-    sha = _out(clone, "rev-parse", "refs/remotes/origin/main")
-    r = _git(clone, "show", f"{sha}:{DRIVE_FLAGS}", check=False)
-    where = f"{DRIVE_FLAGS} at main {sha[:12]}"
-    flags = DriveFlags.parse(r.stdout, where, strict=True) if r.returncode == 0 else DriveFlags()
-    if r.returncode:
-        where = f"the defaults ({DRIVE_FLAGS} isn't at main {sha[:12]})"
-    if config is None:
-        return flags, where
-    if from_tree:
-        try:
-            text = Path(config).read_text()
-        except OSError as e:
-            raise QueueError(f"--config {config}: {e.strerror}") from None
-    else:
-        if Path(config).is_absolute() or config.startswith(".."):
-            raise QueueError(f"--config {config}: a path from the repository's root, read at `main` (or --config-from-tree for "
-                             "this file)")
-        if (c := _git(clone, "show", f"{sha}:{config}", check=False)).returncode:
-            raise QueueError(f"--config {config}: `main` ({sha[:12]}) has no such file: land it first, or pass --config-from-tree")
-        text = c.stdout
-    mine = DriveFlags.parse(text, f"--config {config}", strict=True)
-    if differ := [k for k in tomllib.loads(text) if getattr(mine, k) != getattr(flags, k)]:
-        raise QueueError(f"--config {config} differs from {where}, drive's one source of flags: "
-                         + "; ".join(f"{k} = {mine.toml(k)} there, {flags.toml(k)} at main" for k in differ)
-                         + f". Commit the change to {DRIVE_FLAGS}, or remove the key from {config}")
-    return flags, where
 
 
 def priority_list(path: Path) -> tuple[int, ...]:
@@ -1062,49 +953,6 @@ def priority_list(path: Path) -> tuple[int, ...]:
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
                          "spaces or commas")
     return tuple(dict.fromkeys(map(int, words)))
-
-
-def drive_machines() -> tuple[set[str], dict[str, str]]:
-    """The machines `research run --on` resolves (`remote.load_machines`: machines.toml and the pod registry's machines.d), as
-    train.sh's runs reach them, and the names the registry refuses, with why."""
-    from .pods import registry
-    from .remote import load_machines
-
-    return set(load_machines()), dict(registry.problems)
-
-
-def drive_names(q: "Queue", flags: DriveFlags, push: bool = True) -> None:
-    """Refuse a tick, with each fix, when a name drive's flags use doesn't exist (the queue's clone just fetched): the landing
-    branch (`Queue.into`) on origin; with ``push``, that drive's credential may push it (`git push --dry-run` of the branch to
-    itself: GitHub asks for write access to the repository before it answers, though a ruleset is judged only at a real push);
-    each machine of `on` (`drive_machines`; `auto` is train.sh's); and each landing and warn gate's script at `main`."""
-    main, missing = "refs/remotes/origin/main", []
-    into = q.into
-    if q._remote(q.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode:
-        missing.append(f"origin has no branch `{into}` (drive.toml's `land_into`): create it at `main` as drive's App (`git push "
-                       f"origin refs/remotes/origin/main:refs/heads/{into}` in drive's checkout on the control pod), or "
-                       f"commit `land_into = \"main\"` to {DRIVE_FLAGS}")
-    elif push and (r := q._remote(q.workdir, "push", "--dry-run", "--no-verify", "--quiet", "origin",
-                                  f"{q.base}:refs/heads/{into}", ok=None)).returncode:
-        missing.append(f"drive's credential can't push `{into}` (`git push --dry-run`: {(r.stderr or r.stdout).strip()[-300:]}): "
-                       "give drive's App contents write on the repository (infra: gh_app_token.sh's installation), or run "
-                       "drive where its credential applies")
-    if flags.on and (names := [m for m in flags.on.split(",") if m != "auto"]):
-        try:
-            known, refused = drive_machines()
-        except (OSError, tomllib.TOMLDecodeError) as e:
-            known, refused = set(), {m: f"the machine registry can't be read ({type(e).__name__}: {e})" for m in names}
-        for m in names:
-            if m not in known:
-                missing.append(f"machine {m!r} of `on` doesn't resolve ({refused.get(m) or 'not in machines.toml or machines.d'}): "
-                               f"register it (`research pods register {m} ...`), or remove it from `on` in {DRIVE_FLAGS} (or "
-                               "drive's --on)")
-    for key, kind in (("landing_gates", "landing gate"), ("warn_gates", "warn gate")):
-        for g in getattr(flags, key):
-            if _git(q.workdir, "cat-file", "-e", f"{main}:{g}", check=False).returncode:
-                missing.append(f"{kind} {g} isn't at `main`: land it first, or remove it from `{key}` in {DRIVE_FLAGS}")
-    if missing:
-        raise QueueError("drive's flags name what doesn't exist, so this tick does nothing: " + "; ".join(missing))
 
 
 #: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
@@ -1802,7 +1650,7 @@ class Queue:
                              f"{(r.stderr or r.stdout).strip()[-200:]}")
         self.into_fetched = False
         if (into := self.into) != "main":
-            # a landing branch the remote doesn't have reads as `main` here; drive's tick refuses without it (`drive_names`)
+            # a landing branch the remote doesn't have reads as `main` here
             if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode == 0:
                 self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{into}:{self.base}")
                 self.into_fetched = True
@@ -2795,23 +2643,22 @@ class Queue:
 
     # -- status
 
-    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None, close_days: int = 0,
-               fetched: Callable[[], tuple[Callable[[list[PR]], dict[int, float]] | None, int]] | None = None,
+    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None,
+               fetched: Callable[[], Callable[[list[PR]], dict[int, float]] | None] | None = None,
                loop: bool = False) -> dict[int, Entry]:
         """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
-        PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it.
-        ``fetched``, called once the clone is fetched and before anything reads it, returns those two instead: the command reads
-        its cutoff and drive.toml at `main` there, so it fetches once.  With ``loop``, as the verified queue admits each onto
-        `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on `main` landed, and a move PR that conflicts with
-        `main` refused as any PR is; else as drive does, with each member's place on `next`, a head on `checked` landed there,
-        and the refusals of drive's last sync."""
+        PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
+        returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
+        ``loop``, as the verified queue admits each onto `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on
+        `main` landed, and a move PR that conflicts with `main` refused as any PR is; else as `sync` builds `next`, with each
+        member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
         self._clone()
         state = self.load_state()
         open_prs = self.listed = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         self.unlock()
         if fetched is not None:
-            stale, close_days = fetched()
+            stale = fetched()
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         prefetch = self.prefetch
         if prefetch is not None:                # one pull for every label below, not one each for admission, off-main and stale
@@ -2832,9 +2679,7 @@ class Queue:
             e = entries.setdefault(n, Entry(p, state="waiting", why=f"based on {based_on(p, open_prs)}, and not marked ready at "
                                                                     f"{p.head[:8]}"))
             e.idle_since = since
-            e.why = (f"stale, idle since {time.strftime('%Y-%m-%d', time.gmtime(since))}"
-                     + (f" (drive closes it {close_days} days idle; push, mark it ready or close it)" if close_days else "")
-                     + f": {e.why}")
+            e.why = f"stale, idle since {time.strftime('%Y-%m-%d', time.gmtime(since))}: {e.why}"
         conflicts, waits = ({}, {}) if loop else (state.get("conflicts", {}), state.get("waiting", {}))
         if loop:
             reach = above(self.workdir, main, (e.pr.head for e in entries.values() if e.state == "ready"))
@@ -5553,175 +5398,6 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
     return {owner, q.handle(p), labels.ready_by(pr, head)}
 
 
-def _move_main(q: Queue, sha: str, verb: str, passed: str, wait: Callable[[], str | None] = lambda: None) -> int:
-    """Fast-forward `main` to ``sha``, a commit on the landing branch's first-parent chain (`checked`, `Queue.into`), beside
-    drive's tick: in drive's clone as the tick left it, read only (the branches' tips from the remote, nothing fetched, and the
-    push to the remote's URL, so no ref of the clone moves under the tick), with a plain push, never forced, which a `main` moved
-    meanwhile refuses.  Nothing to do when `main` already holds ``sha``, or while ``wait`` says why not yet.  Drive's next tick
-    takes the new `main` (`Driver._main_moved`)."""
-    if q.into == "main":
-        raise QueueError(f"{verb}: drive lands on `main` itself (drive.toml's `land_into`), so no `checked` leads it")
-    if not (q.workdir / ".git").exists():
-        raise QueueError(f"{verb}: drive has no clone at {q.workdir} yet: its first tick makes it")
-    has = lambda c: not _git(q.workdir, "cat-file", "-e", f"{c}^{{commit}}", check=False).returncode  # noqa: E731
-    holds = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
-
-    def main_tip() -> str | None:
-        out = q._remote(q.workdir, "ls-remote", q.remote, "refs/heads/main", ok=None).stdout.split()
-        return out[0] if out else None
-
-    tips = {ref: c for c, ref in (line.split() for line in q._remote(
-        q.workdir, "ls-remote", q.remote, "refs/heads/main", f"refs/heads/{q.into}").stdout.splitlines())}
-    main, tip = tips.get("refs/heads/main"), tips.get(f"refs/heads/{q.into}")
-    if missing := [f"`{n}` {c[:12]}" for n, c in (("main", main), (q.into, tip)) if c and not has(c)]:
-        raise QueueError(f"{verb}: {' and '.join(missing)} isn't in drive's clone: pushed outside drive, which takes it next tick")
-    if not main or not tip or not on_first_parents(q.workdir, sha, tip):
-        raise QueueError(f"{verb}: {sha[:12]} is not on `{q.into}`'s first-parent chain" + (f" (at {tip[:12]})" if tip else ""))
-    if holds(sha, main):
-        print(f"research queue: {verb}: `main` {main[:12]} holds {sha[:12]} already: nothing to move")
-        return 0
-    if not holds(main, sha):
-        raise QueueError(f"{verb}: `main` {main[:12]}, pushed outside drive, isn't below {sha[:12]}: drive's next tick merges "
-                         f"it into `{q.into}` (`_absorb`)")
-    if why := wait():
-        print(f"research queue: {verb}: `main` stays at {main[:12]}: {why}")
-        return 0
-    q._drive_only("main", verb, False)
-    if (p := q._remote(q.workdir, "push", "-q", "--no-verify", q.remote, f"{sha}:refs/heads/main", ok=None)).returncode:
-        if (now := main_tip()) and has(now) and holds(sha, now):
-            print(f"research queue: {verb}: `main` moved to {now[:12]} meanwhile, which holds {sha[:12]}: nothing to move")
-            return 0
-        raise QueueError(f"{verb}: pushing `main` {main[:12]} to {sha[:12]} was refused: "
-                         f"{(p.stderr or p.stdout).strip()[-200:]}")
-    print(f"research queue: {verb}: `main` fast-forwarded from {main[:12]} to {sha[:12]}, {passed}; drive's next tick takes it")
-    return 0
-
-
-def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
-    """`research queue baseline SHA --by ci [--steps STEP,...]`: fast-forward `main` to SHA, a commit on `checked`'s first-parent
-    chain whose after-landing steps are known green (every one by default; with --steps, those), at once (`_move_main`): it
-    waits for no tick, takes no lock of drive's and writes nothing of drive's state, and drive's next tick takes `main` there as
-    verified (`Driver._main_moved`), so the review landing lands on it.  Refused without `--by ci`, off drive
-    (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod), for --steps that leave out a step on the merge gate
-    at SHA (`landing.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
-    from .landing import AFTER_LANDING, gating
-
-    if _who(by) != "ci":
-        raise QueueError(f"baseline: a green `main` is recorded only with --by ci, not --by {by}")
-    green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
-    if unknown := [x for x in green if x not in AFTER_LANDING]:
-        raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
-    if not (q.workdir / ".git").exists() or not (
-            full := _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()):
-        raise QueueError(f"baseline: {sha} is no commit drive's clone has")
-    if left := [s for s in gating(q.workdir, full) if s not in green]:
-        raise QueueError(f"baseline: --steps leaves out {', '.join(left)}, on the merge gate at {full[:12]}: `main` moves only to "
-                         "a commit that passed every step on it")
-    return _move_main(q, full, "baseline", f"green on every step on the merge gate by {by}")
-
-
-def promote(q: Queue, states: Callable[[Path, list[str]], dict] | None = None,
-            evidence: Callable[[Path, list[str]], list[Path]] | None = None) -> int:
-    """`research queue promote`: fast-forward `main` to the tip of drive's after-landing run (`postland["run"]` in drive's
-    state, read and never written) once each of its runs, every shard's twins, has ended and it passed every step on the merge
-    gate there, as drive's tick judges it (`Driver.not_promotable`), the way `baseline` moves it (`_move_main`): `main` moves
-    within minutes of the run's end, not at drive's next tick.  Nothing to do without such a run, while it runs, once it failed
-    on the gate, or when `main` holds its tip; a loop on drive's host runs it (`/data/infra/drive.sh queue promote`)."""
-    from .drive import Driver
-    from .landing import evidence as run_evidence, run_states
-
-    if not (run := ((q.load_state().get("drive") or {}).get("postland") or {}).get("run")):
-        print("research queue: promote: no after-landing run in drive's state: nothing to move")
-        return 0
-    d = Driver(q, on="", states=states or run_states, evidence=evidence or run_evidence)
-    return _move_main(q, run["tip"], "promote", f"whose after-landing run {' '.join(run.get('ids') or ())} passed every step on "
-                      "the merge gate", lambda: d.not_promotable(run))
-
-
-def accept_checked(q: Queue, sha: str, by: str) -> int:
-    """`research queue accept-checked SHA --by ci`: record the landing branch (`checked`, `Queue.into`) at SHA, the tip it is at,
-    among the tips drive takes (`drive["checked_tips"]`) though drive didn't write it, so drive's ticks, held on it
-    (`Driver._unwritten`), go on from it.  Refused without `--by ci`, for a SHA that isn't the branch's tip, and off drive
-    (`/data/infra/drive.sh queue accept-checked SHA --by ci` on the control pod)."""
-    from .drive import CHECKED_TIPS
-
-    if _who(by) != "ci":
-        raise QueueError(f"accept-checked: a `{q.into}` drive didn't write is accepted only with --by ci, not --by {by}")
-    q._clone()
-    q.fetch()
-    full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
-    tip = _out(q.workdir, "rev-parse", q.base)
-    if full != tip:
-        raise QueueError(f"accept-checked: {sha} is not `{q.into}`'s tip, {tip[:12]}: only the commit it is at is accepted")
-    state = q.load_state()
-    tips = state.setdefault("drive", {}).setdefault("checked_tips", [])
-    tips[:] = [*(t for t in tips if t != tip), tip][-CHECKED_TIPS:]
-    q.save_state(state)
-    print(f"research queue: `{q.into}` {tip[:12]} accepted by {by}: drive's next tick goes on from it")
-    return 0
-
-
-def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
-    """`research queue drive-shard-add TIP K RUN_ID`: count RUN_ID among shard K's twins (``groups``) of the after-landing run of
-    `checked` at TIP (``ids`` too, so drive reads its state), a run launched by hand in place of a twin that waits or was lost: the
-    shard passes once one of its twins does (`Driver._every_shard`).  Drive waits while any twin runs or waits, so cancel the
-    twin it replaces after adding it (before, a shard whose every twin was stopped launches the whole run again).  Refused unless TIP (full, or 7+ hex digits of it) is that
-    run's tip with its shards' ids known, for a K outside 1..N (an unsharded run is shard 1/1), for a RUN_ID it already
-    has, and unless RUN_ID's own record says it is that run's shard: a `check.py` run of TIP's commit (`merge._ran_on`: its
-    attempt's clean source, else its run record's), with `--shard K/N` (none for an unsharded run) and, when it names them,
-    `--deferred` the run's steps, and for an auto plan's shard (`--shard auto:K/N`), that plan among its inputs, so a passing
-    run of a mistyped id never verifies a commit nobody checked."""
-    from . import merge
-    from .drive import AUTO_PLAN, shard_spec
-
-    pl = ((state := q.load_state()).get("drive") or {}).get("postland") or {}
-    run = pl.get("run")
-    if not run or len(tip) < 7 or not run["tip"].startswith(tip):
-        raise QueueError(f"drive-shard-add: {tip} is not the tip of the after-landing run ("
-                         f"{run['tip'][:12] if run else 'none runs'})")
-    if run.get("shards") or "launch" in run:
-        raise QueueError(f"drive-shard-add: the after-landing run of {run['tip'][:12]} is still launching: add to it once drive "
-                         "has read its run ids")
-    groups = run.get("groups") or [run["ids"]]
-    if not 1 <= k <= len(groups):
-        raise QueueError(f"drive-shard-add: shard {k} is not one of the run's {len(groups)} (1..{len(groups)})")
-    if rid in run["ids"]:
-        raise QueueError(f"drive-shard-add: {rid} is already a run of the after-landing run of {run['tip'][:12]}")
-    if (got := merge.fetch_run(rid, [])) is None:
-        raise QueueError(f"drive-shard-add: {rid}'s run record can't be read (`research status {rid}`): its commit and shard "
-                         "are unknown")
-    cmd = [str(x) for x in got[1].get("command") or ()]
-    if not any(x.endswith("check/check.py") for x in cmd):
-        raise QueueError(f"drive-shard-add: {rid} is no check.py run (its command: {' '.join(cmd)[:200] or 'unrecorded'})")
-    if not merge._ran_on(q.store, rid, run["tip"], merge.fetch_run):
-        raise QueueError(f"drive-shard-add: {rid} checked {(got[1].get('tree_sha') or 'an unrecorded commit')[:12]}, not the "
-                         f"after-landing run's {run['tip'][:12]}")
-    want = shard_spec(run, k) if "groups" in run else None
-    if (has := cmd[cmd.index("--shard") + 1] if "--shard" in cmd[:-1] else None) != want:
-        raise QueueError(f"drive-shard-add: {rid} is {f'shard {has}' if has else 'no shard'}, not "
-                         f"{f'shard {want}' if want else 'unsharded'} of the after-landing run of {run['tip'][:12]}")
-    if run.get("plan"):
-        try:
-            d = merge.fetch_run(rid, [f"inputs/{AUTO_PLAN}"])[0]
-            plan = str(json.loads((d / "inputs" / AUTO_PLAN).read_text())["digest"])
-        except (TypeError, OSError, ValueError, KeyError) as e:
-            plan = f"unreadable ({type(e).__name__})"
-        if plan != run["plan"]:
-            raise QueueError(f"drive-shard-add: {rid}'s auto plan ({AUTO_PLAN} among its inputs) is {plan[:12]}, not the "
-                             f"after-landing run's {run['plan'][:12]}")
-    steps = pl.get("steps") or []
-    if "--deferred" in cmd[:-1] and (named := cmd[cmd.index("--deferred") + 1].split(",")) != steps:
-        raise QueueError(f"drive-shard-add: {rid} ran --deferred {','.join(named)}, not the after-landing run's "
-                         f"{','.join(steps)}")
-    if "groups" in run:
-        run["groups"][k - 1].append(rid)
-    run["ids"].append(rid)
-    q.save_state(state)
-    print(f"research queue: {rid} counts as a twin of shard {k}/{len(groups)} of the after-landing run of `{q.into}` "
-          f"{run['tip'][:12]}")
-    return 0
-
-
 def broker_gh(top: Path) -> str:
     """The gh to open PRs with: the checkout's broker wrapper (`<git common dir>/verity-auth/bin/gh`, which trades the agent's
     identity for an installation token) when it has one, else gh on PATH."""
@@ -6031,25 +5707,18 @@ def main(argv: list[str]) -> int:
 
         return vqueue_main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
-                                            "checked-heads", "review", "baseline", "promote", "accept-checked",
-                                            "drive-shard-add", "delegate",
-                                            "shadow-report", "vqueue"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
-                    "commit of `checked` ci knows is green, which `main` moves to; "
-                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
+    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "open", "edit", "link", "stats",
+                                            "checked-heads", "review", "delegate", "shadow-report", "vqueue"])
+    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to")
-    ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
-    ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one), which must cover every "
-                    "step on the merge gate there")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
                          "default $RESEARCH_LANE")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
-    ap.add_argument("--dry-run", action="store_true", help="sync/drive: decide and report, push and launch nothing, tell no "
-                                                           "one; open, edit: say what it would send, and send nothing")
+    ap.add_argument("--dry-run", action="store_true", help="sync: decide and report, push nothing, tell no one; open, edit: "
+                                                           "say what it would send, and send nothing")
     ap.add_argument("--workdir", type=Path, default=None, help="the queue's own clone (default: ~/.research/queue/NAME for --repo "
                                                               "OWNER/NAME, else ~/.research/queue/verity)")
     ap.add_argument("--remote", default=None, help="the repository to clone (default: https://github.com/OWNER/NAME.git for --repo "
@@ -6069,9 +5738,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the after-landing run tests it)")
     ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong)")
     ap.add_argument("--preflight-root", type=Path, default=None, metavar="DIR",
-                    help="ready, drive: where merged trees go, ready's preflight's and every other (default: the temporary "
-                         "directory); a tree must share a filesystem with uv's cache for its sync to hardlink (drive on the "
-                         "control pod, whose TMPDIR is a network volume, passes the container disk)")
+                    help="ready, sync: where merged trees go, ready's preflight's and every other (default: the temporary "
+                         "directory); a tree must share a filesystem with uv's cache for its sync to hardlink (on a host whose "
+                         "TMPDIR is a network volume, pass a directory on its local disk)")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -6083,33 +5752,19 @@ def main(argv: list[str]) -> int:
                          "built in time is a skipped check); the records gate (which warns of a changed Lean lock with no records "
                          "run or Lean check, of any commit, that passed its package on the head's Lean inputs, by their key "
                          "`tools/verity/lean/lean_changed.py --inputs-key`) still runs")
-    ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
-                    help="drive: after a landing that changes Lean, a lock or the spec, run lean-audit alone on `checked`'s tip "
-                         "(the lock run) and commit the lock records it regenerated onto `checked` (`Regenerated:`), which "
-                         "`research merge`'s gate accepts on that run; `main` moves only to a commit with them")
-    ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/drive: admit only ready marks written at "
+    ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
     ap.add_argument("--first", help=argparse.SUPPRESS)
     ap.add_argument("--priority-file", type=Path, metavar="PATH",
-                    help="sync/drive: drive's priority list, the landing order: a file of PR numbers separated by spaces or "
+                    help="sync: the priority list, the landing order: a file of PR numbers separated by spaces or "
                          "commas, first to land first (a number repeated keeps its first place), read again at each sync (none: "
                          "an empty list; one it can't read: an error logged once, and an empty list); its ready PRs go at the "
                          "bottom of `next` in its order, so an edit reorders `next` from the first PR whose place changed; "
                          "these PRs and those they contain go first of "
                          "what the sync merges anew")
-    ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
-                    help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
-                         "(check.py --no-cache --circuit-cache)")
-    for old in ("--max-running", "--train-size"):
-        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
-    ap.add_argument("--config", metavar="PATH",
-                    help=f"drive: a flags file (`DriveFlags`) at `main` in the queue's clone, accepted only while every key it "
-                         f"sets has the value of {DRIVE_FLAGS} at `main`, drive's one source of flags; else the tick refuses, "
-                         "naming each key")
-    ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
                                   "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
@@ -6213,16 +5868,12 @@ def main(argv: list[str]) -> int:
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)
             return 1
-    if a.priority_file and a.command not in ("sync", "drive"):
-        ap.error("--priority-file is for sync and drive only")
+    if a.priority_file and a.command != "sync":
+        ap.error("--priority-file is for sync only")
     if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if (a.config or a.config_from_tree) and a.command != "drive":
-        ap.error("--config and --config-from-tree are for drive only")
-    if a.config_from_tree and not a.config:
-        ap.error("--config-from-tree needs --config PATH")
-    if a.dry_run and a.command not in ("sync", "drive"):
-        ap.error(f"--dry-run is for sync and drive only: `{a.command}` would act for real")
+    if a.dry_run and a.command != "sync":
+        ap.error(f"--dry-run is for sync only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
     if a.no_preflight and a.command != "ready":
@@ -6235,20 +5886,10 @@ def main(argv: list[str]) -> int:
         ap.error("--land, --hold and --ref are for review N only")
     if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
-    if a.command == "baseline" and not (a.pr and a.by):
-        ap.error("baseline SHA moves `main` to a green commit of `checked`: pass the commit and --by ci")
-    if a.command == "promote" and a.pr is not None:
-        ap.error("promote takes no argument: it moves `main` to the tip of drive's after-landing run, once it passed")
-    if a.command == "accept-checked" and not (a.pr and a.by):
-        ap.error("accept-checked SHA records `checked`'s tip as one drive takes: pass the commit and --by ci")
-    if a.shard_run and a.command != "drive-shard-add":
-        ap.error(f"unrecognized arguments: {' '.join(a.shard_run)}")
-    if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
-        ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
     if a.command == "delegate" and not (a.pr and a.by):
         ap.error("delegate AGENT lets a Cursor agent (a worker) sign as your handle: pass its agent id and --by <your lane>")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "accept-checked", "drive-shard-add", "delegate") and a.pr is not None:
+    if a.command not in ("judge", "delegate") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -6280,37 +5921,12 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        if a.command in ("baseline", "promote"):
-            from .merge import DRIVE_ENV, on_drive
-
-            if not on_drive():
-                raise QueueError(f"{a.command}: `main` moves only from drive's clone, and this isn't drive (no {DRIVE_ENV}=1): run "
-                                 f"`/data/infra/drive.sh queue {' '.join([a.command, *([a.pr, '--by', a.by] if a.pr else [])])}` there")
-            # no lock: a tick holds the clone's for its whole run, and these only read the clone and drive's state
-            return baseline(q, a.pr, a.by, a.steps) if a.command == "baseline" else promote(q)
         lock = _lock(workdir)
         q.unlock = lock.close
         # weakly: `q` holds `labels`' methods, so a strong reference back would keep `q`, and the workdir's lock it holds, past
         # `main`'s return
         own = weakref.WeakMethod(q.own_change)
         labels.change = lambda head: own()(head)
-        if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
-            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted; drop them from drive's args")
-        if a.command == "drive":
-            q._clone()
-            q.fetch()
-            base, where = drive_flags(q.workdir, a.config, a.config_from_tree)
-            flags = base.override(a, where)
-            if not flags.on:
-                raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {DRIVE_FLAGS} at `main`, or pass "
-                                 "--on MACHINE")
-            q.verdict_first, q.restack_jobs = flags.verdict_first, flags.restack_jobs
-            q.land_into = flags.land_into
-            a.marked_after = flags.marked_after
-            labels.since = a.marked_after
-            q.log(f"research queue drive: flags from {where}: {flags.line()}")
-            if flags.signed_verdicts:
-                labels.verify = label_verifier(q.workdir, main_ref, keys, q.log)
         if not a.marked_after and a.command != "status":
             if a.rules is None:
                 q._clone()
@@ -6319,14 +5935,13 @@ def main(argv: list[str]) -> int:
         if a.command == "status":
             from .stale import stale_prs
 
-            def at_main() -> tuple[Callable[[list[PR]], dict[int, float]], int]:
+            def at_main() -> Callable[[list[PR]], dict[int, float]]:
                 if not a.marked_after:
                     labels.since = q.rules().marked_after
                 r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
                 got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
-                return (lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
-                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep),
-                        got.stale_close_days)
+                return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
+                                             lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
             entries = q.status(fetched=at_main, loop=True)
             teams = q.issue_teams()
@@ -6346,42 +5961,13 @@ def main(argv: list[str]) -> int:
                 labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
             return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
                           "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
-        from .merge import DRIVE_ENV, off_drive, on_drive
-
-        if a.command == "accept-checked":
-            if not on_drive():
-                raise QueueError(f"accept-checked: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
-                                 f"run `/data/infra/drive.sh queue accept-checked {a.pr} --by {a.by}` there")
-            return accept_checked(q, a.pr, a.by)
-        if a.command == "drive-shard-add":
-            if not on_drive():
-                raise QueueError(f"drive-shard-add: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
-                                 f"run `/data/infra/drive.sh queue drive-shard-add {a.pr} {' '.join(a.shard_run)}` there")
-            return drive_shard_add(q, a.pr, int(a.shard_run[0]), a.shard_run[1])
+        from .merge import off_drive, on_drive
 
         if a.command == "sync" and not (a.dry_run or on_drive()):
             raise QueueError(off_drive(q.branch, "queue sync"))
-        if a.command == "drive":
-            q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
-        if a.command in ("sync", "drive"):
-            q.priority_file = a.priority_file
         if a.command == "sync":
+            q.priority_file = a.priority_file
             q.sync(dry_run=a.dry_run)
-            return 0
-        if a.command == "drive":
-            from .drive import Driver
-
-            drive_names(q, flags, push=not (a.dry_run or a.shadow))
-            Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
-                   reviews=labels.reviews, ready_by=labels.ready_by,
-                   stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep, close_unlandable=flags.close_unlandable,
-                   after_landing_shards=flags.after_landing_shards,
-                   lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
-                   lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps,
-                   verdict_carry=flags.verdict_carry, bottom_ring=flags.bottom_ring,
-                   bottom_wait_min=flags.bottom_wait_min).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

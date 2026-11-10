@@ -195,7 +195,7 @@ def test_start_needs_the_queues_machines(world, monkeypatch):
     nothing: `start` says so rather than launch it."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on = ""
-    with pytest.raises(ValueError, match="build the Landing with drive.toml's `on`"):
+    with pytest.raises(ValueError, match=r"build the Landing with drive.toml's `on` \(`research\.queue\.flags_at\(repo, main\)\.on`\)"):
         start(h.d, sha, base)
     assert h.posted == []
 

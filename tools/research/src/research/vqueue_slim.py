@@ -100,7 +100,7 @@ def start(driver: Landing, sha: str, base: str, shards: int = 0) -> dict | None:
     dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs the queue's machines: build the Landing with drive.toml's `on` "
-                         "(`research.queue.drive_flags(q.workdir)[0].on`)")
+                         "(`research.queue.flags_at(repo, main).on`)")
     kw, skip, flags = driver.beside_args(sha, base)
     every = AFTER_LANDING if shards else SLIM_STEPS
     skip = [s for s in skip if s in every]
