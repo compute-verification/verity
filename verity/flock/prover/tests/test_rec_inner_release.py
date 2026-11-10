@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from verity_flock import firewall as FW
 
-POD = Path(__file__).resolve().parents[3] / "ml" / "flock" / "pod"
+POD = Path(__file__).resolve().parents[2] / "pod"
 UNITS = ["rec-open/l32-h11", "rec-open/l16-h10", "rec-open/l16-h8", "rec-residuals/m29-k26-c6-p0",
          "rec-residuals/m29-k26-c6-p1", "rec-cap/n128-l1", "rec-cap/n64-l2", "rec-cap/n128"]
 PARTS = ["L0", "L1", "L2", "alg-p0", "alg-p1", "cap-L1", "cap-L2", "cap"]

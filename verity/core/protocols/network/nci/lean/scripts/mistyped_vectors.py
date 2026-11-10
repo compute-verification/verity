@@ -1,6 +1,6 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
 `verity/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests and Flock's
-(`verity/ml/flock/tests/test_lean_verifier.py`).
+(`verity/flock/tests/test_lean_verifier.py`).
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does Flock's decoder, which
 `NciCheck` decodes with (`Flock.Program.Widths`), with the codec's message. The descriptors here are written as JSON, since

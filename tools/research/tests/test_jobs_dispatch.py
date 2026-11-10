@@ -319,13 +319,13 @@ def test_the_commands_each_kind_runs(tmp_path):
     job = {"kind": "merge-check", "payload": {"commit": C1, "base": BASE}}
     assert D.command(job, "t1", "py", None) == ["py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", BASE]
     assert D.command(job, "t1", "py", tmp_path / "v.tar.gz")[-2:] == ["--verdicts-in", str(tmp_path / "v.tar.gz")]
-    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["verity/ml/flock/verifier/soundness"]}}, "t1", "py", None)
+    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["verity/flock/agreement/soundness"]}}, "t1", "py", None)
     assert regen[:15] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source",
                           "--preflight", "check", "--"]
     assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
     assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
         "py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
-    assert "check.py --build --update verity/ml/flock/verifier/soundness" in regen[-1]
+    assert "check.py --build --update verity/flock/agreement/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 
@@ -614,7 +614,7 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
 
 def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
     repo = tmp_path / "flock"
-    files = {"verity/ml/flock/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
+    files = {"verity/flock/agreement/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
              "verity/ml/flock/src.rs": "fn main() {}", "verity/flock/prover/README.md": "flock", "docs.md": "docs",
              "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/flock/prover/", "!README.md"]})\n'}
     if pattern is not None:

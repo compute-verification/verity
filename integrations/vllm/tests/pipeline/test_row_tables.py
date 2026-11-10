@@ -306,7 +306,7 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
 def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
     """The chunker cuts at table boundaries, and a prover that builds its own chunks can't bring the old form back: the verifier's
     reads file names one root, and no row of another table opens it at any position through any of its paths (Lean's
-    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/ml/flock/tests/test_lean_registered_reads.py`
+    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/flock/tests/test_lean_registered_reads.py`
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)

@@ -1004,7 +1004,7 @@ loop's `Hello` is set up from. Each table's recheck hands it the table's root (`
 loop's `Level0` of that root (§10.2), its rows, layers and cap, without committing again; the root it answers must be the
 root of record. `flock-firewall finish` serves the same protocol as a process of its own, from the statement's files and a
 table's level-0 request (`table J LEN`: the witness, extra lanes, paddings and level-0 salts), which
-`../../ml/flock/verifier/firewall_finish_agree.py` drives. With the table it samples each rep's salts for levels ≥ 1
+`../agreement/firewall_finish_agree.py` drives. With the table it samples each rep's salts for levels ≥ 1
 itself, from the OS (`salts J R 0`, `192·2^d` bytes a level), and hands them to the prover, whose device trees at those
 levels take them (`LeafSalts::preset`), and so do the loop's opening rounds: no salt of the rep's proof file comes from the
 prover. The loop's finish samples them only once the rep's frame took the coins of its algebraic phase's last round
@@ -1076,7 +1076,7 @@ before its `Finish` (§10.1): the tampered message never leaves (a masked value 
 every stream runs its schedule, and `Finish` goes without proofs, the auditor's verdict not accepted after as many rounds
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
-it (both, for some). `../../ml/flock/verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
+it (both, for some). `../agreement/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
 after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. For `opening`,
 `opening-frame`, `cut-tree` and the inner rounds (`FC_INNER_TAMPER`, §10.4) it requires the frame's stop and admits, never
 requires, the ZK server's

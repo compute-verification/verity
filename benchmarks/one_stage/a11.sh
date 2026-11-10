@@ -48,7 +48,7 @@ audit)
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   TARG=()
   if [ -n "${A11_LAYOUT:-}" ]; then
-    TU=$(cached tmplunit "$(tree_key verity/flock/verifier verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+    TU=$(cached tmplunit "$(tree_key verity/flock/verifier verity/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
     [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
     TARG=(--layout "$A11_LAYOUT" --tmpl-unit-bin "$TU")
   fi

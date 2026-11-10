@@ -39,7 +39,7 @@ SHAPES = [(2, 1), (5, 2), (3, 513)]
 USAGE = "usage: flock-read-tmpl V H | flock-read-tmpl check V H CIRCUIT"
 #: the served reads' circuit files by name, each with its SHA-512, its art id and the (V, H) it reads at, and the
 #: (file, V, H) the check must refuse
-SERVED = json.loads((Path(__file__).parent.parent.parent.parent / "ml" / "flock" / "tests" / "fixtures" / "served_reads.json").read_text())
+SERVED = json.loads((Path(__file__).parent.parent.parent / "tests" / "fixtures" / "served_reads.json").read_text())
 SERVED_DIR = settings.served_reads()
 served = pytest.mark.skipif(SERVED_DIR is None,
                             reason="reads the served reads' circuit files, about 340 MB each, from the directory "

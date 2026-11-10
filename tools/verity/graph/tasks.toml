@@ -66,7 +66,7 @@ timeout_s = 3600
 # the files its tasks are made from (suites.py's AFTER_LEAN and the suites' pyproject.toml: lean-suites', whose inputs are the
 # whole tree)
 files = ["verity/flock/verifier/**", "verity/flock/prover/check_build.sh", "verity/flock/prover/live/**",
-         "verity/flock/prover/flock-*-b684b12.patch", "verity/ml/flock/verifier/**", "tools/verity/check/suites.py",
+         "verity/flock/prover/flock-*-b684b12.patch", "verity/flock/agreement/**", "tools/verity/check/suites.py",
          "**/pyproject.toml"]
 kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
 env = "lean"

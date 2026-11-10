@@ -28,7 +28,7 @@
 #      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N, and a plain one
 #      of a served statement its staged full sample, draw.json; unset, no sample)
 #      WINDOW=DIR (prove_path.py commit's window dir, the prover's files included) MEMBER=0  SUBCIRCUIT=ID  SERVE_RUN=DIR
-#      SERVE_WINDOW=0  CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
+#      SERVE_WINDOW=0  CUDA_TK (default: verity/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
 #      FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps; it holds the staged values)
 #      STEPS="build stage sanity gpu cpu" (lean: add it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -39,7 +39,7 @@ STATEMENTS=${STATEMENTS:-"4096:1 4096:8 14336:1"}; CPU_STATEMENTS=${CPU_STATEMEN
 PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEMENTS:-}; DRAW=${DRAW:-}
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
-. verity/ml/flock/pod/cuda-13.3.sh
+. verity/flock/pod/cuda-13.3.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
@@ -51,7 +51,7 @@ has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 if has build; then
   echo "== build $(date -u +%T)"
-  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $B | tee $O/binary.sha256
 fi

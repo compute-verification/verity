@@ -1,9 +1,9 @@
 """The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
 output row registered too, proved by Flock in one loopback session under a subset sample of 16
-(`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+(`verity/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
 file are the fixture's `stage/`, the ones
-`verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
+`verity/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
 verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
@@ -41,7 +41,7 @@ from verity.core.protocols.spot.one_stage import produced as PRODUCED, proofs as
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
 FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
-VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
+VERIFIER = Path(__file__).resolve().parents[4] / "flock" / "agreement"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
@@ -130,7 +130,7 @@ FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, 
 @pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
 def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
     """`ks_form_why` on files' heads: `KsScope.filesWhy`'s scope refusal with its reason, a shared-row file left to
-    Lean's `sharedWhy` (`verity/ml/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's
+    Lean's `sharedWhy` (`verity/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's
     files)."""
     assert PF.ks_form_why(*_files(tmp_path, **form)) == want
 

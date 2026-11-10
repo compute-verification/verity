@@ -4,7 +4,7 @@ public import Difftest
 public import Flock.Firewall.Honest
 
 /-! The honest worker's requests in an inner session, `Flock.Firewall.honestReqs`, held to `rec_live`'s
-(`verity/ml/flock/tests/test_honest_reqs.py`): `honest-reqs` reads `{"schedule", "honest"}`, the pinned schedule
+(`verity/flock/tests/test_honest_reqs.py`): `honest-reqs` reads `{"schedule", "honest"}`, the pinned schedule
 and what the worker brings beyond it (`honestOf`), and answers the requests in hex, in order. Flock's package has no
 dependencies, so its port lives beside the harness. -/
 

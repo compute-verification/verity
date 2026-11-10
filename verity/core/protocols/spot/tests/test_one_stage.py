@@ -857,7 +857,7 @@ def test_audit_record_under_the_work_law():
 
 
 def test_work_sizes_are_the_lean_verifiers():
-    """The sizes `verity/ml/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    """The sizes `verity/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
     `flock-verify draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))

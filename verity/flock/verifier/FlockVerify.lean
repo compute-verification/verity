@@ -1208,7 +1208,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   return (if all then 0 else 1)
 
 /-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
-(`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
+(`verity/flock/agreement/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
 refusals, in `verify`'s order, on plain sessions whose proof files are upstream's form (the file then the zk patch's
 `None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
 line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:

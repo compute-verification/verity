@@ -58,13 +58,13 @@ writes them as staging's `rows/`, to diff the two mirrors.
 
 ## Hill-climb points in GPU sessions
 
-A BF16 hill-climb point (`../../ml/flock/pod/74-gemm-hill.sh`, its records by `../../ml/flock/pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
+A BF16 hill-climb point (`../pod/74-gemm-hill.sh`, its records by `../pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
 one preflight check (byte identity at B = 16), then `POINTS=N` points of one statement. A session's points share one tree,
 one binary, one `FC_*` set and one K; a setting that differs needs a session of its own. A point whose key (the binaries, the
 `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
 
 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
-   `bash verity/ml/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+   `bash verity/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
 3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the
@@ -73,7 +73,7 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
    ~~~sh
    RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
-     python3 $T/verity/ml/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
+     python3 $T/verity/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
        --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
    ~~~
 
@@ -98,5 +98,5 @@ FLOCK_IR_SLOW=1 uv run pytest verity/flock/prover/tests/test_ir_lowering.py   # 
 cd verity/flock/verifier && lake build               # the Lean verifier; `check` builds and audits it
 ~~~
 
-`../../ml/flock/tests/test_lean_verifier.py` skips its Lean-backed tests without `lake` on the PATH. `check` runs none of the
+`../tests/test_lean_verifier.py` skips its Lean-backed tests without `lake` on the PATH. `check` runs none of the
 `live/` crate's Rust tests; they build only inside the upstream checkout.

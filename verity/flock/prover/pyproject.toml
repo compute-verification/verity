@@ -30,7 +30,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_arena_layout.py",
-    "../../ml/flock/tests/test_challenger_audit.py",
+    "../tests/test_challenger_audit.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
@@ -40,28 +40,28 @@ untraced = [
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
-    "../../ml/flock/tests/test_lean_coin_tree.py",
-    "../../ml/flock/tests/test_lean_forged_proofs.py",
-    "../../ml/flock/tests/test_lean_hidden_outputs.py",
-    "../../ml/flock/tests/test_lean_out_group_slot.py",
-    "../../ml/flock/tests/test_lean_plain_hidden_tables.py",
-    "../../ml/flock/tests/test_lean_public_inputs.py",
-    "../../ml/flock/tests/test_lean_rec_cap_guards.py",
-    "../../ml/flock/tests/test_lean_record_checks.py",
-    "../../ml/flock/tests/test_lean_region_words.py",
-    "../../ml/flock/tests/test_lean_registered_bit_rows.py",
-    "../../ml/flock/tests/test_lean_registered_reads.py",
-    "../../ml/flock/tests/test_lean_session_tables.py",
-    "../../ml/flock/tests/test_lean_shared_reads.py",
-    "../../ml/flock/tests/test_lean_typed_reads.py",
-    "../../ml/flock/tests/test_lean_typed_statement.py",
-    "../../ml/flock/tests/test_lean_typed_template.py",
-    "../../ml/flock/tests/test_lean_verifier.py",
-    "../../ml/flock/tests/test_lean_width_refusals.py",
+    "../tests/test_lean_coin_tree.py",
+    "../tests/test_lean_forged_proofs.py",
+    "../tests/test_lean_hidden_outputs.py",
+    "../tests/test_lean_out_group_slot.py",
+    "../tests/test_lean_plain_hidden_tables.py",
+    "../tests/test_lean_public_inputs.py",
+    "../tests/test_lean_rec_cap_guards.py",
+    "../tests/test_lean_record_checks.py",
+    "../tests/test_lean_region_words.py",
+    "../tests/test_lean_registered_bit_rows.py",
+    "../tests/test_lean_registered_reads.py",
+    "../tests/test_lean_session_tables.py",
+    "../tests/test_lean_shared_reads.py",
+    "../tests/test_lean_typed_reads.py",
+    "../tests/test_lean_typed_statement.py",
+    "../tests/test_lean_typed_template.py",
+    "../tests/test_lean_verifier.py",
+    "../tests/test_lean_width_refusals.py",
     "tests/test_lean_zk.py",
     "tests/test_lean_zk_mask.py",
     "tests/test_ligerito_folds.py",
-    "../../ml/flock/tests/test_pod_lean_verdicts.py",
+    "../tests/test_pod_lean_verdicts.py",
     "tests/test_pouw_rows.py",
     "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
@@ -73,7 +73,7 @@ untraced = [
     "tests/test_witness_host.py", "tests/test_zc_round1.py", "tests/test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
-# ../../ml/flock/tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
+# ../tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
 inputs = [
     # test_lean_verifier.py's `lake build Proofs.Flock.Verifier` and the scratch files importing it: the module's closure
     "Security/Proofs/Flock/Verifier.lean", "Security/Proofs/Flock/Verifier",
@@ -128,11 +128,11 @@ tests = ["tests/test_backend.py"]
 paths = ["verity/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_backend_bench.py"]
+tests = ["../tests/test_backend_bench.py"]
 paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_challenger_audit.py"]
+tests = ["../tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
     "verity/core/primitives/lms/lean",
@@ -147,7 +147,7 @@ tests = [
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
-    "../../ml/flock/tests/test_lean_registered_bit_rows.py",
+    "../tests/test_lean_registered_bit_rows.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
 ]
@@ -169,7 +169,7 @@ paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circui
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_class_statement_unit_stager.py",
-    "../../ml/flock/tests/test_lean_hello.py",
+    "../tests/test_lean_hello.py",
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
@@ -197,22 +197,22 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "../../ml/flock/tests/test_lean_draw_laws.py",
-    "../../ml/flock/tests/test_lean_ks_form.py",
-    "../../ml/flock/tests/test_lean_plain_hidden_tables.py",
-    "../../ml/flock/tests/test_lean_record_checks.py",
-    "../../ml/flock/tests/test_lean_region_words.py",
-    "../../ml/flock/tests/test_lean_registered_reads.py",
-    "../../ml/flock/tests/test_lean_served_registered.py",
-    "../../ml/flock/tests/test_lean_session_tables.py",
-    "../../ml/flock/tests/test_lean_typed_reads.py",
-    "../../ml/flock/tests/test_lean_typed_statement.py",
-    "../../ml/flock/tests/test_lean_typed_template.py",
+    "../tests/test_lean_draw_laws.py",
+    "../tests/test_lean_ks_form.py",
+    "../tests/test_lean_plain_hidden_tables.py",
+    "../tests/test_lean_record_checks.py",
+    "../tests/test_lean_region_words.py",
+    "../tests/test_lean_registered_reads.py",
+    "../tests/test_lean_served_registered.py",
+    "../tests/test_lean_session_tables.py",
+    "../tests/test_lean_typed_reads.py",
+    "../tests/test_lean_typed_statement.py",
+    "../tests/test_lean_typed_template.py",
 ]
 paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_ir_lowering_bench.py"]
+tests = ["../tests/test_ir_lowering_bench.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/research/src/research",
@@ -220,13 +220,13 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_lean_verifier.py", "../../ml/flock/tests/test_lean_width_refusals.py"]
+tests = ["../tests/test_lean_verifier.py", "../tests/test_lean_width_refusals.py"]
 paths = ["verity/circuits/tests", "verity/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "../../ml/flock/tests/test_lean_rec_coins.py",
-    "../../ml/flock/tests/test_lean_witness.py",
+    "../tests/test_lean_rec_coins.py",
+    "../tests/test_lean_witness.py",
     "tests/test_rec_opening_unit.py",
     "tests/test_rec_outer.py",
     "tests/test_rec_vstar_checks.py",
@@ -243,7 +243,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_randomness_spec.py"]
+tests = ["../tests/test_randomness_spec.py"]
 paths = ["verity/flock/verifier/Flock/Draw.lean", "verity/flock/verifier/Flock/Hash.lean"]
 
 [[tool.verity.tests.reads]]
@@ -264,5 +264,5 @@ tests = ["tests/test_sha512_leaves.py"]
 paths = ["verity/definitions/kernels/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
-tests = ["../../ml/flock/tests/test_security_inputs.py"]
+tests = ["../tests/test_security_inputs.py"]
 paths = ["verity/*/lakefile.toml", "verity/flock/prover/tests"]
