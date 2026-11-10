@@ -4,20 +4,6 @@ The honest prover's step of the bandwidth audit v0 (`verity/core/protocols/bandw
 every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
 constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
 
-## Interface
-
-What code outside this directory may use. Everything else here is internal.
-
-| Entry point | What it is |
-|---|---|
-| `uv run tools/verity/check/suites.py benchmarks/bandwidth` | The suite, on the CPU: the tagger's arithmetic transcribed from `tagger.cu` and held to the core reference, `stream/v1` against its pinned vectors, and the honest prover's windows with a fake tagger. It writes no result. |
-| `bash benchmarks/bandwidth/run.sh` | One Attempt on one GPU: `bwtag` and `libbwtag.so` built and the reference's roots computed, then `bwtag`'s gates, its timing and `gpu.py windows`, then `summarize.py`. It writes `validation.json`, `timing.json`, `windows.json`, the challenger's state directory and `summary.json`, with the build's and the GPU's records, to `$RESEARCH_RUN_DIR/out`. |
-| `bash benchmarks/bandwidth/run_chip.sh` | The on-chip storage measured on one GPU (`chip.cu`, built as `bwchip`): each kernel's SASS (`sass.txt`), the uniform registers the kernels name (`uniform.txt`), the sweeps, and one `bwchip --ur` process a pair of registers (`ur.jsonl`). |
-| `bash benchmarks/bandwidth/run_stream.sh` | The certified PCIe stream on one GPU (`stream.py`, `stream/v1`; `stream.cu` built as `bwstream`): its gates, then each timing in a JSON of its own. |
-| `bash benchmarks/bandwidth/run_write_gpu.sh` and `bash benchmarks/bandwidth/run_write_host.sh` | The write rates of a GPU (`write.cu`) and of host DRAM (`write_host.c`). They write `write.jsonl` and `write_host.jsonl`, with the build's and the machine's records, to `$OUT`. |
-
-Nothing outside `benchmarks/` reads this directory.
-
 - `tagger.cu` holds the kernels and builds two ways: `bwtag`, which checks the device's roots against the reference and
   then times, and `libbwtag.so`, a C ABI for a harness that holds `E` in its own device buffer. Its header comment
   explains how each kernel is laid out.
