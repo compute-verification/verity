@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE))
 
 import arguments  # noqa: E402
 import catalog  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 
 def _num(x: float) -> str:
@@ -48,10 +48,10 @@ def render() -> str:
         out += [f"### Calibration `{c['id']}`: K = {_num(c['K'])} bits, Gamma = {_num(c['Gamma'])} gates, "
                 f"b_tok = {_num(c['b_tok'])}", "", c["description"], "",
                 "| Row | Thread theorem | Partial-sum law | Upper (construction) |", "|---|---|---|---|"]
-        for b in slowdown.brackets(rows, [c], parameters):
+        for b in bracket.brackets(rows, [c], parameters):
             chain = _num(b["chain"]) if b["chain"] is not None else "-"
             out.append(f"| `{b['row']}` | {_num(b['lower'])} | {chain} | {_num(b['upper'])} ({b['upper_basis']}) |")
-        out += ["", f"Both lower bounds are proven: `{slowdown.THREAD_THEOREM}` and `{slowdown.CHAIN_THEOREM}`, the "
+        out += ["", f"Both lower bounds are proven: `{bracket.THREAD_THEOREM}` and `{bracket.CHAIN_THEOREM}`, the "
                 "second on one forward chain of the row's reference circuit.", ""]
     for r in rows:
         out += [f"- **`{r['id']}`**: {r['method']}, {r['configuration']}. State: {r['state']}."
