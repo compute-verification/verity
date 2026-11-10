@@ -246,7 +246,8 @@ theorem Flock.SecurityProofs.GenericSampledSessionsZKSum : Flock.Guarantees.Gene
   intro n Tr Rnd Com Stmt Wit VS View _ _ H Zs Rel εb εh stmts samp wits hZ hH Xt hX X₀ v
   exact (Flock.SecurityProofs.GenericSampledSessionsZK n Tr Rnd Com Stmt Wit VS View H Zs Rel (fun x w _ => εb x w) εh
     stmts samp wits hZ hH Xt hX X₀ v).mono
-      (add_le_add le_rfl (avg_mono fun _ => Zk.seqErr_le_sum Zs (fun _ _ _ => le_rfl) _ _))
+      (add_le_add le_rfl (avg_mono fun _ =>
+        Zk.seqErr_le_sum Zs (ε := fun x w _ => εb x w) (εb := εb) (fun _ _ _ => le_rfl) _ _))
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit over Flock's masked sessions, a session per sampled statement, is zero knowledge**
