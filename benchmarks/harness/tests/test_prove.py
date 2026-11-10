@@ -304,6 +304,8 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
     with pytest.raises(ValueError, match=r"art:plan states its planner's seconds \(`prove_s`\) for 2 cell\(s\) and not for 1 "
                                          r"\(Norm_v1.*prices every cell or none"):
         plan([*cells[:2], bare[2]])
+    # a priced cell that takes no block has no seconds a block, and doesn't void the others'
+    assert plan([*cells, {"block": "Idle_v1{N=1}", "type": "", "taken": 0.0, "prove_s": 0.0}]).priced["Idle_v1{N=1}"] == 0.0
 
 
 @pytest.mark.parametrize(("change", "why"), [

@@ -356,8 +356,9 @@ class SamplingPlan:
         state its planner's GPU-seconds for them (`prove_s`, a statement's fixed seconds included)."""
 
         cells = doc["cells"]
-        priced = {c["block"]: c["prove_s"] / c["taken"] for c in cells if c.get("prove_s") is not None and c["taken"]}
-        bare = [c["block"] for c in cells if c["taken"] and c["block"] not in priced]
+        priced = {c["block"]: c["prove_s"] / c["taken"] if c["taken"] else 0.0
+                  for c in cells if c.get("prove_s") is not None}
+        bare = [c["block"] for c in cells if c["block"] not in priced]
         if priced and bare:
             raise ValueError(f"the sampling plan {record} states its planner's seconds (`prove_s`) for {len(priced)} "
                              f"cell(s) and not for {len(bare)}{_some(bare)}: a total at its prices would leave those "
