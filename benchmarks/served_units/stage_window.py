@@ -3,7 +3,7 @@
 for `prove_time.sh`'s ``PT_STATEMENTS``: the verifier's circuit for the member's template (`chunk_rows.statement` by
 `UnitStager`, as ``benchmarks/one_stage/compose_circuit.py --template`` composes it) bound to the window's partition and program
 digests, and the member's public and prover files made from the window's own bodies (`flock_inputs.flock_input_files`): its
-served values under the committer's salts, nothing drawn; the public body must be the one the window's member record states
+served values under the committer's salts, nothing sampled; the public body must be the one the window's member record states
 (``public_sha512``).
 
 ``--pick P N``: the first member of N units of the per-expert cut's fused block of projection P (``w13`` or ``w2``,

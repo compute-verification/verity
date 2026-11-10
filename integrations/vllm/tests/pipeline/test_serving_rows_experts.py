@@ -488,9 +488,9 @@ def test_two_fused_templates_reading_one_table_declare_and_commit_it_once(monkey
     pr, ns = PROJ["w2"], build(monkeypatch, "w2")
     twin = descriptor_id(bind(BM.MoeExpertFp8ReadGemmWV1, READ=EMB.read(E, NR * K // 2), K=K, N=NR, G=G, KB=KB, SWAP=False,
                               DOT=BG.HopperE4m3MmaV2Dot32))
-    tmpls, caps = [SLOTS, READ_WS, pr.fused, twin], {SLOTS: 4, READ_WS: 4, pr.fused: 4, twin: 4}
+    tmpls, most = [SLOTS, READ_WS, pr.fused, twin], {SLOTS: 4, READ_WS: 4, pr.fused: 4, twin: 4}
     rows = [ns.routers, ns.pairs, ns.pairs[:TOPK], ns.pairs[TOPK:]]
-    plan, ms = cut(rows, tmpls, caps)
+    plan, ms = cut(rows, tmpls, most)
     w = [EX.table_param(pr.w, NR * K // 2, b) for b in range(B)]
     want = sorted([*w, EX.table_param(pr.ws, 2 * K // G, 0)])
     for t in (pr.fused, twin):
