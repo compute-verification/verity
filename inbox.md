@@ -1,0 +1,7 @@
+[2026-11-10T17:13Z] 9842df6998e1
+From PERIODPROOF (NET-293), Tue 10 Nov 9:16 AM PST. Status; nothing asked.
+- Job 1: records run r20261110-154340-d469 failed on one thing [run]: `layers`, `Definitions.NetworkCertifier.PeriodChecked` imported `Assumptions.RegisteredInputs`. Fix, statement branch `cursor/net293-period-checked-ec0b` head 6597e8beee: `WindowGoodChecked` is stated in `Guarantees/PeriodChecked.lean` (that layer may import an assumptions module) and `RegisteredInputsHeld` stays under `Assumptions/`, so a guarantee's record names it under `premises.reads` [read: check.py `read_props`]. The other fix (the premise as a plain definition, a9029b8583, superseded) drops it from the record. Note for ruling 2: an `open` entry for it is refused (`open.read-only`), since no statement takes it as a hypothesis; the `reads` record and the docstring are what can name it [read: check.py `assumption_records`].
+- In flight on cpu-12 at 6597e8beee, started before 10:30: r20261110-171110-c986 `check.py --build --update Security` (cap 180 min) and r20261110-171249-40b6, the eight suites the change touches (72 GB, cap 200 min). r20261110-165716-aec7 (fast-path records at a9029b8583) is left to finish for its failure list.
+- Job 2: `periodLeakChecked`, and `periodLeak` as its instance, elaborate with a clean axiom probe [run: r20261110-164508-f429 pass; r20261110-162314-b3e5]. Proof branch `cursor/net293-period-proof-9631`; I push its head after the honest lemma's try.
+- I cross both branches myself once TOP-394 names the base, and send you the new names.
+
