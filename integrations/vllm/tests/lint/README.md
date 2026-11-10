@@ -42,6 +42,11 @@ failure message carries its fix.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
+- **Ruff with vLLM's rules** (`test_ruff_vllm.py`, config `ruff_vllm.toml`, allowlist `allowlists/ruff_vllm.json`): vLLM's
+ selection less the rules `ruff.toml` selects (so no finding is in both lists) and less line length, with `print` (T201)
+ flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
+ lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
+ as this lint's code. Once both lists are small, one config and one list replace the two.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
@@ -59,7 +64,8 @@ lower the counts in another. A change that edits P9's layer map or package units
 judged by its own table at the edges of the modules it adds and by the base's between modules the base holds: a row may
 change with the new module that first imports under it, and an import between two existing modules waits for the next
 change. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
-extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
+extends and the root `dev` group's ruff pin (with vLLM's rules, `test_ruff_vllm.py` and `ruff_vllm.toml`), so the gate reruns
+it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
