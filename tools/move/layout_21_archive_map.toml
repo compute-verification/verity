@@ -33,11 +33,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/pous/period_reports.py" = "archive/verity/protocols/pous/period_reports.py"
 "verity/core/protocols/pous/tests/test_pous_period_reports.py" = "archive/verity/protocols/pous/tests/test_pous_period_reports.py"
 
-[tokens]
-# directories this move shares with other moves, as a reference to one reads after it
-"benchmarks/bandwidth/" = "archive/benchmarks/bandwidth/"
-"examples/" = "archive/examples/"
-
 [retired]
 paths = []
 
