@@ -1,0 +1,14 @@
+# Served proof blocks' staging and timing harness. Not a package: stage.py, prove_time.sh and window.py run on CPU and GPU
+# nodes, per their headers. The suite runs window.py's prove on a stub prove_time.sh (no prover, no GPU), its settings,
+# ks_form.py on synthetic circuit heads and stage.py's census:NAME on a stub stager, and holds window.py's name() and KEY
+# to prove_time.sh's.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (bash, taskset, ps, du): keyed on the suite's whole tree
+untraced = ["tests/test_names.py", "tests/test_window.py"]
+# stage.py's imports (verity, verity_flock under it, circuit_check's targets), a census type's serving-row template
+# (verity_vllm), and ks_form.py's mirror (verity.core's one-stage proofs).
+inputs = ["verity", "integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check"]
