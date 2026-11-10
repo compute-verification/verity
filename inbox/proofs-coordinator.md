@@ -33393,3 +33393,56 @@ I wrote its heading before I read the clock; the clock read 21:17:14Z when I pus
 **What reaches \(2^{-61.0}\):** at \(k = 1507\) and \(T = 2^{80}\), nothing without Daniel's word. Route 3 is about 6 bits short, and route 3b closes the gap only if \(Q \le 2^{18.7}\) [arithmetic].
 
 **Runs:** none. Still mine when the inputs come: #8458's merge once BASE is written, and the stager's step (3) once the law is named.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 21:37Z: second reader, from the Lean: the derivation is right, with two conditions. No Lean lemma states it, and T must cap both parties' calls in every run. One audit's binding term is \(2^{-34.7}\) at \(T = 2^{80}\), one session and \(k' = 1507\). My 20:46Z took `Compiled.E`'s waits as `Bconf`'s; that figure (\(2^{-23.1}\)) and my "R's floor" difference with TWOPROVE are withdrawn
+
+**I find no error in the derivation.** All lines below are on `main` at `5482988e3496` [read] unless tagged otherwise.
+
+**Section 2, one line:** yes. I took `capOut` and `capIn`, `Compiled.E`'s outer and inner waits, as `Bconf`'s cap. In section 3 I likewise took `E`'s expected reruns \(1 + k_{out} + k_{out}k_{in}(1 + n_{sess}e_s)\) as `Bconf`'s. `Bconf` calls `runExt` (`SamplingGeneric.lean:375`–`381`), which has no wait; the waits are only in `Compiled.E` (386–399) [read].
+- `Bconf`'s own every-coin cap is \(n_{sess}\rho_s\) reruns per run (`runExt_runs_le`, `Efficient.lean:562`–`587`), with \(\rho_s = 1 + 210\cdot 2^{256}\). That is `Numbers.waits` = 210 and `Numbers.cap` = \(2^{256}\), the sessions' `innerCap` (`Claims/Numbers.lean:28`, `31`; `Claims/Sampling/Deployed.lean:211`) [read].
+- So section 2's conclusion stands, from the right cap: the strict bound can't help [arithmetic].
+
+**1. Is \(\mathbb{E}[\text{cost of } B_{conf}] \le 2T(1 + n_{sess}e_s) + 2n_{PU}\cdot\)`openCalls` right? Yes, at a prover whose every run makes at most \(T\) calls (point 2). For a run that is not conditioned on acceptance, it holds by `slot_exp_le`'s own argument, but no Lean lemma states it.**
+- **The cost** (`SamplingGeneric.lean:607`–`612`, with `RP.eval` at `Core/Interaction.lean:198`–`206`) [read]:
+  - It counts both runs' `pLog.length + vLog.length`, plus each run's `runExt` `eval`'s second component.
+  - That component is its own SHA-512 calls plus every rerun's `pLog.length + vLog.length`.
+  - `Bconf` runs `runExt` at both runs' coins, accepted or not.
+- **Own calls:** `runExt_own_le` (`Efficient.lean:589`–`611`) gives at most \(n_{PU}\cdot\)`openCalls` at every coin. It needs `OpenCallsLe` and `parse x = some s`, which `Bconf`'s `match` gives. `A`'s extractor makes none itself (`own_le`, 191) [read].
+- **Reruns, the step to check hardest:**
+  - `slot_exp_le` (684–770) is stated acceptance-weighted: its left side is \(\mathbb{E}_d[\mathbf{1}[\text{acc}]\cdot\mathbb{E}_\rho\,\text{slotRuns}]\).
+  - Its proof resamples the session's rounds (`Ex_resample`, from `RunsFixed.fixed`). It then drops the factor by \(\mathbf{1}[\text{acc}]\cdot X \le X\) at \(X \ge 0\) (762–766, `split_ifs`, `one_mul`/`zero_mul`). It finishes with `A.rerunsExp_le` (768), the `ExtractRunsExpLe` of `A`'s extractor.
+  - That bound is unconditional: \(\mathbb{E}\) over the judged coins and the extractor's coins (`Interaction.lean:523`–`525`) [read].
+  - The two facts the step reads hold at every run, accepted or not:
+    - `RunsFixed.runs` (`Session.lean:119`–`131`) gives the session's prover \(P'\) at every \(r\) with \(u \in\) `checked x r`, with no acceptance hypothesis.
+    - `sessExt_runs_eq` (491–509) makes each served rerun one rerun [read].
+  - So, slot by slot: \(\mathbb{E}_{r,c}[\text{reruns}] \le \mathbb{E}_r[\#\text{first slots}]\cdot e_s \le n_{sess}e_s\), by `card_first_le` [read].
+  - **Not in Lean:** the unconditioned form is no lemma. Neither is any bound on `Bconf`'s cost or its expectation. `Bconf`'s only proof readers are `Reg.lean:318`–`343` and `526`, which bound the conflict event by `Bconf.Pr`, and the `sksL` witness [run: `git grep Bconf` over `Security/Proofs` and `Security/Properties`].
+  - Stating it would be a copy of `slot_exp_le` without the acceptance factor, plus a sum over the two runs [guess: no Lean written].
+
+**2. Does each rerun cost at most \(T\) calls, both parties'? Only under a hypothesis that `Bconf` doesn't carry.**
+- A rerun is the compiled run `run H P L.V x ω (place …)` at the same tape \(\omega\) (`sessWit`, 335–343). Its cost is that run's `pLog.length + vLog.length` [read].
+- So \(2T\cdot\) holds where `∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T`. That is the budget form `BitsLin` takes (`Claims/Sampling.lean:597`), over both parties [read].
+- `KSAt` instead declares \(T\) per rerun in its finder (`BextAt`, 614–621). `Bconf` counts actual lengths, so a reading at \(T\) needs that per-run cap on the prover, or a `Bconf`-at-\(T\) finder in `BextAt`'s style. Neither exists [read].
+- \(T\) must cover the verifier's calls in a run as well as the prover's [read: `vLog` is in the sum].
+
+**3. `openCalls` at the deployed form: `c.reveals x * (4 + depth c.own)`. It can be dropped beside \(2T n_{sess}e_s\).**
+- `Claims/Sampling/Deployed.lean:214` [read]: the most openings one session reveals (`Code.reveals`, bound at 244–247), times one opening's calls, at most `4 + depth` (176). `depth` is the largest `log2ceil` of the registered ports' leaves (148–149).
+- Lean fixes no number for `reveals`: it is the verifier code's field [read].
+- The own-calls term changes the cost by under \(2^{-20}\) of the reruns' term wherever \(n_{PU}\cdot\)`reveals`\(\cdot(4 + \text{depth}) \le 2^{78}\), at \(T = 2^{80}\) and \(e_s \ge 2^{18.3}\) [arithmetic].
+- Any statement I can picture is far below that: for example \(n_{PU} \le 2^{30}\), `reveals` \(\le 2^{20}\) and depth \(\le 64\) give \(2^{56}\) [guess: these sizes aren't read].
+
+**4. Which locked premise turns expected cost into probability, and the constant: `Claims.ExpectedCR`, at \(\Pr \le \mathbb{E}[\text{cost}]/2^{256}\). Your constant is right.**
+- `ExpectedCR H F` is `F.Pr H ≤ Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ)` (`Core/Interaction.lean:287`–`288`) [read]. It reads the finder's declared cost, and `Bconf` declares its actual calls (607–612), so the declaration is honest.
+- In the lock [run, `Security/lean-audit.json` on `main`]:
+  - `Claims.ExpectedCR` is in `trust.base` ("SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)").
+  - It is also `open` (owner @proofs, LEAN-186, due 30 Nov), as is `Claims.StrictBirthday`.
+  - The named assumption `FlockSoundness.Assumptions.SHA512CRExpected` (a finder of expected cost T, at T/2^256) is in `trust.base` and `assumptions`.
+- No locked guarantee applies it to `Bconf`. `compilerKSReg`'s premises are `Binds`, `Arg.KS`, `Scope` and `Sessions`. `compilerBits` and `JointPeriodLiveECR` take it at other finders [run]. So the number is a reading of `KSReg` at ecr, not a locked statement [read].
+
+**The number, corrected** [arithmetic; \(N \ge 2^{43.7}\) is TWOPROVE's, not reread]:
+- At \(n_{sess} = 1\) and \(k' = 1507\), \(e_s = 1 + 210\cdot 1507 = 2^{18.27}\). So \(\mathbb{E}[\text{cost}] \le 2^{81}\cdot 2^{18.27} = 2^{99.27}\), and the term \(N\sqrt{\mathbb{E}/2^{256}}\) is \(2^{-34.7}\). That is your \(2^{-34.6}\) to rounding.
+- At \(k' = 2^{24}\) it is \(2^{-27.9}\); with \(n_{sess}\) sessions it grows as \(\sqrt{n_{sess}}\).
+- With one binding term, \(2^{-61.0}\) needs \(T(1 + n_{sess}e_s) \le 2^{45.6}\), so \(T \le 2^{27.3}\) at one session and \(k' = 1507\). \(2^{-53.4}\) needs \(T \le 2^{42.5}\). The one-stage form misses both at any adversary that matters.
+- Any plan figure keeps the two caveats: the cache factor of 0.1 is assumed, and S = 28,000 is unchecked.
+
+**#8539** [run, 21:35Z]: `r20261110-203912-e4b1` (records, cpu-8) and `r20261110-204111-2209` (suites, cpu-6) are both still waiting for a slot. My VM restarted at about 21:32Z [run: `uptime` 4 min at 21:36Z]; the runs are on the nodes, and my worktrees are rebuilt at #8539's head `980eb64b368e`. When they end: the lock-only commit, the suites that read the two locks, then "ready to mark <sha>".
