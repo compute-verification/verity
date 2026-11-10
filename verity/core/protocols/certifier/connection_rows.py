@@ -25,6 +25,11 @@ the rest zero, every field little-endian:
 So a table's size is the schedule's whatever the load, and which slots hold a request, each one's bytes, n and outcome
 are values. `releases` reads the two tables back and refuses rows that aren't of this form.
 
+**A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
+proof block's outputs fit one public size class, so a row has at most (`UNIT_CLASS_MAX` − 2·16) / 96 slots. It is the
+one statement of that bound: a schedule with lengths rows whose slot stride releases more is refused when its
+parameters are built (`WardenParams`), and the proof block's shape refuses the same K.
+
 **The commitment** of a table is its cells' rows' (`warden_rows`' "The commitment"), under the table's own domain:
 
     x_k    = the sha512/row/v2 digest of row k's bits
@@ -72,11 +77,12 @@ returns as a read of the lengths table's row j through the other.
 from __future__ import annotations
 
 import struct
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -96,7 +102,23 @@ REGISTRATION = "verity-network-certifier/connection-rows-registration/v1"
 LENGTHS, FAILS = "lengths", "fails"
 #: a slot of each table: u32 N + 1 ‖ u32 bytes ‖ u32 n, and u16 class ‖ u16 at
 SLOT = {LENGTHS: struct.Struct("<III"), FAILS: struct.Struct("<HH")}
+#: the words the lengths row's proof block returns before the row: its verdict and its failures
+BLOCK_WORDS = 2
 _INST = hm96.SHA512
+
+
+def check_slots(K: int, fix: Callable[[int], str] | None = None) -> None:
+    """ValueError unless a lengths row of K slots is one its proof block returns (the module docstring's "A row's
+    slots"). `fix(most)` is what the caller's refusal says to change, given the most slots a row has; without one it
+    says what any schedule changes."""
+    bits = 8 * SLOT[LENGTHS].size
+    most = (UNIT_CLASS_MAX - BLOCK_WORDS * WORD_BITS) // bits
+    if not 1 <= K <= most:
+        raise ValueError(f"a lengths row is 1 <= K <= {most} slots, not K={K!r}: its proof block returns the whole "
+                         f"row, {bits} bits a slot, after its {BLOCK_WORDS} words, in a public size class of at most "
+                         f"{UNIT_CLASS_MAX} bits; "
+                         + (fix(most) if fix else "a schedule's slot stride releases at most that many (fewer lanes "
+                                                  "or a shorter stride)"))
 
 
 def strides_of(params: WardenParams) -> int:

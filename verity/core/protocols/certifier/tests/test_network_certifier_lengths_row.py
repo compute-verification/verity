@@ -69,6 +69,28 @@ def test_the_shape_and_the_statics_are_checked():
         LR.Shape.of(PLAIN, 32, 8)
 
 
+def test_a_schedule_whose_stride_releases_more_than_a_row_holds_is_refused_when_it_is_built():
+    """One rule (`connection_rows.check_slots`) holds a lengths row to the slots its proof block returns. The shape
+    calls it, and so do a schedule's parameters with lengths rows, so a network certifier is never set to a stride
+    whose rows no proof block returns: the refusal names the longest stride of the window that fits, or the most
+    lanes where none does. A schedule without lengths rows is not held to it."""
+    CR.check_slots(2730)
+    for K in (0, 2731):
+        with pytest.raises(ValueError, match="1 <= K <= 2730 slots.*fewer lanes or a shorter stride"):
+            CR.check_slots(K)
+    # 1,000 lanes: a stride of 16 buckets releases up to 4,000 requests and one of 8 up to 2,000
+    assert dataclasses.replace(LEN, lanes=1000, every=8).stride_releases == 2000
+    assert LR.Shape.of(dataclasses.replace(LEN, lanes=1000, every=8), 32, 8).K == 2000
+    with pytest.raises(ValueError, match="1 <= K <= 2730 slots, not K=4000.*stride of 16 buckets releases up to 4000 "
+                                         "requests.*`every` is at most 8 with"):
+        dataclasses.replace(LEN, lanes=1000, every=16)
+    for every in (1, 16):
+        with pytest.raises(ValueError, match="no stride of 3000 lanes releases as few, so at most 2730 lanes"):
+            dataclasses.replace(LEN, lanes=3000, every=every)
+    for change in (dict(lanes=1000, every=16), dict(lanes=3000)):
+        assert dataclasses.replace(PLAIN, **change).lengths is None
+
+
 def test_the_block_reads_two_rows_and_returns_the_lengths_row():
     """The proof block's inputs are the request row and the fails row, whole 16-bit words each, and nothing else
     (every switch computed, none witness); its outputs are two u16s and the lengths row, gates of the circuit."""

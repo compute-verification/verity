@@ -50,10 +50,10 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
         RB = `Shape.request_bits`: K·(1 + IW + 2·LW) rounded up to a multiple of 16
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
-public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): a schedule whose slot stride releases more
-(`WardenParams.stride_releases`) has rows no one proof block returns. B is a cell size an id request's head and first
-prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the longest prompt's request below 2^32
-bytes.
+public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
+schedule with lengths rows is held to when its parameters are built (`WardenParams.stride_releases`). B is a cell
+size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
+longest prompt's request below 2^32 bytes.
 
 **The prover's side** (`blocks`): from the network certifier's opening of an execution phase's connection rows
 (`connection_rows.Rows`, witness) and the compute side's request rows, one a slot stride, each row's proof block: its
@@ -65,7 +65,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, Any, NamedTuple, Sequence
+from typing import Any, NamedTuple, Sequence
 
 import numpy as np
 
@@ -73,15 +73,14 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, add, compress_columns, c
 from verity.ml.circuits.boolean.trace import part
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.ml.circuits.types import Array, Tuple
+from verity.core.protocols.certifier import connection_rows as CR
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_request as Q
+from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import ID_FIELD_BYTES
+from verity.core.protocols.certifier.connection_rows import Rows, Table
 from verity.core.protocols.certifier.warden import WardenParams
-
-if TYPE_CHECKING:
-    from verity.core.protocols.certifier.connection_rows import Rows, Table
 
 BIT = HC.BIT
 U16 = Array(16, BIT)
@@ -91,7 +90,7 @@ ACCEPT = 1
 #: the Definition's statics, in order
 STATICS = ("K", "B", "IW", "LW")
 #: a lengths slot's and a fails slot's bits (`connection_rows.SLOT`: three u32s, two u16s)
-LENGTHS_BITS, FAILS_BITS = 96, 32
+LENGTHS_BITS, FAILS_BITS = 8 * CR.SLOT[CR.LENGTHS].size, 8 * CR.SLOT[CR.FAILS].size
 #: an id request's two closing bytes, after its last prompt id
 TAIL_BYTES = 2
 
@@ -144,11 +143,7 @@ class Shape:
         K, IW, LW = self.K, self.IW, self.LW
         if any(type(v) is not int for v in (K, self.B, IW, LW)):
             raise ValueError(f"a lengths row's K, B, IW and LW are integers, not {(K, self.B, IW, LW)!r}")
-        if not 1 <= K or 2 * WORD_BITS + LENGTHS_BITS * K > UNIT_CLASS_MAX:
-            raise ValueError(f"a lengths row is 1 <= K <= {(UNIT_CLASS_MAX - 2 * WORD_BITS) // LENGTHS_BITS} slots, "
-                             f"not K={K!r}: a proof block returns the whole row, {LENGTHS_BITS} bits a slot, in a "
-                             f"size class of at most {UNIT_CLASS_MAX} bits, so a schedule's slot stride releases at "
-                             f"most that many (fewer lanes or a shorter stride)")
+        CR.check_slots(K)
         if not 1 <= IW <= 32 or not 1 <= LW <= 32:
             raise ValueError(f"a release order place is 1 <= IW <= 32 bits and a count 1 <= LW <= 32, not IW={IW!r}, "
                              f"LW={LW!r}")
@@ -456,9 +451,6 @@ class RowBlock(NamedTuple):
 def reads(table: Table, position: int) -> Read:
     """What a statement that reads row `position` of one of the network certifier's connection-rows tables commits
     and names: the fails row a block reads, or the lengths row it returns, under the network certifier's own salt."""
-    # at its use, as `blocks` imports the opening's module
-    from verity.core.protocols.certifier import warden_rows as WR
-
     if not 0 <= position < len(table.rows):
         raise ValueError(f"row {position} is outside the table's {len(table.rows)} rows")
     return Read(WR.words(table.rows[position]), table.salts[position],
@@ -471,9 +463,6 @@ def blocks(sh: Shape, opened: Rows, requests: Sequence[Sequence[Request]]) -> li
     row, the slot and what differs, where a block would refuse its rows or return another lengths row than the signed
     one: the request rows are then not the ones the network certifier released, and no statement of them opens its
     root."""
-    # at its use: circuit-check reads this module for the Definition, which reads nothing of the opening
-    from verity.core.protocols.certifier import connection_rows as CR
-
     if sh != Shape.of(opened.params, sh.IW, sh.LW):
         raise ValueError(f"{sh} doesn't read the schedule's rows of {opened.params.stride_releases} slots in "
                          f"{opened.params.cell_bytes}-byte cells")

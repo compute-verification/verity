@@ -2088,8 +2088,9 @@ root only when the computed row is the signed one, so the request row's lengths 
 verdict, that the fails row is of its form against the request row (a failure only on a valid slot, after at most O
 cells), and the row's failures. Every switch is computed and none is witness, so the block adds no free input: the wire's
 length is held to O, which a tied audit already counts among its free inputs. A row is the block's output whole, 96 bits
-a slot in a size class of at most 262,144 bits, so one block returns a row of at most 2,730 slots, which
-`WardenParams` doesn't yet hold a schedule's K to. The prover's side (`blocks`) builds each row's arguments, outputs and
+a slot in a size class of at most 262,144 bits, so one block returns a row of at most 2,730 slots
+(`connection_rows.check_slots`), and `WardenParams` refuses a schedule with lengths rows whose slot stride releases
+more, naming the longest stride that fits. The prover's side (`blocks`) builds each row's arguments, outputs and
 registered reads from the network certifier's opening and refuses request rows that give another row than the signed
 one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
 side's committed values or reads the block's verdict and failures.

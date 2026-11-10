@@ -72,8 +72,9 @@ neither and keeps its digest.
 certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
 outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride. Such a schedule has the
 id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt field
-(`io_request.layout`), at most 2^16 egress cells, and D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
-within a window of its admission; `WardenParams` takes no other. The form enters the parameters' digest; a schedule
+(`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
+within a window of its admission, and a K one proof block returns a row of (`connection_rows.check_slots`);
+`WardenParams` takes no other. The form enters the parameters' digest; a schedule
 without lengths rows hashes nothing of it and keeps its digest, and its network certifier does nothing of this section.
 With lengths rows the network certifier:
 - releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
@@ -235,6 +236,16 @@ class WardenParams:
                                  f"egress cells count in a u16: delay + (egress_cells − 1) // slots ({last}) is at "
                                  f"most the window ({self.window}) and egress_cells at most {1 << 16}")
             _request_form().layout(self.cell_bytes)
+            _connection_rows().check_slots(self.stride_releases, self._stride_that_fits)
+
+    def _stride_that_fits(self, most: int) -> str:
+        """What a schedule whose slot stride releases more than `most` requests changes: its longest stride that
+        releases no more, the other parameters as they are."""
+        fits = [E for E in range(1, self.every) if self.window % E == 0
+                and _stride_releases(self.lanes, E, self.delay, self.ingress_buckets) <= most]
+        return (f"this schedule's slot stride of {self.every} buckets releases up to {self.stride_releases} requests, "
+                f"a slot each: " + (f"`every` is at most {fits[-1]} with its lanes, delay and ingress_buckets" if fits
+                                    else f"no stride of {self.lanes} lanes releases as few, so at most {most} lanes"))
 
     @property
     def program_slots(self) -> int:
@@ -252,9 +263,9 @@ class WardenParams:
         """K: the most requests the network certifier releases in one slot stride with lengths rows, a lengths row's
         slots. A released connection holds its lane from its release through its admission's bucket + D, at least
         L = D + 2 − `ingress_buckets` buckets, so any L buckets hold at most `lanes` releases; and it holds it D + 1
-        buckets around its release, so a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets."""
-        E, D = self.every, self.delay
-        return self.lanes * min(-(-E // (D + 2 - self.ingress_buckets)), 1 + -(-(E - 1) // (D + 1)))
+        buckets around its release, so a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets.
+        With lengths rows it is at most a row's slots (`connection_rows.check_slots`)."""
+        return _stride_releases(self.lanes, self.every, self.delay, self.ingress_buckets)
 
     @property
     def reasons(self) -> tuple[str, ...]:
@@ -293,11 +304,23 @@ OPTIONAL_FIELDS = ("max_tokens_cap", "lengths")
 INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
 
 
+def _stride_releases(lanes: int, every: int, delay: int, ingress_buckets: int) -> int:
+    """`WardenParams.stride_releases` of a schedule with these parameters."""
+    return lanes * min(-(-every // (delay + 2 - ingress_buckets)), 1 + -(-(every - 1) // (delay + 1)))
+
+
 def _request_form():
     """`io_request`, whose reading of a request cell (`io_request.read`) a schedule with lengths rows holds every
     request to. Imported at its first use: `io_request` imports this module."""
     from verity.core.protocols.certifier import io_request
     return io_request
+
+
+def _connection_rows():
+    """`connection_rows`, whose bound on a lengths row's slots (`connection_rows.check_slots`) a schedule with lengths
+    rows holds its slot stride's releases to. Imported at its first use: `connection_rows` imports this module."""
+    from verity.core.protocols.certifier import connection_rows
+    return connection_rows
 
 
 def _id_request_cell(params: WardenParams, c: _Connection, made: bytes) -> bool:
