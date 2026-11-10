@@ -4234,16 +4234,27 @@ def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
     processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
-    of how many keyed, and the error where staging failed, which leaves ``dest`` empty and everything to be built)."""
+    of how many keyed, why each other one isn't, by reason (`missed`, with the `first` module of each), and the error
+    where staging failed, which leaves ``dest`` empty and everything to be built)."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
-        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest)
-        return staged, {"modules": len(staged), "keyed": keyed}
+        why: dict = {}
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why)
+        return staged, {"modules": len(staged), "keyed": keyed, **why}
     except OSError as e:
         shutil.rmtree(dest, ignore_errors=True)
         dest.mkdir(parents=True, exist_ok=True)
         return {}, {"modules": 0, "keyed": 0, "error": str(e)}
+
+
+def staged_line(staged: dict) -> str:
+    """One line of a build's `staged` report: how many keyed modules the artifact cache restores, and the others by reason."""
+    if "error" in staged:
+        return f"nothing restored from the artifact cache: {staged['error']}"
+    missed, first = staged.get("missed") or {}, staged.get("first") or {}
+    return (f"{staged['modules']} of {staged['keyed']} keyed modules restored from the artifact cache"
+            + ("; missed: " + ", ".join(f"{n} {why} (first {first.get(why)})" for why, n in missed.items()) if missed else ""))
 
 
 #: the sampled recompile's randomness (`sampled_recompile`): fresh, this process's, and used only after the build, so nothing
@@ -5322,6 +5333,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                         s = time.monotonic()
                         staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
                         rep["seconds"][step] = round(time.monotonic() - s, 1)
+                        log(f"stage: {pkg}: {staged_line(rep['staged'])}")
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue

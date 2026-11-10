@@ -966,9 +966,12 @@ SHARED_LIMIT = 12
 class LakeArtifacts:
     """The node's Lake artifact cache: Lake's artifacts (`artifacts/<hash>.<ext>`) and an index of the modules they are the
     outputs of, each under its key (`keys/<key>.json`, `module_keys`): the module, its package, Lake's input hash, the
-    outputs its trace names and the digest of each. The builds of check's audit and of a records run read it through a Lake
-    cache directory of their own, which `module_keys.stage` fills with the modules whose keys it indexes (`check.py
-    --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
+    outputs its trace names and the digest of each, and what its key read (`module_keys.record`), against which a later
+    build says why it didn't restore the module (`modules/<package>/<module>.json` names the entry a module was last
+    indexed under). An entry of another schema (`module_keys.SCHEMA`) is under a key no build computes: it is never read,
+    never taken from a bundle, and goes with the least recently used (`prune`). The builds of check's audit and of a
+    records run read it through a Lake cache directory of their own, which `module_keys.stage` fills with the modules
+    whose keys it indexes (`check.py --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
     module version any earlier passing run on this node built is then restored whatever tree comes next, not only the one
     its package's kept build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
@@ -1019,7 +1022,8 @@ class LakeArtifacts:
                 for mod, k in keyed.items():
                     loaded = MK.loads(mod, keyed)
                     if all(i in indexed for i in loaded) and (key := MK.key(mod, keyed, outs, loaded)) is not None \
-                            and (got := self._index(mod, key, k.package.name, built[mod])) is not None:
+                            and (got := self._index(mod, key, k.package.name, built[mod],
+                                                    MK.record(mod, keyed, outs, loaded))) is not None:
                         indexed.add(mod)
                         n += got
             self.prune()
@@ -1057,9 +1061,10 @@ class LakeArtifacts:
             files[name] = (f, MK.digest(f))
         return (h, out, files) if files else "a trace that names no artifact"
 
-    def _index(self, mod: str, key: str, scope: str, built) -> bool | None:
-        """Index ``mod`` of package ``scope`` under ``key`` from ``built`` (`_built`): True for a new entry, False for one
-        kept or replaced, None when it has none."""
+    def _index(self, mod: str, key: str, scope: str, built, inputs: dict | None = None) -> bool | None:
+        """Index ``mod`` of package ``scope`` under ``key`` from ``built`` (`_built`), with what the key read (``inputs``,
+        `module_keys.record`): True for a new entry, False for one kept or replaced, None when it has none. The entry a
+        compiled module is indexed under becomes the one its next miss is explained against (`module_keys.last`)."""
         at = MK.entry_path(self.store, key)
         old = MK.entry(self.store, key, mod, scope)
         if isinstance(built, str):
@@ -1068,6 +1073,7 @@ class LakeArtifacts:
         shas = {n: s for n, (_, s) in files.items()}
         if old is not None and old["hash"] == h and old["digests"] == shas:
             os.utime(at)
+            self._last(mod, key, scope)
             return False
         arts = self.store / "artifacts"
         arts.mkdir(exist_ok=True)
@@ -1087,11 +1093,19 @@ class LakeArtifacts:
             os.replace(tmp, dst)
         at.parent.mkdir(exist_ok=True)
         tmp = at.parent / f".{at.stem}.{os.getpid()}.tmp"
-        tmp.write_text(json.dumps({"module": mod, "scope": scope, "hash": h, "outputs": out, "digests": shas},
-                                  sort_keys=True))
+        tmp.write_text(json.dumps({"schema": MK.SCHEMA, "module": mod, "scope": scope, "hash": h, "outputs": out,
+                                   "digests": shas, "inputs": inputs}, sort_keys=True))
         os.replace(tmp, at)
+        self._last(mod, key, scope)
         self.added.append((at.relative_to(self.store).as_posix(), sorted(files)))
         return old is None
+
+    def _last(self, mod: str, key: str, scope: str) -> None:
+        if (f := MK.last_path(self.store, scope, mod)) is not None:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps({"key": key}))
+            os.replace(tmp, f)
 
     def bundle(self, dest: Path, cap: int = BUNDLE_CAP) -> int:
         """Write the entries `added` as a gzipped tar at ``dest``, each with every artifact it names, the entries before the
@@ -1179,9 +1193,10 @@ class LakeArtifacts:
         return n
 
     def _unpack(self, part: Path) -> int:
-        """Take in the entries of the bundle at ``part`` (`MEMBER`, of the shape `module_keys.valid` reads) under keys this
-        cache lacks, and the artifacts they name that it lacks, each only with a digest an entry names for it; an entry
-        once every artifact it names is here. A file here is never replaced. The number of entries added."""
+        """Take in the entries of the bundle at ``part`` (`MEMBER`, of the shape `module_keys.valid` reads, so of this
+        schema: a bundle made under another adds nothing) under keys this cache lacks, and the artifacts they name that it
+        lacks, each only with a digest an entry names for it; an entry once every artifact it names is here. A file here
+        is never replaced. The number of entries added."""
         entries: dict[str, dict] = {}
         want: dict[str, set[str]] = {}
         with tarfile.open(part, "r:gz") as t:

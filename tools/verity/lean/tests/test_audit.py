@@ -4965,6 +4965,18 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
     assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
 
 
+def test_a_build_s_log_says_in_one_line_how_many_modules_it_restored_and_why_not_the_others():
+    """One line a build, so that any run's log says what the cache missed: the misses by reason, most frequent first,
+    each with the first module it names."""
+    assert A.staged_line({"modules": 3, "keyed": 3, "missed": {}, "first": {}}) == \
+        "3 of 3 keyed modules restored from the artifact cache"
+    assert A.staged_line({"modules": 1, "keyed": 6, "missed": {"reads a module not restored": 3, "its source": 2},
+                          "first": {"reads a module not restored": "P", "its source": "P.A"}}) == \
+        ("1 of 6 keyed modules restored from the artifact cache; missed: 3 reads a module not restored (first P), "
+         "2 its source (first P.A)")
+    assert A.staged_line({"error": "no keys"}) == "nothing restored from the artifact cache: no keys"
+
+
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
     """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
     step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
@@ -4982,7 +4994,7 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
     (store / mk.INDEX).mkdir()
     mk.entry_path(store, mk.key("P", mk.keys(pkg), {})).write_text(json.dumps({
-        "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
+        "schema": mk.SCHEMA, "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
         "digests": {"a" * 16 + ".olean": mk.C.digest(b"P")}}))
     cache = store / mk.STAGE / f"{os.getpid()}-p"
     seen = []
@@ -5004,7 +5016,8 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
-    assert rep["staged"] == {"modules": 1, "keyed": 1} and "stage" in rep["seconds"] and not cache.exists()
+    assert rep["staged"] == {"modules": 1, "keyed": 1, "missed": {}, "first": {}} and "stage" in rep["seconds"]
+    assert not cache.exists()
     assert rep["failures"] == ["build-roots: exit 1\nfake build"]
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     lib.mkdir(parents=True)
@@ -5100,7 +5113,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     monkeypatch.setattr(A, "ARTIFACTS", store)
     cache = store / mk.STAGE / "test"
     staged, said = A.stage_build(mk, b, ["P"], cache)
-    assert said == {"modules": 11, "keyed": 11}
+    assert said == {"modules": 11, "keyed": 11, "missed": {}, "first": {}}
     assert "Built" not in lake(b, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}")
     lib = b / ".lake" / "build" / "lib" / "lean"
     assert (lib / "P/M2.olean").read_bytes() == (v / ".lake/build/lib/lean/P/M2.olean").read_bytes(), "planted"

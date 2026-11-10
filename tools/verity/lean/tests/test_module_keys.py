@@ -78,26 +78,34 @@ def test_the_key_rule_is_the_contract_s_and_reproduces_its_vectors():
         assert C.key(v["task"], fd, v["read_digests"], v["env_digest"]) == v["key"], v["name"]
 
 
+def _canon(doc) -> str:
+    return C.digest(json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
+
+
 def test_a_module_s_key_is_the_contract_s_key_of_its_compile(tmp_path):
-    """Its task: kind `lean-module/v3`, its module and package, its source and its package's lakefile by path from the root
-    package, its outputs, the root's toolchain and manifest as env, and each output it reads of a module it loads by
-    digest."""
+    """Its task: kind `lean-module/v4`; its module, its package and the library that owns it; its source and its package's
+    lakefile, each by its package's name and its path there, the lakefile's digest that of its settings without
+    `defaultTargets` and each library's `roots` and `globs`; its outputs; as env the root's toolchain and its manifest's
+    fetched entries, each whole but `inherited`; and each output it reads of a module it loads by digest."""
     root = _workspace(tmp_path)
     keyed = MK.keys(root)
     digests = {("D.X", "olean"): C.digest(b"X"), ("R.A", "olean"): C.digest(b"A")}
-    task = {"id": "lean-module:R.lean", "kind": "lean-module/v3", "argv": [], "vars": {"module": "R", "package": "r"},
-            "inputs": ["R.lean", "lakefile.toml"],
-            "reads": [{"task": "lean-module:../d/D/X.lean", "output": "olean"}, {"task": "lean-module:R/A.lean", "output": "olean"}],
-            "outputs": [{"name": "olean", "path": ".lake/build/lib/lean/R.olean"},
-                        {"name": "ilean", "path": ".lake/build/lib/lean/R.ilean"}]}
-    files = {p: C.file_digest(root / p) for p in ("R.lean", "lakefile.toml")}
-    env = C.env_digest(["lake-manifest.json", "lean-toolchain"],
-                       {f: C.file_digest(root / f) for f in ("lake-manifest.json", "lean-toolchain")})
-    reads = {"lean-module:../d/D/X.lean": {"olean": C.digest(b"X")}, "lean-module:R/A.lean": {"olean": C.digest(b"A")}}
+    task = {"id": "lean-module:r/R.lean", "kind": "lean-module/v4", "argv": [],
+            "vars": {"module": "R", "package": "r", "library": "R"}, "inputs": ["r/R.lean", "r/lakefile.toml"],
+            "reads": [{"task": "lean-module:d/D/X.lean", "output": "olean"}, {"task": "lean-module:r/R/A.lean", "output": "olean"}],
+            "outputs": [{"name": "olean", "path": "r/.lake/build/lib/lean/R.olean"},
+                        {"name": "ilean", "path": "r/.lake/build/lib/lean/R.ilean"}]}
+    files = {"r/R.lean": C.file_digest(root / "R.lean"), "r/lakefile.toml": _canon({"name": "r", "lean_lib": [{"name": "R"}]})}
+    parts = {"lean-toolchain": C.file_digest(root / "lean-toolchain"),
+             "fetched packages": _canon({"manifest": {}, "fetched": [{"type": "git", "name": "mathlib", "rev": "abc"}]})}
+    env = C.env_digest(["fetched packages", "lean-toolchain"], parts)
+    reads = {"lean-module:d/D/X.lean": {"olean": C.digest(b"X")}, "lean-module:r/R/A.lean": {"olean": C.digest(b"A")}}
     assert MK.key("R", keyed, digests) == C.key(task, files, reads, env)
+    assert keyed["R"].parts == parts == MK.env_parts(root)
     assert MK.key("R", keyed, {("D.X", "olean"): C.digest(b"X")}) is None, "a read whose output isn't known yet"
     assert MK.key("D.X", keyed, {}) == C.key(keyed["D.X"].task | {"reads": []}, keyed["D.X"].files, {}, env)
-    assert keyed["D.X"].task["inputs"] == ["../d/D/X.lean", "../d/lakefile.toml"]
+    assert keyed["D.X"].task["inputs"] == ["d/D/X.lean", "d/lakefile.toml"]
+    assert keyed["D.X"].task["vars"] == {"module": "D.X", "package": "d", "library": "D"}
 
 
 #: `module` files importing one another in every form: R imports R.A publicly, R.M for its code and all of R.B; R.A
@@ -197,6 +205,143 @@ def test_a_key_changes_with_what_the_module_s_compilation_reads_and_not_with_whe
     assert changed("r/lake-manifest.json", json.dumps(manifest)) == set(k), "a fetched package's modules"
 
 
+#: a root package of two libraries with different options: `R` (its default target, which also owns the module `T`) and `S`
+LIBS = ('name = "r"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\nroots = ["R", "T"]\n\n'
+        '[[lean_lib]]\nname = "S"\nroots = ["S"]\n\n[lean_lib.leanOptions]\nautoImplicit = true\n')
+
+
+def _changed(root: Path, keys: dict[str, str], path: str, text: str, extra=()) -> set[str]:
+    """The modules of ``keys`` whose key is another with ``text`` at ``path`` of ``root``'s tree (then put back)."""
+    f = root.parent / path
+    was = f.read_text() if f.exists() else None
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(text)
+    now = _built(MK.keys(root, extra))
+    f.unlink() if was is None else f.write_text(was)
+    return {m for m in keys if now.get(m) != keys[m]}
+
+
+def test_every_setting_of_a_lakefile_is_in_the_key_but_the_lists_of_what_a_build_compiles(tmp_path):
+    """The key leaves out of a lakefile only `defaultTargets` and each library's `roots` (and `globs`, which this reading
+    refuses): they say which modules a build compiles, and Lake's input hash of a module reads none of them. Anything
+    else moves the key of every module of the package, a setting this reading has never met included."""
+    root = _workspace(tmp_path, {"r/lakefile.toml": LIBS, "r/S.lean": "", "r/R/A.lean": ""})
+    build = ["R", "S", "R.B"]
+    keys = _built(MK.keys(root, build))
+    mine = {"R", "R.A", "R.B", "S"}
+    assert set(keys) == mine | {"D.X"}
+    for same in (LIBS.replace('defaultTargets = ["R"]', 'defaultTargets = ["R", "S"]'),
+                 LIBS.replace('defaultTargets = ["R"]\n', ""),
+                 LIBS.replace('roots = ["S"]', 'roots = ["S", "U"]'),
+                 LIBS.replace('roots = ["R", "T"]\n', "")):
+        assert same != LIBS and _changed(root, keys, "r/lakefile.toml", same, build) == set(), same
+    for other in (LIBS.replace('name = "r"', 'name = "r"\nversion = "0.1.0"'),
+                  LIBS.replace('name = "r"', 'name = "r"\nmoreLeanArgs = ["-DautoImplicit=true"]'),
+                  LIBS.replace('name = "r"', 'name = "r"\nweakLeanArgs = ["-Dtrace.x=true"]'),
+                  LIBS.replace('name = "r"', 'name = "r"\nbuildType = "debug"'),
+                  LIBS.replace('name = "r"', 'name = "r"\nplatformIndependent = true'),
+                  LIBS.replace('name = "r"', 'name = "r"\nsomethingNobodyThoughtOf = 1'),
+                  LIBS.replace("autoImplicit = true", "autoImplicit = false"),
+                  LIBS.replace('name = "S"', 'name = "S"\nprecompileModules = true'),
+                  LIBS.replace('name = "S"', 'name = "S"\nsomethingNobodyThoughtOf = 1'),
+                  LIBS + '\n[[lean_exe]]\nname = "tool"\nroot = "Tool"\n',
+                  LIBS + '\n[[require]]\nname = "d"\npath = "../d"\n',
+                  LIBS + '\n[leanOptions]\nrelaxedAutoImplicit = false\n'):
+        assert _changed(root, keys, "r/lakefile.toml", other, build) == mine, other
+    lib = 'name = "d"\n\n[[lean_lib]]\nname = "D"\n'
+    assert _changed(root, keys, "d/lakefile.toml", lib + 'roots = ["D", "E"]\n', build) == set()
+    assert _changed(root, keys, "d/lakefile.toml", lib + 'leanOptions = {autoImplicit = false}\n', build) == {"D.X", "R"}, \
+        "a path dependency's setting moves its modules' keys, and through what they read their importers'"
+
+
+def test_a_module_that_moves_to_a_library_with_other_options_has_another_key(tmp_path):
+    """A library sets its modules' options, and `roots` say which library owns a module: with `roots` out of the key, the
+    key names the owner. Lake compiles a module that several targets of its package own with the settings of whichever
+    a build reaches it through, so it has a key, naming them all, only where they differ in nothing a compile reads."""
+    root = _workspace(tmp_path, {"r/lakefile.toml": LIBS, "r/S.lean": "", "r/T.lean": "", "r/R/A.lean": ""})
+    build = ["S", "T", "R.B"]
+    keyed = MK.keys(root, build)
+    assert {m: k.task["vars"]["library"] for m, k in keyed.items()} == \
+        {"D.X": "D", "R.A": "R", "R.B": "R", "R": "R", "S": "S", "T": "R"}
+    keys = _built(keyed)
+    (root / "lakefile.toml").write_text(LIBS.replace('roots = ["R", "T"]', 'roots = ["R"]').replace('roots = ["S"]', 'roots = ["S", "T"]'))
+    now = MK.keys(root, build)
+    assert now["T"].task["vars"]["library"] == "S" and now["T"].files == keyed["T"].files, "the lakefile's digest is as it was"
+    assert {m for m in keys if _built(now)[m] != keys[m]} == {"T"}
+    (root / "lakefile.toml").write_text(LIBS.replace('roots = ["S"]', 'roots = ["S", "R.A"]'))
+    assert sorted(MK.keys(root, build)) == ["D.X", "S", "T"], "R.A is R's and S's, so it and its importers have no key"
+    exe = '\n[[lean_exe]]\nname = "tool"\nexeName = "t"\nsupportInterpreter = true\n'
+    (root / "lakefile.toml").write_text(LIBS + exe + 'root = "Tool"\n')
+    (root / "Tool.lean").write_text("import R.A\n")
+    assert MK.keys(root, ["Tool"])["Tool"].task["vars"]["library"] == "lean_exe:tool"
+    (root / "lakefile.toml").write_text(LIBS + exe + 'root = "R.A"\n')
+    owned = MK.keys(root, build)
+    assert owned["R.A"].task["vars"]["library"] == "R+lean_exe:tool", "a library's module that is an executable's root"
+    for differ in (exe + 'root = "R.A"\nneeds = ["x"]\n', exe + 'root = "R.A"\nsomethingNobodyThoughtOf = 1\n',
+                   exe + 'root = "R.A"\nleanOptions = {autoImplicit = true}\n', exe + 'root = "S"\n'):
+        (root / "lakefile.toml").write_text(LIBS + differ)
+        assert not {"R.A", "S"} <= set(MK.keys(root, build)), differ
+    both = LIBS.replace('name = "R"\n', 'name = "R"\nprecompileModules = true\n') + exe + 'root = "R.A"\nprecompileModules = true\n'
+    (root / "lakefile.toml").write_text(both)
+    assert "R.A" not in MK.keys(root, build), "alike, but each loads R's other modules another way"
+
+
+def _manifest(root: Path, change) -> str:
+    doc = json.loads((root / "lake-manifest.json").read_text())
+    change(doc)
+    return json.dumps(doc)
+
+
+def test_the_env_is_the_toolchain_and_every_fetched_entry_of_the_root_s_manifest(tmp_path):
+    """Of the manifest a key reads every fetched package's entry, whole but `inherited`, and every other field but the
+    root's `name`, its `packagesDir` and the entries of the packages required by path, whose directories `workspace`
+    reads: a field this reading has never met moves every key, and so does a fetched package added to the root, which
+    could provide a module a dependency imports."""
+    root = _workspace(tmp_path, {"r/lake-manifest.json": json.dumps({
+        "version": "1.2.0", "name": "r", "packagesDir": ".lake/packages", "packages": [
+            {"type": "path", "name": "d", "dir": "../d", "inherited": False, "configFile": "lakefile.toml"},
+            {"type": "git", "name": "mathlib", "rev": "abc", "url": "https://example.org/mathlib", "inherited": False,
+             "configFile": "lakefile.lean", "subDir": None, "scope": "", "inputRev": "v1", "manifestFile": "lake-manifest.json"},
+            {"type": "git", "name": "batteries", "rev": "def", "url": "https://example.org/batteries", "inherited": True}]})})
+    keys = _built(MK.keys(root))
+
+    def changed(change) -> set[str]:
+        return _changed(root, keys, "r/lake-manifest.json", _manifest(root, change))
+
+    for same in (lambda d: d.update(name="another"), lambda d: d.update(packagesDir="elsewhere"),
+                 lambda d: d["packages"][1].update(inherited=True), lambda d: d["packages"].reverse(),
+                 lambda d: d["packages"][0].update(dir="../r/../d", inherited=True, manifestFile="m.json")):
+        assert changed(same) == set()
+    for field, value in (("rev", "abd"), ("url", "https://example.org/other"), ("configFile", "lakefile.toml"), ("subDir", "sub"),
+                         ("scope", "s"), ("inputRev", "v2"), ("manifestFile", "other.json"), ("name", "Mathlib"),
+                         ("somethingNobodyThoughtOf", 1)):
+        assert changed(lambda d: d["packages"][1].update({field: value})) == set(keys), field
+    assert changed(lambda d: d.update(version="1.3.0")) == set(keys)
+    assert changed(lambda d: d.update(somethingNobodyThoughtOf=1)) == set(keys)
+    assert changed(lambda d: d["packages"].append({"type": "git", "name": "extra", "rev": "0"})) == set(keys)
+    assert changed(lambda d: d["packages"].pop()) == set(keys)
+    assert changed(lambda d: d["packages"][2].update(type="another kind")) == set(keys)
+
+
+def test_a_module_has_one_key_under_every_root_with_the_same_fetched_packages(tmp_path):
+    """A key's paths start at the module's own package, and its env is the root's toolchain and fetched entries: a path
+    dependency's module has one key under each root that fetches the same packages, the dependency itself included, and
+    another under a root that fetches one more."""
+    root = _workspace(tmp_path)
+    fetched = {"type": "git", "name": "mathlib", "rev": "abc"}
+    _write(tmp_path, {"d/lake-manifest.json": json.dumps({"name": "d", "packages": [fetched | {"inherited": False}]}),
+                      "d/lean-toolchain": TOOLCHAIN,
+                      "q/lakefile.toml": 'name = "q"\ndefaultTargets = ["Q"]\n\n[[lean_lib]]\nname = "Q"\n',
+                      "q/lake-manifest.json": json.dumps({"name": "q", "packagesDir": "p", "packages": [
+                          fetched | {"inherited": True}, {"type": "path", "name": "d", "dir": "../r/../d"}]}),
+                      "q/lean-toolchain": TOOLCHAIN, "q/Q.lean": "import D.X\n"})
+    under = {r: _built(MK.keys(tmp_path / r, ["D.X"]))["D.X"] for r in ("r", "d", "q")}
+    assert under["r"] == under["d"] == under["q"]
+    (tmp_path / "q" / "lake-manifest.json").write_text(_manifest(tmp_path / "q", lambda d: d["packages"].append(
+        {"type": "git", "name": "arklib", "rev": "1"})))
+    assert _built(MK.keys(tmp_path / "q"))["D.X"] != under["r"]
+
+
 def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
     """No key, so it is built: a header the parser can't read, an import a workspace file holds that no library claims or
     that two packages define, a package whose lakefile it doesn't follow, and every module importing one."""
@@ -217,6 +362,25 @@ def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
         assert MK.keys(root) == {}, lakefile
 
 
+def test_a_workspace_lake_could_configure_otherwise_has_no_keys(tmp_path):
+    """No keys where Lake would read a package from somewhere this reading doesn't: a `lakefile.lean` beside the
+    `lakefile.toml` (Lake reads the `lakefile.lean`), a path entry configured by another file or without a directory,
+    entries in the root's `.lake` that Lake takes over the manifest's, or two packages of one name."""
+    root = _workspace(tmp_path / "a", {"d/lakefile.lean": ""})
+    assert MK.keys(root) == {} and "has a lakefile.lean beside its lakefile.toml" in MK.workspace(root)
+    for i, (change, why) in enumerate([
+            (lambda d: d["packages"][0].update(configFile="other.toml"), "d is configured by other.toml"),
+            (lambda d: d["packages"][0].pop("dir"), "a package required by path has no directory"),
+            (lambda d: d.update(packages={}), "its packages are not a list of entries")]):
+        root = _workspace(tmp_path / f"b{i}")
+        (root / "lake-manifest.json").write_text(_manifest(root, change))
+        assert MK.keys(root) == {} and why in MK.workspace(root), why
+    root = _workspace(tmp_path / "c", {"r/.lake/package-overrides.json": "[]"})
+    assert MK.keys(root) == {} and "overrides the manifest's entries" in MK.workspace(root)
+    root = _workspace(tmp_path / "d", {"d/lakefile.toml": 'name = "r"\n\n[[lean_lib]]\nname = "D"\n'})
+    assert MK.keys(root) == {} and "two packages are named r" in MK.workspace(root)
+
+
 def test_a_package_s_input_files_are_in_the_key_of_each_of_its_modules(tmp_path):
     """A module may read a file as it compiles (`include_str`), which Lake tracks only as an `[[input_file]]` or
     `[[input_dir]]` target: editing a pinned checkpoint's sha512 in the `models.json` a module embeds that way left its key
@@ -228,8 +392,8 @@ def test_a_package_s_input_files_are_in_the_key_of_each_of_its_modules(tmp_path)
     root = _workspace(tmp_path / "ok", files)
     k = MK.keys(root, ["R.B"])
     assert sorted(k) == ["D.X", "R", "R.A", "R.B"]
-    assert {"models.json", "data/a/b.txt"} <= set(k["R.A"].task["inputs"]) and k["D.X"].task["inputs"] == \
-        ["../d/D/X.lean", "../d/lakefile.toml"]
+    assert {"r/models.json", "r/data/a/b.txt"} <= set(k["R.A"].task["inputs"]) and k["D.X"].task["inputs"] == \
+        ["d/D/X.lean", "d/lakefile.toml"]
     keys = _built(k)
 
     def changed(path: str, text: str) -> set[str]:
@@ -298,15 +462,20 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
 
-def _entry(store: Path, key: str, scope: str, mod: str, h: str, files: dict[str, bytes]) -> dict:
-    """``mod``'s index entry under ``key``, with its artifacts, as `LakeArtifacts.put` writes it."""
+def _entry(store: Path, key: str, scope: str, mod: str, h: str, files: dict[str, bytes], inputs: dict | None = None) -> dict:
+    """``mod``'s index entry under ``key``, with its artifacts, as `LakeArtifacts.put` writes it: with what its key read
+    (``inputs``), it is also the entry the module was last indexed under."""
     (store / "artifacts").mkdir(parents=True, exist_ok=True)
     for n, b in files.items():
         (store / "artifacts" / n).write_bytes(b)
-    e = {"module": mod, "scope": scope, "hash": h, "outputs": {"o": [n for n in files if n.endswith(".olean")],
-         "i": next(n for n in files if n.endswith(".ilean"))}, "digests": {n: C.digest(b) for n, b in files.items()}}
+    e = {"schema": MK.SCHEMA, "module": mod, "scope": scope, "hash": h,
+         "outputs": {"o": [n for n in files if n.endswith(".olean")], "i": next(n for n in files if n.endswith(".ilean"))},
+         "digests": {n: C.digest(b) for n, b in files.items()}, "inputs": inputs}
     MK.entry_path(store, key).parent.mkdir(exist_ok=True)
     MK.entry_path(store, key).write_text(json.dumps(e))
+    if inputs is not None:
+        MK.last_path(store, scope, mod).parent.mkdir(parents=True, exist_ok=True)
+        MK.last_path(store, scope, mod).write_text(json.dumps({"key": key}))
     return e
 
 
@@ -318,7 +487,7 @@ def _stock(store: Path, keyed: dict, entries: dict[str, tuple[str, dict[str, byt
     out = {}
     for m, (h, files) in entries.items():
         out[m] = MK.key(m, keyed, named)
-        e = _entry(store, out[m], keyed[m].package.name, m, h, files)
+        e = _entry(store, out[m], keyed[m].package.name, m, h, files, MK.record(m, keyed, named))
         named |= {(m, n.split(".", 1)[1]): d for n, d in e["digests"].items()}
     return out
 
@@ -367,6 +536,73 @@ def test_a_build_keys_each_module_from_the_digests_its_imports_entries_name(tmp_
         {("d", "4" * 16): "D.X", ("r", "2" * 16): "R.A", ("r", "3" * 16): "R"}, "D.X's outputs are as they were"
     _stock(store, MK.keys(root), {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
     assert MK.stage(store, root, [], tmp_path / "cache2")[0] == {("d", "5" * 16): "D.X"}, "D.X's olean is another"
+
+
+def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(tmp_path):
+    """Each entry records its key's inputs (`record`): its vars, the env's parts, each file's digest and what it read of
+    each module it loads. A build that doesn't restore a module says why against the entry the module was last indexed
+    under: the first input that differs, or that it reads a module that isn't restored."""
+    files = {"r/lakefile.toml": LIBS, "r/R/A.lean": "import D.X\n", "r/S.lean": "", "r/T.lean": ""}
+    root = _workspace(tmp_path / "ws", files)
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["T"])
+    stock = {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R),
+             "T": ("4" * 16, {"7" * 16 + ".olean": b"T", "8" * 16 + ".ilean": b"t"})}
+    k = _stock(store, keyed, stock)
+    e = json.loads(MK.entry_path(store, k["R"]).read_text())
+    x, a = (C.digest(" ".join([C.digest(b)]).encode())[7:19] for b in (b"X", b"A"))
+    assert e["inputs"] == {"vars": {"module": "R", "package": "r", "library": "R"}, "env": keyed["R"].parts,
+                           "files": {f: keyed["R"].files[f] for f in ("r/R.lean", "r/lakefile.toml")},
+                           "reads": {"D.X": x, "R.A": a}}
+    assert MK.last(store, "r", "R") == e["inputs"] and MK.last(store, "r", "R.B") is None
+
+    caches = iter(range(99))
+
+    def missed(extra=("T",)) -> tuple[dict, dict]:
+        why: dict = {}
+        MK.stage(store, root, extra, tmp_path / "cache" / str(next(caches)), report=why)
+        return why["missed"], why["first"]
+
+    assert missed() == ({}, {})
+    assert missed(["T", "R.B"]) == ({"never indexed here": 1}, {"never indexed here": "R.B"})
+    (root / "R" / "A.lean").write_text("import D.X\n-- edited\n")
+    assert missed() == ({"its source": 1, "reads a module not restored": 1},
+                        {"its source": "R.A", "reads a module not restored": "R"})
+    (root / "R" / "A.lean").write_text("import D.X\n")
+    (root / "lakefile.toml").write_text(LIBS.replace('name = "r"', 'name = "r"\nbuildType = "debug"'))
+    assert missed()[0] == {"its lakefile": 2, "reads a module not restored": 1}
+    (root / "lakefile.toml").write_text(LIBS.replace('roots = ["R", "T"]', 'roots = ["R"]').replace('roots = ["S"]', 'roots = ["S", "T"]'))
+    assert missed() == ({"its library": 1}, {"its library": "T"})
+    (root / "lakefile.toml").write_text(LIBS)
+    (root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+    assert missed()[0] == {"the toolchain": 2, "reads a module not restored": 2}
+    (root / "lean-toolchain").write_text(TOOLCHAIN)
+    (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abd")))
+    assert missed()[0] == {"the fetched packages": 2, "reads a module not restored": 2}
+    (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abc")))
+    _stock(store, MK.keys(root, ["T"]), {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
+    assert missed() == ({"an output it reads": 1, "reads a module not restored": 1},
+                        {"an output it reads": "R.A", "reads a module not restored": "R"}), "D.X's olean is another"
+    _stock(store, MK.keys(root, ["T"]), {"D.X": ("1" * 16, X)})
+    MK.entry_path(store, k["R"]).unlink()
+    assert missed() == ({"never indexed here": 1}, {"never indexed here": "R"}), "the entry it was last indexed under is gone"
+    _stock(store, MK.keys(root, ["T"]), stock)
+    (store / "artifacts" / ("c" * 16 + ".olean")).write_bytes(b"not what R.A's entry names")
+    assert missed()[0] == {"an artifact of its entry differs": 1, "reads a module not restored": 1}
+
+
+def test_an_entry_of_another_schema_is_never_staged(tmp_path):
+    """An entry written under an earlier schema has no `schema` of this one: were its key ever computed again, it would
+    still not be read."""
+    root = _workspace(tmp_path / "ws")
+    store = tmp_path / "store"
+    k = _stock(store, MK.keys(root), {"D.X": ("1" * 16, X)})
+    f = MK.entry_path(store, k["D.X"])
+    e = json.loads(f.read_text())
+    assert MK.valid(e) and MK.stage(store, root, [], tmp_path / "c1")[0] == {("d", "1" * 16): "D.X"}
+    for other in ({k: v for k, v in e.items() if k != "schema"}, e | {"schema": "lean-module/v3"}):
+        f.write_text(json.dumps(other))
+        assert not MK.valid(other) and MK.stage(store, root, [], tmp_path / "c2")[0] == {}
 
 
 def test_a_build_stages_under_the_store_s_lock(tmp_path, monkeypatch):

@@ -656,13 +656,16 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         monkeypatch.setattr(LC, "ARTIFACTS", at)
         cache = at / LA.MK.STAGE / "test"
         got, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
-        assert said == {"modules": len(got), "keyed": len(mods)}
+        assert said == {"modules": len(got), "keyed": len(mods), "missed": said["missed"], "first": said["first"]}
+        assert sum(said["missed"].values()) == len(mods) - len(got)
+        why.append(said["first"])
         subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
                        cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
         assert LA.MK.misrestored(got, pkg) == []
         shutil.rmtree(cache)
         return got
 
+    why: list[dict] = []
     arts = LA.LakeArtifacts(store)
     assert arts.put({pkg: {"sandbox": True}}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
@@ -672,6 +675,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
     got = staged(store)                                               # Thms and Control have other keys: compiled
     assert sorted(got.values()) == ["Control.Assumptions", "Control.Defs"]
+    assert why[-1] == {"its source": "Control.Thms", "reads a module not restored": "Control"}
     assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
     assert not json.loads((lib / "Control" / "Thms.trace").read_text()).get("synthetic")
     thms.write_text(text)

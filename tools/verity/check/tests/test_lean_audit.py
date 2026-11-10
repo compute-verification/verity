@@ -528,14 +528,19 @@ def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_impo
     arts, entries = LA.LakeArtifacts(store), _keys(pkg)
     assert arts.put({pkg: SANDBOXED}) == 1 and [e for e, _ in arts.added] == [entries["P.A"]]
     names = ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
+    keyed = LA.MK.keys(pkg)
     assert json.loads((store / entries["P.A"]).read_text()) == {
-        "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
+        "schema": "lean-module/v4", "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
         "outputs": json.loads((lib / "P/A.trace").read_text())["outputs"],
-        "digests": {n: LA.MK.C.digest(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()) for n in names}}
+        "digests": {n: LA.MK.C.digest(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()) for n in names},
+        "inputs": {"vars": {"module": "P.A", "package": "p", "library": "P"}, "env": keyed["P.A"].parts,
+                   "files": {f: keyed["P.A"].files[f] for f in ("p/P/A.lean", "p/lakefile.toml")}, "reads": {}}}
+    assert LA.MK.last(store, "p", "P.A") == LA.MK.record("P.A", keyed, {}) and LA.MK.last(store, "p", "P.B") is None
     assert sorted(f.name for f in (store / "artifacts").iterdir()) == sorted(names)
     (lib / "P/B.olean.hash").write_text("d" * 16)
     assert arts.put({pkg: SANDBOXED}) == 2 and arts.put({pkg: SANDBOXED}) == 0, "P.B, then P, which imports it"
     assert sorted(f"keys/{f.name}" for f in (store / "keys").iterdir()) == sorted(entries.values())
+    assert set(LA.MK.last(store, "p", "P")["reads"]) == {"P.A", "P.B"}, "what its key read of each module it loads"
     _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "8" * 16, "c": "9" * 16})
     assert _keys(pkg) == entries and arts.put({pkg: SANDBOXED}) == 0 and arts.added[-1][0] == entries["P.A"], \
         "P.A rebuilt to the same olean: P.B and P, which read only that, keep their keys"
@@ -653,8 +658,8 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
     names is here. A bundle of Lake's own layout (`outputs/`), which no build reads any more, adds nothing."""
     ok = LA.MK.C.digest(b"ok")
 
-    def entry(art, d):
-        return json.dumps({"module": "P.A", "scope": "p", "hash": "1" * 16, "outputs": {"o": [art]},
+    def entry(art, d, schema=LA.MK.SCHEMA):
+        return json.dumps({"schema": schema, "module": "P.A", "scope": "p", "hash": "1" * 16, "outputs": {"o": [art]},
                            "digests": {art: d}}).encode()
 
     bad = tmp_path / "bad.tar.gz"
@@ -664,6 +669,7 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
                            ("keys/" + "3" * 128 + ".json", b"not json"),
                            ("keys/" + "4" * 128 + ".json", entry("8" * 16 + ".olean", LA.MK.C.digest(b"other"))),
                            ("keys/" + "6" * 64 + ".json", entry("e" * 16 + ".olean", ok)),         # a key of before
+                           ("keys/" + "7" * 128 + ".json", entry("e" * 16 + ".olean", ok, "lean-module/v3")),  # an entry of before
                            ("keys/../" + "5" * 128 + ".json", entry("e" * 16 + ".olean", ok)),
                            ("outputs/p/" + "6" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
                            ("../escape", b"x"), ("artifacts/../../x.olean", b"x"),
