@@ -30853,3 +30853,50 @@ proofs, Tue 10 Nov: **the patterns' form at the cap's egress row (S = 32,832), p
 - PRF-504's records (`2f1a` and `5cf4`) and suites (`37eb`) are running on cpu-3, ETA about 19:30Z [guess].
 
 I wait on `38f3` and write its verdict here.
+
+## FLOCKPKG, Tue 10 Nov 18:36Z: PRF-514 first entry: figures recounted (three differ), and names must change: two packages can't share the root `Flock`; forwarders at the old names keep every importer's line outside the seven
+
+- **Agent** `bc-2b7a8758-26b4-5f77-b259-b85efeaad024`. **Branch** `cursor/proofs-flockpkg-1539`, cut from `origin/main` `e7b03e4a6c89` (pushed at that SHA, no commit of mine yet). Clock read with `date -u` at each time below.
+- **Sources** [all run by me on `e7b03e4a6c89`, nothing built on the VM]: an import script over `git ls-files` (the brief's regex, block comments skipped; lakefiles read with `tomllib`), Lake 4.34's own source in the toolchain (`src/lean/lake/Lake/Config/{LeanLibConfig,Workspace,Module}.lean`), and one probe run on a node, `r20261110-183338-1ec8` (vy-nebius-cpu-1, rc 0, 2 min; `r20261110-181928-824d` and `r20261110-183037-a55e` are the same probe, cancelled by me while each still waited for a slot, to add checks).
+
+### Recount
+
+| figure | yours | mine | note |
+|---|---|---|---|
+| modules, lines of `flock_verifier` | 260, 63,139 | 260, 63,135 | 63,135 is `wc -l` (newlines); 63,139 is Python's `splitlines()`, which also breaks on four other characters |
+| other packages requiring it | 24 of 31 | 24 of 31 | direct requires. The seven that don't: `security`, `certifier_device`, `core_world`, `certifier_program`, `pous_grader`, `pouw_check`, `pouw_window` |
+| the seven: modules imported, closure | 12; 24 modules, 9,314 lines | the same | `core_requirement` requires the package and imports none of it |
+| protocols' and devices' packages (15) | 16; 70 modules, 25,439 lines | the same | |
+| recursion | 40 modules, 10,637 lines | **39 library modules, 10,453 lines**, plus 3 executable roots of 8 lines each | your glob `Flock/Rec*.lean` takes `Flock.Record` (199) and `Flock.RecordText` (100), which are the session record and its text, not recursion, and `VStar/*` leaves out `VStar.Menu.Pinned` (115). 10,637 − 299 + 115 = 10,453 |
+| non-test importers of recursion | `HmRow`, `Statement`, `Witness`, `With.Transcript` | **`HmRow` (→ `RecSparse`, `RecOpening`), `Witness` (→ `RecCoins`), and `FlockVerify` through the umbrella `Flock`** | `Statement` and `With.Transcript` import only `Flock.Record`. `FlockVerify` names 9 `Rec*` modules and `VStar` (SPOTARCH's R1); its only package import that reaches them is `import Flock` |
+| ZK server | 19 modules, three import `Zk` or `Ligerito` | the same (`Frame`, `Link`, `SessionPlan`); 8,337 lines | three more reach recursion: `Firewall.Finish`, `Hello` and `Values` import `Flock.Witness` (→ `RecCoins` → `RecVStar` → `VStar.*`). And `Flock.RecCoins` imports `Flock.Firewall` |
+
+### The probe on names: unchanged names do not survive, by the repository's own rule
+
+1. **Lake.** `Workspace.findModule?` takes the first package, root first, with a library for which `isBuildableModule` holds, and a library rooted at `Flock` holds for every `Flock.*` (`roots.any (root.isPrefixOf mod && globs.any (·.matches root))`). So with `Flock.Hash` in a base package, `flock_verifier`'s `Flock` library must stop claiming by prefix: no root `Flock`, each module listed. Probe [ran]: with the default library, `lake build Flock` fails ("no such file or directory … flock/Flock/Hash.lean"). With `roots = []` and every module in `globs`, or every module a root and the umbrella in `globs`, `lake build` passes: the library, an executable, a package above it, and a top package under three orders of `require`.
+2. **Lean, which decides it.** `lake env lean` resolves an import through `LEAN_PATH`, in the first entry that holds a directory for the module's first component. Two packages that both hold `Flock/` build under `lake build` and fail under `lake env lean`. Probe [ran]: under every shape that builds, `lake env lean` on a file that imports `Flock.Hash` (base) and `Flock.Zk` (Flock) fails, "object file …/base/.lake/build/lib/lean/Flock/Zk.olean of module Flock.Zk does not exist"; `lake lean` passes. The tree already rules this out in three places [read]: `tests/test_lean_packages.py::test_lean_module_roots_are_disjoint` ("Across packages they may not even share a first component"), `check.py`'s failure `proved_in.shared-root` and `tools/verity/lean/README.md` l.435 to 440 ("Put the proofs' modules under a root of their own … the declarations keep their names … which is all a record holds"). `verity lean try`, the audit (`check.py`'s `Graph.lean` and its tests' `--run`), `unread.py` and `upstream.py` all call `lake env lean`.
+3. **So a moved module takes a new first component, and its declarations keep their names** (`namespace Flock…` stays, so no record names change).
+
+### Importer lines a rename changes, by owner directory [import script]
+
+For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **334 `import` lines in 167 files**.
+
+| owner | lines | files |
+|---|---|---|
+| `verity/core/service/flock` | 133 | 67 |
+| `Security/Proofs` | 102 | 38 |
+| `verity/core/service/spot` | 24 | 11 |
+| `verity/core/protocols/interface` | 12 | 8 |
+| the seven (`evaluate` 8, `identity` 6, `difftest/lean` 3, `lms` 2, `randomness` 2, `attest` 1) | 22 | 13 |
+| `Security/Properties` | 6 | 5 |
+| eleven other packages under `protocols/`, `devices/` and `service/firewall` | 35 | 25 |
+
+**What I propose, and am building unless you say otherwise: forwarders.** Each moved module `Flock.X` leaves a two-line module `Flock.X` in Flock's package (`module`, `public import <NewRoot>.X`). Then only the seven's 22 lines change, since they stop requiring Flock's package. No `.lean` under `Security/` changes, nor any other package's. The forwarders are a bridge with a named end: the PR that rewrites the remaining 312 lines (108 of them under `Security/`) deletes them. Probe [ran]: with the base as `FBase.*`, the recursion as `FlockRec.*` and forwarders `Flock.Hash` and `Flock.Bytes`, all of `lake build`, `lake env lean`, `lake lean` and a `meta import Flock.Hash` with a `#guard` pass, under the three orders. I stop before any rename across `Security/`, as told.
+
+### Three things the table will carry that change the cut
+
+- **`flock-verify` sits above recursion until M7.** So a real package for recursion either takes the executable with it, and `verity/core/service/flock/.lake/build/bin/flock-verify` is named in 21 files outside the package (benchmarks, `verity/ml/flock`, `tools/verity/check`, a Rust source), or separates almost nothing: `VStar`, `VStar.In`, `VStar.Trace` and the three `Rec*Cmd` modules are all that `FlockVerify`, `HmRow` and `Witness` don't reach. The same shared-root rule would also rename every `Flock.Rec*` module. My default: the recursion's modules become a library of their own **inside Flock's package** (`[[lean_lib]] FlockRec`, declared after `Flock`, module names unchanged, no executable moves), with a boundary test that fails on a `Flock` → `FlockRec` import outside an allowlist of today's edges, each tagged M6, M7 or M8. The package cut then lands with M7 and M8. Say if you want the package now and accept the executable's move.
+- **The circuit format loads bytes and hashes**, not the other way: `Program` imports `Canon`, `Hash`, `JsonParse` and `Sizes`; `Steps` and `Partition` import `Bytes`. Under the page's order (`circuits` first) that is upward. Three strata fit the graph: bytes, hashes and parsing (`Field`, `Bytes`, `Hash`, `Canon`, `CanonForm`, `JsonParse`, `Sizes`), then the format (`Steps`, `Partition`, `Program`, `Gate`, `Annot`, `AnnotExpand`, `Qword`, `Extract`, `Evaluated`), and beside it the commitments (`Hm96`, `FV3`). I'll cut them as three packages so the layout can place each whole.
+- **Two imports drag Flock's own code into the base**: `FV3` → `Net` (by name only for `nextPow2` and `log2ceil`: a token scan, not a build), which brings `Comp` and `Scan` (1,188 lines), and `Bytes` → `Field` (1,060 lines, for `f128` readers). A pure move takes them along; moving two helpers out of `Net` would free the first.
+
+**Next:** the table by 02:00Z; I start the base cut with forwarders now. Runs: none in flight.
