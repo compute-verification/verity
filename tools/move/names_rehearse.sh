@@ -5,6 +5,7 @@
 #         /tmp/names/TAG) and the branch cursor/training-names-moved-TAG-9af3
 #   MAPS  the commit holding the thirteen maps as written on the tree before the layout (default: the commit this
 #         branch's regen.py was added on, less one)
+#   NAMES_REF  the commit the layout's move ran on, when BASE's history has no commit "Move by tools/move/layout_one_map.toml"
 # Regenerates the maps (regen.py, regen_hand_edits.py, both beside this script), commits them, runs the two ordinary
 # maps that go before the moves, stages the eleven certified moves (stage.py) and runs the two ordinary maps that go
 # after them, one commit a map; each ordinary map is run a second time to show it changes nothing. Writes
@@ -32,10 +33,14 @@ git -C "$REPO" worktree add -q --detach "$WT" "$BASE"
 cd "$WT"
 
 # R. the maps, regenerated from the tree's own layout map; REF is the commit the layout's move ran on
-MOVE=$(git log --format=%H --grep='^Move by tools/move/layout_one_map.toml' -1 "$BASE")
-test -n "$MOVE" || { echo "no commit 'Move by tools/move/layout_one_map.toml' below $BASE: is the layout there?"; exit 1; }
-REF=$(git rev-parse "$MOVE^")
-echo "BASE $BASE; the layout's move $MOVE ran on REF $REF; the maps before the layout are $MAPS's" | tee "$W/steps.log"
+if [ -n "${NAMES_REF:-}" ]; then   # the layout's move isn't a commit of that subject here: name the commit it ran on
+  REF=$(git rev-parse --verify "$NAMES_REF^{commit}")
+else
+  MOVE=$(git log --format=%H --grep='^Move by tools/move/layout_one_map.toml' -1 "$BASE")
+  test -n "$MOVE" || { echo "no commit 'Move by tools/move/layout_one_map.toml' below $BASE: set NAMES_REF to the commit the layout's move ran on"; exit 1; }
+  REF=$(git rev-parse "$MOVE^")
+fi
+echo "BASE $BASE; the layout's move ran on REF $REF; the maps before the layout are $MAPS's" | tee "$W/steps.log"
 python3 "$HERE/regen.py" --ref "$REF" --moves tools/move/layout_one_map.toml --moves "$W/security.json" \
   --out "$W/regen" "$W"/before/*_map.toml > "$W/regen.log" 2>&1 || { tail -20 "$W/regen.log"; exit 1; }
 python3 "$HERE/regen_hand_edits.py" "$W/regen" "$W/moved" tools/move/layout_one_map.toml | tee -a "$W/steps.log"
