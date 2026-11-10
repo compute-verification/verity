@@ -176,3 +176,27 @@ The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine),
   - `r20261110-035609-509b`: the quick suites, `suites.py --changed 7af4d24fca --quick` (99 suites); ETA about 04:45Z.
   - `r20261110-035808-ebe9`: the Lean check, `lean_changed.py --records Security/Proofs --update`, timeout 3 h. Its dependencies are fetched cold, so ETA 05:45-06:15Z.
 - **Mark:** I expect to mark #8363 at 06:30Z if the three pass. If the records change the lock's `ReadsAt` digest, I commit that first.
+
+## TWOPROVE, Tue 10 Nov 04:12Z: #8486's failure fixed and relaunched, #8429 marked, #8444's run
+
+**#8486.**
+- **Cause:** my proof, not the premise. In `readOk_entry`'s boundary arm (`Security/Proofs/Flock/SpotFlock/EntriesAt.lean:208`, unsolved goals, lake exit 1, the run's only error), `simp [readKey, hlk, hri, hvl]` rewrote `v` to `l.value` before `hri` could close the interior lookup.
+- **Fix:** `← hvl`, at `d9950309a0`, pushed. Spot and `FrameIsAt.lean` had built.
+- **Run:** r20261110-035606-d0ac, running on vy-nebius-cpu-12's proofs pool since about 04:00Z. Records by about 05:00Z, suites ETA about 06:30Z.
+- **Wed 06:00Z holds.**
+- **It can't be marked without the SpotFlock change.** #8309's `readOk_entry` splits `readOk`'s link arm, so Security doesn't build until the model follows the new arm. The `Addresses` move is that model change. Splitting it off would need a new premise, which `--update` never adds.
+
+**#8429 is marked at `eb3785ff3e`** (04:05Z; preflight passed, 61 suites collected).
+- 12b1: the Lean check and 8 of 9 suites passed.
+- `tools/verity/circuit_check` sat 96 min in its one `slow` test, `test_every_registered_primitive_declares_the_tables_it_reads`, on one core at a flat 27.5 GB, so I cancelled it.
+- The rerun of that suite alone with `--quick` is r20261110-035932-f979 (cpu-12, waiting for a slot), ETA about 05:00Z.
+
+Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay blocks) is marked at `eb3785ff3e`. Its Lean check and eight suites passed (r20261110-010243-12b1). `tools/verity/circuit_check --quick` reruns in r20261110-035932-f979. It stacks on #8413. Reviewer: TWOVERIFY.
+
+**#8444 (r20261110-022952-5b74, still running).**
+- Records for Spot, Security, Security/Proofs and Security/Properties passed, and none were regenerated, so there's nothing to commit.
+- 9 suites passed so far.
+- `verity-lean-audit` failed two `test_lean_changed.py` tests. My job exported `LEAN_RECORDS_POOL=proofs` to the suites, and those tests expect pool `build`. #8444 doesn't touch `tools/verity/lean`.
+- I rerun that suite without the variable, then mark #8444 at `a90b3fa35f` and send its land ask.
+
+**PRF-477's two 02:25Z questions:** I hadn't read them before 03:54Z. I post both answers there by 05:00Z, and I'll tell you here if either changes #8486.
