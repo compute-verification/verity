@@ -170,9 +170,14 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Quick tier: running"]["hour"] == "p50 30, p90 30 min (n=1)"
     assert rows["Candidate: build to verdict"]["today"] == "p50 60, p90 60 min (n=1)"
     plain = rows["Round with no Lean change: build to verdict"]
-    assert plain["today"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min; slowest test "
-                              "`tests/test_x.py::test_slow` of suite `tools/research`, p50 40 min, the slowest in 1 of 1")
-    assert (plain["now"], plain["target"]) == ("0 of the 1 being checked change no Lean", "30")
+    assert plain["today"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min, the slowest in 1 of 1; "
+                              "slowest test `tests/test_x.py::test_slow` of suite `tools/research`, p50 40 min, the slowest in 1 of 1")
+    assert plain["now"] == ("0 of the 1 being checked change no Lean; the newest verdict: built 01:00Z in 1 shards, 60 min, 0 Lean files "
+                            "of 5 changed, slowest step `pytest` 50 min")
+    assert plain["target"] == "30"
+    assert rows["The floor: a round's slowest suite and slowest test"]["today"] == (
+        "slowest suite `tools/research`, p50 45 min, the slowest in 1 of 1; slowest test `tests/test_x.py::test_slow` of suite "
+        "`tools/research`, p50 40 min, the slowest in 1 of 1")
     assert rows["Candidates by outcome"]["today"] == "4 built: 1 green, 1 red, 1 dropped for another reason, 1 being checked"
     shard = rows["Shard 1/1: its slot to the end of its last step on the gate"]["today"]
     assert shard.startswith("p50 50, p90 50 min (n=1); slowest step `pytest` in 1 of 1, p50 50 min; then it holds the slot p50 10, p90 10 min more")
@@ -225,6 +230,13 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     assert "| # | Number | Now | Last hour | Today | Target | How it is measured |" in text
     assert "Not read: vy-nebius-cpu-2: no answer in 100 s" in text
     assert "not measured: needs a run of this command" in text      # no earlier reading of the CPU counters
+    d["now"] += (qt.SHARD_LAYOUT_H + 1) * 3600                      # a layout no shard has used lately has no rows; b's still runs
+    assert "| Shard 1/1: its slot" in qt.render(qt.table(d), d)
+    for run in d["nodes"]["vy-nebius-cpu-1"]["runs"]:
+        run["end"] = run.get("end") or qt.ts(at("02:30"))
+    assert "| Shard 1/1: its slot" not in qt.render(qt.table(d), d)
+    d = doc()
+    d["errors"] = ["vy-nebius-cpu-2: no answer in 100 s"]
     short = qt.render(qt.table(d), d, short=True)
     assert "| # | Number | Now | Last hour | Today | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
     d["control"]["executor"], d["control"]["executor_why"] = [], "its status printed nothing"

@@ -45,6 +45,8 @@ LEAN_FILE = r"\\.lean$|(^|/)lakefile\\.|(^|/)lake-manifest\\.json$|(^|/)lean-too
 COMPARE_FILES = 300
 #: the target for a round whose candidate changes no Lean, in minutes
 PLAIN_ROUND_MIN = 30
+#: a layout of shards (so many a candidate) has its rows while one of its shards runs or took its slot in the last so many hours
+SHARD_LAYOUT_H = 3
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
 
@@ -638,32 +640,61 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         got = lean.get(c["sha"][:12])
         return None if not got or (got[1] == 0 and got[0] >= COMPARE_FILES) else got[1] == 0
 
+    def slowest(c: dict) -> tuple[dict | None, list | None, list | None]:
+        """A round's slowest step on the gate, its slowest suite that ran and its slowest passed test, among its shards."""
+        return (max((st for sh in c["shards"] for st in sh.get("steps") or [] if st.get("seconds") and st["step"] not in off_gate),
+                    key=lambda st: st["seconds"], default=None),
+                max((su for sh in c["shards"] for su in sh.get("suites") or [] if su[1]), key=lambda su: su[1], default=None),
+                max((sh["slow_test"] for sh in c["shards"] if sh.get("slow_test")), key=lambda t: t[2], default=None))
+
+    def named(what: str, found: list, key, seconds, show=str) -> str:
+        """The ``what`` that was the slowest in the most rounds: its name, its p50 minutes there, and in how many rounds."""
+        keys = [key(f) for f in found if f]
+        if not keys:
+            return ""
+        top = max(sorted(set(keys)), key=keys.count)
+        return (f"; slowest {what} {show(top)}, p50 {pct([seconds(f) / 60 for f in found if f and key(f) == top], .5):.0f} min, "
+                f"the slowest in {keys.count(top)} of {len(found)}")
+
+    def a_step(found: list) -> str:
+        return named("step", found, lambda st: st["step"], lambda st: st["seconds"], lambda k: f"`{k}`")
+
+    def a_suite(found: list) -> str:
+        return named("suite", found, lambda su: su[0], lambda su: su[1], lambda k: f"`{k}`")
+
+    def a_test(found: list) -> str:
+        return named("test", found, lambda t: (t[0], t[1]), lambda t: t[2], lambda k: f"`{k[1]}` of suite `{k[0]}`")
+
     def plain_rounds(since: float) -> str:
         judged = [c for c in cands if c.get("verdict") and c["verdict"] >= since]
         rs = [c for c in judged if plain(c)]
+        unknown = f" ({n} not known)" if (n := sum(plain(c) is None for c in judged)) else ""
         if not rs:
-            return f"none of the {len(judged)} with a verdict" + (f" ({n} not known)" if (n := sum(plain(c) is None for c in judged)) else "")
-        steps = [max((st for sh in c["shards"] for st in sh.get("steps") or [] if st.get("seconds") and st["step"] not in off_gate),
-                     key=lambda st: st["seconds"], default=None) for c in rs]
-        tests = [max((sh["slow_test"] for sh in c["shards"] if sh.get("slow_test")), key=lambda t: t[2], default=None) for c in rs]
-        step = max({st["step"] for st in steps if st}, key=[st["step"] for st in steps if st].count, default=None)
-        test = max({(t[0], t[1]) for t in tests if t}, key=[(t[0], t[1]) for t in tests if t].count, default=None)
-        return (_dist([_m(c["verdict"] - c["build"]) for c in rs]) + f", of {len(judged)} with a verdict"
-                + (f" ({n} not known)" if (n := sum(plain(c) is None for c in judged)) else "")
-                + (f"; slowest step `{step}`, p50 {pct([st['seconds'] / 60 for st in steps if st and st['step'] == step], .5):.0f} min" if step else "")
-                + (f"; slowest test `{test[1]}` of suite `{test[0]}`, p50 "
-                   f"{pct([t[2] / 60 for t in tests if t and (t[0], t[1]) == test], .5):.0f} min, the slowest in "
-                   f"{sum(1 for t in tests if t and (t[0], t[1]) == test)} of {len(rs)}" if test else ""))
+            return f"none of the {len(judged)} with a verdict{unknown}"
+        steps, _, tests = zip(*map(slowest, rs))
+        return _dist([_m(c["verdict"] - c["build"]) for c in rs]) + f", of {len(judged)} with a verdict{unknown}" + a_step(steps) + a_test(tests)
+
+    def newest() -> str:
+        """The newest candidate with a verdict, as one clause: the first candidate after a change of the loop is read here."""
+        c = max((c for c in cands if c.get("verdict")), key=lambda c: c["verdict"], default=None)
+        if c is None:
+            return ""
+        got, step = lean.get(c["sha"][:12]), slowest(c)[0]
+        return (f"; the newest verdict: built {datetime.fromtimestamp(c['build'], UTC):%H:%MZ} in {len(c['shards'])} shards, "
+                f"{_m(c['verdict'] - c['build']):.0f} min, " + (f"{got[1]} Lean files of {got[0]} changed" if got else "its changed files not known")
+                + (f", slowest step `{step['step']}` {step['seconds'] / 60:.0f} min" if step else ""))
 
     add("4", "Round with no Lean change: build to verdict", (f"{sum(1 for c in flying if plain(c))} of the {len(flying)} being checked change no Lean"
-        if flying else ""), plain_rounds(hour), plain_rounds(day), str(PLAIN_ROUND_MIN),
+        if flying else "none being checked") + newest(), plain_rounds(hour), plain_rounds(day), str(PLAIN_ROUND_MIN),
         "the candidates whose files changed from their base hold no `.lean` file, lakefile, Lake manifest, toolchain or `lean-audit.json` "
         "(GitHub's compare); the slowest step on the gate among a round's shards (`steps.jsonl`) and the slowest passed test among each "
         "shard's three slowest suites (the suites' reports); by verdict time")
     add("4", "Candidate: build to `main`", "", _dist(win(b2l, hour)), _dist(win(b2l, day)), "", "green candidates: `build` to `advance`")
     add("4", "Candidates by outcome", "", outcomes(hour), outcomes(day), "", "by build time; red: dropped for a failure, a member held "
         "or ejected over one, or infrastructure")
-    for k in sorted({s.get("shard") for c in cands for s in c["shards"] if s.get("shard")}):
+    lately = {s["shard"].rsplit("/", 1)[-1] for c in cands for s in c["shards"] if s.get("shard") and s.get("took")
+              and (not s.get("end") or s["took"] >= now - SHARD_LAYOUT_H * 3600)}
+    for k in sorted({s.get("shard") for c in cands for s in c["shards"] if s.get("shard") and s["shard"].rsplit("/", 1)[-1] in lately}):
         ss = [s for c in cands for s in c["shards"] if s.get("shard") == k]
         whole = [(s, g) for s in ss if s.get("took") and (g := gate_end(s, off_gate))]
         slow = [max((st for st in s["steps"] if st.get("seconds") and st["step"] not in off_gate), key=lambda st: st["seconds"], default=None)
@@ -806,8 +837,15 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         "the loop's `build` to the latest `took` among its shards: the launch and the wait for a check slot")
     add("8", "Green candidate: verdict to `main`", "", _dist(win(v2l, hour)), _dist(win(v2l, day)), "",
         "`judged pass` to `advance`: the wait for the candidates below it and for the tick")
-    add("8", "The floor: the longest chain of a candidate's tasks not in the cache", "not measured: needs each task's dependencies and "
-        "seconds, which the executor's database holds and its `status` does not print")
+    def floor(since: float) -> str:
+        rs = [c for c in cands if c.get("verdict") and c["verdict"] >= since]
+        _, suites, tests = zip(*map(slowest, rs)) if rs else ((), (), ())
+        return (a_suite(suites) + a_test(tests))[2:] or "none"
+
+    add("8", "The floor: a round's slowest suite and slowest test", "", floor(hour), floor(day), "",
+        "what a round's tests take with unlimited cores: the slowest suite that ran among its shards (`suites.json`), or its slowest "
+        "passed test where that suite is split (the suites' reports, of each shard's three slowest suites); rounds with a verdict in "
+        "the window; the longest chain of Lean modules is not read")
     return rows
 
 
