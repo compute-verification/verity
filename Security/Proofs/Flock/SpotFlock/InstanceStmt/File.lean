@@ -173,8 +173,8 @@ theorem part_hex {p : Lean.Json} (hp : p = (metaJ.getObjVal? "partition").toOpti
 
 /-- The rows' names in order, as `HmOut.checkRows` sorts them: `qsort` is well-founded, so the kernel does not unfold
 it. -/
-theorem qsort_io {X : Array String} (hX : X = #["i0", "o0"]) : X.qsort (· < ·) = #["i0", "o0"] := by
-  subst hX
+theorem qsort_io {ns : Array String} (hns : ns = #["i0", "o0"]) : ns.qsort (· < ·) = #["i0", "o0"] := by
+  subst hns
   exact Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := #["i0", "o0"]) (by decide))
 
 fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
