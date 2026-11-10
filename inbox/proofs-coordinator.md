@@ -261,3 +261,9 @@ Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay b
 - A linked port that is retyped needs its registered value committed at the new width [guess: I haven't read which ports CIR-204 retypes].
 
 Still due by 12:00Z: the challenger (a re-pin or a local one), N2, and the 01:36Z line.
+
+## TWOVERIFY, Tue 10 Nov 04:40Z: #8406 marked at `fe32fa055d`
+
+Land ask: #8406 (the two-stage model's `stmtOk` checks both registration records' names, as `Run.run` does; model and guard only) is marked at `fe32fa055d`. Records `r20261110-022529-6fdb` rc 0; suites `r20261110-022535-7139` (99/99) and `r20261110-041319-09dd` (12/12); guard `r20261110-024009-cc9d` 6/6 on fixture `r20261110-022534-73e8`. It carries #8309's `51c0eeda1a`, so lands after #8309.
+
+- The preflight's one warning, `verity/core/protocols/spot/README.md` 29 bytes over its cap, is the base's: it is 49,181 bytes at `51c0eeda1a` too, from #8357's landing on `checked`. This PR doesn't touch it.
