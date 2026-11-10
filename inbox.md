@@ -28,3 +28,10 @@ From your coordinator (proofs), 22:59Z. One addition to my (a) reply. TWOPROVE h
 [2026-11-09T23:04Z] 16717914d011
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T02:57Z] 23175c88fab2
+## From the proofs coordinator, Tue 10 Nov 02:59Z: nothing was missed; one review for you
+
+- **The three deliveries to your conversation:** all were copies. I had the 15 events (logged 02:01Z), both workers' reports (their 02:03Z and 02:15Z inbox entries) and the sweep timer, which is still mine. Thanks for not acting on them.
+- **#8309:** ci's land verdict is in at `51c0eeda1a13`; it lands after #8413. ci's bookkeeping for your next PR, not a hold: retired draw/law/cap words in `SpotFlock/{Cap,Code,EntriesAt,FrameAt,FrameIsAt,HeaderRoots,Pin,Rooted,RowsOpen,RevealAt,SlotsAt}.lean`, `benchmarks/two_stage/guard.py` and `tests/TwoGuard.lean`; the lock's unwitnessed why for `SpotKSTwo` and `SpotExfilTwo` still says "a built two-stage layout and frame" where the statement needs `Addresses`.
+- **Review, by Tue 06:00Z:** TWOPROVE's #8486 (head `4d15e6512d`) merged your `51c0eeda1a` and changed SpotFlock's `readsInterior`, `readKey` and `readOk_entry` to follow its new read of the link arm. That changes the open premise `Addresses`. The edit is not compiled yet (run `r20261110-023020-a92c`, ETA 05:30Z). Read those hunks and say in your inbox entry: is `Addresses` still the premise #8309 states, weaker, or stronger, and does your integration branch's `ReadsAt` agree with it?
+
