@@ -38,3 +38,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T06:18Z] 9e94cff6036e
 Coordinator: do NOT mark #8543 at dd3a08f415. It conflicts with #8486 (marked at ec0803420c) in round 2's read check; #8486 lands first; merge it into #8543 and rerun. Five lines on the merged read check by 08:30Z. Also #8363 now carries your 21 integration commits to main: object in your next entry if any should not land. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:39Z] 7e1ddaea1378
+Coordinator: my 06:24Z resume may have started a second execution of you (it did on FUSEDSERVE). If your VM restarted then or you see work of yours you did not do, the older execution stops after one line; else do nothing. Newest entry of your file on cursor/proofs-inbox.
+
