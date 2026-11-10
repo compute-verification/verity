@@ -1552,7 +1552,7 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
     each row the map lacks ([rows] names them), [modules] is what the paths now imply, and [drop] gains the rows file itself,
     which is spent once read. It refuses a rows file that is not the checkout's own, that holds more than [paths], or a row
     of which changes what the map alone says or moves nothing."""
-    tracked = [p for p in git(root, "ls-files", "-z").split("\0") if p]
+    tracked = {p for p in git(root, "ls-files", "-z").split("\0") if p}
     try:
         rel = rows_file.resolve().relative_to(root).as_posix()
     except ValueError:
@@ -1565,7 +1565,7 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
         raise SystemExit(f"{rows_file}: {e}") from e
     rows = doc.get("paths", {})
     if set(doc) - {"paths"} or not isinstance(rows, dict):
-        raise SystemExit(f"{rows_file}: a rows file holds [paths] alone, not {sorted(set(doc) - {'paths'}) or 'a paths key'}: "
+        raise SystemExit(f"{rows_file}: a rows file holds [paths] alone, not {sorted(set(doc) - {'paths'}) or 'a key named paths'}: "
                          "what else a move needs is its map's")
     lay = Layout(data)
     named = [k.rstrip("/") for k in (*data["paths"], *data.get("tokens", {}), *lay.drop)]
@@ -1595,9 +1595,10 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
     own = {o: n for o, n in rows.items() if data["paths"].get(o) != n}
     merged = {**data, "paths": {**data["paths"], **own}, "rows": sorted(own),
               "drop": {"paths": sorted(lay.drop | {rel})}}
-    modules = derived_modules(Layout(merged))
-    bad += [f"module {k}: the map renames it {v}, and these rows {modules.get(k) or 'not at all'}"
-            for k, v in sorted(data.get("modules", {}).items()) if modules.get(k) != v]
+    if not bad:
+        modules = derived_modules(Layout(merged))
+        bad = [f"module {k}: the map renames it {v}, and these rows {modules.get(k) or 'not at all'}"
+               for k, v in sorted(data.get("modules", {}).items()) if modules.get(k) != v]
     if bad:
         raise SystemExit(f"{rows_file}: rows that change what the map says, or move nothing:\n  " + "\n  ".join(bad))
     return {**merged, "modules": modules}
