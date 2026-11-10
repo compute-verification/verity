@@ -30130,3 +30130,68 @@ proofs, for @vllm (PRF-456, 17:11Z): **of your three, the 2.05 points carry the 
 Then Lean tries and both Security records on a node (`--cwd clone`). Its heading will say exactly which hashes moved. It is still due Wed 12:00Z.
 
 **Needs your word:** whether a statement that newly says what acceptance publishes needs Daniel (an ask, as R8's `Registered` had), or whether it is yours or network's to accept. Until you say, the branch stays scratch and goes nowhere.
+
+## HOUSEKEEP, Tue 10 Nov 17:49Z: top's 17:39Z (after your 17:42Z brief was written from its 17:36Z): the layout does not land today and no branch crosses today. The table on `0247` is done: 25 of 25 clean. On the new staging `1254` (`f9b81e59412a`) our fixtures and rows hold and all 25 merge BASE clean; its rehearsal runs until about 18:10Z unless you stop it
+
+**1. Read this first: top, TOP-394, 9:41 AM PST (17:39Z), "Correction to my post of five minutes ago: the layout does not land today. Daniel read the target tree and wants it changed first."** [read, 17:46Z] Your 17:42Z entry in my mailbox names top's 17:36Z only.
+- Daniel, 9:37 AM PST, through top: "I would much prefer this being presented to me as an architecture doc ... I think this needs more work before we push it." He named: `flock` and `spot` belong in `protocols/`; adapters, not integrations; where fixtures belong; `definitions` should be in `circuits`; `composite` may not be first-class.
+- Top's four rules: "Nobody waits for the layout. A worker whose brief starts 'when the layout is on `main`' or works 'on the moved tree' has lost its premise: end it or point it at `main` as it is, within the hour. Crossing is not today."; the no-recorded-check rule is withdrawn; "The stager finishes its run as a rehearsal and runs no whole check. Hand-row files stay in the notes as they are: do not delete or rewrite them."; "The map will change once. Every open branch then crosses one time".
+- **What it means for PRF-505:** part (3), the crossing, has no date. Part (1), on call for the cut's reds, has no cut. Part (2) is a rehearsal of a map that will change. I touch no hand file.
+- **What I do unless you stop me:** your 17:42Z word on the new head is the newest to me, and the head is pushed, so its rehearsal is running (it costs only my VM, about 22 minutes). I read my mailbox at 18:00Z and before I end. One line there, "stop", and I kill it and end.
+
+**2. The new staging: `cursor/top-layout-staged-1254` at `f9b81e59412a439f15d4983f9f7dae71bac8a070`** (on origin at 17:46Z). [run] Base `queue/118b43a00132` (`main` `e7b03e4a6c89` plus 38 commits), #8659 and the model's tables merged, the maps `5600df44ee`, the one-map move `1254099b44`, the second move `bad7d7d09b`, vllm's pick, generated files, old roots, boundary rows. `queue/034a1702664b` is no longer on origin.
+- **Fixtures on its head:** 8, 7 and 6 recorded inputs; 0 with another digest; 0 absent. [run, 17:47Z]
+- **Our rows:** 48 of 48 applied at `81d4eaf0f4` (the last commit before the second move); at the tip 44 read as `want` and rows 40, 41, 45, 47 as `want` with `Security/` as `security/`. [run]
+- **All 25 heads merge its BASE `5600df44ee4d` clean** (`git merge-tree`, drivers registered), #8543 and #8563 too. [run] The stager's 17:36Z block: 245 hand rows applied, 10 as wanted, 0 stops on this base. [read]
+- **The 25 against its head:** launched 17:48Z, three at a time, due about 18:10Z. Table in my next entry.
+
+**3. The table on the dropped cut, `cursor/top-layout-staged-0247` at `0bda472ef80c`: 25 of 25 cross clean.** [run, 17:20Z to 17:44Z; it was running when your 17:42Z came, so I let it finish] BASE `eb9d76020c46`; moves `02479f5e1822` and `4904f9d675cf`; both pass `restack.py`'s check that the commit is what the script writes on its base. Dry, nothing pushed.
+
+| PR | head | mark | restack | steps, or where it stops | an ordinary merge of the tip | result (scratch) |
+|---|---|---|---|---|---|---|
+| #8354 | `a53eb5d1686d` | ready | clean | both moves | conflicted (1) | `dcaf5f30c31e` |
+| #8368 | `533958045e8e` | ready | clean | both moves | conflicted (2) | `28cf619079a5` |
+| #8552 | `20d95f339db2` | ready | clean | both moves | conflicted (1) | `6ebb6220266c` |
+| #8406 | `fe32fa055d40` | ready | clean | both moves | conflicted (1) | `33a1a8c5f329` |
+| #8411 | `1562e328dae3` | ready | clean | both moves | clean | `15a5e4b81b42` |
+| #8414 | `4975a307d3f7` | ready | clean | both moves | conflicted (3) | `0c70f3c0c20d` |
+| #8423 | `e973bd0d968c` | ready | clean | both moves | clean | `b4f34227a639` |
+| #8425 | `8d4002392314` | ready | clean | both moves | clean | `71f81dc8d3f9` |
+| #8453 | `0054c395fe85` | ready | clean | both moves | clean | `8fadce65f189` |
+| #8454 | `0e694dd53ec6` | ready | clean | both moves | clean | `f310876951f6` |
+| #8458 | `9c4fa7138715` | ready | clean | both moves | clean | `34013357d207` |
+| #8517 | `2e8a4eab4b65` | ready | clean | both moves | clean | `51f45dda7117` |
+| #8536 | `b7afd40baa20` | ready | clean | both moves | conflicted (5) | `4d8568a91c92` |
+| #8540 | `b301a406cc3c` | ready | clean | both moves | clean | `564a866a0519` |
+| #8565 | `38e2f7d06762` | ready | clean | both moves | conflicted (5) | `a4609a8087b1` |
+| #8576 | `1803be00c9f6` | ready | clean | both moves | clean | `2d4871f9e1c2` |
+| #8583 | `eccc38719cd5` | ready | clean | both moves | clean | `19b6a0366dcd` |
+| #7952 | `4d3d22fda080` | waiting | clean | both moves | clean | `fb02125b59f6` |
+| #8120 | `b6e0c1dc5de8` | waiting | clean | both moves | conflicted (1) | `eaa0e9d78f2a` |
+| #8177 | `6dd74f50be00` | waiting (draft) | clean | both moves | clean | `ff103f17b8e8` |
+| #8363 | `a81a1b11ea1d` | waiting | clean | both moves | conflicted (9) | `06b78de4b69f` |
+| #8543 | `2007687fd9b8` | waiting | clean | both moves | conflicted (1) | `1eb4780b1baf` |
+| #8563 | `80bc72a80541` | waiting (draft) | clean | both moves | clean | `663bd3016409` |
+| #8568 | `a28822661c1a` | waiting | clean | both moves | clean | `307842b8ac13` |
+| #8578 | `0a713e7caaf6` | waiting | clean | both moves | clean | `8c3b7e42b261` |
+
+- By status: clean 25; conflicted 0; `locks-stale` 0; `pins-stale` 0; pins commits 0. 10 of the 25 would conflict by an ordinary merge of the moved tip.
+- **The result carries the PR's change and nothing else** [run, `netchange.py`]: for 22 of 25, `git diff --shortstat` of the head with BASE merged against BASE equals that of the result against the tip (files, insertions, deletions). The other three differ by one line, each read:
+  - #8414: one import line becomes two, since `optimize.py` goes to `verity/spot` and `second_stage`, `service` to `verity/spot/verifier` (the map's split).
+  - #8406 and #8543: in `fixtures/artifacts.json` one entry no PR touches (`art:0f06d319…`, `verity/definitions/silicon/discrepancy_log.json`) sits at another line of the map. The `fixture-map` driver wrote the keys in its order. Parsed, the map's change is the same before and after: one id replaced, one `previous` entry added.
+- No result holds a file under `Security/`, `verity/core/` or `verity/ml/`, and no line a result adds names one of them. [run]
+- **Stacks among the 25: #8368 holds #8354's head; #8543 holds #8406's.** [run] After the lower lands, as a squash on the tip or as its restacked head (then two merge bases), the upper's restacked head merges clean, and the merged tree is the upper's own tree, both ways, for both stacks. [run: `git merge-tree`]
+- Not checked: any test or Lean build on a result; the 20 conflicting PRs; any head against a map that is not written yet.
+
+**4. One line of ours the moved tree leaves wrong, found by compute-research (TOP-394, 17:44Z) and read by me on `f9b81e59412a`.** `benchmarks/verifier_cost/flock_served.sh`: line 86 is rewritten to `git archive "$base" verity/flock/verifier | tar -x -C "$S/base"` and line 87 still reads `scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base`. No lane's hand file has a row on that file. [run: `git show`, `grep`] It stops no check (compute-research). The row, **not added** (rows are closed and the files frozen), for the map's next form:
+
+```toml
+[[line]]
+file = "benchmarks/verifier_cost/flock_served.sh"
+after = '    scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base'
+want = '    scratch flock-tmpl "$S/base/verity/flock/verifier" flock-tmpl-base'
+```
+
+- One thing the row does not settle [guess]: `$base` is a revision to compare with. A base from before the move holds Flock at the old path, so both lines are then wrong for it whichever way they read. That is the script's owner's call.
+
+**5. What stays useful when the map changes** (all in the notes, `lanes/proofs/layout/tools/`, `eadf67aaee`): `rehearse.py CLONE STAGE PR` (the two commands, dry), `table.py`, `netchange.py`, `leftover.py`, `oldnames.py`, `fixture_digests.py REPO REV`, `hand_lines_applied.py hand-lines.toml REPO REV`; `lanes/proofs/layout/clean25.tsv`. A pass of 25 is 20 minutes on one 4-core VM, so it needs no second worker.
