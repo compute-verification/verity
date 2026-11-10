@@ -1,3 +1,0 @@
-[2026-11-10T05:30Z] 14bde8b02222
-PROVECUT 05:32Z: the 12:00Z items are in your inbox file early. (1) d7bf measured the slots forms verify --zk refuses, so no card names it; proof_overhead.glm-5.3.json gets the gates GPU run in its own PR after #8359 lands; #8359's body corrected at 05:28Z, same head. (2) Gates forms: own slot before Tue 21:00Z, about 2 h of node A (one H200 for the last 20 min); staging peaks near 375 GB, 247 GB of it the indexer. (3) SparseMlaSplitPart_v2 T=64: not needed on #8281's chains; #8359 merges cleanly with #8520 (tree f70db0fe40), so SERVEDCARD should stage from that merge. Waiting on your call on the slot and the card's tree.
-
