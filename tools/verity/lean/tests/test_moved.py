@@ -43,6 +43,8 @@ def test_a_package_path_of_any_earlier_layout_is_where_the_package_is_now(tmp_pa
                      ("verity/Security/Properties/", "security/Properties"), ("Security/Specs", "security/Models"),
                      ("security", "security"), ("./security/Proofs", "security/Proofs")]:
         assert M.resolve(old, root) == new, old
+    (root / "Security" / ".lake").mkdir(parents=True)
+    assert M.resolve("Security", root) == "security", "the old directory a build left behind is not the package"
 
 
 def test_a_path_no_move_knows_or_that_leads_to_no_directory_is_refused(tmp_path):
@@ -98,6 +100,10 @@ def test_the_install_command_s_old_package_path_sets_up_the_moved_package(tmp_pa
     for rel in ("tools/lean/setup.sh", "tools/verity/lean/setup.sh", "tools/verity/lean/moved.py"):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(LEAN.parents[2] / rel, root / rel)
+    (root / ".gitignore").write_text(".lake/\n")
+    for argv in (["init", "-q"], ["add", "."], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c"]):
+        subprocess.run(["git", *argv], cwd=root, check=True, capture_output=True)
+    _builds(root, {"Security": "spec", "Security/Proofs": "proofs"})      # what the machine built before the move
     bin_, state = tmp_path / "bin", tmp_path / "state"
     bin_.mkdir()
     for name in ("elan", "lean", "lake"):
@@ -108,6 +114,8 @@ def test_the_install_command_s_old_package_path_sets_up_the_moved_package(tmp_pa
     r = subprocess.run(["bash", "tools/lean/setup.sh", "Security"], cwd=root, env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert "setup.sh: Security is security since the layout moves" in r.stdout
+    assert "lean: security/Proofs: its build directory moved with it from Security/Proofs (a layout move)" in r.stdout
+    assert (root / "security" / ".lake" / "build" / "olean").read_text() == "spec" and not (root / "Security").exists()
     log = state.read_text().splitlines()
     assert f"lake env true in {root / 'security'}" in log and log[0] == f"elan toolchain install leanprover/lean4:v9.9.9 in {root / 'security'}"
     state.unlink()

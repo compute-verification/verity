@@ -7,8 +7,8 @@ commit appends its own entry. So it says which moves have happened in this tree,
 parses: `setup.sh` runs it with the machine's own `python3`.
 
     python3 tools/verity/lean/moved.py PATH       print the directory PATH names in this tree, from the repository's root:
-                                                  PATH itself when it is one, else where the recorded moves took it
-                                                  (`verity/Security` to `Security` to `security`); exit 1 when neither is
+                                                  where the recorded moves took it (`verity/Security` to `Security` to
+                                                  `security`) when that is one, else PATH itself; exit 1 when neither is
     python3 tools/verity/lean/moved.py --carry    in this checkout, move each Lake package's build directory (`.lake`,
                                                   untracked, so a move leaves it at the package's former path) to where
                                                   the package is now; a package that has one already keeps it
@@ -75,14 +75,14 @@ def former(path: str, moves: list[dict[str, str]]) -> list[str]:
 
 
 def resolve(path: str, root: Path = ROOT) -> str | None:
-    """The directory ``path`` (from ``root``) names in this tree: itself, else where the recorded moves took it."""
+    """The directory ``path`` (from ``root``) names in this tree: where the recorded moves took it, when that is a
+    directory, else itself when it is one. The moves come first: a machine that built a package before its move still has
+    the package's old directory, holding only the build (`.lake`, which `carry` moves)."""
     p = posixpath.normpath(path)
     if p.startswith("..") or posixpath.isabs(p):
         return None
-    if (root / p).is_dir():
-        return p
     q = now(p, recorded(root))
-    return q if q != p and (root / q).is_dir() else None
+    return q if (root / q).is_dir() else p if (root / p).is_dir() else None
 
 
 def carry(tree: Path, packages: list[str], moves: list[dict[str, str]], log=print, prune: bool = False) -> dict[str, str]:
