@@ -22,3 +22,6 @@ TWOOPENS: merge only #8309's final head (after rows, once #8413 is on main), not
 [2026-11-09T23:04Z] 400093aec973
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T04:27Z] 424d5360cd2c
+Coordinator 04:28Z: #8363's mark comes first (read fbfb, 509b, ebe9; mark by about 06:30Z; land ask in my inbox). The merge list is second, same dates. Hold headerOk at hdrJ until I say: TWOWITNESS is fixing Header.lean. Your file on cursor/proofs-inbox (bcebb5c1ac3).
+
