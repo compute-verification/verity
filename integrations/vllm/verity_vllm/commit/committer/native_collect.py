@@ -158,12 +158,8 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
-<<<<<<< 99c8914848
     commit_scheme, rows = step_rows.NAME, True
-||||||| merged common ancestors
-=======
     ends_source_steps = True
->>>>>>> 7af4d24fca3e
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -217,23 +213,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         # takes that run's keys (`replay_row_keys`, set before the run and dropped by its finalize)
         if (commit_scheme or step_rows.NAME) != step_rows.NAME:
             raise ValueError(f"unknown commit scheme {commit_scheme!r}: the collector commits {step_rows.NAME}")
-<<<<<<< 99c8914848
-        if not self.windowed or self.hiding is not None:
-            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
-                             "its own hiding leaves only")
-        self.chunk = step_rows.ROW_BYTES          # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
-        self.row_keys: dict[int, bytes] = {}
-||||||| merged common ancestors
-        if not self.windowed or self.hiding is not None:
-            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
-                             "its own hiding leaves only")
-        self.commit_scheme, self.rows = step_rows.NAME, True
-        self.chunk = step_rows.ROW_BYTES          # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
-        self.row_keys: dict[int, bytes] = {}
-=======
         if not self.windowed:
             raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0)")
->>>>>>> 7af4d24fca3e
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
         self._copy = None                           # the worker's stream for rows-sha512 level copies (created lazily on the worker thread)
