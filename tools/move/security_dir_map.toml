@@ -27,13 +27,15 @@ paths = []
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
-# whose bytes a digest pins, and every Lean file (above).
+# whose bytes a digest pins, every Lean file (above), and every Lake manifest: none names the directory, a package's
+# requirements by path sit where they sat from it (`../Properties`, `../../verity/...`), and a manifest's bytes key its
+# package's fetched dependencies (`lean_audit.deps_key`), so a path in one written shorter would fetch Mathlib again.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
-           "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json", "**/*.lean"]
+           "**/lake-manifest.json", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean"]
 # Rewritten though a pattern above matches: the pins that record a file's digest under its path, whose paths follow the
 # move while every digest stays (the run refuses a digest that would change).
-include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
            "**/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json",
            "verity/core/protocols/spot/tests/fixtures/exfiltration_two_lean.json",
            "verity/ml/flock/tests/fixtures/randomness_lean.json"]
