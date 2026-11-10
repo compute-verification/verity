@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
 KEYS_FIXTURE = ROOT / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
-PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
+PINNED_TEXT = (R.VECTORS.parent / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
 POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)
 """The least c0 ≡ 1 mod 4 with 2^w − c0 prime at each reduced width, and the deployment's."""
@@ -350,7 +350,7 @@ def main() -> None:
     negative = negative_vectors(audit["small_end_to_end"])
     files = {R.VECTORS.name: _dump(maps), AUDIT_VECTORS.name: _dump(audit), NEGATIVE_VECTORS.name: _dump(negative)}
     for name, raw in files.items():
-        (HERE / name).write_bytes(raw)
+        (R.VECTORS.parent / name).write_bytes(raw)
     KEYS_FIXTURE.write_bytes(_dump(keys_fixture(maps, _sha512(files[R.VECTORS.name]))))
     new = pins(maps, audit, negative, files)
     for path in PINNED_TEXT:
