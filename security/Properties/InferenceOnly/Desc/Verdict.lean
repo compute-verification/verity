@@ -6,7 +6,7 @@ public import Properties.InferenceOnly.Threads
 /-!
 # What a verdict of the description-sized check carries
 
-`InferenceOnlyCheck.Desc.evaluate` is the policy check `nci-check` runs (`InferenceOnlyCheck.Desc.check` writes its refusals, and the check
+`InferenceOnlyCheck.Desc.evaluate` is the policy check `inference-only-check` runs (`InferenceOnlyCheck.Desc.check` writes its refusals, and the check
 of record, `InferenceOnlyCheck.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
 (`Properties.InferenceOnly.Desc`) makes its verdict the one `InferenceOnlyCheck.evaluate` gives on every expansion of the instance gate by gate
 (`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.InferenceOnly`,
