@@ -15,7 +15,7 @@ public import InferenceOnlyCheck.CountDifftest
 /-!
 # The inference-only policy's check
 
-`InferenceOnlyCheck.Baseline.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
+`InferenceOnlyCheck.Baseline.check` (the `inference-only-check` exe) is the verifier's check that a declared division of a declaration into
 inference blocks meets `InferenceOnly.CompliesRate Γ α` (`Security/Definitions/InferenceOnly.lean`), for inference blocks aligned to the root's Calls, at
 the cost of the descriptor: `InferenceOnlyCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
@@ -36,7 +36,7 @@ Flock's decoder doesn't check that a reference reads a leaf at the width it was 
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
 `InferenceOnlyCheck.decodeProgram`, which refuses one that doesn't, with a message.
 
-`InferenceOnlyCheck.Count.check` (`nci-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
+`InferenceOnlyCheck.Count.check` (`inference-only-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`InferenceOnly.CompliesAtMost`), the blocks the
 activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
 table and its fresh bits from `InferenceOnlyCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
