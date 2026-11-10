@@ -75,18 +75,17 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
                                (SampledLeakCarried, PooledLeakCarried)
-../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: a period statement's named conditions: the windows'
-                               registrations (WindowsPlaced), a record that reads back under a registered parameter
-                               (RecordFormat.ReadsBy), the sender's channel over those (PeriodChannelReg), and the
-                               windows' count (windowsCount)
+../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: a period statement's conditions: WindowsPlaced,
+                               a record read back under a registered parameter (RecordFormat.ReadsBy), the sender's
+                               channel over those (PeriodChannelReg), the windows' count (windowsCount)
 ../../Definitions/NetworkCertifier/Assumptions/RegisteredInputs.lean  trusted: the trace holds the registration's
                                values at the registered inputs (RegisteredInputsHeld), an open premise
 ../../Definitions/NetworkCertifier/PeriodChecked.lean  trusted: the run at the network certifier's rows
-                               (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked) and a
+                               (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked), a
                                window's good event with it (WindowGoodChecked)
-../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: the leak over a monitoring period with the
-                               checked inputs left out and the record read under a registered parameter
-                               (PeriodLeakChecked), stated and not proved
+../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: the period's leak with checked inputs
+                               left out and the record read under a registered parameter (PeriodLeakChecked),
+                               stated and not proved
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
                                (trivLay, notLay, certOps)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -162,9 +161,9 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
                                          of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
                                          (rootsOfChecked)
 PeriodCheckedChecks.lean  checks of PeriodLeakChecked: held to the trace's run its first part is false, at a toy
-                                         whose check passes there and misses on the run at the network certifier's
-                                         rows (freeL_traceRun_insufficient, periodLeakChecked_traceRun_fails,
-                                         freeL_certifierRun_miss); its nontrivial lemma; readsBy_read
+                          whose check passes there and misses on the run at the network certifier's rows
+                          (freeL_traceRun_insufficient, periodLeakChecked_traceRun_fails, freeL_certifierRun_miss);
+                          its nontrivial lemma; readsBy_read
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -365,8 +364,8 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
 - **The leak bounds with checked inputs** (`Checked.lean`, `Carried.lean`): inputs a check pins cost no advice bits. A
   check `valid` over a run's values pins the inputs `chk` where a valid run's values there are a function of the
   ingress, the other inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid
-  accepted run with probability at most `εchk` on the runs it is held to (`CheckedWitness`, a scope; the three bounds
-  below read it at the trace's run, `traceRun`).
+  accepted run with probability at most `εchk` on the runs it is held to (`CheckedWitness`, a scope; the two sampled
+  bounds below read it at the trace's run, `traceRun`).
   - `SampledLeakChecked` is `SampledLeakAccepted` with the leak relation and the count taken over valid runs only, at
     `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`. Its honest lemma is `SampledAuditAccepted_honest`, at
     its one stated premise `Compiled.KS`.
@@ -384,11 +383,11 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
 - **The period statement with checked inputs** (`Guarantees/PeriodChecked.lean`), stated and not proved:
   `PeriodLeakChecked` is `PeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
-  windows' count, with no factor for the schedules or a connection's cells. Its check is held to the run at the
-  network certifier's rows (`CheckedWitness` at `certifierRun`), which holds an incorrect proof block's committed gates
-  at the trace filled in with the network certifier's openings; held to the trace's run the statement is false
-  (`PeriodCheckedChecks.lean`). That the trace holds the registration's values at the registered inputs is the named
-  premise `RegisteredInputsHeld`.
+  windows', with no factor for the schedules or a connection's cells. Window `i`'s operator reads the windows before it
+  (`runsBefore`). Its check is held to the run at the network certifier's rows (`CheckedWitness` at `certifierRun`),
+  which holds an incorrect proof block's committed gates at the trace filled in with the network certifier's openings;
+  held to the trace's run the statement is false (`PeriodCheckedChecks.lean`). That the trace holds the registration's
+  values at the registered inputs is the named premise `RegisteredInputsHeld`.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
