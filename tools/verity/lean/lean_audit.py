@@ -59,7 +59,7 @@ The audit's `dependencies` check still compares their `.olean` files with the pa
 still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
 those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
-one imported (`check.gather_verdicts`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
+one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
@@ -1543,16 +1543,17 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `gather_verdicts` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
-    read: each node then reuses only what it built."""
+    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
+    cancelled run's too, since its bundle holds only modules of packages whose audit passed. When the store has a remote, the
+    attempts started in the last `common.RECENT_S` are refreshed from it first. Empty when the store can't be read: each node
+    then reuses only what it built."""
     from research.store.local import LocalStore
 
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
-            store.refresh(attempts_only=True)
+            store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
         rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                                "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
         for (rid,) in rows:

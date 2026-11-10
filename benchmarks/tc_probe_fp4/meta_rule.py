@@ -29,12 +29,22 @@ import multiprocessing as mp
 import os
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import probe as P
 import sparse as S
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED
+
+if TYPE_CHECKING:
+    import argparse
+    from multiprocessing.pool import Pool
+
+    from verity.ml.circuits.silicon.models import BlockScaledAlignAdd
 
 INSTRUCTIONS = {"sp_nvf4_meta": "sp_nvf4", "sp_mxf4_meta": "sp_mxf4"}
 K_STORED, K_LOGICAL, CHUNKS = S.K_STORED, S.K_LOGICAL, S.CHUNKS
@@ -66,7 +76,7 @@ def gather_offsets(rule: dict) -> np.ndarray:
     return off
 
 
-def gathered_b(B, META, off) -> np.ndarray:
+def gathered_b(B: np.ndarray, META: np.ndarray, off: np.ndarray) -> np.ndarray:
     """B (n,8,128) codes, META (n,16,16) nibbles, off (16,4) -> (n,16,8,64): each row's B codes at its stored slots (code 0
     where the slot lands nowhere)."""
     n = B.shape[0]
@@ -77,7 +87,8 @@ def gathered_b(B, META, off) -> np.ndarray:
     return np.where(np.broadcast_to((o < 0)[:, :, None, :], g.shape), 0, g).astype(np.uint8)
 
 
-def gather_words(model, As, Bg, SFA, SFB, C) -> tuple[np.ndarray, np.ndarray]:
+def gather_words(model: BlockScaledAlignAdd, As: np.ndarray, Bg: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+                 C: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """The dense pinned step per element on the stored A row and its gathered B: (D (n,16,8), domain-error mask)."""
     n = As.shape[0]
     out = np.zeros((n, 16, 8), np.uint32)
@@ -100,11 +111,13 @@ def _init(instr: str) -> None:
     _CTX["model"] = S.PINNED[instr]
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                ) -> tuple[np.ndarray, np.ndarray]:
     return gather_words(_CTX["model"], *args)
 
 
-def evaluate(pool, instr, As, Bg, SFA, SFB, C, procs: int):
+def evaluate(pool: Pool | None, instr: str, As: np.ndarray, Bg: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+             C: np.ndarray, procs: int) -> tuple[np.ndarray, np.ndarray]:
     if pool is None:
         return gather_words(S.PINNED[instr], As, Bg, SFA, SFB, C)
     idx = np.array_split(np.arange(As.shape[0]), max(1, min(As.shape[0] // 4 + 1, procs * 8)))
@@ -118,7 +131,7 @@ class FakeMeta:
 
     tcgen05 = False
 
-    def __init__(self, instr: str, model_name: str):
+    def __init__(self, instr: str, model_name: str) -> None:
         if model_name != "pairs_from_bits":
             raise SystemExit(f"--fake-silicon: {instr} takes only 'pairs_from_bits'")
         self.model_name = model_name
@@ -128,10 +141,11 @@ class FakeMeta:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
                 "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
-    def tiles(self, instr: str, As, B, META, SFA, SFB, C) -> np.ndarray:
+    def tiles(self, instr: str, As: np.ndarray, B: np.ndarray, META: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+              C: np.ndarray) -> np.ndarray:
         D, err = gather_words(S.PINNED[instr], np.asarray(As), gathered_b(B, META, self.off), np.asarray(SFA), np.asarray(SFB),
                               np.asarray(C, np.uint32))
         D[err] = 0x7FFFFFFF
@@ -141,7 +155,7 @@ class FakeMeta:
 # --- Part A: the map -------------------------------------------------------------------------------------------------------------
 
 
-def part_a_operands(instr: str, variant: str, rng):
+def part_a_operands(instr: str, variant: str, rng: np.random.Generator) -> tuple[np.ndarray, ...]:
     """1024 tiles: B chunk c' = t // 64, row i of tile t holds config order[64 c' ... ] -> (s, m).  Returns the operands and
     (n,16) arrays of each row's slot and nibble."""
     kind, nb = S.SCALE_KIND[instr], S.NBLK[instr]
@@ -173,7 +187,7 @@ def part_a_operands(instr: str, variant: str, rng):
     return As, B, META, SFA, SFB, np.zeros((n, 16, 8), np.uint32), slot, nib
 
 
-def decode(D, instr: str, variant: str):
+def decode(D: np.ndarray, instr: str, variant: str) -> tuple[np.ndarray, np.ndarray]:
     """Words -> (weight, block): weight 0 and block -1 for +0; weight -1 where the word is not weight x a x b x 2^e_block."""
     kind = S.SCALE_KIND[instr]
     acode, bcode = CODES[variant]
@@ -190,7 +204,8 @@ def decode(D, instr: str, variant: str):
     return weight, block
 
 
-def landing_table(D, slot, nib, instr: str, variant: str):
+def landing_table(D: np.ndarray, slot: np.ndarray, nib: np.ndarray, instr: str,
+                  variant: str) -> tuple[np.ndarray, np.ndarray, list[dict]]:
     """Part A's words -> W (64 slots, 16 nibbles, 128 k) weights and BLK the decoded blocks, plus the undecodable words."""
     weight, block = decode(D, instr, variant)
     n = D.shape[0]
@@ -208,7 +223,7 @@ def landing_table(D, slot, nib, instr: str, variant: str):
     return W, BLK, bad
 
 
-def nibble_rule(W, BLK_a, BLK_b, nb: int):
+def nibble_rule(W: np.ndarray, BLK_a: np.ndarray, BLK_b: np.ndarray, nb: int) -> tuple[dict, dict, dict]:
     """Per nibble: where each slot of chunk c lands, relative to 8c, if that is the same in every chunk; the blocks against
     both ways of assigning one (the stored slot's, the logical k's)."""
     rule, per_nibble = {}, {}
@@ -237,7 +252,7 @@ def nibble_rule(W, BLK_a, BLK_b, nb: int):
 
 def predicate_tables(rule: dict) -> dict:
     """Part C: the 256 zero patterns of an 8-chunk against the hardware's images and D-24."""
-    def image(m):
+    def image(m: int) -> int:
         return sum(1 << o for o in rule[m] if o is not None)
 
     ordered = [m for m in S.META_VALID.tolist() if m in rule]
@@ -245,10 +260,10 @@ def predicate_tables(rule: dict) -> dict:
     img_o = [image(m) for m in ordered]
     img_a = [image(m) for m in all16]
 
-    def d24(p):
+    def d24(p: int) -> bool:
         return bin(p & 0xF).count("1") <= 2 and bin(p >> 4).count("1") <= 2
 
-    def pairs(p):
+    def pairs(p: int) -> int:
         return sum(1 for q in range(4) if p >> (2 * q) & 3)
 
     rows = []
@@ -256,7 +271,7 @@ def predicate_tables(rule: dict) -> dict:
         rows.append({"pattern": p, "hw_ordered": any(p & ~i == 0 for i in img_o), "hw_all16": any(p & ~i == 0 for i in img_a),
                      "d24": d24(p), "pairs_touched": pairs(p)})
 
-    def offs(p):
+    def offs(p: int) -> list[int]:
         return [o for o in range(8) if p >> o & 1]
 
     count = {k: sum(r[k] for r in rows) for k in ("hw_ordered", "hw_all16", "d24")}
@@ -276,7 +291,8 @@ def predicate_tables(rule: dict) -> dict:
 # --- Part B ----------------------------------------------------------------------------------------------------------------------
 
 
-def part_b_operands(instr: str, rng, n: int, nibbles: np.ndarray, shared: bool):
+def part_b_operands(instr: str, rng: np.random.Generator, n: int, nibbles: np.ndarray,
+                    shared: bool) -> tuple[np.ndarray, ...]:
     kind, nb = S.SCALE_KIND[instr], S.NBLK[instr]
     As = rng.integers(0, 16, (n, 16, K_STORED)).astype(np.uint8)
     B = rng.integers(1, 16, (n, 8, K_LOGICAL)).astype(np.uint8)
@@ -294,7 +310,7 @@ def part_b_operands(instr: str, rng, n: int, nibbles: np.ndarray, shared: bool):
 # --- driver ----------------------------------------------------------------------------------------------------------------------
 
 
-def main(args) -> int:
+def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
