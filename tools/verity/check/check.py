@@ -1249,6 +1249,10 @@ def record(argv: list[str]) -> int:
 
 #: how many of the newest recorded checks' verdict packs a recorded check gathers (`gather_verdicts`)
 GATHER = 12
+#: the bytes of recorded checks' packs one gather fetches (`gathered_packs`): a pack that would take it past this is passed over
+#: by name, so what a launch stages (the packs, `combine`'s spill of every entry and the pack it writes) stays bounded whatever
+#: a recorded check published
+GATHER_BYTES = 256 << 20
 
 
 def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
@@ -1256,9 +1260,9 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     send with `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
     under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
-    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
-    verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
-    runs on its own cache)."""
+    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse, or that would take the gather
+    past `GATHER_BYTES`, is passed over by name, so its verdicts are recomputed, never reused; a refused pack given is an
+    error.  None when there is no pack at all (the check then runs on its own cache)."""
     from research.store.local import LocalStore
 
     if given is not None and not given.is_file():
@@ -1298,21 +1302,38 @@ def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Pat
     return None
 
 
+def pack_bytes(store, rid: str, name: str = "verdicts.tar.gz") -> int | None:
+    """The size the store lists for the pack `attempt_pack` would fetch for ``rid``; None when it published none or lists no size."""
+    out = (store.get_attempt(rid) or {}).get("outputs") or {}
+    for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
+        for f in store.listing(art):
+            if f["path"] == name:
+                return f.get("bytes")
+    return None
+
+
 def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
     """(attempt, pack) of the ``limit`` recorded checks that ended last and published a pack `combine` takes, newest first
-    (`gather_verdicts`); one it refuses is passed over by name.  The store's attempts are refreshed first when it has a remote."""
+    (`gather_verdicts`); one it refuses is passed over by name, and so, before it is fetched, is one whose listed size would
+    take the packs gathered past `GATHER_BYTES`.  The store's attempts are refreshed first when it has a remote."""
     if store.remote is not None:
         store.refresh(attempts_only=True)
     rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                            "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
-    packs = []
+    packs, room = [], GATHER_BYTES
     for (rid,) in rows:
+        size = pack_bytes(store, rid)
+        if size is not None and size > room:
+            print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this gather past "
+                  f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
+            continue
         if (pack := attempt_pack(store, rid, d)) is None:
             continue
         if why := VERDICTS.refusal(pack):
             print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed", flush=True)
             continue
         packs.append((rid, pack))
+        room -= size if size is not None else (pack.stat().st_size if pack.is_file() else 0)
         if len(packs) == limit:
             break
     return packs
