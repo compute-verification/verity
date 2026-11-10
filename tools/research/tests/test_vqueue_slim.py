@@ -459,6 +459,17 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
         assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
 
 
+def test_a_shard_whose_train_sh_printed_no_run_at_once_stops_the_others_and_start_gives_no_record(world, monkeypatch):
+    """A shard launched at once whose train.sh printed no run ids: the shards that registered a run are cancelled, and `start`
+    logs that shard's tail and gives no record, which `judge` takes as infra."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, launch = "m1,m2,m3", h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: (
+        ([], "train.sh: no slot") if kw["shard"] == "2/3" else launch(repo, commit, machine, steps, **kw))
+    assert start(h.d, sha, base, shards=3) is None and h.cancelled == ["r-post-0", "r-post-1"]
+    assert world.logs[-1].endswith(f"as 3 shards as candidate {sha[:12]}'s check registered no run: train.sh: no slot")
+
+
 def test_shards_are_n_of_ci_tomls_plan_or_auto_n_of_an_auto_plan():
     assert [shard_count(s) for s in (0, 3, "auto:6", "auto:12")] == [(0, False), (3, False), (6, True), (12, True)]
     for bad in ("auto:0", "auto:", "auto:6x", "auto:-1", " auto:6", "6", "x:6"):

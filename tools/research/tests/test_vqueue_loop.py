@@ -2289,6 +2289,9 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
 #: split over the last two
 PLAN = (("lean-changed", "flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
         ("pytest", "flock-rust-tests"), ("pytest", "circuit-check", "ratchet-gate"))
+#: an auto plan's six shards of the same steps, pytest's suites split over three of them
+PLAN6 = (("lean-changed", "flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
+         ("pytest", "flock-rust-tests"), ("pytest",), ("pytest", "circuit-check"), ("ratchet-gate",))
 OLD, NEW = "tests/test_x.py::test_old", "tests/test_x.py::test_new"
 
 
@@ -2315,16 +2318,18 @@ class Runs:
         self.state[rid := f"c-{len(self.launches)}"] = ("running", None, None)
         return [rid], ""
 
-    def end(self, sha: str, shard: int = 0, step: str = "", log: str = "", rows: tuple[dict, ...] = ()) -> None:
-        """The three shards of the newest check of ``sha`` ended, each step passed but ``step`` in shard ``shard``, which
-        failed with ``log`` and, of a step that runs suites, the suites.json ``rows``."""
+    def end(self, sha: str, shard: int = 0, step: str = "", log: str = "", rows: tuple[dict, ...] = (),
+            plan: tuple[tuple[str, ...], ...] = PLAN) -> None:
+        """The shards of the newest check of ``sha`` ended, each running a step list of ``plan`` (`PLAN`'s three, unless
+        given): each step passed but ``step`` in shard ``shard``, which failed with ``log`` and, of a step that runs suites,
+        the suites.json ``rows``."""
         from research.drive import LIVE
 
-        for k, n in enumerate([n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-3:], 1):
+        for k, n in enumerate([n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):], 1):
             (d := self.tmp / f"c-{n}").mkdir(parents=True)
             bad = step if k == shard else ""
             recs = [{"step": x, "status": "failed", "rc": 1, "log": f"{x}.log"} if x == bad else {"step": x, "status": "passed"}
-                    for x in (*PREFLIGHT, *PLAN[k - 1])]
+                    for x in (*PREFLIGHT, *plan[k - 1])]
             (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
             (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": "failed" if bad else "passed",
                                               "steps": [{"step": r["step"], "state": r["status"]} for r in recs]}))
@@ -2465,28 +2470,30 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
 
 def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a_candidate_dropped_while_it_is_made_launches_none(
         env, monkeypatch):
-    """`--shards auto:N`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
-    that finds it made launches its N shards `--shard auto:K/N` with its file; the candidate advances once every shard passed.
-    One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
+    """`--shards auto:6`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
+    that finds it made launches its 6 shards `--shard auto:K/6` with its file, a machine each; the candidate advances once
+    every shard passed.  One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
     from research.drive import AFTER_LANDING, AUTO_PLAN
     from test_drive_review import _plan_doc
     from test_vqueue_slim import Plans
 
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
-    loop, runs = _check(env, monkeypatch, shards="auto:3")
+    loop = env.loop(vqueue.decide, slim=vqueue_slim, gate="check", shards="auto:6")
+    runs = Runs(env, loop, monkeypatch, on=",".join(f"m{k}" for k in range(1, 7)))
     plans = Plans(loop.world.slim_driver(), env.tmp / "plans")
     _, built, started = loop.tick()
     sha = built["sha"]
-    assert runs.launches == [] and plans.asked == [(c, ",".join(AFTER_LANDING), None, 3) for c in (main, sha)]
-    assert started["record"]["plan"]["n"] == 3 and loop.tick() == [] and runs.launches == [], "pending while they are made"
-    plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(3), None) for k in (1, 2)})
+    assert runs.launches == [] and plans.asked == [(c, ",".join(AFTER_LANDING), None, 6) for c in (main, sha)]
+    assert started["record"]["plan"]["n"] == 6 and loop.tick() == [] and runs.launches == [], "pending while they are made"
+    plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(6), None) for k in (1, 2)})
     assert _acts(loop.tick()) == ["slim", "slim"]
     assert [(c, m, kw["shard"], kw["shard_plan"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"auto:{k}/3", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha)) for k in (1, 2, 3)]
+        (c, f"m{k}", f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha))
+        for k in range(1, 7)]
     assert not any((plans.tmp / f"plan-{k}").exists() for k in (1, 2)) and loop.tick() == []
-    runs.end(main)
-    runs.end(sha)
+    runs.end(main, plan=PLAN6)
+    runs.end(sha, plan=PLAN6)
     assert _acts(loop.tick()) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha
     env.put(2, {"b.txt": "1\n"})
     built, started = loop.tick()
@@ -2495,7 +2502,7 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     (drop,) = loop.tick()
     assert drop["action"] == "drop" and "beside_launching" not in drop and "beside_cancelled" not in drop
     assert not (plans.tmp / "plan-3").exists() and not (plans.tmp / "job-3").exists()
-    assert loop.tick() == [] and len(runs.launches) == 6 and len(plans.asked) == 3
+    assert loop.tick() == [] and len(runs.launches) == 12 and len(plans.asked) == 3
 
 
 def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_beside_each_check(capsys, tmp_path):
