@@ -157,3 +157,22 @@ proofs answered twice on HASH-98 at 07:31Z. Read both comments whole.
   two of them differ between the two partitions). No `CENSUS` PR is needed if `stage.py` at that tree takes them: check.
 - **Lean accepts none of these under `--zk`** (`NO_PROGRAM`); every acceptance is the Rust verifier's in loopback. Keep
   saying so beside each number.
+
+## Tue 10 Nov 07:36Z: Friday's number follows #8281's partition. Prepare a swap for 10:30Z
+
+benchmarks decided on HASH-98 at 07:34Z (read it): the census of record becomes #8281's `glm53_blocks.json`. So:
+
+- **f308 prices no row of it.** It stays a measurement of `FlashInferFp8Linear_v2{K=2048,N=1}`; the command lists it as
+  unread. Your 62% estimate was on main's stale census: do not repeat it as the state of Friday's number. benchmarks
+  posts the list of #8281's types by share, with specs and pins, by Tue 6 PM PST; Wednesday's runs follow that list.
+- **In place of the linear, #8281 serves two parts at K=2048:** `FlashInferFp8Quant1x128_v2{K=2048}` and
+  `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` (the larger: 44,949,504 decode blocks, shared with DeepGemm).
+- **The 10:30Z run may change type.** benchmarks asked proofs whether the group-quantization block is a served block on
+  #8281's partition. The lead asked proofs to answer by 09:30Z and to post both parts' pins. Prepare now, on CPU only:
+  check that `stage.py` at `c6cadd0e32` stages `census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` (one block, a CPU
+  node), note its pin, `k_log`, blocks a full statement, and how long a full staging and a one-prover row would take.
+  Say on HASH-98 whether it fits 10:30 to 11:53Z.
+- **Do not requeue on your own.** If proofs says the block is not served there, the lead writes "swap" here and resumes
+  you only if you are IDLE; if you are still in your turn when you read "swap" here, do it: cancel
+  r20261110-072045-1a01 and queue the ScaledMm part with the same guard and checks. Without that word, the queued run
+  stays.
