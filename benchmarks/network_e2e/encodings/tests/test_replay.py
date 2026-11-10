@@ -200,7 +200,7 @@ def test_the_kv_pool_is_the_hooks_record_of_the_schedulers(tmp_path):
         R.read_corpus_trace(d)
 
 
-def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
+def test_network_certifier_ingress_is_the_engines_arrival_order(tmp_path):
     """`ingress="warden"` reads the engine's own `arrival` stamp (the server's body read, the order vLLM schedules in):
     requests the client sent out of the engine's order cost order bits at the client's send and none there, the floor a
     server admitting in the network certifier's release order would give."""
@@ -212,11 +212,11 @@ def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
     for k in range(4, len(recs), 5):
         recs[k]["send_unix"] = recs[k - 3]["arrival"] - 1e-3          # sent early, stamped late: a delay after the wire
     (d / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
-    client, warden = R.read_corpus_trace(d), R.read_corpus_trace(d, ingress="warden")
+    client, network_certifier = R.read_corpus_trace(d), R.read_corpus_trace(d, ingress="warden")
     n = len(t.requests)
-    assert warden.ingress_t == sorted(warden.ingress_t) == [r["arrival"] for r in recs]
-    assert R.order_bits(warden) <= 0.5 * R.math.log2(n) + 1 < R.order_bits(client)
-    assert R.compare(R.decode(warden.certified(), R.encode(warden)).steps, warden.steps).first_mismatch is None
+    assert network_certifier.ingress_t == sorted(network_certifier.ingress_t) == [r["arrival"] for r in recs]
+    assert R.order_bits(network_certifier) <= 0.5 * R.math.log2(n) + 1 < R.order_bits(client)
+    assert R.compare(R.decode(network_certifier.certified(), R.encode(network_certifier)).steps, network_certifier.steps).first_mismatch is None
     with pytest.raises(ValueError, match="ingress"):
         R.read_corpus_trace(d, ingress="server")
 

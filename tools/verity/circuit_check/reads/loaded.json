@@ -110,7 +110,7 @@
   "verity/core/protocols/certifier/served_rows",
   "verity/core/protocols/certifier/served_statics",
   "verity/core/protocols/certifier/served_tie",
-  "verity/core/protocols/certifier/warden",
+  "verity/core/protocols/certifier/network_certifier",
   "verity/core/protocols/certifier/window_charge",
   "verity/core/protocols/pous/answer_circuit",
   "verity/core/protocols/pous/circuit",

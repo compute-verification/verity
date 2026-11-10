@@ -1,15 +1,15 @@
 module
 
 public import Definitions.NetworkCertifier.Run
-public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Cells
 public import Mathlib.Algebra.GroupWithZero.Nat
 
 /-!
 # The network certifier's record as rows: a row a bucket, each frame naming its connection
 
 Definitions only. The record the deployed network certifier writes, as a `RecordFormat` format
-(`Definitions.NetworkCertifier.Tap`): the egress record of `verity/core/protocols/certifier/warden.py`, whose rows
-`verity/core/protocols/certifier/warden_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
+(`Definitions.NetworkCertifier.Tap`): the egress record of `verity/core/protocols/certifier/network_certifier.py`, whose rows
+`verity/core/protocols/certifier/network_certifier_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
 it, connection by connection in ordinal order (`conns`), each frame naming its connection (`bucketFrames`): `r` padding
 frames a bucket from the connection's admission to `adm c + D`, then its lane's cells in their bucket, in order. The
 frames fill the row's first slots, each encoded as a `List Bool` (`enc`), and a slot no connection holds is empty

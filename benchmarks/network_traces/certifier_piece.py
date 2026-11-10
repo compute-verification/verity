@@ -41,7 +41,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
      reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
-     requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
+     requests (`network_certifier_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
@@ -168,7 +168,7 @@ def front(a: argparse.Namespace) -> int:
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
     if a.minutes is None:
         tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
-        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
+        a.minutes = SS.A.network_certifier_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
@@ -477,10 +477,10 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
-def case_of(warden: Path, scan: Path) -> dict:
+def case_of(network_certifier: Path, scan: Path) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan)
+        return SP.rows_case(network_certifier, scan)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
@@ -510,17 +510,17 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
            check: Callable[[dict, Path], dict], case: Callable[[Path, Path], dict] = case_of) -> tuple[dict, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
     ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows. `NotRun` when a step can't run."""
-    import warden_chain as WC
+    import network_certifier_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)
     unpacked = None
     try:
-        unpacked, warden = unpack(keep / run / "fetch.tar.gz")
-        rehearsed(warden)
+        unpacked, network_certifier = unpack(keep / run / "fetch.tar.gz")
+        rehearsed(network_certifier)
         try:
-            io = WC.io(warden)
-            dep, params = WC.deployment(warden)
+            io = WC.io(network_certifier)
+            dep, params = WC.deployment(network_certifier)
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
@@ -539,7 +539,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         except (OSError, ValueError, KeyError) as e:
             raise NotRun(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
         in_link_window(certified, T, w)
-        got = check(case(warden, out / "scan"), d / "period")
+        got = check(case(network_certifier, out / "scan"), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked

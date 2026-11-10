@@ -32,7 +32,7 @@ public import Definitions.NetworkCertifier
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.WindowCharge
-public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Cells
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period

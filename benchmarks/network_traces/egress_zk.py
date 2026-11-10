@@ -1,7 +1,7 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
 computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
 certifier's signed root
-(`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
+(`network_certifier_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
 (`verity.ml.protocols.certifier.egress`).
@@ -10,8 +10,8 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
   (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
-  head signed by a test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its
-  registration is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it
+  head signed by a test-size LMS key (`network_certifier_rows.attest`). The window read is the one with the most `DATA` cells; its
+  registration is read by the verifier (`network_certifier_rows.check_registration`) before its port is built from the head it
   names.
 * **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
@@ -47,11 +47,11 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import warden_zk as WZ  # noqa: E402
+import network_certifier_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.protocols.certifier import egress as EG  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, network_certifier as W, network_certifier_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 
@@ -60,7 +60,7 @@ _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
 
-PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+PARAMS = W.NetworkCertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 NR, K = 4, 16
 SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))
@@ -138,8 +138,8 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
 
 
 def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | None:
-    """The host's read of a member's registered ``o1`` port against the verifier's own (`warden_rows.bucket_port`),
-    as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    """The host's read of a member's registered ``o1`` port against the verifier's own (`network_certifier_rows.bucket_port`),
+    as Lean's registered reads make it (`network_certifier_rows.refusal`): None when they accept, else why not."""
     port = WR.bucket_port(at.head, PARAMS, reads_from)
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
@@ -227,7 +227,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     return m
 
 
-# --- the audit (warden_zk's, on a bucket port) ------------------------------------------------------------------------
+# --- the audit (network_certifier_zk's, on a bucket port) ------------------------------------------------------------------------
 
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
     """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean

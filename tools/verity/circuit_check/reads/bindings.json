@@ -2107,7 +2107,7 @@
     "verity/core/protocols/certifier/release.py",
     "verity/core/protocols/certifier/schedule.py",
     "verity/core/protocols/certifier/served_rows.py",
-    "verity/core/protocols/certifier/warden.py",
+    "verity/core/protocols/certifier/network_certifier.py",
     "verity/core/protocols/pouw/leaf_lanes.py",
     "verity/core/protocols/pouw/live_reads.py",
     "verity/core/protocols/spot/one_stage/produced.py",
