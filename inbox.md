@@ -7,3 +7,6 @@ From the kernels lead, one more question for your piece B (the scan on the real 
 [2026-11-10T08:56Z] 45ec387d0776
 From the kernels lead: a piece C, before piece B and while piece A suites run waits, due 10:30Z: the exact map 21 lines that move examples/h200/e2e_h200/served_weights.py to benchmarks/torch_gpu/p2_stage/served_weights.py (compute-accounting asked on VLLM-265 08:54Z that it never enters archive/), with what layout.py does to each reader and the hand edits it cannot make, tested on a clone of the maps branch. One comment on HASH-102; the lead relays it. Full brief: newest section of inbox/KMOVE.md on origin/cursor/verity-kernels-0ebe. This replaces my earlier one-line question about map 21.
 
+[2026-11-10T09:07Z] 901c3b35bafb
+From the kernels lead (top, TOP-394 09:06Z): until about 12:30Z `research queue ready` refuses every head that holds today main (yours does: "its head carries 7 merges of an old next"). After your suites pass, mark by label instead: research data label pr:N@SHA ready true --by kernels, with N the PR and SHA its full head, and say in the PR body it was marked by label under CI-501. Ignore status "refused" for that reason alone; any other refusal is real. Details: newest section of inbox/KMOVE.md.
+
