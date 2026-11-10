@@ -97,11 +97,16 @@ arm's row names the target's part for what its step turns on (`in_target`). Unde
 output and prompt tokens a second, the tokens a request and the engine's GPUs, and the load's cost within the SLO
 (`within_slo`: the reference's best goodput over the arm's, less one, each at the rung where its own is largest),
 which is the cost only where both sides meet the SLO for every
-request and which no target or verdict is of. The loads are chat and long context (`LOADS`): where one of them has not
-run, the first line names the one that has and the number isn't said to meet its target. Directories of one arm from
-two jobs, each a load of its own, are one arm (`joined`), so a load served later joins the number. ``--result`` writes
-the run's result.json too (`result_of`): each load's cost a measurement, and the number one under the model's metric
-id once every load has run.
+request and which no target or verdict is of. The number's loads are chat and long context (`NUMBER`): where one of
+them has not run, the first line names the one that has and the number isn't said to meet its target. Neither repeats
+a prefix, so the number is labelled "no repeated prefix" and is never given without the row on a repeated prefix
+directly under it (`prefix_row`): the arm's cost over the reference on a third load (`PREFIX`), four planned requests
+of which the second and fourth begin as the one before does (`PAIRS`), sent by the client's timed_trace dataset from a
+file of lengths and block ids (`write_trace`) with one request in flight, in a run of its own. The row has no target
+and no verdict; where that load has not run, the report's value is None and its first line says why. Directories of
+one arm from two jobs, each a load of its own, are one arm (`joined`), so a load served later joins the number.
+``--result`` writes the run's result.json too (`result_of`): each load's cost a measurement, and the number one under
+the model's metric id once every load has run.
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
