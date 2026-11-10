@@ -44,10 +44,10 @@ from typing import Any
 from verity_vllm.pipeline.tp import grain as G
 from verity_vllm.program import tp_binding as TB
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import dead_free as DF
-from verity.ml.windows import interface as I
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.definitions.registry import dead_free as DF
+from verity.windows import interface as I
 
 PRODUCER, GATHER, COMBINE, OUTPUT, NORM, CONSUMER = "producer", "gather", "combine", "output", "norm", "consumer"
 #: the rank of the stages every rank reads: combines, output gathers and norms

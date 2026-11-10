@@ -8,13 +8,13 @@ import json
 
 import pytest
 
-from verity.ml.circuits import codec
+from verity.circuits import codec
 from verity_vllm.query import query_artifact as QA
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.partition import PartitionVerdict, ReadinessReport, WidthVerdict
-from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import b1
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import bind
+from verity.circuits.partition import PartitionVerdict, ReadinessReport, WidthVerdict
+from verity.circuits.program import Program
+from verity.definitions.registry import b1
 
 Q1 = {"op": "override", "base": {"op": "default", "w": 32},
       "cases": [{"path": "//Gemm_v1{*}", "family": {"op": "members", "path": "//Gemm_v1{K=*,N=*}", "sel": "@batch:GemmCoordinate_v1", "k": 1}}]}

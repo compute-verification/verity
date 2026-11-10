@@ -111,7 +111,7 @@ def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     import numpy as np
 
-    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero
+    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero
 
     layout = StreamLayout(1, len(rows), 2, 128, 64)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
@@ -174,7 +174,7 @@ def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     import numpy as np
 
-    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
@@ -330,8 +330,8 @@ def _launch_tile_out(c, D, t, geo):
     """What an exact FA3 launch writes: every row `AttentionHead_v4` at the launch's tile, on the twin."""
     import numpy as np
     import torch
-    from verity.ml.definitions.numerics import derived_rows as DR
-    from verity.ml.definitions.registry import attention_vocab
+    from verity.definitions.numerics import derived_rows as DR
+    from verity.definitions.registry import attention_vocab
 
     q, k, v, bt = G._words(t["q"]), G._words(t["k"]), G._words(t["v"]), t["block_table"].numpy()
     g = c["H"] // c["Hk"]

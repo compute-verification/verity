@@ -1,4 +1,4 @@
-"""The recursive session's figures from one recursion bench result (``benchmarks/recursion_e2e``'s
+"""The recursive session's figures from one recursion bench result (``workloads/recursion_e2e``'s
 ``recursion_e2e.json``, ``rec_profile.read``'s, with its ``session_times``):
 
     python benchmarks/recursion_figures/figures.py RESULT.json [--json]
@@ -50,7 +50,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
-from verity.core.protocols.reporting import PERIODS  # noqa: E402
+from verity.protocols.reporting import PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"

@@ -21,11 +21,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits import bind
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import hopper as H
-from verity.ml.definitions.registry import prims as P
+from verity.circuits import bind
+from verity.circuits.evaluation import evaluate_call
+from verity.definitions.registry import b1
+from verity.definitions.registry import hopper as H
+from verity.definitions.registry import prims as P
 
 from tests.program.crosscheck import _standalone
 from tests.program.test_composition import REPO
@@ -205,9 +205,9 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     locally); the two differ on the recorded number of words. T = 100/193/300 are held-out positions (composition.md §3:
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
-    from verity.ml.definitions.numerics import fa2_model as FA2
-    from verity.ml.definitions.numerics import fa3_model as FA3
-    from verity.ml.definitions.numerics.fa2_relation import tables_dir
+    from verity.definitions.numerics import fa2_model as FA2
+    from verity.definitions.numerics import fa3_model as FA3
+    from verity.definitions.numerics.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001

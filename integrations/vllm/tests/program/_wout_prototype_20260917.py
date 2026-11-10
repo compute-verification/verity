@@ -5,12 +5,12 @@ body (m = 0 for primitive/call nodes).  Out(part) = gates of the part that are (
 part, or (b) returned by S's body (escape to the parent; exact when S is the root, conservative otherwise)."""
 import sys
 sys.path.insert(0, "/private/tmp/lane-coverage")
-from verity.ml.circuits.defs import PrimitiveDefinition, bind
-from verity.ml.circuits.layout import Scope, resolve
-from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Concat, Strided, runs
-from verity.ml.definitions.registry import b1
+from verity.circuits.defs import PrimitiveDefinition, bind
+from verity.circuits.layout import Scope, resolve
+from verity.circuits.query_ast import oracle_gateset, oracle_out
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Concat, Strided, runs
+from verity.definitions.registry import b1
 
 
 def node_leaf_gate(sc: Scope, j: int, leaf: int) -> int:
@@ -187,7 +187,7 @@ if __name__ == "__main__":
         print("MoE skipped:", type(e).__name__, str(e)[:120])
     # 5. Gumbel: the Const64 gates
     try:
-        from verity.ml.definitions.registry import sampling as G
+        from verity.definitions.registry import sampling as G
         P5 = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
         sc5 = P5.circuit.root_scope
         ok5, w5 = check(P5, sc5, body_parts(sc5), "GumbelArgmaxBf16_v1{V=8} nodes")

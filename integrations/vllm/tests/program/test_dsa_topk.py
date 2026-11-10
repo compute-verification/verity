@@ -12,16 +12,16 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.codec import lookup_primitive
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.registry import boolean_dsa_topk as BT
-from verity.ml.definitions.registry import dsa_topk as T
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.codec import lookup_primitive
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions import boolean as SW
+from verity.definitions.registry import boolean_dsa_topk as BT
+from verity.definitions.registry import dsa_topk as T
 
 POOL = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7FC00000, 0xFFC00000, 0x7F800000, 0xFF800000, 0x00000001, 0x80000001]
 

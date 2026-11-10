@@ -7,7 +7,7 @@ form "because the name is in this list" is a structural leak).  The inventory (A
 found 98 such decision points, ~68 structural; v2 retires them phase by phase.  This test pins the current set so that it
 can only shrink.
 
-What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` and ``verity/ml/definitions`` (the Definitions
+What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` and ``verity/definitions`` (the Definitions
 that moved from it, keyed by their repository paths) except ``tests/`` directories and
 ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
 message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and a module's ``__models__`` marker (the models it
@@ -50,11 +50,11 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # integrations/vllm
 REPO = ROOT.parents[1]
-#: (base, directory): the package, and the Definitions that moved from it to `verity.ml.definitions` (circuits', held to this
+#: (base, directory): the package, and the Definitions that moved from it to `verity.definitions` (circuits', held to this
 #: list as it stood), each file keyed by its path from its base
-SCAN = ((ROOT, "verity_vllm"), (REPO, "verity/ml/definitions"))
+SCAN = ((ROOT, "verity_vllm"), (REPO, "verity/definitions"))
 SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/kernels/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
-#: program/kernels/ (`numerics/` in `verity.ml.definitions`), and its modules that stay in the package, skipped wherever they go
+#: program/kernels/ (`numerics/` in `verity.definitions`), and its modules that stay in the package, skipped wherever they go
 SKIP_FILES |= {"relations.py", "sampling_rng.py", "libdevice_sampling.py", "rmsnorm_fused_sweep.py", "gemm_target_correspondence.py",
                "compiled_relations.py", "compiled_norm_literal.py"}
 #: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name

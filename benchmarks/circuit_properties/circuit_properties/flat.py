@@ -12,8 +12,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.layout import Circuit, Scope, param_leaf, resolve
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.layout import Circuit, Scope, param_leaf, resolve
 
 from .measure import Measurer
 from .ops import Designation, is_constant, op_shape, param_bases

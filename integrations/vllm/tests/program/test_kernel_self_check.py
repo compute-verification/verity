@@ -1,5 +1,5 @@
-"""Every (Definition, kernel) pair registered through `verity.ml.definitions.numerics.kernel_registry` — the replay row
-kernels (`rows`) and the twins — against the reference by core `verity.ml.circuits.evaluation.self_check`, on each of the kernel's
+"""Every (Definition, kernel) pair registered through `verity.definitions.numerics.kernel_registry` — the replay row
+kernels (`rows`) and the twins — against the reference by core `verity.circuits.evaluation.self_check`, on each of the kernel's
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import pkgutil
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import kernels, self_check
+from verity.circuits.evaluation import kernels, self_check
 from verity_vllm.commit import challenge as CH
-from verity.ml.definitions import registry
-from verity.ml.definitions.numerics import kernel_registry as KR
-from verity.ml.definitions.numerics import rows, twins
+from verity.definitions import registry
+from verity.definitions.numerics import kernel_registry as KR
+from verity.definitions.numerics import rows, twins
 
 N = 6
 # a registry module registers its composites' twins as it loads, and the pairs are read at collection: unless this file
@@ -40,10 +40,10 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     2^-87 <= |x| < 2^-63, where the C rule's shift count reached 64 (undefined; the host took it mod 64) and MUFU.EX2 reads
     T[0] = 1.0.  The twin and the row kernel equal the reference there, and the reference equals the same instance with
     q = 0, whose every ex2 input is 0."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.numerics import derived_rows as DR
-    from verity.ml.definitions.registry import b1
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.definitions.numerics import derived_rows as DR
+    from verity.definitions.registry import b1
 
     statics = {"T": 20, "NH": 2, "KVH": 1, "D": 16, "BN": 16}
     target = bind(b1.AttentionV3, **statics)
