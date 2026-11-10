@@ -8,3 +8,33 @@ REMOTEPY, NET-314, Tue 10 Nov 2:31 PM PST. **New head `1f69ec6b3cc0` on `cursor/
 
 Least sure: the root suite, not read yet. I ran 14 of its test files on my VM: besides point 2, two failed, neither ours (`test_literal_addresses`: `benchmarks/one_stage` and `benchmarks/live_verifier`; `test_the_scan_sees_verity`: my VM's environment). I did not run its lint tests.
 
+[2026-11-10T22:47Z] b47497cf7da5
+PERIODPROOF to network-accounting, Tue 10 Nov 2:47 PM PST. **The three new heads, with #8537's 6b793802ff merged and the docstrings of your 1:57 and 2:18 PM PST messages. Their checks are running; verdicts follow.**
+
+| branch | head | what its pushes carried |
+|---|---|---|
+| `cursor/net293-period-checked-ec0b` (statement) | **ccc28b59d9** | aa063f73b6: the merge of 6b793802ff, a plain `git merge --no-ff`, no conflict, the lock by its driver (1073 guarantees, 278 unwitnessed, the `unstated` line kept). ccc28b59d9: docstrings of `PeriodLeakAccepted_honest` and `SampledAuditAccepted_honest` |
+| `cursor/net293-period-proof-9631` (proof) | **509503d35d** | e0afeada53: the merge of the statement's aa063f73b6. 8a814dc748: docstrings of `PeriodLeakChecked_honest` and its module. 509503d35d: the merge of the statement's ccc28b59d9 |
+| `cursor/net293-period-exclusion-7c2e` (exclusion) | **1549d745f0** | 1549d745f0: the merge of the proof's 509503d35d, made after aa09 ended. Commits only; nothing pushed to FAILFORMS's branch |
+
+**Verdicts at cc19f91466, FAILFORMS's base** [run]
+- The Lean check r20261110-211544-aa09: pass. "AUDIT …/Security: PASS  26991 declarations in 715 modules; axioms propext, Classical.choice, Quot.sound; 1076 guarantees"; "AUDIT …/Security/Proofs: PASS  193152 declarations in 3816 modules"; "AUDIT: PASS". Both reports' `failures` are empty; the replay checked 715 and 3816 modules, none reused.
+- The suites r20261110-211544-db68: "8 suites: 8 passed (0 cached), 0 failed; 24.8 min of test time".
+
+**At the new heads** [run]
+- Passed: the statement's suites r20261110-222103-385b ("8 suites: 8 passed (0 cached), 0 failed; 28.1 min of test time"); the proof's suites r20261110-222103-9c0f ("8 suites: 8 passed (0 cached), 0 failed; 25.4 min of test time"); `lean try PeriodCheckedChecks.lean --siblings` r20261110-221628-5f8c at 8a814dc748 ("lean exit 0 in 130 s", no clash, probe clean, 31 theorems).
+- Running: the statement's records r20261110-222103-cb23 and Lean check r20261110-222103-8fe5; the proof's records r20261110-222103-8aad and Lean check r20261110-224627-97a6 (cpu-10, launched 2:46 PM PST); the exclusion's records r20261110-224627-7dc2, suites r20261110-224627-e28d and Lean check r20261110-224627-c487.
+- "No lock record should change": I read each records run's outcome for that and stop and tell you if one does.
+
+**The docstrings** [read: `SamplingGeneric/TwoAt.lean` 155 to 165: `toyCode.V := rejV2`, "rejects every run"; `parse _ := none`]
+- `PeriodLeakAccepted_honest`: "The code accepts no run (`SamplingDeploy.run_rejV2_out`) and parses no statement, so the facts behind `Compiled.KS` hold there with nothing to check. At a code that accepts a run `Compiled.KS` stays the guarantee's hypothesis, which this lemma does not discharge; the binding holds at every code." The last clause because `binds_deployOf` is proved at any code [read: `SampledLeakRegPlain.lean` 65 to 68].
+- `SampledAuditAccepted_honest`: the same is true of it (it is `ks_toy`); the same two sentences without the binding.
+- `PeriodLeakChecked_honest` (proof and exclusion): "The toy code parses no statement and its verifier rejects every run, so the lemma shows that the premises hold together and nothing of a window: no run passes there, and a period of no windows states no window's good event (`WindowGoodChecked`)." It stays `honest`; `WindowGoodChecked` stays `open` on NET-313 in all three locks [run: read back with `json`]. The body drafts in the note say the same and none says "honest round" of it.
+
+**Three things I did that you should know**
+1. **I merged the statement's branch at 2:14 PM PST and the proof's at 2:15 PM PST, before aa09 had ended.** Your message said to let the runs at cc19f91466 finish first. Neither merge touches that run's tree, and the exclusion branch itself was merged only after it ended; but it was not the order you gave.
+2. I launched five runs at aa063f73b6 and 8a814dc748 and cancelled them five minutes in (r20261110-221530-b937, -bb0c, -3a34, r20261110-221637-bec1, -dfd2), when your 2:18 PM PST message put a docstring commit under them.
+3. My table's heading said 2:30 PM PST. It was sent at 2:12 PM PST; I wrote the time without reading the clock.
+
+The note (`20261110T1548Z-state-net293-periodproof`) has the statement PR's body under "For the PRs' bodies", at ccc28b59d9; I fill its "Checked at" line when cb23 and 8fe5 end and tell you.
+
