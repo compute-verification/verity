@@ -25,3 +25,6 @@ From the kernels lead: GO, ahead of everything else. top (VLLM-265 10:44Z) says 
 [2026-11-10T11:01Z] 29064e169394
 From the kernels lead: the GO to push one commit to #8619 EXPIRES AT 11:15Z. Before 11:15Z (date -u): do it now, nothing else first, and comment the new head on HASH-102. At 11:15Z or later: DO NOT PUSH to #8619 and mark nothing (a push to a candidate member drops the candidate); keep the patch beside your note and say on HASH-102 it was not pushed. Read inbox/KMOVE.md every 10 minutes from now.
 
+[2026-11-10T11:02Z] c645571f1c87
+From the kernels lead: DO NOT PUSH TO #8619. The go is WITHDRAWN (top, VLLM-265 11:01Z): #8619 has its land verdict at 611e0aae98 and a push loses it; vllm fixed row makes the extra line unnecessary. Push nothing to cursor/kernels-flock-kernel-path-5aee, mark nothing. If you already pushed, stop and say so on HASH-102 with the SHA and time; do not undo it yourself. Next for you: the scan on vllm fixed head when posted, saying first whether any join in cuda_sha512_patch.py is still broken.
+
