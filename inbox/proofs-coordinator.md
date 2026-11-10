@@ -32943,3 +32943,33 @@ Read your 20:35Z entry and CI-489 to its 20:36Z comment [read]. Neither PR is re
 - **Records** [guess]: a guarantee whose record reads `SecondStage.check` through `SpotFlock.code` may get a new record. I launched no records run; that waits for a PR.
 - **PRF-516 and PRF-517**: I would take PRF-516, the `regVal` lemma, because it is the gap I named at 19:38Z. Your 20:35Z asks, including a date for each with the lemmas and files, come in the Wed 12:00Z entry.
 - **Still mine when the inputs come**: #8458's merge once you write BASE, and the stager's step (3) once the law is named.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 20:52Z: head unchanged, `0ab9be91a6b0`, and it is in the base `db7c3f391a46`; `7cdc` ended green: the composition suite's quick tier ran for the first time, 22 passed; `c67f` still waits for a slot; the test-time job is started and its measuring run waits too
+
+**The close** [run unless tagged]
+
+- My head `0ab9be91a6b0` is an ancestor of the base `db7c3f391a46` (lean's merge `9f458752c5`, 20:33Z). I pushed nothing since, as you said.
+- Run `r20261110-201014-7cdc` ended, rc 0, at `2d833ee3dd0c` (the head but for `tests/test_lean_vocabulary.py`), through the runner: `suites.py --quick verity-core-composition verity/core/protocols/spot`.
+
+| suite | verdict | what it says |
+|---|---|---|
+| `verity-core-composition` | 22 passed, 9 slow tests left out, 218 s | The new stop's file ran for the first time: `test_product_names_only_the_composites` and the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` pass with the Lean built, under `main`'s package paths. No read outside the suite's inputs |
+| `verity/core/protocols/spot` | 828 passed, 21 slow tests left out, 134 s | Green through the runner too, with the read guard on |
+
+- Its slow tests did not run. That is the other job's file; I say there what they cost.
+- Run `r20261110-201606-c67f` (the spot service suite at `0ab9be91a6b0`) still waits: one check ahead of it on vy-nebius-cpu-6 at 20:51Z, after 35 minutes in line. One entry when it ends, as you asked.
+
+**The test-time job** (your 20:20Z; branch `cursor/proofs-composition-test-time-cf05`, cut from `origin/main` `5482988e3496`, pushed with no commit of mine yet)
+
+- Two runs are in line, both at `5482988e3496`:
+  - `r20261110-203745-32de` on vy-nebius-cpu-8, 9 checks ahead at 20:51Z. It times the Lean build, then `test_remote_agrees` with a timer on each phase (making the cases, the Python reference, the Lean server), then the Lean server by subprotocol on 40 cases, then the file's other tests the same way, then `test_remote_agrees` under a profiler. I can't say when it starts [guess: an hour or more].
+  - `r20261110-204114-8eb9` on vy-nebius-cpu-6, 3 ahead: what N examples from the test's seed reach, for N from 50 to 1,000, with the reference alone and no Lean.
+- I launched them with `--cwd clone`, not `--cwd source`: the test builds a Lake package, which writes `.lake` into the tree, and every run of a commit shares the source tree (the writing-runs skill's first norm).
+- Read from the code and a six-example trial of the timers with the Lean side stubbed, so none of it is the measurement:
+  - A case of remote is 3 MB of JSON on average and up to 6 MB [run, local, six examples]. Sampled proofs' evidence is 0.4 to 0.7 MB, nearly all of it the challenger's ledger of eight signed entries; a PoUW period's evidence is 0.16 to 1.2 MB and its ledger up to 0.34 MB. Each is hex inside the product's evidence, which is hex inside the case, so four characters a byte [run, local].
+  - Every case of remote rejects in both sides, by construction: sampled proofs' cases all reject and a rejection decides. So what the 1,000 examples compare is the verdict `reject` and whether the outcome carries the commitment; the reasons are not compared [read: the module's docstring, `RejectingPort`, `ProtocolPort.key`].
+  - `test_remote_refuses_two_records_and_else_keeps_the_products_verdict`, Python only, 200 examples and not marked slow, took 140.5 s in `7cdc` [run]. So the Python side of an example is not small either.
+
+**Questions:** none.
+
+**Left:** `c67f`'s verdict, then I say the close is done. The test-time table when `32de` ends; next entry then, or by 22:30Z with where the runs stand.
