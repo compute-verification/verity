@@ -34369,3 +34369,33 @@ The first two are the commands `pins.py` holds for `randomness_lean.json` and `i
 - **In flight.** `r20261110-225335-dafa` (records, vy-nebius-cpu-9): waited 25 minutes for a slot, took its Lean slot at 23:19Z; ETA about 00:45Z [guess, from `6190`'s 82 min]. `r20261110-225444-1fdb` (suites, vy-nebius-cpu-1): ETA about 00:10Z [guess]. `r20261110-232533-66d3`: about 23:50Z [guess; it is in line].
 - **A correction to what I called the move.** The 17 moved files are `main`'s but for 23 `import` lines, which name the base modules (`4f44157cbc` moves them byte for byte, a later commit rewrites those lines); a script over `git show 2b869ed35db5:…` for each file finds no other line differing [run]. `Base.Pow2` is the one new module: `log2ceil` and `nextPow2`, cut with their text out of `Flock/Net.lean`. The PR's body says it this way.
 - Mailbox: nothing after 22:25Z at 23:24Z. `main` is still `2b869ed35db5`.
+
+## PRF-522 PUBUNITS, Tue 10 Nov 23:41Z: the spot package builds and passes its Lean check at `f2090e464bd9` (`r20261110-232252-033f`, PASS); the LEAN-249 comment is posted; the difftest run `r20261110-232449-2161` still waits for a slot on vy-nebius-cpu-3
+
+**The branch** [run]
+- `cursor/proofs-remote-publicunits-537a` at `f2090e464bd925aa65c52a6d389d70193177b0f9`, on the base's `97876e5336e1f0a7c746f8ce0dff6cb0e1f74ade`. Unchanged since my 23:21Z entry.
+- The base moved to `f63a7b76334d` at 23:33Z (ASSEMBLY's settlements: two caps and one `trust_gap` entry, no `.lean` file). The branch merges onto it with no conflict. The merged tree is `a1bd5a82abf3` and differs from `f63a7b76334d` in `Spot/PublicUnits.lean` alone. I did not merge the base into the branch and pushed no merge.
+
+**Run 1, done** [run]
+- `r20261110-232252-033f`, vy-nebius-cpu-3, slot b12, at `f2090e464bd9`: `python3 tools/verity/lean/check.py --build verity/core/service/spot`, exit 0.
+- `AUDIT … verity/core/service/spot: PASS  5531 declarations in 52 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`. Build 275 s, 476 jobs, in the sandbox. The replay checked 52 modules.
+- The build log has `Built Spot.PublicUnits`, `Built Spot.Pieces`, `Built Spot`, and the executables `sampled-proofs-difftest` and `sampled-proofs-verifier`.
+- The lock passed as committed, so no record moved. Spot's lock holds 0 guarantees.
+
+**On my VM** [run]
+- On the unpushed merge onto `f63a7b76334d`: `tests/test_flock_json.py` and `tests/test_lean_packages.py`, 34 passed.
+- At `f2090e464bd9` alone `tests/test_lean_packages.py` has 2 failures, the two caps `f63a7b76334d` settles. Neither names spot.
+
+**LEAN-249** [run]
+- One comment posted at 23:40Z (3:40 PM PST). It names the branch, both SHAs, the change, run 1, and run 2 as not yet run.
+- **The tool refused `--as proofs --worker PUBUNITS`:** "--worker goes with `comment` alone, never with --as". I posted with `--worker PUBUNITS` alone. It shows as `lean/PUBUNITS` and rings no one. Its first line says "PUBUNITS (proofs, PRF-522)". If lean must be rung, that is yours to do.
+- lean's coordinator wrote at 23:28Z that this branch goes in with the second merge of `main` and gets the second lock run [read].
+
+**For lean, as the comment says** [read, but the last line is a guess]
+- No module under `Security/` imports `Spot.PublicUnits`, `Spot.Pieces` or `Spot`.
+- Lake compiles again only `Spot.PublicUnits`, `Spot.Pieces`, `Spot`, `Spot.DifftestMain` and `Spot.VerifierMain`.
+- The Lean check keys a package on what it requires by path, so I expect the kept passes of spot, the eight other packages whose manifests name `core_spot`, and `Security` to miss [guess].
+
+**Still open**
+- `r20261110-232449-2161`, vy-nebius-cpu-3, at `f2090e464bd9`: waiting since 23:24:58Z, one check ahead of it at 23:40Z. It runs `tests/test_flock_json.py` on the node, the spot suite's `test_a_piece_agrees[public_units]` through `suites.py`, and builds the two benchmark files that `import Spot`. Its limit is 150 minutes from its slot. I expect its end about 00:30Z, Wed 11 Nov.
+- I end my turn on that run. Resume me when it ends: I read `out/verdicts.txt` and report here. Its verdict is not on LEAN-249, which holds one comment by your order.
