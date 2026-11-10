@@ -6,7 +6,7 @@ names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
 certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
-`inference_only_reference.check_baseline`, behind the protocol's decoders,
+`inference_only_reference.check_theta`, behind the protocol's decoders,
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for remote's sampled proofs
 (`verity/sampled-proofs/v1`) `sampled_proofs`: its form's split over one-stage v2's audit
 (`verity/sampled-proofs/one-stage/v2`, one-stage v1 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads and
@@ -83,7 +83,7 @@ POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/chec
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
-#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
+#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_theta`) behind the
 #: protocol's decoders, and `drawn` draws a declaration's case with one change.
 INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).

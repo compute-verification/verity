@@ -6,7 +6,7 @@ import InferenceOnlyCheck.DescDifftest
 
 `scripts/theta_difftest_vectors.py` writes cases, each `{"instance", "trusted"}` (an instance of `InferenceOnlyCheck.Desc` with
 θ's `provenance`, and the trusted input beside it), each expanded gate by gate where the policy check gives it a verdict
-and its provenance is one entry per θ entry, and `scripts/inference_only_reference.py`'s `check_baseline` on each.
+and its provenance is one entry per θ entry, and `scripts/inference_only_reference.py`'s `check_theta` on each.
 `InferenceOnlyCheck/ThetaDifftestMain.lean` fails unless `InferenceOnlyCheck.Theta.check` gives Python's result on every case and
 `InferenceOnlyCheck.Theta.checkUnrolled`'s on every expansion: per inference block its size and fresh input bits, the verdict and the first failing
 inference block, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not

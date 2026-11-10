@@ -25,12 +25,12 @@ and fresh bits are read off one activation of it on its own, gate by gate (`bloc
 its primitive gates, and the widths of the parameter leaves its gates read (each reference resolved up to the
 activation's parameters, `source`) over the parameters that are not θ at every one of its blocks.
 
-    check_baseline(instance, trusted) -> the same, then θ's provenance (`InferenceOnlyCheck.Theta`)
+    check_theta(instance, trusted) -> the same, then θ's provenance (`InferenceOnlyCheck.Theta`)
 
-`check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
+`check_theta` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
 deployment's registration log, the run's own record and the program function's parameters), with `InferenceOnlyCheck.Theta`'s
-codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
-`expand_baseline`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
+codes in its order; `check_theta_unrolled` is `check` followed by the same, on an instance expanded by
+`expand_theta`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
 is, and is refused `run-program` otherwise. θ holds registered public data only: an entry of any kind but `registered`,
 an earlier run's `output` among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its
 first record, the first run's own included; any other record is refused `theta-not-at-deployment-start`.
@@ -612,7 +612,7 @@ def _node_of(offs: list[int], g: int) -> int:
     return bisect.bisect_right(offs, g) - 1
 
 
-def check_baseline(inst, tr) -> dict:
+def check_theta(inst, tr) -> dict:
     """`InferenceOnlyCheck.Theta.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
     out = check_desc(inst)
     if "error" in out:
@@ -624,7 +624,7 @@ def check_baseline(inst, tr) -> dict:
     return out
 
 
-def check_baseline_unrolled(inst, tr) -> dict:
+def check_theta_unrolled(inst, tr) -> dict:
     """`InferenceOnlyCheck.Theta.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
     out = check(inst)
     if "error" in out:
@@ -636,7 +636,7 @@ def check_baseline_unrolled(inst, tr) -> dict:
     return out
 
 
-def expand_baseline(inst) -> dict:
+def expand_theta(inst) -> dict:
     """`expand`, with θ's provenance repeated for every gate of its node."""
     _, _, spans = root_nodes(inst["program"])
     prov = [p for k, p in zip(inst["theta"], inst["provenance"], strict=True) for _ in range(*spans[k])]
