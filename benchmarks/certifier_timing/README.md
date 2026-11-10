@@ -57,8 +57,8 @@ verity bench certifier_timing score DIR               # recorded cases again, as
 verity bench certifier_timing table RESULT.json       # results as a table's rows
 ~~~
 
-The certifier imports only the standard library and `verity`, so a bare `python3` of 3.12 or later runs
-`benchmarks/certifier_timing/run.py` with the checkout's root on `PYTHONPATH`. Under `research run` the result and
+The certifier imports only the standard library, `verity` and numpy, so a `python3` of 3.12 or later that has numpy
+runs `benchmarks/certifier_timing/run.py` with the checkout's root on `PYTHONPATH`. Under `research run` the result and
 every case's timestamps go to `$OUT`. `run` exits 1 when the guard fails and 2 when a case is no measurement: the
 certifier failed a connection, a tick ran past its slack, or the parties disagree on which interval is which.
 

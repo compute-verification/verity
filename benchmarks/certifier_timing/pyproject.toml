@@ -3,7 +3,7 @@ name = "verity-certifier-timing"
 version = "0.0.0"
 description = "The bits an interval a server moves through when the network certifier releases its bytes."
 requires-python = ">=3.12"
-dependencies = ["verity"]
+dependencies = ["verity", "verity-config"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -11,6 +11,7 @@ package = false
 
 [tool.uv.sources]
 verity = { workspace = true }
+verity-config = { workspace = true }   # run.py reads the run's id, commit and directory through its SHARED settings
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

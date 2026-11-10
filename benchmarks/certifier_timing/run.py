@@ -79,10 +79,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(HERE))
+sys.path[:0] = [str(HERE), str(ROOT / "tools" / "config")]
+sys.path.append(str(ROOT))
 
 import channel  # noqa: E402
 import parties  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 from parties import (  # noqa: E402
     ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, plan_of, span_s,
 )
@@ -113,7 +115,7 @@ def _git(tree: Path) -> str | None:
 
 
 def _commit() -> str | None:
-    return os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE)
+    return SHARED.RESEARCH_SOURCE_SHA or _git(HERE)
 
 
 def config(args: argparse.Namespace, *, attack: str, observer: str, certifier: str = "warden", ignore: bool = False,
@@ -132,7 +134,7 @@ def config(args: argparse.Namespace, *, attack: str, observer: str, certifier: s
         "pin": False if relay else args.pin, "gate_ms": None if relay else args.gate_ms,
         "waker_ms": None if relay else args.waker_ms, "awake": False if relay else args.awake, "launch": launch,
         "cores": distinct_cores(sorted(os.sched_getaffinity(0))),
-        "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"), "host": platform.node(),
+        "commit": _commit(), "run": SHARED.RESEARCH_RUN_ID, "host": platform.node(),
         "certifier_commit": (getattr(args, "tree_commit", None) or _git(tree)) if tree and not relay else _commit()}
 
 
@@ -196,7 +198,7 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
     cfg["stop"] = cfg["origin"] + cfg.get("wait_s", 0.0) + span_s(cfg)
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
     party = [sys.executable, str(HERE / "parties.py")]
-    env = os.environ | {"PYTHONPATH": os.pathsep.join(filter(None, [str(tree), os.environ.get("PYTHONPATH")]))}
+    env = os.environ | {"PYTHONPATH": os.pathsep.join([str(tree), *SHARED.PYTHONPATH])}
     started: list[subprocess.Popen] = []
 
     def start(role: str, *extra: str, **kw) -> subprocess.Popen:
@@ -395,7 +397,7 @@ def result(cases: list[dict], **more) -> dict:
     if goal:
         goal["met"] = [summary["ceiling"] is not None and summary["ceiling"] <= b for b in goal["bits"]]
     return {"schema": SCHEMA, "benchmark": "certifier_timing"} | summary | {
-        "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"), "target": goal,
+        "commit": _commit(), "run": SHARED.RESEARCH_RUN_ID, "target": goal,
         "guard": verdict(cases)} | more | {"cases": cases}
 
 
@@ -521,10 +523,10 @@ def main(argv: list[str] | None = None) -> int:
             "observer": args.observer, "intervals": args.intervals, "interval_ms": args.interval_ms, "pin": False,
             "wait_s": args.wait_s, "connect": name, "port": int(port), "hello": hello, "chunk": chunk})
         (args.out / "observer.json").write_text(json.dumps(doc | {
-            "host": platform.node(), "run": os.environ.get("RESEARCH_RUN_ID"), "commit": _commit()}))
+            "host": platform.node(), "run": SHARED.RESEARCH_RUN_ID, "commit": _commit()}))
         print(json.dumps({"observed": str(args.out / "observer.json"), "intervals": sum(map(len, doc["segments"]))}))
         return 0 if doc["segments"] else 2
-    out = args.out or Path(os.environ.get("OUT") or tempfile.mkdtemp(prefix="certifier-timing-"))
+    out = args.out or Path(SHARED.OUT or tempfile.mkdtemp(prefix="certifier-timing-"))
     out.mkdir(parents=True, exist_ok=True)
     if args.pin and len(distinct_cores(sorted(os.sched_getaffinity(0)))) < 4:
         ap.error("--pin takes four cores: the certifier's loop, its pacer, the server and the observer")
@@ -537,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
         if cfg["launch"] and not args.paced_ms:
             ap.error("--launch: the gate is after a pacer's release time (--paced-ms)")
         live(cfg | {"listen": args.listen, "port": args.port, "wait_s": args.wait_s}, out, args.tree or ROOT)
-        print(json.dumps({"served": str(out), "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"),
+        print(json.dumps({"served": str(out), "commit": _commit(), "run": SHARED.RESEARCH_RUN_ID,
                           "host": platform.node()}))
         return 0
     cases = guard(args, out)

@@ -2196,10 +2196,14 @@ version = "0.0.0"
 source = { virtual = "benchmarks/certifier_timing" }
 dependencies = [
     { name = "verity" },
+    { name = "verity-config" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
+requires-dist = [
+    { name = "verity", editable = "." },
+    { name = "verity-config", editable = "tools/config" },
+]
 
 [[package]]
 name = "verity-check"

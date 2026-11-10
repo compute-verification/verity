@@ -46,6 +46,7 @@ import hashlib
 import json
 import math
 import os
+import select
 import signal
 import socket
 import sys
@@ -189,11 +190,9 @@ def server(cfg: dict) -> dict:
     _announce({"port": listener.getsockname()[1]})
     gc.disable()
     while len(rows) < cfg["intervals"] and (left := cfg["stop"] - time.monotonic()) > 0:
-        listener.settimeout(left)
-        try:
-            conn, _ = listener.accept()
-        except TimeoutError:
+        if not select.select([listener], [], [], left)[0]:
             break
+        conn, _ = listener.accept()
         with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             conn.settimeout(max(0.001, cfg["stop"] - time.monotonic()))
@@ -231,14 +230,16 @@ def last_bytes(stream: bytes, chunk: int) -> list[int]:
 def observer(cfg: dict) -> dict:
     """The client side: one connection after another until it has seen `intervals` intervals or its stop, each a
     segment: the monotonic time in ns at which the first byte of each `chunk` arrived, and each chunk's last byte
-    (`labels`). On the certifier's host it starts at the run's origin and ends at its stop. On another host (`connect`,
-    and no `origin`) it has its own clock alone: it tries the certifier for `wait_s`, past any connection that gave it
-    nothing, and ends once a connection's intervals have had their time."""
+    (`labels`); a connection that ended in an error leaves it in `errors`. On the certifier's host it starts at the
+    run's origin and ends at its stop. On another host (`connect`, and no `origin`) it has its own clock alone: it
+    tries the certifier for `wait_s`, past any connection that gave it nothing, and ends once a connection's
+    intervals have had their time."""
     cpus = _pin(cfg, 3)
     spin, chunk, tau = cfg["observer"] == "spin", int(cfg["chunk"]), cfg["interval_ms"] / 1000
     address, remote = (cfg.get("connect", LOOPBACK), int(cfg["port"])), cfg.get("origin") is None
     segments: list[list[int]] = []
     labels: list[list[int]] = []
+    errors: list[str] = []
     gc.disable()
     if remote:
         retry = time.monotonic() + cfg["wait_s"]
@@ -269,7 +270,8 @@ def observer(cfg: dict) -> dict:
                     if (not spin or not polls & 0xFFF) and time.monotonic() > stop:
                         break
                     continue
-                except OSError:
+                except OSError as e:
+                    errors.append(f"{type(e).__name__}: {e}")
                     break
                 now = time.monotonic_ns()
                 if not data:
@@ -285,7 +287,7 @@ def observer(cfg: dict) -> dict:
         segments.append(arrivals)
         labels.append(last_bytes(b"".join(blobs), chunk))
     return {"observer": cfg["observer"], "chunk": chunk, "remote": remote, "segments": segments, "labels": labels,
-            "cpus": cpus}
+            "errors": errors, "cpus": cpus}
 
 
 def waker(cfg: dict) -> dict:
@@ -298,16 +300,14 @@ def waker(cfg: dict) -> dict:
             pass
         os._exit(0)
     cpus, period, sent = sorted(os.sched_getaffinity(0)), cfg["waker_ms"] / 1000, 0
+    stopped: list[int] = []
     with socket.create_connection(listener.getsockname()) as conn:
         _announce({"waker_ms": cfg["waker_ms"]})
-        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-        try:
-            while time.monotonic() < cfg["stop"]:
-                conn.sendall(b"x")
-                sent += 1
-                time.sleep(period)
-        except SystemExit:
-            pass
+        signal.signal(signal.SIGTERM, lambda *_: stopped.append(1))
+        while not stopped and time.monotonic() < cfg["stop"]:
+            conn.sendall(b"x")
+            sent += 1
+            time.sleep(period)
     return {"waker_ms": cfg["waker_ms"], "sent": sent, "cpus": cpus}
 
 
@@ -364,13 +364,13 @@ async def relay(cfg: dict) -> dict:
     cpus = _pin(cfg, 0)
     listener = await asyncio.start_server(handle, sock=_listener(cfg))
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": HELLO.hex(), "chunk": cfg["unit"]})
-    stopped = asyncio.Event()
-    asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stopped.set)
+    stopped, loop = asyncio.Event(), asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, stopped.set)
+    at_stop = loop.call_later(max(0.0, cfg["stop"] - time.monotonic()), stopped.set)
     try:
-        await asyncio.wait_for(stopped.wait(), max(0.0, cfg["stop"] - time.monotonic()))
-    except TimeoutError:
-        pass
+        await stopped.wait()
     finally:
+        at_stop.cancel()
         listener.close()
     return {"certifier": "relay", "cpus": cpus}
 
@@ -443,13 +443,13 @@ async def warden(cfg: dict) -> dict:
 
     gating = asyncio.create_task(gate(*(x / 1000 for x in cfg["gate_ms"]))) if cfg["gate_ms"] else None
     try:
-        await run
-    except asyncio.CancelledError:
-        pass
+        await asyncio.wait([run])
     finally:
         listener.close()
         if gating is not None:
             gating.cancel()
+    if not run.cancelled():
+        run.result()
     return {"certifier": "warden", "cpus": cpus, "pacer_cpus": pacer_cpus, "params": dataclasses.asdict(params),
             "slack_ms": w.slack * 1000, "ticks": w.ticks, "refused": w.refused, "connections": w.log,
             "tick_late_us": [round(x * 1e6, 1) for x in w.lateness],
