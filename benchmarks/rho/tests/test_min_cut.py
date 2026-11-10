@@ -257,6 +257,27 @@ def test_with_no_untied_word_the_charged_bound_is_the_bounds_and_with_every_bloc
     assert "w = 20435, fixed before the period" in charged(54_300, 20_435).rests_on
 
 
+def test_a_stated_most_a_block_reads_lowers_the_cap_and_charges_no_block_below_the_threshold():
+    """`most`, the most untied words one block reads where its caller states one. Unstated it is `untied`. Below the
+    threshold no block is charged, (H) is taken at `k + word · most` and `S` at `most` a block; above it the count is
+    the threshold's. It never lowers the bound, and the best threshold is searched up to it."""
+    assert charged(54_300).most == UNTIED == charged(54_300, most=10 * UNTIED).most
+    under = charged(54_300, 20_435, most=20_000)
+    assert under.charged == 0 == under.charged_macs and under.cap == TIED + 32 * 20_000
+    assert under.squares == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * 20_000)
+    assert under.slowdown == charged(54_300, most=20_000).slowdown > charged(54_300, 20_435).slowdown
+    assert "no block charged, none reading more than the threshold w = 20435" in under.rests_on
+    assert "at most 20000 of them in one block" in under.rests_on
+    over = charged(54_300, 20_435, most=20_436)
+    assert (over.charged, over.cap, over.squares) == (32, TIED + 32 * 20_435, charged(54_300, 20_435).squares)
+    few = charged(54_300, most=10)
+    assert few.squares == 54_300 * TIED ** 2 + 32 * 543_000 * (2 * TIED + 320)
+    for blocks, w, most in itertools.product((1e4, 54_300, 1e15), (0, 1_582, math.inf), (0, 10, 20_000, UNTIED)):
+        assert charged(blocks, w, most=most).slowdown >= charged(blocks, w).slowdown
+    assert min_cut.best_w(C, TIED, blocks=54_300, untied=UNTIED, most=20_000, **SERVED) == 20_000
+    assert charged(54_300, most=10).slowdown == pytest.approx(37_518.7, abs=0.05)
+
+
 def test_the_charged_bound_falls_with_the_untied_words_and_says_nothing_past_the_last_row():
     """More untied words never raise it, and it is never above `bound`'s. A block charged whole stays in the count:
     its MACs are the most of what the period holds where few blocks are charged. A MAC of more gates leaves a charged

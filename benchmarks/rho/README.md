@@ -148,7 +148,8 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output wires and
   `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. A block that reads more
   than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by default there
-  is none and no block is charged. It gives the slowdown, the blocks charged at most, the MACs they hold and their
+  is none and no block is charged. `most` is the most untied words one block reads, where its caller states one:
+  below the threshold no block is charged and (H) is taken there. It gives the slowdown, the blocks charged at most, the MACs they hold and their
   share of the blocks and of the MACs, and what it rests on: `HECharged`, (H) at the most a block that isn't charged
   reads, (E), and two premises no Lean statement gives, the period's bound on the untied words and an untied word's
   bits. With no untied word it is `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block
