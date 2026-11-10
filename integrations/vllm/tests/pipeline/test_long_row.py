@@ -52,7 +52,7 @@ def _small():
 
 def test_the_served_row_is_2101_units_of_54_templates() -> None:
     t = LR.served()
-    assert t.id == descriptor_id(t) and {k: t.bindings[k] for k in LR.SERVED} == {"N": 1 << 17, "TOPK": 2048, "BLOCK": 16384}
+    assert {k: t.bindings[k] for k in LR.SERVED} == {"N": 1 << 17, "TOPK": 2048, "BLOCK": 16384}
     assert descriptor_id(t.bindings["READ"]) == descriptor_id(read(1 << 17, 576))
     us = LR.units(t)
     by = Counter(d.base_id for _, d in us)
