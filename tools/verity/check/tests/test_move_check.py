@@ -1159,6 +1159,8 @@ LEFT_OLD = ("HERE = Path(__file__).resolve().parent\nsys.path.insert(0, str(Path
             + LEFT_BODY)
 LEFT_NEW = ('HERE = (Path(__file__).resolve().parent.parent.parent / "bench" / "kv")\n'
             'sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "bench")))\n' + LEFT_BODY)
+LEFT_BY_HAND = ('HERE = Path(__file__).resolve().parent.parent.parent / "bench" / "kv"\n'
+                'sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench"))\n' + LEFT_BODY)
 
 
 def _left(tmp_path: Path, new: str) -> dict:
@@ -1172,6 +1174,12 @@ def _left(tmp_path: Path, new: str) -> dict:
 def test_an_anchor_joined_back_to_the_directory_its_file_left_is_certified(tmp_path):
     """As `tools/move/layout.py` writes it: the anchor gains the path back, and parentheses around the two."""
     r = _left(tmp_path, LEFT_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_back_by_hand_with_no_parentheses_of_its_own_is_certified(tmp_path):
+    """Where the anchor is a call's whole argument, the call's parentheses are around it and are not ones it gained."""
+    r = _left(tmp_path, LEFT_BY_HAND)
     assert r["certified"], r["refusals"]
 
 

@@ -506,12 +506,15 @@ def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> 
     """Whether `new` is `old` with each anchor recounted so that, from where it now is (`at_new(module alias or None)`),
     it names the path the old one named, moved by `pmap`. An anchor with no path that gains one may gain parentheses
     with it, as `tools/move/layout.py` writes the anchor of a file that left the directory it names
-    (`Path(__file__).resolve().parent` to `(Path(__file__).resolve().parents[2] / "old/dir")`)."""
+    (`Path(__file__).resolve().parent` to `(Path(__file__).resolve().parents[2] / "old/dir")`); the parentheses the
+    line already had around it, as a call's own (`str(Path(__file__).resolve().parents[2] / "old/dir")`), are not ones
+    it gained."""
     a, b = list(ANCHOR.finditer(old)), list(ANCHOR.finditer(new))
     if not a or len(a) != len(b):
         return False
     joined = [x.group("rest") is None and y.group("rest") is not None for x, y in zip(a, b)]
-    if anchors_out(old, a, [False] * len(a)) != anchors_out(new, b, joined):
+    plain = ANCHOR.sub("\0", old)
+    if plain not in (ANCHOR.sub("\0", new), anchors_out(new, b, joined)):
         return False
     for x, y in zip(a, b):
         dx, dy = anchored(x, at_old(x.group("mod"))), anchored(y, at_new(y.group("mod")))
