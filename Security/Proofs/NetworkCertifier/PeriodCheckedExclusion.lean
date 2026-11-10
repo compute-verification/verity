@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.Flock.Claims.CompleteFails
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced
 public import Proofs.Flock.SamplingGeneric.Fails
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -47,17 +48,18 @@ read-back of the record under a registered parameter (`RecordFormat.ReadsBy`). T
 one placed window at which every other premise holds, no reader reads the record back, and two secrets are counted
 against a count of 1 (`PeriodLeakChecked_readsBy_exclusion`).
 
-**The code.** `posL` is a compiled verifier that rejects every run, so `Compiled.KS` holds at it, over the statement
-whose program negates its input (`notProg`), under a commitment `posCm` whose roots hold the input's bit: an opening of
-the input passes at that bit and one of the negation at its complement, so it binds with no call. The network
-certifier's openings (`posTops`) register one step whose ingress is the bit and whose egress frame is there when the
-bit is unset. The window meets `WindowGoodChecked` (`pos_good`) at the check that always holds, with no checked input
-(`pos_checkedUnique`): the leak relation holds at every witness, since the circuit computes the frame the openings
-hold.
+**The code** (`Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced`). `posL` is a compiled verifier that rejects every
+run, so `Compiled.KS` holds at it, over the statement whose program negates its input (`notProg`), under a commitment
+`posCm` whose roots hold the input's bit: an opening of the input passes at that bit and one of the negation at its
+complement, so it binds with no call. The network certifier's openings (`posTops`) register one step whose ingress is
+the bit and whose egress frame is there when the bit is unset. The window meets `WindowGoodChecked` (`pos_good`) at the
+check that always holds, with no checked input (`pos_checkedUnique`): the leak relation holds at every witness, since
+the circuit computes the frame the openings hold.
 
-**The network certifier** is one connection of one cell with no data (`Cell := Empty`): its end is late for its bucket
-or not (`bitArr`), so the client receives the fail cell or padding, and the record format `bitFmt` writes that bit as
-the window's frame and reads it back under the whole schedule. Its host runs `recordingCode bitFmt`.
+**The network certifier** (`Definitions.NetworkCertifier.Witness`) is one connection of one cell with no data
+(`Cell := Empty`): its end is late for its bucket or not (`bitArr`), so the client receives the fail cell or padding,
+and the record format `bitFmt` writes that bit as the window's frame and reads it back under the whole schedule. Its
+host runs `recordingCode bitFmt`.
 
 **The exclusion.** The two secrets are the connection's admission bucket (`admSched`), which `bitFmt`'s record does
 not hold, at a server that is never late: the client reads the secret off the cell's bucket (`adm_channel`), both runs
@@ -88,58 +90,13 @@ namespace NetTiming.Witness
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Arg Compiled maxBelow_nonneg)
 open Claims.CompleteFails (run_rejV)
-open Claims.Witness.SamplingGeneric (toyA bext_pr notProg notStmt notPart)
+open Claims.Witness.SamplingGeneric (toyA bext_pr notProg notStmt notPart rootBit posOpens posCm posStmt posX posTops
+  posL)
 open scoped NNRat
 
 set_option linter.unusedVariables false
 
 /-! ## The code -/
-
-/-- The bit the roots hold: set when there is a root. -/
-def rootBit (roots : List Msg) : Bool := !roots.isEmpty
-
-/-- An opening of position 0 passes at the roots' bit, one of position 1 at its complement, and no other. -/
-def posOpens (roots : List Msg) (o : Opening Bool) : Bool :=
-  (o.pos == 0 && o.val == rootBit roots) || (o.pos == 1 && o.val == !rootBit roots)
-
-/-- The commitment whose roots hold the input's bit, with no call. -/
-def posCm : CommitmentScheme Bool := ⟨fun roots o => .ret (posOpens roots o), fun _ _ _ => []⟩
-
-/-- `notStmt` under roots that hold the bit `b`. -/
-def posStmt (b : Bool) : AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, if b then [[]] else []⟩
-
-/-- The statement's bytes at the bit `z`. -/
-def posX (z : Bool) : Msg := if z then [0] else []
-
-/-- The network certifier's openings at a statement: the input at the roots' bit and its negation. -/
-def posTops (s : AuditStatement) : List (Opening Bool) := [⟨0, rootBit s.roots, []⟩, ⟨1, !rootBit s.roots, []⟩]
-
-/-- One step: a frame on the link when the bit is unset, every status complete. -/
-def posObs (b : Bool) : Obs 1 1 1 := ⟨fun _ _ => if b then none else some [], 0, fun _ => .complete⟩
-
-/-- The compiled verifier that rejects every run, parses a statement's bytes as `posStmt` at whether there are any,
-and commits under `posCm`. -/
-noncomputable def posL (Coin : Type) : Compiled Coin (toyA Coin) where
-  V := Claims.CompleteFails.rejV Coin
-  parse x := some (posStmt (!x.isEmpty))
-  scopeCheck _ := true
-  partition _ := some notPart
-  commit := posCm
-  stage2 _ := ∅
-  checked _ _ := []
-  sh _ _ := ()
-  κb _ _ := 0
-  γb _ _ := 0
-  rounds _ _ := ∅
-  session _ _ _ := none
-  iroots _ _ _ := []
-  reveal _ _ _ _ := []
-  openCalls _ := 0
-  nOut _ := 1
-  nIn _ := 1
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 theorem posCm_binds (H : Msg → Msg) : posCm.Binds H := by
   intro roots o o' hpos hne ho ho'
@@ -331,12 +288,6 @@ theorem pos_windowsCount :
   rw [hfree, pos_faultySets]
   simp
 
-/-- The view is the records, and the secret is read off the record's frame. -/
-def posDec (v : Fin 1 → List (Obs 1 1 1)) : Bool :=
-  match v 0 with
-  | [y] => (y.rows 0 0).isNone
-  | _ => false
-
 theorem posDec_obs (z : Bool) : posDec (fun _ => [posObs z]) = z := by cases z <;> rfl
 
 /-! ## One connection of one cell with no data -/
@@ -349,17 +300,6 @@ theorem pos_count :
   rw [pos_windowsCount]
   simp
 
-/-- Whether a connection's cells begin with the fail cell. -/
-def failedAt0 {Cell : Type} : List (ℕ × CellView Cell) → Bool
-  | (_, .fail) :: _ => true
-  | _ => false
-
-/-- One connection, admitted in bucket 0 with no latency, of one cell. -/
-def oneSched : CertifierSchedule Unit := ⟨1, 0, fun _ => 0, fun _ => 1⟩
-
-/-- The server's arrivals at the bit `b`: no data, its end late for bucket 0 exactly when `b` is set. -/
-def bitArr (b : Bool) : Unit → Arrivals Empty := fun _ => ⟨[], fun _ => if b then 1 else 0⟩
-
 /-- A lane of one cell with no data: the fail cell where its end is late for the bucket, else padding. -/
 theorem lane_one (a : Arrivals Empty) (t : ℕ → ℕ) :
     certifierLane a t 0 1 = [(t 0, if t 0 < a.ready 0 then CellView.fail else CellView.pad)] := by
@@ -370,29 +310,6 @@ theorem lane_one (a : Arrivals Empty) (t : ℕ → ℕ) :
   by_cases h : t 0 < a.ready 0
   · simp [certifierLane, hs, h]
   · simp [certifierLane, streamCell, hs, h]
-
-/-- **The record format of one bit**: on a schedule of one cell a connection, the window's frame is there exactly
-when the connection's cell is not the fail cell, and reads back as that cell in its bucket. -/
-def bitFmt : RecordFormat Unit Empty (Fin 1 → List (Obs 1 1 1)) where
-  record _ _ v := fun _ => [posObs (failedAt0 (v ()))]
-  read s ob := fun _ => [(s.bucket () 0, if posDec ob then CellView.fail else CellView.pad)]
-  fits s := s.cells () = 1
-  read_record := by
-    intro s hfits a
-    have hs : s.cells () = 1 := hfits
-    funext c
-    have hc : certifierCode s a () =
-        [(s.bucket () 0, if s.bucket () 0 < (a ()).ready 0 then CellView.fail else CellView.pad)] := by
-      show certifierLane (a ()) (s.bucket ()) 0 (s.cells ()) = _
-      rw [hs, lane_one]
-    show [(s.bucket () 0, if posDec (fun _ => [posObs (failedAt0 (certifierCode s a ()))]) then CellView.fail
-      else CellView.pad)] = certifierCode s a ()
-    rw [posDec_obs, hc]
-    by_cases h : s.bucket () 0 < (a ()).ready 0
-    · simp only [h, ↓reduceIte]
-      rfl
-    · simp only [h, ↓reduceIte]
-      rfl
 
 /-- The cells the client receives at the bit: the fail cell or padding, in bucket 0. -/
 theorem bit_code (z : Bool) :
@@ -411,14 +328,6 @@ theorem bit_channel :
   ⟨fun _ _ => ⟨rfl, (), Set.mem_singleton (), rfl⟩, fun z _ => bit_dec z⟩
 
 /-! ## The record must read back under the registered parameter -/
-
-/-- The schedule whose one connection, of one cell, is admitted in bucket 1 at `z` and in bucket 0 otherwise. -/
-def admSched (z : Bool) : CertifierSchedule Unit := ⟨1, 0, fun _ => if z then 1 else 0, fun _ => 1⟩
-
-/-- Whether a connection's first cell is past bucket 0. -/
-def lateAt0 {Cell : Type} : List (ℕ × CellView Cell) → Bool
-  | (b, _) :: _ => decide (0 < b)
-  | _ => false
 
 /-- The cells the client receives at the admission `z` from a server that is never late: padding, in the admission's
 bucket. -/
@@ -459,13 +368,14 @@ theorem adm_not_readsBy (rd : Unit → (Fin 1 → List (Obs 1 1 1)) → Unit →
 /-! ## The exclusion -/
 
 /-- **Without the read-back, `PeriodLeakChecked`'s count fails.** At `posL`, one window, a server that is never late and
-the format `bitFmt`, with the secret the connection's admission bucket: `Compiled.KS`, the commitment's binding, the
-window's placement, its check's pinning, `TrustedHost` at a host that runs the network certifier's code, and the
-channel all hold; the network certifier registers its observations at both secrets, at an operator that reads nothing;
-no reader reads the record back under the one registered parameter; and the two secrets, each of whose windows meets
-its good event, are counted against `#Θ · windowsCount = 1`. -/
+the format `bitFmt`, with the secret the connection's admission bucket: the coins are a nonempty type and `δ = 0` is
+nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedHost` at a
+host that runs the network certifier's code, and the channel all hold; the network certifier registers its
+observations at both secrets, at an operator that reads nothing; no reader reads the record back under the one
+registered parameter; and the two secrets, each of whose windows meets its good event, are counted against
+`#Θ · windowsCount = 1`. -/
 theorem PeriodLeakChecked_readsBy_exclusion :
-    (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
+    Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
       Verity.Assumptions.TrustedHost ()
@@ -484,8 +394,8 @@ theorem PeriodLeakChecked_readsBy_exclusion :
               ((recordingCode bitFmt (admSched z) (bitArr false)).2 i)}.encard ≤
           ({()} : Set Unit).encard * ((windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
             (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) : ℕ) : ℕ∞) := by
-  refine ⟨posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl, adm_channel, fun z i s hs => ?_,
-    adm_not_readsBy, fun hc => ?_⟩
+  refine ⟨⟨true⟩, le_rfl, posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl, adm_channel,
+    fun z i s hs => ?_, adm_not_readsBy, fun hc => ?_⟩
   · obtain rfl : posStmt false = s := Option.some.inj ((pos_parse (Coin := Bool) false).symm.trans hs)
     have ho : (recordingCode bitFmt (admSched z) (bitArr false)).2 i = [posObs false] := congrFun (adm_obs z) i
     exact ho ▸ pos_registers id false (fun _ _ => [false]) rfl
