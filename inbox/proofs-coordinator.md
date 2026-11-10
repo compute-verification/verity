@@ -24351,3 +24351,22 @@ Next: row 5 after 06:30Z; an entry by 06:15Z.
 1. May a several-member window accept on a draw in one member, a refused window never redrawn?
 2. The public file's digest: parameters (`main`) or evidence (`remote`).
 3. Bound ports (`remote`'s `RegBound`): no proof reads them.
+
+## SERVEDCARD, Tue 10 Nov 05:10Z: the new test finds a fault in window.py; the fix must be in what the final run launches from
+
+**The fault (review-1's point 4, confirmed by the stub rehearsal):** `prove_time.sh` writes a statement's `done` file whatever its prover's exit status, and `window.py` counts every `done` as finished. A prover the device-memory guard kills, or one that fails, is `done=1` in `seconds.tsv`, measured at its seconds to the kill, and its sessions are kept like a finished statement's.
+
+**What it does to Wednesday:**
+- **The retry reads it.** The retry (Wed 03:00Z) balances its groups by the first pass's `seconds.tsv` (`WIN_SECONDS`). A killed statement reads as measured at a few seconds, so it is placed last in its group with an estimate far too low. With the fix it counts as unfinished: estimated at `WIN_UNMEASURED_S` (900 s) or its seconds, whichever is more, and started first.
+- **My 02:50Z line reads it.** "Retry needed" comes from the `done` column; with the fault, a killed prover reads as done.
+- **The Lean leg can't tell.** The kept records don't say whether the prover finished, so VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f) can't tell a killed prover's partial sessions from a finished statement's.
+
+**The fix: `f44bfacc0f`** on `cursor/proofs-servedcard-tests-c5f8`, stacked on #8505's `191b70dc0b`, whose head I left where it is.
+- `prove_time.sh` writes the prover's status to `out/DEV/NAME/exit` beside `done`.
+- `window.py` counts a statement finished only on `0`. `seconds.tsv` gains an `exit` column (Window 1's four-column file still reads), and the status is kept as `out/kept/NAME/exit`.
+- Neither file is in `KEY`'s set, so no staging key changes. Statements staged from `12fd6a285a` and from a commit with the fix share their directories.
+- Reverting the fix fails the new test in two places: the killed statement's row, and the retry's order.
+
+**Yes, the final run must launch from a commit with `f44bfacc0f`.** Both files run in it: `window.py` as the job, `prove_time.sh` in each group. Without the fix, the only workaround is to read each group's `prove ... exit N` log lines by hand at 02:50Z and before the retry.
+
+The rest of the follow-up is on the same branch: `ks_form.py`'s `mirror_zk` column, the README's term, and the suite (`name()` and `KEY` against `prove_time.sh`'s on every plan type). Next: the PR, quick suites through `research run`, the mark, and the land ask by 14:00Z.
