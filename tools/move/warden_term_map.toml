@@ -73,9 +73,10 @@ scope = "prose"
 "warden cells" = "network certifier cells"
 "warden cell" = "network certifier cell"
 
-# The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay". A phrase
-# here holds the word after the word wherever prose has one, so that it is none of the phrases
-# `warden_tokens_map.toml` names "the network certifier".
+# The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay". Each
+# phrase holds the word after the word, so it is none that `warden_tokens_map.toml` names "the network certifier".
+# `Security/Definitions/NetworkCertifier/Tap.lean`'s module docstring opens with the word before a name in backticks,
+# where no phrase is prose: it must read "The relay" when this move runs, or [words] makes it "The network certifier".
 [[words_in]]
 files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/NetworkCertifier/Tap.lean"]
 
@@ -85,7 +86,6 @@ files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/Netw
 "its warden sent" = "its relay sent"
 "the warden's cells" = "the relay's cells"
 "the warden's code" = "the relay's code"
-"The warden" = "The relay"                # opens a sentence before a name in backticks: no word beside it is prose
 
 [[words_in]]                              # a sentence that wraps inside a shell comment, past the phrases' reach
 files = ["benchmarks/one_stage/a5_tp.sh"]
