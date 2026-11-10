@@ -15,7 +15,12 @@
   busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
   memory peak; host memory (each process's RSS every 0.5 s: each prover's peak, the provers' summed peak, the
   verifiers'); the provers' CPU seconds a statement and the node's load over the window; each window session's prover
-  timings (``e2e_s`` from Register to the last proof, ``prove_total_s`` its device phases, ``front_s`` the difference).
+  timings (``e2e_s`` from Register to the last proof, ``prove_total_s`` its device phases, ``front_s`` the difference); the
+  verifier's seconds a statement (``verify_s``: the mean over the window of each session's, from its verifier's record).
+* **What prices a row**: ``gpus``, the devices its provers held, so a statement costs ``gpus / statements_per_s``
+  GPU-seconds; ``stage.blocks``, the proof blocks of the proved statement, and ``stage.full``, the most one statement of
+  its circuit holds (`statement_blocks`); and ``flat``, whether the provers' statement caches had stopped filling, with the
+  hit series and the rule that decide it (``cache``; `cache_flat`).
 * **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
   seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type.
@@ -49,6 +54,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/py
 from verity_flock.proof_server import ProofServer, Statement
 
 STATEMENT_ID = "verity/flock-circuit"
+#: flock-circuit's statement shape: m = k_log + nbl is at most 35 (`a6.M_MAX`)
+M_MAX = 35
+#: the rule that decides a row's ``flat``, kept in the row's ``cache``
+FLAT_RULE = ("every prover's statement-cache hit rate over the last quarter of its timed sessions is within 0.01 of the "
+             "third quarter's")
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
 # the CUDA prover prints the runtime's error string ("FFI CUDA error out of memory at ...") before it fails the session
 DEVICE_OOM = re.compile(r"out of memory", re.IGNORECASE)
@@ -72,6 +82,41 @@ def staged(z: Path, t: str) -> tuple[Statement, int, Path]:
     n = json.loads((d / "stage.json").read_text())["n"]
     return Statement(pin=(d / "pin.txt").read_text().strip(), circuit=d / "circuit.txt", tables=d / "tables",
                      instances=d / "inst.bin", public=d / "pub.bin"), n, d
+
+
+def statement_blocks(stage: dict) -> dict:
+    """The proof blocks of a staged statement (its ``n`` instances) and the most one statement of its circuit holds
+    (`a6.chunk_cap`: ``vus_per_block`` instances in each of 2^(M_MAX - k_log) blocks; None without the circuit's shape)."""
+    k, g = stage.get("k_log"), stage.get("vus_per_block") or 1
+    return {"blocks": stage["n"], "full": g << (M_MAX - k) if isinstance(k, int) and k <= M_MAX else None}
+
+
+def cache_flat(sessions: list[tuple[str, bool, dict | None]]) -> tuple[bool, dict]:
+    """Whether the provers' statement caches had stopped filling over the timed sessions (`FLAT_RULE`), and the hit series
+    that says so. ``sessions``: each session's prover, whether it was a warm one, and its record's ``stmt_cache``: the
+    prover's lookups so far and the drawn statements it holds, each built once, so a statement held is a miss.
+
+    A prover's timed sessions, in the order of its lookups, are cut into four quarters. A quarter's hit rate is
+    1 - held / lookups over what it added to the quarter before it (the first: to the prover's last warm session); a record's
+    counters are read when it is emitted, after the lookups of the sessions built ahead of it, so a quarter's lookups are
+    its sessions' only roughly. A prover with under four timed sessions, without the counters, or with no lookup in either
+    of its last two quarters isn't flat."""
+    by: dict[str, dict[bool, list[tuple[int, int]]]] = {}
+    for prover, warm, c in sessions:
+        mine = by.setdefault(prover, {True: [], False: []})
+        if c and isinstance(c.get("lookups"), int) and isinstance(c.get("held"), int):
+            mine[warm].append((c["lookups"], c["held"]))
+    series, flat = {}, bool(by)
+    for prover, mine in sorted(by.items()):
+        timed, start = sorted(mine[False]), max(mine[True], default=(0, 0))
+        ends = [timed[len(timed) * q // 4 - 1] for q in range(1, 5)] if len(timed) >= 4 else []
+        added = [(e[0] - p[0], e[1] - p[1]) for p, e in zip([start, *ends], ends)]
+        series[prover] = {"warm": {"lookups": start[0], "held": start[1]}, "timed": len(timed), "quarters": [
+            {"lookups": n, "held": h, "hit_rate": round(1 - h / n, 4) if n > 0 else None} for n, h in added]}
+        # |h3 / n3 - h4 / n4| <= 0.01, in integers
+        flat = flat and len(added) == 4 and added[2][0] > 0 and added[3][0] > 0 and (
+            100 * abs(added[2][1] * added[3][0] - added[3][1] * added[2][0]) <= added[2][0] * added[3][0])
+    return flat, {"rule": FLAT_RULE, "provers": series}
 
 
 class Device:
@@ -208,9 +253,10 @@ def one(a, dev: str, t: str, K: int) -> dict:
     room, lock, done = threading.Semaphore(window), threading.Lock(), []
     gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
     wall = time.time() - t_start
-    rec: dict = {"type": t, "provers": K, "n": n, "pin": st.pin, "verify_ahead": a.ahead, "warm": a.warm,
-                 "sessions": timed_n, "device": dev, "stage": json.loads((d / "stage.json").read_text())}
-    ps = ProofServer(a.bin, out, devices=[dev], provers=K, verify_ahead=a.ahead, verdicts=1,
+    devices, stage = [dev], json.loads((d / "stage.json").read_text())
+    rec: dict = {"type": t, "provers": K, "gpus": len(devices), "n": n, "pin": st.pin, "verify_ahead": a.ahead, "warm": a.warm,
+                 "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
+    ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
@@ -287,6 +333,10 @@ def one(a, dev: str, t: str, K: int) -> dict:
             "prebuilt_used": sum(1 for r in win if r["s"].live.get("witness_prebuilt_s") is not None),
             "per_prover": dict(sorted(Counter(r["s"].prover for r in win).items()))}
     rec["idle_provers"] = K - len(rec["per_prover"])
+    if verify := [v for r in win if isinstance(v := (r["s"].served or {}).get("verify_s"), (int, float))]:
+        rec["verify_s"] = round(statistics.fmean(verify), 4)
+    rec["flat"], rec["cache"] = cache_flat([(r["s"].prover, r["i"] < K * a.warm, (r["s"].live or {}).get("stmt_cache"))
+                                            for r in done])
     if rec["median"]["e2e_s"] is not None and rec["median"]["prove_total_s"] is not None:
         rec["median"]["front_s"] = round(rec["median"]["e2e_s"] - rec["median"]["prove_total_s"], 4)
     if lean is not None:
@@ -340,7 +390,7 @@ def main() -> int:
             rows.append(r)
             (out / "rate.json").write_text(json.dumps(rows, indent=1, default=str))
             print("RATE " + json.dumps({k: r.get(k) for k in ("type", "provers", "statements_per_s", "busy", "device_peak_mib",
-                                                              "host", "accepted", "median", "lean", "void", "error")},
+                                                              "host", "accepted", "flat", "median", "lean", "void", "error")},
                                        default=str), flush=True)
             if r.get("void"):
                 print(f"VOID {t} K={K}: " + "; ".join(r["void"]), flush=True)
