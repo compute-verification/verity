@@ -48,7 +48,7 @@ import numpy as np
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR

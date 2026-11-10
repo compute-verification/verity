@@ -72,11 +72,11 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                             bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest,
                                             sha512_row_v2_digest)
-from verity.ml.circuits.codec import canonical_json, jcs_domain_error
-from verity.ml.circuits.partition_object import TemplatePartition
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import runs as ref_runs
-from verity.ml.circuits.types import Array
+from verity.circuits.codec import canonical_json, jcs_domain_error
+from verity.circuits.partition_object import TemplatePartition
+from verity.circuits.program import Program
+from verity.circuits.refs import runs as ref_runs
+from verity.circuits.types import Array
 
 from . import partition as P
 

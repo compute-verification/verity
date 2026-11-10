@@ -17,7 +17,7 @@ inputs = ["verity/core/protocols/sampled_proofs/coins.py", "verity/core/protocol
           "verity/core/protocols/sampled_proofs/one_stage/draw.py",
           "verity/core/protocols/sampled_proofs/one_stage/registration.py",
           "verity/core/protocols/sampled_proofs/one_stage/verdict.py",
-          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
+          "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
           # the core's monitoring periods, which `monitoring` reads through PoUS's `wipe_monitoring`
           "verity/core/periods",

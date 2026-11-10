@@ -24,8 +24,8 @@ from hypothesis import strategies as st
 from verity_difftest import settings
 
 import verity_difftest as D
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A

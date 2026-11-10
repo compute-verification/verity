@@ -735,7 +735,7 @@ def test_the_coverage_is_what_a_go_record_shows() -> None:
 # --- what is covered --------------------------------------------------------------------------------------------------------------
 
 def _bind_captured(c: T.Captured, M: int):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     e = X.expect("fused" if c.route == "fused" else "allreduce", M, c.setting, c.N)
     size = M * c.N
@@ -797,7 +797,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     more than not-yet-established, only when `CAPTURED` covers every call GLM-5.3's served engine makes at the workload's setting
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
-    from verity.ml.circuits.defs import REGISTRY as DEFS
+    from verity.circuits.defs import REGISTRY as DEFS
     from verity_vllm.program.frontend.conformance import status_of
 
     cmap = json.loads(CMAP.read_text())

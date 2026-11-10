@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import b1, fa2_check_inf, hopper
 
     return [

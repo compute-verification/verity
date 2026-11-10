@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The relation at GLM-5.3's first row past TOPK (2049 keys, TOPK 2048: one primitive over the row), and the Waksman read at
     small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaWaksmanSwap_v1`, `DsaWaksmanPick_v1` and both `Xor3x*`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk
 
     return [

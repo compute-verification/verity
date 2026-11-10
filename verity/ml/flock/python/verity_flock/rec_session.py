@@ -47,8 +47,8 @@ import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from verity.ml.circuits.ops.boolean import gf2k as G
-from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean.gf2k import mul
 from verity.ml.commitments import coin_tree as CT
 
 from . import rec_algebra as A

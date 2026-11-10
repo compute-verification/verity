@@ -31,14 +31,14 @@ reads its rows on all 78 (the mux it replaces, `Embedding_v2` per slot, was abou
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import scalar as SC
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import scalar as SC
 from verity.ml.definitions.registry import dsa_topk as T
 
 BIT = BL.BIT

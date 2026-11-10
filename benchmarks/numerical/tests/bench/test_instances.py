@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.ml.circuits.silicon import models as S, term as T
-from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.circuits.silicon import models as S, term as T
+from verity.circuits.silicon.errors import InvalidArtifact
 from verity_numerical.bench import contract
 from verity_numerical.bench import instances as I
 from verity_numerical.bench import instances_gen as G

@@ -161,7 +161,7 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/network/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/ml/circuits/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
+    "verity/circuits/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     ".agents/skills/friction/SKILL.md": "queued PRs on next add the warden here; the network certifier's rename follows them",
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",

@@ -10,11 +10,11 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity.ml.circuits.evaluation.reference import signature_of
-from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.batch import type_dtype, type_shape
+from verity.circuits.evaluation.reference import signature_of
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.ml.definitions.numerics import rows
 from verity.ml.definitions.numerics.kernel_registry import Declined
 from verity.ml.definitions.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper

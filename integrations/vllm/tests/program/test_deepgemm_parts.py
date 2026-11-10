@@ -11,8 +11,8 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.pipeline import serving_templates as ST
 from verity.ml.definitions.numerics import deepgemm_twins as T
 from verity.ml.definitions.registry import deepgemm as DG

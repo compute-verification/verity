@@ -59,12 +59,12 @@ and 32 scales `fused_inv_rope_fp8_quant` writes), N = 1024, the weight [g, 1024,
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.fp32 import ftz_bits, f32_of
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import BIT, F32Fminf, F32Neg
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.fp32 import ftz_bits, f32_of
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BIT, F32Fminf, F32Neg
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import fp8 as F8
 from verity.ml.definitions.registry import prims as P

@@ -8,9 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 from test_class_statement_unit_stager import STATEMENTS, TOY, TOY_ROWS
-from verity.ml.circuits.boolean import AND, BIT, and_gate
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean import AND, BIT, and_gate
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS

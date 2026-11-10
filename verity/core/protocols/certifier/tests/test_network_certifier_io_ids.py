@@ -12,9 +12,9 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.boolean.forms import and_reduce
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.boolean.forms import and_reduce
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC

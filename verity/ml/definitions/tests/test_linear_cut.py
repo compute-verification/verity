@@ -6,8 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.registry import linear_cut as LC
 from verity.ml.definitions.registry.prims import BF16
 

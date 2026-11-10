@@ -1,5 +1,5 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
-modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package:
+modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their twins and vocabulary live in the integration package:
 `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
 `program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
 from __future__ import annotations
@@ -21,7 +21,7 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.ml.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
@@ -47,8 +47,8 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
                 "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
@@ -85,4 +85,4 @@ def test_the_boundary_names_a_foreign_import():
     assert _foreign(REGISTRY, ("b1", "moe_difftest")) == [f"{REGISTRY}.moe_difftest"]
     assert _foreign(f"{REGISTRY}.gemm_targets", ("GemmTarget",)) == [f"{REGISTRY}.gemm_targets"]
     assert _foreign("torch", ()) == ["torch"]
-    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.ml.circuits.defs", ("bind",)) == []
+    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.circuits.defs", ("bind",)) == []

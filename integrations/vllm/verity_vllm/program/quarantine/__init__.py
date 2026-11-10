@@ -16,5 +16,5 @@ Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.pro
   6. only then may an accepted profile use the definition.  Promotion out of quarantine into `verity.ml.definitions.registry` is an
      integrator move.
 
-Sub-packages must import only `verity.ml.circuits.*` and the standard library's math / dataclasses / typing.
+Sub-packages must import only `verity.circuits.*` and the standard library's math / dataclasses / typing.
 """

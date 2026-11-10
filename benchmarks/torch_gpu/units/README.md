@@ -17,7 +17,7 @@ device's arch.
 
 Each module's docstring states its OPS: every f32 operation an IEEE round-to-nearest-even instruction with no flush, every
 reduction sequential in ascending order from +0, no atomics. The one approximate operation is softmax's exponential,
-`ex2.approx.ftz.f32` (MUFU.EX2, `verity.ml.circuits.ops.mufu.MufuEx2Ftz`). `words.py` holds the word operations the twins
+`ex2.approx.ftz.f32` (MUFU.EX2, `verity.circuits.ops.mufu.MufuEx2Ftz`). `words.py` holds the word operations the twins
 are made of; `gpu()` in each module launches its kernel on torch tensors through `lib.py`, and with `units=True` also
 returns the intermediate proof blocks' outputs (chunk sums, rs, the absmax tree, m, r, chunk bests).
 

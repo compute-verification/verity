@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     block size 4, a row of 8); the served slot (a row of 4096 blocks, over `targets.MAX_GATES`, so checked when named) and the
     served length (top-k 1024).  The served row is TOPK Calls of the served slot, the word Definition's
     (`dsv4_decode_indices.circuit-check.py`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsv4_decode_indices as BX
 
     return [

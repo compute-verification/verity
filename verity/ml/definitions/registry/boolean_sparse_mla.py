@@ -13,10 +13,10 @@ once.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import attention as BA
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
 from verity.ml.definitions.registry import sparse_mla as M
 from verity.ml.definitions.registry.boolean_attention import BF16, F32, Fa3InvSum, _Bits
 from verity.ml.definitions.registry.boolean_dsa import flat

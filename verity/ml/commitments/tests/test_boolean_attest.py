@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
+from verity.circuits import evaluation as E
 from verity.ml.commitments.gates import attest as G
 from verity.ml.commitments.indexed import RangeU64Domain
 from verity.ml.commitments.merkle import CommitmentDomain

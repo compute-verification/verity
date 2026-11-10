@@ -11,7 +11,7 @@ def _boolean_roots() -> list[Any]:
     elements (16 per owner) at a chain for owners 0-3 and a balanced tree for 4-7, IEEE and FTZ, and one 16-byte vector of it,
     the one-stage unit, at GLM-5.3's tree with IEEE adds and at the balanced tree with FTZ ones; and NCCL's tree one of 8
     elements at WORLD 4, down the TP4 capture's chain and down another."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_tp_allreduce as BA
     from verity.ml.definitions.registry import tp_allreduce as TA
 

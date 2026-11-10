@@ -5,12 +5,12 @@ The test's cases and the production chain it runs (vLLM d9105ea80's `Sampler.sam
 
 from __future__ import annotations
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import tuple_of
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import tuple_of
 from verity.ml.definitions.registry.prims import BF16, F32, I32
 from verity.ml.definitions.registry.b1 import const
 from verity.ml.definitions.registry.sampling import I64, GumbelSelectF32, GumbelTopPTokenSelect, TemperatureScale, TopPMask
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.types import Array, Tuple
 
 
 def _difftest_body(B, S, logits, top_p, seed, pos, temp):

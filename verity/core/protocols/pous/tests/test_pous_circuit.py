@@ -8,8 +8,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as EB
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as EB
 from verity.core.protocols.pous import circuit as P
 
 RNG = random.Random(11)

@@ -52,7 +52,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a6  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS  # noqa: E402
 

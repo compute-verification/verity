@@ -134,10 +134,10 @@ from dataclasses import dataclass, field
 from itertools import accumulate, product
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Refs, runs
-from verity.ml.circuits.types import Tuple
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.refs import Refs, runs
+from verity.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import rmsnorm_fused_split as NS
 from verity.ml.definitions.registry import int8_exact as IX

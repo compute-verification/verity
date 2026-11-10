@@ -1068,7 +1068,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   the coins are hm96 leaves until released, so the formats don't change when the openings move into proofs. A public
   \(c_a\) and append root say which append the drawn block belongs to, but not its index or its contents. Which value
   leaves a block's payload bytes are is the memory-map unit's public row's (`map_value_leaves` in
-  `verity.ml.circuits.requirement_units`: a present value \(k\) is leaf \(\text{pos}[k]\) of the value commitments,
+  `verity.circuits.requirement_units`: a present value \(k\) is leaf \(\text{pos}[k]\) of the value commitments,
   and payload \(c\) is store index \(\text{first} + c\)). Open: the units' circuits; and the plan's commitment in
   place of v0's clear plan ("What the plan shows", below).
 - **Where \(z\) comes from,** under a registration that binds it. \(z\) comes from Pearl-C's k-slice accumulators,

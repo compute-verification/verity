@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import is_input
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import is_input
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
@@ -77,7 +77,7 @@ def _joined(node, ranks: list, check_leaves: bool) -> None:
 
 
 def _runs(c):
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
     return runs(c.refs)
 
 

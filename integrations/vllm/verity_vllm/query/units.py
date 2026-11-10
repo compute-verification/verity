@@ -10,7 +10,7 @@ open are the values that cross a unit boundary, plus what the protocol prescribe
 where, for a unit ``V``: ``in(V)`` is every Value produced *outside* ``V`` (by a Call of another unit, or by a
 prescribed input of the Program) that a Call inside ``V`` reads, and ``out(V)`` is every Value produced inside ``V``
 that a Call outside ``V`` reads or that is a Program output.  A Value is a *logical* identity ``(producer, port)``:
-the Call that produces it and the output port it leaves the Call by (``verity.ml.circuits`` invariant: "Composite interfaces ->
+the Call that produces it and the output port it leaves the Call by (``verity.circuits`` invariant: "Composite interfaces ->
 ordered collections of value references"; a port is one such collection).  Nothing here is a commitment position, a
 tensor, a module or a kernel.
 
@@ -20,13 +20,13 @@ an identity is spelt for a collector are the integration's concern (``verity_vll
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
 contract; see ``integrations/vllm/tests/query/test_units.py``.
 
-The Program is read through the :class:`CallGraph` protocol so an integration can present a decoded ``verity.ml.circuits`` descriptor,
+The Program is read through the :class:`CallGraph` protocol so an integration can present a decoded ``verity.circuits`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
 the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates their own canonical references.
 
-The canonical partition (``verity.ml.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
+The canonical partition (``verity.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
 every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
 an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
 ``integrations/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.

@@ -13,9 +13,9 @@ from circuit_check import targets as TG
 from verity_flock import ir_lower as IL
 from verity_flock import tmpl as TM
 
-from verity.ml.circuits.boolean.forms import maj
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.ops.boolean import scalar as SB
+from verity.circuits.boolean.forms import maj
+from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean import scalar as SB
 
 MAJ = definition("StructuralTestMaj", 1, lambda C, a, b, c: [maj(C, a[0], b[0], c[0])],
                  (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)
@@ -214,8 +214,8 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     """`verity_flock.struct_lower` (TMPL1) emits each specialized Definition once and keeps its calls as calls: its template
     of a GEMM scan is the flat lowering by construction."""
     S = pytest.importorskip("verity_flock.struct_lower")
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as GB
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
     tm = S.lower(t)[0]
@@ -228,9 +228,9 @@ def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template
     evaluated from the template, equals the reference on every correspondence vector; a template whose outputs differ is
     refused by name on every vector."""
     from circuit_check import checks as CK
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
-    from verity.ml.circuits.ops.boolean import gemm as GB
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = resolve(bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32))
     opts = CK.Options(vectors=16, struct_max_gates=1 << 30)
@@ -257,8 +257,8 @@ def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity_flock import class_statement as CS
 
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as GB
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = bind(GB.GemmAccumulatorS8, K=64, DOT=GB.BlackwellS8ImmaDot32)
     rows = [(f"p{r}", [f"x[{r}]", f"wrow[{r}]"]) for r in range(64)]

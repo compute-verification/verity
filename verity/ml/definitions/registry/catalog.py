@@ -8,7 +8,7 @@ imported its module.  A reader of Definitions beyond the registry names their pa
 from __future__ import annotations
 
 #: the packages `load` imports, by scope
-SCOPES = {"registry": "verity.ml.definitions.registry", "ops": "verity.ml.circuits.ops"}
+SCOPES = {"registry": "verity.ml.definitions.registry", "ops": "verity.circuits.ops"}
 _LOADED: dict[str, list[str]] = {}
 
 
@@ -19,7 +19,7 @@ def load(scope: str | tuple[str, ...] = "registry"):
     import importlib
     import pkgutil
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     errors: list[str] = []
     for s in (scope,) if isinstance(scope, str) else scope:
         if s not in _LOADED:

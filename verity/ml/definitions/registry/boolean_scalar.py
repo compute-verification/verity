@@ -1,5 +1,5 @@
 """The registry's scalar f32 primitives (`registry.prims`, `registry.moe`) as Boolean Definitions: the next version of each word
-primitive, the same function on bits (`verity.ml.circuits.boolean.trace`).
+primitive, the same function on bits (`verity.circuits.boolean.trace`).
 
     DivFullScaleA_v4   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: DivFullScaleA_v2
     F32Sub_v3          (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: F32Sub_v2
@@ -8,21 +8,21 @@ primitive, the same function on bits (`verity.ml.circuits.boolean.trace`).
     F32FmaRm_v4        (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32FmaRm_v2
     F32GtStrict_v2     (a, b: Array<32, Value<1>>) -> Value<1>                  word view: F32GtStrict_v1
 
-`DivFullScaleA_v4` is `verity.ml.circuits.ops.boolean.mufu.div_full_scale_a_gpu` (`DivFullScaleA_v3`'s scalings, each an FMUL whose
+`DivFullScaleA_v4` is `verity.circuits.ops.boolean.mufu.div_full_scale_a_gpu` (`DivFullScaleA_v3`'s scalings, each an FMUL whose
 NaN is 0x7FFFFFFF); `F32Sub_v3` is FADD of a and -b with every NaN result 0x7FFFFFFF, so no operand NaN's payload or sign
 survives and numpy's quieting rule does not arise, and `F32Sub_v4` is the same FADD with every NaN 0x7FC00000 (`ref_prims.F32Sub_v1`
-canonicalizes numpy's NaN); the `fma.rm.f32` pair is `verity.ml.circuits.silicon.fp.f32_fma`
+canonicalizes numpy's NaN); the `fma.rm.f32` pair is `verity.circuits.silicon.fp.f32_fma`
 rounded toward -infinity, every NaN 0x7FC00000 (v3) or 0x7FFFFFFF (v4); `F32GtStrict_v2` is
-`verity.ml.circuits.ops.boolean.softmax.f32_gt` (NaN false, +0 == -0).
+`verity.circuits.ops.boolean.softmax.f32_gt` (NaN false, +0 == -0).
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.ops.boolean import softmax as SM
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import softmax as SM
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
 
 from . import moe as M
 from . import prims as P

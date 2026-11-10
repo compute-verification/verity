@@ -21,8 +21,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.codec import program_digest
+from verity.circuits import Program, bind
+from verity.circuits.codec import program_digest
 from verity.ml.definitions.registry import b1, serve3
 from verity.ml.definitions.numerics import serve3_reference as ref
 from verity.ml.definitions.registry.b1 import weights_type

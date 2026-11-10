@@ -18,8 +18,8 @@ from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
-from verity.ml.circuits import codec, partition_v2 as PV2
-from verity.ml.circuits.population import population_program
+from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits.population import population_program
 from verity.ml.windows import interface as IF
 
 REFERENCE = Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py"

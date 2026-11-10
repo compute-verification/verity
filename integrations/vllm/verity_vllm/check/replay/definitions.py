@@ -5,7 +5,7 @@ compiled from the Build's tree.  A Definition whose body moved between the two t
 words against a circuit the Commit never bound, and the Program digest the loaders check is the Build's recorded string, which no
 tree change moves.  `refusal` reads the Build's ``descriptor.json.gz``, holds it to the digest of record, and holds each
 specialization the replay evaluates, with every Definition it reaches, to the descriptor's entry for it
-(`verity.ml.circuits.metadata.definition_digest`: the entry with the v1 interning resolved, the same for one Definition in any
+(`verity.circuits.metadata.definition_digest`: the entry with the v1 interning resolved, the same for one Definition in any
 Program).
 
 That holds the Definitions, not the code that grades by them.  A primitive is held to its entry, its signature and ports only:
@@ -77,7 +77,7 @@ def kernel_refusal(specs: Iterable[str]) -> str | None:
 def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
     ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits.codec import program_digest
     from verity.ml.definitions.registry.catalog import load
 
     specs = list(specs)
@@ -108,8 +108,8 @@ def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
 
 def _ours(desc: dict[str, Any], fid: str, registry: Any, ours: dict[str, Any]) -> Any:
     """This tree's specialization for the descriptor's ``fid``: the registry's Definition bound at the Build's binding record."""
-    from verity.ml.circuits.codec import descriptor_id, lookup_primitive
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.codec import descriptor_id, lookup_primitive
+    from verity.circuits.defs import CompositeDefinition, bind
 
     if fid in ours:
         return ours[fid]
@@ -144,8 +144,8 @@ def _static(desc: dict[str, Any], v: Any, registry: Any, ours: dict[str, Any]) -
 
 def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list[str]:
     """Each Definition ``fn`` reaches in this tree whose entry is not the Build's descriptor's, named."""
-    from verity.ml.circuits.metadata import definition_digest
-    from verity.ml.circuits.codec import encode_program
+    from verity.circuits.metadata import definition_digest
+    from verity.circuits.codec import encode_program
 
     # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
     mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])

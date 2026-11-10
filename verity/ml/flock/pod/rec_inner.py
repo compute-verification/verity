@@ -59,7 +59,7 @@ def _population(sub, n: int, sets: Path, seed: int):
 def _write_binding(out: Path, part: dict, program) -> None:
     """``partition.json``, ``program.json`` and the draw the coin server answers ``Register`` with, every unit
     (`rec_live.full_draw`), ``draw.json``."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     (out / "partition.json").write_text(json.dumps(part))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))

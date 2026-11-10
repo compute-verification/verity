@@ -280,8 +280,8 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3

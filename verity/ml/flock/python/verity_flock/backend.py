@@ -18,10 +18,10 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity.ml.circuits.boolean import forms
-from verity.ml.circuits.silicon import fp4, tc_step
-from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.circuits.boolean import forms
+from verity.circuits.silicon import fp4, tc_step
+from verity.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
 from . import lowering
 

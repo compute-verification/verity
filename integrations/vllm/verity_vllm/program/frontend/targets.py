@@ -29,8 +29,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
+from verity.circuits.defs import bind
+from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity.ml.definitions.numerics import fa3_model as FA3
 from verity.ml.definitions.registry import b1
@@ -93,8 +93,8 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
                                           "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
                                           "other bf16 matmuls stay on cuBLASLt with split-K disabled, the same chain without a bias)",
-                           "pipeline": "verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
-                                       "verity.ml.circuits.silicon.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "pipeline": "verity.circuits.silicon.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity.circuits.silicon.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
                            "flash_attn_versions": (2,),
                            "fa2_construction": "check-inf-per-iteration",
                            # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)

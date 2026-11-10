@@ -105,15 +105,15 @@ from __future__ import annotations
 import functools
 from typing import Any, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce,
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce,
                                               sub)
-from verity.ml.circuits.boolean.trace import Traced, emit, trace
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.partition_object import template_instances_query
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Type
+from verity.circuits.boolean.trace import Traced, emit, trace
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.partition_object import template_instances_query
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, Type
 
 from verity.core.protocols.pouw.circuit.live_reads import HEADER
 

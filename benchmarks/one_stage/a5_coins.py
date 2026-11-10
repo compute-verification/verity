@@ -65,7 +65,7 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 from verity.ml.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]

@@ -11,10 +11,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain

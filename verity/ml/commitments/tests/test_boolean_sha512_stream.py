@@ -11,10 +11,10 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import compile as compile_bits
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Tuple
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import compile as compile_bits
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Tuple
 from verity.ml.commitments.gates import sha512_stream as S
 from verity.ml.commitments.gates.lms import Sha512Compress
 from verity.ml.commitments.gates.sha512 import IV

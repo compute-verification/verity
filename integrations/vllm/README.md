@@ -23,7 +23,7 @@ through every subprotocol (`examples/vllm/README.md`).
 - **Build: the circuit.** The torch frontend (`program/frontend/`) lowers the served model's exported graph by lowering rules
   into a Program of registered Definitions (`verity.ml.definitions.registry`), with its runtime correspondence: each Call's
   module, graph node, slot and view. `program/predict/` derives the same Programs ahead of time from the workload alone.
-- **Query: proof blocks.** The query of record, `Q_word_v1{X=16,W=32}` (`query/word.py`, on `verity.ml.circuits`), cuts every
+- **Query: proof blocks.** The query of record, `Q_word_v1{X=16,W=32}` (`query/word.py`, on `verity.circuits`), cuts every
   Call's circuit into proof blocks of bounded committed width. The required-value manifest (`query/manifest/`) lists every
   value on a proof block's boundary, with the prescribed inputs (weights, prompt ids) and what a protocol requires.
 - **Match.** A capture of the engine's run (`observe/`) is folded back into a Program (`observe/fold/`) and compared with the

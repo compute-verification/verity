@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity_vllm.config import option
 from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
 
@@ -61,7 +61,7 @@ NAN_CANONICALISATION = {
     "production_conversion": "F2fpBf16_v1",
     "nan_word": "0x7FFF",
     "nan_rule": "every FP32 NaN (either sign, quiet or signalling, any payload) -> 0x7FFF; sign and payload dropped",
-    "source": "measured: verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
+    "source": "measured: verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
               "(12 +qNaN, 12 -qNaN, 34 +sNaN, 26 -sNaN), all 0x7FFF on both devices; not an assumption",
     "not_bound": {"F32ToBf16Rn_v1": "NaN -> 0x7FC0 (software canonical); registered, unchanged, not bound by B0/B1"},
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},

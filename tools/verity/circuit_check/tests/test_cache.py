@@ -19,7 +19,7 @@ REPO = Path(__file__).resolve().parents[4]
 FILES = {
     "syn/__init__.py": "",
     "syn/prims.py": """
-from verity.ml.circuits import Value, primitive
+from verity.circuits import Value, primitive
 
 V = Value(16)
 
@@ -30,7 +30,7 @@ def SynAdd(a, b):
 """,
     # the sub-Definition SynTop resolves: imported only while SynTop's body is built, so no import statement names it
     "syn/sub.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -40,7 +40,7 @@ def SynSub(B, S, a, b):
     return B.call(SynAdd, a, b)
 """,
     "syn/top.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -54,7 +54,7 @@ def SynTop(B, S, a, b):
     # a helper SynTop's body builder runs: no Definition, and imported only during the build
     "syn/shape.py": "def operands(a, b):\n    return a, b\n",
     "syn/other.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -65,7 +65,7 @@ def SynOther(B, S, a, b):
 """,
     # registered with the rest, resolved by no target
     "syn/idle.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -85,7 +85,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     import inspect
     import sys
 
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
 
     inspect.getmodule(sys._getframe())                 # as torch's import does: it looks for every loaded module's source
     if "h" not in memo:
@@ -98,7 +98,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
 """,
     # the bindings, as the harness runs them (`targets._produce`), and the families the suite keeps of what their roots reach
     "syn/catalog.py": """
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 
 def core():
@@ -144,7 +144,7 @@ FAMILIES = ["SynOther_v1", "SynTop_v1"]
     "syn/extra.py": "X = 1\n",
     # a Definition a binding makes, whose body closes over a value the binding read from `syn.ops`
     "syn/factory.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -158,7 +158,7 @@ def make(swap):
     "syn/ops.py": "SWAP = False\n",
     # a Definition bound at a static the binding computed from `syn.ksize`
     "syn/kdef.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -174,7 +174,7 @@ def SynK(B, S, a, b):
     # a primitive whose evaluator reads a constant of another module, and the Definition that calls it
     "syn/consts.py": "MASK = 0xFFFF\n",
     "syn/xkern.py": """
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from syn.consts import MASK
 from syn.prims import V
@@ -185,7 +185,7 @@ def SynXor(a, b):
     return (a ^ b) & MASK
 """,
     "syn/xdef.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.xkern import SynXor
 from syn.prims import V
@@ -198,7 +198,7 @@ def SynX(B, S, a, b):
     # a Definition whose body reads module state another binding sets from a module only that binding read
     "syn/knob.py": "N = [1]\n",
     "syn/kn.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -481,7 +481,7 @@ def test_another_binding_or_pin_reuses_every_target_and_its_own_reruns_it(tmp_pa
 #: SynOther's binding and pin moved out of `targets.py` and ``pins/`` into its module's sidecar
 SIDECAR = """
 def _model_roots():
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from syn import idle, other
     return [
         ("SynOther_v1", lambda: bind(other.SynOther)),
@@ -615,7 +615,7 @@ def test_removing_a_sidecar_reruns_the_targets_it_bound_and_those_that_reached_w
 LOOKUPS = {
     "syn/lookup.py": """
 def boolean_of(key):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     for d in list(REGISTRY.defs.values()):
         if callable(getattr(d, "build", None)) and getattr(getattr(d, "word", None), "id", None) == key:
             return d.id
@@ -623,7 +623,7 @@ def boolean_of(key):
 
 
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     got = {"failures": [], "warnings": [], "gates": fn.gates, "late": "SynLate_v1" in REGISTRY, "bits": boolean_of("SynAdd_v1")}
     if fn.id == "SynOther_v1":
         got["n"] = len(REGISTRY.defs)
@@ -631,7 +631,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
 """,
     "syn/late/__init__.py": "",
     "syn/late/mod.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -643,7 +643,7 @@ def SynLate(B, S, a, b):
     "syn/late/bits.py": """
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 
 from syn.prims import SynAdd
 
@@ -781,7 +781,7 @@ def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
     other package is never read, so its bindings would leave the task list without an error."""
     from circuit_check import sidecars as SC
     from circuit_check import targets as TG
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     TG.load_registries()
     tops = {m.partition(".")[0] for d in REGISTRY.defs.values() if TG._authored(d) and (m := SC.owner(d))}
@@ -816,7 +816,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from circuit_check import cache as CC
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 CC.trace(root)
 from syn import top
@@ -1077,7 +1077,7 @@ KERNEL_FILES = {
     "syn/rows.py": """
 import numpy as np
 
-from verity.ml.circuits.evaluation import register_kernel
+from verity.circuits.evaluation import register_kernel
 
 register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, None))
 """,
@@ -1085,7 +1085,7 @@ register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, N
     "syn/corr.py": """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     from circuit_check import checks as CK
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     F = CK.Findings()
     CK.correspondence(resolve(fn), opts, F)
@@ -1169,7 +1169,7 @@ def test_every_binding_and_pin_is_in_the_module_it_binds():
 OWNERS = """
 import json
 from circuit_check import checks as CK, sidecars as SC
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.circuits.defs import REGISTRY, bind
 
 ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf16x64_v2"), ("pieces", "GatherBf16x1_v1"),
              ("pieces", "BitAtx32_v1")]
@@ -1358,7 +1358,7 @@ def _named(target: str) -> str:
     found by ``--all``."""
     return (HARNESS.replace("TG.load_registries = lambda: None",
                             "TG.load_registries = lambda: None\n"
-                            "from verity.ml.circuits.defs import REGISTRY\n"
+                            "from verity.circuits.defs import REGISTRY\n"
                             "TG.definition = lambda spec: REGISTRY[spec].bind()")
             .replace("cli.run([], CK.Options(), everything=True,", f"cli.run([{target!r}], CK.Options(),"))
 
@@ -1450,8 +1450,8 @@ def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_d
 #: checked it
 CONSTS = {
     "syn/cfam.py": """
-from verity.ml.circuits import Value
-from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.circuits import Value
+from verity.circuits.defs import PrimitiveDefinition
 
 from syn.cbits import widen
 
@@ -1563,8 +1563,8 @@ def _walked(fn) -> str:
     """`cache.descriptor` as a walk of every body node and static, with no memo: what its memo must give."""
     import hashlib
 
-    from verity.ml.circuits import codec as C
-    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits import codec as C
+    from verity.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
 
     def statics(v):
         if isinstance(v, FunctionDefinition):
@@ -1591,11 +1591,11 @@ def test_a_descriptor_is_its_walk_of_every_body_node_however_often_a_body_calls_
     """`cache.descriptor` takes each specialization's distinct callees and statics once (`cache._NEXT`): every digest, first
     and again, is the one a walk of every node gives, for a body that calls one Definition from many nodes, a function
     static, and two specializations that share a callee."""
-    from verity.ml.circuits import Array, bind
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits import Array, bind
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Tuple
 
     from circuit_check import cache as CC
 

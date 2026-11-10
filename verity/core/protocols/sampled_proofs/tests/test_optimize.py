@@ -26,7 +26,7 @@ from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorComm
                                                            max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
                                                            template_cost, touched, weigh, work_law)
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
@@ -239,7 +239,7 @@ def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
     """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
     are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the
     ripple-carry model's count, leaves out."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
     from verity.ml.commitments import gates
     from verity.ml.commitments.gates.sha512 import compress_gadget
 

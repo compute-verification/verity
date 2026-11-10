@@ -19,7 +19,7 @@ from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import VerifierKey
-from verity.ml.circuits import requirement
+from verity.circuits import requirement
 
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 SALT = hashlib.sha512(b"the setup's salt").digest()[:R.SALT_BYTES]

@@ -9,8 +9,8 @@ def _boolean_roots() -> list[Any]:
     """The rest of Gemma-2's norm chain on bits (over `boolean_dense`'s rows): the mean at N = 16 and at N = 1030 (two
     chunks, one element per thread), the narrowing at N = 16, and the rsqrt with its MUFU at the word id and at mufu's
     `RsqrtApprox_v2`."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import mufu as BM
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import mufu as BM
     from verity.ml.definitions.registry import boolean_dense_norm as DN
     from verity.ml.definitions.registry import prims as P
 

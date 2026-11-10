@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
 from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_request as Q, service as SVC, \
     tie_service as TS, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.active import id_request

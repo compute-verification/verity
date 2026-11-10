@@ -42,9 +42,9 @@ sys.path.insert(0, str(HERE.parent / "served_units"))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops import gemm as OG  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.ops import gemm as OG  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402

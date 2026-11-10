@@ -14,14 +14,14 @@ from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
 from verity.ml.definitions.registry import b1, gemm_bias, topp_words as TW
 
-from verity.ml.circuits.defs import Body, BodyNode, bind
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.prims import BF16
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Strided
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import Body, BodyNode, bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import BF16
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, Strided
+from verity.circuits.types import Array
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,

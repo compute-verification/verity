@@ -35,10 +35,10 @@ from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
+from verity.circuits.ports import In, Out, Ports  # noqa: E402
+from verity.circuits.refs import Coll, coll_concat  # noqa: E402
+from verity.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -489,7 +489,7 @@ def test_register_writes_each_calls_file(tmp_path):
     assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(run.served.registered)
     assert sorted(p.name for p in tmp_path.iterdir()) == [SV.file_name(0), SV.file_name(2)] == [
         "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
 
 

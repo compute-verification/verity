@@ -13,12 +13,12 @@ import pytest
 
 import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.ml.circuits.silicon import fp32
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.circuits.silicon import fp32
 from verity.ml.definitions.registry import pearl_c_tile as PT
 from verity.core.protocols.pouw.circuit import pc8
 from verity.core.protocols.pouw.schemes import pearl_c as C

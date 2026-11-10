@@ -80,18 +80,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, or_reduce
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.ops.boolean.mufu import mufu_ex2
-from verity.ml.circuits.ops.boolean.scalar import gt_u
-from verity.ml.circuits.ops.boolean.softmax import f32_gt
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.refs import Coll, concat, strided_view, tuple_of
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, const_bits, mux, or_reduce
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.mufu import mufu_ex2
+from verity.circuits.ops.boolean.scalar import gt_u
+from verity.circuits.ops.boolean.softmax import f32_gt
+from verity.circuits.ports import In, Ports
+from verity.circuits.refs import Coll, concat, strided_view, tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
 
 from . import boolean_moe as BMOE
 from . import cublas_bf16 as CB

@@ -14,7 +14,7 @@ from test_queue_drive import _steps_run, _tip
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-            "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
+            "verity/core/", "verity/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
             "verity/ml/randomness/")
 TAG = "(low-risk lane: no Lean, lock or soundness-path change)"
 
@@ -49,7 +49,7 @@ def _skipped(world: World) -> list[str]:
     (["verity/core/service/flock/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
-    (["verity/ml/circuits/ops/add.py"], False), (["verity/ml/kernels/k.cu"], False),
+    (["verity/circuits/ops/add.py"], False), (["verity/ml/kernels/k.cu"], False),
     (["verity/ml/commitments/c.py"], False), (["verity/ml/crypto/c.py"], False), (["verity/ml/randomness/r.py"], False),
     (["verity/ml/circuitsx/a.py"], True),                   # a directory entry is a whole path component
     ([], False),                                            # nothing to land

@@ -251,7 +251,7 @@ def test_the_circuits_are_the_reference():
 def test_build_link_inline_and_the_bound():
     """`build_link`, the call a caller's circuit makes, is the unit, and a caller holding its charge to c_w (as the
     compile slice does) accepts c_w = the charge and refuses one bit less."""
-    from verity.ml.circuits.boolean.forms import Circuit, sub
+    from verity.circuits.boolean.forms import Circuit, sub
     N, H, O, rng = 1, 1, 1, random.Random(3)
     cases = [_random_link(rng, N, H, O) for _ in range(40)]
     C = Circuit(cse=True)
@@ -325,8 +325,8 @@ def test_no_and_reads_a_form_its_earlier_slots_grew():
     """The carried words are committed after each hit and each order entry's value, as after each decision, so the
     widest AND operand stays put as slots are added (the count's popcount moves it a few terms) and the build is linear
     in H and O. Without the copies each hit widens it by about 1,200 terms and each order entry by about 3,500."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits import boolean as BL
+    from verity.circuits.boolean.forms import Circuit
 
     def widest(N, H, O):
         S = SimpleNamespace(N=N, H=H, O=O)

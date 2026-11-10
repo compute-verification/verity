@@ -13,11 +13,11 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll as _Coll, concat
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll as _Coll, concat
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, fold
@@ -430,7 +430,7 @@ class ToyRecord:
                 BAKED[int(m["event"])] = tuple(int(w) for w in call_outs)
 
     def _returns(self, node: int):
-        from verity.ml.circuits.layout import FunctionCall
+        from verity.circuits.layout import FunctionCall
         circuit = self.genuine.program.circuit
         n_in = len(self.genuine.program.root.body.nodes) - len(self.genuine.body.nodes)
         return FunctionCall(circuit, circuit.root_scope, n_in + node).returns

@@ -197,8 +197,8 @@ def matching_ns(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, T: int, got: np.
 
 def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's NH heads against the twin of `SparseMlaHeadSplit_v1{T, NS}`; head 0 against the reference on REFERENCE."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
     from verity.ml.definitions.registry import sparse_mla_split as W
 
@@ -226,7 +226,7 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_lg2(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Words [lo, hi) of an lg2 launch against `MufuLg2Ftz_v1`'s twin, the open words skipped; the reference on the first two."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
     from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
     from verity.ml.definitions.registry import sparse_mla_split as W
 
@@ -293,7 +293,7 @@ def sweep_words() -> np.ndarray:
 
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
-    from verity.ml.circuits.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
     from verity.ml.definitions.registry import sparse_mla_split as W
 
@@ -375,7 +375,7 @@ def phase_attn(work: Path, names, num_sm: int) -> tuple[list[dict[str, Any]], li
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import sparse_mla as M
     from verity.ml.definitions.registry import sparse_mla_split as W
 

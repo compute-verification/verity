@@ -82,7 +82,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 
 from . import rec_algebra as A
 from . import rec_cap as RC
@@ -505,7 +505,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     import numpy as np
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity.ml.commitments import hm96
 
     from . import circuit as FC

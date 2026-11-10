@@ -24,7 +24,7 @@ from test_lean_verifier import ROW_SEG_PAIRS, ROW_V2_PAIRS, _bit_row_toy, _publi
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_v2_digest)
-from verity.ml.circuits.types import Tuple
+from verity.circuits.types import Tuple
 from verity_flock import circuit as FC
 from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.circuit import pc4, pc8
@@ -227,7 +227,7 @@ def _unit_toy(m: str, role: str, d: Path, n: int = 2) -> tuple[dict, dict, list,
     row's words, the output words and every row's salts."""
     from types import SimpleNamespace
 
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.types import Array, Value
     from verity_flock import class_statement as CS
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
@@ -429,8 +429,8 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     file (`TileAnchors.public_inputs`), and refuses that file with a wrong anchor, and a public file whose anchor the prover
     chose.  A stand-in unit with Pc4RowA's anchor parameters (it copies ``x``) keeps the test off PoUW's pieces; the real
     unit's run is the lane's record."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
     from verity_flock import class_statement as CS
     from verity.core.protocols.pouw.circuit.anchors import public_ports
 

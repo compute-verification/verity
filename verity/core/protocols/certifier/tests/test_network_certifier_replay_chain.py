@@ -13,7 +13,7 @@ import pytest
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.head_check import ands
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.circuits.boolean.forms import Circuit
+from verity.circuits.boolean.forms import Circuit
 
 SMALL = RC.Shape(R=3, W=2, A=3, L=40, NB=20, IW=4, Q=5, D=6, P=3, K=3)
 #: A a power of two (AC = 3 > DW = 1), one decision and one step a window
@@ -115,7 +115,7 @@ def test_the_state_is_replay_steps(S):
     assert list(RC.state_bits(row_of(state), S)) == [b for a in args[:n] for b in a]
     front = tuple(tuple(getattr(r, k) for k in RC.arrival_names(S)) for r in arrivals)
     assert list(RC.front_bits(S, front)) == [b for a in args[n:n + len(RC.front_fields(S))] for b in a]
-    from verity.ml.circuits.evaluation.bits import evaluate_bits
+    from verity.circuits.evaluation.bits import evaluate_bits
 
     raw = evaluate_bits(RS.unit(**st.__dict__), *[[a] for a in args]).reshape(-1).tolist()
     out, end = RS.decode(st, raw), RC._bits_of(RS._out_fields(st))

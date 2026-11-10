@@ -8,8 +8,8 @@ import re
 
 import pytest
 
-from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
-from verity.ml.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
+from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")

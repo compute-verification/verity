@@ -70,8 +70,8 @@ from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.codec import canonical_json
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent

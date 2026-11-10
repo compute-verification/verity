@@ -74,7 +74,7 @@ SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
 D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/core/service/flock/Flock/"
 PROTOCOL = "verity/core/protocols/interface/CoreProtocol/Protocol.lean"
-REQ, REQ_PY = "verity/core/primitives/requirement/CircuitRequirement.lean", "verity/ml/circuits/requirement.py"
+REQ, REQ_PY = "verity/core/primitives/requirement/CircuitRequirement.lean", "verity/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/core/protocols/interface/CoreProtocol/Site.lean", "verity/core/site/__init__.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
@@ -115,7 +115,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Placement": (f"{CORE}Requirement.lean::Accounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
                   f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
-    "Program": ("verity/ml/circuits/program.py::Program",),
+    "Program": ("verity/circuits/program.py::Program",),
     "Record": (),
     "Registration": (f"{CORE}Site.lean::Verity.Registration", f"{SITE_LEAN}::Core.Site.Registration",
                      f"{SITE_PY}::Registration"),
@@ -164,9 +164,9 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
-    "verity/ml/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
+    "verity/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
                                            "the evaluator's `gate` answers each gate of the Python's layout"),
-    "verity/ml/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
+    "verity/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
                                                           "the evaluator's `partition` answers the Python's Q_word evaluation"),
 }
 
@@ -1041,26 +1041,26 @@ KNOWN: dict[str, str] = {
         "homonym, an execution block's wiring: rename (proofs)",
     "verity/core/wire/__init__.py::Registry": "homonym, message types by version: rename (proofs)",
     # verity/ml/
-    "verity/ml/circuits/annotations.py::Verdict": "homonym, an annotation check's result: rename (proofs)",
-    "verity/ml/circuits/boolean/forms.py::Circuit":
+    "verity/circuits/annotations.py::Verdict": "homonym, an annotation check's result: rename (proofs)",
+    "verity/circuits/boolean/forms.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/defs.py::Node": "homonym, one body node of a Definition: rename (proofs)",
-    "verity/ml/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
-    "verity/ml/circuits/layout.py::Circuit":
+    "verity/circuits/defs.py::Node": "homonym, one body node of a Definition: rename (proofs)",
+    "verity/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
+    "verity/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/layout.py::Gate":
+    "verity/circuits/layout.py::Gate":
         "duplicate of `Flock.Program`'s gate: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/metadata.py::Verdict": "homonym, whether a circuit's metadata resolves: rename (proofs)",
-    "verity/ml/circuits/partition_object.py::Partition":
+    "verity/circuits/metadata.py::Verdict": "homonym, whether a circuit's metadata resolves: rename (proofs)",
+    "verity/circuits/partition_object.py::Partition":
         "duplicate of `Verity.Partition`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/requirement.py::Layout":
+    "verity/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
-    "verity/ml/circuits/requirement.py::Store.Placement":
+    "verity/circuits/requirement.py::Store.Placement":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Store.Placement`'s mirror) (proofs)",
-    "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
-    "verity/ml/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
-    "verity/ml/circuits/types.py::Record": "homonym, a record type of the circuit type system: rename (proofs)",
-    "verity/ml/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
+    "verity/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
+    "verity/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
+    "verity/circuits/types.py::Record": "homonym, a record type of the circuit type system: rename (proofs)",
+    "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
     "verity/ml/commitments/advice.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "verity/ml/commitments/advice.py::Registration":

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import pytest
 
 from verity.core.protocols.certifier import boundary as BD, egress as EG, ingress_scan as IS
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 
 @dataclass(frozen=True)

@@ -822,7 +822,7 @@ def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
     accepted answer, and a `FAKE_SAMPLED_LEAN`; then `record --off-node --sampled-lean` on it, remote's product. Its argv
     and the stand-in."""
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
 
     d = tmp_path / "serve"
     w = d / "sampled-proofs-served" / "window"
@@ -4439,7 +4439,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
     pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
     ``extra`` adds to the sender's environment. The sender's run and $OUT."""
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
 
     d, out, gate = tmp_path / "serve", tmp_path / "served-out", tmp_path / "gate-host"
     v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),

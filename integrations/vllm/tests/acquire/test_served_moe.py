@@ -8,7 +8,7 @@ import copy
 
 import pytest
 
-from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM

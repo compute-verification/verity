@@ -83,7 +83,7 @@ def test_audit_layer_is_abstract():
 
 def _has_unit_cut():
     try:
-        from verity.ml.circuits.partition import validate_unit_cut  # noqa: F401
+        from verity.circuits.partition import validate_unit_cut  # noqa: F401
     except ImportError:
         return False
     return True
@@ -311,9 +311,9 @@ def test_a_draw_over_several_tables_has_a_count_they_split():
 
 
 def _ir_tests() -> Path:
-    """The circuits' `tests`, inside the `verity.ml.circuits` the import system finds (whichever member ships it): the vectors the
+    """The circuits' `tests`, inside the `verity.circuits` the import system finds (whichever member ships it): the vectors the
     Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
-    return Path(importlib.util.find_spec("verity.ml.circuits").origin).resolve().parent / "tests"
+    return Path(importlib.util.find_spec("verity.circuits").origin).resolve().parent / "tests"
 
 
 def _template_vectors():
@@ -683,13 +683,13 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
 
 def _has_check_cut():
     try:
-        from verity.ml.circuits.cut import check_cut  # noqa: F401
+        from verity.circuits.cut import check_cut  # noqa: F401
     except ImportError:
         return False
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.circuits.cut")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -700,7 +700,7 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        from verity.ml.circuits.codec import decode_program  # noqa: F401
+        from verity.circuits.codec import decode_program  # noqa: F401
     except ImportError:
         return None
     return _ir_tests() / "qword_vectors.json"
@@ -723,8 +723,8 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
 
 def _qword_vectors():
     try:
-        import verity.ml.circuits.partition_object  # noqa: F401
-        from verity.ml.circuits.cut import cut_word  # noqa: F401
+        import verity.circuits.partition_object  # noqa: F401
+        from verity.circuits.cut import cut_word  # noqa: F401
     except ImportError:
         return None
     return _ir_tests() / "partition_vectors.json"
@@ -1176,7 +1176,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
 
     import numpy as np
 
-    from verity.ml.circuits.types import Array, Tuple, Value
+    from verity.circuits.types import Array, Tuple, Value
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
     from verity_flock import gf2

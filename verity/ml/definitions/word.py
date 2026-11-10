@@ -12,12 +12,12 @@ The rule (no recomputes):
     value a program or a request brings (a norm's epsilon, the attention scale, a softcap, temperature, top-p): a registered or run
     input, committed under a hiding leaf.  Only an operation's own constant bits and wiring (`WIRING`: bit rearrangement, such as
     BF16 -> FP32 zero-extension) are circuit structure, not counted as gates; a unit reads through wiring to its source.
-  * **Width** counts bits (`verity.ml.circuits.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
+  * **Width** counts bits (`verity.circuits.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
   * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
-The cut of one Call (`partition`), on its computing gates (`Graph`, the graph of core's `verity.ml.circuits.cut.CallGraph` in flat arrays:
+The cut of one Call (`partition`), on its computing gates (`Graph`, the graph of core's `verity.circuits.cut.CallGraph` in flat arrays:
 wiring and constants removed, reads through them re-pointed):
 
   1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
@@ -26,7 +26,7 @@ wiring and constants removed, reads through them re-pointed):
   3. A gate no returned value depends on (dead) joins the one unit it reads, else heads a dead unit; any value such a gate reads
      across units is committed too.
 
-`verity.ml.circuits.partition.validate_unit_cut` checks every Call's cut (`cut_verdict`, its verdict in numpy passes over the reads); the
+`verity.circuits.partition.validate_unit_cut` checks every Call's cut (`cut_verdict`, its verdict in numpy passes over the reads); the
 committed interior values are what serving must acquire (a tap
 where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
 
@@ -46,11 +46,11 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.codec import canonical_json, definition_entry
-from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.partition import MAX_LISTED, CutVerdict
+from verity.circuits.codec import canonical_json, definition_entry
+from verity.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.layout import resolve
+from verity.circuits.partition import MAX_LISTED, CutVerdict
 
 from verity.ml.definitions.call_scope import QueryRuleViolation, specialization
 
@@ -112,7 +112,7 @@ def _view(a: array) -> np.ndarray:
 
 
 class Graph:
-    """The computing gates of one activation of `fn`: the graph of core's `verity.ml.circuits.cut.CallGraph` (the reference, whose step 3
+    """The computing gates of one activation of `fn`: the graph of core's `verity.circuits.cut.CallGraph` (the reference, whose step 3
     this follows; `tests/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
     reference keeps Python objects per operand read (an interned token per input, a tuple per input read, the full key of every computing
     gate), hundreds of bytes each: GLM-5.3's MoE expert FP8 GEMMs read 257 operands per gate, 468 GB for one Definition.  Here a read
@@ -251,7 +251,7 @@ class Graph:
 
 
 def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """(owner per gate, kind per unit, head per gate) of core's `verity.ml.circuits.cut.cut_word` (the reference): "output" (returned values),
+    """(owner per gate, kind per unit, head per gate) of core's `verity.circuits.cut.cut_word` (the reference): "output" (returned values),
     "committed" (a value another unit reads), "dead" (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the
     returned ones and every value read across units."""
     own, kinds, head = cut_word(G, X)
@@ -259,8 +259,8 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
-    """`verity.ml.circuits.partition.validate_unit_cut` of the cut `owner` committing the gates `head >= 0`, the Call's parameters standing
-    for the input unit (`verity.ml.circuits.cut.check_cut`'s arguments), in numpy passes over `G`'s reads: the reference's verdict, detail
+    """`verity.circuits.partition.validate_unit_cut` of the cut `owner` committing the gates `head >= 0`, the Call's parameters standing
+    for the input unit (`verity.circuits.cut.check_cut`'s arguments), in numpy passes over `G`'s reads: the reference's verdict, detail
     for detail (`tests/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
     computing unit and reads a committed value, so it fails nothing: it counts in `cross_unit_reads`, and a parameter no unit reads and
     the Call does not return is `committed-unread`."""
@@ -302,7 +302,7 @@ def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
 
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned), and
-    the partition invariant's check (`cut_verdict`, `verity.ml.circuits.partition.validate_unit_cut` over the gates the cut commits;
+    the partition invariant's check (`cut_verdict`, `verity.circuits.partition.validate_unit_cut` over the gates the cut commits;
     violations by gate id)."""
     owner, kinds, head = partition(G, X)
     U = len(kinds)
@@ -368,7 +368,7 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
 RULE_CACHE_ENV = "VERITY_UNIT_RULE_CACHE"
 _RULE_CACHE_SCHEMA = "verity-vllm/unit-rule/v1"
 #: the directory of unit rules this process shares (`use_rule_cache`; None: none).  An entry is keyed by the Definition's content (its
-#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.ml.circuits`, this
+#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.circuits`, this
 #: package's `word`, `cross_call` and `call_scope`); a rule is written only when JSON gives it back equal, so a read rule is the computed one
 _RULE_CACHE: list[str | None] = [None]
 _DIGESTS: dict[str, str] = {}
@@ -382,10 +382,10 @@ def use_rule_cache(directory: str | None) -> None:
 
 def _code_version() -> str:
     if not _CODE:
-        import verity.ml.circuits
+        import verity.circuits
         from verity.ml.definitions import call_scope, cross_call
         h = hashlib.sha256()
-        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), Path(__file__), *(Path(m.__file__) for m in (cross_call, call_scope))]:
+        for p in [*sorted(Path(verity.circuits.__file__).parent.glob("*.py")), Path(__file__), *(Path(m.__file__) for m in (cross_call, call_scope))]:
             h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
         _CODE.append(h.hexdigest())
     return _CODE[0]
