@@ -37,7 +37,7 @@ for f in ${KV_FIELDS:-512 768}; do
   [[ $tag == *m* ]] && flags+=(-DKV_MASK=1)
   [[ $tag == *f6* ]] && flags+=(-DKV_FOLD6=1)
   nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
-    "${flags[@]}" -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
+    "${flags[@]}" -o "$B/kv-$lib.so" benchmarks/word_codec/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
   LIBS+=(--lib "$lib=$B/kv-$lib.so")
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"

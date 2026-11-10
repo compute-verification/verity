@@ -9,3 +9,6 @@
 - `store.py`: the encoded weights store's layout (the MQA16K INT8 weights block-aligned in W; `store.py layout` writes
   its JSON) and the reference `decode_layer` a decode-to-staging kernel matches; `store-toy/` is its toy fixture.
 """
+from pathlib import Path
+
+__path__.append(str((Path(__file__).resolve().parents[3] / "benchmarks/pous/p2_v1/store.py").parent))

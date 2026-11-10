@@ -36,7 +36,7 @@ P2=benchmarks/pous/p2_v1
 PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
-REG=${BW_REGISTRATION:-$P2/bandwidth-mem69-v2.json}
+REG=${BW_REGISTRATION:-"benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"}
 PARTY_MIN=${BW_PARTY_MIN:-40}
 PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --fixture --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}

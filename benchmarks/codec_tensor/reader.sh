@@ -22,12 +22,12 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" --)
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -o "$B/reader.so" \
-    $CT/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
+    benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
   sha256sum "$B/reader.so" > "$O/libs.sha256"
   if [ "$SANITIZE" = 1 ]; then
     env -u RESEARCH_RUN_ID compute-sanitizer --tool memcheck --error-exitcode 9 --print-limit 20 \
-      "$PY" $CT/reader.py --lib "$B/reader.so" --out "$O/smoke" --gate-blocks 256 --gib 0 > "$O/smoke.log" 2>&1 \
+      "$PY" benchmarks/codec_tensor/reader.py --lib "$B/reader.so" --out "$O/smoke" --gate-blocks 256 --gib 0 > "$O/smoke.log" 2>&1 \
       || { tail -60 "$O/smoke.log"; exit 9; }
   fi
-  "$PY" $CT/reader.py --lib "$B/reader.so" --out "$O" --gib "$GIB" 2>&1 | tee "$O/reader.log"
+  "$PY" benchmarks/codec_tensor/reader.py --lib "$B/reader.so" --out "$O" --gib "$GIB" 2>&1 | tee "$O/reader.log"
   exit "${PIPESTATUS[0]}"'

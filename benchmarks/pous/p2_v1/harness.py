@@ -210,7 +210,7 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
 
     from band_gpu import native
 
-    from .gpu import Kernels
+    from p2_v1.gpu import Kernels
 
     device = torch.device("cuda", torch.cuda.current_device())
     ext = native.load(build_dir)
