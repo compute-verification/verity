@@ -1,6 +1,7 @@
 module
 
 public import Properties.Accounting.ReadUnit
+public import Proofs.Accounting.ReadUnit.Digests
 public import Proofs.Accounting.ReadUnit.Guarantees
 public import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Core.Circuit
@@ -24,13 +25,14 @@ import all Init.WF
 * **Honest** (`TableReadBinding_honest`): the check accepts a template at the served expert-row read's shape, 256 rows
   of 3072 words (the one the read's text reads back to), from the one fact witnessed outside Lean
   (`ReadUnit.ExpertReadAccepted`).
-* **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind. The
-  unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed row, so a read at the
-  template's columns (`portsAt`, at one row of no words) holds its index, root and the domain id's first 96 bits on
-  input gates, and the rest of its domain id and its verdict on the constant. At the evaluation of the input that puts
-  a one-row table's root on the root's gates, every hypothesis of `ReadUnit.BindsAt` holds at no error and no cost (the
-  unit is correct, its rows hold, and the table, a row of 16 bits, is committed under that root), and the read returns
-  no bits.
+* **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind: some
+  unit's reads don't. The unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed
+  row, so a read at the template's columns (`portsAt`, at one row of no words) holds its index, root and the domain
+  id's first 96 bits on input gates, and the rest of its domain id, its salt and its verdict on the constant. At the
+  evaluation of the input that puts a one-row table's root on the root's gates, every hypothesis of `ReadUnit.BindsAt`
+  holds at no error and no cost: the unit is correct, its rows hold, the table, a row of 16 bits, is committed under
+  that root, and SHA-512 is collision resistant at the reads' finder, since what the read's check and its table's
+  hash has pairwise different digests (`Witness.no_collision₀`). The read returns no bits.
 -/
 
 @[expose] public section
@@ -260,11 +262,7 @@ abbrev key₀ : Hash.Msg := Flock.Hm96.Default512.key.data.toList
 /-- The read at copy 0 of unit 0, at one row of no words. -/
 noncomputable abbrev q₀ : Ports (Flock.Bridge.circuitOf D₀ hU₀ 1) := portsAt D₀ hU₀ 1 0 hj₀ 1 0
 
-/-- The table's one row: 16 zero bits, a zero salt, no siblings. -/
-def o₀ : Hash.RowLeaf.Opening := ⟨List.replicate 16 false, List.replicate 192 0, []⟩
-
-/-- The domain id the read's gates hold: every bit set. Irreducible, so that unification never computes its bytes. -/
-@[irreducible] noncomputable def d₀ : Verity.Digest := digestOf (List.ofFn fun _ : Fin 512 => true)
+attribute [local irreducible] d₀
 
 /-- The table's root: its one leaf's digest. Irreducible, so that unification never computes SHA-512. -/
 @[irreducible] noncomputable def r₀ : Verity.Digest :=
@@ -363,6 +361,27 @@ theorem okOf₀ : q₀.okOf tr₀ = true := by
 
 theorem hOf₀ : q₀.hOf tr₀ = [] := rfl
 
+theorem salt_ones : bytesOf (List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true) = List.replicate 192 255 := by
+  decide +kernel
+
+/-- The opening the read's gates hold: no row bits, the salt of ones on the constant, no siblings. -/
+theorem opening₀ : q₀.opening tr₀ = op₀ := by
+  have hr : bits tr₀ q₀.row = [] := List.ofFn_eq_nil_iff.2 rfl
+  have hs : bits tr₀ q₀.salt = List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true := by
+    unfold bits
+    congr 1
+    funext i
+    show bit tr₀ (g₀ (colAt Rw (Flock.ReadNet.saltAt 0 + i.val))) = true
+    exact bit_col_ge (by unfold Flock.ReadNet.saltAt; omega)
+  have hp : (List.ofFn fun j => digestOf (bits tr₀ (q₀.path j))) = [] :=
+    List.ofFn_eq_nil_iff.2 (show Hash.Tree.depth 1 = 0 by decide)
+  have e : q₀.opening tr₀ =
+      ⟨bits tr₀ q₀.row, bytesOf (bits tr₀ q₀.salt), List.ofFn fun j => digestOf (bits tr₀ (q₀.path j))⟩ := rfl
+  rw [e, hr, hs, salt_ones, hp]
+  rfl
+
+theorem verifier₀ : q₀.verifier key₀ d₀ = V₀ := rfl
+
 /-- The registered constants: unit 0's constant gate at 1. -/
 noncomputable def consts₀ (g : Fin (Flock.Bridge.circuitOf D₀ hU₀ 1).N) : Option Bool :=
   if g = Flock.Bridge.constGate D₀ hU₀ 1 0 then some true else none
@@ -447,9 +466,32 @@ theorem returns₀ (i : Unit) :
   rw [R₀_table, R₀_unit, R₀_port, localEval₀, hOf₀]
   decide
 
+/-- What the drawn read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
+theorem drawnHashed₀ (ω : Unit) :
+    R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
+      L₀ := by
+  have hr : R₀.reads = {()} := rfl
+  unfold Reads.drawnHashed
+  simp only [hr, Finset.mem_univ, Finset.filter_True, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
+    List.append_nil]
+  unfold Reads.hashedAt Reads.index
+  rw [R₀_unit, R₀_port, R₀_domain, localEval₀, tokOf₀, opening₀, R₀_table, verifier₀]
+  rfl
+
 /-- The reads' collision finder at the counterexample: every unit drawn, the trace `tr₀`, no cost. -/
 noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
+
+theorem out₀ (ω : finder₀.S) : finder₀.out ω = none :=
+  dif_neg (by rw [drawnHashed₀]; exact no_collision₀)
+
+theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl
+
+/-- SHA-512 is collision resistant at the reads' finder: it finds no collision, at no cost. -/
+theorem hcr₀ : FlockSoundness.Assumptions.SHA512CRExpected (fun m => (Verity.sha512 m).bytes)
+    (Verity.Game.draw finder₀.S) (fun _ => PUnit.unit) finder₀.out fun s => (finder₀.cost s : ℝ) := by
+  unfold FlockSoundness.Assumptions.SHA512CRExpected
+  simp [Verity.Game.draw, Verity.Game.prob, Verity.Game.expect, out₀, cost₀]
 
 end Accounting.ReadUnit.Witness
 
@@ -463,20 +505,18 @@ theorem TableReadBinding_honest (h : ExpertReadAccepted) : ∃ t, Flock.ReadNet.
   let ⟨t, _, ht⟩ := h
   ⟨t, ht⟩
 
-/-- **`TableReadBinding`'s nontrivial lemma**: at a unit the check doesn't fix (`Witness.D₀`, a net whose read columns
-are inputs and the constant), the reads needn't bind. Every hypothesis of `ReadUnit.BindsAt` holds there at no error
-and no cost, SHA-512's collision resistance at the reads' finder included, and the read returns no bits where its
-table's row has 16. -/
-theorem TableReadBinding_nontrivial
-    (hcr : FlockSoundness.Assumptions.SHA512CRExpected (fun m => (Verity.sha512 m).bytes)
-      (Verity.Game.draw finder₀.S) (fun _ => PUnit.unit) finder₀.out fun s => (finder₀.cost s : ℝ)) :
-    ¬ ReadUnit.BindsAt D₀ hU₀ 1 0 := by
-  intro hB
+/-- **`TableReadBinding`'s nontrivial lemma**: at a unit the check doesn't fix, the reads needn't bind. At `Witness.D₀`,
+a net whose read columns are inputs and the constant, every hypothesis of `ReadUnit.BindsAt` holds at no error and no
+cost, SHA-512's collision resistance at the reads' finder included (`Witness.hcr₀`), and the read returns no bits
+where its table's row has 16. -/
+theorem TableReadBinding_nontrivial :
+    ∃ (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit), ¬ ReadUnit.BindsAt D hU 1 0 := by
+  refine ⟨D₀, hU₀, fun hB => ?_⟩
   have hle := hB 1 consts₀ (fun u => by rw [Subsingleton.elim u 0]; simp [consts₀]) R₀
     (fun i _ => ⟨0, hj₀, by rw [R₀_port, R₀_unit]⟩) (fun _ : Unit => True) (fun _ => Finset.univ) (fun _ => tr₀)
     (fun _ => 0) 0 committed₀ (le_of_eq (pr_unit_of_not (by
       rintro ⟨-, i, -, -, h⟩
-      exact h ⟨correct₀ i, registered_R₀ i⟩))) hcr
+      exact h ⟨correct₀ i, registered_R₀ i⟩))) hcr₀
   rw [pr_unit_of ?ev] at hle
   · norm_num [Claims.Ex] at hle
   · exact ⟨trivial, (), mem₀, Finset.mem_univ _, index₀ (), returns₀ ()⟩
