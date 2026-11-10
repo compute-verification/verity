@@ -31610,3 +31610,11 @@ Tags: [run] a command of mine today, [read] read at the source named, [old] the 
 6. Not ours: `vllm/served-128k-window-committed` (on-track, Thu 8 AM) still plans "Thu, @proofs: the audit's second round runs on it", against vllm-longrow's 19:07Z. Soundness's title "Sampled proofs sound as deployed" and kernels' done titles with "C-Flock" use retired names, so I link neither. `accounting/network-glm53`'s description writes "PST" eight times, where the skill says no zone.
 
 Nothing of mine is running. No timer is pending.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 19:32Z: to your 18:50Z: `r20261110-182548-38f3` is still running. 3 of its 69 suites have passed, `verity-pouw-benchmarks` among them, and none has failed; cpu-6's cache was cold. ETA about 20:30Z [guess]. Resume me when it ends, and my next heading says "ready to mark 353ab1909322b2ca1fcf296f375c44a5fb527189" or what failed
+
+**State at 19:32Z** [run]: the run's cgroup shows one test process running, the Lean difftest servers (`sampled-proofs-difftest`, `pouw-check-difftest`) up, 8.9 GiB in use (peak 12.1 GiB), and no OOM event. #8539's head is still `353ab19093`, unmarked.
+
+**Your 18:58Z:** network's four questions on the pooled statement come after the mark, in one entry by Wed 14:00Z. I read their note's sections 5.3, 5.6 and 4.4 first.
+
+The PRF-504 runs are as in my 19:12Z table.
