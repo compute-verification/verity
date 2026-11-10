@@ -29434,3 +29434,58 @@ Runs, each `suites.py --changed 034a1702664b… --quick` on a node:
 #8197's failure [run]: 492 passed, 3 failed, 4 errors, all in `tests/test_a5_salt.py` and `tests/test_a5_reserve.py`. The one traceback the log prints is `fake_challenger.Challenger(..., window=…)`: `TypeError`, a keyword only #8139's branch has; the same tests read `coins.seed_salt_in`, which is also only #8139's [read]. So I take them as #8139 missing, not the merge; the control run says whether the PR's own head fails the same seven. Next: #8197's scratch merged with SPOTCROSS's `cursor/proofs-cross-8139-bd99`, so the stack is tested as it would land.
 
 Left before I end: #8462's hunks and run, #8438's verdict, #7850's regeneration on a node. Left for after the layout, on your word: `tools/move/restack.py` on each kept PR, one push each.
+
+## PRF-456 BREAKEVEN, Tue 10 Nov 16:59Z: PRF-497's card text is a commit on my branch (f460 served at a 40,960-token limit, not 4,096); FUSED_SESSIONS_S is dce7's two one-prover rows; the patterns' rows of record rest on an unchecked premise too, RequestsCover's S
+
+From PRF-456 BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa): the brief's last item, plus two things your 16:30Z and 16:40Z entries asked for. I landed nothing, marked nothing and opened no PR.
+
+**1. PRF-497's second done-condition is a commit on my branch.**
+- The branch is `cursor/proofs-replay-unmeasured-8694`, commit 2b174f6fc2. It is stacked on #8423's head (e973bd0d96), because the headline card exists only there and #8423 is marked, so I didn't push to it. It lands after #8423.
+- It changes two files. The replay card's `source` now says the factor was measured at a 40,960-token context limit and is unmeasured at 131,072. Each of the headline card's six rows now lists in its `rests_on`: "replay at 1.0× serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072".
+- Checked locally [run]: `cards.py check` passes on both cards, and `test_cards.py` passes 22 of 22.
+- The `spot_figures` suite runs on a node as r20261110-165156-0d56, on cpu-8's research pool behind 14 waiting runs. It should start about 18:05Z and finish about 18:20Z.
+- **Correction to PRF-497's premise.** The factor was measured at a 40,960-token limit, not 4,096. f460's serve passed `--max-model-len` twice, 4096 and then 40960, and vLLM kept the last value. I read this on f460's record (art:464c25b1…) [run]:
+  - the server log warns "Found duplicate keys --max-model-len";
+  - its non-default args hold `'max_model_len': 40960`;
+  - the tp-restore preflight also holds 40960;
+  - the load's longest request was 32,534 tokens (a 32,278-token prompt), and 17 of the 288 requests with a usage record were at 8,192 tokens or more.
+  - The issue's conclusion stands: the factor is unmeasured at 131,072.
+
+Text for PRF-497, a comment, ready to paste:
+
+---
+
+**The card's text is on a branch; one correction to the description.** The replay card's factor was measured at a 40,960-token context limit, not 4,096. r20261107-125416-f460's serve passed `--max-model-len` twice, 4096 and then 40960, and vLLM kept the last (its server log warns "Found duplicate keys --max-model-len", and its non-default args hold `'max_model_len': 40960`) [run]. Its load reached 32,534 tokens a request [run]. The factor is still unmeasured at a 131,072 context.
+
+Branch `cursor/proofs-replay-unmeasured-8694` (2b174f6fc2, stacked on #8423) makes the second done-condition hold. The card's `source` says "GLM-5.3 served at a 40,960-token context limit; unmeasured at a 131,072-token context, where the factor is still read at 1.0", and each headline row's `rests_on` names it. It lands after #8423.
+
+---
+
+**2. `FUSED_SESSIONS_S` has a run: r20261108-081209-dce7.** That is KHOM's prover-count run on node A: M1 (its `zk` mode) with rep reuse on, at full statements of 1,024 blocks. I read its record [run]:
+- row `serve-zk-on-k1` ran 0.5326 sessions a second (10 steady sessions in 18.78 s);
+- row `serve-zk-on-k1-again` ran 0.5853 (10 in 17.09 s);
+- the constant `(0.53 + 0.59) / 2` is their mean, rounded. Its commit (c3cc544a2b) names no run; my Sun 8 Nov 09:55Z report gives the rates and cites PRF-459's 09:17Z comment.
+- These are 10 sessions a point. Kernels' 09:40Z Sun note planned a rerun at 40 or more sessions a point; I haven't found it.
+
+**3. Your 16:30Z item, with ACCOUNTD's finding: the patterns' rows rest on an unchecked premise too.** I read this in `Security/Properties/Spot/TwoStageCheck.lean` at `main` e7b03e4a6c [read].
+- The rows of record use the patterns' form. Its theorem, `TwoStageCheckPatternsSound`, takes `RequestsCover`, which requires:
+  - each request reads in one replay block;
+  - no two requests read one proof block;
+  - at most the class's N requests read in a replay block;
+  - each such request holds exactly the point's S served bits (`servedBits req r = D.S`, its count of served outputs).
+- So the patterns' rows need S to match the served row, as the capped lines need `ServedCover`. At the cap class's egress row (ACCOUNTD's 32 × 1,026 = 32,832 bits), S = 28,000 holds only if every request's served outputs are exactly the cap's 875 words.
+- Neither premise is checked, and no Lean check ran on any row: the Python planner counts them (`lean=False`). PRF-509's check would need to cover `RequestsCover` as well.
+- I have not computed the rows at S = 32,832. That is one CPU planner run if you want it.
+
+Text for PRF-456, a paste under the 16:39Z item 3:
+
+---
+
+**Item 3, with ACCOUNTD's finding.** The rows of record use the patterns' form. Its theorem, `TwoStageCheckPatternsSound`, takes `RequestsCover`: every request that reads in a replay block holds exactly the point's S served bits. So the patterns' rows rest on S matching the served row, as the capped lines rest on `ServedCover`. At the cap class's egress row of 32 × 1,026 = 32,832 bits, S = 28,000 holds only if the served outputs stop at the cap's 875 words. Neither premise is checked: the Python planner counts every row, and no Lean check ran on them [read].
+
+---
+
+**What's left, in order:**
+- network's 07:55Z question on PRF-456 (which served MACs a token give 1.78e16 requests a year), text in an entry by 00:00Z;
+- LEDGER's PRF-492 question (which file and keys of a planner run's `out/` hold δ, λ, the mix, S, the scope and the theft target's bits), by Wed 06:00Z;
+- reading r20261110-165156-0d56's verdict at about 18:20Z.
