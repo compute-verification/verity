@@ -6,7 +6,7 @@ certifier's wiring places it; each member's statement is accepted or refused by 
 reads exactly as the member says (sender and receiver accepted; unsigned and altered by their rows; pad and swapped,
 made for other proof blocks' wiring, by their value, swapped at the Program's own rows; pad-named, under the Program's
 value, by its row's position); the
-scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
+scan's public pieces hold every pad the network certifier wrote, pad's read among them, and none of the Program's cells; the toy
 unit is the identity on a row's bits. Nothing here lowers or proves (`warden_zk.prove` does, on a node)."""
 
 from __future__ import annotations

@@ -163,7 +163,7 @@ TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
-    or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    or on a `.released` view the network certifier's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
     to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits

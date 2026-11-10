@@ -3,14 +3,14 @@ module
 public import Definitions.NetworkCertifier.Warden
 
 /-!
-# The tap: one auditor device on each server's uplink, the warden and the certifier at once
+# The tap: one auditor device on each server's uplink, the relay and the certifier at once
 
-Definitions only. The warden (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
+Definitions only. The relay (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
-connection) gives both what the client receives, the warden's cells (`certifierCode`), and the certifier's record of
+connection) gives both what the client receives, the relay's cells (`certifierCode`), and the certifier's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`
 (`Verity.Assumptions.TrustedHost`) over that code, with no second device and no second trust, so that what the
-certifier saw is what the warden sent is a fact of the code, not a premise.
+certifier saw is what the relay sent is a fact of the code, not a premise.
 
 **The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
@@ -22,7 +22,7 @@ anything the tap saw. The server's bytes after a connection's fail cell, or past
 neither the client nor the record: the record fixes what the client received, not everything the server sent.
 
 The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
-can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the warden's code.
+can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the relay's code.
 -/
 
 @[expose] public section

@@ -30,7 +30,7 @@ replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span w
 slice's P·A = 14 whatever `--cut` says) and the trace-corpus fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
-(`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
+(`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the network certifier's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
 where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
 shape: symbols, segment bits and scalings per window, which is what the circuit's cost reads.

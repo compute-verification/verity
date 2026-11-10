@@ -1,4 +1,4 @@
-"""What a warden trace records to tell a late tick's cause: the warden's probe (each tick's lateness and work, each
+"""What a network certifier trace records to tell a late tick's cause: the network certifier's probe (each tick's lateness and work, each
 publish, each collection), the host sampler, the cores each process gets, and the summary's layout of the late ticks."""
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_probe_records_every_ticks_work_each_publish_and_the_collections(mod):
 
 
 def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
-    """The warden's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
+    """The network certifier's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
     ticks.json's `publisher`."""
     probe_mod = mod("warden_probe")
 
