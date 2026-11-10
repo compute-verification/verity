@@ -2,8 +2,8 @@ module
 
 public import Properties.NetworkScan
 public import Proofs.Properties.NetworkScan.Accept
-public import Proofs.Properties.Nci.BodiesOk.Decode
-public import Proofs.Properties.Nci.BodiesOk.Order
+public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.InferenceOnly.BodiesOk.Order
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -39,22 +39,22 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.Nci.BodiesOk
-import Proofs.Properties.Nci.BodiesOk.Basic
+import Proofs.Properties.InferenceOnly.BodiesOk
+import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The scan's layout fits its Program: where its egress and ingress gates resolve
 
 What `NetworkCheck.Period.scanOf`'s description checks give `Properties.NetworkScan.ScanFits`, on a Program Flock's
-decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `NciCheck.Desc.walkable`
+decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `InferenceOnlyCheck.Desc.walkable`
 checks.
 
 * Down from a node whose outputs its activation computes (`Own`: no scan, a primitive's or an `ownReturns`
   composite's), resolution never goes up through a parameter, so it ends at a gate within the node's gates, within the
   walk's fuel (`resolve_own`).
 * A gate within a root node that calls a composite is located below the root, where no input node is
-  (`NciCheck.Desc.inputsAtRoot`), so it is no input (`gate_not_input`); a gate within a root input node is located there
+  (`InferenceOnlyCheck.Desc.inputsAtRoot`), so it is no input (`gate_not_input`); a gate within a root input node is located there
   (`gate_at_input`).
 * A template member's parameter whose argument is one input node's leaves resolves, one step up and one down, to a gate
   of that input node (`resolve_param_input`).
@@ -65,7 +65,7 @@ checks.
 namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Scope Ref Node Part Seq resolve resolveStep gateStep)
-open NciCheck.Properties.SecurityProofs
+open InferenceOnlyCheck.Properties.SecurityProofs
 open NetworkCheck.Period (ownReturns partNames)
 
 /-- A node of body `d` whose outputs are gates its activation computes: no scan, and calling a primitive or an
@@ -118,12 +118,12 @@ theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) 
     · simp at h
   | explicit it => exact h
 
-/-- What `NciCheck.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
-theorem inputsAtRoot_spec (P : Prog) (h : NciCheck.Desc.inputsAtRoot P = true) :
+/-- What `InferenceOnlyCheck.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
+theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyCheck.Desc.inputsAtRoot P = true) :
     ∀ d < P.defs.size, ∀ n ∈ (P.defs[d]!).body.nodes, n.fn ≠ P.root ∧
-      (d = P.root ∨ NciCheck.Desc.isInputNode P n = false) := by
+      (d = P.root ∨ InferenceOnlyCheck.Desc.isInputNode P n = false) := by
   intro d hd n hn
-  unfold NciCheck.Desc.inputsAtRoot at h
+  unfold InferenceOnlyCheck.Desc.inputsAtRoot at h
   have := Array.all_eq_true_iff_forall_mem.1 (List.all_eq_true.1 h d (List.mem_range.2 hd)) n hn
   simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, Bool.or_eq_true, beq_iff_eq, Bool.not_eq_true'] at this
   exact this
@@ -190,8 +190,8 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
 include hroot hL
 
 /-- **A gate of a root node calling a composite is no input**: `Prog.gate`'s walk goes into the node's member, below
-the root, where only primitives that are no input are (`NciCheck.Desc.inputsAtRoot`). -/
-theorem gate_not_input (hin : NciCheck.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
+the root, where only primitives that are no input are (`InferenceOnlyCheck.Desc.inputsAtRoot`). -/
+theorem gate_not_input (hin : InferenceOnlyCheck.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hkc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
     (h1 : (P.defs[P.root]!).body.offsets[k]! ≤ g) (h2 : g < (P.defs[P.root]!).body.offsets[k + 1]!)
@@ -214,7 +214,7 @@ theorem gate_not_input (hin : NciCheck.Desc.inputsAtRoot P = true) {k g p : ℕ}
       rcases hd with hd | hd
       · exact absurd hd ha
       · rw [hb1]
-        simpa [NciCheck.Desc.isInputNode, hp] using hd
+        simpa [InferenceOnlyCheck.Desc.isInputNode, hp] using hd
     · obtain ⟨k'', hk'', h1', h2', hinl', -⟩ := gateStep_found P g P.rootScope _ hb
       simp only [rootScope_d, rootScope_off, Nat.sub_zero] at hk'' h1' h2' hinl'
       have e : k'' = k := offsets_unique _ _ hmono hk'' hk h1' h2' h1 h2
@@ -300,7 +300,7 @@ def Down (P : Prog) (lo hi : ℕ) (s : Scope × Ref) : Prop :=
 
 section
 variable (P : Prog) (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!)
-  (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (hc : NciCheck.Desc.calleesFirst P = true)
+  (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (hc : InferenceOnlyCheck.Desc.calleesFirst P = true)
 include hok hL hc
 
 /-- **A composite that `ownReturns` takes returns its own nodes' leaves**: its return's leaf `t` is an output leaf of a
@@ -328,7 +328,7 @@ whose outputs it computes, within the member's gates, one callee deeper. -/
 theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
     (∃ b, resolveStep P s = .ok (.inl b) ∧ lo ≤ b ∧ b < hi) ∨
       ∃ s', resolveStep P s = .ok (.inr s') ∧ Down P lo hi s' ∧
-        (NciCheck.Desc.depths P)[s'.1.d]! < (NciCheck.Desc.depths P)[s.1.d]! := by
+        (InferenceOnlyCheck.Desc.depths P)[s'.1.d]! < (InferenceOnlyCheck.Desc.depths P)[s.1.d]! := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
   obtain ⟨hd, hpr, hp, hi, hj, ⟨hns, hcall⟩, hlo, hhi⟩ := hs
   dsimp only at hd hpr hp hi hj hns hcall hlo hhi
@@ -392,10 +392,10 @@ theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
 walk's fuel: each step goes one callee deeper (`down_step`), and the activation's callees nest less deep than the
 fuel. -/
 theorem resolve_own {lo hi : ℕ} (sc : Scope) (r : Ref) (hs : Down P lo hi (sc, r))
-    (hdep : (NciCheck.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
+    (hdep : (InferenceOnlyCheck.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
     ∃ a, resolve P sc r = .ok a ∧ lo ≤ a ∧ a < hi :=
   Walk.run_of_potential (what := "scope resolution") (Down P lo hi)
-    (fun s => (NciCheck.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
+    (fun s => (InferenceOnlyCheck.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
     Flock.Steps.FUEL (sc, r) hs hdep
 
 /-- **A template member's parameter whose argument is one input node's leaves resolves to that node's gate**: up
@@ -405,7 +405,7 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
     (hk : k < (P.defs[P.root]!).body.nodes.size) (hb : ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     (hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
     (ha : (((P.defs[P.root]!).body.nodes[k]!).args[0]!).seq.parts = #[.affine false kr 0 c])
-    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true)
+    (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).n)
     (hp0 : 0 < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params.size)
     (hj : j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[0]!).2.leaves) :
@@ -442,7 +442,7 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
   obtain ⟨-, hnokr, -⟩ := (hok P.root hroot.1).2.1 kr hkr
   have hcokr := (hok _ hfsr).1
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[kr]!).fn]!).prim = true := by
-    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+    simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
   have hdownr := BodiesOk.down_ok _ _ hcokr hnokr x hlv
   have hlayr := ((hL P.root hroot.1) hroot.2).2.2 kr hkr
   have hs1 : resolveStep P (P.child P.rootScope k m, ⟨true, 0, j⟩) =
@@ -494,7 +494,7 @@ theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.te
 
 /-- **What `inputArg` takes**: an argument that is one root input node's leaves, from its first. -/
 theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkCheck.Period.inputArg P a = some kr) :
-    ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ NciCheck.Desc.isInputNode P (node P kr) = true := by
+    ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ InferenceOnlyCheck.Desc.isInputNode P (node P kr) = true := by
   unfold NetworkCheck.Period.inputArg at h
   split at h <;> try (cases h; done)
   rename_i k c hl
@@ -508,7 +508,7 @@ theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : Network
     rw [hl] at e
     exact e
   · obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hn
-    show NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true
+    show InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true
     rw [getElem!_pos _ kr hlt, e]
     exact hin
 
@@ -520,11 +520,11 @@ body laid out, callees first. -/
 theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s) :
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
-      NciCheck.Desc.calleesFirst P = true := by
+      InferenceOnlyCheck.Desc.calleesFirst P = true := by
   obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
   obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
   have hw := hA.laid.2.2
-  simp only [NciCheck.Desc.walkable, Bool.and_eq_true] at hw
+  simp only [InferenceOnlyCheck.Desc.walkable, Bool.and_eq_true] at hw
   exact ⟨by rw [hdefs]; exact hinv.1, ⟨hr, hp⟩, (Walk.bodiesLaidOut_spec P hw.1.2).2.1, hw.1.1⟩
 
 /-- **`Fits`' first part**: before the window's `T` steps, every egress gate is one the flattened Program returns, and
@@ -631,7 +631,7 @@ theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok 
     (by rw [show ((P.defs[P.root]!).body.nodes[k]!).args[0]! = a from ha0]; exact hparts) hin hm hp0 hjr
   have hga : gateAt P (P.child P.rootScope k m) ⟨true, 0, j⟩ = g := by unfold gateAt; rw [hres]; rfl
   rw [hga]
-  simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin
+  simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin
   have hlt : g < C.gates.length := by
     rw [hF.1]
     have := hmono (kr + 1) _ hkr' (le_refl _)

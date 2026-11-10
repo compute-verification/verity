@@ -13,7 +13,7 @@ per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tok
 beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent, exact block on Qwen2.5-1.5B; the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
 thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
-thread_k = { value = 2e7, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
+thread_k = { value = 2e7, unit = "bit", source = "InferenceOnly.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
 c_w = { value = 2.5, low = 0.8, high = 3.4, source = "Kimi K2's weights at b_w.pretrained/frontier-lossy (benchmarks/nci/parameters.json), 2.5 bits; low: b_w's; high: a uniform c_w is at most what the cheapest 1% of weights cost, 2.3-3.4 bits", status = "conjecture" }
 c_a = { value = 4, low = 1, high = 16, source = "each counted product's output reads all four bits of its FP4 activation; high: a bf16 activation, 16", status = "derived" }
 price = { value = 2.8, low = 2.3, high = 6.7, source = "Kimi K2: a uniform price is at most what the cheapest 1% of weights cost, 2.3-3.4 bits; high: priced per parameter, the weights' mean, 6.7 bits", status = "derived" }
