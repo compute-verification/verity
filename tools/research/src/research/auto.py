@@ -5,11 +5,12 @@ Node 2's share is 48 cores that queued runs claim whole (research.cores) in one 
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
 --on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
-node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json`. `choose`
-then takes, in order:
+node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json` and the
+memory slot.py finds free there (`free_gb`, read once a pool). `choose` then takes, in order:
 
-  - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
-    run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
+  - a pool where a slot that fits the job (not trains-only, at least its CPUs) is free and unblocked for every waiter ahead
+    and this job, the machine's free memory covering what the job would reserve there as slot.py admits it (`_blocked`:
+    the larger of the slot's mem= and the job's ask, with no cgroup cap);
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as waiters ahead per fitting slot, leaving out a pool whose line is stalled on
@@ -26,7 +27,7 @@ Lean pool is free too, with nobody waiting for one; and the third takes the shor
 per slot of the pool (none where one is free), before the shortest line for a CPU slot. A machine whose Lean slots can't be
 read comes last there, never first. The placement's reason names the Lean pool that decided it.
 
-A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
+A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
 the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
@@ -184,6 +185,28 @@ def lean_slots():
     return load("auto_lean_slot", LEAN_SRC, {"LEAN_SLOTS": LEAN_SLOTS}).status_doc(datetime.now(timezone.utc))
 
 
+def once(f):
+    seen = {}
+
+    def first(*a, **kw):
+        key = (a, tuple(sorted(kw.items())))
+        if key not in seen:
+            seen[key] = f(*a, **kw)
+        return seen[key]
+    return first
+
+
+def pool_doc(pool, slots):
+    m = load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots})
+    if not (hasattr(m, "memory_gb") and hasattr(m, "reserved_gb")):
+        return m.status_doc(datetime.now(timezone.utc))
+    # slot.py reads the machine's memory and every live reservation's process tree for each slot with mem=; once is the same answer
+    m.memory_gb, m.reserved_gb = once(m.memory_gb), once(m.reserved_gb)
+    d = m.status_doc(datetime.now(timezone.utc))
+    d["free_gb"] = m.memory_gb() - m.reserved_gb(priority=False)
+    return d
+
+
 def disk_short():
     if not os.path.isdir(DISK):
         return None
@@ -203,8 +226,7 @@ short = disk_short()
 if LEAN_SRC:
     out["lean"] = doc(lean_slots)
 for pool, slots in POOLS.items():
-    out[pool] = {"error": f"disk: {short}"} if short else \
-        doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
+    out[pool] = {"error": f"disk: {short}"} if short else doc(lambda: pool_doc(pool, slots))
 print(json.dumps(out))
 '''
 
@@ -326,14 +348,29 @@ class Stalled(ValueError):
         self.waiting = waiting
 
 
+def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
+    """What keeps a job asking ``mem_gb`` GB from taking ``slot`` now, as slot.py decides it at admission: what blocks the slot
+    for any check (its `blocked`), or less memory free than the job would reserve there. slot.py raises a slot's mem= to the
+    job's ask (its `asking`: GB as GiB, rounded up) and one without mem= to that ask, so the machine's free memory (the
+    pool's `free_gb`, GiB less what live reservations haven't reached) decides, not the slot's mem=. A document without it
+    (no pool's since the probe reads it) leaves the slot's own `blocked`."""
+    if slot.get("blocked"):
+        return str(slot["blocked"])
+    need = max(slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
+    if need and isinstance(free_gb, (int, float)) and free_gb < need:
+        return f"{free_gb:g}{MEMORY_BLOCK}, under the {need} GB this job would reserve there"
+    return None
+
+
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
-    """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
+    """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job. A slot fits by its
+    CPUs: slot.py gives a job any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`)."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus
-           and (s.get("mem") is None or s["mem"] >= mem_gb)]  # slot.py raises a slot without mem= to what the run asks
+    fit = [{**s, "blocked": _blocked(s, doc.get("free_gb"), mem_gb)} for s in doc.get("slots") or []
+           if not s.get("trains") and cpulist(s["cpus"]) >= cpus]
     if not fit:
-        raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
+        raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs")
     # a window (slot.py's `window ...` reason) closes a slot for hours or days, unlike a memory or disk block
     open_ = [s for s in fit if not str(s.get("blocked") or "").startswith("window ")]
     if not open_:
@@ -341,7 +378,7 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     free = [s for s in open_ if s.get("holder") is None and not s.get("blocked")]
     waiters = doc.get("waiters") or []
     waiting = len(waiters)
-    # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what that slot's document
+    # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what this job's ask
     # doesn't show: the memory its own --mem-gb asks (cpu-3's head asked 256 GB for hours while its other slots sat free)
     if free and waiters and (head := max(w.get("minutes") or 0 for w in waiters)) >= STALL_MIN:
         raise Stalled(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
@@ -505,17 +542,21 @@ def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: in
 def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
             ) -> tuple[int, float, tuple[str, str]] | None:
     """The smallest change of a job's request that starts it now: (CPUs, GB, the pool that takes it), the request cut to a
-    slot that is free in some pool, where `expect` then gives it no wait (the first such pool of SPILL, as `choose` takes
-    it). Of several, the one that keeps the most of what was asked, as its share of the CPUs plus its share of the memory.
-    None when no smaller request starts now."""
+    slot that is free in some pool and to the memory free on its machine (`_blocked`), where `expect` then gives it no wait
+    (the first such pool of SPILL, as `choose` takes it). Of several, the one that keeps the most of what was asked, as its
+    share of the CPUs plus its share of the memory. None when no smaller request starts now."""
     cpus = max(cpus, 1)
     shapes = set()
     for machine, pool in SPILL:
         doc = docs.get(machine)
         doc = doc.get(pool) if isinstance(doc, dict) else None
-        for s in (doc.get("slots") or []) if isinstance(doc, dict) else []:
-            if not s.get("trains") and s.get("holder") is None and not s.get("blocked"):
-                shapes.add((min(cpus, cpulist(s["cpus"])), mem_gb if s.get("mem") is None else min(mem_gb, s["mem"])))
+        if not isinstance(doc, dict):
+            continue
+        free_gb = doc.get("free_gb")
+        gb = min(mem_gb, int(free_gb * 2 ** 30 / 1e9)) if isinstance(free_gb, (int, float)) else mem_gb
+        for s in doc.get("slots") or []:
+            if not s.get("trains") and s.get("holder") is None and not s.get("blocked") and (gb > 0 or not mem_gb):
+                shapes.add((min(cpus, cpulist(s["cpus"])), gb))
     shapes.discard((cpus, mem_gb))
     for c, m in sorted(shapes, key=lambda cm: (-(cm[0] / cpus + (cm[1] / mem_gb if mem_gb else 1)), cm)):
         for target in SPILL:

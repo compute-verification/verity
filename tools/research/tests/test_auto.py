@@ -30,9 +30,11 @@ def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, block
     return {"name": name, "cpus": cpus, "mem": mem, "trains": trains, "holder": {"pid": 1} if held else None, "blocked": blocked}
 
 
-def pool(*slots: dict, waiters: int = 0, minutes: int = 0) -> dict:
+def pool(*slots: dict, waiters: int = 0, minutes: int = 0, free_gb: int | None = None) -> dict:
+    """A pool's document as the probe gives it; ``free_gb``: the memory slot.py finds free on its machine, in GiB."""
     return {"research": {"file": "/workspace/research/locks/research/slots", "slots": list(slots),
-                         "waiters": [{"pid": i, "minutes": minutes} for i in range(waiters)]}}
+                         "waiters": [{"pid": i, "minutes": minutes} for i in range(waiters)],
+                         **({} if free_gb is None else {"free_gb": free_gb})}}
 
 
 def lean(**pools: tuple[int, int, int]) -> dict:
@@ -237,12 +239,38 @@ def test_with_every_pool_full_node_2_takes_a_job_it_can_start_now():
 
 def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
     docs = {N2: share(waiters=56)}
-    for p, cpus, mem in ((pool(slot("r0", cpus="8-11")), 8, 16), (pool(slot("r0", mem=40)), 4, 64),
-                         (pool(slot("b", cpus="54-191", mem=560, trains=True)), 4, 16)):
+    for p, cpus, mem in ((pool(slot("r0", cpus="8-11")), 8, 16), (pool(slot("b", cpus="54-191", mem=560, trains=True)), 4, 16)):
         target, why = auto.choose({**docs, CPU1: p}, cpus, mem)
         assert target is None and f"{CPU1}'s research pool skipped: no slot of" in why
     target, why = auto.choose({**docs, CPU1: pool(slot("r0", blocked="its window opens"))}, 4, 16)
     assert target == (CPU1, "research") and "r0 blocked" in why and "shortest line" in why, "a blocked slot is no free one"
+
+
+def test_a_slot_fits_a_job_as_slot_py_admits_it_whatever_its_own_mem():
+    """slot.py gives a job any slot of its pool and raises the slot's reservation to the job's ask, so a slot's mem= rules no
+    job out: the machine's free memory decides whether the job starts there now. Counting only slots whose mem= covered the
+    ask, a job asking over 40 GB saw one slot of a pool of 21 and its wait there twenty times too long."""
+    small = [slot(f"r{i}", held=i < 10) for i in range(20)]                 # 12 CPUs each, mem=40; ten of them held
+    def docs(free_gb: int | None, waiters: int = 6) -> dict:
+        return {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), *small, waiters=waiters, free_gb=free_gb)}
+
+    at = (CPU1, "research")
+    assert auto._pool(docs(300)[CPU1]["research"], 12, 128)[:3] == (21, 10, 6), "all 21 run, and the ten unheld take 128 GB now"
+    assert auto.expect(docs(300), at, 12, 128) == auto.Wait(0, "", False)
+    fit, free, waiting, why = auto._pool(docs(100)[CPU1]["research"], 12, 128)
+    assert (fit, free, waiting) == (11, 0, 6) and "r10 blocked" in why, "128 GB is 120 GiB: over the 100 free, the unheld wait"
+    assert auto.expect(docs(100), at, 12, 128).minutes == pytest.approx(7 * auto.HOLD_MIN / 11), "the eleven that run drain its line"
+    assert auto._pool(docs(100)[CPU1]["research"], 12, 16)[:2] == (21, 10), "a 16 GB job reserves the slot's own 40 there, which is free"
+    assert auto._pool(docs(30)[CPU1]["research"], 12, 16)[:2] == (11, 0), "under a slot's own mem= free, nothing takes it"
+    assert auto._pool(docs(None)[CPU1]["research"], 12, 128)[:2] == (21, 10), "a document without the figure: the slot's own word"
+    idle = pool(*(slot(f"b{i}", mem=None) for i in range(4)), free_gb=13)   # slots without mem=: nothing in them shows memory
+    with pytest.raises(auto.Stalled, match="13 GB of memory free, under the 68 GB this job would reserve there"):
+        auto._pool(idle["research"], 4, 72)
+    target, why = auto.choose({N2: DOWN, CPU1: idle, CPU5: pool(slot("r0", held=True), free_gb=300)}, 4, 72)
+    assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: its line is stalled" in why, \
+        "a job is not sent to wait on memory beside idle slots while another pool runs"
+    assert auto._pool(idle["research"], 4, 0)[:2] == (4, 4), "a job that asks no memory reserves none in a slot without mem="
+    assert auto._pool(idle["research"], 4, 12)[:2] == (4, 4), "12 GB is 12 GiB rounded up: inside the 13 free"
 
 
 def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
@@ -266,7 +294,7 @@ def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
     with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job.*research run --on MACHINE --mem-gb N"):
         auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
-    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs and 300 GB"):
+    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs;"):
         auto.choose({N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))}, 64, 300)
     target, why = auto.choose({N2: share(waiters=5), CPU1: {"research": {"error": "OSError: no slots"}}}, 4, 16)
     assert target is None and f"{CPU1}'s research pool skipped: OSError: no slots" in why
@@ -297,6 +325,18 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}, \
         "a run that takes no Lean slot asks for none"
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
+    # a slot.py that reads memory: the probe reads it once for the pool, however many slots ask, and reports what is free
+    (src / auto.SLOT_PY).write_text(
+        "import os\ncalls = []\n"
+        "def memory_gb():\n    calls.append('memory')\n    return 100\n"
+        "def reserved_gb(priority=False):\n    calls.append('reserved')\n    return 30\n"
+        "def status_doc(now):\n"
+        "    slots = [{'name': f'r{i}', 'free': memory_gb() - reserved_gb(priority=False)} for i in range(3)]\n"
+        "    return {'file': os.environ['CHECK_SLOTS'], 'slots': slots, 'waiters': [], 'calls': calls}\n")
+    counted = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+    assert counted["free_gb"] == 70 and [s["free"] for s in counted["slots"]] == [70, 70, 70]
+    assert counted["calls"] == ["memory", "reserved"], "once a pool, not once a slot: each read walks every live reservation's process tree"
+    (src / auto.SLOT_PY).write_text("import os\ndef status_doc(now):\n    return {'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}\n")
     assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
     monkeypatch.setattr(auto, "MIN_FREE_INODES", 2**62)
@@ -455,7 +495,7 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
     assert main([*runs, "--gpus", "1", "--", "nvidia-smi"]) == 3
     assert "a GPU or quiet job, which only the queue books" in capsys.readouterr().err
     assert main([*runs, "--cpus", "16", "--mem-gb", "160", "--", "pytest"]) == 3
-    assert "no slot of /workspace/research/locks/research/slots gives 16 CPUs and 160 GB" in capsys.readouterr().err
+    assert "no slot of /workspace/research/locks/research/slots gives 16 CPUs" in capsys.readouterr().err
     assert [(s["node"], s["gpus"], s["cpus"]) for s in placed] == [(N2, 1, None), (N2, None, 16)]
 
 
@@ -705,21 +745,27 @@ def test_a_wait_nothing_read_bounds_gets_no_estimate_and_only_a_stalled_line_is_
 
 
 def test_the_smallest_change_of_a_request_that_starts_now_keeps_the_most_of_what_it_asked(hold_25):
-    """A refused launch is told the way on that needs no wait: the request cut to a slot that is free now, the largest such."""
+    """A refused launch is told the way on that needs no wait: the request cut to a slot that is free now and to the memory
+    free on its machine, the cut that keeps the most of it."""
     docs = {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7),
-            CPU5: pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16))}
+            CPU5: pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), free_gb=40)}
     target, _ = auto.choose(docs, 16, 150)
     assert target == (CPU1, "research") and auto.expect(docs, target, 16, 150).late
-    assert auto.smaller(docs, 16, 150) == (12, 40, (CPU5, "research")), "r0 keeps more of it than r1 does"
-    assert auto.choose(docs, 12, 40)[1].endswith("a slot is free there now")
+    assert auto.smaller(docs, 16, 150) == (12, 42, (CPU5, "research")), "r0's 12 CPUs, and the 40 GiB free there"
+    assert auto.choose(docs, 12, 42)[1].endswith("a slot is free there now")
     assert auto.smaller(docs, 4, 16) is None, "it starts now as asked: nothing to cut"
-    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40, held=True), slot("r1", cpus="20-23", mem=16, blocked="window 02:00-06:00"))
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), free_gb=400)
+    assert auto.smaller(docs, 16, 150) == (12, 150, (CPU5, "research")), "the memory is free there: its CPUs alone are cut"
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40, held=True), slot("r1", cpus="20-23", mem=16, blocked="window 02:00-06:00"),
+                      free_gb=400)
     assert auto.smaller(docs, 16, 150) is None, "no slot is free anywhere: no cut starts it"
-    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), waiters=2)
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), waiters=2, free_gb=400)
     assert auto.smaller(docs, 16, 150) is None, "the free slots are their waiters'"
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), free_gb=0)
+    assert auto.smaller(docs, 16, 150) is None, "no memory is free where the slot is"
     docs = {N2: DOWN, CPU1: {**pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7), **lean(build=(3, 0, 0))},
-            CPU5: {**pool(slot("r0", cpus="8-19", mem=40)), **lean(build=(0, 0, 0))}}
-    assert auto.smaller(docs, 16, 150) == (12, 40, (CPU5, "research"))
+            CPU5: {**pool(slot("r0", cpus="8-19", mem=40), free_gb=40), **lean(build=(0, 0, 0))}}
+    assert auto.smaller(docs, 16, 150) == (12, 42, (CPU5, "research"))
     assert auto.smaller(docs, 16, 150, lean_pool="build") is None, "its free slot is on a machine whose Lean slots give `build` none"
 
 
@@ -752,12 +798,13 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
     assert launch("40 min") == (2, [f"refused: {late}. --accept-wait queues it there anyway"]) and len(launched) == 3
     assert launch("40 min", "--accept-wait") == (3, [f"warning: {late}"]) and len(launched) == 4
     assert launch("now")[0] == launch("5 min")[0] == 3 and len(launched) == 6, "a run on time is never refused"
-    lines["cut"] = {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7), CPU5: pool(slot("r0", cpus="8-19", mem=40))}
+    lines["cut"] = {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7),
+                    CPU5: pool(slot("r0", cpus="8-19", mem=40), free_gb=40)}
     rc, (said,) = launch("cut", "--cpus", "16", "--mem-gb", "150")
-    assert rc == 2 and said.endswith(f". --accept-wait queues it there anyway; `--cpus 12 --mem-gb 40` starts now on {CPU5}'s research pool")
+    assert rc == 2 and said.endswith(f". --accept-wait queues it there anyway; `--cpus 12 --mem-gb 42` starts now on {CPU5}'s research pool")
     monkeypatch.setattr(auto, "REFUSE", False)
     rc, (said,) = launch("cut", "--cpus", "16", "--mem-gb", "150")
-    assert rc == 3 and said.startswith("warning: ") and said.endswith(f". `--cpus 12 --mem-gb 40` starts now on {CPU5}'s research pool")
+    assert rc == 3 and said.startswith("warning: ") and said.endswith(f". `--cpus 12 --mem-gb 42` starts now on {CPU5}'s research pool")
     assert main(["run", "--on", CPU1, "--project", "verity", "--accept-wait", "--", "true"]) == 2 and len(launched) == 7
     assert "--accept-wait is for --on auto" in capsys.readouterr().err
 
