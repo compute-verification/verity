@@ -4,7 +4,7 @@
 certified record its string decodes against), and of the advice and the bodies only the fields `reads.READS` declares, each with
 its account in the output accounting (the advice through `reads.gate`):
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), ℓ, the
-  public cap on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
+  public bound on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
@@ -63,7 +63,7 @@ its account in the output accounting (the advice through `reads.gate`):
 - Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
   (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
-  first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
+  first scheduled step and with bound T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
   whole, at the C its admission had, and each window places its own rows: from where it had reached (its carried `made`), its kept
   outputs counted from its carried `kept`. A request the window leaves with outputs to keep reaches only as far as its rows go. A
@@ -139,7 +139,7 @@ CAP_BITS = 1 << 23
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
-    seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the cap on
+    seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the bound on
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
     the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
     like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`

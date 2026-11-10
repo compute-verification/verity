@@ -1,7 +1,7 @@
 """memory-map/v1 from the circuit (`verity_vllm.commit.memory_map`) on a small Llama's request Programs: rows of 1 KiB (4 KV heads
 of 128 bf16) in pages of 4 slots, so a plane of a page is one 4 KiB block; request r0 (a 4-row prefill, then 5 decode steps) from
 step 0, and r1 (a 4-row prefill, then 1 decode step) from step 1, which ends while r0 runs.  The record is one
-`remote_bandwidth.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
+PoUB's `memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
 pages are the ones the engine's slots name.  A warm request (a prefix-cache hit) reads its first page from the request that
 computed it: the page is written once and freed after the last reader of either.  GLM-5.3's MLA: the DSA stand-in's rows are its
 latent rows, one plane a layer, in MLA's latent page (a row past INDEX_TOPK reads them through its concentrator, and a batched
