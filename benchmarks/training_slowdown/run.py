@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import subprocess
@@ -35,6 +34,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 from training_slowdown import config, starts  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 KIND = "training-attack"
 #: the asserter of the command's labels
@@ -187,7 +187,7 @@ def main(argv=None, store: Store | None = None) -> int:
     configs = [cfg] + [h for h in [config.honest(cfg, reg)] if h]
     jobs = [j for c in configs for j in c.jobs()]
     if a.local:
-        root = a.root or (Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
+        root = a.root or (Path(SHARED.OUT) if SHARED.OUT else None)
         if root is None:
             raise SystemExit("training-slowdown: --local writes its jobs under --root DIR (or $OUT)")
         states = [local_state(j, root) for j in jobs]
