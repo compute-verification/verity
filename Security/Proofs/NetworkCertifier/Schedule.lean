@@ -121,7 +121,7 @@ theorem expectedRow_causal (S T W : ℕ) (syncs syncs' : Fin W → ClockSync) (f
 
 /-! ### Seven bits per window opened -/
 
-theorem encard_accSeqs_le_constantRate_windows {Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
+theorem encard_accSeqs_le_constantRate_executionPhases {Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D m : ℕ)
     (hm : n ≤ m * T) :
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
@@ -195,7 +195,7 @@ theorem encard_decodable_le_constantRate {Ac : Type} [Fintype Ac]
         intro x hx
         obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun z n x hx
         exact hJ k xs as
-    _ ≤ _ := encard_accSeqs_le_constantRate_windows T W ss frames I.op n D m hm
+    _ ≤ _ := encard_accSeqs_le_constantRate_executionPhases T W ss frames I.op n D m hm
 
 /-! ## Witness: the windows bound is met -/
 

@@ -81,7 +81,7 @@ def tick (c : Certifier) : Certifier × Slots :=
     ({ c with queue := c.queue.extract n c.queue.size, rows := c.rows.push row }, row)
 
 /-- `close_window`: the record, with one untimed status, and the next window; queued frames carry over. -/
-def closeWindow (c : Certifier) : Certifier × Record :=
+def closeExecutionPhase (c : Certifier) : Certifier × Record :=
   let status := match c.fault with | none => Status.complete | some r => .notEstablished r
   ({ c with rows := #[], fault := none, window := c.window + 1 }, ⟨c.link, c.window, c.rows, status⟩)
 

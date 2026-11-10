@@ -12,7 +12,7 @@ their conclusions false at an audit that accepts everything, over these:
 * `trivLay`: one link of one slot with no gate, at which `SampledAuditAccepted`'s conclusion fails;
 * `notLay`: step `t`'s ingress is the input, and its egress slot's presence gate the input's negation, at which the
   leak bounds fail;
-* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `PeriodLeakAccepted`'s
+* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `MonitoringPeriodLeakAccepted`'s
   bound fails.
 -/
 

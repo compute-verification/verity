@@ -1198,7 +1198,7 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
            "second": lambda c: "a second one of its direction",
            "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
                                "reused, under which two windows of one sync sign one digest",
-           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
+           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.TransferBlocks.refusals) and its reference "
                                    "(audit.certificate_refusals) disagree on the window's certificates"}
     kept, refused = {"certificate": [], "clock certificate": []}, []
     for what, c, no in ([("certificate", c, r) for c, r in zip(certificates, held)]

@@ -140,14 +140,14 @@ structure Link where
 structure Evidence where
   links : Array Link
 
-structure LinkWindow where
+structure TransferBlocks where
   direction : Direction
   link : String
   window : Nat
   violation : Option String
 
 structure Profile where
-  verdicts : Array LinkWindow
+  verdicts : Array TransferBlocks
   windows : Nat
   syncs : Array ClockSync
 
@@ -213,7 +213,7 @@ def paramsOf (j : Json) : V Params := do
   let key ← Flock.unhex (← Flock.J.str j "key" "the object")
   unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
   let session ← Flock.unhex (← Flock.J.str j "session" "the object")
-  unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
+  unless session.size = attachmentBytes do throw s!"a certifier session id is {attachmentBytes} bytes, not {session.size}"
   pure { egress, ingress, windows, grid := ← gridOf (← Flock.J.get e "grid" "egress") "egress.grid",
          ingressGrid := ← gridOf (← Flock.J.get i "grid" "ingress") "ingress.grid",
          syncSet := ← syncSetOf (← Flock.J.get j "sync_set" "the object"), lms, key, session }
@@ -386,13 +386,13 @@ def ingressVerdict (p : Params) (c : Commitment) (ingressDigest : ByteArray) (l 
 
 /-- Every execution phase's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's.
 `egressDigest` and `ingressDigest` are `parameters_digest` of the egress grid with Σ_sync and of the ingress grid. -/
-def verdicts (p : Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array LinkWindow :=
+def verdicts (p : Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array TransferBlocks :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) => (List.range p.windows).map fun w =>
       ({ direction := .egress, link := l, window := w, violation := egressVerdict p c e egressDigest l link w } :
-        LinkWindow)) ++
+        TransferBlocks)) ++
     p.ingress.toList.flatMap fun l => (List.range p.windows).map fun w =>
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
-        LinkWindow)).toArray
+        TransferBlocks)).toArray
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Profile :=
   if e.links.size ≠ p.egress.size then
@@ -405,7 +405,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Profi
     match parametersDigest p.grid (some (manifestSet p.syncSet)), parametersDigest p.ingressGrid none with
     | .ok eg, .ok ig =>
       let vs := verdicts p c e eg ig
-      let named (v : LinkWindow) (why : String) := s!"{v.direction.value} link {v.link} window {v.window}: {why}"
+      let named (v : TransferBlocks) (why : String) := s!"{v.direction.value} link {v.link} window {v.window}: {why}"
       match vs.find? (·.violation.any (· != "no-verdict")) with
       | some v => .reject (named v (v.violation.getD ""))
       | none =>
