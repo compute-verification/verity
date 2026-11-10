@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from functools import cache
 from pathlib import Path
 
@@ -44,15 +45,17 @@ def _calculator():
 
 
 def policies() -> list[str]:
-    """The names of the registry's fixed policies."""
-    return list(_calculator()[4].names("policy"))
+    """The names of the registry's fixed policies: the `[policy.*]` tables of its data files, read without importing
+    the calculator, since a job checks its config's policy by name and runs none of the calculator's code."""
+    return sorted({name for f in (CALCULATOR / "data").glob("*.toml")
+                   for name in tomllib.loads(f.read_text()).get("policy", {})})
 
 
 def policy(name: str) -> dict | None:
     """The registry's policy `name`: Γ in FLOP (`gamma_flop`) and K in bits (`k_bits`); None where it has none."""
-    _, envelopes, _, _, registry = _calculator()
-    if name not in registry.names("policy"):
+    if name not in policies():
         return None
+    _, envelopes, _, _, registry = _calculator()
     p = envelopes.policy(registry, name)
     return {"gamma_flop": p.gamma, "k_bits": p.k}
 

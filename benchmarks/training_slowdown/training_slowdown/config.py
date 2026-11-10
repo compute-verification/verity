@@ -29,12 +29,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from . import starts
+from . import calculator, starts
 from .data import SPLITS
 
 ROUTES = Path(__file__).with_name("routes")
-#: the calculator's registry, whose [policy.*] tables are the fixed policies a config may name
-RHO_DATA = Path(__file__).resolve().parents[2] / "rho" / "data"
 #: the policies stated relative to the start, in `training_slowdown.policy` (`CONSOLE`)
 RULES = ("console",)
 LABEL_KEY = "training-slowdown"
@@ -45,13 +43,6 @@ OPTIONAL = ("honest", "dials")
 TABLES = {"target": {"gain": (int, float)}, "budget": {"steps": int, "batch": int, "minutes": (int, float)},
           "seeds": {s: list for s in SPLITS}}
 REQUIRED_IN = {"target": ("gain",), "budget": ("steps", "batch"), "seeds": ()}
-
-
-def policies() -> list[str]:
-    names = list(RULES)
-    for f in sorted(RHO_DATA.glob("*.toml")):
-        names += sorted(tomllib.loads(f.read_text()).get("policy", {}))
-    return names
 
 
 def route(name: str) -> ModuleType:
@@ -167,7 +158,7 @@ def load(path: Path, reg: dict | None = None) -> Config:
             raise SystemExit(f"{where}: seeds.{split} is {ss}, not distinct non-negative integers")
     if not any(seeds.values()):
         raise SystemExit(f"{where}: no seed")
-    if raw["policy"] not in (names := policies()):
+    if raw["policy"] not in (names := [*RULES, *calculator.policies()]):
         raise SystemExit(f"{where}: no policy {raw['policy']!r} (have {', '.join(names)}: policy.py's rule, or a "
                          f"[policy.*] table of benchmarks/rho/data)")
     start = starts.start(raw["start"], reg)
