@@ -112,6 +112,11 @@ WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "
 conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
 commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
 
+WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
+"""What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the
+memory challenger's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
+secret source."""
+
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
 segments."""
@@ -521,12 +526,12 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.ObligationWide320",
-                       delta=Fraction(1, 1 << 20) - Fraction(1, 1 << 128), segments=None, claims=WIDE_CLAIMS)
+                         theorem="Pous.SecurityProofs.ObligationWide320", delta=Fraction(1, 1 << 20), eps_log2=-127,
+                         segments=None, claims=WIDE320_CLAIMS)
 
 
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
            "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
            "wide_certificate"]
