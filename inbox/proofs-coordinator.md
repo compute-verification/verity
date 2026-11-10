@@ -29169,3 +29169,27 @@ I am SPOTCROSS, `bc-620a35fa-6df3-5b43-9c93-59767f937835`. Base: `origin/queue/0
 - The records run of `Security/Proofs` waits for a tree where the two files build.
 
 **Next:** mend DrawnAt and ReadsAt against the candidate's `Code.lean` (reading #8354's `a53eb5d1686d` for `templateOk`), push, try again. My mailbox read at 16:20Z had no file for me.
+
+## WEIGHTSEC, Tue 10 Nov 16:44Z: PRF-506: read your 16:30Z message; the five runs are still running, each lock holds exactly its PR's own change, and I end my turn
+
+**Runs** [run, at 16:43Z]: all five running on vy-nebius-cpu-12 (pool `proofs`, Lean slots proofs/0 to proofs/4), none past its build yet.
+
+| PR | Scratch branch | Head | Run | ETA [guess] |
+|---|---|---|---|---|
+| #8224 | `cursor/proofs-cross-8224-a7c1` | `c6e50db7dcf0` | `r20261110-163617-ac46` | 17:00Z to 17:35Z |
+| #8400 | `cursor/proofs-cross-8400-b3e2` | `a4a92cd2d3a1` | `r20261110-163648-d3aa` | 17:00Z to 17:35Z |
+| #8226 | `cursor/proofs-cross-8226-c9d4` | `ae3c44da829b` | `r20261110-163650-7710` | by 17:50Z: it fetches its dependencies cold |
+| #8512 | `cursor/proofs-cross-8512-d5f6` | `a30e44b3ca22` | `r20261110-163652-99d6` | by 17:50Z: cold too |
+| #8527 | `cursor/proofs-cross-8527-e8a7` | `9b4fc83a133f` | `r20261110-163653-bd9c` | 17:00Z to 17:35Z |
+| #8261 | none | | none | waits on your answer |
+
+**Lock, before the runs** [run: a leaf-by-leaf diff of `Security/lean-audit.json`]. Each scratch branch's lock differs from the candidate's (for #8400, #8226 and #8527: from its base's crossing) by exactly the PR's own lock change: 75 leaves for #8224, 124 for #8512, 33 for #8400, none for #8226 and #8527. The only leaves outside it are the two `reads` digests of the modules both sides edited (`Definitions.WeightSecurity.Assumptions` and `Definitions.WeightSecurity.Guarantees`), which the merge driver derived for the merged files. No lock was edited by hand. Whether the check agrees with those two digests, and with `TheftServedTied` resting on `HonestUseHard` and `Simulable` as `domain` (my first entry), is what the runs decide.
+
+**#8261:** the local merge is aborted and nothing of it is pushed. Its two forms are in my first entry.
+
+**Left for when you resume me:**
+1. The five verdicts. A regenerated record is named in an entry, with why, before I commit it.
+2. #8261: on your answer, (A), (B) on #8224, (B) on #8400, or close.
+3. After the layout is on `main` and on your word: `tools/move/restack.py` on each, pushed once to its PR's branch.
+
+Correction: my first entry's checkpoint note is `20261110T1624Z-checkpoint-weightsec` (fixed in place). This one's is `20261110T1644Z-checkpoint-weightsec`.
