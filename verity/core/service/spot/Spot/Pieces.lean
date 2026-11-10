@@ -26,8 +26,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
   registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+* `second_interior_reads`: of that check's input, the statements' reads that rest on the interior's own values
+  (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
+* `replay_rows`: the rows the design's links' and wires' units read, from the replay block's Definition in a program
+  (`SecondStage.replayRows`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 * `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
@@ -650,6 +654,8 @@ def run (j : Json) : V Json := do
         throw "an interior names no links: the verifier derives them from the replay block's Definition"
       if (field? it "wires").isSome then
         throw "an interior names no wires: the verifier derives them from the replay block's Definition"
+      if (field? it "rows").isSome then
+        throw "an interior names no rows: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
                     statements, circuits } : Run.Interior))
@@ -658,15 +664,15 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
 
-/-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
-first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
-registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`') and wires
-(`replayWires`'), each null for none, the verdicts, whose verifiers of record report the sessions' reads
-(`Record.sessionRegistered`) and name the header, registered reads and sample each checked (`SecondStage.verifiedOf`),
-the reference header of each template's statement (`refs`, `{template: header}`, null for none) and the registered
-reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no template's), and the
-statements, null for none. -/
-def secondStatements (j : Json) : V Json := do
+/-- `second_stage.check`'s input, read: the two-stage form allowed or not (`allow`), the first stage's replay sample,
+the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
+second stage's units (`drawn`), the design's links (`replayLinks`') and wires (`replayWires`'), each null for none, and
+the rows their units read (`replayRows`'), null for none, the verdicts, whose verifiers of record report the sessions'
+reads (`Record.sessionRegistered`) and name the header, registered reads and sample each checked
+(`SecondStage.verifiedOf`), the reference header of each template's statement (`refs`, `{template: header}`, null for
+none) and the registered reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no
+template's), and the statements, null for none. -/
+private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
   let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
@@ -684,6 +690,11 @@ def secondStatements (j : Json) : V Json := do
     | ws => match SecondStage.wiresOf? ws with
       | some ws => pure (some ws)
       | none => throw "wires is null or a list of {template, port, writer, wport}, strings"
+  let rows ← match getD j "rows" with
+    | .null => pure #[]
+    | rs => match SecondStage.rowsOf? rs with
+      | some rs => pure rs
+      | none => throw "rows is null or a list of {template, port, per, runs}, runs [unit, count, row, step] naturals"
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
   let verdicts := entries (getD j "verdicts")
   unless verdicts.all fun (_, v) => (v matches .obj _) && (!(truthy (getD v "of_record") &&
@@ -706,8 +717,19 @@ def secondStatements (j : Json) : V Json := do
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
-      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires }
+      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows }
+  return (allow, own, stmts)
+
+/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/
+def secondStatements (j : Json) : V Json := do
+  let (allow, own, stmts) ← secondOwn j
   return (SecondStage.check allow own stmts).toJson
+
+/-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
+(`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/
+def secondInteriorReads (j : Json) : V Json := do
+  let (_, own, stmts) ← secondOwn j
+  return .arr (SecondStage.interiorReads own ((stmts.getD #[]).toList))
 
 /-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay
 block's descriptor id in it (`replay`) and the boundary registration's record; null for none. -/
@@ -728,6 +750,14 @@ def replayWires (j : Json) : V Json := do
   return match SecondStage.replayWires p.prog key with
     | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
+
+/-- `second_stage.replay_rows`' input to the rows the design's links' and wires' units read
+(`SecondStage.replayRows`): a program object and the replay block's descriptor id in it (`replay`). -/
+def replayRows (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return Json.arr ((SecondStage.replayRows p.prog key).map SecondStage.Rows.toJson)
 
 /-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
 of v2's inputs (`OneStageZk.fitsWhy`) and of a session's draw (`OneStageZk.drawFitsWhy`) a session's statement would hold
@@ -767,8 +797,9 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
-   ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),
-   ("replay_wires", replayWires),
+   ("select_second", selectSecond), ("second_statements", secondStatements),
+   ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
+   ("replay_wires", replayWires), ("replay_rows", replayRows),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
