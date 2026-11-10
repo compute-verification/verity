@@ -16,10 +16,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_layout
+from verity.spot.verifier.one_stage import registered as G
+from verity.commitments import hm96
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
 
 #: the widest row `row_width` picks, in leaves
 MAX_WORDS = 4096

@@ -6,7 +6,7 @@ import Mathlib.Tactic.Finiteness.Attr
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): every term, as `code_v1` codes it
 
-Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
+Definitions only. They mirror `verity/protocols/certifier/prover/window_charge.py`'s `reference_window` one for one, with
 each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of `window_code.code_window`'s
 segment for the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
 `arith_encode.py`'s references), and of the length terms' tail after it.

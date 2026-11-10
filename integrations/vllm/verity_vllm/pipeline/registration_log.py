@@ -28,8 +28,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registration as REG
-from verity.ml.circuits.types import Array, RecordType, Tuple, Type
+from verity.spot.verifier.one_stage import registration as REG
+from verity.circuits.types import Array, RecordType, Tuple, Type
 from verity_vllm.commit import registered_rows as RR
 
 

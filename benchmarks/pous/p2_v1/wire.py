@@ -1,9 +1,9 @@
-"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (`verity/core/protocols/pous/README.md`, "P2"): the builders the
+"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (`verity/protocols/pous/verifier/README.md`, "P2"): the builders the
 vectors are made with, and the reference verifier, `verify_audit`, which reads a setup and one audit transcript and returns
 the exact `FINAL` frame.
 
 A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py`, PoUS's verification tree
-(`verity.core.protocols.pous.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.ml.randomness`, with
+(`verity.protocols.pous.verifier.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.commitments.randomness`, with
 v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and the
 frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
 kit's, it decodes a public setup's blocks back to the committed `W`, and checks a private setup's declared root against the
@@ -16,7 +16,7 @@ import json
 from collections.abc import Mapping, MutableSet, Sequence
 from dataclasses import dataclass
 
-from verity.core.protocols.pous.verifier import MerkleTree, path_length, verify_path
+from verity.protocols.pous.verifier.verifier import MerkleTree, path_length, verify_path
 
 from . import reference as R
 

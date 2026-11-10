@@ -1,10 +1,10 @@
 """H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
-(`verity.core.protocols.spot.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
+(`verity.spot.device.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
 The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
 challenger started over a live epoch's layout, scheme `pouw_h1_challenger.SCHEME` and `pouw_h1_challenger.families` (S)
-as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
+as ``FAMILIES`` (`verity/composite/device/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
 (``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
@@ -33,12 +33,12 @@ import json
 import time
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
+from verity.spot.device import remote
+from verity.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

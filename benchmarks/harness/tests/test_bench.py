@@ -1009,8 +1009,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1096,7 +1096,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.core.protocols.pouw.salt import epoch_open_root
+    from verity.protocols.pouw.verifier.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 

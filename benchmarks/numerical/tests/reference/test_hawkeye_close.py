@@ -1,4 +1,4 @@
-"""The source-close evaluator against ``verity.ml.circuits.silicon.models`` and the hardware captures (test plan items a-d of lane WP1).
+"""The source-close evaluator against ``verity.definitions.silicon.models`` and the hardware captures (test plan items a-d of lane WP1).
 
 The exhaustive/pod counterpart is ``exhaustive_driver.py`` (recorded run, stage ``wp1.exhaustive``); these run in seconds.
 """
@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.silicon import models as S, term as T
-from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.definitions.silicon import models as S, term as T
+from verity.definitions.silicon.errors import InvalidArtifact
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import (
     boundary_groups,
