@@ -350,7 +350,7 @@ def verifier_flags(root: Path, lincheck: str | None) -> list[str]:
     sources it compiles, since a synced tree has no history: the column-major fold, and the structured lincheck when FC_LINCHECK
     leaves it on (unset or partial; `both` rejects unless it equals upstream's flat fold, `flat` is upstream's). A source that
     carries its change but none of the reviewed versions, or a circuit.rs that can't be read, is a change nobody reviewed."""
-    live = root / "verity/ml/flock/live/src"
+    live = root / "verity/flock/prover/live/src"
     flags: list[str] = []
     for name, mark, unreviewed, reviewed in VERIFIER_SOURCES:
         if name == "session_verify.rs" and (lincheck or "partial") != "partial":

@@ -16,7 +16,7 @@ import pytest
 
 from verity_flock import circuit as FC
 
-FLOCK = Path(__file__).resolve().parents[1]
+FLOCK = (Path(__file__).resolve().parents[3] / "flock" / "prover")
 LEAN = FLOCK.parents[2] / "verity/flock/verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit+plain-leaves"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock-backend's preflight check: a short integration check of verity/ml/flock on one GPU pod. Builds flock-pure-gpu with
+# flock-backend's preflight check: a short integration check of verity/flock/prover on one GPU pod. Builds flock-pure-gpu with
 # the CUDA prover (SM), then:
 #   CPU selftests at SELF (8 64): flock-pure-gpu on bf16-hopper, fp8-ada, fp8-hopper, bf16-ampere with blake3 and sha256 row
 #   leaves;
@@ -39,7 +39,7 @@ preflight() {  # name bin rel leaf gpu
   local name=$1 bin=$2 rel=$3 leaf=$4 g=$5
   for n in $SELF; do
     f=$W/inst-$rel-$leaf-$n.bin
-    [ -f $f ] || python3 -m verity_flock.instances $rel $n $f --procs $TH --leaf $leaf > /dev/null
+    [ -f $f ] || python3 -m verity.ml.flock.python.verity_flock.instances $rel $n $f --procs $TH --leaf $leaf > /dev/null
     python3 -c "from verity_flock import lowering; open('$W/net-$rel.txt','w').write(lowering.netlist('$rel'))"
     $bin selftest ${g:+--gpu} --instances $f --netlist $W/net-$rel.txt > $O/selftest-$name-$n.txt 2>&1
     s=$(grep -h '^SELFTEST' $O/selftest-$name-$n.txt | tail -1)

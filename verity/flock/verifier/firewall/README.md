@@ -4,7 +4,7 @@ The ZK server is the developer's only path from its workers to the auditor
 ([ARCHITECTURE.md](../../../../ARCHITECTURE.md)'s Glossary), trusted by the developer and by no one else. In a recursive
 session the workers prove the statement with Π_in, and the ZK server commits every message they send, masks, checks or
 fixes everything else, and releases Π_out's zero-knowledge proofs that V_in, Π_in's verifier, accepts, one per
-statement, on a fixed schedule. [Flock's live protocol](../../../ml/flock/live/PROTOCOL.md), §10, says what it computes.
+statement, on a fixed schedule. [Flock's live protocol](../../prover/live/PROTOCOL.md), §10, says what it computes.
 
 Its Lean is two packages, code and not analysis:
 

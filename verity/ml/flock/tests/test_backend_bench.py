@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from verity_flock import instances
+from verity.ml.flock.python.verity_flock import instances
 
 
 @pytest.mark.parametrize("relation", ["bf16-hopper", "fp8-ada"])
@@ -30,7 +30,7 @@ def test_frozen_set_digests_match_the_contract():
 
 def test_register_adds_the_union_bound_and_the_verifier(tmp_path):
     import argparse
-    from verity_flock.register import patch
+    from verity.ml.flock.python.verity_flock.register import patch
 
     doc = {"workload_fingerprint": {"N_subbatches": 4, "security": {"achieved_log2": -195.5}, "software": {"backend": {}}},
            "measurements": [{"name": "net.rtt_ms", "value": 1.42, "unit": "ms"}], "interaction": {"rtt_method": "coin wait"},

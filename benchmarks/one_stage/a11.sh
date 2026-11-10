@@ -28,7 +28,7 @@ command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --
 case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
-  cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
+  cached flock "$(tree_key verity/flock/prover/live verity/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
   cached lean "$(tree_key verity/flock/verifier)" build_lean > "$W/lean.dir" &
   rc=0
   for d in "$IN"/*.json.gz; do

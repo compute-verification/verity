@@ -1,10 +1,10 @@
 """The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``, or with ``--typed`` the typed statement
-``verity/flock-circuit/types``): one ``result.json`` per point, as ``verity_flock.ir_bench``
-does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity_flock.bench``, this reuses).
+``verity/flock-circuit/types``): one ``result.json`` per point, as ``verity.ml.flock.python.verity_flock.ir_bench``
+does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity.ml.flock.python.verity_flock.bench``, this reuses).
 
-    python -m verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
+    python -m verity.ml.flock.python.verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
         --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback] [--typed]
-    python -m verity_flock.circuit_bench ... --serve-plan --listen 0.0.0.0:7501        the verifier pod's side
+    python -m verity.ml.flock.python.verity_flock.circuit_bench ... --serve-plan --listen 0.0.0.0:7501        the verifier pod's side
 
 A point is the first ``total`` instances of the input set, proved in sequential sub-batches of ``--per-proof``. The prover stages
 its instance files (rows included); the verifier stages only its own public files (roots, row digests, outputs; no row) from its
@@ -229,7 +229,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": a.meta["statement"], "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
                               "circuit_format": a.meta["format"], "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
-                              "flock": "succinctlabs/flock b684b12 + verity/ml/flock/flock-link-b684b12.patch + cuda_circuit_patch.py"},
+                              "flock": "succinctlabs/flock b684b12 + verity/flock/prover/flock-link-b684b12.patch + cuda_circuit_patch.py"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the composite circuit are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its rows and evaluates every unit afresh (the witness bucket) before proving",
@@ -322,9 +322,9 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
 
 
 def main(argv=None) -> int:
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
-    ap = argparse.ArgumentParser(prog="verity_flock.circuit_bench")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.circuit_bench")
     ap.add_argument("--template", required=True)
     ap.add_argument("--input-set", required=True)
     ap.add_argument("--art", default=None, help="the input set's art: id, recorded in the fingerprint")

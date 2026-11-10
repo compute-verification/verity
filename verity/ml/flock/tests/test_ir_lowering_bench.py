@@ -11,7 +11,7 @@ P = pytest.importorskip("verity.definitions.registry.prims")
 from test_ir_lowering import LOWERED, REG, SLICES, _check_set  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity_flock.input_sets import InputSet  # noqa: E402
+from verity.ml.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 
 INGRESS = {"MODEL": "m", "LP": 3, "V": 1000}
@@ -188,7 +188,7 @@ def test_attention_key_classes_and_the_class_manifest(tmp_path):
     import hashlib
     import json
 
-    from verity_flock import ir_bench
+    from verity.ml.flock.python.verity_flock import ir_bench
     from verity_flock.templates import attention_head as A
 
     assert [A.key_class(t) for t in (1, 128, 129, 256, 257, 287, 512, 513)] == [(1, 128)] * 2 + [(129, 256)] * 2 + [(257, 512)] * 3 + [(513, 1024)]
@@ -212,11 +212,11 @@ def test_attention_key_classes_and_the_class_manifest(tmp_path):
 
 def test_an_ir_run_result_is_a_point_not_a_second_cell():
     """The runner publishes a run's result.json under its own kind: ir_bench marks it a bench-point/v1 (a known kind), so the
-    cell's one bench-result/v1 is bench.cell register's, and verity_flock.register drops the kind it read."""
+    cell's one bench-result/v1 is bench.cell register's, and verity.ml.flock.python.verity_flock.register drops the kind it read."""
     from pathlib import Path
 
     from research.store.kinds import KINDS
-    from verity_flock import ir_bench, register
+    from verity.ml.flock.python.verity_flock import ir_bench, register
 
     assert ir_bench.POINT_KIND == "bench-point/v1" and ir_bench.POINT_KIND in KINDS
     assert 'raw.pop("kind", None)' in Path(register.__file__).read_text()

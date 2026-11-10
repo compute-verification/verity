@@ -1,9 +1,9 @@
 """The backend sweep's work lists, and a row's whole-row figure from `class_statement`'s per-shape records.
 
-    python -m verity_flock.class_sweep plan GRAPH_DIR OUT [--full-row 101] [--per-doubling 24] [--pods l40s=3,h100=1]
-    python -m verity_flock.class_sweep rollup RESULTS.jsonl... --total-ands N [--counts COUNTS.json...] [--total-units N]
+    python -m verity.ml.flock.python.verity_flock.class_sweep plan GRAPH_DIR OUT [--full-row 101] [--per-doubling 24] [--pods l40s=3,h100=1]
+    python -m verity.ml.flock.python.verity_flock.class_sweep rollup RESULTS.jsonl... --total-ands N [--counts COUNTS.json...] [--total-units N]
                                               [--native-tensor S] [--native-memory S] [--row R] [--digest D] [--json]
-    python -m verity_flock.class_sweep regroup NEW.program.json COUNTS.json... --out NEW.counts.json
+    python -m verity.ml.flock.python.verity_flock.class_sweep regroup NEW.program.json COUNTS.json... --out NEW.counts.json
 
 ``plan`` reads served rows' program graphs (``vllm-program-graph/v1``). Per served hardware it lists every Call Definition of the
 rows outside the token-select Calls, with attention's key counts subsampled per head configuration (`grid`), deduplicated across

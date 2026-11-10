@@ -79,12 +79,12 @@ def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_
         _step("lean-build", "skipped"), _step("lean-agreement", seconds=900.0), _step("lean-changed", "stopped", None),
         _step("lean-audit:verity/flock/verifier", seconds=120.0, cache={"hit": True}), "not a step"],
         "reuse": {"steps": {"lean-audit": {"reran": ["Security", "Security/Proofs"], "reused": ["X"]},
-                            "lean-suites": {"reran": [{"suite": "verity/ml/flock", "seconds": 1100.0, "forced_by": []},
+                            "lean-suites": {"reran": [{"suite": "verity/flock/prover", "seconds": 1100.0, "forced_by": []},
                                                       {"suite": "benchmarks/pouw", "seconds": None}]}}}}
     got = L.check_tasks("r20261028-100000-cccc", _doc(CHECK_ARGV, host="vy-nebius-cpu-1"), meta)
     assert [(t["kind"], t["packages"], t["minutes"], t["outcome"]) for t in got] == [
         ("lean-audit", ["Security", "Security/Proofs"], 30.0, "passed"),
-        ("lean-suites", ["verity/ml/flock"], 1100 / 60, "failed"),
+        ("lean-suites", ["verity/flock/prover"], 1100 / 60, "failed"),
         ("lean-suites", ["benchmarks/pouw"], None, "unfinished"),
         ("lean-changed", [L.NONE], None, "unfinished"),
         ("lean-audit", ["verity/flock/verifier"], 2.0, "passed")]
@@ -136,7 +136,7 @@ def test_the_summary_is_per_kind_and_package_with_all_first_and_records_wait_and
 def test_the_table_names_each_task_over_the_limit_the_longest_first():
     tasks = [_rec("r20261028-100000-aaaa", 20.0, work=5.0), _rec("r20261028-100000-bbbb", 90.0, "verity/core/protocols/remote_bandwidth/lean"),
              _rec("r20261028-100000-dddd", 3.0), _rec("r20261028-100000-eeee", None),
-             {"kind": "lean-suites", "packages": ["verity/ml/flock"], "run": "r20261028-100000-cccc", "node": "n", "minutes": 33.0,
+             {"kind": "lean-suites", "packages": ["verity/flock/prover"], "run": "r20261028-100000-cccc", "node": "n", "minutes": 33.0,
               "outcome": "failed"}]
     out = L.render(L.summary(tasks), tasks, T.replace(hour=0), T)
     assert out.startswith("Lean tasks that ended 2026-10-28 00:00Z to 2026-10-28 12:00Z")

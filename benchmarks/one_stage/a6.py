@@ -54,7 +54,7 @@ from verity.spot.verifier.python.one_stage import draw as D, partition as P, reg
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
-#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`): a statement's dense size
+#: flock-circuit's spec shape (`verity/flock/prover/live/src/circuit.rs`'s `shape_in_range`): a statement's dense size
 #: m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
 WINDOW_OF = ("seeded s8 rows quantized as benchmarks/ppl/steps.py's quant_rows (benchmarks/served_units/stage.py's s8-coord "

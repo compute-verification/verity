@@ -42,7 +42,7 @@ def staged(tmp_path_factory):
     verifier's own reads file and the honest statement."""
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-bit-rows")
@@ -83,7 +83,7 @@ def one_value(tmp_path_factory):
     statement."""
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")

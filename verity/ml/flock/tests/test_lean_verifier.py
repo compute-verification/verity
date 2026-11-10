@@ -899,7 +899,7 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
@@ -942,7 +942,7 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     from verity_flock.ir_lower import TABLES
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
@@ -1020,7 +1020,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])

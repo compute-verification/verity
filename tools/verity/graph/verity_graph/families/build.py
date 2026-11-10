@@ -15,9 +15,9 @@
   since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite that declares
   `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its `worker_gb`); its
   timeout is its own `timeout_s`, else the family's.
-- `flock-circuit-build:verity/ml/flock/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
+- `flock-circuit-build:verity/flock/prover/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
   builds. It outputs nothing: `cargo check` builds nothing a reader runs.
-- `flock-rust-tests:verity/ml/flock/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
+- `flock-rust-tests:verity/flock/prover/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
   itself: it reads nothing of flock-circuit-build's.
 
 A tree without the verifier's Lean package or its pin lists none of the Lean tasks, as check skips them there; one without
@@ -32,7 +32,7 @@ from .test_file import Imports, Layout, Tree, discover
 
 LEAN = "verity/flock/verifier"
 VERIFIER = "verity/ml/flock/verifier"
-FLOCK = "verity/ml/flock"
+FLOCK = "verity/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/verity/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their

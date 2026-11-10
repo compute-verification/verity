@@ -1,6 +1,6 @@
 """Statement negatives for a Flock cell's instance files, run with the cell's own binary against a loopback verifier.
 
-    python -m verity_flock.negatives --bin flock-pure-gpu --relation R --vus N --leaf sha256|blake3 --out DIR [--prove-arg --gpu]
+    python -m verity.ml.flock.python.verity_flock.negatives --bin flock-pure-gpu --relation R --vus N --leaf sha256|blake3 --out DIR [--prove-arg --gpu]
 
 Each case writes the verifier's instance file from the recipe, changes it the way a cheating prover would need the
 verifier to accept, and checks that an honest prover's session over the original data is refused:
@@ -72,7 +72,7 @@ def session(a, prover_file: Path, verifier_file: Path, d: Path, port: int) -> di
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_flock.negatives")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.negatives")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--relation", required=True)
     ap.add_argument("--vus", type=int, default=64)

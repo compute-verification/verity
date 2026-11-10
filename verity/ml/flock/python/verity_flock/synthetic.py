@@ -21,15 +21,15 @@ import numpy as np
 
 from verity.commitments.randomness import Key, derive
 
-from verity_flock import input_sets as IS
+from verity.ml.flock.python.verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 
 SOURCE = b"verity input-set synthetic"
 DOMAIN = "verity/input-sets/synthetic/v1"
 MAX_DRAW_FACTOR = 4
 #: the sources a set's recipe depends on, each by its path under its import package
-_SOURCES = {"verity_flock/subcircuit_templates.py": TM.__file__, "verity_flock/synthetic.py": __file__,
-            "verity_flock/input_sets.py": IS.__file__}
+_SOURCES = {"verity_flock/subcircuit_templates.py": TM.__file__, "verity/ml/flock/python/verity_flock/synthetic.py": __file__,
+            "verity/ml/flock/python/verity_flock/input_sets.py": IS.__file__}
 
 
 def key_for(sub: TM.Subcircuit, seed: int) -> Key:
@@ -96,7 +96,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     ports: dict[str, list[np.ndarray]] = {p.name: [d.inputs[p.name] for _j, d, _o in kept] for p in sub.inputs}
     ports.update({p.name: [o[p.name] for _j, _d, o in kept] for p in sub.outputs})
     rows = [[i, None, None, None, None, None, None, "synthetic", {"draw": jj, **d.sub}] for i, (jj, d, _o) in enumerate(kept)]
-    recipe = {"generator": "verity_flock.synthetic", "template": sub.template.id, "subcircuit": sub.id, "parameters": sub.params,
+    recipe = {"generator": "verity.ml.flock.python.verity_flock.synthetic", "template": sub.template.id, "subcircuit": sub.id, "parameters": sub.params,
               "seed": int(seed), "n": n, "key": f"verity.commitments.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
               "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
               "samplers": sub.recipe, "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",

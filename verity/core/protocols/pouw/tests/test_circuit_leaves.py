@@ -3,7 +3,7 @@ are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor'
 over `sha512/row-seg/v1` or `sha512/row/v2` at every padding and segment edge, the pinned row-seg rows are rebuilt from the
 spec and core's own row-seg vectors are PoUW's rows, each unit's statement rows are its ports' schemas, and the tile digest
 in gates is the pinned one and `pearl_c.leaf`.  Flock's tests recompute every row's vector through its own ports
-(``verity/ml/flock/tests/test_pouw_rows.py``)."""
+(``verity/flock/prover/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
 import hashlib

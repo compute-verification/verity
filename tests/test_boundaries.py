@@ -202,7 +202,7 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
 SPOT_TREES = ("verity/spot/verifier/python", "verity/spot/verifier", "verity/flock/verifier",
-              "verity/ml/flock")
+              "verity/flock/prover")
 SPOT_LEAN = ("verity/spot/verifier", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
@@ -247,7 +247,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
         "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/test_backend_bench.py", "verity/ml/flock/tests/test_class_statement.py",
+        "verity/ml/flock/tests/test_backend_bench.py", "verity/flock/prover/tests/test_class_statement.py",
         "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools

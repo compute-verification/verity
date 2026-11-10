@@ -89,8 +89,8 @@ OUTPUTS = {"lean-build": [f"lean-build:{VERIFIER}/.lake/build"],
 #: cache keys where the task runs, as `PLACED` is set there
 STEP_INPUTS = {
     "lean-build": [VERIFIER],
-    "flock-circuit-build": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
-    "flock-rust-tests": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
+    "flock-circuit-build": ["verity/flock/prover/check_build.sh", "verity/flock/prover/live", "verity/flock/prover/flock-*-b684b12.patch"],
+    "flock-rust-tests": ["verity/flock/prover/check_build.sh", "verity/flock/prover/live", "verity/flock/prover/flock-*-b684b12.patch"],
     "lean-agreement": ["verity/ml/flock/verifier", VERIFIER],
 }
 #: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit the same with a

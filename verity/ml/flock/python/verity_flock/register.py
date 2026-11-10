@@ -1,6 +1,6 @@
 """Re-register a Flock cell's ``bench-result/v1`` from its recorded runs, with what the red team and `bench.interaction` require.
 
-    python -m verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
+    python -m verity.ml.flock.python.verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
         [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
 
 then put in the evidence store as ``bench-result/v1`` with ``meta.json``, its run files referenced, preserved.
@@ -110,7 +110,7 @@ def patch(doc: dict, prover: dict, verifier: dict, a) -> dict:
 def main(argv=None) -> int:
     from verity_numerical.bench import contract
 
-    ap = argparse.ArgumentParser(prog="verity_flock.register")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.register")
     ap.add_argument("--prover-run", required=True)
     ap.add_argument("--verifier-run", required=True)
     ap.add_argument("--out", required=True)

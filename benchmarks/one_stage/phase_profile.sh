@@ -79,7 +79,7 @@ if has build; then
 fi
 if has test; then
   $PY -c 'import pytest' 2> /dev/null || $HOME/.local/bin/uv pip install -q --python $PY pytest
-  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/ml/flock/tests/test_arena_layout.py verity/ml/flock/tests/test_ligerito_folds.py}
+  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/flock/prover/tests/test_arena_layout.py verity/flock/prover/tests/test_ligerito_folds.py}
   G=$W/ghash-b684b12
   [ -d $G/cuda-ghash ] || for F in $W/fw/*/flock; do mkdir -p $G && git -C $F archive b684b12 cuda-ghash | tar -x -C $G && break; done
   (cd verity/ml/flock/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \

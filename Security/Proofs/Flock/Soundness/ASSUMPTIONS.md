@@ -297,7 +297,7 @@ prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
 a verifier that chooses its coins only because the challenger commits every coin at `Hello`, before the prover's first
-message (`verity/ml/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
+message (`verity/flock/prover/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the
 malicious-verifier claim rests on beyond the theorems.

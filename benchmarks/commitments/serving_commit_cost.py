@@ -32,7 +32,7 @@ import numpy as np
 
 from verity.commitments import hm96
 from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
-from verity_flock.input_sets import InputSet
+from verity.ml.flock.python.verity_flock.input_sets import InputSet
 from verity.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"

@@ -43,7 +43,7 @@ trap 'rm -rf $S' EXIT
 export PATH=$HOME/.elan/bin:$PATH
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
-. verity/ml/flock/pod/challenger.sh
+. verity/flock/prover/pod/challenger.sh
 challenger_build
 LSHA=$(cd verity/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
@@ -58,8 +58,8 @@ LP=$!
 
 # the CPU prover, cached per pod under its sources' key (91-plain-hidden.sh's)
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then

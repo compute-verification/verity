@@ -191,7 +191,7 @@ import a5_memo as AM  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
-from verity_flock.input_sets import InputSet  # noqa: E402
+from verity.ml.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.spot.device import coins as CC

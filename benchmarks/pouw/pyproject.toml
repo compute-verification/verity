@@ -201,7 +201,7 @@ paths = [
     "verity/spot/verifier/python/one_stage",
     "verity/circuits",
     "verity/commitments/frame_v3",
-    "verity/ml/flock/python/verity_flock",
+    "verity/flock/prover/python/verity_flock",
 ]
 
 [[tool.verity.tests.reads]]

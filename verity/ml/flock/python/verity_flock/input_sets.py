@@ -10,15 +10,15 @@ A set is a directory ``<name>/`` (the exporter writes it under ``<out>/sets/``),
   ``index.json``               one row per instance, columns :data:`INDEX_COLUMNS` (a captured row: the VU it came from; a synthetic
                                row: ``source = "synthetic"`` and ``sub = {"draw": j, ...}``)
 
-Captured sets carry ``schema = "vllm-vu-set/v1"``; synthetic ones (``verity_flock.synthetic``) ``"input-set/v1"``, with the
+Captured sets carry ``schema = "vllm-vu-set/v1"``; synthetic ones (``verity.ml.flock.python.verity_flock.synthetic``) ``"input-set/v1"``, with the
 same fields.  :data:`PROVENANCE_FIELDS` are every set's provenance keys: a synthetic set writes all of them (the row, model and run
 keys ``None``), and :func:`provenance` fills ``source`` (``captured`` for a ``vllm-vu-set/v1``) and ``recipe`` (``None``) for a set
 that predates them.  A set's subcircuit is derived from its ``relation`` (``templates.identify``), never stored beside it.
 
-    python -m verity_flock.input_sets show DIR
-    python -m verity_flock.input_sets verify DIR [--lo L --hi H]      files against the manifest, then every instance
+    python -m verity.ml.flock.python.verity_flock.input_sets show DIR
+    python -m verity.ml.flock.python.verity_flock.input_sets verify DIR [--lo L --hi H]      files against the manifest, then every instance
                                                                                 re-evaluated by the IR evaluator
-    python -m verity_flock.input_sets meta DIR                        the ``input-set/v1`` store meta (``research data put``)
+    python -m verity.ml.flock.python.verity_flock.input_sets meta DIR                        the ``input-set/v1`` store meta (``research data put``)
 """
 from __future__ import annotations
 
@@ -251,7 +251,7 @@ def subset(src: str | Path, dst_root: str | Path, lo: int, hi: int) -> Path:
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_flock.input_sets")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.input_sets")
     sp = ap.add_subparsers(dest="cmd", required=True)
     for name in ("show", "verify", "meta"):
         p = sp.add_parser(name)

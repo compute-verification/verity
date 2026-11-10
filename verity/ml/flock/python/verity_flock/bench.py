@@ -1,9 +1,9 @@
 """The TABLES.md batch sweep for ``flock-pure``: one ``result.json`` per point, stamped with its ``sweep`` and ``protocol``.
 
-    python -m verity_flock.bench --relation bf16-hopper --bin target/release/flock-pure --out-dir D \\
+    python -m verity.ml.flock.python.verity_flock.bench --relation bf16-hopper --bin target/release/flock-pure --out-dir D \\
         [--start 1024] [--max 65536] [--runs 5] [--verifier HOST:PORT] [--procs N]
 
-Each point writes its instance set range (``verity_flock.instances``), starts a live verifier on loopback (unless
+Each point writes its instance set range (``verity.ml.flock.python.verity_flock.instances``), starts a live verifier on loopback (unless
 ``--verifier`` names one that serves the same range), and runs ``flock-pure prove --warm 1 --runs R --dump``: one untimed
 session, then ``R`` timed sessions, each committing its batch afresh (row digests and the three frame-v3 roots) before
 proving. A session's time is its prover's end to end: commitment, rows, both reps with their coin waits; the verifier's
@@ -340,7 +340,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                               "statement": first.get("statement") or "verity/flock-pure/v1", "prover": first.get("prover") or "cpu-union",
                               "prove_args": a.prove_arg,
                               "lowering_sha256": lowering.PINS[a.relation], "lowering_version": lowering_version(),
-                              "flock": "succinctlabs/flock b684b12 + verity/ml/flock/flock-link-b684b12.patch"},
+                              "flock": "succinctlabs/flock b684b12 + verity/flock/prover/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds); every "
                       "timed session commits its batch and builds its rows afresh",
@@ -438,7 +438,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_flock.bench")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.bench")
     ap.add_argument("--relation", required=True, choices=sorted(lowering.PIPES))
     ap.add_argument("--bin", required=True)
     ap.add_argument("--out-dir", required=True)

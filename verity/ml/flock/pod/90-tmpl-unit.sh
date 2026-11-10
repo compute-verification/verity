@@ -61,13 +61,13 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
-. verity/ml/flock/pod/challenger.sh
+. verity/flock/prover/pod/challenger.sh
 challenger_build
 
 # the CPU prover, cached per pod under its sources' key (76-read-gadget.sh's)
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
@@ -87,11 +87,11 @@ CHALLENGER_PY=python3
 challenger_built || exit 1
 
 D=$S/stage; N=8; LAYOUT=${LAYOUT:-iv}
-python3 verity/ml/flock/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
+python3 verity/flock/prover/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 $UNIT_BIN $D/unit.tmpl --layout $LAYOUT --out $D/unit.placed > $O/tmpl.txt 2>&1 || { cat $O/tmpl.txt; exit 1; }
 grep -h '^TMPL ' $O/tmpl.txt | cut -c6- > $D/tmpl.json
-python3 verity/ml/flock/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
+python3 verity/flock/prover/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 mkdir -p $D/tables
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)

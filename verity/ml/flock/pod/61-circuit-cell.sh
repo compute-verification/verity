@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # flock-circuit: a Flock cell of an IR template under verity/flock-circuit through the bench spine
-# (bench.drivers.c_interactive, relation circuit:<template>): the sweep verity_flock.circuit_bench, the prover on the line's GPU, the
+# (bench.drivers.c_interactive, relation circuit:<template>): the sweep verity.ml.flock.python.verity_flock.circuit_bench, the prover on the line's GPU, the
 # verifier on a separate pod serving its own public files (no rows). The cell's input set arrives as inputs/<digest>.tar.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7501)
@@ -28,17 +28,17 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 # the challengers' Lean, where this pod serves sessions: the verifier role's servers and LOOPBACK=1's
 if [ "$FLOCK_CHALLENGER" = 1 ] && { [ $ROLE = verifier ] || [ -n "${LOOPBACK:-}" ]; }; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=python3 CHALLENGER_WORK=$O/challenger-build
-  . verity/ml/flock/pod/challenger.sh
+  . verity/flock/prover/pod/challenger.sh
   challenger_build; challenger_built || exit 1
 fi
 rm -rf $W/set && mkdir -p $W/set && tar -xf $(ls $I/*.tar | head -1) -C $W/set || exit 1
 SET=$(dirname $(find $W/set -name manifest.json | head -1))
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
-  python3 -m verity_flock.circuit_bench --template $TEMPLATE --input-set $SET --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER \
+  python3 -m verity.ml.flock.python.verity_flock.circuit_bench --template $TEMPLATE --input-set $SET --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER \
     --runs $RUNS --serve-plan --listen 0.0.0.0:7501 --operator ${OPERATOR:-flock-circuit-verifier-pod} 2>&1 | tee $O/serve-plan.log
 else
-  python3 -m verity_flock.circuit_bench --template $TEMPLATE --input-set $SET ${ART:+--art $ART} --bin $B --out-dir $O/cell --points "$POINTS" \
+  python3 -m verity.ml.flock.python.verity_flock.circuit_bench --template $TEMPLATE --input-set $SET ${ART:+--art $ART} --bin $B --out-dir $O/cell --points "$POINTS" \
     --per-proof $PER --runs $RUNS --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-circuit-verifier-pod} --prove-arg=--gpu \
     ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
 fi

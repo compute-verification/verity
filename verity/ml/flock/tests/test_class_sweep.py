@@ -1,9 +1,9 @@
-"""The backend sweep's work lists and whole-row figures (`verity_flock.class_sweep`), on synthetic graphs and records."""
+"""The backend sweep's work lists and whole-row figures (`verity.ml.flock.python.verity_flock.class_sweep`), on synthetic graphs and records."""
 from __future__ import annotations
 
 import math
 
-from verity_flock import class_sweep as CW
+from verity.ml.flock.python.verity_flock import class_sweep as CW
 
 ATT = "Attention_v3{{T={t},NH={nh},KVH=8,D=64,BN=64}}"
 

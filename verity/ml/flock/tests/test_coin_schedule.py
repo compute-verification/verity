@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-PROVER = ROOT / "verity/ml/flock/live/src/bin/flock-circuit.rs"
+PROVER = ROOT / "verity/flock/prover/live/src/bin/flock-circuit.rs"
 VERIFIER = ROOT / "verity/flock/verifier/Flock/Zk.lean"
 
 ROUNDS_LOG, BLOCK = 9, 512

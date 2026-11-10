@@ -48,7 +48,7 @@ python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$LEAF" "$SETDIR" "${YMODEL:-}
 import sys, json
 from argparse import Namespace
 from pathlib import Path
-from verity_flock import bench
+from verity.ml.flock.python.verity_flock import bench
 rel, per, s, out, procs, leaf = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
 a = Namespace(relation=rel, procs=procs, cache=None, leaf=leaf, set=sys.argv[7], y_model=bool(sys.argv[8]), k=int(sys.argv[9]))
 for d in sorted(s.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):

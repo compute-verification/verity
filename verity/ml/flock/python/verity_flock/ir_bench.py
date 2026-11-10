@@ -1,9 +1,9 @@
 """The TABLES sweep for ``flock-ir-frame`` (``verity/flock-ir-frame/v1``): one ``result.json`` per point, stamped with its
-``sweep`` and ``protocol``, as ``verity_flock.bench`` does for the GEMM cells (whose guard, probes and helpers this reuses).
+``sweep`` and ``protocol``, as ``verity.ml.flock.python.verity_flock.bench`` does for the GEMM cells (whose guard, probes and helpers this reuses).
 
-    python -m verity_flock.ir_bench --template rope-head --input-set DIR --bin target/release/flock-ir-frame --out-dir D \\
+    python -m verity.ml.flock.python.verity_flock.ir_bench --template rope-head --input-set DIR --bin target/release/flock-ir-frame --out-dir D \\
         --points "64 128 256 512 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback]
-    python -m verity_flock.ir_bench ... --serve-plan --listen 0.0.0.0:7400        the verifier pod's side
+    python -m verity.ml.flock.python.verity_flock.ir_bench ... --serve-plan --listen 0.0.0.0:7400        the verifier pod's side
 
 A point is the first ``total`` instances of the input set, proved in sequential sub-batches of ``--per-proof``. Each side stages
 its own instance files from its own copy of the input set (``verity_flock.ir_frame.stage``; the verifier never reads the
@@ -273,7 +273,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": statement, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
                               "unit": (low.name.rsplit("/", 1)[0] + f"/class-t{a.klass.lo}-{a.klass.hi}") if a.klass else low.name,
-                              "flock": "succinctlabs/flock b684b12 + verity/ml/flock/flock-link-b684b12.patch"},
+                              "flock": "succinctlabs/flock b684b12 + verity/flock/prover/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its batch's rows afresh (commit.seconds) before proving",
@@ -366,9 +366,9 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
 
 
 def main(argv=None) -> int:
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
-    ap = argparse.ArgumentParser(prog="verity_flock.ir_bench")
+    ap = argparse.ArgumentParser(prog="verity.ml.flock.python.verity_flock.ir_bench")
     ap.add_argument("--template", required=True)
     ap.add_argument("--input-set", required=True)
     ap.add_argument("--art", default=None, help="the input set's art: id, recorded in the fingerprint")
@@ -457,7 +457,7 @@ def main(argv=None) -> int:
             if pd.is_relative_to(rd):
                 doc["artifacts"] = [str(pd.relative_to(rd))]
             # the runner publishes the run's result.json as its own kind: a point, not a cell. The cell's one bench-result/v1 is
-            # bench.cell register's (verity_flock.register drops the kind)
+            # bench.cell register's (verity.ml.flock.python.verity_flock.register drops the kind)
             Path(rd, "result.json").write_text(json.dumps(dict(doc, kind=POINT_KIND), indent=1, default=str))
     summary = {"id": sid, "template": a.template, "rule": RULE, "stopped": stop, "plateau_total": best["total"],
                "points": [{k: x.get(k) for k in ("total", "ok", "vu_per_second", "wall_s", "peak_rss", "dir", "err")} for x in points]}

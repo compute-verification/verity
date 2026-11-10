@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # flock-backend: a Flock Table 2 cell with flock-gpu-link's flock-pure-gpu (verity/flock-pure-block): the TABLES sweep through
-# verity_flock.bench, prover on the line's GPU, verifier on a separate same-datacenter pod.
+# verity.ml.flock.python.verity_flock.bench, prover on the line's GPU, verifier on a separate same-datacenter pod.
 #   ROLE=prover   REL POINTS PER RUNS VERIFIER=host:port  (GPU build; sweep against the verifier)
 #   ROLE=verifier REL POINTS PER RUNS OPERATOR=lane       (CPU build; its own instance files; serves the prover's order on :7400)
 #   SET=name.tar  a spine input set sent with the run (inputs/name.tar or .tgz: its manifest.json and port files, at the top
@@ -52,10 +52,10 @@ fi
 [ -n "${YMODEL:-}" ] && SRC="$SRC --y-model"
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
-  python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER --runs $RUNS \
+  python3 -m verity.ml.flock.python.verity_flock.bench --relation $REL --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER --runs $RUNS \
     --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} $SRC --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-backend-verifier-pod} 2>&1 | tee $O/serve-plan.log
 else
-  python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/cell --points "$POINTS" --per-proof $PER --runs $RUNS \
+  python3 -m verity.ml.flock.python.verity_flock.bench --relation $REL --bin $B --out-dir $O/cell --points "$POINTS" --per-proof $PER --runs $RUNS \
     --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} $SRC --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-backend-verifier-pod} --prove-arg=--gpu ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
 fi
 true

@@ -75,7 +75,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()

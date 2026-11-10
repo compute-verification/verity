@@ -31,7 +31,7 @@ export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 
 N=${N:-1}; D=$S/stage; X=$O/fixture; mkdir -p $X
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 verity/flock/prover/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1

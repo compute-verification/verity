@@ -201,7 +201,7 @@ class Sets:
         return tars[0][1] if tars else None
 
     def open(self, tar_sha: str, name: str):
-        from verity_flock.input_sets import InputSet
+        from verity.ml.flock.python.verity_flock.input_sets import InputSet
         if not self.has(tar_sha, name):
             raise Missing(f"inputs/set.tar ({tar_sha[:16]}): {name}/manifest.json")
         return InputSet.open(str(self.dir(tar_sha) / name))
@@ -1457,7 +1457,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     file's shared-row tables. The audit took the sessions and their roots (the LIVE line's), not the served sample, and read
     the roots the Lean verdict opened registered reads against; `audit_negatives` re-decided it with the record's roots as
     the sessions'."""
-    from verity_flock.input_sets import InputSet
+    from verity.ml.flock.python.verity_flock.input_sets import InputSet
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat

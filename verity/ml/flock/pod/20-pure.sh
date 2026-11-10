@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# flock-backend: build flock-pure into a flock b684b12 checkout (flock-link's patch, verity/ml/flock/live as crates/flock-live,
+# flock-backend: build flock-pure into a flock b684b12 checkout (flock-link's patch, verity/flock/prover/live as crates/flock-live,
 # verity_unit.rs into flock-prover), then (MODE):
 #   selftest  flock-pure's negatives at SELF_VUS for REL (in-process verifier)
-#   sweep     the TABLES.md sweep (verity_flock.bench) from START, RUNS timed sessions per point, loopback verifier
+#   sweep     the TABLES.md sweep (verity.ml.flock.python.verity_flock.bench) from START, RUNS timed sessions per point, loopback verifier
 #   serve     only a verifier for REL at SERVE_VUS on 0.0.0.0:7400 (a verifier pod; VERIFIER=host:port on the prover)
 #   replay    re-verify recorded sessions: REPLAY_DIR holds pN-*/ point dirs (instances regenerated here, not read)
 # env: REL=bf16-hopper MODE="selftest sweep" SELF_VUS="8 64" START=1024 MAX=65536 RUNS=5 VERIFIER= SERVE_VUS=4096 CUDA=
@@ -10,7 +10,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 W=/workspace/flock-backend; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/flock-backend}/out; mkdir -p $W $O
-REPO=$(pwd); SRC=$REPO/verity/ml/flock
+REPO=$(pwd); SRC=$REPO/verity/flock/prover
 REL=${REL:-bf16-hopper}; MODE=${MODE:-selftest sweep}
 command -v cc >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential pkg-config >/dev/null; }
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
@@ -48,21 +48,21 @@ PIN=$(awk '$1 == "'$REL'" {print $2}' $O/lowering.txt)
 for mode in $MODE; do case $mode in
 selftest)
   for v in ${SELF_VUS:-8 64}; do
-    python3 -m verity_flock.instances $REL $v $O/inst-$REL-$v.bin --procs $TH | tee -a $O/instances.txt
+    python3 -m verity.ml.flock.python.verity_flock.instances $REL $v $O/inst-$REL-$v.bin --procs $TH | tee -a $O/instances.txt
     $B selftest --instances $O/inst-$REL-$v.bin --netlist $O/net-$REL.txt --netlist-other $O/net-$OTHER.txt 2>$O/selftest-$v.err \
       | tee $O/selftest-$REL-$v.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-240
   done
   grep -h '^NEG' $O/selftest-$REL-*.txt > $O/negatives-$REL.tsv ;;
 sweep)
-  python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/sweep-$REL --start ${START:-1024} --max ${MAX:-65536} \
+  python3 -m verity.ml.flock.python.verity_flock.bench --relation $REL --bin $B --out-dir $O/sweep-$REL --start ${START:-1024} --max ${MAX:-65536} \
     --runs ${RUNS:-5} --procs $TH ${VERIFIER:+--verifier $VERIFIER} 2>&1 | tee $O/sweep-$REL.log | cut -c1-600 ;;
 serve)
-  python3 -m verity_flock.instances $REL ${SERVE_VUS:-4096} $O/inst-$REL-serve.bin --procs $TH
+  python3 -m verity.ml.flock.python.verity_flock.instances $REL ${SERVE_VUS:-4096} $O/inst-$REL-serve.bin --procs $TH
   $B serve --listen 0.0.0.0:7400 --out $O/sessions-$REL --pin $PIN --instances $O/inst-$REL-serve.bin --netlist $O/net-$REL.txt ;;
 replay)
   for d in ${REPLAY_DIR:?}/p*-*/; do
     n=$(basename $d | cut -d- -f2)
-    python3 -m verity_flock.instances $REL $n $O/inst-$REL-$n.bin --procs $TH >/dev/null
+    python3 -m verity.ml.flock.python.verity_flock.instances $REL $n $O/inst-$REL-$n.bin --procs $TH >/dev/null
     for s in $d/sessions/p*/; do
       i=$(basename $s | cut -c2-5); r=$(printf "%02d" $((10#$i)))
       $B replay --instances $O/inst-$REL-$n.bin --netlist $O/net-$REL.txt --pin $PIN --session $s/session.json \

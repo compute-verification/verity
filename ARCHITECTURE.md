@@ -90,7 +90,7 @@ The joint ledger charges each device's time once. Without attribution, it subtra
 
 ### The proof system
 
-Flock (`verity/ml/flock`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. A plain path (Flock without `--zk`) stays beside the zero-knowledge ones, for a configuration whose values needn't be hidden; its guarantee is soundness alone.
+Flock (`verity/flock/prover`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. A plain path (Flock without `--zk`) stays beside the zero-knowledge ones, for a configuration whose values needn't be hidden; its guarantee is soundness alone.
 
 ### The reference deployment
 

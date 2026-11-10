@@ -13,8 +13,8 @@ set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-flock}; mkdir -p $O $W/bin
 nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo "threads $(nproc)" | tee -a $O/host.txt
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+  $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 LKEY=$(cd verity/flock/verifier && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8

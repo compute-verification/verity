@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # flock-ir-lowering: a Flock cell of an IR template under frame-v3 (verity/flock-ir-frame/v3) through the bench spine
-# (bench.drivers.c_interactive): the sweep verity_flock.ir_bench, prover on the line's GPU, verifier on a separate pod. The
+# (bench.drivers.c_interactive): the sweep verity.ml.flock.python.verity_flock.ir_bench, prover on the line's GPU, verifier on a separate pod. The
 # cell's input set arrives as inputs/<content digest>.tar (research run --send); each pod stages its own instance files from it.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7400)
@@ -29,10 +29,10 @@ rm -rf $W/set && mkdir -p $W/set && tar -xf $(ls $I/*.tar | head -1) -C $W/set |
 SET=$(dirname $(find $W/set -name manifest.json | head -1))
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
-  python3 -m verity_flock.ir_bench --template $TEMPLATE --input-set $SET --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER \
+  python3 -m verity.ml.flock.python.verity_flock.ir_bench --template $TEMPLATE --input-set $SET --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER \
     --runs $RUNS --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-ir-lowering-verifier-pod} 2>&1 | tee $O/serve-plan.log
 else
-  python3 -m verity_flock.ir_bench --template $TEMPLATE --input-set $SET ${ART:+--art $ART} --bin $B --out-dir $O/cell --points "$POINTS" \
+  python3 -m verity.ml.flock.python.verity_flock.ir_bench --template $TEMPLATE --input-set $SET ${ART:+--art $ART} --bin $B --out-dir $O/cell --points "$POINTS" \
     --per-proof $PER --runs $RUNS --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-ir-lowering-verifier-pod} --prove-arg=--gpu \
     ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
 fi
