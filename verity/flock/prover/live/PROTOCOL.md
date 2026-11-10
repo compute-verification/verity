@@ -822,7 +822,7 @@ uses, and `Flock.Firewall.treeHello` holds `coins` without its nonce to the spec
 one another on the tree's sessions. Lean's ZK server refuses a binding round of a registered top, so `rec_session.serve`'s
 sessions, with their stacked table's registered top, keep the Python check that the test holds to `run`.
 
-In the Lean analysis (`Security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
+In the Lean analysis (`security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
 sent the pinned schedule's transcript (`tmpl`) but for its commitment strings, and `sends_of_one` that if `run` finishes at
 one salt list with each commitment string the commitment of a given 64-byte digest under its salt, then at every salt list
 of that length it finishes and sends the transcript with each string the same digest's commitment under the new salt.
