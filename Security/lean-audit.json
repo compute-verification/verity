@@ -2233,6 +2233,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
+   "owner": "@memory-accounting",
+   "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895"
   }
  },
  "meaning": [
@@ -23405,12 +23409,13 @@
    "guarantees": ["Verity.SecurityProofs.CapacityWithinEstimate"]
   },
   "Definitions.Core.Assumptions.Transport": {
-   "digest": "9545eb71509723cc596d09cb9b66e446f61917ef6088fe1c1869f22df632ed22",
+   "digest": "4c605638a386990d2ccefd4142e940296f489a27489e81a3c6750d9c0ac8f986",
    "definitions": {
     "Verity.Assumptions.ChannelAuthentic": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
     "Verity.Assumptions.ChannelHides": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4",
     "Verity.Assumptions.ImprintPathPrivate": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
-    "Verity.Assumptions.WitnessPathPrivate": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be"
+    "Verity.Assumptions.WitnessPathPrivate": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be",
+    "Verity.Assumptions.WitnessPathPrivateOrChannelHides": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895"
    },
    "guarantees": [
     "Verity.SecurityProofs.ImprintRootHidden",
@@ -24854,11 +24859,11 @@
    ]
   },
   "Definitions.Core.Guarantees.Transport": {
-   "digest": "291713e105948f3887c27654aac8c9488af72025f366bf74299d76c142811efe",
+   "digest": "b179ba3755762ff789bb021729eb412bb3c8f5c2132d4adec613aa816712393c",
    "definitions": {
     "Verity.Guarantees.ImprintRootHidden": "d8c07b123007646d1fd164abafd0fd463840737e033b235b628f66978d9b2094",
     "Verity.Guarantees.TransportDelivers": "8abd2ff063ff6f7b13cc8877aead2a6231f49d7d1b38773e5b3a7c4452ee37f0",
-    "Verity.Guarantees.TransportPassiveZk": "72bd2dd40de46d9c44b3c851a90df53acb1c6b5a1446bb5910580cafd81cd306"
+    "Verity.Guarantees.TransportPassiveZk": "d654a01df6cf9b94ecef73b64e13d04b39de4a7eef72eb885b7315d848e05487"
    },
    "guarantees": [
     "Verity.SecurityProofs.ImprintRootHidden",
