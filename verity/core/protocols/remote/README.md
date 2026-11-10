@@ -540,7 +540,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 - **Their status.** Draft. `min-cut` sets them, `reference-remote-h200-pouw`'s and `reference-remote-h200-sampled`'s
   at inference blocks of 2·10⁷ fresh bits: the min-cut bound, proved in Lean under the conjectures
   `training-cut-hardness` and `training-cut-exports`, which are assumed at that block size. They are draft because
-  the bound counts uncertified gates under `draft:no-straddle`. `cover` sets `reference-remote-h200-elementary`'s 1,
+  the bound counts free compute under `draft:no-straddle`. `cover` sets `reference-remote-h200-elementary`'s 1,
   contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
