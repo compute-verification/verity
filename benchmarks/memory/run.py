@@ -53,7 +53,7 @@ SETTINGS = of(__file__)
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
 ROLE = "LLAMA32_1B_BF16"
 REFERENCES = HERE / "references.json"
-#: a store's block, `remote_bandwidth`'s
+#: a block of PoUB's store, in bytes
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
 RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json"]
@@ -74,7 +74,7 @@ class Unreadable(Exception):
     """A run or a record can't be read, or the command line doesn't name one session."""
 
 
-class Store:
+class EvidenceStore:
     """The evidence store as this command reads it: a run's attempt, some of its files, and a label on it."""
 
     def __init__(self) -> None:
@@ -287,7 +287,7 @@ def wipe(store, run: str) -> dict:
             "detail": f"{_gb(bits / 8)} of {_gb(memory)}", "card": (a.get("conditions") or {}).get("hw.sku")}
 
 
-READERS = {"PoUS certified share": pous, "wipe residue": wipe}
+READERS = {"PoUS memory held": pous, "wipe residue": wipe}
 
 
 def beside(store_of: Callable[[], object]) -> list[dict]:
@@ -333,7 +333,7 @@ def text(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Store, run: Callable = subprocess.run,
+def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = EvidenceStore, run: Callable = subprocess.run,
          wait: Callable[[float], None] = time.sleep) -> int:
     """The command: 0 with the number printed, 1 with none (the session wasn't accepted, or its run left no record),
     2 when the command line or a run can't be read. `store_of` opens the evidence store, `run` starts a process and

@@ -40,7 +40,7 @@
 # and fire opens no period for a lease that began after it. ARENA_GIB (default 62) is each engine's weights arena
 # (`engine.py --arena-gib`) and so the host's ARENA_BLOCKS, its 4 KiB blocks, and UTIL (default 0.8) vLLM's share of a
 # card (`--util`); PACED is the host run's sessions (default gate.sh's four), one word a session of PLAN, and
-# PACE_PASS_MS the pass the host counts their groups at (default gate.sh's): it splits a stretch's DRAWS among
+# PACE_PASS_MS the pass the host counts their groups at (default gate.sh's): it splits a stretch's samples among
 # T_MS/(K·PACE_PASS_MS) groups, so where the node's pass is longer than it, as a larger arena's is, the groups take
 # longer than the stretch. No session is late for it.
 # PROVER_RUN names a prover already launched for PERIOD,

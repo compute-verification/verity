@@ -28,15 +28,16 @@ POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
 COMMIT = "c" * 40
 PACED = M.SETTINGS.setting("PACED").default
 GIB = 1 << 30
+SESSION = HERE / "fixtures" / "session.json"
 
 
 def a_session(k: int = 0, *, accepted: bool = True, gamma=0.25, failure: str | None = None, verdict="lean") -> dict:
-    """One session as the verifier records it, with the fields `summary.py` and the bench read."""
-    ledger = {"spec": {"gamma": gamma, "terms": {}, "horizon": {}}, "measured": {"gamma": 0.5},
-              "inputs": {"spec_bytes_per_s": 2e12}, "sketch_failure": {"log2": -40.0}, "memory": {"hbm_bytes": 8 * GIB}}
-    return {"k": k, "accepted": accepted, "failure": None if failure is None else {"t": 0, "failure": failure, "at": None},
-            "verdict": verdict, "samples": 4, "windows": 1, "window_ns": 10 ** 9, "draws": {"0": [[0, 1]]},
-            "windows_seen": [{"passes": 2, "slack_ns": 5}], "lean_check_ns": {"0": 7}, "ledger": ledger}
+    """One session as the verifier records it (`fixtures/session.json`: the fields `summary.py` and the bench read),
+    with this one's index, verdict and γ."""
+    s = json.loads(SESSION.read_text())
+    s["ledger"]["spec"]["gamma"] = gamma
+    return {**s, "k": k, "accepted": accepted, "verdict": verdict,
+            "failure": None if failure is None else {"t": 0, "failure": failure, "at": None}}
 
 
 def a_record(*sessions: dict, blocks: int = GIB // 4096, binding: dict | None = None) -> dict:
@@ -46,7 +47,7 @@ def a_record(*sessions: dict, blocks: int = GIB // 4096, binding: dict | None = 
 
 
 class FakeStore:
-    """The evidence store as `run.Store` offers it, over runs laid out under a directory."""
+    """The evidence store as `run.EvidenceStore` offers it, over runs laid out under a directory."""
 
     def __init__(self, root: Path) -> None:
         self.root, self.attempts, self.labels, self.fetched, self.asked = root, {}, {}, [], []
@@ -89,7 +90,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
     s.add(WIPE, sku="CARD B")
     s.labels[WIPE, "label"] = "full-fill wipe certified: foreign <= 8,589,934,592 bits (1.0737 GB) at eps 2^-128, M = 8,589,934,592 B"
     references = tmp_path / "references.json"
-    references.write_text(json.dumps({"PoUS certified share": POUS, "wipe residue": WIPE}))
+    references.write_text(json.dumps({"PoUS memory held": POUS, "wipe residue": WIPE}))
     monkeypatch.setattr(M, "REFERENCES", references)
     return s
 
@@ -235,10 +236,10 @@ def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsy
     store.add(RUN, {"out/verifier.json": a_record(a_session())})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[3] == f"  beside it, PoUS certified share: 0.750 (6.44 GB of 8.59 GB; {POUS}, 2000-01-02, CARD A)"
+    assert text[3] == f"  beside it, PoUS memory held: 0.750 (6.44 GB of 8.59 GB; {POUS}, 2000-01-02, CARD A)"
     assert text[4] == f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; {WIPE}, 2000-01-02, CARD B)"
     assert [(r["name"], r["value"], r["run"], r["date"], r["card"]) for r in doc["beside"]] == [
-        ("PoUS certified share", 0.75, POUS, "2000-01-02", "CARD A"), ("wipe residue", 0.125, WIPE, "2000-01-02", "CARD B")]
+        ("PoUS memory held", 0.75, POUS, "2000-01-02", "CARD A"), ("wipe residue", 0.125, WIPE, "2000-01-02", "CARD B")]
 
 
 def test_a_reference_that_cannot_be_read_says_why_and_the_number_still_prints(store, capsys):
@@ -248,7 +249,7 @@ def test_a_reference_that_cannot_be_read_says_why_and_the_number_still_prints(st
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 0.25 and [r["value"] for r in doc["beside"]] == [None, None]
-    assert text[3] == f"  beside it, PoUS certified share: not read ({POUS}'s record certifies nothing)"
+    assert text[3] == f"  beside it, PoUS memory held: not read ({POUS}'s record certifies nothing)"
     assert text[4] == f"  beside it, wipe residue: not read ({WIPE}'s label doesn't state a residue: 'a wipe, no bound stated')"
 
 
@@ -266,7 +267,7 @@ def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_n
     assert M.main(["--loopback"], store_of=no_store, run=launch) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 4.5 and all(r["value"] is None for r in doc["beside"])
-    assert text[4] == "  beside it, PoUS certified share: not read (the evidence store's client isn't installed here)"
+    assert text[4] == "  beside it, PoUS memory held: not read (the evidence store's client isn't installed here)"
 
 
 def test_every_reference_of_the_tree_has_a_reader():
@@ -452,7 +453,7 @@ def test_the_command_takes_exactly_one_way_in(store, capsys, argv):
 
 
 class Local:
-    """`research.store.local.LocalStore` as `run.Store` uses it: attempts, the withdrawn label, a record's listing and
+    """`research.store.local.LocalStore` as `run.EvidenceStore` uses it: attempts, the withdrawn label, a record's listing and
     fetches. Its record holds every path but `nothing`, and `lost` is a file whose bytes the store no longer has."""
 
     def __init__(self, root: Path, withdrawn: dict) -> None:
@@ -479,7 +480,7 @@ def test_a_withdrawn_run_is_refused_before_any_of_it_is_fetched(tmp_path, target
     """The store's own adapter, over a stand-in for its client: a `withdrawn` label on the run or on its record
     refuses the run, and its files are never asked for."""
     pulled = []
-    s = M.Store.__new__(M.Store)
+    s = M.EvidenceStore.__new__(M.EvidenceStore)
     s.store, s.error = Local(tmp_path, {target: "'held a secret', by someone"}), OSError
     s.sync = SimpleNamespace(read_through=lambda store, targets, warn: pulled.append(targets))
     with pytest.raises(M.Unreadable, match="was withdrawn .*held a secret.*: nothing of it is fetched"):

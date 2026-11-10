@@ -1,10 +1,10 @@
 # benchmarks/memory
 
 `verity bench memory` is the front door for the memory audit's one number: the share of a node's memory read rate that
-an accepted PoUB session (`verity/core/protocols/remote_bandwidth`) leaves uncertified, at the data sheet's read
-bandwidth. It is the session's γ in its verifier's ledger at the specification's rate, read from the verifier's record
-alone: nothing the prover recorded reaches it. `run.py` is the whole command; the sessions are
-`benchmarks/remote_session`'s, which it starts and reads and never copies.
+an accepted PoUB session leaves uncertified, at the data sheet's read bandwidth. It is the session's γ in its
+verifier's ledger at the specification's rate, read from the verifier's record alone: nothing the prover recorded
+reaches it. `run.py` is the whole command; the sessions are `benchmarks/remote_session`'s, which it starts and reads
+and never copies.
 
 **Status: active.** The lane's number for a node serving under the audit comes from here.
 
