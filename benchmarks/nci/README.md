@@ -13,7 +13,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 (`Security/Definitions/InferenceOnly/Guarantees/Threads.lean`) and `InferenceOnly.SecurityProofs.IncompressibleContainedTraining`
 (`Security/Definitions/InferenceOnly/Guarantees/Training.lean`).
 
-The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
+The slowdown lower bound's numbers come from [`benchmarks/slowdown`](../slowdown/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
 `rho.theorem.multiple_bound` in Lean's form (`InferenceOnly.Slowdown.remoteSlowdown` at the reference's MFU), which `statement.py`,
 `fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so

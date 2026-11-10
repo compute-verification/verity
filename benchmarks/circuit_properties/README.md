@@ -56,6 +56,6 @@ optimizer) circuit.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
-measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
+measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/slowdown's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.

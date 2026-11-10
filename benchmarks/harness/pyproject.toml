@@ -107,7 +107,7 @@ inputs = [
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",
     "benchmarks/census/hardware.json",
-    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/slowdown/data/hardware.toml",
     "benchmarks/overhead/run.py",
 ]
 
