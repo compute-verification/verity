@@ -223,6 +223,21 @@ def test_chi_is_the_chord_times_the_pool():
     assert today["bits"] / many["bits"] == pytest.approx(pool(today["overhead"]) / pool(many["overhead"]), rel=1e-12)
 
 
+def test_chis_linear_cost_is_from_the_closed_form_where_the_share_is_stopped():
+    """Section 6 sets the proving cost at which chi reaches 1% beside what a chi linear in the cost gives. At the defaults
+    the fleet's capacity stops the share at 1, and 0.01 over the stopped share is far above the search: the line divides
+    by the closed form's chi, which doesn't stop, and agrees with the search. At batched proving, where the share isn't
+    stopped, the closed form is the share."""
+    th = {"defaults": {"T3": [{"key": "K", "below": {100.0: "never"}, "intervals": {100.0: []}}]}}
+    q = quantities(S.exposures(th))
+    found = q["multiple of today's proving cost at which χ reaches 1%"]
+    (linear,) = (v for name, v in q.items() if name.startswith("the same if χ were linear in it"))
+    assert S.cheat(P) == 1 < X.chi(P) and 0.01 / S.cheat(P) > 10 * found
+    assert linear == 0.01 / X.chi(P) == pytest.approx(found, rel=1e-3)
+    batched = P | X.BATCHED
+    assert 1 > S.cheat(batched) == pytest.approx(X.chi(batched), rel=1e-3)
+
+
 def test_bisect():
     assert S.bisect(lambda x: x * x >= 2, 1.0, 2.0) == pytest.approx(math.sqrt(2), rel=1e-12)
 
