@@ -31618,3 +31618,100 @@ Nothing of mine is running. No timer is pending.
 **Your 18:58Z:** network's four questions on the pooled statement come after the mark, in one entry by Wed 14:00Z. I read their note's sections 5.3, 5.6 and 4.4 first.
 
 The PRF-504 runs are as in my 19:12Z table.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 19:34Z: 25 of 26 files and 77 of 79 places closed and pushed, head `5e87d3f088b4`; STOPPED on `sampling_plan/int8_llama.py` (2 places): its default plan matches neither line, three outputs below; `v2_case.py` fixed (no clean cherry-pick onto `main`; the two files taken whole pass there); the two suites are running on a node (`r20261110-193050-f867`)
+
+- **Branch and heads** [run: `git rev-parse`, `git push`]: `cursor/proofs-remote-bench-8973`. New heads since `7eb342fc4136`: `34ab0ce622` (eight `sampling_plan` files), `274ad88ff8` (`auditor.py`, `verifier_cost/README.md`), `eb6a4e2341` (the base's `80c5aea08a4b` merged in, clean), `04622846ec` (`v2_case.py` and its test), `eab2655dbd` (the toy v2 case), **`5e87d3f088b4`** (`sampling_plan/pyproject.toml`), pushed 19:28Z.
+- **The 15 closed `one_stage` files are unchanged since `7eb342fc4136`** [run: `git diff --name-only`]. None of my files is closed on the base by someone else [run].
+- **Read from my mailbox** [read, 19:16Z]: 19:01Z and 19:08Z. Question 2 is the side's; the alternative line is in its row below.
+- **Left:** `benchmarks/sampling_plan/int8_llama.py`, 2 places [run: `git grep -c '^<<<<<<< '` over my piece]. Its close is written and waits for your word (below).
+
+**Stopped: `int8_llama.py`'s default plan is a third figure** [run: `int8_llama.py --out DIR` on the side's tip `99c8914848`, on `main`'s tip `e7b03e4a6c89`, and on my close]
+
+| `plan.json` | the side | `main` | my close |
+|---|---|---|---|
+| ε at 2^-40, B budget 0.5 | 1.9000% | 1.8156% | 1.9051% |
+| ε at 2^-40, B budget 1.0 | 0.2947% | 0.2813% | 0.2955% |
+| `cost.replay` at B budget 0.5 | 1.26e-06 | 2.60e-04 | 2.47e-04 |
+| cuts offered (`alternatives`) | 40 | 38 | 40, the side's exactly |
+| leaves that differ from my close | 471 | 854 | |
+
+- **Why.** The side changed what a statement may hold (`inputs.cap`, the composer's occupancy; a tile past Flock's block is no proof block) and priced noise at `SHA512_ROWS`. `main` changed what a sampled unit's replay costs (`39c2317219`: its request re-run, not a layer step). Each line changed lines the other left alone, so git merged both with no marker. The merged plan has the side's cuts and `main`'s replay, and no line ever printed it: its `alternatives` equal the side's exactly and its `inputs` equal `main`'s exactly [run].
+- **My two places hold no choice that moves it.** Place 1 is the imports (`spot` paths, `SHA512_ROWS`, `TensorCommit`, `ReplayGrain`); place 2 is `model`'s signature (`main`'s `requests`, the side's `TensorCommit`). The figure comes from the unmarked text.
+- **Both lines' tests pass on it** [run, scratch]: `main`'s `tests/test_int8_llama.py` (5, the request replay) and the side's `tests/test_inputs.py` (5, among them `test_the_int8_plan_offers_no_tile_past_the_block`).
+- **Recommendation:** commit it as it is. It is the two landed changes together, which is what the merge is; taking either line's figure would drop the other line's change. Whoever owns a table printed from this plan reruns it after the merge. Say yes and I commit the two places in one commit.
+
+**A second figure you should know, not a default** [run]: `h200.py --card h200` exists only on `main`. Under the merge it runs with the side's cap: proving 121,488 GPU-s where `main`'s tip prints 155,138 (statements 106,519 against 140,143). The default card's plan is the side's exactly (231,107). It also comes from unmarked text. If a GLM-5.3 table was printed from `main`'s `--card h200`, it moves by this.
+
+**The table so far** (every `.py`: `python -m py_compile` and `ruff check FILE`; findings equal `main`'s tip's count where there are any: `h200.py` 8, `transformer.py` 9, `auditor.py` 20, `test_served_verdicts.py` 2. Every `.sh`: `bash -n`. `main` changed no file of mine between `7af4d24fca3` and `e7b03e4a6c89` but `a5.py`, `auditor.py` and `verifier_cost/README.md`; each holds that change [run: `git diff`])
+
+| File | Places | What was taken | Why | Checked beyond that |
+|---|---|---|---|---|
+| `one_stage/a5.py`, `tests/test_a5_case_v2.py`, `test_a5_tp_gates.py`, `test_a5_outputs.py`, `replay.py`, `a0.py` | 23 | As in my 18:20Z entry; v2 is `main`'s one statement | Question 1, yes | As there |
+| `one_stage/served_verdicts.py` | 7 | The side's whole with `main`'s later changes carried in (`PUBLIC_FILES`, "sampled", `spot_row`, the `spot` paths) | The lines share commits to 3 Nov; then the side added and `main` changed three things | `diff` against the side shows only `main`'s changes [run]; its test |
+| `one_stage/served_verdicts.sh` | 11 | The side's whole with `main`'s `ONSITE_PIECES` file, `KEEP_CMD` and words | Same | same |
+| `one_stage/served_composite.sh` | 4 | The side's whole with `main`'s `ONSITE_PIECES` check. **Place 4, Question 2, decided the side's:** an untied run hands its period case to no product. The other way is one line, `[ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")` | Same; the merged tree has `served_cases.py` | `test_the_composite_step_...` |
+| `one_stage/tests/test_served_verdicts.py` | 9 | The side's tests with `main`'s changes; `main`'s tests stay (155 tests) | Follows the three above | 392 passed [run, scratch] |
+| `one_stage/composite.py`, `tests/test_composite.py` | 2 | `main`'s onsite line, the side's `remote-v1` line | `Core.Onsite.components`, `Core.Remote.components`, `Core.Remote.V1.components` [read] | 15 passed [run, scratch] |
+| `one_stage/README.md`, `pouw_piece.py`, `prove_leg.py` | 3 | As in my 18:59Z entry | As there | compile |
+| `sampling_plan/inputs.py` | 2 | `main`'s file (the cards, the request replay's inputs, `spot` paths) with the side's `block_k_log`, the one estimator read unpacked | Both lines hold one landed change, the cap by the composer's occupancy. `main`'s copy is its first form (the layout written out, `2ecd0fd052`'s); the side's is the later one (`a2e5e73e67`, `97246ec4fc`). The two differ on 2,534 of 200,000 random shapes [run] | `served_window.py`'s tables come out as `main`'s byte for byte [run] |
+| `sampling_plan/h200.py`, `tests/test_h200.py` | 5 | The side's `Template.cap`, `parts` and `SamplingBlock`, with `main`'s `--card`, reporting grid and terms | Different additions | default plan equals the side's, plus `main`'s `card` field [run: 1 leaf of `plan.json` differs]; 8 passed |
+| `sampling_plan/transformer.py` | 2 | The side's `inputs.cap` and `TensorCommit` under `main`'s `spot` paths, `ReplayGrain`, card and reporting grid | Different additions | default plan equals the side's, 0 leaves differ [run]; 11 passed |
+| `sampling_plan/cpu_budget.py` | 3 | The side's one estimator (`proof_block_k_log`, `PACK_LOG`, `MAX_ROWS`) in `main`'s terms and reporting grid | Different additions | on its tree's `h200` plan, `cpu-budget.json` and `.md` equal the side's [run] |
+| `sampling_plan/served_window.py` | 1 | `main`'s whole | Both lines hold it; `main`'s is the later landing. The side's one later edit (`WINDOW_DELTA`) is in `main`'s | `served_window.json` and `.md` equal `main`'s, with and without the planner [run]; 10 passed |
+| `sampling_plan/README.md` | 2 | `main`'s `served_window` and `glm53` entries; `cpu_budget`'s entry in `main`'s terms, reading "rows and ANDs" as the side's code does | Follows the code | text only |
+| `sampling_plan/tests/test_demo_a.py` | 1 | `main`'s `spot` paths with the side's `K_MAX` import | both added | 9 passed |
+| `sampling_plan/int8_llama.py` | 2 | **not closed**, above | | |
+| `live_challenger/auditor.py` | 1 | `main`'s usage line (`--watermark`) | The side changed nothing there that `main` lacks | byte-identical to `main`'s tip [run: `cmp`] |
+| `verifier_cost/README.md` | 1 | Both entries, `population.sh` then `whole_run.sh` | Each line added one | equals `main`'s tip plus the side's paragraph [run: `git diff`]; the six files they name exist |
+| the six importers | 0 | `sampled_proofs` is `spot` | `main`'s move | compile, ruff |
+
+**Beside the markers**
+
+- **`one_stage/v2_case.py` and `tests/test_v2_case.py`** (`04622846ec`, only those two files). A window of one member gets a5's case as `a5.v2_proof` builds it: the pin, the kept public file's SHA-512 as `public`, the member's `registered.json`, and the tables its circuit looks up. A window of several members gets no case, only `missing.json` saying so, which `composite.py` leaves out. 8 passed [run, scratch].
+  - **Does it apply to `main`?** `git cherry-pick 04622846ec` onto `origin/main` (`5482988e3496`) conflicts in both files: `main`'s copies are an earlier form of the side's [run, scratch worktree, not pushed]. Taken whole (`git checkout 04622846ec -- benchmarks/one_stage/v2_case.py benchmarks/one_stage/tests/test_v2_case.py`) they pass on `main`'s tree: 8 passed, ruff clean [run]. So carry the two files whole.
+  - **A correction to my 18:20Z words:** I wrote "the summary's digest for that member". a5's `summary.json` keeps no digest of the public file [read: `a5.py:831`]. The case names the SHA-512 of the public file the run kept. So an accept on a kept window says the sessions verify on the kept file; it does not show the file is the one staged before the sample. The docstring says so.
+  - **One choice of mine:** I count the window's members, as you approved. `a5.v2_proof` counts sampled members, so for a window of several with one sampled it builds that member's case and v2's Lean refuses the windowed registration [read: `a5.case_v2`'s docstring; not run]. `v2_case.py` writes `missing.json` there instead. Say so if it should build the case and let the Lean refuse.
+- **`one_stage/tests/test_served_cases.py`** (`eab2655dbd`): the toy v2 case holds `public` in the params' `proofs`. It is its own commit: `main` has no such file, so with it in `04622846ec` that commit could not be carried. 58 passed, 15 skipped with no `lake` on the path [run, scratch]; the 15 are the node run's.
+- **`sampling_plan/pyproject.toml`** (`5e87d3f088b4`): I dropped four inputs no test of the suite reads: `verity/core/periods/__init__.py`, `verity/core/protocols/pous`, `verity/core/deploy`, `verity/core/wire`. They were the side's, for `pous.wipe_monitoring`; the suite reads the grid from `verity.core.protocols.reporting` [run: an audit hook on `open` and the imported modules over the suite's eight test files, 57 passed, 140 files read, none under those four and none outside the declared inputs]. If the grid goes back to `wipe_monitoring`, these four go back with it.
+  - Left, for vllm: `verity/ml/windows` is listed twice (the union). `benchmarks/rho/data/hardware.toml` is named by no file of the suite, on `main`'s tip either [run: `git grep`]; it is `main`'s own, so I left it.
+- **`one_stage/pyproject.toml`:** nothing dropped. No input of the union was dropped by either line since the base [run: the three lists], and each input one line added has a reader at the head [read: `test_spot_stage_*.py` for `main`'s ten; `test_inference_only.py`, `test_served_pearlplus_lean.py` and the `gate-compose` tests for the side's eighteen]. Not traced: eleven of its test files start programs no tracer follows.
+
+**Lean's rule 5: names `main` declares at `e7b03e4a6c89` that my result lacks** [run: AST; beside the three of 18:59Z]
+
+- `h200.Window`: kept as `SamplingBlock`, the side's rename, same fields.
+- `transformer._cap`: dropped, the side's deletion; `inputs.cap` replaces it.
+- `cpu_budget.K_LOG_MIN`: kept as the interface's `PACK_LOG`, same value 22.
+- `inputs.py` no longer imports `K_MIN`, `LAST_BLOCK_BYTES`, `MASK_LOG`, `PER_SLOT`, `SLOT_LOG`: they served `main`'s written-out layout. `tests/test_served_window.py` read `MASK_LOG` through `inputs`; it now imports it from `verity.ml.windows.interface` (one line of an unmarked file in my directory).
+- `test_h200`'s `import transformer as X`: dropped, the side's removal; nothing reads it.
+- `int8_llama.cap` (in the close that waits): dropped, the side's deletion; `inputs.cap` replaces it.
+- `served_window.py`, `test_demo_a.py`, `auditor.py`, `v2_case.py`, `test_v2_case.py`: none.
+
+**Tests changed to what the merged code does** (the full list, for the final table)
+
+- 18:20Z's five (`test_a5_case_v2.py` and its neighbours).
+- `test_served_verdicts.py`: six `accept` assertions are `pending`, and `main`'s `test_the_composite_step_...` as in 18:59Z.
+- `test_v2_case.py`: `test_a_window_of_several_members_is_the_per_member_case` is now `test_a_window_of_several_members_has_no_v2_case_and_leaves_only_missing`; `test_a_window_of_one_member_is_the_one_statement_case` asserts `proofs` is exactly `circuit`, `public`, `registered`; `test_the_one_statement_names_the_members_registered_file_and_the_tables_its_circuit_looks_up` is new.
+- `test_served_cases.py`'s toy case, and `test_served_window.py`'s import, above.
+
+**Corrections to my 18:59Z entry**
+
+- The importers are 14 import lines and one `monkeypatch`, not 17 lines.
+- In `test_served_verdicts.py` six `accept` assertions became `pending`, not seven places; beside them two readings of `rec["composed"]["onsite"]` changed (one reads the report's reason, one is gone).
+- "392 passed, 87 s" was a run of `test_served_verdicts.py` alone at about 18:46Z. The 18:57Z run was both files, 462 passed and 3 failed in 106 s.
+
+**The node run** [run]: `r20261110-193050-f867` on `vy-nebius-cpu-1`, launched 19:30Z at `5e87d3f088b4`, `--cwd clone`, 150 min limit. It runs `suites.py benchmarks/sampling_plan benchmarks/one_stage`, the `@lean` tests among them. In the run's clone only, every other lane's still-marked file is first closed mechanically (21 to the side: the certifier's, `benchmarks/network_traces`, vllm's `pearl_c/graphs.py` and `pouw/__init__.py`; 82 to `main`; `block_record.py` on `reporting`) and `int8_llama.py` is my waiting close. So it shows my files agree with the head, not that the merged tree passes. I report it when it ends; I expect it by 21:00Z [guess: I have not seen this suite's Lean builds on a node].
+
+**"[run, scratch]"** as in 18:59Z, now on `5e87d3f088b4` (the base's `80c5aea08a4b` with proofs' core `8ec5167aa5a4` in it).
+
+**Text ready to paste for other lanes**
+
+- **vllm:** `benchmarks/sampling_plan/pyproject.toml` lists `verity/ml/windows` twice, and `benchmarks/rho/data/hardware.toml` is read by no file of that suite. A plan printed from `h200.py --card h200` or from `int8_llama.py` before the merge does not reproduce after it (the figures above).
+- **top and lean** (the whole-tree rename, already proposed): in `sampling_plan` the side's unmarked text still says "C-Flock" (`tests/test_inputs.py`, `int8_llama.py`'s heading, the suite's `pyproject.toml` comment) and "drawn units" (`README.md`'s `h200.py` entry). I changed words only at marked places.
+
+**Open questions, each with my recommendation**
+
+1. `int8_llama.py`: commit the close whose plan is the third figure? Yes.
+2. `v2_case.py` on a window of several members with one sampled: `missing.json` (as now), or a5's case for the Lean to refuse? As now.
+
+Next entry when the run ends or your word arrives, by 20:35Z at the latest.
