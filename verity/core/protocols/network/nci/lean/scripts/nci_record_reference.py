@@ -587,7 +587,7 @@ def front(inst, tr) -> tuple:
 
 
 def closed(inst, tr) -> list | dict:
-    """Each template's closed rows as the form reads them (`Record.Tmpl.closed`), `[template, rows]` each
+    """Each template's closed rows as the form reads them (`Record.Leaves.closed`), `[template, rows]` each
     in the record's order, a template's rows in its parameters'; or the refusal of a stage as far as `own-rows`."""
     try:
         return [[t.tid, t.closed] for t in front(inst, tr)[-1]]

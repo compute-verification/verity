@@ -1,6 +1,7 @@
 module
 
 public import NciCheck.Baseline
+public import NciCheck.RecordText
 public import NciCheck.DefinitionDigest
 public import Spot.Wires
 public import Flock.TemplateQuery
@@ -16,6 +17,11 @@ unit. This module does for such a record what `Baseline.evaluate` does for a Pro
 (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
 what the registration log registers at the start of the deployment (`isTheta`). It is a library with a difftest
 (`RecordDifftest`): no executable, protocol or verdict reads it.
+
+What the record's text declares is the module `RecordText`'s, functions of the Program and the text alone: the
+text's wiring, the templates, each unit's block and what each row is declared to hold. This module builds on them
+what the instance and the trusted input decide: the order, the leaves each wire lands on, which declared parameter
+is θ, which opening is held, and each reader's pin.
 
 ## The instance and the trusted input
 
@@ -45,19 +51,21 @@ record first, and the digest of the run's own record. `params` is not read.
 6. `templates`: the record does not name the Program, or its `templates` are not the root's nodes that are no input,
    each a call or a batch of a template of its own, in order (`Flock.TemplateQuery.evaluate`); or a template's
    parameter is not whole 16-bit words, an output has no bit, or two of its ports share a name. A template's rows
-   are its Definition's parameters, one row a parameter, and its outputs the fields of its return type (`tmplOf`).
+   are its Definition's parameters, one row a parameter, and its outputs the fields of its return type
+   (`RecordText.templatesOf`).
 7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
    below).
 8. `wires`: SPOT's reader refuses the record's wires, cuts or order (`Spot.Wires.Wiring.ofJson`), or SPOT's check
-   refuses them (`Spot.Wires.check`). The wiring is the one SPOT reads: the templates' rows and outputs from the
-   Program, and the record's own `cuts`, `wires` and `order` (`piece`).
+   refuses them (`Spot.Wires.check`). The wiring is the one SPOT reads: the text's `cuts` and `wires`
+   (`RecordText.wiring`), with the templates' rows and outputs from the Program and the record's `order`, else the
+   instance's (`piece`, `wiringOf`).
 9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
    inside one leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
 10. `inputs`: a registered read, table, table read, opening or ingress declaration is malformed for the templates and
-    cuts, or two declarations (wires among them) fill one row (`inputsOf`). A registered read is a wire's record with
-    `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
+    cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered read is a
+    wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
 11. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
-    class's radix (`gridsOf`).
+    class's radix (`RecordText.gridsOf`).
 12. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
     read names as its reader has no layout; or an opening or a table read of such a reader names a row or an output
     that is not the layout's.
@@ -123,7 +131,8 @@ reads it. `Desc.evaluate` counts only the leaves some gate reads, so over a phas
 the rows no gate reads.
 
 Every input row of every unit has exactly one kind (`Kind`), by one total function (`Case.rowKind`): what fills the
-row (`fillAt`: the one declaration that covers it, or nothing), classed by `kindOf`. Two kinds are not fresh:
+row (`RecordText.fillAt`: the one declaration that covers it, or nothing), classed by `kindOf`. Two kinds are not
+fresh:
 
 * `inside`: a wire fills it from a writer of the reader's own slot (`sameSlot`);
 * `theta`: a registered read of a θ parameter, a table read of a table over one, or a port of an opening that is held
@@ -154,8 +163,9 @@ earlier run's output is θ.
 A pin is a digest and says nothing of which of its Definition's rows is which. One rule by position says it for every
 pinned reader (`layoutOf`), read from the Definition's parameters and return type and from nothing else of it: a
 template's input rows are its Definition's parameters and its outputs the fields of its return type, in order
-(`tmplOf`). A Definition has a layout where it has at least six parameters, the second and the third of 512 bits
-each, the first named unlike the fourth, fifth and sixth, and at least two return fields. Its roles are then:
+(`RecordText.tmplOf`). A Definition has a layout where it has at least six parameters, the second and the third of
+512 bits each, the first named unlike the fourth, fifth and sixth, and at least two return fields. Its roles are
+then:
 
 * input row 0: the key;
 * input row 1: the table's root; input row 2: the table's domain id;
@@ -193,10 +203,21 @@ fresh, whatever the record declares of it.
 ## What a property reads of it
 
 A statement about the form reads, beside `read`, `summarize` and `rate`: a unit's block, `Case.slot` (the slot its
-template's grids give it); why a row is counted θ, `Case.heldAt` (`Held`: a registered read of a θ parameter; a table
-read of a θ table's root or of its domain id; or a row opened from a θ table by a pinned reader, with that reader's
-pin), which answers exactly on the rows whose kind is `theta`; and `layoutOf`, a function of a Definition's
-parameters and return type alone. `exported` gives the first two for the difftest.
+template's grids give it); why a row is counted θ, `Case.heldAt` (`RecordText.Held`: a registered read of a θ
+parameter; a table read of a θ table's root or of its domain id; or a row opened from a θ table by a pinned reader,
+with that reader's pin), which answers exactly on the rows whose kind is `theta`; and `layoutOf`, a function of a
+Definition's parameters and return type alone. `exported` gives the first two for the difftest.
+
+Each is built on what the record's text declares, so that a statement names the text's readers and not this
+module. On a record `read` accepts, `c` what it reads, with the Program `c.f.P` and the parsed text `c.f.doc`:
+
+* the wiring `c.W` has the cuts and the wires of the text's wiring (`RecordText.wiring`), field for field
+  (`wiringOf`);
+* `Case.slot c` is `RecordText.slot` of the Program and the text: one `slotIn` of one `gridsOf` of one
+  `templatesOf`;
+* where `Case.heldAt c r` is a reason, `RecordText.declared` of the Program, the text and `r` is that reason
+  without its pin (`RecordText.Held.declared`): `heldAt` reads what fills the row through `Inputs.declares`, on the
+  declarations `inputsOf` gives of the templates and the text's wiring, which are `declared`'s.
 
 ## Cost
 
@@ -216,6 +237,7 @@ namespace NciCheck.Record
 
 open Lean (Json toJson)
 open Flock.Program
+open NciCheck.RecordText
 
 /-! ## The instance -/
 
@@ -254,51 +276,11 @@ def parse (j : Json) : Except String Instance := do
 
 /-! ## Templates -/
 
-private theorem lt_array (n : Nat) (e : Ty) : sizeOf e < sizeOf (Ty.array n e) := by simp; omega
-
-private theorem lt_tuple {f : Ty} {fs : Array Ty} (h : f ∈ fs) : sizeOf f < sizeOf (Ty.tuple fs) := by
-  have := Array.sizeOf_lt_of_mem h; simp; omega
-
-private theorem lt_record {f : String × Ty} {fs : Array (String × Ty)} (h : f ∈ fs) :
-    sizeOf f.2 < sizeOf (Ty.record fs) := by
-  have := Array.sizeOf_lt_of_mem h; cases f; simp at *; omega
-
-/-- The bits of a type's leaves, from its structure: an Array's are one element's times its length. -/
-def bits : Ty → Nat
-  | .value w => w
-  | .array n e => n * bits e
-  | .tuple fs => (fs.toList.attach.map fun ⟨f, _⟩ => bits f).sum
-  | .record fs => (fs.toList.attach.map fun ⟨f, _⟩ => bits f.2).sum
-termination_by t => sizeOf t
-decreasing_by
-  · exact lt_array _ _
-  · exact lt_tuple (Array.mem_def.mpr ‹_›)
-  · exact lt_record (Array.mem_def.mpr ‹_›)
-
-/-- A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. -/
-def fieldsOf (t : Ty) : List Ty :=
-  match t with
-  | .tuple fs => if fs.isEmpty then [t] else fs.toList
-  | .record fs => if fs.isEmpty then [t] else fs.toList.map (·.2)
-  | _ => [t]
-
-/-- A parameter's outer length: its outermost array's length, 1 when it is no array. -/
-def outerOf : Ty → Nat
-  | .array n _ => n
-  | _ => 1
-
-/-- A template of the record: its descriptor id, its Definition's index in the Program, its units, its rows (each
-parameter's name, 16-bit words and outer length), its outputs (`o<j>` for return field `j`, and its words), each
-output's bits (`bits`), per port, input row or output, its leaves' one width, none where they have more than one
-(`Flock.Program.Widths.homo`),
-and its closed rows: the parameters whose leaves are of one bit each and none of which its Definition passes on
-(`passedOn`). -/
-structure Tmpl where
+/-- A template's leaves, from its Definition: each output's bits (`o<j>` for return field `j`); per port, input row
+or output, its leaves' one width, none where they have more than one (`Flock.Program.Widths.homo`); and its closed
+rows: the parameters whose leaves are of one bit each and none of which its Definition passes on (`passedOn`). -/
+structure Leaves where
   tid : String
-  defn : Nat
-  units : Nat
-  rows : List (String × Nat × Nat)
-  outs : List (String × Nat)
   bits : List (String × Nat)
   leaf : List (String × Option Nat)
   closed : List String
@@ -326,27 +308,18 @@ def passedOn (P : Prog) : Array (List Nat) :=
       let returned := of reach d.body.ret
       acc.push returned.eraseDups
 
-/-- The template of one root node's units, from its Definition's parameters and return type, and for its closed
-rows from what the Program's Definitions pass on (`passed`, `passedOn`'s). Refused (`templates`) where a parameter
-is not whole 16-bit words, an output has no bit, or two ports share a name. -/
-def tmplOf (P : Prog) (passed : Array (List Nat)) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := do
-  let d := (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0
-  let defn := P.defs[d]!
-  let rows ← defn.params.toList.mapM fun (name, ty) =>
-    let b := bits ty
-    if b == 0 || b % 16 != 0 then throw "templates" else pure (name, b / 16, outerOf ty)
-  let outs ← (fieldsOf defn.ret).zipIdx.mapM fun (ty, j) =>
-    let b := bits ty
-    if b == 0 then throw "templates" else pure (s!"o{j}", (b + 15) / 16, b)
-  let names := rows.map (·.1) ++ outs.map (·.1)
-  if names.eraseDups.length != names.length then throw "templates"
-  let leaf := defn.params.toList.map (fun (name, ty) => (name, Widths.homo ty)) ++
-    (fieldsOf defn.ret).zipIdx.map fun (ty, j) => (s!"o{j}", Widths.homo ty)
-  let on := passed[d]?.getD (List.range defn.params.size)
-  let closed := defn.params.toList.zipIdx.filterMap fun ((name, ty), i) =>
-    if Widths.homo ty == some 1 && !on.contains i then some name else none
-  return { tid := r.template, defn := d, units := r.count, rows, outs := outs.map fun (o, n, _) => (o, n),
-           bits := outs.map fun (o, _, b) => (o, b), leaf, closed }
+/-- The leaves of the template `t`, from its Definition's parameters and return type, and for its closed rows from
+what the Program's Definitions pass on (`passed`, `passedOn`'s). -/
+def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
+  let defn := P.defs[t.defn]!
+  let outs := (fieldsOf defn.ret).zipIdx
+  let on := passed[t.defn]?.getD (List.range defn.params.size)
+  { tid := t.tid
+    bits := outs.map fun (ty, j) => (s!"o{j}", bits ty)
+    leaf := defn.params.toList.map (fun (name, ty) => (name, Widths.homo ty)) ++
+      outs.map fun (ty, j) => (s!"o{j}", Widths.homo ty)
+    closed := defn.params.toList.zipIdx.filterMap fun ((name, ty), i) =>
+      if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every argument of a root node that is no input node is runs of leaves of the root's input nodes (affine parts
@@ -383,16 +356,17 @@ def widthName : Option Nat → String
 refusal's message: the wire, its two rows' bits or its two leaf widths, and the fix. Of every wire, the writer's
 output's bits are the row's (`short`): a wire's two rows have the same words (`Spot.Wires.check`), a row's bits are
 its words', so the output's bits are then its own words'. And a wire is taken in one of two ways. The reader's row
-is closed (`Tmpl.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the
+is closed (`Leaves.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the
 writer's leaves. Or the reader's row and the writer's output each have leaves of one width, and the writer's
 divides the reader's: with the same words, every leaf of the writer's output then lies inside one leaf of the row
 that reads it. It costs the wires, each four lookups among the templates. -/
-def unwhole (ts : List Tmpl) (wires : List Spot.Wires.Wire) : Option String :=
-  let tmpl := fun (tid : String) => ts.find? (·.tid == tid)
-  let width := fun (tid port : String) => ((tmpl tid).bind fun t => t.leaf.lookup port).join
-  let closed := fun (tid port : String) => ((tmpl tid).map fun t => t.closed.contains port).getD false
-  let short := fun (w : Spot.Wires.Wire) => (tmpl w.writer).bind fun t =>
-    match t.bits.lookup w.out, t.outs.lookup w.out with
+def unwhole (ts : List Tmpl) (ls : List Leaves) (wires : List Spot.Wires.Wire) : Option String :=
+  let leaves := fun (tid : String) => ls.find? (·.tid == tid)
+  let width := fun (tid port : String) => ((leaves tid).bind fun l => l.leaf.lookup port).join
+  let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
+  let short := fun (w : Spot.Wires.Wire) =>
+    match (leaves w.writer).bind fun l => l.bits.lookup w.out,
+        (ts.find? (·.tid == w.writer)).bind fun t => t.outs.lookup w.out with
     | some b, some n => if b == 16 * n then none else some (b, 16 * n)
     | _, _ => none
   let whole := fun (w : Spot.Wires.Wire) => closed w.reader w.port ||
@@ -417,35 +391,17 @@ def unwhole (ts : List Tmpl) (wires : List Spot.Wires.Wire) : Option String :=
     "writer's output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
     "its Definition return gates of its own in their place."
 
-/-- The record's templates, held to the Program: the record names the Program, and its `templates`, `[id, units]`
-each, are the root's nodes that are no input, each a call or a batch of a template of its own, in order. -/
-def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
-  if Baseline.strAt doc "program" != some (Flock.hexOf P.sha512) then throw "templates"
-  let .arr tsJ := Baseline.getD doc "templates" | throw "templates"
-  let ts ← tsJ.mapM fun t => match pairOf? t with
-    | some (.str tid, n) => match natOf? n with
-      | some n => if n ≥ 1 then pure (tid, n) else throw "templates"
-      | none => throw "templates"
-    | _ => throw "templates"
-  let tids := ts.map (·.1)
-  if tids.toList.eraseDups.length != tids.size then throw "templates"
-  let rs ← match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids with
-    | .ok rs => pure rs
-    | .error _ => throw "templates"
-  if (rs.map fun r => (r.template, r.count)) != ts then throw "templates"
-  let passed := passedOn P
-  rs.toList.mapM (tmplOf P passed)
-
 /-! ## The record, as far as its templates -/
 
 /-- The instance and the trusted input, read as far as the record's templates: the instance, the Program, the trusted
-input, the record and its templates. -/
+input, the record, its templates (`RecordText.templatesOf`) and their leaves (`leavesOf`). -/
 structure Front where
   i : Instance
   P : Prog
   T : Baseline.Trusted
   doc : Json
   ts : List Tmpl
+  leaves : List Leaves
 
 /-- Stages 1 to 7 of the module docstring, as far as `own-rows`. -/
 def front (j tr : Json) : Except String Front := do
@@ -464,11 +420,12 @@ def front (j tr : Json) : Except String Front := do
       some (Flock.hexOf (Flock.Sha512.hash i.record.toUTF8)) then throw "run-circuit"
   let ts ← templatesOf P doc
   if !ownRows P then throw "own-rows"
-  return { i, P, T, doc, ts }
+  let passed := passedOn P
+  return { i, P, T, doc, ts, leaves := ts.map (leavesOf P passed) }
 
-/-- The record's wires as SPOT's `wires` piece states them, the JSON `Spot.Wires.Wiring.ofJson` reads: the templates'
-units, rows and outputs from the Program, the record's `cuts` (none where it states none) and `wires`, and its
-`order`, else the instance's. -/
+/-- The record's wires as SPOT's `wires` piece states them, the JSON `Spot.Wires.Wiring.ofJson` reads: the text's
+`cuts` and `wires` (`RecordText.wiresOf`), with the templates' units, rows and outputs from the Program, and the
+record's `order`, else the instance's. -/
 def piece (f : Front) : Json :=
   let templates := Json.mkObj (f.ts.map fun t => (t.tid, Json.mkObj [
     ("units", toJson t.units),
@@ -478,280 +435,16 @@ def piece (f : Front) : Json :=
     | some o, _ => [("order", o)]
     | none, some o => [("order", o)]
     | none, none => []
-  Json.mkObj ([("templates", templates), ("cuts", (f.doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])),
-    ("wires", Baseline.getD f.doc "wires")] ++ order)
+  (wiresOf f.doc).mergeObj (Json.mkObj (("templates", templates) :: order))
 
-/-- `x`, its refusal recoded as `code`. -/
-def recode {α : Type} (code : String) : Except String α → Except String α
-  | .ok a => .ok a
-  | .error _ => .error code
-
-/-- The record's wiring, as SPOT's reader reads it from `piece`. -/
-def wiringOf (f : Front) : Except String Spot.Wires.Wiring := recode "wires" (Spot.Wires.Wiring.ofJson (piece f))
-
-/-! ## Declarations -/
-
-/-- What fills a declaration's rows: wire `i` of the record, a registered read of a parameter, a table read of a
-table's root (`root`) or else its domain id, a port of opening `i`, or ingress. -/
-inductive Fill where
-  | wire (i : Nat)
-  | read (param : String)
-  | table (name : String) (root : Bool)
-  | opening (i : Nat)
-  | ingress
-  deriving Inhabited, Repr
-
-/-- A declaration: the reader rows it fills, as a wire's rectangle (`w`'s reader, port, `start`, `readerUnits`, `cut0`
-and `cuts`), the bits of each of those rows (none for an output port), and what fills them. -/
-structure Decl where
-  w : Spot.Wires.Wire
-  bits : Nat
-  fill : Fill
-
-/-- A registered table: its name and the registered parameter it lies in. -/
-structure Table where
-  name : String
-  param : String
-
-/-- A table read: template `reader`'s units `[start, start + units)` read, in input row `port`, `table`'s root
-(`root`), else its domain id. -/
-structure TableRead where
-  reader : String
-  port : String
-  table : String
-  root : Bool
-  start : Nat
-  units : Nat
-
-/-- A table opening: template `reader`'s units `[start, start + units)` each open a row of `table` by the key in input
-row `key`, filling input rows `ports`, with the verdict in output `verdict`. -/
-structure Opening where
-  reader : String
-  table : String
-  key : String
-  ports : List String
-  verdict : String
-  start : Nat
-  units : Nat
-
-/-- What the record declares to fill its units' rows: the registered parameters' leaves, the tables, the table reads,
-the openings, and every declaration, the wires first. -/
-structure Inputs where
-  params : List (String × Nat)
-  tables : List Table
-  roots : List TableRead
-  openings : List Opening
-  decls : List Decl
-
-def REGISTERED : List String := ["params", "tables", "reads", "roots", "openings"]
-def READ : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
-def TABLE : List String := ["name", "param", "offset", "words", "rows"]
-def TABLE_READ : List String := ["reader", "port", "table", "of", "at", "units"]
-def OPENING : List String := ["reader", "table", "key", "ports", "verdict", "at", "units"]
-def INGRESS : List String := ["reader", "port", "at", "units", "step"]
-
-/-- Whether `j` is an object of exactly the keys `ks`. -/
-def keyed (j : Json) (ks : List String) : Bool :=
-  match Spot.Wires.sameKeys j ks "" with
-  | .ok _ => true
-  | .error _ => false
-
-/-- Field `k` of `j`, a string. -/
-def strIn (j : Json) (k : String) : Except String String :=
-  match Baseline.strAt j k with
-  | some s => .ok s
-  | none => .error "inputs"
-
-/-- Field `k` of `j`, a natural. -/
-def natIn (j : Json) (k : String) : Except String Nat :=
-  match natOf? (Baseline.getD j k) with
-  | some n => .ok n
-  | none => .error "inputs"
-
-/-- The template `tid`. -/
-def tmplIn (ts : List Tmpl) (tid : String) : Except String Tmpl :=
-  match ts.find? (·.tid == tid) with
-  | some t => .ok t
-  | none => .error "inputs"
-
-/-- The words of `t`'s input row `p`. -/
-def rowIn (t : Tmpl) (p : String) : Except String Nat :=
-  match t.rows.find? (·.1 == p) with
-  | some (_, words, _) => .ok words
-  | none => .error "inputs"
-
-/-- Template `reader`'s units `[start, start + units)`, every one of port `port`'s `k` rows, as a wire's rectangle. -/
-def rect (reader port : String) (start units k : Nat) : Spot.Wires.Wire :=
-  { reader, port, writer := "", out := "", start, radix := [units, k], base := 0, step := [0, 0], cut0 := 0, cuts := k }
-
-/-- A registered read's record as a wire, by SPOT's reader: `{reader, port, param, at, radix, base, step}` and
-optionally `cut`, its `param` the wire's writer and its sources, `base + Σ d_k · step_k`, leaves of the parameter. -/
-def readOf (j : Json) : Except String Spot.Wires.Wire := do
-  if !(keyed j READ || keyed j ("cut" :: READ)) then throw "inputs"
-  let kvs ← recode "inputs" (Spot.Wires.fields j)
-  recode "inputs" (Spot.Wires.Wire.ofJson
-    (Json.mkObj (("writer", Baseline.getD j "param") :: ("out", Json.str "") :: kvs.filter (·.1 != "param"))))
-
-/-- What `registered` reads as where the record has none. -/
-def NO_REGISTERED : Json :=
-  Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
-    ("openings", Json.arr #[])]
-
-/-- The record's declarations (the module docstring's `inputs`), each refused (`inputs`) unless it is well formed for
-the templates `ts` and the cuts of `W`, and unless no two declarations, the wires `wired` among them, fill one row:
-
-* `registered.params`, `{name: leaves}`, at least one leaf each;
-* `registered.tables`, `{name, param, offset, words, rows}`: `rows` rows of `words` leaves from leaf `offset` of a
-  registered parameter, within it; names distinct;
-* `registered.reads` (`readOf`): of an input row or an output of the reader, its cut as a wire's, its reader units
-  among the reader's, and every source with its row's words within the parameter;
-* `registered.roots`, `{reader, port, table, of, at, units}`: units `[at, at + units)` of the reader read, in a row
-  of 32 words, the table's root (`of` = `root`) or its domain id (`domain`);
-* `registered.openings`, `{reader, table, key, ports, verdict, at, units}`: units `[at, at + units)` of the reader
-  open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`;
-* `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
-def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (wired : Spot.Wires.Summary) (doc : Json) :
-    Except String Inputs := do
-  let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
-  if !(keyed reg REGISTERED || keyed reg ("values" :: REGISTERED)) then throw "inputs"
-  let .obj pkv := Baseline.getD reg "params" | throw "inputs"
-  let params ← pkv.toArray.toList.mapM fun (p, v) => match natOf? v with
-    | some n => if n ≥ 1 then pure (p, n) else throw "inputs"
-    | none => throw "inputs"
-  let mut decls : Array Decl :=
-    ((wired.wires.zip wired.rowWords).zipIdx.map fun ((w, words), i) => { w, bits := 16 * words, fill := .wire i }).toArray
-  let .arr tablesJ := Baseline.getD reg "tables" | throw "inputs"
-  let mut tables : List Table := []
-  for t in tablesJ do
-    if !keyed t TABLE then throw "inputs"
-    let name ← strIn t "name"
-    let param ← strIn t "param"
-    let offset ← natIn t "offset"
-    let words ← natIn t "words"
-    let rows ← natIn t "rows"
-    let some leaves := params.lookup param | throw "inputs"
-    if tables.any (·.name == name) || words < 1 || rows < 1 || offset + words * rows > leaves then throw "inputs"
-    tables := tables ++ [({ name, param } : Table)]
-  let .arr readsJ := Baseline.getD reg "reads" | throw "inputs"
-  for r in readsJ do
-    let w ← readOf r
-    let t ← tmplIn ts w.reader
-    let k := W.cutsOf w.reader w.port
-    let (words, rowBits) ← match t.rows.find? (·.1 == w.port), t.outs.lookup w.port with
-      | some (_, words, _), _ => pure (words, 16 * words / k)
-      | none, some words => pure (words, 0)
-      | none, none => throw "inputs"
-    if !(w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) && w.units % w.cuts == 0) then
-      throw "inputs"
-    if !(w.readerUnits ≥ 1 && w.start + w.readerUnits ≤ t.units) then throw "inputs"
-    let some leaves := params.lookup w.writer | throw "inputs"
-    if !(0 ≤ w.span.1 && w.span.2 + ((words / k : Nat) : Int) ≤ (leaves : Int)) then throw "inputs"
-    decls := decls.push { w, bits := rowBits, fill := .read w.writer }
-  let .arr rootsJ := Baseline.getD reg "roots" | throw "inputs"
-  let mut roots : List TableRead := []
-  for r in rootsJ do
-    if !keyed r TABLE_READ then throw "inputs"
-    let reader ← strIn r "reader"
-    let port ← strIn r "port"
-    let table ← strIn r "table"
-    let which ← strIn r "of"
-    let t ← tmplIn ts reader
-    let words ← rowIn t port
-    let start ← natIn r "at"
-    let units ← natIn r "units"
-    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
-    if !(tables.any (·.name == table)) || !(which == "root" || which == "domain") || words != 32 then throw "inputs"
-    let k := W.cutsOf reader port
-    roots := roots ++ [({ reader, port, table, root := which == "root", start, units } : TableRead)]
-    decls := decls.push
-      { w := rect reader port start units k, bits := 16 * words / k, fill := .table table (which == "root") }
-  let .arr openingsJ := Baseline.getD reg "openings" | throw "inputs"
-  let mut openings : List Opening := []
-  for o in openingsJ do
-    if !keyed o OPENING then throw "inputs"
-    let reader ← strIn o "reader"
-    let table ← strIn o "table"
-    let key ← strIn o "key"
-    let out ← strIn o "verdict"
-    let .arr portsJ := Baseline.getD o "ports" | throw "inputs"
-    if portsJ.isEmpty then throw "inputs"
-    let t ← tmplIn ts reader
-    let start ← natIn o "at"
-    let units ← natIn o "units"
-    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
-    let _ ← rowIn t key
-    if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
-    let mut ports : List String := []
-    for pj in portsJ do
-      let .str p := pj | throw "inputs"
-      let words ← rowIn t p
-      let k := W.cutsOf reader p
-      decls := decls.push { w := rect reader p start units k, bits := 16 * words / k, fill := .opening openings.length }
-      ports := ports ++ [p]
-    openings := openings ++ [({ reader, table, key, ports, verdict := out, start, units } : Opening)]
-  let .arr ingressJ := (doc.getObjVal? "ingress").toOption.getD (Json.arr #[]) | throw "inputs"
-  for g in ingressJ do
-    if !keyed g INGRESS then throw "inputs"
-    let reader ← strIn g "reader"
-    let port ← strIn g "port"
-    let _ ← natIn g "step"
-    let t ← tmplIn ts reader
-    let words ← rowIn t port
-    let start ← natIn g "at"
-    let units ← natIn g "units"
-    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
-    let k := W.cutsOf reader port
-    decls := decls.push { w := rect reader port start units k, bits := 16 * words / k, fill := .ingress }
-  if !Spot.Wires.pairwiseDisjoint (decls.toList.map (·.w)) then throw "inputs"
-  return { params, tables, roots, openings, decls := decls.toList }
+/-- The record's wiring: the text's cuts and wires (`text`, `RecordText.wiring`'s), with the Program's templates and
+the order as SPOT's reader reads them from `piece`. Its cuts and its wires are `text`'s, field for field. -/
+def wiringOf (f : Front) (text : Spot.Wires.Wiring) : Except String Spot.Wires.Wiring :=
+  match Spot.Wires.Wiring.ofJson (piece f) with
+  | .ok W => .ok { text with templates := W.templates, order := W.order }
+  | .error _ => .error "wires"
 
 /-! ## Blocks -/
-
-/-- Units `[start, start + units)` of a template, unit `start + i` in slot `(i / q) % S` of the class's `S`: an
-inference entry's, `q` the product of the radices after its slot digit, or neighbouring entries of one `q` merged. -/
-structure Grid where
-  start : Nat
-  units : Nat
-  q : Nat
-  deriving Inhabited
-
-/-- One inference entry, `{template, at, radix, axes}`: its template and its grid. Refused (`blocks`) unless it has one
-radix a digit, each at least 1, and exactly one digit that `axes` name `slot`, of radix `S`. -/
-def gridOf (S : Nat) (e : Json) : Except String (String × Grid) := do
-  let some tid := Baseline.strAt e "template" | throw "blocks"
-  let some start := natOf? (Baseline.getD e "at") | throw "blocks"
-  let .arr radixJ := Baseline.getD e "radix" | throw "blocks"
-  let .arr axes := Baseline.getD e "axes" | throw "blocks"
-  let radix ← radixJ.toList.mapM fun r => match natOf? r with
-    | some r => if r ≥ 1 then pure r else throw "blocks"
-    | none => throw "blocks"
-  if radix.isEmpty || radix.length != axes.size then throw "blocks"
-  let [k] := (List.range axes.size).filter fun k => Baseline.strOf? axes[k]! == some "slot" | throw "blocks"
-  if radix[k]! != S then throw "blocks"
-  return (tid, { start, units := radix.foldl (· * ·) 1, q := (radix.drop (k + 1)).foldl (· * ·) 1 })
-
-/-- Grids in unit order, neighbours of one `q` merged: a unit's slot is the same in the merged grid, since every
-grid's units are a multiple of `q · S`. -/
-def merged (gs : List Grid) : List Grid :=
-  (gs.foldl (fun (acc : List Grid) g => match acc with
-    | last :: before => if last.q == g.q then { last with units := last.units + g.units } :: before else g :: acc
-    | [] => [g]) []).reverse
-
-/-- The class's slots and each template's grids (the module docstring's `blocks`), from the record's
-`blocks.inference`, `{slots, entries}`: refused (`blocks`) unless every entry is a template's (`gridOf`) and each
-template's entries tile its units (`Spot.Wires.tiles`). -/
-def gridsOf (ts : List Tmpl) (doc : Json) : Except String (Nat × List (String × List Grid)) := do
-  let inference := Baseline.getD (Baseline.getD doc "blocks") "inference"
-  let some S := natOf? (Baseline.getD inference "slots") | throw "blocks"
-  let .arr entries := Baseline.getD inference "entries" | throw "blocks"
-  if S < 1 then throw "blocks"
-  let gs ← entries.toList.mapM (gridOf S)
-  if gs.any fun g => (ts.find? (·.tid == g.1)).isNone then throw "blocks"
-  let per ← ts.mapM fun t => do
-    let mine := ((gs.filter (·.1 == t.tid)).map (·.2)).mergeSort fun a b => a.start ≤ b.start
-    if !Spot.Wires.tiles (mine.map fun g => (g.start, g.units)) 0 t.units then throw "blocks"
-    pure (t.tid, merged mine)
-  return (S, per)
 
 /-- The indices `i < x` of a grid of row length `q` whose slot `(i / q) % S` is `s`: `q` in every whole period of
 `q · S`, and of the rest those from `s · q`, at most `q`. -/
@@ -893,7 +586,7 @@ structure Layout where
 /-- A Definition's layout, from its parameters and its return type alone: none unless it has at least six parameters,
 the second and the third of 32 words each (512 bits), the first named unlike the fourth, fifth and sixth, and at
 least two return fields. The rows are the parameters in order, and the verdict is the second return field, `o1`
-(`tmplOf`). So a layout's key is none of its opened rows. -/
+(`RecordText.tmplOf`). So a layout's key is none of its opened rows. -/
 def layoutOf (d : Defn) : Option Layout :=
   match d.params.toList, fieldsOf d.ret with
   | (key, _) :: (root, r) :: (domain, m) :: (row, _) :: (salt, _) :: (path, _) :: _, _ :: _ :: _ =>
@@ -971,11 +664,6 @@ def kindOf (inside held : Array Bool) (theta : String → Bool) (tables : List T
   | some (.opening i) => if held[i]?.getD false then .theta else .openings
   | some .ingress => .ingress
 
-/-- What fills row `row` of port `port` of template `tid`'s unit `u`: the first declaration that covers it (the one,
-since no two fill a row), none where none does. -/
-def fillAt (ds : List Decl) (tid port : String) (u row : Nat) : Option Fill :=
-  (ds.find? fun d => (d.w.indexOf tid u port row).isSome).map (·.fill)
-
 /-! ## The record, read -/
 
 /-- The record, read (every stage of the module docstring): its front, its wiring and wires as SPOT checked them, its
@@ -1002,47 +690,41 @@ def Case.isTheta (c : Case) (p : String) : Bool := (c.theta.lookup p).getD false
 /-- The kind of a row filled by `fill`. -/
 def Case.kind (c : Case) (fill : Option Fill) : Kind := kindOf c.inside c.held c.isTheta c.x.tables fill
 
-/-- **The classing**: the kind of row `row` of port `port` of template `tid`'s unit `u`, one for every row. -/
-def Case.rowKind (c : Case) (tid port : String) (u row : Nat) : Kind := c.kind (fillAt c.x.decls tid port u row)
+/-- **The classing**: the kind of the row `r`, one for every row. -/
+def Case.rowKind (c : Case) (r : Row) : Kind := c.kind (fillAt c.x.decls r)
 
-/-- **A unit's block**: the slot of template `tid`'s unit `u`, by the grid that holds it; none where the record has no
-such unit. -/
-def Case.slot (c : Case) (tid : String) (u : Nat) : Option Nat :=
-  ((c.gridsAt tid).find? fun g => g.start ≤ u && u < g.start + g.units).map fun g => (u - g.start) / g.q % c.S
+/-- **A unit's block**: the slot of template `tid`'s unit `u`, by the grid that holds it (`RecordText.slotIn`); none
+where the record has no such unit. `S` and `grids` are what `RecordText.gridsOf` reads of the Program's templates and
+the record, so on a record `read` accepts this is `RecordText.slot` of the Program and the record's text. -/
+def Case.slot (c : Case) (tid : String) (u : Nat) : Option Nat := slotIn c.S c.grids tid u
 
-/-- Why a row counts as θ: it is a registered read of the θ parameter `param`; a table read of the root (`root`), else
-the domain id, of the table `name` over the θ parameter `param`; or a port of a held opening of that table, by a
-reader whose Definition's closure digest is the pin `pin`. -/
-inductive Held where
-  | read (param : String)
-  | table (name param : String) (root : Bool)
-  | opened (name param pin : String)
-  deriving BEq, Inhabited, Repr
-
-/-- **Why a row is θ**: for row `row` of port `port` of template `tid`'s unit `u`, the reason it counts as θ, none
-where it does not. It is some reason exactly where the row's kind is `theta` (`Case.rowKind`). -/
-def Case.heldAt (c : Case) (tid port : String) (u row : Nat) : Option Held :=
-  let table := fun (name : String) => (c.x.tables.find? (·.name == name)).filter fun t => c.isTheta t.param
-  match fillAt c.x.decls tid port u row with
-  | some (.read p) => if c.isTheta p then some (.read p) else none
-  | some (.table name root) => (table name).map fun t => .table name t.param root
-  | some (.opening i) =>
-    if c.held[i]?.getD false then
-      c.x.openings[i]?.bind fun o => (table o.table).bind fun t =>
-        (c.pins.lookup o.reader).map fun pin => .opened o.table t.param pin
-    else none
-  | _ => none
+/-- **Why a row is θ**: for the row `r`, the reason it counts as θ (`RecordText.Held`), none where it does not. It is
+some reason exactly where the row's kind is `theta` (`Case.rowKind`). The reason is what the record's text declares
+the row to hold (`RecordText.Inputs.declares` of what fills it), with an opening's reader's pin; that the declared
+parameter is θ, that an opening is held, and the pin are this check's, from the trusted input and the instance. -/
+def Case.heldAt (c : Case) (r : Row) : Option Held :=
+  match fillAt c.x.decls r with
+  | none => none
+  | some fill => match c.x.declares fill, fill with
+    | some (.read p), _ => if c.isTheta p then some (.read p) else none
+    | some (.table name param root), _ => if c.isTheta param then some (.table name param root) else none
+    | some (.opened name param), .opening i =>
+      if c.held[i]?.getD false && c.isTheta param then
+        (c.x.openings[i]?.bind fun o => c.pins.lookup o.reader).map fun pin => .opened name param pin
+      else none
+    | _, _ => none
 
 /-- The stages of the module docstring after `own-rows`, on a front, with `pin` each template's pin where the policy
 pins its Definition. `rolesOf` gives the pinned templates among the readers the declarations name, every opening's
 reader among them, so an opening's reader is pinned exactly where it is one of those. -/
 def finish (f : Front) (pin : String → Option String) : Except String Case := do
-  let W ← wiringOf f
+  let text ← recode "wires" (wiring f.doc)
+  let W ← wiringOf f text
   let wired ← match Spot.Wires.check W with
     | .ok s => pure s
     | .error _ => throw "wires"
-  if (unwhole f.ts wired.wires).isSome then throw "leaf-widths"
-  let x ← inputsOf f.ts W wired f.doc
+  if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
+  let x ← inputsOf f.ts text f.doc
   let (S, grids) ← gridsOf f.ts f.doc
   let pins ← rolesOf f.P f.ts pin x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []
@@ -1150,9 +832,9 @@ def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
   else if code == "leaf-widths" then
     match front j tr with
-    | .ok f => match wiringOf f with
+    | .ok f => match wiring f.doc >>= wiringOf f with
       | .ok W => match Spot.Wires.check W with
-        | .ok wired => unwhole f.ts wired.wires
+        | .ok wired => unwhole f.ts f.leaves wired.wires
         | .error _ => none
       | .error _ => none
     | .error _ => none
@@ -1179,12 +861,12 @@ def check (j tr : Json) : Json :=
   | .error code => refusalOf j tr code
 
 /-- A row of a unit, `[template, port, unit, row]`. -/
-def rowOf (r : Json) : Option (String × String × Nat × Nat) :=
+def rowOf (r : Json) : Option Row :=
   match r with
   | .arr a =>
     if a.size == 4 then
       match a[0]!, a[1]!, natOf? a[2]!, natOf? a[3]! with
-      | .str tid, .str port, some u, some row => some (tid, port, u, row)
+      | .str tid, .str port, some unit, some row => some { tid, unit, port, row }
       | _, _, _, _ => none
     else none
   | _ => none
@@ -1195,12 +877,12 @@ def kinds (j tr rows : Json) : Json :=
   match read j tr, rows with
   | .error code, _ => NciCheck.refusal code
   | .ok c, .arr rs => Json.arr (rs.map fun r => Json.str (match rowOf r with
-    | some (tid, port, u, row) => (c.rowKind tid port u row).name
+    | some r => (c.rowKind r).name
     | none => Kind.free.name))
   | .ok _, _ => Json.arr #[]
 
 /-- A reason as JSON: `["read", param]`, `["table", name, param, root]` or `["opened", name, param, pin]`. -/
-def Held.toJson : Held → Json
+def heldJson : Held → Json
   | .read p => Json.arr #[Json.str "read", Json.str p]
   | .table name p root => Json.arr #[Json.str "table", Json.str name, Json.str p, Json.bool root]
   | .opened name p pin => Json.arr #[Json.str "opened", Json.str name, Json.str p, Json.str pin]
@@ -1212,8 +894,8 @@ def exported (j tr rows : Json) : Json :=
   match read j tr, rows with
   | .error code, _ => NciCheck.refusal code
   | .ok c, .arr rs => Json.arr (rs.map fun r => match rowOf r with
-    | some (tid, port, u, row) => Json.arr #[((c.slot tid u).map toJson).getD Json.null,
-        ((c.heldAt tid port u row).map Held.toJson).getD Json.null]
+    | some r => Json.arr #[((c.slot r.tid r.unit).map toJson).getD Json.null,
+        ((c.heldAt r).map heldJson).getD Json.null]
     | none => Json.arr #[Json.null, Json.null])
   | .ok _, _ => Json.arr #[]
 
