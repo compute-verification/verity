@@ -16,6 +16,8 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   network (`kernel_stamp`), which no scheduling of the observer's process moves. It keeps each chunk's last byte,
   which names its interval. It never has the seed: `run.py` joins its timestamps with the server's bits once both
   have ended.
+  Its process counts, before and after its case, how many times the host's cores entered an idle state that stops
+  them (`halts`): a host that keeps its cores from idling shows none.
 - **The waker** (`waker_ms`) and **the awake cores** (`awake`) are candidate fixes beside the certifier, not parties
   to the channel. The waker is a reader asleep on a loopback connection and a writer that wakes it every `waker_ms`,
   so the host's network path is as recently used at every release whatever the server does. `awake` is a process
@@ -74,6 +76,8 @@ LAUNCH_PRIORITY = 5
 #: arm64, which Python's `socket` doesn't name), and the room a read leaves for it
 SO_TIMESTAMPNS = 35
 ANCILLARY = 64
+#: where the kernel keeps each core's idle states and their entry counts (`halts`)
+CPUIDLE = Path("/sys/devices/system/cpu")
 #: how many loopback reads `stamping` waits for the kernel's first stamp
 STAMP_TRIES = 20000
 
@@ -267,6 +271,17 @@ def stamping(tries: int = STAMP_TRIES) -> tuple[socket.socket | None, str]:
     except OSError as e:
         return None, f"asking this host's kernel for its receive stamp failed ({type(e).__name__}: {e})"
     return None, f"this host's kernel stamped none of {tries} loopback reads"
+
+
+def halts(root: Path = CPUIDLE) -> int | None:
+    """How many times this host's cores have entered an idle state that stops them, since boot: the entries the
+    kernel counts for every cpuidle state of every core but the polling one's (`POLL`). None where the kernel counts
+    none: a host with no cpuidle driver, whose cores stop in the kernel's default idle uncounted."""
+    states = list(root.glob("cpu[0-9]*/cpuidle/state[0-9]*"))
+    if not states:
+        return None
+    return sum(int((state / "usage").read_text()) for state in states
+               if (state / "name").read_text().strip() != "POLL")
 
 
 def wall_less_monotonic(reads: int = 5) -> int:
@@ -539,7 +554,9 @@ def main(argv: list[str]) -> int:
     elif role == "awake":
         doc = awake(cfg)
     elif role == "certifier":
+        before = halts()
         doc = asyncio.run(relay(cfg) if cfg["certifier"] == "relay" else network(cfg))
+        doc["halts"] = [before, halts()]
     else:
         raise SystemExit(f"a party is server, certifier, observer, waker or awake, not {role!r}")
     Path(cfg["out"], f"{role}.json").write_text(json.dumps(doc))

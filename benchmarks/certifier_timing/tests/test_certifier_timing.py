@@ -359,7 +359,44 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     assert not bench.verdict([more[1], more[1] | {"ignore": False}])["ok"]
     table = bench._table([whole]).splitlines()
     assert len(table) == 2 + 5 and table[2].split(" | ")[10:13] == ["attack", "write", "plain"]
-    assert table[2].split(" | ")[-3:] == ["-", "-", "- |"]
+    assert table[2].split(" | ")[-4:] == ["-", "-", "-", "- |"]
+
+
+def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
+    """`halts` sums the entries of every core's idle states but the polling one, and is None where there are none
+    to read; a case's `halted` is its certifier's count after less before, and a row's the sum of its cases'."""
+    assert parties.halts(tmp_path) is None
+    for cpu, (polls, stops, deeper) in enumerate([(5, 7, 1), (9, 3, 0)]):
+        for k, (name, usage) in enumerate([("POLL", polls), ("haltpoll idle", stops), ("C2", deeper)]):
+            state = tmp_path / f"cpu{cpu}" / "cpuidle" / f"state{k}"
+            state.mkdir(parents=True)
+            (state / "name").write_text(name + "\n")
+            (state / "usage").write_text(f"{usage}\n")
+    (tmp_path / "cpuidle").mkdir()
+    (tmp_path / "cpuidle" / "current_driver").write_text("haltpoll\n")
+    assert parties.halts(tmp_path) == 11
+    for cpu in (0, 1):
+        for k in (1, 2):
+            (tmp_path / f"cpu{cpu}" / "cpuidle" / f"state{k}" / "name").write_text("POLL\n")
+    assert parties.halts(tmp_path) == 0
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    plan = parties.plan_of(cfg)
+
+    def on_time(t, writes):
+        return plan.release(t) + 3e-4
+
+    def halted(name, halts):
+        case = _case(tmp_path / name, cfg, on_time)
+        record = json.loads((case / "certifier.json").read_text()) | ({} if halts is None else {"halts": halts})
+        (case / "certifier.json").write_text(json.dumps(record))
+        return bench.score(case)
+
+    held, more, unread, older = (halted("held", [40, 40]), halted("more", [40, 44]), halted("unread", [None, None]),
+                                 halted("older", None))
+    assert [c["halted"] for c in (held, more, unread, older)] == [0, 4, None, None]
+    assert bench.summarize([held, more])["rows"][0]["halted"] == 4
+    assert bench.summarize([held, unread])["rows"][0]["halted"] is None
+    assert bench._table([bench.result([held, more])]).splitlines()[2].split(" | ")[-1] == "4 |"
 
 
 def test_a_reads_ancillary_data_holds_the_kernels_stamp():
@@ -433,8 +470,8 @@ def test_the_kernels_stamp_reads_a_bit_the_observers_wake_up_blurs(tmp_path):
     assert (doc["lower"], doc["upper"]) == (row["kernel"]["lower"], row["kernel"]["upper"])
     assert doc["ceiling"] == max(row["upper"], row["kernel"]["upper"])
     cells = bench._table([bench.result(cases[:1])]).splitlines()[2].split(" | ")
-    assert cells[-3:] == [f"{row['kernel']['bits']:.4f}",
-                          f"[{row['kernel']['lower']:.4f}, {row['kernel']['upper']:.4f}]", "0 |"]
+    assert cells[-4:] == [f"{row['kernel']['bits']:.4f}",
+                          f"[{row['kernel']['lower']:.4f}, {row['kernel']['upper']:.4f}]", "0", "- |"]
 
 
 def test_the_guard_holds_on_both_stamps(tmp_path):

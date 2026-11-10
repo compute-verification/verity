@@ -320,7 +320,9 @@ def score(case: Path, observed: Path | None = None) -> dict:
     """One recorded case (a directory `live` left; `observed`: its observer.json, where another host wrote it): its
     configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
     (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`:
-    a paced one's write ends, else its ticks' lateness), and what makes it no measurement (`problems`). A record
+    a paced one's write ends, else its ticks' lateness), how many times the certifier's host's cores entered an idle
+    state that stops them while it ran (`halted`; None where the host counts none, `parties.halts`), and what makes
+    it no measurement (`problems`). A record
     whose certifier is none of `CERTIFIERS` is another benchmark's, and is refused."""
     cfg, server, certifier = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
     if cfg["certifier"] not in CERTIFIERS:
@@ -332,6 +334,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
     problems += unfit
     coins = {t: bit for t, bit, _ in server["rows"]}
     sender = late_releases = gated = None
+    halts = certifier.get("halts") or [None]
     if cfg["certifier"] == "network":
         if cfg["paced_ms"]:
             times = {r[0]: r[3] / 1e6 for r in certifier["releases"]["rows"]}
@@ -362,7 +365,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
         "observer_host": observer.get("host", cfg.get("host")), "observer_run": observer.get("run", cfg.get("run")),
         "client": channel.measure(pairs), "kernel": kernel, "unstamped": observer.get("unstamped") or None,
-        "sender": sender,
+        "sender": sender, "halted": None if None in halts else halts[1] - halts[0],
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
         "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],
@@ -427,9 +430,9 @@ def host() -> dict:
 def summarize(cases: list[dict]) -> dict:
     """The cases as one number: `rows`, the cases by (role, attack, observer), each pooled over its runs
     (`channel.pool`) on the observer's own clock and, under `kernel`, by the kernel's stamps (with `merged`, the
-    runs' sum), the attacks first, most bits on either stamp first; `value`, `lower`, `upper` and `n`, of the attack
-    and stamp that showed most (`best`); `ceiling`, the largest upper bound of any attack on either stamp; and every
-    case's problems."""
+    runs' sum), with `halted`, the runs' sum (None where a run's host counted none), the attacks first, most bits
+    on either stamp first; `value`, `lower`, `upper` and `n`, of the attack and stamp that showed most (`best`);
+    `ceiling`, the largest upper bound of any attack on either stamp; and every case's problems."""
     groups: dict[tuple[str, str, str], list[dict]] = {}
     for c in cases:
         groups.setdefault((role(c), c["attack"], c["observer"]), []).append(c)
@@ -438,7 +441,8 @@ def summarize(cases: list[dict]) -> dict:
         stamps = [c["kernel"] for c in group if c.get("kernel")]
         rows.append({"role": r, "attack": a, "observer": o} | channel.pool([c["client"] for c in group]) | {
             "kernel": channel.pool(stamps) | {"merged": sum(m["merged"] for m in stamps)},
-            "sender": channel.pool([c["sender"] for c in group if c["sender"]])})
+            "sender": channel.pool([c["sender"] for c in group if c["sender"]]),
+            "halted": None if any(c.get("halted") is None for c in group) else sum(c["halted"] for c in group)})
     reads = {id(r): [(stamp, m) for stamp, m in (("process", r), ("kernel", r["kernel"])) if m["bits"] is not None]
              for r in rows}
     rows.sort(key=lambda r: (r["role"] != "attack", -max((m["bits"] for _, m in reads[id(r)]), default=0.0)))
@@ -467,7 +471,7 @@ def _table(docs: list[dict]) -> str:
     """Results' rows as a Markdown table, each with what its cases ran with."""
     head = ["run", "host", "observer's host", "certifier", "paced ms", "pin", "gate ms", "waker ms", "awake",
             "launch", "role", "attack", "observer", "bits/interval", "95%", "scored", "sender",
-            "by the kernel's stamp", "95%", "merged"]
+            "by the kernel's stamp", "95%", "merged", "halted"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for d in docs:
         for r in d["rows"]:
@@ -484,7 +488,8 @@ def _table(docs: list[dict]) -> str:
                      r["role"], r["attack"], r["observer"], f"{r['bits']:.4f}",
                      f"[{r['lower']:.4f}, {r['upper']:.4f}]", r["n"], "-" if sender is None else f"{sender:.4f}",
                      *(["-"] * 3 if stamps["bits"] is None else
-                       [f"{stamps['bits']:.4f}", f"[{stamps['lower']:.4f}, {stamps['upper']:.4f}]", stamps["merged"]])]
+                       [f"{stamps['bits']:.4f}", f"[{stamps['lower']:.4f}, {stamps['upper']:.4f}]", stamps["merged"]]),
+                     "-" if r["halted"] is None else r["halted"]]
             lines.append("| " + " | ".join(map(str, cells)) + " |")
     return "\n".join(lines)
 

@@ -62,7 +62,7 @@ A client can stamp as the kernel does, so the number is over both columns.
 | `commit`, `run` | the commit measured from and the run's id |
 | `certifier`, `host` | the certifier's commit and settings; the host, its cores and its clock |
 | `guard`, `target` | the guard's two readings; the budget's bits an interval, and whether `ceiling` is under each end |
-| `rows` | each attack with each observer, pooled, most bits first: the `process` stamp's reading and, under `kernel`, the kernel stamp's; then the guard's cases and any control, which are no part of the number (`role`) |
+| `rows` | each attack with each observer, pooled, most bits first: the `process` stamp's reading and, under `kernel`, the kernel stamp's; `halted`, how many times the certifier's host's cores entered an idle state that stops them while the row's cases ran (null where the host counts none); then the guard's cases and any control, which are no part of the number (`role`) |
 | `cases` | each run: its settings, hosts and problems, both stamps' readings (`client`, `kernel`), and the certifier's own release times scored the same way (`sender`) |
 
 ## Run it
