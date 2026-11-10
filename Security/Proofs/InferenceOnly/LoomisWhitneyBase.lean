@@ -9,7 +9,7 @@ A finite set of triples has at most `√(|π₁₂| |π₁₃| |π₂₃|)` elem
 The proof slices the set by its first coordinate: a slice lies in the product of its two projections' slices and injects
 into the third projection, so its size squared is at most the product of the three, and Cauchy–Schwarz sums the slices.
 
-The inference-only policy's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an IU computes at its other positions, as index triples
+The inference-only policy's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an inference block computes at its other positions, as index triples
 `(i, j, t)`: their projections are the weight entries `(i, j)` they use, the input entries `(t, j)` they use, and the
 output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and summing over the multiplications `ℓ` with
 Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The cover theorem's partial-sum bounds apply it
@@ -82,7 +82,7 @@ theorem card_products_sq_le (T : Finset (ι × κ × τ)) :
   rw [inputs, outputs, mul_right_comm]
   exact loomis_whitney T
 
-/-- The draft's form: an IU's products at one multiplication, as index triples `(i, j, t)`, number at most `√(p q y)` when
+/-- The draft's form: an inference block's products at one multiplication, as index triples `(i, j, t)`, number at most `√(p q y)` when
 they use at most `p` weight entries `(i, j)` and `q` input entries `(t, j)`, and contribute to at most `y` output entries
 `(t, i)`. -/
 theorem card_products_le_sqrt (T : Finset (ι × κ × τ)) {p q y : ℕ}
@@ -91,7 +91,7 @@ theorem card_products_le_sqrt (T : Finset (ι × κ × τ)) {p q y : ℕ}
   Real.le_sqrt_of_sq_le <| by
     exact_mod_cast (card_products_sq_le T).trans (Nat.mul_le_mul (Nat.mul_le_mul hp hq) hy)
 
-/-- Loomis–Whitney at each multiplication `ℓ`, summed with Cauchy–Schwarz: an IU whose products at multiplication `ℓ`
+/-- Loomis–Whitney at each multiplication `ℓ`, summed with Cauchy–Schwarz: an inference block whose products at multiplication `ℓ`
 (at its other positions) use at most `p` weight entries, `q ℓ` input entries and contribute to `y ℓ` output entries
 computes at most `√(p Q Y)` of them in all, with `Q = ∑ q ℓ` and `Y = ∑ y ℓ`. -/
 theorem sum_card_products_le_sqrt {L : Type*} (s : Finset L) (T : L → Finset (ι × κ × τ)) {p : ℕ} {q y : L → ℕ}

@@ -25,7 +25,7 @@ section Lemmas
 
 variable {D : Circuit} {k : ℕ} (c : PackedChain D k)
 
-/-- **Lemma 2 (other positions)**, on a packed chain: every output entry that an IU contributes products to, at a
+/-- **Lemma 2 (other positions)**, on a packed chain: every output entry that an inference block contributes products to, at a
 position that is not full for it, is split. -/
 theorem other_positions_packed {n : ℕ} (P : Partition D n) (u : Fin n) :
     ∀ ℓ t i j, c.prod ℓ t i j ∈ P.gates u → ¬ c.Full (P.gates u) t → c.Split P ℓ t i := by
@@ -37,7 +37,7 @@ theorem other_positions_packed {n : ℕ} (P : Partition D n) (u : Fin n) :
   exact hu ▸ hw
 
 open Classical in
-/-- **The split entries' contributions**, on a packed chain: the IUs' `Y`s add up to at most `2 ∑ (spread − 1)`. -/
+/-- **The split entries' contributions**, on a packed chain: the inference blocks' `Y`s add up to at most `2 ∑ (spread − 1)`. -/
 theorem sum_card_outputsOther_le_packed {n : ℕ} (P : Partition D n) :
     ∑ u, #(outputsOtherPacked c (P.gates u)) ≤
       2 * ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) := by
@@ -128,7 +128,7 @@ theorem partialSums_count_packed {c d : RegisteredCircuit} {M : PartialContainme
   linarith
 
 open Classical in
-/-- **Training's incompressibility gives the activations'**, on a packed chain: a small IU is a division of `c` into
+/-- **Training's incompressibility gives the activations'**, on a packed chain: a small inference block is a division of `c` into
 it and the rest. -/
 theorem activationsIncompressible_of_training_packed {c : RegisteredCircuit} {k : ℕ} {ch : PackedChain c.D k}
     {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ} (hba : 0 ≤ b_a)
@@ -141,7 +141,7 @@ theorem activationsIncompressible_of_training_packed {c : RegisteredCircuit} {k 
   exact le_of_max_charge_left hba h0.1
 
 open Classical in
-/-- **The partial-sum rule with dark gates, in reads, at most `k` products to a gate**: each dark gate is a small IU of
+/-- **The partial-sum rule with dark gates, in reads, at most `k` products to a gate**: each dark gate is a small inference block of
 its own, whose partial sums are within its reads. -/
 theorem PackedIncompressibleContainedMatMulOn_rate :
     ∀ (k Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
