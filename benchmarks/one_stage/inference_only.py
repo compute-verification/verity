@@ -171,7 +171,7 @@ def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, An
     priced by `price` where it can be, and the keys of the rest."""
     from verity_vllm.program.predict import block_counts as BC
 
-    table, unpriced = BC.gate_table(BC.primitives(fns))
+    table, unpriced = BC.gate_table(fns)
     priced, left = {}, []
     for key in unpriced:
         p = price(key)
@@ -259,7 +259,7 @@ def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: M
         k = BC.fresh(doc, m, pins, roots)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's fresh bits: {e}") from e
-    return {"definition": PV2.definition_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
+    return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
             "gates": g, "fresh": k, "table": table, "priced": priced}
 
 
