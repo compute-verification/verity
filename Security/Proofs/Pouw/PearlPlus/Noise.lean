@@ -17,6 +17,7 @@ public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactProofs
 public import Proofs.Properties.Core.Evaluate
+import all Init.Data.String.Defs
 
 /-!
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
