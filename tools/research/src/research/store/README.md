@@ -496,7 +496,7 @@ research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
-research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
+research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs; a run with run custody: `research data custody RUN --publish`)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
 research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
@@ -530,7 +530,7 @@ Active run state stays in the run registry; the store only ever sees completed/f
 
 With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
 the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
+(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`, and takes one past 24h with `--custody-ttl 24h`, warning that a run outliving its key is repaired after with `research data custody RUN --publish`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
 attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
