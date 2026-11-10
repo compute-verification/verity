@@ -710,9 +710,10 @@ class GitHub:
             if r.returncode:
                 raise QueueError(f"gh api {path}: {(r.stderr or r.stdout).strip()[-300:]}")
             try:
-                page = json.loads(r.stdout).get(key)
-            except (ValueError, AttributeError):
-                page = None
+                doc = json.loads(r.stdout)
+            except ValueError:
+                raise QueueError(f"gh api {path}: its answer isn't JSON: {r.stdout.strip()[-200:]}") from None
+            page = doc.get(key) if isinstance(doc, dict) else None
             if not isinstance(page, list):
                 raise QueueError(f"gh api {path}: its answer holds no `{key}` list: {r.stdout.strip()[-200:]}")
             out += [d for d in page if isinstance(d, dict)]

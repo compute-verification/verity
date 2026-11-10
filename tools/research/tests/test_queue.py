@@ -4821,7 +4821,8 @@ def test_a_commit_s_statuses_and_check_runs_are_read_whole_from_its_repository_o
         hub.statuses("abc")
     for answer, why in ((subprocess.CompletedProcess([], 1, "", "HTTP 403: Resource not accessible by integration"), "HTTP 403"),
                         (subprocess.CompletedProcess([], 0, json.dumps({"message": "Not Found"}), ""), "holds no `check_runs` list"),
-                        (subprocess.CompletedProcess([], 0, "[]", ""), "holds no `check_runs` list")):
+                        (subprocess.CompletedProcess([], 0, "[]", ""), "holds no `check_runs` list"),
+                        (subprocess.CompletedProcess([], 0, "<html>502</html>", ""), "its answer isn't JSON: <html>502</html>")):
         monkeypatch.setattr(subprocess, "run", lambda argv, answer=answer, **kw: answer)
         with pytest.raises(QueueError, match=why):
             hub.check_runs("abc")
