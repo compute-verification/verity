@@ -82,11 +82,11 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P

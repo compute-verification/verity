@@ -28,11 +28,11 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity.ml.circuits.evaluation.bits import evaluate_bits, peak_bytes
-from verity.ml.circuits.refs import runs
+from verity.circuits import boolean as BL
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.evaluation.batch import type_dtype, type_shape
+from verity.circuits.evaluation.bits import evaluate_bits, peak_bytes
+from verity.circuits.refs import runs
 
 __all__ = ["BITS_MAX", "Check", "MEM_BYTES", "Model", "Walk", "family", "walk"]
 

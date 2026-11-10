@@ -409,8 +409,8 @@ def compare_cache(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_insert_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4QNormRopeKvInsert_v1{NH=16,...}` (the reference) against the twin, every output word."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     t = job["token"]
@@ -436,8 +436,8 @@ def compare_iq(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_indexer_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4IndexerQ_v1{H=64,...}` (the reference) against the twin."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     t = job["token"]
@@ -558,8 +558,8 @@ def _dev(a: np.ndarray, dtype=None):
 def launch_sumsq_probe() -> dict[str, Any]:
     """Run the non-served-eps query head and compare every word with the fused Definition and the unfused mutant."""
     import torch
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     import vllm._C_stable_libtorch  # noqa: F401
 
@@ -657,7 +657,7 @@ def launch_indexer(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the seams: the insert's row is `FlashMlaKvRow_v1{448, 64, 64}`'s
     input, the indexer's outputs `DsaMqaLogit_v1{H=64, D=128}`'s q and w."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa as Dsa
     from verity.ml.definitions.registry import flashmla as F
 

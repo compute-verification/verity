@@ -1,7 +1,7 @@
 # attn_bf16: attention's BF16 GEMMs, bit-exact to their Definition
 
 QK^T and PV for one H100/H200 (sm_90a) or RTX PRO 6000 (sm_120a), each output word exactly
-`GemmCoordinate_v2{K, GEMM_HOPPER}` (`verity.ml.circuits.ops.gemm`): K/16 `mma.sync.m16n8k16` BF16 steps in ascending k
+`GemmCoordinate_v2{K, GEMM_HOPPER}` (`verity.circuits.ops.gemm`): K/16 `mma.sync.m16n8k16` BF16 steps in ascending k
 from +0, then `cvt.rn.bf16.f32`. QK^T's K is the head dim; PV's is the larger of `kpv` and the query's KV length padded to
 a multiple of 16, both operands zero-padded to it. Softmax is its own Definition, so QK^T's words come out and PV's P goes in.
 Decode (one query a sequence), causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a BF16 KV

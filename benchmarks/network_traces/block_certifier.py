@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.pous import wipe_monitoring
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 
 PROTOCOL = "verity/certifier/v0"
 #: the block record's owner by default: the lane that runs the network's sessions (``site.json``'s ``lane``)

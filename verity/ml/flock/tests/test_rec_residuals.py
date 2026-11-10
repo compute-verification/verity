@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.ml.commitments import hm96
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR
@@ -100,7 +100,7 @@ def test_the_unit_sums_each_residuals_products_leaf_by_leaf():
 @pytest.mark.slow
 def test_the_definition_computes_the_reference():
     """``InnerRepCheck{S_SMALL}`` evaluated bit-sliced from its descriptor, on the unit's cases."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     cases = _cases(random.Random(7), 3)
     bits = lambda ws: np.array([[(w >> j) & 1 for j in range(16)] for w in ws], dtype=np.uint8)

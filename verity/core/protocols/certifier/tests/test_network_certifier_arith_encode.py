@@ -490,7 +490,7 @@ def test_the_charge_circuit_is_the_reference():
 def test_build_charge_inline():
     """`build_charge`, the call a caller's circuit makes, is the proof block: its public inputs split by
     `charge_fields`."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
     N, rng = 3, random.Random(3)
     cases = [_random_charge(rng, N) for _ in range(40)]
     C = Circuit(cse=True)
@@ -556,7 +556,7 @@ def test_size_counts_the_gates():
 def test_a_parts_build_is_called_as_the_lowering_calls_it(part, key):
     """Flock's lowering (`ir_lower._boolean_activation`) passes the statics to ``build`` only when the part has some, so a
     part without any, ArithEncodeFinish_v1, takes the elements alone."""
-    from verity.ml.circuits.boolean.trace import trace
+    from verity.circuits.boolean.trace import trace
 
     S = SimpleNamespace(**dict(zip(part.statics, key)))
     build = (lambda C, *e: part.build(C, S, *e)) if part.statics else part.build
@@ -570,9 +570,9 @@ def test_no_and_of_the_charge_reads_a_form_its_earlier_decisions_grew(traced):
     """The carried words are committed once a decision, as rows of a lowering and in the gate trace alike (where
     `C.commit` is the word itself), so the widest AND operand is the same at every N and the build linear in N. Without
     the copies it grows with each decision, 2,983 terms at N = 2 and 3,006 at N = 3."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.boolean.forms import Circuit
-    from verity.ml.circuits.boolean.trace import TracingCircuit
+    from verity.circuits import boolean as BL
+    from verity.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.trace import TracingCircuit
 
     def widest(N):
         C = (TracingCircuit if traced else Circuit)(cse=True)

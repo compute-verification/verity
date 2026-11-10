@@ -12,13 +12,13 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ml.circuits import ports as PT
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate, evaluate_bits
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import runs
-from verity.ml.circuits.types import Array
+from verity.circuits import ports as PT
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate, evaluate_bits
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import runs
+from verity.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1window as HW

@@ -12,7 +12,7 @@ def _network_egress_roots() -> list[Any]:
     class (16 256-byte cells in 4 lanes of 4, 4 request slots of 64 outputs, 17-bit ids, D = 22), at the w63k4 scan's
     (scan_zk.py's ``w63k4``: 16 512-byte cells in 4 lanes of 4, 4 request slots of 4 outputs, 17-bit ids, D = 27), and
     at the smallest even cell with lanes of 3, more request slots than lanes, K not a power of two and D = 0."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.core.protocols.certifier.egress import EgressBucket
 
     return [

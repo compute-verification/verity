@@ -11,8 +11,8 @@ import dataclasses
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule

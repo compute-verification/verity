@@ -1,4 +1,4 @@
-"""A static MoE pair unit's select of its expert's word (`MoeSelectBf16x{E}_v1`, circuits' `verity.ml.circuits.ops.moe`) and a
+"""A static MoE pair unit's select of its expert's word (`MoeSelectBf16x{E}_v1`, circuits' `verity.circuits.ops.moe`) and a
 routed FP8 expert's gather (`GatherE4m3x{E}_v1`, vLLM's `fp8_moe_experts`) lower by their `tail_pieces.FAMILIES` pieces in a
 process that never made their Boolean forms: the word at every id in [0, E) and the fill at the ids outside it (E, the negative
 ids, the widest), on random columns, with no lookup, the select in the ANDs of circuits' `MoeSelectBf16x{E}_v2` (its pins at
@@ -11,9 +11,9 @@ import random
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

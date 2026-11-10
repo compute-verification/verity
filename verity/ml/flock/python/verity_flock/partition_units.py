@@ -1,4 +1,4 @@
-"""C-Flock over an arbitrary partition: every unit class (`verity.ml.circuits.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
+"""C-Flock over an arbitrary partition: every unit class (`verity.circuits.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
     uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
@@ -28,11 +28,11 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.cut import CallGraph, check_cut
-from verity.ml.circuits.program import input_id
-from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
+from verity.circuits.cut import CallGraph, check_cut
+from verity.circuits.program import input_id
+from verity.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 from verity.ml.randomness import derive
 
 from . import gf2
@@ -227,8 +227,8 @@ def check(units: PartitionUnits, T: int = 16, seed: int = 0, max_gates: int = 1 
 
 def one_call(fn: Any) -> Any:
     """A Program whose one Call is ``fn`` over Input gates."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.program import Program
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.program import Program
 
     params, ret = fn.signature()
     shell = CompositeDefinition(f"OneCall[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *x: B.call(fn, *x),
@@ -237,8 +237,8 @@ def one_call(fn: Any) -> Any:
 
 
 def _program(a: argparse.Namespace) -> Any:
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.program import Program
+    from verity.circuits.defs import bind
+    from verity.circuits.program import Program
 
     from circuit_check import targets as TG
 

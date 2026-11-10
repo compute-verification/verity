@@ -40,4 +40,4 @@ paths = ["verity/core", "verity/ml"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_records_audit.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/circuits/ops"]

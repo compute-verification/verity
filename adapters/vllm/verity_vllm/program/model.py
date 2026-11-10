@@ -30,7 +30,7 @@ import numpy as np
 
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.prims import BF16
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Array, RecordType, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 

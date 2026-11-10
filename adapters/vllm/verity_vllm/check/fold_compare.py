@@ -41,15 +41,15 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.check.checkpoint_words import MLA_LAYER_FIELD, load_safetensors_words, mla_field_words, mla_moe_sources
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.circuits.evaluate import evaluate_call
 from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
-from verity.ml.circuits.layout import FunctionCall
-from verity.ml.circuits.refs import Refs, runs
+from verity.circuits.layout import FunctionCall
+from verity.circuits.refs import Refs, runs
 from verity.ml.definitions.registry import b1
-from verity.ml.circuits.types import Array, Tuple as TupleT, Type
+from verity.circuits.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, fold, summarize

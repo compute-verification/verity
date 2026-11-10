@@ -49,9 +49,9 @@ from functools import partial
 
 import numpy as np
 
-from verity.ml.circuits.boolean.forms import ONE, Circuit, L
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.layout import FunctionCall, Region
+from verity.circuits.boolean.forms import ONE, Circuit, L
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.layout import FunctionCall, Region
 
 from . import ir_lower as IL
 from . import tmpl as T

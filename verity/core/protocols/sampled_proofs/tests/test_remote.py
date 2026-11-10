@@ -25,11 +25,11 @@ import pytest
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.core.protocols.sampled_proofs.coins import ChallengerCoins, coins_within
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, Value
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.ml.commitments import coin_tree as CT

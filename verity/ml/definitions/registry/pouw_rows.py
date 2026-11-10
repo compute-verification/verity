@@ -20,13 +20,13 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
-from verity.ml.circuits.ops import fp32 as F
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.ops.ncp import NcpDequant
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
+from verity.circuits.ops import fp32 as F
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.ncp import NcpDequant
 
 BF16, F32, U32, I7, BIT = Value(16), Value(32), Value(32), Value(7), Value(1)
 A16I7 = Array(16, I7)

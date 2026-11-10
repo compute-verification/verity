@@ -136,8 +136,8 @@ from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import egress as EG
 from verity.core.protocols.certifier import head_check as HC

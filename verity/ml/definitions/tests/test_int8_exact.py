@@ -7,12 +7,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate, evaluate_batch
+from verity.circuits.types import Array
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import boolean_int8 as BX
 from verity.ml.definitions.registry import int8_exact as X

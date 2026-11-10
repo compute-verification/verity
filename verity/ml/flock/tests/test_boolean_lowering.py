@@ -1,5 +1,5 @@
-"""Flock lowers the Boolean BF16 Definitions (`verity.ml.circuits.ops.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
-(`verity.ml.circuits.ops.boolean.scalar`) by their builders: each step and cast and the AND lower to exactly the circuit of the piece
+"""Flock lowers the Boolean BF16 Definitions (`verity.circuits.ops.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
+(`verity.circuits.ops.boolean.scalar`) by their builders: each step and cast and the AND lower to exactly the circuit of the piece
 their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the coordinate to
 `GemmCoordinate_v2`'s, whose words it evaluates to. A Boolean Definition whose builder commits keeps its commits as rows, so
 its AND operands stay a few bits however many activations are chained."""
@@ -8,18 +8,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops import gemm as G
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops import gemm as G
 from verity.ml.kernels import tc as K
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops import scalar as S
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import scalar as BSC
-from verity.ml.circuits.types import Array
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as S
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import scalar as BSC
+from verity.circuits.types import Array
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 

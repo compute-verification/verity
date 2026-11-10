@@ -35,10 +35,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import mufu as MU
 
 HOPPER = G.GEMM_HOPPER["DOT"]
 LOG2E = torch.tensor([0x3FB8AA3B], dtype=torch.int32).view(torch.float32)

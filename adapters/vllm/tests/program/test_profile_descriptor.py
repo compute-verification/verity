@@ -3,10 +3,10 @@ terms follow their closed forms."""
 
 from __future__ import annotations
 
-from verity.ml.circuits import REGISTRY
+from verity.circuits import REGISTRY
 
 from verity_vllm.program import profile_descriptor as PD
-from verity.ml.circuits.codec import SCHEMA_V0, decode_program, descriptor_size, encode_program, program_digest
+from verity.circuits.codec import SCHEMA_V0, decode_program, descriptor_size, encode_program, program_digest
 from verity.ml.definitions.registry import b1
 
 BN = b1.BN

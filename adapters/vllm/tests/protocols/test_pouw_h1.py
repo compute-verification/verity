@@ -29,7 +29,7 @@ from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveRecord  # noqa: E402
-from verity.ml.circuits.refs import runs  # noqa: E402
+from verity.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402

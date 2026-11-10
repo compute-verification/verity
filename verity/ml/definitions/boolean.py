@@ -1,11 +1,11 @@
 """The served Program on bits: the Boolean version of each Definition a derived Program calls, and how far a Program is from
 pure bits.
 
-A Definition is Boolean (`verity.ml.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
-only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`: its
+A Definition is Boolean (`verity.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
+only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
-looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity.ml.definitions.registry` (`registry.catalog`), and
+looked up among every module of `verity.circuits.ops.boolean` and of `verity.ml.definitions.registry` (`registry.catalog`), and
 `NoBooleanVersion` names each Definition it finds none for.  A Boolean Definition marked ``opt_in`` is left out of the table:
 it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
 so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
@@ -43,11 +43,11 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
+from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
+from verity.circuits.types import Array, RecordType, Tuple, Type, Value
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
 #: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
@@ -64,7 +64,7 @@ def word_descriptor(d: str | Path) -> Path:
 def write_word(d: str | Path, program, word_digest: str) -> str:
     """Write a lifted Program's word Program into derive dir ``d`` (`WORD_DESCRIPTOR`) and return its digest, refused unless it is
     ``word_digest`` (the derive's ``ir.word_digest``)."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     desc = encode_program(program.word)
     digest = program_digest(desc)
@@ -104,12 +104,12 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     from verity.ml.definitions.registry.catalog import load as load_registry
     _, errors = load_registry()
     errors = list(errors)
-    core = importlib.import_module("verity.ml.circuits.ops.boolean")
+    core = importlib.import_module("verity.circuits.ops.boolean")
     for m in sorted(pkgutil.iter_modules(core.__path__), key=lambda m: m.name):
         try:
-            importlib.import_module(f"verity.ml.circuits.ops.boolean.{m.name}")
+            importlib.import_module(f"verity.circuits.ops.boolean.{m.name}")
         except Exception as e:  # noqa: BLE001  (named in every gap: a module that fails to import serves nothing)
-            errors.append(f"verity.ml.circuits.ops.boolean.{m.name}: {type(e).__name__}: {e}")
+            errors.append(f"verity.circuits.ops.boolean.{m.name}: {type(e).__name__}: {e}")
     exact: dict[str, list] = {}
     by_name: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
@@ -125,7 +125,7 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
 
 
 def load() -> list[str]:
-    """Every module that registers a Boolean Definition imported (`verity.ml.circuits.ops.boolean`'s and the integration's registry),
+    """Every module that registers a Boolean Definition imported (`verity.circuits.ops.boolean`'s and the integration's registry),
     so a Boolean Definition's id resolves in `REGISTRY`; the modules that failed to import."""
     return list(_load()[2])
 
@@ -171,7 +171,7 @@ def _families() -> tuple:
     """The Boolean versions made on demand, as their word Definitions are (a family by id): (word id pattern, its Boolean
     version's factory)."""
     if not _FAMILIES:
-        from verity.ml.circuits.ops.boolean import scalar as SC
+        from verity.circuits.ops.boolean import scalar as SC
         from verity.ml.definitions.registry import boolean_gather as BGA
         _FAMILIES.extend([
             (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
@@ -205,7 +205,7 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     bindings = getattr(fn, "bindings", None) or {}
     notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
-        from verity.ml.circuits.boolean.trace import word_of
+        from verity.circuits.boolean.trace import word_of
         for d in by_name.get(fn.name, ()):
             # ``word_statics``: the statics its word has no counterpart for, as the word Definitions they compute, each bound to its
             # Boolean version (`RMSNormFusedCuda_v3`'s RSQRT computes `RsqrtApprox_v1`)
@@ -383,7 +383,7 @@ def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
 
 def _word_static(v: Any) -> Any:
     """A Boolean Definition's binding as its word's: a Boolean Definition as the word Definition it computes (`trace.word_of`)."""
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
     if isinstance(v, CompositeDefinition):
         v = bind(v)
     if isinstance(v, FunctionDefinition) and getattr(getattr(v, "defn", v), "word", None) is not None:
@@ -572,7 +572,7 @@ def dry_run(program) -> dict:
 
 
 def load_program(path: Path):
-    from verity.ml.circuits.codec import decode_program, program_digest
+    from verity.circuits.codec import decode_program, program_digest
     from verity.ml.definitions.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:

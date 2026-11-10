@@ -9,8 +9,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics on the H200's k16 step: the steps and their halves cut at x's words, the
     coordinates at TK 64 (over 150k gates already, so the suite keeps a family's smallest binding only: `targets.select`), and the
     pair forms over 3 experts, which reach the gathers and the schedule."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import boolean_marlin_moe as BM
 
     D = BG.HopperBF16WgmmaDot16

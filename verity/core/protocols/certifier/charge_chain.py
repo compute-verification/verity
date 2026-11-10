@@ -41,11 +41,11 @@ from collections.abc import Sequence
 from functools import lru_cache
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, Circuit, and_reduce
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ZERO, Circuit, and_reduce
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import arith_encode as AE

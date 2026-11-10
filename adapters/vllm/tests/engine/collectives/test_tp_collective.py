@@ -14,11 +14,11 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.properties.quarantine_lint import lint
 from tests.engine.collectives import collective_link as CL
 from verity_vllm.engine.collectives.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
-from verity.ml.circuits.codec import decode_program, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluate import evaluate_region
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import decode_program, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluate import evaluate_region
+from verity.circuits.layout import resolve
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import b1_tp2
 from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.quarantine import collective as QC

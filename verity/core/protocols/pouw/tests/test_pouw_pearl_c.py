@@ -18,9 +18,9 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.ml.crypto.turboshake import turboshake128
-from verity.ml.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
-from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
+from verity.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
+from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C

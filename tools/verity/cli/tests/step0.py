@@ -28,7 +28,7 @@ from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 from verity.core.wire import Refused
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity.ml.crypto import lms
 
 Entry = Callable[[Mapping[str, Any], Path, bool], int]

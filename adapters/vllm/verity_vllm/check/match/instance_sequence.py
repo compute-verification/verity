@@ -7,7 +7,7 @@ import collections
 import re
 import sys
 
-from verity.ml.circuits.program import RUN, input_id
+from verity.circuits.program import RUN, input_id
 from verity_vllm.check.match import compiler_form
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import split_selects
@@ -52,7 +52,7 @@ class RootView(PeerReads, PX.PrefixInput):
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False):
-        from verity.ml.circuits.codec import program_digest
+        from verity.circuits.codec import program_digest
         self.label = label
         self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
@@ -74,7 +74,7 @@ class RootView(PeerReads, PX.PrefixInput):
             self.param_names = lr["params"]
             del lr
         else:
-            from verity.ml.circuits.codec import decode_program
+            from verity.circuits.codec import decode_program
             descriptor_id, runs = self._node_functions()
             dec = decode_program(desc, registry)
             root = dec.root
@@ -124,7 +124,7 @@ class RootView(PeerReads, PX.PrefixInput):
         self._segment()
 
     def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
-        from verity.ml.circuits import codec, refs
+        from verity.circuits import codec, refs
         return codec.descriptor_id, refs.runs
 
     def _bind_splits(self) -> None:

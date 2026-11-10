@@ -194,7 +194,7 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     import hashlib
 
     from verity.core.protocols.pouw import credit as CR
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits.codec import program_digest
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     srv = _Server(monkeypatch)

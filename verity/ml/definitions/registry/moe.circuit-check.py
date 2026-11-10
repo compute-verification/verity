@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """GLM-5.3's sigmoid `noaux_tc` router (`MoeRouterSigmoidBias_v1`, the word view of `boolean_moe`'s) and its one-field-a-slot
     form (`MoeRouterSigmoidBiasSlots_v1`) at 8 experts, 2 slots, on both of its kernels."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import moe as M
 
     return [

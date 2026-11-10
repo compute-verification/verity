@@ -3,7 +3,7 @@ decode token-step and one prefill token of each model of `frontier_models.json`,
 nonlinear units by class and by role, with the stacked share f of `share.py`. Nonlinear units are the gate model's
 (`Accounting.Gates`): only linear maps with coefficients fixed before the coins are free (a weight times an activation),
 every product of two run-dependent values is a data product, a unit, and every other nonlinear operation a unit as
-property/v1 (`verity.ml.circuits.stacking`) counts it.
+property/v1 (`verity.circuits.stacking`) counts it.
 
 A model is composed from atoms: the exact-int8 profile's Definitions (vLLM's registry: `int8_exact`, `moe`, `b1`, `act`) bound
 at the model's statics, whose property/v1 units `atoms.py` counts (measured), a few operations the registry has no Definition

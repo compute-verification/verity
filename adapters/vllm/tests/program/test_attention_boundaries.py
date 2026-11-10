@@ -44,7 +44,7 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.ml.definitions.evidence"
 
@@ -55,8 +55,8 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
                 "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
@@ -136,7 +136,7 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
-        "from verity.ml.circuits.defs import composite\n"
+        "from verity.circuits.defs import composite\n"
         "from verity.ml.definitions.registry import prims as P, targets\n"
         "from verity.ml.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"

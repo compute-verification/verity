@@ -2584,7 +2584,7 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/",
+_COLD_PREFIXES = ("verity/circuits/", "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/",
                   "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
                   "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
 

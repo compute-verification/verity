@@ -16,4 +16,4 @@ inputs = ["verity", "benchmarks/torch_gpu/commit_slots/slots.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_replay_bundle.py"]
-paths = ["verity/ml/circuits"]
+paths = ["verity/circuits"]

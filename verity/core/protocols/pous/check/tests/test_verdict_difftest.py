@@ -31,10 +31,10 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import verdict_circuit as V
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as EB
-from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as EB
+from verity.circuits.evaluation.reference import standalone_call
 from verity_difftest import protocol as P
 
 LEAN = Path(__file__).resolve().parents[1]

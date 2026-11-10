@@ -157,7 +157,7 @@ def _sample_prefill(rng, n, params, *, NH, NP, D, BN, DOT, SCALE):
 
 def _targets(defs: dict, family: str) -> list:
     """The specialisations the self-check binds: small statics, one pair and two."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     d, dot, s = defs, FT.HopperBF16WgmmaDot16, 32 ** -0.5
     blk = dict(D=32, BN=16, DOT=dot, SCALE=s)

@@ -19,8 +19,8 @@ import math
 import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of

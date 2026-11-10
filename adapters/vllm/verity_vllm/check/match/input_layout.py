@@ -12,7 +12,7 @@ def weights_input_nodes(B: "SEQ.RootView", n_request_params: int, n_seed_params:
                         n_witness_params: int = 0) -> set[int]:
     """The fold's shared WEIGHTS parameter as a SET of Input nodes: every Input node of the oracle
     RootView that no request owns.  The fold's root parameters are `prompt_<r>` (one per request, header order), then `seed_<i>` (one per
-    seeded request), then ONE `weights` Record (`fold._header`).  `verity.ml.circuits.program._lower_input` lowers a width-homogeneous
+    seeded request), then ONE `weights` Record (`fold._header`).  `verity.circuits.program._lower_input` lowers a width-homogeneous
     Record to ONE `Input` batch (the bf16 dense models: `n_input_nodes - 1` was that node) but a MIXED-width Record to one batch PER LEAF
     FIELD (Qwen3-4B-FP8: e4m3 weight + f32 `weight_scale_inv` per linear + bf16 norms -> 435 nodes at B=1), so the last Input node is not
     "the weights" and the node count says nothing about the number of requests.  The request-owned Inputs are exactly the first

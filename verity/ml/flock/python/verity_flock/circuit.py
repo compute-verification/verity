@@ -162,9 +162,9 @@ def set_statics(input_set) -> dict:
 
 def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
     """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
-    descriptor id (``verity.ml.circuits.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
+    descriptor id (``verity.circuits.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
     reference no core Definition wraps keeps its own key."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
 
     digests = sub.program_digests([statics or {}])
     try:
@@ -178,8 +178,8 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 def program_sha512(sub, statics: dict | None = None) -> str:
     """META ``program_sha512``: core's ``program_digest`` of the subcircuit's Definition at its default statics; a caller that
     builds the partition over another Program passes that Program's digest instead."""
-    from verity.ml.circuits.codec import encode_program, program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import encode_program, program_digest
+    from verity.circuits.program import Program
 
     try:
         desc = encode_program(Program(sub.definition(**(statics or {}))))
@@ -552,7 +552,7 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 
 
 def _type_bits(t) -> int:
-    from verity.ml.circuits.types import Array, RecordType, Value
+    from verity.circuits.types import Array, RecordType, Value
 
     if isinstance(t, Value):
         return t.w
@@ -565,7 +565,7 @@ def unit_witness(definition) -> dict:
     """What a unit needs read off its Definition, before any lowering: its ANDs (`ir_lower.definition_ands`), its parameters'
     and returns' bits, and ``k``, the least with ``2^k`` above their sum, so the smallest slot `compose` could give the unit
     (whose block holds its rows' hashes and the mask besides)."""
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.evaluation.reference import signature_of
 
     params, ret = signature_of(definition)
     ands, ports = IL.definition_ands(definition), sum(_type_bits(t) for t in params) + _type_bits(ret)
@@ -616,7 +616,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (`Flock.HmRow`). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
-    The data guard counts a port whose derivation it does not list as data (``verity.ml.circuits.operations.public_data``).
+    The data guard counts a port whose derivation it does not list as data (``verity.circuits.operations.public_data``).
 
     ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
@@ -1125,13 +1125,13 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     (``{port: (n, words)}``), else the set's.
 
     ``identifier``: the header's ``identifier`` (``Flock.HmRow``), a JSON object Flock does not read, on which canonical JSON
-    is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
+    is RFC 8785 (``verity.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
     ``digests`` and ``meta``: ``text``'s (:func:`digest`, :func:`class_digest`; :func:`meta_of`), from a caller that writes many
     statements of one circuit (`class_statement.UnitStager`), whose ``text`` may then be None (a circuit it never holds);
     else computed here."""
-    from verity.ml.circuits.codec import jcs_domain_error
+    from verity.circuits.codec import jcs_domain_error
 
     if text is None and (digests is None or meta is None):
         raise ValueError("write: without the circuit's text, give its digests and META")

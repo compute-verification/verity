@@ -17,9 +17,9 @@ import pytest
 import transformer as T
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k
 from verity.core.protocols.sampled_proofs.optimize import Candidate
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.ops import gemm as G
 
 CENSUS = Path(__file__).resolve().parents[2] / "census" / "hardware.json"
 CIR_100 = ("Argmax", "EmbedSelect", "Quant", "Relu", "Rms", "Softmax")

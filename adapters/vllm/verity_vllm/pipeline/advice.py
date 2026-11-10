@@ -66,7 +66,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 

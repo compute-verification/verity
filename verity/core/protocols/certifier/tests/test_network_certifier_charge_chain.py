@@ -197,7 +197,7 @@ def test_the_circuit_is_the_reference():
 
 def test_build_link_inline():
     """`build_link`, the call a caller's circuit makes, is the proof block: its book split by `book_fields`."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
     N, rng = 3, random.Random(3)
     cases = [_random_link(rng, N) for _ in range(40)]
     C = Circuit(cse=True)

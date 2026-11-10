@@ -49,7 +49,7 @@ import numpy as np
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
 from verity.core.protocols.remote_bandwidth.store import store_salt
-from verity.ml.circuits import requirement
+from verity.circuits import requirement
 from verity.ml.commitments import merkle_depth
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,

@@ -14,7 +14,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (128001); `SelectCollect_v1` and `SelectEntry_v1` at TINY's select (V 256, groups of 16) and small class, and at
     Llama-3.2-1B's (V 128,256) at 4 outputs and 32 prompt ids with its stop id, `SelectEntry_v1` also at the class of
     record's (64 outputs, 1,024 prompt ids)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import io_shell as X
 
     return [("TokenFeed_v1:4:1", lambda: bind(X.TokenFeed, NP=4, FIRST=True)),

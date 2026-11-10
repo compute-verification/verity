@@ -10,8 +10,8 @@ import operator
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.strided_views import _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack, _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of, type_of_tensor, width_of

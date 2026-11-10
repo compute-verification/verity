@@ -19,9 +19,9 @@ def _pouw_roots() -> list[Any]:
     (`population`, made as every root here is, unbuilt: its Program's port rules are `test_h1tile_population`'s), a window's
     program over the pinned tile: each instance's salt a coin, its position a position and its receipt a sink."""
     from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.circuits.population import population
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity.circuits.population import population
 
     if H.SG is None:
         return []

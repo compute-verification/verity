@@ -1,4 +1,4 @@
-"""The partition as a named query over a program, P = Q(C): core's `verity/partition/v1` (`verity.ml.circuits.partition_object`),
+"""The partition as a named query over a program, P = Q(C): core's `verity/partition/v1` (`verity.circuits.partition_object`),
 applied here with the template queries `Q_template_instance` v0 and `Q_template_instances` v0, `Q_word` v1 at `X = 16`
 and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the template queries.
 
@@ -14,7 +14,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
   (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class
-  (`verity.ml.circuits.partition_v2`'s `UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its
+  (`verity.circuits.partition_v2`'s `UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its
   class the least that holds them (`unit_class`), a public property of its Definition: a program with a proof block wider
   than the widest class is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a
   `Q_call` proof block's count the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
@@ -24,7 +24,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
-  templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
+  templates by descriptor id, are `verity.circuits.population`'s, named here too: a serving stack builds its window's
   program with the same builders. v0 of each, which names only the counts, is kept for the records made with it
   (`POPULATION_VERSIONS`).
 
@@ -36,16 +36,16 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import boundary_widths, call_scope
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
+from verity.circuits import partition_object as PO
+from verity.circuits.cut import boundary_widths, call_scope
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.layout import resolve
+from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
-from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.types import Value
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
+from verity.circuits.program import Program, is_input
+from verity.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)

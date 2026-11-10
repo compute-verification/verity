@@ -112,8 +112,8 @@ def test_plain_tables_holds_the_program_to_the_circuit(root, tmp_path):
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
 
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.circuits.program import Program
 
     other = tmp_path / "other.json"
     other.write_bytes(canonical_json(encode_program(Program(TM.rope_head(64).definition()))))

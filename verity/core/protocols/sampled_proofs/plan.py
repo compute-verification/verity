@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any
 
-from verity.ml.circuits.layout import FunctionCall, Gate, GateSelection
-from verity.ml.circuits.program import Program
+from verity.circuits.layout import FunctionCall, Gate, GateSelection
+from verity.circuits.program import Program
 
 DEFAULT_CLASS = "default"
 

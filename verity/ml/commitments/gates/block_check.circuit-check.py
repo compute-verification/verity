@@ -15,7 +15,7 @@ def _block_check_roots() -> list[Any]:
     is past any whole lowering here, so each part is also bound at a deployed field, among them the 512- and 1,024-bit
     Karatsuba squares and their folds by C, which no toy word reaches. The toy's whole lowering (about 2.5 M ANDs) is over
     the default budget: its correspondence and pin are checked with ``--lower-max-ands 3000000``."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.commitments.gates.block_check import (BlockOpeningCheck, BlockVerdict, CodecBinding, CodecLess, CodecMatch,
                                                          CodecModAdd, CodecRound, CodecWord, LeafMatch, SketchRow)
 

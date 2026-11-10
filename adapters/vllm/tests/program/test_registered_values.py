@@ -6,10 +6,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.constants import program_data
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits.evaluation import evaluate
+from verity.circuits.constants import program_data
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import b1, hopper
 from verity.ml.definitions.registry import fa2_check_inf as F2
 from verity.ml.definitions.registry import prims as P
@@ -137,7 +137,7 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
 
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
     from verity.ml.definitions import boolean as BB
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report

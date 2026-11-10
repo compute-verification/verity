@@ -15,7 +15,7 @@ public import Evaluate.Act
 
 Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands taken unmasked as the Python takes them:
 
-- E0, the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9, `verity.ml.circuits.boolean`): `And<n>_v1` and `Xor<n>_v1`
+- E0, the Boolean profile (`verity/circuits/PROTOCOL.md` §9, `verity.ml.circuits.boolean`): `And<n>_v1` and `Xor<n>_v1`
   for every n ≥ 2, `Not_v1`; and the input primitives `Input<w>_v1` and `RegisteredInput<w>_v1` (§5.2), whose gates take the
   values bound per run (a registered table's are read where a gate reads them, `Evaluate.Walk`).
 - E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.ml.circuits.ops.prims.const`, of which the constant bits are the
@@ -67,7 +67,7 @@ private def hexDigit? (c : Char) : Option Nat :=
   else none
 
 /-- `(w, bits)` of the constant family's id in the one spelling `prims.const(w, bits)` gives it and the decoder takes
-(`verity/ml/circuits/PROTOCOL.md` §9, `prims.CONST_ID`): `Const<w>[0x<h>]_v1` with `w ≥ 1` in decimal without a leading
+(`verity/circuits/PROTOCOL.md` §9, `prims.CONST_ID`): `Const<w>[0x<h>]_v1` with `w ≥ 1` in decimal without a leading
 zero, `bits < 2^w`, and `h` the lowercase hex of `bits` zero-padded to `w / 4` digits, at least one
 (`f"{bits:0{w // 4}x}"`). -/
 def constId? (id : String) : Option (Nat × Nat) := do

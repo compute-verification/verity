@@ -21,11 +21,11 @@ import numpy as np
 import pytest
 
 from verity.ml.commitments import hm96
-from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 

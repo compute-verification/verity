@@ -9,9 +9,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The word Definitions: the gate's f32-out GEMM at GLM-5.3's K (6144) over two W rows, the batched GEMM at two members,
     K = 32, N = 3, and both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four
     splits."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -31,8 +31,8 @@ def _boolean_roots() -> list[Any]:
     the 8-aligned grid.z split-K at K = 64, N = 3, three slices of 24, 24 and 16 words at k-tile 16 (each 24-word slice's
     residue tile of 8 words and 8 zeros before its whole tile).  The f32-out, batched, bf16-workspace, serial and aligned ones
     again on the training routes' step (`CB.TRAIN_DOT`, `HopperBF16WgmmaDot16_v3`)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
 
     HOP, TRAIN = BG.HopperBF16WgmmaDot16, CB.TRAIN_DOT
