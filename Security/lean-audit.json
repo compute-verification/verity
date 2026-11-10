@@ -43,6 +43,10 @@
   "Pouw.CostModel.Hashless": {
    "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
+  },
+  "WeightSecurity.Assumptions.FaultedUseHard": {
+   "owner": "@proofs",
+   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
   }
  },
  "domain": {
@@ -455,6 +459,21 @@
    "owner": "@lean",
    "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
    "why": "The recursion's interface: the outer proof system is zero knowledge at δ₁ against a malicious verifier (`ZKmalRx`), which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs",
+   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
+   "why": "The honest-use rate p the bound is stated relative to: every party of the class steals the weights from honest queries with probability at most p, which holds at p = p_hon by definition, so the bound counts what leaks beyond honest serving; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftServedMinEntropyHonest, TheftFaultedHonest)."
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs",
+   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+   "why": "A condition on the class the honest-use rate is about: it holds the outsider with each covert string written in, which the class of all parties does; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftFaultedHonest)."
+  },
+  "WeightSecurity.NoFault": {
+   "owner": "@proofs",
+   "digest": "264e1f5841fb8b8efce93565492e493c6406dc51d8d8970d46ed6ca367e71251",
+   "why": "The pattern beside each honest query faults no proof block, so the fault budget M counts only the server's faults; the honest witness meets it at the toy deployment (TheftFaultedHonest)."
   },
   "WeightSecurity.Served.UndetectedLe": {
    "owner": "@proofs",
@@ -3343,21 +3362,9 @@
    "issue": "PRF-462",
    "due": "2026-11-10"
   },
-  "WeightSecurity.Assumptions.HonestUseHard": {
-   "owner": "@proofs",
-   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
-   "issue": "PRF-413",
-   "due": "2026-11-17"
-  },
   "WeightSecurity.Assumptions.LeaksThrough": {
    "owner": "@proofs",
    "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
-   "issue": "PRF-413",
-   "due": "2026-11-17"
-  },
-  "WeightSecurity.Assumptions.Simulable": {
-   "owner": "@proofs",
-   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
    "issue": "PRF-413",
    "due": "2026-11-17"
   }
@@ -4559,6 +4566,10 @@
   "Accounting.SecurityProofs.TableReadBinding": {
    "honest": ["Accounting.SecurityProofs.TableReadBinding_honest"],
    "nontrivial": "Accounting.SecurityProofs.TableReadBinding_nontrivial"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
   }
  },
  "unwitnessed": {
@@ -5881,10 +5892,11 @@
     "Definitions.Core",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
+    "Definitions.Assumptions",
     "Definitions.WeightSecurity.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over weight security's definitions and assumptions, never over a proof",
+   "why": "a guarantee is stated over weight security's definitions, its premises and the named assumptions, never over a proof",
    "sealed": true
   },
   "Definitions.Assumptions": {
@@ -5896,10 +5908,12 @@
     "Definitions.Accounting",
     "Definitions.Nci",
     "Definitions.Pouw",
+    "Definitions.WeightSecurity",
+    "Definitions.WeightSecurity.Assumptions",
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism) and PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw), never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism), PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw) and weight security's definitions and premises (for Definitions.Assumptions.WeightSecurity), never a guarantee or a proof"
   }
  },
  "reads_exempt": {
@@ -25866,16 +25880,64 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": [
-     "WeightSecurity.Assumptions.HonestUseHard",
-     "WeightSecurity.Assumptions.LeaksThrough",
-     "WeightSecurity.Assumptions.Simulable"
-    ],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "open": ["WeightSecurity.Assumptions.LeaksThrough"],
     "reads": []
    },
    "type_hash": "e9765a688f6dcb14a14db81583b5eef4eefb1b701eaa7af7e9cbc972256abad0",
    "unfolded_hash": "8f2bdeb5f0947ba7a5dca302c9c3c76a4c2eca1870eddc3a803d5eab2b75c762"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaulted : WeightSecurity.Guarantees.TheftFaulted"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["WeightSecurity.Assumptions.FaultedUseHard"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.NoFault",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.FaultBudget", "WeightSecurity.Assumptions.patternCount"]
+   },
+   "type_hash": "c97d64a78151d0cc29028512eab03c45b8819137d1d7b96344d6357124dba8ac",
+   "unfolded_hash": "06a1b49874ef213c546f56a5377ffa1d7543602033c38a369017c9f8d9f61770"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaultedHonest : WeightSecurity.Guarantees.TheftFaultedHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "WeightSecurity.Assumptions.FaultBudget",
+     "WeightSecurity.Assumptions.FaultedUseHard",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Assumptions.patternCount"
+    ]
+   },
+   "type_hash": "2e12ae30f8e11b937a4ce5276f85cc0844f4ec52099d8b6a729954b61184fb3a",
+   "unfolded_hash": "ba8a1586ca87122a8eebfa76ab323a5f90a1f35a17cc3fd08d8a695f5dd36bd9"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedNontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "WeightSecurity.SecurityProofs.TheftFaultedNontrivial : WeightSecurity.Guarantees.TheftFaultedNontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.patternCount"]
+   },
+   "type_hash": "b40a8234f7dae5f1fa63ddd7db7b8b4e613569b40cfa3145514ca5f33255d431",
+   "unfolded_hash": "3cd9c7d74243d9b1d67f039c82073895e18a3b1cb15c20c92382fb6937efe047"
   },
   "WeightSecurity.SecurityProofs.TheftHonest": {
    "owner": "@proofs",
@@ -25917,8 +25979,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "3ba016bf392579018f28901a3762edbef405dcdecdff27caaccb6e9b4dcf4dd2",
@@ -25943,8 +26009,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard"],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Served.UndetectedLe"],
+    "open": [],
     "reads": []
    },
    "type_hash": "8b2f9f145e791c67699d3e5f661505469364bc71b0a9cc5d04383fc1768c2d05",
@@ -26000,8 +26066,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "9aa3f44f0c9c3699c124835ba59dd0ab41dc4ab634a16922f2c4f8fbffbb9567",
@@ -26028,13 +26098,14 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Population.Dataflow.Checked", "Population.Dataflow.FanOut", "WeightSecurity.Served.UndetectedLe"],
-    "open": [
-     "WeightSecurity.Assumptions.AdviceCovered",
-     "WeightSecurity.Assumptions.EgressTied",
+    "domain": [
+     "Population.Dataflow.Checked",
+     "Population.Dataflow.FanOut",
      "WeightSecurity.Assumptions.HonestUseHard",
-     "WeightSecurity.Assumptions.Simulable"
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
     ],
+    "open": ["WeightSecurity.Assumptions.AdviceCovered", "WeightSecurity.Assumptions.EgressTied"],
     "reads": []
    },
    "type_hash": "f6c9b659a2bff6abb06b6c8487e5acfc032868eb57481edba1d7c5f40911730e",
@@ -27045,7 +27116,8 @@
    "NetTiming.SecurityProofs.SampledLeakCarried": "frozen (no-function): It is SampledLeakChecked for one run that reads an opened row at its opening gates (OpensAtInputs) and leaves one at its closing gates, stated over the sampled audit's statement as Definitions.NetworkCertifier states it, at every compiled sampled verifier where Claims.SamplingGeneric.Compiled.KS holds (its proof reads the proved SampledAuditAccepted), on the statements whose check misses with probability at most εchk (CheckedWitness); its relation (RLeakCarried) reads both rows off the extracted witness, and it bounds AccSeqsCarried, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run from a fixed opened row, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered, checked and opening inputs (freeInputs \\ (reg ∪ chk ∪ prow)).",
    "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (Security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
-   "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (Security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance."
+   "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (Security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
+   "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -32000,6 +32072,12 @@
    "digest": "efdf273874d92486e0a8367f4875bc6090c6146b359059f17a8b4894b8ea0707",
    "definitions": {
     "Pouw.CostModel.Hashless": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
+   }
+  },
+  "Definitions.Assumptions.WeightSecurity": {
+   "digest": "dba9b491637c6007f3d3a3bd3138d181d58bb78c9d60bbcd8c26170a73afd440",
+   "definitions": {
+    "WeightSecurity.Assumptions.FaultedUseHard": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
    }
   },
   "Definitions.Claims": {
@@ -39752,19 +39830,49 @@
    }
   },
   "Definitions.WeightSecurity.Assumptions": {
-   "digest": "7164f4317edf677f397a613d05c7680a48430501a1a0d43d52d69f5238aeb971",
+   "digest": "a26f2f25f464b48d01aa44ac382fa672c7bb1de5abdedb91d56fb28477d5700e",
    "definitions": {
     "WeightSecurity.Assumptions.AdviceCovered": "054221f16cebcc31af98cc455ece0e22d6f6d9ba8ee5490adc946335389fe415",
     "WeightSecurity.Assumptions.EgressTied": "0772acfb5754e63473d5629ccafe4049668a3b928a8fc1a1f3193e088e4ada67",
+    "WeightSecurity.Assumptions.FaultBudget": "080406bc5ffda650543b6f3f67f23c54fdbf93f4e9c28b08c10f159312f12a5c",
     "WeightSecurity.Assumptions.HonestUseHard": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
     "WeightSecurity.Assumptions.LeaksThrough": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
-    "WeightSecurity.Assumptions.Simulable": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29"
+    "WeightSecurity.Assumptions.Simulable": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+    "WeightSecurity.Assumptions.patternCount": "7911fca42b09f80a1931fa880d25bb5112617283c452fd72f6aa59f72f909396"
+   }
+  },
+  "Definitions.WeightSecurity.Cut": {
+   "digest": "44a4a5a4debd8b96d831907e97c5fc8fcb63e0b5d359c7896fe2cc84ee412044",
+   "definitions": {
+    "WeightSecurity.Cut": "482dff7300d5403546fcd13ac3117fc19007912a0e59dddfc320dbb545e971cb",
+    "WeightSecurity.Cut.Cuts": "4100a2305eeae78cf6e291cd5cf2e97d4b739eb0184e1b8c5e53547c4916f40b",
+    "WeightSecurity.Cut.H": "dbd179ebe2b9f560dfe439c8b52470da09db497428e36a269c56e57e61d9307b",
+    "WeightSecurity.Cut.Interior": "a40e291ce0eb725a8b113c6e26dab26fc81843b951ec4e0ebaaf8b00194cac8b",
+    "WeightSecurity.Cut.Interiors": "96597c94e76a601739923924701be166d4d3ad813402a46c04cce8da445ab047",
+    "WeightSecurity.Cut.ask": "f386db6a3d36c1da71e41d727a0cec66407cbe53dc3e8d914751a7a66f028dfc",
+    "WeightSecurity.Cut.fin": "e0570f677997598f4df251196ced05446f3ee22e7c68087aa5cc01833e5b4b2d",
+    "WeightSecurity.Cut.none": "1e12b023022b3fac1393d53ef5d7b17e51e1c11dab9678317882f4c15683085e",
+    "WeightSecurity.Cut.sim": "2b11c89a733f2aecf4ba05eadfd23b4b98b5b065a8ba3d1cc40f631e9644cf73",
+    "WeightSecurity.Cut.size": "43a5519bb676166c30f2a3cab2ba42b231ba9f46b19faa54002cd4e4fa8d7a81",
+    "WeightSecurity.instFintypeInteriors": "bc69230a622e61a8c51d9b7ba2283de5b1c71451f6e59dfcfc7665bf00e35ac6"
+   }
+  },
+  "Definitions.WeightSecurity.Faulted": {
+   "digest": "6489a616852ef1b6b690d8b619f2a24fd9cf7dd10a7438c2824544d8776d996a",
+   "definitions": {
+    "WeightSecurity.NoFault": "264e1f5841fb8b8efce93565492e493c6406dc51d8d8970d46ed6ca367e71251",
+    "WeightSecurity.Outsider.withFaults": "029d3f6e39a4e6112e43dd024984b671317ac8ee30364cbc376cb50a5d3450b2",
+    "WeightSecurity.Served.Faithful": "8ea78585faee2c95b29faad304e40f61e73c6a8af5b4129bf15b0e2294077972",
+    "WeightSecurity.faultChannel": "0bee798b9b0cbe51548dd772a4095e43e467fa60647baccd24ec7165a8eacdb5"
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "d5a5eb18bb40363d9489b1de3f7174732dffad8ceefc552444b38924cfaa557e",
+   "digest": "13fabbeac2593345bc3a8ad6aab65edb10ae4d594ea3c0fc0543901252cabf36",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
+    "WeightSecurity.Guarantees.TheftFaulted": "c7f0c0c26e3e3954057860feaca6a544e060e25a5c87e94bc56425944bae9088",
+    "WeightSecurity.Guarantees.TheftFaultedHonest": "6f7271f043d7a810d7b2705462fb073d100b9646187c7352e43d02d5caeef57a",
+    "WeightSecurity.Guarantees.TheftFaultedNontrivial": "0f0eaf9760d8d0a05f51ba1dfe467d95c34e47ee7da79d7e6d47d251adfac171",
     "WeightSecurity.Guarantees.TheftHonest": "edcebe0ece71b890e6f3ba54fd3daf68deef830b9bcf824f8453dd5b347b07c3",
     "WeightSecurity.Guarantees.TheftNontrivial": "01c971f2461b56cc999f6f851dd87a4be69c2c8c9d0692e56f2f452ce42fff75",
     "WeightSecurity.Guarantees.TheftServed": "3001e1613e4c171768f8231c43f04b9da48f65e1c192a23c70253af21ae82447",
@@ -39834,6 +39942,16 @@
     "WeightSecurity.Toy.silent": "b0b616e206663a6e8094b9a7b6a568306c8544a6490464c898cbc8a97812a48a",
     "WeightSecurity.Toy.thief": "f4c89279c043eba1b9034f27e3ae0cf393472af02867fd1e3f8d528d693db865",
     "WeightSecurity.Toy.user": "c0800da2e0d99641faf805d0b95e7ab038074cc2c43e192b5c6d739fd27034b2"
+   }
+  },
+  "Definitions.WeightSecurity.ToyFaulted": {
+   "digest": "132ef4116a3b3ceae73975d7fc6990bb5b65a9b11bc129f4a5e3d33b630dcfff",
+   "definitions": {
+    "WeightSecurity.ToyServed.Cf": "d72c5997f6d1bd3759d84ca77e8d9bc20b3e26d4219ef2cdb804c0333c76cd00",
+    "WeightSecurity.ToyServed.Fault": "5020c537a7deb4d5815c13c10f56876cdd8358401cbbde754d2e3ceef34e8adb",
+    "WeightSecurity.ToyServed.FaultI": "8f5c59522d4cac021ae8cf20526ed6a468134e35eeeef63752ec3f95ca740d5c",
+    "WeightSecurity.ToyServed.anyoneF": "77394841fadda0534b0434b5f4476c0ebc2569862616ffb41c55ca9edd20b146",
+    "WeightSecurity.ToyServed.size": "3791acb7c94c469abb8bc44952909ccfc73ec5267b0a6fd4ccf5e68a8efe98a9"
    }
   },
   "Definitions.WeightSecurity.ToyServed": {
