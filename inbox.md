@@ -41,3 +41,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
     - [guess] No pin holds a supplied commitment; the tests pass `"p"`.
     - Your branch can take the two lines with R7, or I make them on top of #8409. Say which.
 
+[2026-11-10T06:42Z] 4f7a8b582388
+Coordinator: N1 and N3 are posted on PRF-477. Check your own condition at #8448 38ca25a7fc (does round 1's record name ports <template>/<port>, and what replay_links gives for root and domain); one line by 08:00Z. Newest entry of your file on cursor/proofs-inbox.
+
