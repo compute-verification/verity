@@ -8,7 +8,7 @@ import torch
 from synthetic import MERGES, PARTS, SETS, sha256, tiny_data
 
 from training_slowdown import policy, starts
-from training_slowdown.data import Data, Stream, draw_slice, held_out, windows
+from training_slowdown.data import Data, Stream, sample_slice, held_out, windows
 
 CTX = 16
 
@@ -66,12 +66,12 @@ def test_every_target_is_in_one_window():
     assert targets == list(range(1, n))
 
 
-def test_a_slice_is_drawn_from_its_coin_and_the_weights_digest():
-    a = draw_slice(50, "w1", size=10)
+def test_a_slice_is_sampled_from_its_coin_and_the_weights_digest():
+    a = sample_slice(50, "w1", size=10)
     assert len(a["coin"]) == 32 and len(a["windows"]) == 10 == len(set(a["windows"]))
-    assert draw_slice(50, "w1", a["coin"], size=10) == a
-    assert draw_slice(50, "w2", a["coin"], size=10)["windows"] != a["windows"]
-    assert len(draw_slice(5, "w1", size=10)["windows"]) == 5
+    assert sample_slice(50, "w1", a["coin"], size=10) == a
+    assert sample_slice(50, "w2", a["coin"], size=10)["windows"] != a["windows"]
+    assert len(sample_slice(5, "w1", size=10)["windows"]) == 5
 
 
 def test_token_bytes_are_the_tokenizers_byte_level_vocabulary(tmp_path):

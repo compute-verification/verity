@@ -7,8 +7,8 @@ again when it runs out. The built stream's `manifest.json` lists the parts and t
 tokenizer.json isn't the registry's, whose manifest names another selection, or whose part on disk isn't its
 manifest's size is refused.
 
-The held-out sets (`held_out`) are the search pool, which a checkpoint is scored on through a slice drawn from a live
-coin (`draw_slice`), and the final set, scored whole: each set's `<tokenizer>.bin`, its tokens checked by sha256, and
+The held-out sets (`held_out`) are the search pool, which a checkpoint is scored on through a slice sampled from a live
+coin (`sample_slice`), and the final set, scored whole: each set's `<tokenizer>.bin`, its tokens checked by sha256, and
 its `manifest.json` (bytes, documents). `windows` cuts a set into evaluation windows, and `token_bytes` is each token's
 UTF-8 bytes (tokenizer.json's byte-level vocabulary), so a window's bytes are its targets'.
 """
@@ -143,10 +143,11 @@ def windows(n: int, ctx: int = EVAL_CTX) -> tuple[list[int], list[int]]:
     return full, starts[len(full):]
 
 
-def draw_slice(n_windows: int, weights_digest: str, coin: str | None = None, size: int = SLICE_TOKENS // EVAL_CTX) -> dict:
+def sample_slice(n_windows: int, weights_digest: str, coin: str | None = None,
+                 size: int = SLICE_TOKENS // EVAL_CTX) -> dict:
     """A slice of a set's `n_windows` full windows for weights already hashed to `weights_digest`: a live coin (16
-    bytes from the OS, drawn now, unless `coin` replays one) and `size` windows by index, drawn without replacement
-    by a generator seeded with sha256(coin ‖ digest)."""
+    bytes from the OS, flipped now, unless `coin` replays one) and `size` windows by index, sampled without
+    replacement by a generator seeded with sha256(coin ‖ digest)."""
     raw = os.urandom(16) if coin is None else bytes.fromhex(coin)
     seed = int.from_bytes(hashlib.sha256(raw + weights_digest.encode()).digest(), "little")
     pick = np.random.default_rng(seed).choice(n_windows, size=min(size, n_windows), replace=False)
