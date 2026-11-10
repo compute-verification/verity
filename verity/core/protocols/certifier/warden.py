@@ -300,6 +300,19 @@ def _request_form():
     return io_request
 
 
+def _id_request_cell(params: WardenParams, c: _Connection, made: bytes) -> bool:
+    """With lengths rows: whether `made`, the next cell cut from c's request, is that cell of a canonical id request
+    as the ingress proof block reads it (`io_request.read`, against the bytes its request has left), which it then
+    counts as cut. It reads the schedule and the connection, nothing of the device: `Warden._ingress` cuts the same
+    cells for a caller that stands in for the device with its parameters alone."""
+    form = _request_form()
+    got = form.read(form.layout(params.cell_bytes), made, c.ordinal, c.left)
+    if not isinstance(got, form.Frame):
+        return False
+    c.left = (c.left or got.length) - got.used
+    return True
+
+
 def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
     return encode_frame(kind, ordinal, payload, cell_bytes)
 
@@ -502,7 +515,6 @@ class Warden:
         self.hand_lengths = lengths or (lambda window, strides: self.lengths.append((window, strides)))
         self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
         self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
-        self._form = _request_form() if params.lengths is not None else None
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -590,6 +602,12 @@ class Warden:
                     self.ingress.enqueue(frame)
                 if c.ingress_end == t:
                     released.append(c)
+                    if self.params.lengths is not None:
+                        stride = self._released[t // T][t % T // self.params.every]
+                        if len(stride) >= self.params.stride_releases:
+                            raise RuntimeError(f"bucket {t}'s slot stride releases more than "
+                                               f"{self.params.stride_releases} requests, the lengths rows' slots")
+                        stride.append(c)
             out = self._egress(c, t)
             for frame in out:
                 self.egress.enqueue(frame)
@@ -758,7 +776,7 @@ class Warden:
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended) or c.ingress_ended:
                 kind = DATA if len(c.ingress) > p or not c.ingress_ended else END
                 made = cell(kind, c.ordinal, bytes(c.ingress[:p]), B)
-                if self._form is not None and not self._request_cell(c, made):
+                if self.params.lengths is not None and not _id_request_cell(self.params, c, made):
                     c.problem = c.problem or "malformed"
                     out.append(pad)
                     continue
@@ -775,12 +793,6 @@ class Warden:
         c.held += b"".join(sent)
         if c.ingress_end == t:
             c.release, self.requests_released = self.requests_released, self.requests_released + 1
-            if self.params.lengths is not None:
-                stride = self._released[t // self.params.window][t % self.params.window // self.params.every]
-                if len(stride) >= self.params.stride_releases:
-                    raise RuntimeError(f"bucket {t}'s slot stride releases more than {self.params.stride_releases} "
-                                       "requests, the lengths rows' slots")
-                stride.append(c)
             whole = with_release(bytes(c.held), c.release, self.run_id, t)
             c.held.clear()
             if c.server is None:
@@ -789,16 +801,6 @@ class Warden:
                 c.server[1].write(whole)
                 c.wrote = True
         return out
-
-    def _request_cell(self, c: _Connection, made: bytes) -> bool:
-        """With lengths rows: whether `made`, the next cell cut from c's request, is that cell of a canonical id
-        request as the ingress proof block reads it (`io_request.read`, against the bytes its request has left), which
-        it then counts as cut."""
-        got = self._form.read(self._form.layout(self.params.cell_bytes), made, c.ordinal, c.left)
-        if not isinstance(got, self._form.Frame):
-            return False
-        c.left = (c.left or got.length) - got.used
-        return True
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r egress cells at bucket t (the module docstring's schedule), from s + D on. A client's

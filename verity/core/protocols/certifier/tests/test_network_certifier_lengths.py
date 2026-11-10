@@ -394,3 +394,16 @@ def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
     assert [c.received for c in server.conns] == [c.received for c in plain_server.conns]
     assert warden.log == plain.log and [e["release"] for e in warden.log] == list(range(len(reqs)))
     assert audit(PLAIN, *records(warden))["accepted"]
+
+
+def test_the_ingress_cut_reads_of_the_device_only_what_a_stand_in_holds():
+    """The proof blocks' traffic (`io_request.serve`) calls `Warden._ingress` on a stand-in that holds the schedule, the
+    release count and the run id, nothing else of the device: with lengths rows or without, it cuts every id request
+    into the same cells and releases, and with them it cuts a request that is no id request only as far as it reads."""
+    reqs = [id_req(i, n) for i, n in enumerate((1, 13, 58, 147), 1)]
+    served = [Q.serve(p, reqs, (0, 0, 6, 6), (10 ** 6,) * 4, buckets=T) for p in (PLAIN, LEN)]
+    assert served[0].rows == served[1].rows and served[0].releases == served[1].releases
+    assert [sum(r.cells) for r in served[1].releases] == [1, 2, 3, 4]
+    assert sum(Q.serve(PLAIN, [request(2 * P, 1)], (0,), (10 ** 6,), buckets=T).releases[0].cells) == 2
+    with pytest.raises(ValueError, match="ends its ingress"):
+        Q.serve(LEN, [request(2 * P, 1)], (0,), (10 ** 6,), buckets=T)
