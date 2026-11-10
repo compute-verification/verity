@@ -18,17 +18,12 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-<<<<<<< 99c8914848
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
-||||||| merged common ancestors
-=======
-                              [--product P] [--deferred WHY]
->>>>>>> 7af4d24fca3e
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -102,17 +97,9 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
-<<<<<<< 99c8914848
-the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`); with ``--lean-answers`` its
 verifier runs take the answers another step kept there by key (`answers.Answers`). The verdict says whether the
-||||||| merged common ancestors
-the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
-``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
-=======
-the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
-``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
->>>>>>> 7af4d24fca3e
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
@@ -373,7 +360,7 @@ PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
 #: the window's registration R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
-#: audit's summary (`sampled_proofs_row`)
+#: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
 #: why `pearlplus_live_draw` refuses a node's draw source
 PEARLPLUS_NODE_DRAW = ("the verifier's draw source is drawn on the serving node (verify_run.node_draw, PEARLPLUS_NODE_DRAWS), "
@@ -606,18 +593,8 @@ def public_doc(text: str) -> str:
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-<<<<<<< 99c8914848
-    field (`public_doc`) held in
-    full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
-    stays. The paths held, in order."""
-||||||| merged common ancestors
-    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
-    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
-    files stay. The paths held, in order."""
-=======
     field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
     file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
->>>>>>> 7af4d24fca3e
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -635,15 +612,8 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
-<<<<<<< 99c8914848
-||||||| merged common ancestors
-        try:
-            text = data.decode()
-        except UnicodeDecodeError:
-=======
             shutil.move(p, dst)
             held.append(rel)
->>>>>>> 7af4d24fca3e
             continue
         pub = public_doc(text)
         if pub != text:
@@ -800,7 +770,7 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
-    from verity.core.protocols.sampled_proofs import challenger as CH
+    from verity.core.protocols.spot import challenger as CH
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
@@ -1164,17 +1134,9 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
          check: Check, statements: Path | None = None, live: Path | None = None,
          lean_answers: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
-<<<<<<< 99c8914848
-    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the sampled
     calls' `statements` and the `live` evidence), its document's ``credit_inputs``, and `lean_answers`, the verifier's
     memo of its runs' answers (``--lean-answers``, `answers.Answers`), whose counts are its ``lean_answers``."""
-||||||| merged common ancestors
-    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
-    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
-=======
-    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the sampled
-    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
->>>>>>> 7af4d24fca3e
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
     line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
@@ -1229,7 +1191,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     coins = served.get("coins") or {}
@@ -1282,8 +1244,8 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     refuses it, `pearlplus_live_draw`)."""
     from verity.core.protocols.pouw import salt as PS
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as Ch
+    from verity.core.protocols.spot import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
@@ -1476,7 +1438,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
     import served_shares as SS
-    from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+    from verity.core.protocols.spot.one_stage import registration as REG
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1618,12 +1580,12 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` default built here)
     on files in a 0700 directory under ``scratch``, its answer tied to the window's registration record (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
-    no proofs to recompute from: its row is `sampled_proofs_row`'s, its ``answer_from`` saying so. A case the Lean
+    no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
-        return {**sampled_proofs_row(audit_dir, run),
+        return {**spot_row(audit_dir, run),
                 "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): the records audit wrote no v2 case "
                                "(window/case-v2.json), so there are no proofs to recompute it from"}
     try:
@@ -1667,8 +1629,8 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     and the one session opened on C, so a prover who draws again under another session holds a draw no compose takes;
     and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`), the record's source that coin."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as Ch
+    from verity.core.protocols.spot import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -1748,7 +1710,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     The answer is Pearl+'s, its work the Lean's, its profile the reference's with the lane, pin, period, session and the
     Lean verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2092,15 +2054,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
-<<<<<<< 99c8914848
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
-||||||| merged common ancestors
-    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
-    rows = {k: dict(r) for k, r in rows.items()}
-=======
->>>>>>> 7af4d24fca3e
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -2451,7 +2407,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-<<<<<<< 99c8914848
     got = {k: piece(k, a.pieces, run, sampled_proofs=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
            for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
@@ -2459,15 +2414,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.tree_on and not a.tree:
         ap.error("--tree-on names the branch of the tree --tree names")
     integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
-                 if a.sampled_lean else sampled_proofs_row(a.sampled_proofs, run))
+                 if a.sampled_lean else spot_row(a.sampled_proofs, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
-||||||| merged common ancestors
-    got = {k: piece(k, a.pieces, run) for k in keys}
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
-=======
-    got = {k: piece(k, a.pieces, run) for k in keys}
-    rows = {"integrity": spot_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
->>>>>>> 7af4d24fca3e
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
