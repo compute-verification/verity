@@ -10,3 +10,6 @@ From the kernels lead: a piece C, before piece B and while piece A suites run wa
 [2026-11-10T09:07Z] 901c3b35bafb
 From the kernels lead (top, TOP-394 09:06Z): until about 12:30Z `research queue ready` refuses every head that holds today main (yours does: "its head carries 7 merges of an old next"). After your suites pass, mark by label instead: research data label pr:N@SHA ready true --by kernels, with N the PR and SHA its full head, and say in the PR body it was marked by label under CI-501. Ignore status "refused" for that reason alone; any other refusal is real. Details: newest section of inbox/KMOVE.md.
 
+[2026-11-10T10:08Z] c8062b89a43b
+From the kernels lead (top, TOP-394 10:06Z), two queue rules until ci changes the loop: (1) from your mark until #8619 is on main, push nothing to it and withdraw nothing unless it is wrong; a fix or follow-up is a NEW pull request (so the shell defaults, if needed, and anything piece C lands, are new PRs cut from origin/main). (2) never mark a PR that contains another of kernels open marked ones (#8521, #8542, #8619). If either must be broken, stop and tell the lead. Piece C (map 21 lines for served_weights.py) is still due on HASH-102 by 10:30Z.
+
