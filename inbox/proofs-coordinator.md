@@ -31101,3 +31101,91 @@ For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **33
 - **top**: the side's own new prose and names still say `sampled_proofs` and "drawn" where `main`'s moves never ran (for example `served_verdicts.py`'s `--sampled-proofs` option and its `sampled_proofs=` keyword, and `served_shares.py`'s "declared utilization"). I applied `main`'s words only on lines both lines hold. Recommendation: rerun `tools/move/rename.py` with `terms_map.toml` and `spot_names_map.toml` on the merged tree as one whole-tree step, not per file.
 
 **Runs launched:** none. Next entry by 19:55Z.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 18:59Z: all 26 files closed (60 of 60 places) and the stale copies gone, head `8ec5167aa5a4`; the suite run `r20261110-185119-7089` waits for a slot on vy-nebius-cpu-3
+
+- **Branch and head:** `cursor/proofs-remote-core-cf05` at `8ec5167aa5a4` [run: `git rev-parse` of the local and the remote ref, 18:52Z], pushed. It holds the base's head `13f54ad455ac`, which has not moved [run: `git fetch`, 18:57Z].
+- **Read from my mailbox** [read, 18:58Z]: your 18:52Z (yes to all three; name the final head in the heading). `8ec5167aa5a4` is the final head unless the suite run finds something of mine or the base moves.
+- **Counts** [run: `git grep -c '^<<<<<<< '` over my 26 at `8ec5167aa5a4`]: 26 files and 60 places closed, none left. Tree-wide 142 files and 297 places are still marked, none in my list; under `verity/` they are in `certifier`, `network`, `pous`, `pouw`, `remote_bandwidth` and `verity/ml/protocols`, the other lanes' by your 18:34Z count.
+- **Since 18:42Z, three commits:** `d55f8f37a5` (the stale README's edits into `spot/README.md`, the copy deleted; `verity/core/protocols/sampled_proofs/` no longer exists), `8ec5167aa5` (the three fixtures).
+
+**What I ask you to look at** (the list for the owner; details in the table and below)
+
+1. `spot/README.md` is 50,367 bytes, 1,215 over the 48 KiB Markdown cap (a warning). Question 1.
+2. `spot/README.md:262` reads "the selection rules `All`, `Law` and `TwoStage`". `main` has "`All`, `Law` and `Sequential`", the side "`All` and `Law`". Mine is neither line's: `service.Selection` is `All | Law | TwoStage` at the head [read]. Question 2.
+3. The side's clause "one-stage v2's `proofs.interface`, its SHA-512 a blob" is not in the README: `OneStageZk.lean` at the head is `main`'s whole and reads no `interface` (row 7) [read].
+4. `service.Sequential` is gone (the side's deletion); `coins.law_problem` refuses `subset:0` in `flockLaw`'s order. Neither makes a verifier accept or refuse what neither line did.
+5. Five side tests are absent from `test_difftest.py` at the base's head, none at a place of mine: four `test_v2_per_member_*` and `test_the_run_refuses_a_count_that_varies`.
+6. Row 7's remnants in Python, listed below.
+7. Two stale names I left, each the same on both lines: `spot/tests/fake_challenger.py:87` annotates `R.Session` (never evaluated; the class is `ChallengePhase`), and `spot/tests/lean/ExfiltrationTwoVectors.lean:7`'s docstring names `verity.core.protocols.sampled_proofs.consumers` (a pinned generator input: changing it moves the pin).
+
+**The table** (every `.py` row: `python -m py_compile` and `ruff check FILE` pass, ruff's findings equal to the file's at `e7b03e4a6c89`; "= e7b" means `diff` against `git show e7b03e4a6c89:FILE` shows only what the row names; all rechecked in one sweep at `8ec5167aa5a4` [run, 18:53Z])
+
+| file | places | taken at each | why | checked beyond compile and ruff |
+|---|---|---|---|---|
+| `spot/service.py` | 13 | `main`'s text, with the side's two edits carried in: `Sequential` deleted, `Session` is `ProofRun`. One unmarked line read the side's "draw"; it reads "sample" | The side's own changes to the file are those two (`c5dc2a9614`, `a1cdc7ae64`); `Spot.Select.Rule` is all, law or two-stage [read] | = e7b plus the two edits; `main`'s later landings carried by `git merge-file`; imports [run] |
+| `spot/tests/test_service.py` | 1 | `main`'s docstring line; the `Sequential` assertion the side deleted stays deleted | Both lines dropped the closure clause | In the suite run |
+| `spot/one_stage/registration.py` | 4 | Both: the side's `members` and its `link-points` step, `main`'s `seed_salt` and `pool`. The Declared-day paragraph is the side's later text (`79813d182a`) under `main`'s names | The step sits after R7's pool chain, the order of `Spot.Registration.check` [read] | = e7b plus those; no caller passes `members` but the difftest's `_registration` [run: AST scan] |
+| `spot/one_stage/verifier.py` | 1 | `main`'s call (`day`, `declarations`, `seed_salt`, `pool`) | Every other side edit is already in `main`'s text | Identical to e7b [run] |
+| `spot/one_stage/registered.py` | 1 | Both: the side's `bind_ports`, `BOUND`; `main`'s `DIGEST`, `bit_words`, `digest_leaves`, `digests` | Different additions | = e7b plus `bind_ports`; `tests/test_registered.py` 78 passed, 182 s [run, local] |
+| `spot/one_stage/proofs.py` | 3 | `main`'s text; the side's `units_exactly` and `statements_v2` stay, their docstrings saying v2 refuses the per-member form at parse (`OneStageZk.proofsOf`) | Row 7 | = e7b plus the two functions and one sentence |
+| `protocols/registration.py` | 10 | `main`'s whole | Lean's rule 3: one landed change, the side's the earlier head. `Core.Registration` reads `previous` as `hex64` [read] | Identical to e7b [run] |
+| `protocols/profile.py` | 3 | `main`'s wording with the side's `Work` named; `Work`, `WorkStratum`, `work_k`, `SamplingDesign` stay | `Core.SamplingDesign` has `work` [read] | = e7b plus the work design; imports [run] |
+| `spot/coins.py` | 2 | Both: the side's public `law_problem`, `RAN_OUT`, `ran_out`; `main`'s refusal of a subset of no unit, placed before the population check | `Spot.Draw.flockLaw` refuses in that order [read] | Imports [run]; `tests/test_coins.py` in the suite run |
+| `spot/optimize.py` | 2 | `main`'s (`ReplayGrain`, the two-stage design) with the side's `TensorCommit` | The rename is the side's only (`cf28ba13e7`) | `tests/test_optimize.py` 50 passed [run, local] |
+| `spot/remote.py` | 2 | `main`'s release frames with the side's `ChallengePhase` | The rename is the side's only | = e7b plus the rename |
+| `verity/core/service/spot/tests/test_difftest.py` | 2 | Both lines' imports and `PIECE_RUNS` (the side's `RAN_OUT`, `DESIGN`, `POP_ORDER`, `PUBLIC_UNITS`, `LINK_POINTS`; `main`'s `TABLES_HELD`, `SECOND_INTERIOR_READS`, `SECOND_SCHEDULE`) | Each is a piece of `Spot/Pieces.lean` at the head [read] | 53 tests, `main`'s 49 all there [run: AST]. In the suite run (it builds the Lean) |
+| `verity/ml/circuits/census.py` | 2 | `main`'s `boolean_gates` over the side's `BooleanWork`; the side's `__all__`, which holds both | Side-only rename (`33e93b6380`) | Imports [run] |
+| `verity/ml/circuits/defs.py` | 1 | `__all__` with the side's `DefinitionTable`, `BodyNode` and `main`'s `CONFORMANCE`, `conformance_label` | Different additions | Imports [run] |
+| `verity/ml/circuits/layout.py` | 1 | The side's `BodyNode` and `main`'s `res` parameter | Different additions | Imports [run] |
+| `verity/ml/circuits/query_codec.py` | 1 | `main`'s sentence | Rule 3: one change, `main`'s the later head | Identical to e7b [run] |
+| `verity/ml/circuits/requirement.py` | 1 | The side's "store packing (`Store.Packing`)" | The class is `Store.Packing` at the head | = e7b plus the side's rename |
+| `verity/ml/circuits/requirement_units.py` | 1 | `main`'s "Flock's" | `main` only renamed | Identical to e7b [run] |
+| `verity/ml/circuits/tests/test_part_log.py` | 1 | `main`'s imports with `DefinitionTable`; `main`'s newer test built `Registry()`, now `DefinitionTable()` | The side's rename under `main`'s additions | 68 passed with `test_population_values.py` [run, local] |
+| `verity/ml/flock/python/verity_flock/firewall_transcript.py` | 1 | `main`'s "a challenger" and the side's `InnerRun.handle` | The file's class is `InnerRun` (side-only rename) | = e7b plus the rename |
+| `verity/ml/flock/verifier/README.md` | 1 | `main`'s `verify` and `agree` lines with the side's `[--registered F [--interface F]]` | `FlockVerify.lean`'s usage has `--interface`, `--coins tree` and `agree` [read] | = e7b plus `--interface` |
+| `verity/settings.py` | 1 | Both lines' settings (`VERITY_COMPOSITION_SERVED`; `VERITY_ML_DEFINITIONS_SLOW`, `VERITY_ML_FLOCK_CUDA_GHASH`). The module text's `Registry.check` reads `EnvSettings.check` | Different additions; the class is `EnvSettings` (side-only rename) | `tests/test_settings.py` 12 passed [run, local] |
+| `verity/README.md` | 2 | `main`'s rows; the side's "its proof and inference blocks" in the windows row and its `verity.core.periods` row | The window interface states no server blocks at the head (`5171c0dfe3`) [read] | = e7b plus those two |
+| `integrations/vllm/verity_vllm/protocols/spot.py` | 1 | "SPOT runs in the Commit stage: a row's (...) or serve-openai's Commit windows" | `main`'s name, the side's wider stage | vllm's lead: the close stands [read: LEAN-249, 18:48Z] |
+| `spot/tests/fixtures/exfiltration_lean.json` | 1 | Regenerated by `bash verity/core/protocols/spot/tests/lean/generate.sh` | Rule 4. The place was in the `inputs` table only | Every vector equals `main`'s at e7b; one pin moved, `Security/Proofs/lake-manifest.json` (the merged manifest's sha256, which I recomputed) [run]; `tests/test_consumers.py` 10 passed [run, local] |
+| `verity/ml/flock/tests/fixtures/randomness_lean.json` | 1 | Regenerated by `bash verity/ml/flock/tests/lean/generate.sh` | Rule 4. As above | As above; `tests/test_randomness_spec.py` 4 passed [run, local] |
+
+**The fixtures** [run `r20261110-183603-e39b`: vy-nebius-cpu-1 at `38df8377ee90`, done rc 0 at 18:42Z]: `setup.sh Security/Proofs`, then both generators in the run's clone. The first also wrote `exfiltration_two_lean.json`: same one pin moved, committed with the other two as you said. `python tools/verity/check/pins.py --stale` prints nothing and returns 0, on the node after regenerating and here at `8ec5167aa5a4` [run]. The two commits since `38df8377ee90` touch no generator input.
+
+**The rows no marker shows**
+
+- Rows 1 to 3: in the table (`one_stage/registration.py`, `verifier.py`, `service.py`).
+- Row 6, `spot/parties.py` (`5c9ee14225`): `SUBPROTOCOLS["verity/remote/v1"]` is inference-only, `pearl-plus` at `verity/pouw/pearl-plus/v1` and sampled proofs as `COMPOSED`; `IDS` gains `pearl-plus`; onsite stays `main`'s, as `CoreOnsite.lean` has it [read].
+- The stale copies, all four gone:
+  - `parties.py`, `tests/test_optimize.py`, `tests/test_service_window.py` (`17e55a8470`): every test either copy defines is in the live file [run: by name].
+  - `README.md` (`d55f8f37a5`): its three-way merge against the live file has 21 places; at each, `main`'s text is the later head of one landed change and stays (lean's rule 3). The side's five edits that `main` lacks are carried in: remote as `verity/remote/v1` with Pearl+'s run; `Sequential` out of the selection rules; `TensorCommit`; the two-modes paragraph (`CostModel.commit_weight`, `Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`); the bound-ports paragraph (`bind_ports`, `flock-verify --interface`). Every name those five cite exists at the head [run: `grep`].
+- Importers: nothing of proofs' is left outside `benchmarks/` [run: `git grep 'protocols[./]sampled_proofs'` at `8ec5167aa5a4`]. What is left is vllm's ten files and memory-accounting's `pyproject.toml`, both on LEAN-249 already.
+
+**Files outside the 26 that my commits changed, all proofs'** [run: `git log --first-parent --name-only`, 37 files in all]: the four stale copies (deleted); `spot/parties.py`; `spot/README.md`; `spot/tests/fixtures/exfiltration_two_lean.json`; `spot/tests/test_optimize.py` (`Commitment` to `TensorCommit`); `spot/tests/test_two_stage.py:744` (the refusal's text); `verity/ml/circuits/tests/test_population_values.py` and `test_settings.py` (`main`'s newer tests named classes the side renamed).
+
+**Lean's rule 5: every name `main` declares at `e7b03e4a6c89` that my result lacks** [run: AST, each closed `.py`]
+
+- Kept under the side's name: `settings.Registry` as `EnvSettings`; `profile.Draw` as `SamplingDesign`; `coins._law_problem` as `law_problem`; `optimize.Commitment` as `TensorCommit`; `remote.Session` as `ChallengePhase`; `service.Session` as `ProofRun`; `census._Work` as `BooleanWork`; `defs.Registry` as `DefinitionTable`; `defs.Node` as `BodyNode`; `firewall_transcript.Session` as `InnerRun`.
+- Dropped: `service.Sequential` and `service._UNIFORM`, which only it read (the side's `c5dc2a9614`).
+- No test function of `main`'s is missing from any test file I closed or changed. One assertion is gone, with `Sequential`: `test_service.py`'s check of its refusal.
+
+**Lean's rule 7** [run]: for 21 of the 26, `git merge-file` of my file with `main` from `7af4d24fca3` to `e7b03e4a6c89` changes nothing. For the other five it reports an overlap, and at each my text is e7b's plus one named side edit: `verity/README.md` ("its proof and inference blocks"), `service.py` (the `Sequential` refusal), `proofs.py` (`statements_v2`, `units_exactly`), `registered.py` (`bind_ports`, `BOUND`), `test_difftest.py` (the side's five pieces in `PIECE_RUNS`). No place lacks `main`'s later change.
+
+**Row 7: what Python still reaches of the per-member path** [read]
+
+- `spot/one_stage/link_points.py`, read by `registration.check(members=)`, which fails `link-points`. No caller passes `members` but the difftest's `_registration`.
+- `proofs.statements_v2`: one caller, `benchmarks/one_stage/a5.py` (REMOTEBENCH's). Its form is refused at parse by `OneStageZk.proofsOf`.
+- `proofs.units_exactly`: `a5.py` and the difftest's `public_units` piece.
+- The difftest's `link_points`, `public_units` and `ran_out` pieces; `coins.RAN_OUT` and `ran_out`.
+
+**The suite run** [run `r20261110-185119-7089`, launched 18:51Z at `8ec5167aa5a4`, `--cwd clone`, placed on vy-nebius-cpu-3; at 18:57Z it waits: every check slot's memory is reserved by other live runs]. Six steps, each its own log and a line in `$OUT/summary.txt`: `verity/ml/circuits/tests`, `verity/core/protocols/spot/tests`, `verity/core/service/spot/tests` (builds the Lean), `verity/ml/flock/tests/test_firewall_contract.py`, `tests/test_pins.py`, `verity/core/protocols/composition/tests/test_registration_difftest.py`; each with `--continue-on-collection-errors`, so a file that imports another lane's marked module is named and the rest still run. No ETA until it has a slot; about one to two hours after that [guess]. `--max-min 240`.
+
+**Questions, each with my recommendation**
+
+1. **The README's cap.** `main`'s `spot/README.md` is 49,050 bytes, 102 under the cap; the side's five edits add 1,317. Recommendation: leave it as merged for the merge (the gate warns, and cutting either line's text is not mine under lean's rule 6), and after it lands cut the two added paragraphs to one sentence each, since `optimize.py`'s "Modes" docstring and `registered.bind_ports`' docstring hold their detail (about 850 bytes back; the remaining 370 are the writer's to find).
+2. **`TwoStage` in the selection-rules sentence.** Recommendation: keep it, it is what `service.py` has. If you want one line's text verbatim, the side's "`All` and `Law`" is the other choice; `main`'s names a class that is gone.
+3. **`main` since e7b.** `main` is `118b43a00132`, 38 commits on; they touch none of my 37 files and none of the 17 generator inputs my three fixtures pin [run: `git diff --name-only e7b03e4a6c89 origin/main`]. So when the base merges it I expect no new place of mine and no stale pin, unless the merged `Security/Proofs/lake-manifest.json` changes [guess]. I merge the base when it moves and rerun `pins.py --stale`.
+
+**Text for other lanes:** nothing new; yours of 18:52Z on LEAN-249 holds what I had [read].
+
+**Left:** read the suite run when it ends and say which files fail to collect on another lane's module; merge the base when it moves. Next entry when the run ends, or by 19:55Z.
