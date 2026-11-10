@@ -33145,3 +33145,29 @@ The first two are plain. The last three are top's to choose, and I would not tak
 **8. Next, in your order.** When `6190` ends: check that every record moved and none changed, in all four locks and the rest (if one changed, I stop and write it up); commit the kept records; `research data put` each lock's `--moved` output and cite the ids; merge `main`; records and suites on the merge; then (B) as `cursor/proofs-flockpkg-layers-<hex>` cut from that tip, with the table of section 2 in its body.
 
 **Yours to answer:** the rows of section 6 (who, and where the base goes); whether the M6 branch may be pushed under that name once it builds.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 21:22Z: test time: two cuts pushed on `cursor/proofs-composition-test-time-cf05` (head `3bb08a357c`), the node's measurement still waits for a slot; the close waits on `c67f`, also in line
+
+**Runs, all three waiting for a check slot** [run: `research status`, 21:14Z]: `r20261110-203745-32de` (item 1's measurement at `origin/main` `5482988e3496`: three ahead on vy-nebius-cpu-8), `r20261110-204114-8eb9` (what N examples reach, N from 50 to 1000) and `r20261110-201606-c67f` (the close's spot service suite at `0ab9be91a6b0`), both on vy-nebius-cpu-6, whose memory is all reserved by live runs. A new launch would wait about 45 minutes too [run: `research.auto.expect`, 21:08Z], so I leave them in line. No number below is item 1's table: they are from my VM, reference only, no Lean, to choose what to change.
+
+**Two changes, pushed, neither changes what any test compares:**
+
+| commit | file (owner) | what | Python seconds a remote example, my VM [run] |
+|---|---|---|---|
+| (`origin/main`) | | | 0.45 (reference 0.34, generation and harness 0.11) |
+| `61db652240` | `verity/core/difftest/python/verity_difftest/protocol.py` (@proofs) | `unhex` and `canonical_json` walked megabytes one character at a time in Python (`any(c >= 0x7f for c in b)`, `HEX.issuperset(s)`); they ask the same of the whole buffer in C. Old and new agree on 400,017 random and odd inputs, non-strings among them [run, local]. One new test in `verity/core/difftest/tests/test_protocol_port.py` holds both to the Lean on a hex digit past ASCII and on DEL or a byte past it in canonical evidence; its Lean half has not run yet. | 0.21 (reference 0.11) |
+| `3bb08a357c` | `verity/core/protocols/composition/tests/reference.py` (@proofs) | the reference asked every subprotocol for its answer four times a case (the outcome, then the verdicts, the records and the ties the difftest counts); the last composition's answers are kept (`_answers`, one entry). | 0.15 (reference 0.054) |
+
+The counters of 60 examples are the same before and after (`reject` 60, `one record` 21, `two records` 32) [run, local]. `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` (Python only, 200 examples, not marked `slow`; 140.5 s in `7cdc`'s quick tier on a node) takes 32.8 s on my VM at `3bb08a357c` [run, local; the two machines differ, so this is not a ratio].
+
+**What I read that shapes the cut:**
+
+- [read: `reference.py`, `test_composition_difftest.py` at `5482988e3496`] Every case of remote's rejects on both sides whatever the other two subprotocols say, since sampled proofs' cases are all refused. So `test_remote_agrees` can tell Lean from Python only on the outcome's commitment (there or null: whether the case, the params and the 64-byte commitment decode) and on the Lean not failing on a megabyte case. A wrong record check or tie in `remote` changes only the reason, which is not compared. Onsite's cases do vary in verdict.
+- [run, local] The examples at N are not the first N of the thousand: Hypothesis keeps its first `max_examples // 10` (at most 50) examples small, and here a small case is one that does not fit the composition (54 of 100, 60 of 200). A smaller N loses more than its share of whole cases; `8eb9` gives the counts up to 1000.
+- [read] A case is 3 MB on average, hex inside hex, and each subprotocol's evidence is re-decoded at each layer.
+
+**For compute-accounting (their file, I change nothing in it):** `verity/core/protocols/pouw/core_check.py` has the same two scans, `canonical` (`any(c >= 0x7f for c in b)`) and `_unhex` (`any(c not in "0123456789abcdef" for c in s)`), each a Python step per byte of a period's megabyte evidence. With `not b.isascii() or 0x7f in b` and `s.encode().translate(None, b"0123456789abcdef")` in their place (tried in my worktree and reverted, not committed) the Python side here drops another 9% [run, local]; it would help PoUW's own difftests more. Low priority.
+
+**Question, with my recommendation.** If a thousand examples do not fit in 5 minutes after these cuts (I expect not: the Lean side is untouched, and I have no node figure for it yet), the split needs a way to keep the sweep out of a candidate's check. Two ways: (a) the sweep skips unless `VERITY_COMPOSITION_SWEEP=1` (the testing skill's rule for minutes-long checks), and ci's nightly sets it; (b) the sweep stays a plain `slow` test over 5 minutes and ci's own rule moves it. **I recommend (a)**: it takes effect at landing and does not move a test in and out of the check as a loaded node's timing crosses 5 minutes. Its cost, plainly: until ci's nightly sets the variable, nothing runs the sweep. Under (b) nothing is opt-in, and the check runs both until ci's rule is live. Say which; I build (a) unless told otherwise, and it is one line to turn into (b).
+
+**Left:** item 1's table and item 3's seconds when `32de` ends; the split's N from `8eb9` and `32de`; the docstrings; the suite on a node at the final head (`verity-core-composition`, and `verity-difftest` for the new test); `c67f`'s verdict for the close. Next entry when `32de` or `c67f` ends, or by 22:25Z.
