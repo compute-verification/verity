@@ -104,6 +104,17 @@ SparseMlaDotStepB, SparseMlaDotStep = EW.shared_specialized(
     by_element=True)
 
 
+def _own_gates(part):
+    """A builder for ``part{DOT}`` of the step, its own gates on a circuit: with one, Flock's flat lowering runs each activation
+    of the part (`ir_lower.lower_gates`) and keeps a word for what it returns, not for each of its gates. The circuit it
+    lowers to is the same."""
+    return lambda C, S, *elements: replay(BS.compile(bind(part, DOT=S.DOT)), C, [f for e in elements for f in e])
+
+
+SparseMlaDotStepB.build = _own_gates(SparseMlaDotStepB)  # type: ignore[attr-defined]
+SparseMlaDotStep.build = _own_gates(SparseMlaDotStep)  # type: ignore[attr-defined]
+
+
 def _head_block_calls(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
     """`SparseMlaHeadBlock_v1`'s body on bits as Calls: S[c] and P V by rows of `SparseMlaDotStep` (the query's 16 words of a
     step decoded once for the NVIS keys, bf16(P)'s once for the DV columns, each key word once for the block), a partial P V

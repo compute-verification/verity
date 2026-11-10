@@ -3,8 +3,8 @@
 and its end are the whole Call word for word, at small statics and at GLM-5.3's served ones; each unit fits the Flock block where
 the whole doesn't; the end is `dead_free.AttnHeadEnd_v1`'s function; the twin (`sparse_mla_split_twins.chain_rows`,
 `head_end_rows`) is each unit's word; the Boolean versions agree with their word views; the key block written as Calls
-(`boolean_sparse_mla.SparseMlaHeadBlock_v3`) is the traced one, its step is FA3's, and at the served statics its description
-stays small and its Flock block under its word view's."""
+(`boolean_sparse_mla.SparseMlaHeadBlock_v3`) is the traced one, its step is FA3's and lowers by its builder to the circuit its
+gates lower to, and at the served statics its description stays small and its Flock block under its word view's."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -215,6 +215,49 @@ def test_the_shared_step_is_fa3s_step() -> None:
     bd = BS.evaluate_bits(own_b, bb.reshape(-1, 16)).reshape(len(b), 16, -1)
     got = BS.evaluate_bits(step, ab, bb, bits(acc, 32), BS.evaluate_bits(own_a, ab), bd)
     assert np.array_equal(got, bits(np.asarray(E.evaluate_batch(FA3["DOT"], acc, a, b)).reshape(-1), 32))
+
+
+def _lowered(unit) -> tuple[list, int]:
+    """Flock's flat lowering of ``unit`` (`ir_lower.lower`, as a served unit's stager runs it): each committed bit and the
+    output's forms, and the activations it lowered by a builder."""
+    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity_flock import ir_lower as IL
+    from verity_flock.class_statement import _UnitCircuit
+
+    C, built = _UnitCircuit(), []
+    activation = IL._lower_activation
+
+    def counted(C, s, *rest):
+        built.append(s.spec.id.split("_v")[0])
+        return activation(C, s, *rest)
+
+    params, _ = signature_of(unit)
+    ins = [C.input(f"in{j}", w) for j, w in enumerate(w for t in params for w in t.leaf_widths())]
+    IL._lower_activation = counted
+    try:
+        out = [b for w in IL.lower(C, unit, ins) for b in w]
+    finally:
+        IL._lower_activation = activation
+    bits = [(k, (tuple(d[0].s), d[0].c, tuple(d[1].s), d[1].c) if k == "and" else d) for k, d in zip(C.kind, C.data)]
+    return [bits, [(tuple(x.s), x.c) for x in out]], sum(n in ("SparseMlaDotStep", "SparseMlaDotStepB") for n in built)
+
+
+@pytest.mark.slow
+def test_the_steps_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`SparseMlaDotStep` and `SparseMlaDotStepB` carry a builder, so Flock's flat lowering runs each of their activations and
+    keeps no word a gate of them. The circuit is the one their gates lower to, AND for AND: each part alone, and a block of
+    5 keys (10 steps and 160 key words, each by its builder). About 10 s for the block's two lowerings; only the block has
+    a builder read its operands from the other Calls' wires."""
+    dot = BM.SPARSE_MLA_GLM53["DOT"]
+    units = [bind(BM.SparseMlaDotStepB, DOT=dot), bind(BM.SparseMlaDotStep, DOT=dot),
+             bind(BM.SparseMlaHeadBlockV3, SCALE=0.0625, DOT=dot, **CALLS["partial_first"])]
+    with_builders = [_lowered(u) for u in units]
+    assert [n for _, n in with_builders] == [1, 1, 5 * 32 + 2 * 5]
+    monkeypatch.delattr(BM.SparseMlaDotStepB, "build")
+    monkeypatch.delattr(BM.SparseMlaDotStep, "build")
+    for unit, (circuit, _) in zip(units, with_builders, strict=True):
+        by_gates, n = _lowered(unit)
+        assert n == 0 and by_gates == circuit, unit.id
 
 
 @pytest.mark.parametrize("nvis,first", [(64, False), (64, True), (16, True)])
