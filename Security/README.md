@@ -388,7 +388,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
-| The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run; the inference-only policy is a subprotocol of neither yet |
+| The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run; the inference-only policy is a subprotocol of both (`Core.Remote.components`, `Core.Onsite.components`) |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.Soundness` not yet in Lean | Open |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
@@ -471,9 +471,10 @@ accepts only when all three accept and the commitment binds them (`Properties.Co
 policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite adds PoUS, PoUB, network certification and memory wipes.
 
-- **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
-  `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol's one-stage form is v2,
+- **Guarantees:** the table's sampled-proofs row, PoUW's period guarantee,
+  `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, and what remote's acceptance means for the policy,
+  `Properties.Remote.AcceptInferenceOnly`, all proved. The composed statement, `Verity.Soundness`, is
+  not in Lean yet (above), so the three compose by hand. Remote's sampled-proofs subprotocol's one-stage form is v2,
   which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed coins; one-stage v1,
   which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance to
   `SampledKSLiveV3`'s event. Onsite's sampled-proofs subprotocol is still one-stage v1.

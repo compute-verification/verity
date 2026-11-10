@@ -110,9 +110,9 @@ failure probability that, beyond the sample and SHA-512, rests on undischarged p
 - the committed computation satisfies the registered circuit, except on few proof blocks;
 - the hardware's credited time went to the registered circuit's work, on part 3's premises, which the deployed path
   doesn't meet;
-- once remote runs the inference-only policy's check (part 4), which it doesn't yet, the registered circuit divides
-  into inference blocks of at most Γ gates, each reading at most α_f fresh bits per gate, hence padded blocks of c = Γ
-  gates and k = ⌊α_f·Γ⌋ fresh bits.
+- the registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f fresh bits per
+  gate, hence padded blocks of c = Γ gates and k = ⌊α_f·Γ⌋ fresh bits (part 4: remote runs the inference-only
+  policy's check, its third subprotocol).
 
 Conditionally on the items under What's open below, a fourth claim follows: training a new frontier model takes more
 fleet-time than it would without the protocol, by the slowdown bound (part 6). That bound is the argument's one
@@ -246,31 +246,33 @@ expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` inst
 
 **How it is checked.**
 
-- *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`); once composed, the
-  verifier runs it on an auditor host in each verification phase.
+- *By whom.* By remote: the policy is one of its three subprotocols (Subprotocols, above), as
+  `NciCheck.Protocol.protocol`, `verity/inference-only/v0`, whose check is `NciCheck.Baseline.evaluate`. The
+  same check runs on its own as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`).
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
-- *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What is to bind
-  it to the other subprotocols is a commitment to the registration PoUW and sampled proofs commit to; no composite rule
-  ties them yet.
-- *In the clear.* The check reads the inference partition and θ's provenance in the clear. Before a composite may run
-  it, it needs a private form: the partition committed under hiding commitments, and compliance proved in zero
-  knowledge.
+- *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What binds it
+  to the other subprotocols is the run's record: the policy and sampled proofs must commit to the same one
+  (`Core.Remote.tied`), and every window of PoUW's period must name it as its Commit record (`Core.Remote.windows`).
+- *In the clear.* The check reads the inference partition and θ's provenance in the clear, and v0 publishes the
+  declared division and each inference block's profile. Remote composes it as a stated exception to
+  everything-zero-knowledge (`CoreRemote.lean`'s header), until a private form replaces it: the partition committed
+  under hiding commitments, and compliance proved in zero knowledge.
 
 **Assumes.** The data the registration names was public, not computed off the books before
 (`Nci.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
 is the deployment's; that the registered roots bind their data (`Nci.Assumptions.RootsBind`, named in
-`Security/Properties/Nci/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
-for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
+`Security/Properties/Nci/Baseline.lean`, not yet stated); and SHA-512 collision resistance
+for its tie to one record. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
 **Lean, and how it discharges `Complies`, link by link.**
 
-1. *Remote's verdict means the policy accepted the same registration.* **Open**: remote doesn't run the policy, and no
-   composite rule ties the policy's registration to the one sampled proofs and PoUW bind. The composition's proved
-   property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
-   needs the policy among remote's subprotocols, with that tie.
+1. *Remote's verdict means the policy accepted the same record.* `Properties.Remote.AcceptInferenceOnly`, **proved**:
+   on every input remote's check accepts, the policy's and sampled proofs' records have one digest, which every
+   Commit record the period's windows name has, and that record names the registered circuit by its SHA-512. Its
+   corollary `Properties.Remote.AcceptComplies` concludes `Nci.Complies Γ α d` from remote's acceptance, in the form
+   `DampenerRemote` reads.
 2. *The policy's check accepts ⇒ `Baseline.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `baseline_desc`
    is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
    `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
@@ -279,10 +281,10 @@ part 6's premises say why that shape trains little.
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
    is the definition's), **proved**. `Witnessed` yields exactly `DampenerRemote`'s hypothesis `Complies Γ α d`, so for
-   the Lean bound only links 1 and 2 remain open.
+   the Lean bound only link 2 remains open, as a property of the policy's check on its own.
 4. *`Complies` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
-   is open with links 1 and 2.
+   is open with link 2.
 5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. Sampled proofs bound the faulty proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
@@ -345,7 +347,7 @@ verification phase an hour) give η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8
 
 **Conditional on three things not in place yet:**
 
-- the inference-only policy's guarantee doesn't reach the local bounds yet (part 4, links 1, 2, 5 and 6);
+- the inference-only policy's guarantee doesn't reach the local bounds yet (part 4, links 2, 5 and 6);
 - there is no utilization policy, so nothing bounds f uniformly over accepted runs;
 - the rate ceiling ζ̄ is a hypothesis: reference efficiency, ζ̄ equal to the reference's measured rate ζ_ref, is open.
 
@@ -419,8 +421,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
-- **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
-  with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
+- **The inference-only policy's link to the bound** (part 4, links 2, 5 and 6): the policy's check accepting as a
   property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading the
   result instead of assuming `Complies`.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
@@ -547,8 +548,8 @@ the slowdown calculator). Its `periods.py` gives the slowdown bound for monitori
 ## The demo
 
 **No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
-runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
-development run:
+runs remote's sampled proofs for real, and the vLLM demo runs sampled proofs and PoUW, two of remote's three
+subprotocols, on one served run, PoUW's as a development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the

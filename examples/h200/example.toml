@@ -1,4 +1,4 @@
-# The H200 example (examples/README.md): the remote protocol's sampled-proofs half at a frozen shape on one H200, and
+# The H200 example (examples/README.md): the remote protocol's sampled proofs alone at a frozen shape on one H200, and
 # nothing else. `verity example h200 --out OUT` runs its step driver, run.py (on the CPU at small shapes, or the H200 at the
 # frozen shape), and writes a replay bundle and a block record; phases.sh runs the drawn-block proving, one phase a run.
 # Its evidence is sampled proofs': the step committed on the H200, 8 proof blocks sampled by one live coin, each proved by
