@@ -2350,8 +2350,8 @@ def main(argv: list[str]) -> int:
     from .store.local import LocalStore
 
     ap = argparse.ArgumentParser(prog="research queue vqueue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--repo", type=Path, default=WORKDIR, help=f"the clone to work in (default drive's, {WORKDIR}); the loop "
-                                                              f"fetches into its own refs ({NS}/) and touches none of drive's")
+    ap.add_argument("--repo", type=Path, default=WORKDIR, help=f"the clone to work in (default the queue's, {WORKDIR}); the "
+                                                              f"loop fetches into its own refs ({NS}/)")
     ap.add_argument("--remote", default=None, help="the repository (default the clone's origin)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--lock", type=Path, default=LOCK, help=f"the loop's own lock (default {LOCK})")
@@ -2359,7 +2359,8 @@ def main(argv: list[str]) -> int:
                                                           f"directory holds the loop's caches")
     ap.add_argument("--state", type=Path, default=STATE, help=f"each tick's candidates, their verdicts beside graph2's and what "
                                                               f"their graphs lack, rewritten each tick (default {STATE})")
-    ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
+    ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"the priority list, the landing order: PR numbers, "
+                                                                        f"first to land first (default {PRIORITY})")
     ap.add_argument("--frozen", type=Path, default=FROZEN, help=f"a freeze's pathspecs, one a line: while the file exists, a PR "
                                                                 f"renaming or deleting a file under one waits (default {FROZEN})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
@@ -2377,22 +2378,22 @@ def main(argv: list[str]) -> int:
                          "error that ran out of attempts on two or more nodes, as an outage's do")
     ap.add_argument("--no-slim", action="store_true",
                     help="judge each candidate on its graph2 check alone, with no run beside it of lean-agreement and the "
-                         "preflights (research.vqueue_slim), which it otherwise launches on drive's machines beside each "
+                         "preflights (research.vqueue_slim), which it otherwise launches on --on's machines beside each "
                          "candidate's check when it builds it; only with --shadow or --dry-run, since `main` would move past "
                          "what that run checks")
     ap.add_argument("--gate", choices=GATES, default=GRAPH2_GATE,
                     help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
-                         f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards, with graph2's "
+                         f"`{CHECK_GATE}`, its whole check (`check.py --record`), every step as --shards shards, with graph2's "
                          "check in shadow: read, compared with the check's verdict in one logged line, and deciding nothing")
     ap.add_argument("--shards", type=int, default=SHARDS,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, an N ci.toml has a shard plan for, one "
                          f"launch each (default {SHARDS})")
     ap.add_argument("--on", default="", help="the machines the run beside each check and each records run take, a comma list, "
-                                             "each shard its share of them as drive gives its own (default drive.toml's `on` "
+                                             "each shard its share of them (default drive.toml's `on` "
                                              "at `main`)")
     ap.add_argument("--no-records", action="store_true",
                     help="start the check of a candidate with a member that changes Lean, a lock or a spec at once, with no "
-                         "records run before it (research.vqueue_records: drive's lock run, on drive's machines) "
+                         "records run before it (research.vqueue_records: lean-audit alone, on --on's machines) "
                          "regenerating its lock records and no records commit of them checked in its place: stale records "
                          "fail it as any failure")
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "

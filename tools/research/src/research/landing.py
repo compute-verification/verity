@@ -344,7 +344,7 @@ def failing(run_dir: Path) -> str | None:
 def gating(repo: Path, commit: str) -> list[str]:
     """The steps `main` waits for at ``commit`` (`vqueue_slim.judge`): every step of `AFTER_LANDING` but those a run
     skips by name (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own policy takes off the merge gate (policy.toml's
-    `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every such
+    `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and hold nothing; every such
     step when that ci.toml or policy can't be read."""
     from .merge import declared_jobs
 

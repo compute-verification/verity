@@ -114,7 +114,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
 def test_the_strict_parse_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_likely_meant():
     with pytest.raises(QueueError) as e:
         DriveFlags.parse("stale_day = 4\n", "d.toml", strict=True)
-    assert str(e.value) == ("d.toml: unknown key 'stale_day' (did you mean 'stale_days'?): drive reads only on, "
+    assert str(e.value) == ("d.toml: unknown key 'stale_day' (did you mean 'stale_days'?): this research reads only on, "
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
                             "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
                             "after_landing_shards, command_line, lowrisk_lane, "

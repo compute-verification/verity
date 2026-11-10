@@ -227,8 +227,9 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]
     assert entries[2].state == "waiting"
-    assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retrying next sync"
-    assert world.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
+    assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retried at the next reading"
+    assert world.logs[-2] == (f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retried at the "
+                              "next reading")
 
     world.gh.put(2, new)
     assert [m.pr for m in q.sync()[0]] == [1, 2]
@@ -1351,7 +1352,7 @@ def test_status_lists_a_marked_pr_based_on_another_branch_as_waiting_and_drive_s
     assert [m.pr for m in members] == [5] and set(entries) == {5}
 
 
-def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it(world, capsys):
+def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_the_queue_wont_see_it(world, capsys):
     from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
@@ -1361,8 +1362,8 @@ def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it
     world.gh.put(6, child := world.change({"c.txt": "stacked\n"}, base=parent), ready=False)
     _based_on(world, 6, "lane-5/parent")
     assert ready(world.gh, world.store, 6, "lane-6", MarkOnly()) == 0
-    note = ("#6 is based on lane-5/parent (#5's head), not main: drive won't see it until #5 lands, one stack level per landing. "
-            "Retarget it to main (drive orders stacked PRs itself: a PR containing another waits for it)")
+    note = ("#6 is based on lane-5/parent (#5's head), not main: the verified queue won't see it until #5 lands, one stack level "
+            "per landing. Retarget it to main (the queue orders stacked PRs itself: a PR containing another waits for it)")
     assert note in capsys.readouterr().err
     assert StoreLabels(world.store, log=world.logs.append).ready(6, child) is True
 
@@ -1371,7 +1372,8 @@ def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it
     out = capsys.readouterr()
     got = json.loads(out.out)
     assert got["pr"] == 6 and got["head"] == child and got["base"] == "some/branch" and got["exit"] == 0
-    assert got["warning"].startswith("#6 is based on some/branch, not main: drive won't see it until it is. Retarget it to main")
+    assert got["warning"].startswith("#6 is based on some/branch, not main: the verified queue won't see it until it is. Retarget "
+                                     "it to main")
     assert "marked on lane-6's word" in out.err
 
     assert ready(world.gh, world.store, 5, "lane-5", MarkOnly()) == 0
@@ -1921,7 +1923,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert research_main(argv) == 0
     got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
     assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
-    assert got[2][0] == "ready" and "the verified queue builds it into a batch onto `main`" in got[2][1]
+    assert got[2][0] == "ready" and "the verified queue merges it into a candidate on `main`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
@@ -2178,7 +2180,7 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
 
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
-    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
+    assert refs() == before and "the verified queue leaves it out until a ready mark re-admits it" in capsys.readouterr().out
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
@@ -2807,7 +2809,7 @@ def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_t
 
 def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_unjudged(world, capsys):
     """With no credentials (or no source holding it), the suite that reads it isn't collected, so it can't refuse on bytes it
-    never had; one note names the suite and the fixtures, and the head is marked: the after-landing run fetches them."""
+    never had; one note names the suite and the fixtures, and the head is marked: its candidate's check fetches them."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     files, _ = _fixture_tree(world)
@@ -2818,7 +2820,7 @@ def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight" in s)
     note = (f"pkg not judged: 1 of the 1 fixture(s) the suites read weren't fetched (no credentials for the store's remote: "
-            f"{BIG_PATH}); the after-landing run fetches them")
+            f"{BIG_PATH}); its candidate's check fetches them")
     assert said.count(note) == 1 and "collected 1 suite(s) (.)" in said and "not judged" not in said.replace(note, ""), said
     assert calls == [[BIG_PATH]]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
@@ -3101,8 +3103,8 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     assert [s for s in world.logs if "warning" in s] == [
         f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate gates/g.py at `main` {main[:12]}: touches bad.txt; "
-        "delete bad.txt (`python3 gates/g.py origin/main HEAD` in the branch runs it). A warn gate refuses nothing: drive lands "
-        "the PR and tells its owner, who fixes it in their next PR"], world.logs
+        "delete bad.txt (`python3 gates/g.py origin/main HEAD` in the branch runs it). A warn gate refuses nothing: the PR "
+        "lands, and its owner fixes it in their next PR"], world.logs
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
@@ -3130,8 +3132,8 @@ def test_the_preflight_refuses_what_the_sync_holds_a_marked_pr_waiting_on_one_it
     world.gh.put(4, four := world.change({"z.txt": "z\n"}, base=five), ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world)) == 1
     err = capsys.readouterr().err
-    assert (f"it contains #5's head {five[:12]}, and #5 isn't admitted (contains #6, which isn't admitted), so drive holds "
-            f"this PR behind it") in err and "#6's head" not in err
+    assert (f"it contains #5's head {five[:12]}, and #5 isn't admitted (contains #6, which isn't admitted), so the verified "
+            f"queue holds this PR behind it") in err and "#6's head" not in err
     assert StoreLabels(world.store, log=world.logs.append).ready(4, four) is False
     world.gh.ready |= {(5, five), (4, four)}                                                  # as the sync judges it
     _, entries = world.queue().sync()
@@ -3203,8 +3205,8 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     pre = _preflight(world)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     err = capsys.readouterr().err
-    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so drive holds "
-            f"this PR behind it: mark #5 ready first, so it lands first, or drop #5's commits from this branch (if this PR "
+    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so the verified "
+            f"queue holds this PR behind it: mark #5 ready first, so it lands first, or drop #5's commits from this branch (if this PR "
             f"carries #5's change, #5's owner withdraws its mark: `research data label pr:5@{parent[:12]} ready false "
             f"--by OWNER`)") in err
     assert "merged onto `main` at" in err                                                    # no `next` yet
@@ -4605,7 +4607,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
-    assert "A PR lands on `checked` on a review, and reaches `main` on the full check after, so the quick tier isn't required" in err and "research run --on auto" in err
+    assert "A PR lands once its candidate's full check passes, so the quick tier isn't required" in err and "research run --on auto" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
