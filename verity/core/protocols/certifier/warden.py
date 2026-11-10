@@ -83,7 +83,12 @@ With lengths rows the network certifier:
 - fails such a connection at its first egress slot, in bucket s + D, and never before: until then both its directions
   are padding. So every connection it admits, released or not, holds its lane through its admission's bucket + D at
   least, the bucket through which the ingress proof block's scan holds the connection's slot (`ingress_scan.held`),
-  and a lane it frees is a slot the scan has freed: a client's failure leaves the next admission a slot.
+  and a lane it frees is a slot the scan has freed: a client's failure leaves the next admission a slot;
+- hands each window's releases (`Released`, to `Warden(lengths=…)`) by the slot stride of each one's `END` and in
+  release order, at most K a stride. Window w's are handed once window w + 1's records are published, where each of
+  their connections has ended, and only where both windows' three records were published complete: a window whose
+  cells have no certificate, or whose responses may reach into one that has none, has no lengths rows, and neither has
+  the run's last window.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
@@ -141,7 +146,7 @@ from collections import Counter, defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field, fields, replace
 from functools import cached_property
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import (DATA, HEADER, ID_DIGITS, MAX_TOKENS_AT, PAD, RUN_ID_BYTES,
@@ -401,6 +406,17 @@ class _Connection:
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
+class Released(NamedTuple):
+    """One released request as the lengths rows hold it (the module docstring's "The lengths rows"): `order`, N, its
+    place in the release order; `request_bytes`, its request's; `outputs`, n, its response's `DATA` cells before its
+    `END` or `FAIL`; and `failed`, whether it ended in a `FAIL`."""
+
+    order: int
+    request_bytes: int
+    outputs: int
+    failed: bool
+
+
 def _pad(c: _Connection, cell_bytes: int) -> bytes:
     """c's PAD cell, made at its first use and kept, however c was admitted."""
     if not c.pad:
@@ -424,6 +440,9 @@ class Warden:
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`, its
       bucket `ingress_end`), and `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on
       the server's side;
+    - with lengths rows (`WardenParams.lengths`; the module docstring's "The lengths rows"), `lengths(window,
+      strides)` receives each window's releases by slot stride, a window later (by default they are kept in
+      `lengths`);
     - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
@@ -441,7 +460,8 @@ class Warden:
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
-                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
+                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
+                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")
@@ -471,6 +491,10 @@ class Warden:
         self.withheld: list[Record] = []
         self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
+        self.lengths: list[tuple[int, tuple[tuple[Released, ...], ...]]] = []
+        self.hand_lengths = lengths or (lambda window, strides: self.lengths.append((window, strides)))
+        self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
+        self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -547,6 +571,8 @@ class Warden:
         T = self.params.window
         if t % T == 0 and t // T - 1 in self._held:
             self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
+        if t % T == 0 and self.params.lengths is not None:
+            self._released[t // T] = [[] for _ in range(T // self.params.every)]
         while self.queue and len(self.active) < self.params.lanes:
             self._admit(self.queue.popleft(), t)
         parts, released = [], []
@@ -590,9 +616,30 @@ class Warden:
         """Window w's held records, each with `reason` as its status unless it has one: a window records its first
         fault."""
         out, records = self._held.pop(w)
+        whole = out is self.publish
         for record, grid in records:
-            out(record if reason is None or not record.status.complete else replace(record, status=Status(reason)),
-                grid)
+            if reason is not None and record.status.complete:
+                record = replace(record, status=Status(reason))
+            whole = whole and record.status.complete
+            out(record, grid)
+        if self.params.lengths is not None:
+            self._emit_lengths(w, whole)
+
+    def _emit_lengths(self, w: int, whole: bool) -> None:
+        """Window w − 1's releases by slot stride, handed once window w's records are, when each has ended
+        (`WardenParams`: with lengths rows a connection ends within a window of its admission), and only where both
+        windows' records were published complete: a window whose cells have no certificate, or whose releases'
+        responses reach into one that has none, gets no lengths rows."""
+        strides, before = self._released.pop(w - 1, None), self._whole.pop(w - 1, False)
+        self._whole[w] = whole
+        if strides is None or not (whole and before):
+            return
+        if any(c.ended is None or c.failed in CLIENT_REASONS for stride in strides for c in stride):
+            raise RuntimeError(f"window {w - 1} released a request whose connection is live, or failed as its "
+                               f"client's, at window {w}'s close")
+        self.hand_lengths(w - 1, tuple(tuple(
+            Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None)
+            for c in stride) for stride in strides))
 
     async def _reports(self, pacer: Pacer) -> None:
         async for report in pacer.reports():
@@ -717,6 +764,12 @@ class Warden:
         c.held += b"".join(sent)
         if c.ingress_end == t:
             c.release, self.requests_released = self.requests_released, self.requests_released + 1
+            if self.params.lengths is not None:
+                stride = self._released[t // self.params.window][t % self.params.window // self.params.every]
+                if len(stride) >= self.params.stride_releases:
+                    raise RuntimeError(f"bucket {t}'s slot stride releases more than {self.params.stride_releases} "
+                                       "requests, the lengths rows' slots")
+                stride.append(c)
             whole = with_release(bytes(c.held), c.release, self.run_id, t)
             c.held.clear()
             if c.server is None:

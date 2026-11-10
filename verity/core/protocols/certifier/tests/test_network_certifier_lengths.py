@@ -13,7 +13,7 @@ from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, id_request
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, run
-from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams,
+from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
@@ -230,3 +230,65 @@ def test_the_audit_holds_each_failure_to_the_side_that_can_cause_it():
     assert audit(LEN, ingress, egress, swapped(2, "late"))["windows"][0]["problems"] == [
         "connection 2: it failed (late) and its request was never released",
         "connection 2 failed closed (late) at egress cell 0", "connection 3 failed closed (late) at egress cell 0"]
+
+
+# --- the releases ------------------------------------------------------------------------------------------------
+
+
+def traffic():
+    """Five requests over two windows: two released in one slot stride (as many as its slots), one later in the window,
+    then, in the next window's one slot stride, one whose server never answers and one whose server stops after two
+    outputs."""
+    reqs = [id_req(1, 3), id_req(2, 40), id_req(3, 100), id_req(4, 5), id_req(5, 7)]
+    arrivals = {0: [cells(reqs[0], B), cells(reqs[1], B)], 9: [cells(reqs[2], B)], 17: [cells(reqs[3], B)],
+                18: [cells(reqs[4], B)]}
+    answers = [answer((11, 22, 33)), answer(range(8)), answer((5, 6)), [], [(1, response((1, 2))[:2 * P])]]
+    return reqs, arrivals, answers
+
+
+def test_each_windows_releases_are_handed_by_slot_stride_once_the_next_windows_records_are():
+    """Window w's releases, by the slot stride of each one's `END` and in release order: N, the request's bytes, the
+    response's `DATA` cells and whether the connection ended in a `FAIL`, as the signed records say. They are handed
+    after window w + 1's records, where every one of them has ended; the run's last window's never are."""
+    reqs, arrivals, answers = traffic()
+    order: list = []
+    warden, _, _ = run(answers, arrivals, params=LEN, windows=3,
+                       publish=lambda record, grid: order.append((record.link, record.window)),
+                       lengths=lambda window, strides: order.append(("lengths", window, strides)))
+    assert [e[:2] for e in order] == [
+        ("requests", 0), ("responses", 0), ("fails", 0), ("requests", 1), ("responses", 1), ("fails", 1),
+        ("lengths", 0), ("requests", 2), ("responses", 2), ("fails", 2), ("lengths", 1)]
+    handed = {e[1]: e[2] for e in order if e[0] == "lengths"}
+    for strides in handed.values():
+        assert len(strides) == T // E and all(len(stride) <= LEN.stride_releases for stride in strides)
+    got = {(w, j): stride for w, strides in handed.items() for j, stride in enumerate(strides) if stride}
+    assert got == {(0, 0): (Released(0, len(reqs[0]), 3, False), Released(1, len(reqs[1]), 8, False)),
+                   (0, 5): (Released(2, len(reqs[2]), 2, False),),
+                   (1, 1): (Released(3, len(reqs[3]), 0, True), Released(4, len(reqs[4]), 2, True))}
+    # as the records say: a release is an END in the ingress record, N their order, n the DATA cells of its egress
+    plain, _, _ = run(answers, arrivals, params=PLAIN, windows=3)
+    verdict = audit(PLAIN, *records(plain))
+    by_end = sorted(verdict["connections"], key=lambda c: (c["ingress_end"], c["ordinal"]))
+    want: dict = {}
+    for n, c in enumerate(by_end):
+        outputs = c["failed_at"] if c["failed"] else c["egress_cells"] - 1
+        want.setdefault((c["ingress_end"] // T, c["ingress_end"] % T // E), []).append(
+            Released(n, c["ingress_bytes"], outputs, bool(c["failed"])))
+    assert got == {k: tuple(v) for k, v in want.items()}
+    assert [c["failed"] for c in verdict["connections"]] == [None, None, None, "late", "late"]
+    assert plain.lengths == []
+
+
+def test_a_window_whose_records_or_the_next_ones_are_not_published_complete_gets_no_lengths_rows():
+    """A tick past its slack faults window 2's records, so neither window 2's releases nor window 1's, whose responses
+    may reach into it, are handed; a refused connection withholds window 0's records, and with them window 0's
+    releases only."""
+    reqs, arrivals, answers = traffic()
+    late, _, _ = run(answers, arrivals, params=LEN, windows=5, late={2 * T + 3: 0.05})
+    assert [r.status.complete for r in records(late)[0]] == [True, True, False, True, True]
+    assert [w for w, _ in late.lengths] == [0, 3]
+    crowd = {0: [cells(reqs[0], B)] * 3}
+    refused, _, _ = run([answer((1,))] * 2, crowd, params=LEN, windows=4)
+    assert refused.refused == 1 and refused.refused_windows == {0} and len(refused.withheld) == 3
+    assert [w for w, _ in refused.lengths] == [1, 2]
+    assert all(not stride for _, strides in refused.lengths for stride in strides)
