@@ -2329,6 +2329,39 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
 
+def test_merged_root_takes_the_codemod_s_worktrees_off_tmpdir_and_sweeps_one_a_killed_tick_left_there(tmp_path, monkeypatch):
+    """`ported`'s codemod runs in a worktree a merge (`queue.merged_worktree`, under `queue.MERGED_ROOT`, else TMPDIR): on the
+    control pod TMPDIR is a network volume, where each add and remove takes minutes.  `--merged-root` takes them to a local
+    disk, as `research queue --preflight-root` takes drive's, and a tree a killed tick left there (its process gone) is
+    swept."""
+    import tempfile
+
+    from test_queue import _move_main
+    from test_queue_ported import _tooling
+
+    tmp, fast, ran, vq = tmp_path / "tmpdir", tmp_path / "fast", tmp_path / "ran", tmp_path / "vq"
+    tmp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(Q, "MERGED_ROOT", None)
+    o = Origin(tmp_path)
+    main = _move_main(o, {**_tooling(tmp_path / "argv", f"import os\nPath({str(ran)!r}).write_text(os.getcwd())\n"),
+                          "Lib/A.lean": "import Init\n"})
+    _git(tmp_path, "clone", "-q", str(o.origin), str(clone := tmp_path / "clone"))
+    (left := fast / f"{Q.MERGED_PREFIX}999999999-x" / "tree").mkdir(parents=True)     # no such pid: Linux's cap is 2**22
+    ported = []
+
+    def tick(self):
+        ported.append(Q.ported(self.world.repo, _git(self.world.repo, "rev-parse", f"{main}^{{tree}}")))
+        return []
+
+    monkeypatch.setattr(L.Loop, "tick", tick)
+    assert L.main(["--repo", str(clone), "--remote", f"https://github.com/{Q.REPO}.git", "--store", str(tmp_path / "store"),
+                   "--lock", str(vq / "lock"), "--log", str(vq / "decisions.jsonl"), "--state", str(vq / "state.json"),
+                   "--merged-root", str(fast), "--once"]) == 0
+    assert [p[1:] for p in ported] == [(["Lib/A.lean"], [], "")] and Path(ran.read_text()).is_relative_to(fast)
+    assert not left.exists() and not list(fast.iterdir()) and not list(tmp.iterdir())
+
+
 # -- the check that gates (`--gate check`)
 
 #: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are

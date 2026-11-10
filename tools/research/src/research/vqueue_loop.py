@@ -2191,6 +2191,7 @@ def _locked(path: Path):
 
 
 def main(argv: list[str]) -> int:
+    from . import queue
     from .queue import GitHub, credential_args, remote_and_repo
     from .store.local import LocalStore
 
@@ -2241,10 +2242,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
                     help=f"old heads mapped across `main`'s moves at once at the end of a tick, each running every move's "
-                         f"script on a scratch worktree where a build's merged worktrees go, so a mark or land verdict carries "
-                         f"to a head whose own change is theirs mapped (`Queue.mapped_change`); 0 carries none across a move "
+                         f"script on a scratch worktree under --merged-root, so a mark or land verdict carries to a head whose "
+                         f"own change is theirs mapped (`Queue.mapped_change`); 0 carries none across a move "
                          f"(default {MAPPED_JOBS})")
+    ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",
+                    help="where the worktrees a build checks out go (`queue.merged_worktree`, one a merge for `ported`'s "
+                         "codemod) and those a move's script runs on for --move-carry-jobs (`queue.mapped_tree`), and where "
+                         "one a killed tick left is swept (default the temporary directory; the control pod's TMPDIR is a "
+                         "network volume, where each worktree add and remove takes minutes)")
     a = ap.parse_args(argv)
+    queue.MERGED_ROOT = a.merged_root or queue.MERGED_ROOT
     if a.no_slim and not (a.shadow or a.dry_run):
         print("research queue vqueue: --no-slim moves `main` past lean-agreement and the preflights unchecked: it runs only "
               "with --shadow or --dry-run", file=sys.stderr)
