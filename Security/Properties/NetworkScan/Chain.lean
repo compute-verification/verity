@@ -4,7 +4,7 @@ public import Properties.NetworkScan
 public import Definitions.NetworkCertifier.Checked
 
 /-!
-# The scan's state chain and its count: what `NetworkCheck.Period.scanOf`'s acceptance gives the checked inputs
+# The scan's two ties and its count: what `NetworkCheck.Period.scanOf`'s acceptance gives the checked inputs
 
 The scan's Program is flattened with no wire between its units: bucket `t`'s ingress unit reads the state the bucket
 before passed on through its `sin` parameter, and bucket `t`'s egress unit reads the view its ingress unit gives through
@@ -12,28 +12,38 @@ its `state` parameter, and both parameters are input nodes of the root (`scanOf`
 flattening those gates are free inputs (`NetTiming.freeInputs`), beside the slot entries the ingress units read through
 their entry ports `prog<j>`.
 
-They are not the prover's to choose. A run on which each `sin` holds what the unit before returned as its state, and
-each egress `state` what its bucket's ingress unit returned as its view (`Chained`), has them fixed by the ingress and
-the slot entries: they are checked inputs (`NetTiming.CheckedUnique`, `stateGates`), which the leak bounds with checked
-inputs leave out of the count (`NetTiming.Guarantees.SampledLeakChecked`).
+**Two ties**, each a property of a run's gate values and each its own premise:
+
+* tie 1, the state chain (`StateTied`): each later bucket's `sin` holds what the unit before returned as its state;
+* tie 2, the egress view (`ViewTied`): each egress `state` holds what its bucket's ingress unit returned as its view.
+
+A run on which both hold has its `sin` and `state` gates (`sinSet`, `viewSet`) fixed by the ingress and the slot
+entries: they are checked inputs (`NetTiming.CheckedUnique`), which the leak bounds with checked inputs leave out of
+the count (`NetTiming.Guarantees.SampledLeakChecked`), so the count is the slot entries'. That an accepted run has each
+tie is that tie's premise, one each (`StateTieHeld`, `ViewTieHeld`: `NetTiming.CheckedWitness` at the tie), which no
+statement here proves.
+
+With neither tie the egress rows are still a function of the `state` gates alone, so every other free input is
+checked under no check at all (`ScanViewCut`), and the count is the views'.
 
 **The gates.** The ingress Definitions return a verdict, the state and the view, in that order, so the state a unit
 passes on is component 1 of its return (`stateOut`) and the view it gives component 2 (`viewOut`), each a run of the
 return's leaves (`componentRun`). A later bucket's `sin` is parameter 1 of its unit (`sinGates`) and an egress unit's
-`state` its parameter 0 (`viewGates`), as `scanOf` holds the templates' parameters to their names. `Chained` equates
-the values of each read with the values of what it reads as lists, so a read of another length than what it reads is
-never chained: a row's commitment binds its length.
+`state` its parameter 0 (`viewGates`), as `scanOf` holds the templates' parameters to their names. A tie equates the
+values of each read with the values of what it reads as lists, so a read of another length than what it reads is
+never tied: a row's commitment binds its length.
 
 **The arguments' input nodes.** `scanOf` counts the input gates' bits against the templates' parameters' and the slot
 entries' and takes each row, state and egress argument to be one input node's leaves from its first (`inputArg`). It
 refuses an egress argument that is an ingress row's input node and slot entries read from one, and no other pair: two
 arguments reading one input node leave the count room for an input node nothing reads. `argsApart` is the rest, the
-row, state and egress arguments' input nodes pairwise distinct and none the slot entries'; the statements take it as a
-condition on the Program, decided from the root's nodes.
+row, state and egress arguments' input nodes pairwise distinct and none the slot entries'; the statements that count
+the slot entries take it as a condition on the Program, decided from the root's nodes.
 
-* `ScanChainPinned`: an accepted scan's state chain pins its state gates, at every partition and design.
-* `ScanCountsEntries`: an accepted scan's free inputs, less its state gates, are its slot entry gates, at most the
-  slot entries' bits as `scanOf` counts them (`entryBits`).
+* `ScanChainPinned`: an accepted scan's two ties pin its `sin` and `state` gates, at every partition and design.
+* `ScanCountsEntries`: an accepted scan's free inputs, less those gates, are its slot entry gates, at most the slot
+  entries' bits as `scanOf` counts them (`entryBits`).
+* `ScanViewCut`: at an accepted scan, the free inputs other than the `state` gates are pinned under no check.
 -/
 
 @[expose] public section
@@ -89,17 +99,53 @@ def viewOut (P : Flock.Program.Prog) (t : ℕ) : List ℕ :=
   let r := componentRun (calleeAt P km.1).ret 2
   returnGates P km.1 km.2 r.1 r.2
 
-/-- **The scan's state gates** over the window's `T` buckets: each later bucket's `sin` and each bucket's egress
-`state`. -/
-def stateGates (P : Flock.Program.Prog) (s : Schedule) : Finset ℕ :=
-  ((List.range s.window).flatMap fun t => (if t = 0 then [] else sinGates P t) ++ viewGates P t).toFinset
+/-- **Tie 1's gates** over the window's `T` buckets: each later bucket's `sin`. -/
+def sinSet (P : Flock.Program.Prog) (s : Schedule) : Finset ℕ :=
+  ((List.range s.window).flatMap fun t => if t = 0 then [] else sinGates P t).toFinset
 
-/-- **The scan's state chain holds on the gate values `val`**: at each bucket `t` of the window, a later bucket's
-`sin` holds the state bucket `t - 1` passed on, and the egress unit's `state` holds the view bucket `t`'s ingress unit
-gives, value for value and as many. -/
-def Chained (P : Flock.Program.Prog) (s : Schedule) (val : ℕ → Bool) : Prop :=
-  ∀ t < s.window, (0 < t → (sinGates P t).map val = (stateOut P (t - 1)).map val) ∧
-    (viewGates P t).map val = (viewOut P t).map val
+/-- **Tie 2's gates** over the window's `T` buckets: each bucket's egress `state`. -/
+def viewSet (P : Flock.Program.Prog) (s : Schedule) : Finset ℕ :=
+  ((List.range s.window).flatMap (viewGates P)).toFinset
+
+/-- **Tie 1, the state chain, holds on the gate values `val`**: each later bucket `t` of the window reads as its `sin`
+the state bucket `t - 1` passed on, value for value and as many. -/
+def StateTied (P : Flock.Program.Prog) (s : Schedule) (val : ℕ → Bool) : Prop :=
+  ∀ t, 0 < t → t < s.window → (sinGates P t).map val = (stateOut P (t - 1)).map val
+
+/-- **Tie 2, the egress view, holds on the gate values `val`**: each bucket `t` of the window's egress unit reads as
+its `state` the view bucket `t`'s ingress unit gives, value for value and as many. -/
+def ViewTied (P : Flock.Program.Prog) (s : Schedule) (val : ℕ → Bool) : Prop :=
+  ∀ t < s.window, (viewGates P t).map val = (viewOut P t).map val
+
+/-- A statement's tie 1: its descriptor's (`StateTied`), as `layOf` reads its layout; no condition on a statement whose
+descriptor doesn't decode. -/
+def stateTiedAt (s : Schedule) (x : Claims.Sampling.AuditStatement) (val : ℕ → Bool) : Prop :=
+  match Flock.Program.decode ⟨x.desc.toArray⟩ with
+  | .ok P => StateTied P s val
+  | .error _ => True
+
+/-- A statement's tie 2: its descriptor's (`ViewTied`), as `layOf` reads its layout; no condition on a statement whose
+descriptor doesn't decode. -/
+def viewTiedAt (s : Schedule) (x : Claims.Sampling.AuditStatement) (val : ℕ → Bool) : Prop :=
+  match Flock.Program.decode ⟨x.desc.toArray⟩ with
+  | .ok P => ViewTied P s val
+  | .error _ => True
+
+/-- **Tie 1 is held at `x`**, a premise: at every prover, an accepted run whose extracted witness has no proof block
+sampled `all` incorrect has the state chain on its trace's run, except with probability `ε x`
+(`NetTiming.CheckedWitness` at `stateTiedAt`). -/
+def StateTieHeld {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
+    (H : Claims.Msg → Claims.Msg) (D : Claims.SamplingGeneric.Compiled Coin A) (s : Schedule)
+    (ε : Claims.Msg → ℝ) (x : Claims.Msg) : Prop :=
+  NetTiming.CheckedWitness H D (stateTiedAt s) ε x
+
+/-- **Tie 2 is held at `x`**, a premise of its own: at every prover, an accepted run whose extracted witness has no
+proof block sampled `all` incorrect has the egress view on its trace's run, except with probability `ε x`
+(`NetTiming.CheckedWitness` at `viewTiedAt`). -/
+def ViewTieHeld {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
+    (H : Claims.Msg → Claims.Msg) (D : Claims.SamplingGeneric.Compiled Coin A) (s : Schedule)
+    (ε : Claims.Msg → ℝ) (x : Claims.Msg) : Prop :=
+  NetTiming.CheckedWitness H D (viewTiedAt s) ε x
 
 /-- **The scan's slot entry gates**: every gate a bucket's ingress unit reads through an entry port `prog<j>`, a lane
 each, its parameters past the row at bucket 0 and past the row and the state at a later bucket. -/
@@ -131,30 +177,43 @@ def argsApart (P : Flock.Program.Prog) (s : Schedule) : Bool :=
     (inputArg P)
   decide qs.Nodup && (List.range s.lanes).all fun j => !qs.contains (some (entryNode P j))
 
-/-- **An accepted scan's state chain pins its state gates.** If `scanOf` accepts the scan `j` as the registered
-Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, whose row, state and egress
-arguments read input nodes of their own (`argsApart`), then in every flattening `C` of `P`, at every partition and
-design, the check `Chained P s` pins the state gates over the window's `T` steps (`NetTiming.CheckedUnique` at
-`scanLayout`): two runs on which the chain holds, with one ingress through step `t`, the same inputs off the state
-gates and the same held gates, have the same egress rows at step `t`. -/
+/-- **An accepted scan's two ties pin its `sin` and `state` gates.** If `scanOf` accepts the scan `j` as the
+registered Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, whose row, state and
+egress arguments read input nodes of their own (`argsApart`), then in every flattening `C` of `P`, at every partition
+and design, tie 1 and tie 2 together pin tie 1's and tie 2's gates over the window's `T` steps
+(`NetTiming.CheckedUnique` at `scanLayout`): two runs on which both ties hold, with one ingress through step `t`, the
+same inputs off those gates and the same held gates, have the same egress rows at step `t`. -/
 def ScanChainPinned : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (C : Claims.Sampling.Prog) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design),
     scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
     argsApart P s = true →
-      NetTiming.CheckedUnique C Pt d (scanLayout P s) s.window (stateGates P s) (Chained P s)
+      NetTiming.CheckedUnique C Pt d (scanLayout P s) s.window (sinSet P s ∪ viewSet P s)
+        (fun val => StateTied P s val ∧ ViewTied P s val)
 
-/-- **An accepted scan's free inputs, less its state gates, are its slot entries.** If `scanOf` accepts the scan `j`
+/-- **An accepted scan's free inputs, less its tied gates, are its slot entries.** If `scanOf` accepts the scan `j`
 as the registered Program `program` at a schedule `s` the check reads (`scheduleOf`), its canonical text is `c` and
 decodes to `P`, whose row, state and egress arguments read input nodes of their own (`argsApart`), then in every
-flattening `C` of `P` the free inputs over the window's `T` steps that are no state gate are exactly the slot entry
-gates, and those number at most the slot entries' bits `scanOf` counts (`entryBits`). -/
+flattening `C` of `P` the free inputs over the window's `T` steps that are neither tie's gates are exactly the slot
+entry gates, and those number at most the slot entries' bits `scanOf` counts (`entryBits`). -/
 def ScanCountsEntries : Prop :=
   ∀ (sj j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (C : Claims.Sampling.Prog),
     scheduleOf sj = .ok s → scanOf j program s = .ok sc → Flock.canon j = .ok c →
     Flock.Program.decode c.toUTF8 = .ok P → Flattens P C → argsApart P s = true →
-      NetTiming.freeInputs C (scanLayout P s) s.window \ stateGates P s = entryGates P s ∧
+      NetTiming.freeInputs C (scanLayout P s) s.window \ (sinSet P s ∪ viewSet P s) = entryGates P s ∧
         (entryGates P s).card ≤ entryBits P s
+
+/-- **With neither tie, an accepted scan's egress views are the cut.** If `scanOf` accepts the scan `j` as the
+registered Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, then in every
+flattening `C` of `P`, at every partition and design, the free inputs other than tie 2's gates are pinned under no
+check (`NetTiming.CheckedUnique` at `scanLayout` with the check that holds of every run): two runs with the same
+values at the egress units' `state` gates and the same held gates have the same egress rows at every step. -/
+def ScanViewCut : Prop :=
+  ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
+    (C : Claims.Sampling.Prog) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design),
+    scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
+      NetTiming.CheckedUnique C Pt d (scanLayout P s) s.window
+        (NetTiming.freeInputs C (scanLayout P s) s.window \ viewSet P s) (fun _ => True)
 
 end Properties.NetworkScan
