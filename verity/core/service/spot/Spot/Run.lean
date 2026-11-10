@@ -184,16 +184,14 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
 
 /-- **Each history table the interior reads is one the boundary registration served** (`interior-table`): every table
 `tables` names, at the root and domain id `HistoryTable.rootsOf` computed for it, is a port of the boundary
-registration's record `record` of that name with that root and domain (its `roots`). The interior's copies name the
-tables round 2 recomputes from the writers it opens; this holds each one to the table round 1 registered under its
-name, so no table only the interior's copies name is read. -/
+registration's record `record` of that name with that root and domain, at the port's last root (`Record.byPort`, the one
+round 1's checks hold). The interior's copies name the tables round 2 recomputes from the writers it opens; this holds
+each one to the table round 1 registered under its name, so no table only the interior's copies name is read. -/
 def tablesServed (record : Json) (tables : Array (String × ByteArray × ByteArray)) : Bool :=
-  let roots := match getD record "roots" with
-    | .arr rs => rs
-    | _ => #[]
-  tables.all fun (name, root, domain) => roots.any fun r =>
-    jsonStrIs (getD r "port") name && jsonStrIs (getD r "root") (Flock.hexOf root) &&
-      jsonStrIs (getD r "domain") (Flock.hexOf domain)
+  let ports := Record.byPort record
+  tables.all fun (name, root, domain) => match ports.find? (·.1 == name) with
+    | some (_, r) => jsonStrIs (getD r "root") (Flock.hexOf root) && jsonStrIs (getD r "domain") (Flock.hexOf domain)
+    | none => false
 
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step

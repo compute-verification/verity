@@ -264,14 +264,14 @@ def reference_served(j):
 def served(draw, broken: bool = False):
     """A boundary registration's record, its ``roots`` its own port and one to three tables', and tables an interior
     reads: some of the record's at their roots and domains, or one with its root, domain or name changed, one the record
-    has no port of, the same name twice, or the record's ``roots`` in another form; broken, a table that isn't
-    ``[name, root, domain]`` in lowercase hex."""
+    has no port of, the same name twice, a port the record lists again under another root before or after its own, or
+    the record's ``roots`` in another form; broken, a table that isn't ``[name, root, domain]`` in lowercase hex."""
     digest = st.binary(min_size=64, max_size=64).map(bytes.hex)
     names = draw(st.lists(NAMES, min_size=1, max_size=3, unique=True))
     entries = [{"port": n, "root": draw(digest), "leaves": 2 ** 17, "domain": draw(digest)} for n in names]
     roots = [{"port": "b.ingress", "root": draw(digest), "leaves": 4, "domain": draw(digest)}, *entries]
     tables = [[e["port"], e["root"], e["domain"]] for e in draw(st.lists(st.sampled_from(entries), max_size=3))]
-    how = draw(st.integers(0, 9))
+    how = draw(st.integers(0, 10))
     if how == 1 and tables:
         tables[0][1] = draw(digest)
     elif how == 2 and tables:
@@ -286,6 +286,9 @@ def served(draw, broken: bool = False):
         roots = draw(st.sampled_from([None, {}, "roots", [1, None], [{"port": n} for n in names]]))
     elif how == 7 and tables:
         roots[1:] = [{**e, "root": e["root"].upper()} for e in entries]
+    elif how == 9:
+        again = {**draw(st.sampled_from(entries)), "root": draw(digest)}
+        roots = [roots[0], again, *roots[1:]] if draw(st.booleans()) else [*roots, again]
     record = draw(st.sampled_from([{"roots": roots}, {"roots": roots, "population": 3}])) if how != 8 else roots
     if broken:
         bad = draw(st.sampled_from([[1, "aa", "bb"], ["n", "AA", "bb"], ["n", "a", "bb"], ["n", "aa"], "n", None]))
@@ -309,7 +312,8 @@ def test_a_history_piece_agrees(pieces, port, examples):
 
 def test_a_table_is_served_only_at_its_ports_root_and_domain(pieces):
     """An interior's table is round 1's only where round 1's record has a port of its name at its root and domain
-    (`Run.tablesServed`): another root, another domain, another name or no port is refused, and no tables are served."""
+    (`Run.tablesServed`): another root, another domain, another name or no port is refused; a port the record lists twice
+    is held at its last root, the one round 1's checks hold (`Record.byPort`); and an interior with no tables passes."""
     port = {"port": "layer.3/keys", "root": "aa" * 64, "leaves": 2 ** 17, "domain": "bb" * 64}
     record = {"roots": [{"port": "b.ingress", "root": "cc" * 64, "leaves": 4, "domain": "dd" * 64}, port]}
     for tables, want in [([["layer.3/keys", "aa" * 64, "bb" * 64]], True), ([], True),
@@ -318,6 +322,10 @@ def test_a_table_is_served_only_at_its_ports_root_and_domain(pieces):
                          ([["layer.3/keys", "aa" * 64, "bb" * 64], ["layer.3/keys", "ab" * 64, "bb" * 64]], False)]:
         j = {"record": record, "tables": tables}
         assert _call(pieces, "tables_served", j) == reference_served(j) == {"served": want}, tables
+    again = {**port, "root": "ab" * 64}
+    for roots, want in [([port, again], False), ([again, port], True)]:
+        j = {"record": {"roots": roots}, "tables": [["layer.3/keys", "aa" * 64, "bb" * 64]]}
+        assert _call(pieces, "tables_served", j) == reference_served(j) == {"served": want}, roots
 
 
 def _call(pieces, fn: str, j):

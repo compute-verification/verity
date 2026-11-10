@@ -905,13 +905,15 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
 def tables_served(record: Any, tables: Iterable[tuple[str, bytes, bytes]]) -> bool:
     """Whether each history table the interior reads is one the boundary registration served (`interior-table`): every
     table of `tables`, `(name, root, domain)` with the root and domain id `history.roots_of` computed for it, is a port
-    of the boundary registration's record `record` of that name with that root and domain (its ``roots``). The
-    interior's copies name the tables round 2 recomputes from the writers it opens; this holds each one to the table
-    round 1 registered under its name. The Lean verifier's `Run.tablesServed` is this."""
+    of the boundary registration's record `record` of that name with that root and domain, at the port's last root
+    (`Record.byPort`, the one round 1's checks hold). The interior's copies name the tables round 2 recomputes from the
+    writers it opens; this holds each one to the table round 1 registered under its name. The Lean verifier's
+    `Run.tablesServed` is this."""
     roots = record.get("roots") if isinstance(record, Mapping) else None
-    roots = roots if isinstance(roots, list) else []
-    return all(any(isinstance(r, Mapping) and r.get("port") == name and r.get("root") == root.hex()
-                   and r.get("domain") == domain.hex() for r in roots) for name, root, domain in tables)
+    ports = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
+             if isinstance(r, Mapping) and isinstance(r.get("port"), str)}
+    return all((r := ports.get(name)) is not None and r.get("root") == root.hex() and r.get("domain") == domain.hex()
+               for name, root, domain in tables)
 
 
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
