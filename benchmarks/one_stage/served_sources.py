@@ -1,8 +1,8 @@
 """A served run's record composed off the served node, each part from the source that produced its verdict.
 
     served_sources.py record --serve-dir D --replay DIR --private DIR --out OUT --gate GATE --key-sha512 PIN
-        --main FILE --controlled-by WHO --published-coin FILE [--coin-put FILE] [--sampled-causes FILE]
-        [--verifier-commit SHA]
+        --main FILE --controlled-by developer|auditor --published-coin FILE [--coin-put FILE]
+        [--sampled-causes FILE] [--verifier-commit SHA] [--exact-totals private|public]
 
 `served_verdicts.py record` composes from each piece's answer file as the served node wrote it, so an edit to such a
 file on that node changes its row. This composes on another host, from the copy D of the run's serve dir there, and
@@ -17,7 +17,10 @@ hashed, the Python verifier opened no file outside the case, and the Lean check 
 record are `served_verdicts.pearlplus_of_record`'s, on a private piece directory built here from the case's manifests,
 the coin as drawn and the two answers: the served node's `development.json`, `pearlplus-answer.json`,
 `pearlplus-lean.json` and `piece.json` are never opened, so an edit to one changes nothing in the row. A tie that
-names its weights (a version 1 W: ``public.tie.weights``) puts `WEIGHTS_COST` on the row.
+names its weights (a version 1 W: ``public.tie.weights``) puts `WEIGHTS_COST` on the row. The row's verdict is a bare
+``accept`` only when every record it reads accepted: its tie to the window reads the audit of record's registration and
+summary, so beside an audit that did not accept it is `ACCEPT_UNAUDITED`, which the composed verdict never counts as an
+accept.
 
 **The gate's three reads.** The salt session, the draw session, the auditor's ledger and the host's pins log are
 read live from the challenger's gate (`GateReads`: ``fetch SID``, ``ledger``, ``pins``, each asked once; any other word
@@ -36,19 +39,30 @@ audit's own ``summary.json`` and ``window/audit.json`` under D. Nothing is rerun
 **The inference-only policy: the served node's own answer.** Not recomputed, because the block count it is judged on
 stays on that node (`INFERENCE_FROM`, by source: one today); its part says so.
 
-**What the record says of itself.** ``composed_on``: `OFF_NODE`, ``served_node: false``, who controls the host
-(``--controlled-by``) and `SOURCES_FROM`. ``composed``: the verdict `served_verdicts.record` composes over the rows
+**What the record says of itself.** ``composed_on``: where it was composed (`WHERE`), ``served_node: false``, who
+controls the host (``--controlled-by``: required, one of `CONTROLLERS`, never a default) and `SOURCES_FROM`.
+``composed``: the verdict `served_verdicts.record` composes over the rows
 (a rejected audit rejects it; an accept of every row is left pending, since one part is not verified again here), the
 sentence `parts_said` (which part was verified again off the served node and which was not), and `NOT_COMPOSITE`: no
 theorem of the remote protocol is cited and no block record is written.
 
-**What leaves.** ``--out`` gets the record (``record/verdicts.json``), its ``RECORD`` line (``verdicts.txt``), the
-two Pearl+ answers and the coin record, each in its public form (`served_verdicts.public_doc`); the full record, the
-coin as drawn, the manifests and the gate's reads stay in ``--private``, a new 0700 directory outside ``--out``. The
-case's blobs are opened tile values, witness: they are read where they are and never copied. A hash is published only
-of a public form: the SHA-512 of the coin as drawn, published beside the redacted coin record, would give the window's
-number to anyone who tries each number in its place, so the record names the redacted record's hash (held to
-``--published-coin``, the run's published one) and says the other stays on this host (`COIN_HELD`).
+**What leaves.** ``--out`` gets the public record (``record/verdicts.json``), its ``RECORD`` line (``verdicts.txt``)
+and the coin record, each in its public form (`served_verdicts.public_doc`); the full record, the coin as drawn, the
+manifests and the gate's reads stay in ``--private``, a new 0700 directory outside ``--out``. The case's blobs are
+opened tile values, witness: they are read where they are and never copied. The public record is `public_report`'s:
+
+- **A row is its judgment** (`JUDGMENT`): its verdict with its ε and δ, where its answer is from and what it rests on.
+  Its exact totals (`TOTALS`: the answer and its public quantity) stay in the private record unless
+  ``--exact-totals public``, which also lets the two Pearl+ answers leave.
+- **A row that did not accept gives the kind of its reason** (`kind_of`): a rejected audit's own words name drawn
+  members by index and their session paths, and a copy that differs from the gate's is named by hashes of both sides.
+  Those stay in the private record.
+- **No hash of a file whose redacted form is published** (`Withheld`): the SHA-512 of the coin as drawn, published
+  beside the redacted coin record, would give the window's number to anyone who tries each number in its place, and
+  the same holds of the ledger, the pins, the sessions' files and the record itself. The record names the redacted
+  coin record's hash (held to ``--published-coin``, the run's published one) and says the other stays on this host
+  (`COIN_HELD`); the gate's reads leave as when each was read and how the served node's copy was held to it; and
+  `write` refuses, before it writes anything, a public file that holds such a digest or its first 16 hex digits.
 """
 from __future__ import annotations
 
@@ -57,6 +71,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shlex
 import sys
 import tarfile
@@ -67,8 +82,13 @@ from typing import Any
 
 import served_verdicts as S
 
-#: where such a record is composed, in its ``composed_on.where``
+#: where such a record is composed, in its ``composed_on.where``, by who controls the host
 OFF_NODE = "off the served node, on a CPU node the lane runs; not the auditor's host"
+WHERE = {"developer": OFF_NODE, "auditor": "off the served node, on an auditor's host"}
+#: who controls the composing host (``--controlled-by``), in its ``composed_on.controlled_by``: a fixed vocabulary, which
+#: the command line requires and never defaults
+CONTROLLERS = {"developer": "the developer's side, which also ran the served node; no auditor controls this host",
+               "auditor": "an auditor's host: the developer's side controls neither it nor what runs on it"}
 #: what it composes from, in its ``composed_on.from``
 SOURCES_FROM = ("each part from the source its answer_from names; no answer file the served node wrote is read for a "
                 "part verified again here, and the inference-only verdict is that node's own answer")
@@ -89,9 +109,22 @@ INFERENCE_FROM = {"served-node": "the served node's own answer, not recomputed, 
 WEIGHTS_COST = ("for a version 1 W the tie is by the record alone: nothing holds PoUW's committed weights to the weights "
                 "the record registers, and the remote protocol doesn't establish that PoUW's credited work and the "
                 "audited inference read the same weights")
+#: PoUW's verdict when both verifiers accept and the audit its tie reads did not: never a bare accept, and no accept to
+#: the composed verdict (`served_verdicts.record` takes only ``accept`` as one)
+ACCEPT_UNAUDITED = "accept, tie unaudited"
 #: what the tie to the window rests on when the audit it reads did not accept
 TIE_UNAUDITED = ("W is tied to the window by the audit of record's registration and summary, and that audit did not "
                  "accept: the tie says which window the credited passes belong to, not that its inference was audited")
+#: a row's fields the public record carries: its judgment with its ε and δ, where its answer is from and what it rests on
+JUDGMENT = ("protocol", "owner", "verdict", "commitment", "delta", "epsilon", "runs", "answer_from", "said", "weights",
+            "tie_rests_on", "coin", "causes")
+#: a row's exact totals (its answer and that answer's public quantity), public only under ``--exact-totals public``
+TOTALS = ("quantity", "answer")
+TOTALS_HELD = "exact totals are in the private record alone (--exact-totals private)"
+#: what the public record says of a reason it gives the kind of, and the kind of one that has no plain words
+DETAIL_HELD = ("the kind of reason alone: the words it was given in, which can name drawn members, session paths or "
+               "hashes of private files, are in the private record")
+NO_KIND = "not accepted"
 #: what ``composed`` says of the parts together
 NOT_COMPOSITE = ("parts, each verified where its clause says, not the remote protocol's composite: this record cites no "
                  "theorem of the remote protocol, is no verity/remote/v1 accept and writes no block record")
@@ -147,6 +180,54 @@ def utc_now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+class Withheld:
+    """The digests the public record must not hold: SHA-512 and SHA-256 of each file whose redacted form is published,
+    by this writer (the coin as drawn, the record, its line) or by the run's own record (the ledger, the pins, the
+    sessions' files). Such a hash beside the redacted file gives back what was cut to anyone who tries each value in
+    its place. A file that is its own public form has nothing cut, and its hash is not withheld. `found` names each
+    one a text holds, by its first 16 hex digits."""
+
+    def __init__(self) -> None:
+        self._names: dict[str, str] = {}
+
+    def add(self, name: str, data: bytes) -> None:
+        try:
+            text = data.decode()
+            if S.public_doc(text) == text:
+                return
+        except UnicodeDecodeError:
+            pass
+        for h in (hashlib.sha512, hashlib.sha256):
+            self._names.setdefault(h(data).hexdigest()[:16], name)
+
+    def add_file(self, name: str, path: Path) -> None:
+        if path.is_file():
+            self.add(name, path.read_bytes())
+
+    def found(self, text: str) -> list[str]:
+        return sorted({name for head, name in self._names.items() if head in text})
+
+
+_PLAIN = re.compile(r"[A-Za-z][A-Za-z ,.'+-]*")
+_CUT = re.compile(r" \(|;")
+
+
+def kind_of(reason: Any) -> str:
+    """The kind of a reason, for the public record: its leading clauses (split at ``": "``) while each is plain words
+    (letters, spaces, commas, full stops, apostrophes and hyphens: no digit, path, quote or bracket), the last cut at a
+    parenthesis or a semicolon. So a rejected audit's ``audit record: coins, proved (drawn units not proved: ...);
+    lean-verify/m...`` is ``audit record: coins, proved``; a reason with no plain leading clause is `NO_KIND`."""
+    kept = []
+    for clause in str(reason or "").split(": "):
+        plain = _CUT.split(clause)[0].strip()
+        if not _PLAIN.fullmatch(plain):
+            break
+        kept.append(plain)
+        if plain != clause.strip():
+            break
+    return ": ".join(kept)[:300] or NO_KIND
+
+
 class GateReads:
     """The challenger gate's answers to its read verbs, each asked once and kept with when it was read: ``fetch SID``
     (a session's tree), ``ledger`` (the auditor's ledger) and ``pins`` (the host's pins log). Any other word raises
@@ -178,6 +259,10 @@ class GateReads:
         """Each read made, by verb: that it was read live, when, its length and its SHA-512."""
         return {verb: {"read": READ_LIVE, "read_utc": at, "bytes": len(data), "sha512": hashlib.sha512(data).hexdigest()}
                 for verb, (data, at) in sorted(self._got.items())}
+
+    def raw(self) -> dict[str, bytes]:
+        """Each read made, by verb: the gate's answer."""
+        return {verb: data for verb, (data, _at) in self._got.items()}
 
 
 def _lines(data: bytes) -> list[bytes]:
@@ -307,7 +392,8 @@ def _refusal(owner: str, verdict: str, why: str, **more: Any) -> dict[str, Any]:
 
 def pearlplus_row(*, replay: Path, coin: Path, w: Path, case: Path, audit: Path, circuit_record: Path, node: Path,
                   private: Path, reads: GateReads, key: str | None, lane: str, main: Path | None,
-                  published_coin: Path | None = None, commit: str | None = None, runs: Sequence[str] = ()) -> dict[str, Any]:
+                  published_coin: Path | None = None, commit: str | None = None, runs: Sequence[str] = (),
+                  withheld: Withheld | None = None) -> dict[str, Any]:
     """PoUW's row from the replay under ``replay`` (module docstring): `replay_held`'s facts, the gate's reads with the
     served node's copies under ``node`` held to them (`held_to_gate`), and `served_verdicts.pearlplus_of_record` on the
     piece directory built in ``private`` (the coin as drawn, the two answers, the gate's sessions, ledger and pins as
@@ -315,8 +401,11 @@ def pearlplus_row(*, replay: Path, coin: Path, w: Path, case: Path, audit: Path,
     summary, and ``circuit_record``). An accepting replay under every condition is the row, its answer Pearl+'s with the
     Lean's work; a verifier's reject is its ``reject``; a condition of record that fails leaves it ``missing``, naming
     the condition; a replay not held to its inputs, a copy that differs from the gate's, or an input that can't be read
-    is its ``error``."""
+    is its ``error``. ``withheld`` takes the coin as drawn, each of the gate's answers and each copy the served node
+    handed off of one: files whose hashes the public record must not hold."""
     owner = S.PIECES["work"][2]
+    if withheld is not None:
+        withheld.add_file("the coin as drawn", coin)
     try:
         held = replay_held(replay, coin, w, case / PARTS, commit)
     except Refused as e:
@@ -353,7 +442,15 @@ def pearlplus_row(*, replay: Path, coin: Path, w: Path, case: Path, audit: Path,
             (f := piece / "passes" / f"pass-{i:05d}.json").write_text(json.dumps(m))
             served["passes"].append({"pass": i, "units": len(m["matmuls"]), "manifest": str(f)})
         sessions = [salts[0], *([draw] if isinstance(draw, str) and draw != salts[0] else [])]
-        more["gate"] = held_to_gate(reads, node, sessions)
+        try:
+            more["gate"] = held_to_gate(reads, node, sessions)
+        finally:
+            if withheld is not None:
+                for verb, data in reads.raw().items():
+                    withheld.add(f"the gate's answer to {verb}", data)
+                for f in (node / "ledger.jsonl", node / "pins.jsonl",
+                          *(f for sid in sessions for f in sorted((node / "session" / sid).rglob("*")))):
+                    withheld.add_file(f"the served node's copy of {f.relative_to(node).as_posix()}", f)
         check = S.pearlplus_coins(served, piece, None, key, main, fetch=reads)
         drew = S.pearlplus_draw(piece / S.COIN_RECORD, piece, None, key, main, fetch=reads)
         more["coin"] = coin_held(coin, answer, published_coin)
@@ -402,12 +499,13 @@ def inference_only(path: Path, source: str = "served-node") -> dict[str, Any]:
 
 def parts_said(rows: Mapping[str, Mapping[str, Any]], policy: Mapping[str, Any]) -> tuple[str, list[str]]:
     """The record's sentence over its three parts, each with where its verdict is from, and the names of those verified
-    again off the served node."""
+    again off the served node. Pearl+ verified again says so, with `ACCEPT_UNAUDITED` where that is its verdict."""
     work, audit = rows["work"], rows["integrity"]
-    again = ([S.NAMES["work"]] if work.get("answer_from") == REPLAYED_FROM + GATE_HELD and work.get("verdict") == "accept"
-             else [])
+    again = ([S.NAMES["work"]] if work.get("answer_from") == REPLAYED_FROM + GATE_HELD
+             and work.get("verdict") in ("accept", ACCEPT_UNAUDITED) else [])
     why = work.get("reason") or work.get("why")
-    pouw = f"Pearl+ {REPLAYED_SAID}" if again else f"Pearl+ not accepted off the served node ({work.get('verdict')}: {why})"
+    pouw = (f"Pearl+ {REPLAYED_SAID}{'' if work.get('verdict') == 'accept' else ': ' + ACCEPT_UNAUDITED}" if again
+            else f"Pearl+ not accepted off the served node ({work.get('verdict')}: {why})")
     v = policy.get("verdict")
     served = (f"the inference-only verdict{'' if v == 'accept' else f' ({v})'} is "
               f"{policy['answer_from']}")
@@ -419,14 +517,18 @@ def compose(rows: Mapping[str, Mapping[str, Any]], policy: Mapping[str, Any], *,
             node: str, controlled_by: str, product: str, run: str | None = None, tree: Mapping[str, str] | None = None,
             notes: Sequence[str] = ()) -> tuple[dict[str, Any], dict[str, Any]]:
     """The record over sampled proofs' and PoUW's ``rows`` and the inference-only ``policy`` (module docstring, "What the
-    record says of itself"), and its ``RECORD`` line. PoUW's accept beside an audit that didn't accept says what its
-    tie then rests on (`TIE_UNAUDITED`). ValueError on the served node itself."""
+    record says of itself"), and its ``RECORD`` line. ``controlled_by`` is one of `CONTROLLERS`' keys. PoUW's accept
+    beside an audit that didn't accept is `ACCEPT_UNAUDITED`, which composes as no accept, and says what its tie then
+    rests on (`TIE_UNAUDITED`). ValueError on the served node itself, or for another ``controlled_by``."""
+    if controlled_by not in CONTROLLERS:
+        raise ValueError(f"who controls the composing host is one of {', '.join(sorted(CONTROLLERS))}, not {controlled_by!r}")
     rows = {k: dict(r) for k, r in rows.items()}
     if rows["work"].get("verdict") == "accept" and rows["integrity"].get("verdict") != "accept":
-        rows["work"]["tie_rests_on"] = TIE_UNAUDITED
+        rows["work"] |= {"verdict": ACCEPT_UNAUDITED, "tie_rests_on": TIE_UNAUDITED}
     report, rec, line = S.record(rows, window=window, steps=steps, node=node, run=run, servers={"work": (node, "real")},
                                  product=product, tree=tree,
-                                 sources={"where": OFF_NODE, "controlled_by": controlled_by, "from": SOURCES_FROM})
+                                 sources={"where": WHERE[controlled_by], "controlled_by": CONTROLLERS[controlled_by],
+                                          "from": SOURCES_FROM})
     said, again = parts_said(report["protocols"], policy)
     composed = dict(report["composed"])
     if rec is not None or composed["verdict"] == "accept":
@@ -438,6 +540,77 @@ def compose(rows: Mapping[str, Mapping[str, Any]], policy: Mapping[str, Any], *,
              "reverified_off_served_node": again, "composite": NOT_COMPOSITE,
              "inference_only": {k: policy.get(k) for k in ("source", "verdict", "answer_from")}, "notes": list(notes)}
     return report, line
+
+
+def public_row(row: Mapping[str, Any], totals: str = "private") -> dict[str, Any]:
+    """A row as the public record carries it (module docstring, "What leaves"): its `JUDGMENT`, Pearl+'s ε from its
+    work where the row states none, the kind of a reason (`kind_of`) with `DETAIL_HELD`, each of the gate's reads as
+    when it was read and how the served node's copy was held to it, and the replay's verifiers' verdicts. A row with a
+    quantity carries its `TOTALS` under ``totals`` ``public`` and `TOTALS_HELD` otherwise; a refusal has none, and its
+    answer, which holds its reason in full, never leaves."""
+    if totals not in ("private", "public"):
+        raise ValueError(f"exact totals are private or public, not {totals!r}")
+    pub = {k: row[k] for k in JUDGMENT if k in row}
+    work = (row.get("quantity") or {}).get("work") if isinstance(row.get("quantity"), Mapping) else None
+    if pub.get("epsilon") is None and isinstance(work, Mapping) and work.get("epsilon") is not None:
+        pub["epsilon"] = work["epsilon"]
+    for key in ("reason", "why"):
+        if key in row:
+            pub[key] = None if row[key] is None else kind_of(row[key])
+            if row[key] is not None:
+                pub["detail"] = DETAIL_HELD
+    if row.get("quantity") is not None:
+        pub |= {k: row[k] for k in TOTALS if k in row} if totals == "public" else {"totals": TOTALS_HELD}
+    if isinstance(row.get("gate"), Mapping):
+        pub["gate"] = {verb: {"read": r.get("read"), "read_utc": r.get("read_utc"),
+                              "node_copy": c if isinstance(c := r.get("node_copy"), str) else (c or {}).get("held")}
+                       for verb, r in row["gate"].items()}
+    if isinstance(row.get("replay"), Mapping):
+        held = row["replay"]
+        pub["replay"] = {"schema": held.get("schema"), "verifier_commit": held.get("verifier_commit"),
+                         "python": {k: (held.get("python") or {}).get(k) for k in ("exit", "verdict")},
+                         "lean": {k: (held.get("lean") or {}).get(k) for k in ("exit", "verdict", "differ")}}
+    return pub
+
+
+def _swap(o: Any, swaps: Sequence[tuple[str, str]]) -> Any:
+    if isinstance(o, Mapping):
+        return {k: _swap(v, swaps) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_swap(v, swaps) for v in o]
+    if isinstance(o, str):
+        for full, kind in swaps:
+            o = o.replace(full, kind)
+    return o
+
+
+def _strings(o: Any):
+    if isinstance(o, Mapping):
+        for k, v in o.items():
+            yield from _strings(k)
+            yield from _strings(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _strings(v)
+    elif isinstance(o, str):
+        yield o
+
+
+def public_report(report: Mapping[str, Any], line: Mapping[str, Any], totals: str = "private"
+                  ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """`compose`'s record and line as they leave: each row its `public_row`, and each reason given in full anywhere
+    else (the composed reason, the line) given as its kind. RuntimeError if a reason's own words would still leave."""
+    rows = report["protocols"]
+    swaps = sorted({(str(r[k]), kind_of(r[k])) for r in rows.values() for k in ("reason", "why") if r.get(k) is not None},
+                   key=lambda x: -len(x[0]))
+    swaps = [(full, kind) for full, kind in swaps if full != kind]
+    pub = {**_swap({k: v for k, v in report.items() if k != "protocols"}, swaps),
+           "protocols": {k: public_row(r, totals) for k, r in rows.items()}}
+    said = _swap(dict(line), swaps)
+    for full, _kind in swaps:
+        if any(full in x for x in _strings([pub, said])):
+            raise RuntimeError("a reason's own words would leave with the public record")
+    return pub, said
 
 
 def coin_note(put: Path | None) -> str:
@@ -457,25 +630,37 @@ def coin_note(put: Path | None) -> str:
             "the store holds the redacted coin record in the run's published record")
 
 
-def write(out: Path, private: Path, report: Mapping[str, Any], line: Mapping[str, Any],
-          pouw: Mapping[str, Path]) -> list[str]:
-    """The record in full under ``private`` and what leaves under ``out`` (module docstring, "What leaves"), each file in
-    its public form: the record, its line, and PoUW's files ``pouw`` (by name; one that isn't there is left out). The
-    files written under ``out``. RuntimeError if a file left there isn't its own public form."""
+def write(out: Path, private: Path, report: Mapping[str, Any], line: Mapping[str, Any], pouw: Mapping[str, Path],
+          totals: str = "private", withheld: Withheld | None = None) -> list[str]:
+    """The record in full under ``private`` and what leaves under ``out`` (module docstring, "What leaves"): the public
+    record and its line (`public_report` at ``totals``) and PoUW's files ``pouw`` (by name; one that isn't there is left
+    out), each in its public form. The files written under ``out``. RuntimeError, before anything is written under
+    ``out``, if a file that would leave isn't its own public form or holds a digest of ``withheld`` or of a file this
+    leaves in redacted form."""
+    withheld = withheld if withheld is not None else Withheld()
     kept(private / "record")
     text = json.dumps(report, indent=1, sort_keys=True) + "\n"
+    said = f"RECORD {json.dumps(line, sort_keys=True)}\n"
     (private / "record" / "verdicts.json").write_text(text)
-    (private / "verdicts.txt").write_text(f"RECORD {json.dumps(line, sort_keys=True)}\n")
-    leaves = {"record/verdicts.json": text, "verdicts.txt": f"RECORD {json.dumps(line, sort_keys=True)}\n"}
+    (private / "verdicts.txt").write_text(said)
+    pub, pub_line = public_report(report, line, totals)
+    sources = {"record/verdicts.json": json.dumps(pub, indent=1, sort_keys=True) + "\n",
+               "verdicts.txt": f"RECORD {json.dumps(pub_line, sort_keys=True)}\n"}
     for name, src in pouw.items():
         if src.is_file():
-            leaves[f"pieces/pouw/{name}"] = src.read_text()
+            sources[f"pieces/pouw/{name}"] = src.read_text()
+    leaves = {rel: S.public_doc(body) for rel, body in sources.items()}
+    for name, body in (("the private record", text), ("the private record's line", said), *sources.items()):
+        withheld.add(name, body.encode())
+    for rel, body in leaves.items():
+        if S.public_doc(body) != body:
+            raise RuntimeError(f"{rel} would leave in a form that is not its own public form")
+        if names := withheld.found(body):
+            raise RuntimeError(f"{rel} would leave holding a hash of {', '.join(names)}: a file whose redacted form is "
+                               "published, which that hash would undo")
     for rel, body in leaves.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
-        (out / rel).write_text(S.public_doc(body))
-    for rel in leaves:
-        if S.public_doc(body := (out / rel).read_text()) != body:
-            raise RuntimeError(f"{rel} under the published directory is not its own public form")
+        (out / rel).write_text(body)
     return sorted(leaves)
 
 
@@ -491,7 +676,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--key-sha512", required=True, help="the challenger key's pin")
     r.add_argument("--main", type=Path, required=True, help="main's first-parent line, a commit a line")
     r.add_argument("--lane", default="vllm")
-    r.add_argument("--controlled-by", required=True, help="who controls this host, which composed_on names")
+    r.add_argument("--controlled-by", required=True, choices=sorted(CONTROLLERS),
+                   help="who controls this host, which composed_on names: the developer's side, or an auditor")
+    r.add_argument("--exact-totals", default="private", choices=("private", "public"),
+                   help="where a row's exact totals go: the private record alone (default), or the public one too")
     r.add_argument("--published-coin", type=Path, help="the coin record the run published, which the coin as drawn's "
                                                        "public form is held to")
     r.add_argument("--coin-put", type=Path, help="the coin-put.json the run published, for the record's note on whether "
@@ -518,22 +706,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         causes = json.loads(a.sampled_causes.read_text()) if a.sampled_causes else []
         if not (isinstance(causes, list) and all(isinstance(c, str) for c in causes)):
             raise ValueError("--sampled-causes is not a JSON list of strings")
-        reads = GateReads(lambda *words: S._gate_out(a.gate, *words))
+        reads, withheld = GateReads(lambda *words: S._gate_out(a.gate, *words)), Withheld()
         rows = {"integrity": integrity_row(audit, a.audit_run, causes),
                 "work": pearlplus_row(replay=a.replay, coin=handed / "pieces" / "pouw" / S.COIN_RECORD,
                                       w=window / "registration.json", case=d / "private" / "pearlplus" / "case",
                                       audit=audit, circuit_record=window / "tie" / S.CIRCUIT_RECORD,
                                       node=handed / "pieces" / "pouw", private=private, reads=reads, key=a.key_sha512,
                                       lane=a.lane, main=a.main, published_coin=a.published_coin,
-                                      commit=a.verifier_commit, runs=[*([a.run] if a.run else []), *a.replay_run])}
+                                      commit=a.verifier_commit, runs=[*([a.run] if a.run else []), *a.replay_run],
+                                      withheld=withheld)}
         tree = {k_: v for k_, v in (("tree", a.tree), ("tree_on", a.tree_on)) if v}
         report, line = compose(rows, inference_only(handed / "inference-only.json", a.inference_only), window=k,
                                steps=(lo, hi), node=node, controlled_by=a.controlled_by, product=env.get("PRODUCT") or "remote",
                                run=a.run, tree=tree, notes=[coin_note(a.coin_put)])
-        held = "replay" in rows["work"]
+        answers = "replay" in rows["work"] and a.exact_totals == "public"
         left = write(out, private, report, line, {
-            **({S.PEARLPLUS_ANSWER: a.replay / S.PEARLPLUS_ANSWER, S.PEARLPLUS_LEAN: a.replay / S.PEARLPLUS_LEAN} if held else {}),
-            S.COIN_RECORD: private / "pouw" / S.COIN_RECORD})
+            **({S.PEARLPLUS_ANSWER: a.replay / S.PEARLPLUS_ANSWER, S.PEARLPLUS_LEAN: a.replay / S.PEARLPLUS_LEAN} if answers else {}),
+            S.COIN_RECORD: private / "pouw" / S.COIN_RECORD}, a.exact_totals, withheld)
     except (OSError, ValueError, KeyError, RuntimeError) as e:
         print(S.public_line(f"RECORD refused: {type(e).__name__}: {e}"[:1000]), flush=True)
         return 2

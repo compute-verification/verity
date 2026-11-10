@@ -4,7 +4,9 @@ served node handed off that differs from the gate's refuses the row, naming both
 commitment that only the gate's ledger holds is seen; the gate is asked its three read verbs alone, each once; a replay
 not held to the inputs here, or whose verifier rejects, is not an accept; and the record says where it was composed, which
 part was verified again off the served node and which was not, takes no composite accept, and leaves nothing that names
-the window or hashes the coin as drawn under what it publishes."""
+the window or hashes the coin as drawn under what it publishes. The public record is each row's judgment: exact totals
+leave only under the switch, a reason leaves as its kind, Pearl+'s accept beside an audit that did not accept is not a
+bare accept, and who controls the host is one of two words, required."""
 from __future__ import annotations
 
 import hashlib
@@ -127,7 +129,8 @@ def world(tmp_path, monkeypatch):
     (audit / "window").mkdir(parents=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"format": T.REG.FORMAT_V2, "previous": T.PEARL_W,
                                                            "registered": []}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": T.PEARL_W}}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": T.PEARL_W}, "audit": {"why": {
+        "lean-verify/m0412": "session files: /srv/serve/v3c-w3-4-32-4/audit/window/session-m0412: no such file"}}}))
     (audit / "window" / "audit.json").write_text(json.dumps({"accepted": False, "checks": {
         "coins": {"ok": False}, "proved": {"ok": False}, "ledger": {"ok": True}}}))
 
@@ -350,68 +353,201 @@ def _record(world, tmp_path: Path, monkeypatch, gate: Gate, capsys, *more: str) 
     out, private = tmp_path / "out", tmp_path / "kept"
     rc = SS.main(["record", "--serve-dir", str(d), "--replay", str(replay), "--private", str(private), "--out", str(out),
                   "--gate", T.GATE, "--key-sha512", PIN, "--main", str(tmp_path / "main.txt"), "--controlled-by",
-                  "the lane, which also ran the served node", "--published-coin", str(tmp_path / "published-coin.json"),
+                  "developer", "--published-coin", str(tmp_path / "published-coin.json"),
                   "--coin-put", str(d / "private" / "compose" / "pieces" / "pouw" / S.COIN_PUT),
                   "--sampled-causes", str(tmp_path / "causes.json"), "--verifier-commit", COMMIT, "--run", "r-compose",
                   "--replay-run", "r-replay", "--audit-run", "r-audit", "--tree", "ee" * 20, *more])
     return rc, out, private, capsys.readouterr().out
 
 
+MEMBER = "lean-verify/m0412: session files: /srv/serve/v3c-w3-4-32-4/audit/window/session-m0412: no such file"
+PARTS_SAID = ("Pearl+ re-verified off the served node (Python and Lean): accept, tie unaudited; the inference-only verdict "
+              "is the served node's own answer, not recomputed, because the block count stays on that node; the "
+              "sampled-proofs audit of record rejected.")
+
+
 def test_the_record_says_where_it_was_composed_and_which_part_was_verified_again(world, tmp_path, monkeypatch, capsys):
     """The record over the replayed Pearl+, the rejected audit of record and the served node's inference-only answer:
-    composed off the served node on a host it names as the lane's and not the auditor's; rejected, because the audit of
-    record rejected, with the lane's causes beside the audit's own reason; its sentence says Pearl+ alone was verified
-    again; it is no composite and writes no block record. What leaves names no window and doesn't hash the coin as
-    drawn; the full record and the coin as drawn stay in the private directory."""
+    composed off the served node on a host it names as the developer's side and not the auditor's; rejected, because
+    the audit of record rejected, with the lane's causes beside the audit's own reason; Pearl+'s accept, whose tie reads
+    that audit, is `ACCEPT_UNAUDITED` and counts as no accept; its sentence says Pearl+ alone was verified again; it is
+    no composite and writes no block record. The full record, with the audit's own words, each hash and the coin as
+    drawn, stays in the private directory."""
+    d, _replay = world
+    rc, out, private, said = _record(world, tmp_path, monkeypatch, Gate(), capsys)
+    assert rc == 0, said
+    kept = json.loads((private / "record" / "verdicts.json").read_text())
+    where = kept["composed_on"]
+    assert (where["host"], where["served_node"], where["where"], where["controlled_by"], where["from"], where["tree"]) == (
+        HOST, False, "off the served node, on a CPU node the lane runs; not the auditor's host",
+        "the developer's side, which also ran the served node; no auditor controls this host", SS.SOURCES_FROM, "ee" * 20)
+    composed = kept["composed"]
+    assert composed["verdict"] == "reject" and composed["composite"] == SS.NOT_COMPOSITE
+    assert composed["parts"] == PARTS_SAID and composed["reverified_off_served_node"] == ["PoUW"]
+    assert composed["reason"] == (f"sampled proofs: reject: audit record: coins, proved; {MEMBER}; PoUW: accept, tie "
+                                  f"unaudited, {SS.REPLAYED_SAID}, {UNTIED}")
+    assert sorted(kept["protocols"]) == ["integrity", "work"]
+    audit, work = kept["protocols"]["integrity"], kept["protocols"]["work"]
+    assert (audit["verdict"], audit["answer_from"], audit["runs"]) == ("reject", SS.AUDIT_FROM, ["r-audit"])
+    assert audit["reason"] == f"audit record: coins, proved; {MEMBER}"
+    assert audit["files"] == {name: SS.sha512(d / "v3c-w3-4-32-4" / "audit" / name)
+                              for name in ("summary.json", "window/audit.json")}
+    assert audit["causes"] == {"by": SS.CAUSES_BY, "of": ["the coin link's frame limit", "seven members out of memory"]}
+    assert (work["verdict"], work["runs"], work["tie_rests_on"]) == (SS.ACCEPT_UNAUDITED, ["r-compose", "r-replay"],
+                                                                     SS.TIE_UNAUDITED)
+    assert work["quantity"]["work"] == T.PEARL_LEAN_WORK and work["gate"]["ledger"]["sha512"]
+    assert work["coin"] == {"published_sha512": SS.sha512(tmp_path / "published-coin.json"), "as_drawn": SS.COIN_HELD,
+                            "reason": None}
+    assert kept["inference_only"] == {
+        "source": "served-node", "answer_from": SS.INFERENCE_FROM["served-node"], "format":
+        "verity-bench/inference-only-verdict/v4", "verdict": "accept", "complies": True, "reason": None, "failure": None,
+        "published_sha512": SS.sha512(d / "private" / "compose" / "inference-only.json")}
+    assert kept["notes"] == ["the coin record's own artifact was never preserved in the evidence store (coin-put.json: "
+                             "preserved: false); the store holds the redacted coin record in the run's published record"]
+    assert (kept["run"], kept["node"], kept["servers"]["work"]) == ("r-compose", NODE, NODE)
+    assert kept["window"] == 3 and stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert "/w3/" in (private / "pouw" / S.COIN_RECORD).read_text()
+    assert SS.sha512(d / "private" / "compose" / "pieces" / "pouw" / S.COIN_RECORD) not in json.dumps(kept)
+    assert not (out / "record" / "block-record.json").exists()
+
+
+def test_the_public_record_is_each_rows_judgment(world, tmp_path, monkeypatch, capsys):
+    """What leaves by default: the record, its line and the redacted coin record, and not the two Pearl+ answers. Each
+    row is its verdict with its ε and δ, where it is from and what it rests on: no exact total, no hash of a private
+    file, the gate's reads as when each was read and how the node's copy was held. The rejected audit's reason is its
+    kind: no member's index and no session path, in the row, the composed reason or the line. Nothing names the window
+    or hashes the coin as drawn."""
     d, _replay = world
     rc, out, private, said = _record(world, tmp_path, monkeypatch, Gate(), capsys)
     assert rc == 0, said
     assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == [
-        "pieces/pouw/coin.json", "pieces/pouw/pearlplus-answer.json", "pieces/pouw/pearlplus-lean.json",
-        "record/verdicts.json", "verdicts.txt"]
+        "pieces/pouw/coin.json", "record/verdicts.json", "verdicts.txt"]
     rep = json.loads((out / "record" / "verdicts.json").read_text())
-    where = rep["composed_on"]
-    assert (where["host"], where["served_node"], where["where"], where["controlled_by"], where["from"], where["tree"]) == (
-        HOST, False, "off the served node, on a CPU node the lane runs; not the auditor's host",
-        "the lane, which also ran the served node", SS.SOURCES_FROM, "ee" * 20)
-    composed = rep["composed"]
-    assert composed["verdict"] == "reject" and composed["composite"] == SS.NOT_COMPOSITE
-    assert composed["parts"] == (
-        "Pearl+ re-verified off the served node (Python and Lean); the inference-only verdict is the served node's own "
-        "answer, not recomputed, because the block count stays on that node; the sampled-proofs audit of record rejected.")
-    assert composed["reverified_off_served_node"] == ["PoUW"]
-    assert composed["reason"].startswith("sampled proofs: reject: audit record: coins, proved; PoUW: accept (")
-    assert composed["reason"].endswith(f"), {SS.REPLAYED_SAID}, {UNTIED}") and sorted(rep["protocols"]) == ["integrity", "work"]
+    kept = json.loads((private / "record" / "verdicts.json").read_text())
     audit, work = rep["protocols"]["integrity"], rep["protocols"]["work"]
-    assert (audit["verdict"], audit["answer_from"], audit["runs"]) == ("reject", SS.AUDIT_FROM, ["r-audit"])
-    assert audit["files"] == {name: SS.sha512(d / "v3c-w3-4-32-4" / "audit" / name)
-                              for name in ("summary.json", "window/audit.json")}
-    assert audit["causes"] == {"by": SS.CAUSES_BY, "of": ["the coin link's frame limit", "seven members out of memory"]}
-    assert (work["verdict"], work["runs"], work["tie_rests_on"]) == ("accept", ["r-compose", "r-replay"], SS.TIE_UNAUDITED)
-    assert work["coin"] == {"published_sha512": SS.sha512(tmp_path / "published-coin.json"), "as_drawn": SS.COIN_HELD,
-                            "reason": None}
-    assert rep["inference_only"] == {
-        "source": "served-node", "answer_from": SS.INFERENCE_FROM["served-node"], "format":
-        "verity-bench/inference-only-verdict/v4", "verdict": "accept", "complies": True, "reason": None, "failure": None,
-        "published_sha512": SS.sha512(d / "private" / "compose" / "inference-only.json")}
-    assert rep["notes"] == ["the coin record's own artifact was never preserved in the evidence store (coin-put.json: "
-                            "preserved: false); the store holds the redacted coin record in the run's published record"]
-    assert (rep["run"], rep["node"], rep["servers"]["work"]) == ("r-compose", NODE, NODE)
+    assert audit == {"protocol": kept["protocols"]["integrity"]["protocol"], "owner": kept["protocols"]["integrity"]["owner"],
+                     "verdict": "reject",
+                     "commitment": kept["protocols"]["integrity"]["commitment"], "delta": None, "epsilon": None,
+                     "runs": ["r-audit"], "answer_from": SS.AUDIT_FROM, "reason": "audit record: coins, proved",
+                     "detail": SS.DETAIL_HELD,
+                     "causes": {"by": SS.CAUSES_BY, "of": ["the coin link's frame limit", "seven members out of memory"]}}
+    assert sorted(work) == sorted(["protocol", "owner", "verdict", "commitment", "delta", "epsilon", "runs", "answer_from",
+                                   "said", "weights", "tie_rests_on", "coin", "reason", "totals", "gate", "replay"])
+    assert (work["verdict"], work["epsilon"], work["delta"], work["reason"], work["totals"]) == (
+        SS.ACCEPT_UNAUDITED, "1/100", "1/100", None, SS.TOTALS_HELD)
+    assert work["gate"]["ledger"] == {"read": SS.READ_LIVE, "read_utc": work["gate"]["ledger"]["read_utc"],
+                                      "node_copy": "line for line the start of the gate's"}
+    assert work["gate"][f"fetch {T.SID}"]["node_copy"] == "each byte for byte the gate's"
+    assert work["replay"] == {"schema": SS.REPLAY_SCHEMA, "verifier_commit": COMMIT, "python": {"exit": 0, "verdict": "accept"},
+                              "lean": {"exit": 0, "verdict": "accept", "differ": []}}
+    assert rep["composed"]["reason"] == (f"sampled proofs: reject: audit record: coins, proved; PoUW: accept, tie "
+                                         f"unaudited, {SS.REPLAYED_SAID}, {UNTIED}")
+    assert rep["composed"]["parts"] == PARTS_SAID and rep["composed"]["verdict"] == "reject" and "window" not in rep
     line = json.loads(said.splitlines()[0].removeprefix("RECORD "))
     assert (line["composed"], line["parts"], line["verdicts"]["PoUW"], line["verdicts"]["sampled proofs"]) == (
-        "reject", composed["parts"], "accept", "reject")
-    assert "block_record" not in line and not (out / "record" / "block-record.json").exists()
-    assert said.splitlines()[1].startswith("RECORD-FILES 5 under the published directory: ")
+        "reject", PARTS_SAID, SS.ACCEPT_UNAUDITED, "reject")
+    assert line["reason"] == rep["composed"]["reason"] and "block_record" not in line
+    assert said.splitlines()[1].startswith("RECORD-FILES 3 under the published directory: ")
     drawn = SS.sha512(d / "private" / "compose" / "pieces" / "pouw" / S.COIN_RECORD)
+    private_hashes = [drawn, kept["protocols"]["work"]["gate"]["ledger"]["sha512"], kept["protocols"]["work"]["replay"]["w_sha512"],
+                      *kept["protocols"]["integrity"]["files"].values()]
     for p in out.rglob("*"):
         if p.is_file():
             text = p.read_text()
-            assert "w3" not in text and '"window": 3' not in text and drawn not in text, p
+            assert "w3" not in text and '"window": 3' not in text and "m0412" not in text and "session-m" not in text, p
+            assert '"credited"' not in text and "5300" not in text and "5400" not in text and '"macs"' not in text, p
+            assert not any(h[:16] in text for h in private_hashes), p
     assert (out / "pieces" / "pouw" / "coin.json").read_bytes() == (tmp_path / "published-coin.json").read_bytes()
-    kept = json.loads((private / "record" / "verdicts.json").read_text())
-    assert kept["window"] == 3 and "window" not in rep and stat.S_IMODE(private.stat().st_mode) == 0o700
-    assert "/w3/" in (private / "pouw" / S.COIN_RECORD).read_text()
-    assert drawn not in json.dumps(kept)
+
+
+def test_exact_totals_leave_only_under_the_switch(world, tmp_path, monkeypatch, capsys):
+    rc, out, _private, said = _record(world, tmp_path, monkeypatch, Gate(), capsys, "--exact-totals", "public")
+    assert rc == 0, said
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == [
+        "pieces/pouw/coin.json", "pieces/pouw/pearlplus-answer.json", "pieces/pouw/pearlplus-lean.json",
+        "record/verdicts.json", "verdicts.txt"]
+    work = json.loads((out / "record" / "verdicts.json").read_text())["protocols"]["work"]
+    assert work["quantity"]["work"] == T.PEARL_LEAN_WORK and work["answer"]["verdict"] == "accept" and "totals" not in work
+    assert work["verdict"] == SS.ACCEPT_UNAUDITED
+    with pytest.raises(ValueError, match="exact totals are private or public"):
+        SS.public_row({"verdict": "accept"}, "some")
+
+
+@pytest.mark.parametrize("reason, kind", [
+    (f"audit record: coins, proved (drawn units not proved: T 4-9); {MEMBER}; and 4 more", "audit record: coins, proved"),
+    ("before the draw: ledger, registration", "before the draw: ledger, registration"),
+    ('refused: {"window": "/srv/serve/w3"}', "refused"),
+    ("RuntimeError: the records audit left no summary under /srv/serve/w3/audit: [Errno 2]", "RuntimeError"),
+    ("the served node's copy of the auditor's ledger is not the start of the one the gate reads now: line 2 is sha512 "
+     "0123456789abcdef... in the node's copy", "the served node's copy of the auditor's ledger is not the start of the "
+     "one the gate reads now"),
+    ("not PoUW's verdict of record: the verdict is not held to the coin published at its draw: the coin as drawn, in its "
+     "public form (sha512 0123...)", "not PoUW's verdict of record: the verdict is not held to the coin published at its "
+     "draw: the coin as drawn, in its public form"),
+    ("no replay record (replay.json: FileNotFoundError: /srv/replay.json)", "no replay record"),
+    ("tile 7: y is not the product", SS.NO_KIND),
+    ("pass 153 matmul 12", SS.NO_KIND),
+    (None, SS.NO_KIND),
+])
+def test_a_reason_leaves_as_its_kind(reason, kind):
+    """The public form of a reason is its leading plain clauses: nothing with a digit, a path, a quote or a bracket."""
+    assert SS.kind_of(reason) == kind
+    row = SS.public_row({"verdict": "reject", "reason": reason, "quantity": None, "files": {"summary.json": "ab" * 64}})
+    assert row == ({"verdict": "reject", "reason": None} if reason is None else
+                   {"verdict": "reject", "reason": kind, "detail": SS.DETAIL_HELD})
+
+
+def test_a_hash_of_a_file_published_redacted_is_refused_before_anything_leaves(world, tmp_path):
+    """`write` refuses a public file holding the SHA-512 or SHA-256 of a file whose redacted form is published (the coin
+    as drawn; the private record itself; a gate's answer that names a window), whole or by its first 16 hex digits,
+    and writes nothing under what leaves; a file that is its own public form is not withheld."""
+    d, _replay = world
+    coin = d / "private" / "compose" / "pieces" / "pouw" / S.COIN_RECORD
+    work = _row(world, tmp_path, Gate(), withheld=(held := SS.Withheld()))
+    assert held.found(SS.sha512(coin)) == ["the coin as drawn"]
+    assert held.found(hashlib.sha256(coin.read_bytes()).hexdigest()[:16] + "...") == ["the coin as drawn"]
+    assert held.found(hashlib.sha512(_jsonl(LEDGER)).hexdigest()) == [] and held.found(hashlib.sha512(KEY).hexdigest()) == []
+    held.add("the gate's answer to ledger", b'{"window": 3, "kind": "open"}\n')
+    assert held.found(hashlib.sha512(b'{"window": 3, "kind": "open"}\n').hexdigest()[:16]) == ["the gate's answer to ledger"]
+    policy = SS.inference_only(d / "private" / "compose" / "inference-only.json")
+    rows = {"integrity": SS.integrity_row(d / "v3c-w3-4-32-4" / "audit"), "work": work}
+    for n, leak in enumerate((SS.sha512(coin), SS.sha512(coin)[:16] + "...")):
+        report, line = SS.compose(rows, policy, window=3, steps=(8, 12), node=NODE, controlled_by="developer",
+                                  product="remote", notes=[f"the coin as drawn is sha512 {leak}"])
+        with pytest.raises(RuntimeError, match="would leave holding a hash of the coin as drawn"):
+            SS.write(tmp_path / f"out{n}", tmp_path / f"kept{n}", report, line, {S.COIN_RECORD: coin}, withheld=held)
+        assert not (tmp_path / f"out{n}").exists()
+    report, line = SS.compose(rows, policy, window=3, steps=(8, 12), node=NODE, controlled_by="developer", product="remote")
+    assert SS.write(tmp_path / "out-ok", tmp_path / "kept-ok", report, line, {S.COIN_RECORD: coin}, withheld=held) == [
+        "pieces/pouw/coin.json", "record/verdicts.json", "verdicts.txt"]
+    full = (tmp_path / "kept-ok" / "record" / "verdicts.json").read_text()
+    assert '"window": 3' in full
+    cites = {**line, "notes": [f"the full record is sha512 {hashlib.sha512(full.encode()).hexdigest()}"]}
+    with pytest.raises(RuntimeError, match="verdicts.txt would leave holding a hash of the private record"):
+        SS.write(tmp_path / "out-rec", tmp_path / "kept-ok", report, cites, {})
+    assert not (tmp_path / "out-rec").exists()
+
+
+def test_who_controls_the_host_is_one_of_two_words_and_required(world, tmp_path, monkeypatch, capsys):
+    d, replay = world
+    base = ["record", "--serve-dir", str(d), "--replay", str(replay), "--private", str(tmp_path / "kept"), "--out",
+            str(tmp_path / "out"), "--gate", T.GATE, "--key-sha512", PIN, "--main", str(tmp_path / "main.txt")]
+    for more in ([], ["--controlled-by", "the lane"], ["--controlled-by", "developer", "--exact-totals", "some"]):
+        with pytest.raises(SystemExit):
+            SS.main([*base, *more])
+        assert not (tmp_path / "out").exists() and not (tmp_path / "kept").exists()
+    capsys.readouterr()
+    work = _row(world, tmp_path, Gate())
+    policy = SS.inference_only(d / "private" / "compose" / "inference-only.json")
+    with pytest.raises(ValueError, match="who controls the composing host is one of auditor, developer"):
+        SS.compose({"integrity": T._accepted(), "work": work}, policy, window=3, steps=(8, 12), node=NODE,
+                   controlled_by="the lane", product="remote")
+    report, _line = SS.compose({"integrity": T._accepted(), "work": work}, policy, window=3, steps=(8, 12), node=NODE,
+                               controlled_by="auditor", product="remote")
+    assert (report["composed_on"]["where"], report["composed_on"]["controlled_by"]) == (
+        "off the served node, on an auditor's host",
+        "an auditor's host: the developer's side controls neither it nor what runs on it")
+    assert report["composed"]["verdict"] == "pending"
 
 
 @pytest.mark.parametrize("case", ["served node", "private under out", "private exists"])
@@ -437,9 +573,11 @@ def test_an_accept_of_every_row_composes_pending_and_a_part_not_accepted_is_said
     work = _row(world, tmp_path, Gate())
     policy = SS.inference_only(world[0] / "private" / "compose" / "inference-only.json")
     report, line = SS.compose({"integrity": T._accepted(), "work": work}, policy, window=3, steps=(8, 12), node=NODE,
-                              controlled_by="the lane", product="remote")
+                              controlled_by="developer", product="remote")
     assert (report["composed"]["verdict"], line["composed"]) == ("pending", "pending")
+    assert report["protocols"]["work"]["verdict"] == "accept" and line["verdicts"]["PoUW"] == "accept"
     assert report["composed"]["reason"].startswith(f"{SS.NOT_ALL_HERE}; sampled proofs: accept")
+    assert report["composed"]["parts"].startswith("Pearl+ re-verified off the served node (Python and Lean); the ")
     assert report["composed"]["parts"].endswith("the sampled-proofs audit of record accepted.")
     assert "tie_rests_on" not in report["protocols"]["work"] and "steps" not in line and "check" not in line
     missing = {"verdict": "missing", "owner": "compute-accounting", "why": "no", "answer_from": SS.REPLAYED_FROM}

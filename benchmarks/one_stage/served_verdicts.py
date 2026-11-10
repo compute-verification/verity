@@ -1917,7 +1917,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
          legs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
     """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why; an
     accept about ``node`` with its `terms` (``legs``: each accepted one's block record leg, by runner name) and, where
-    its row carries one, its own clause (``said``: `served_sources`' rows, each saying where it was verified)."""
+    its row carries one, its own clause (``said``: `served_sources`' rows, each saying where it was verified); a verdict
+    that is neither, with no reason of its own and such a clause (`served_sources.ACCEPT_UNAUDITED`), says that clause."""
     out = []
     for k, r in rows.items():
         v, server = r.get("verdict"), at[k][0]
@@ -1935,7 +1936,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
             elif r.get("said"):
                 s += f", {r['said']}"
         else:
-            s = f"{v}: {r.get('reason')}"
+            s = f"{v}, {r['said']}" if r.get("reason") is None and r.get("said") else f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
     return "; ".join(out)
 

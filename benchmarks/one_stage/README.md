@@ -238,8 +238,11 @@ negatives.
   each part from the source that produced its verdict. PoUW's row is the verdict `case_replay.sh`
   (`benchmarks/pouw/pearl_c_vllm/`) took again there from the run's case, by Python and Lean, under the conditions of
   record read live from the challenger's gate (its three read verbs alone); sampled proofs' is the audit of record's
-  own answer, never rerun; the inference-only verdict stays the served node's. It takes no composite accept, writes no
-  block record, and publishes each file in its public form.
+  own answer, never rerun; the inference-only verdict stays the served node's. It takes no composite accept and writes
+  no block record. Who controls the composing host is a required word (`developer` or `auditor`). The public record is
+  each row's judgment with its ε and δ: exact totals stay private unless `--exact-totals public`, a reason leaves as
+  its kind, PoUW's accept whose tie reads an audit that did not accept is `accept, tie unaudited`, and no hash of a
+  file published in redacted form leaves.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
