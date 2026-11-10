@@ -2453,6 +2453,8 @@ open(os.environ["ORDER"], "a").write(json.dumps(sys.argv[1:]) + "\\n")
 if os.environ.get("IO_FAIL"):
     print("inference_only.py: no torch", file=sys.stderr)
     sys.exit(2)
+if os.environ.get("IO_WRITE") and sys.argv[1] == "policy":
+    open(sys.argv[sys.argv.index("--out") + 1], "w").write(os.environ["IO_WRITE"])
 print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions" if sys.argv[1] == "policy" else
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
@@ -2493,6 +2495,36 @@ def test_the_inference_only_policy_is_written_at_the_first_class_but_record_from
     assert calls == [["policy", "--class", cls, "--model", "verity-int8/Llama-3.2-1B-INT8", "--revision",
                       "15b0976d400d796ee589e7737d03a919526bf800", "--lease-min", lease, "--tree", SHA, "--out",
                       str(tmp_path / "out" / "inference-only-policy.json")]]
+
+
+LIMITS_SAID = (": fixed with the policy before the serve, written by the developer and signed by no auditor's device "
+               "(inference-only-limits.json)")
+
+
+def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_and_k_or_the_runs_settings(tmp_path):
+    """Once the policy is written, the limits of its rate rule go beside it (inference-only-limits.json): α = k/c in
+    lowest terms and Γ = c of the policy's own numbers, with the policy file's SHA-512, or the run's ALPHA and GAMMA
+    where both are set, and the line says which, and that the developer wrote them. A policy that names no c writes
+    none and says so, and the policy step still passes."""
+    policy = json.dumps({"c": 14, "k": 6, "n": 16})
+    rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
+    assert rc == 0 and lines[1:] == [
+        "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID]
+    assert json.loads((tmp_path / "own" / "out" / "inference-only-limits.json").read_text()) == {
+        "format": "verity-bench/inference-only-limits/v1", "alpha": [3, 7], "gamma": 14,
+        "from": "the policy's c and k (alpha = k/c, gamma = c)",
+        "policy_sha512": hashlib.sha512(policy.encode()).hexdigest(),
+        "written_by": "the developer; no auditor's device signed them"}
+    rc, lines, _ = _inference_only(tmp_path / "given", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100")
+    assert rc == 0 and lines[1:] == ["INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA" + LIMITS_SAID]
+    got = json.loads((tmp_path / "given" / "out" / "inference-only-limits.json").read_text())
+    assert (got["alpha"], got["gamma"], got["from"]) == ([1, 2], 100, "the run's ALPHA and GAMMA")
+    rc, lines, _ = _inference_only(tmp_path / "half", "inference-policy", IO_WRITE=policy, ALPHA="1/2")
+    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k")
+    rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
+    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
+                                           "reads them off its own division:")
+    assert not (tmp_path / "none" / "out" / "inference-only-limits.json").exists()
 
 
 def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(tmp_path):
@@ -4251,6 +4283,20 @@ def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tm
     listed = (tmp_path / "serve" / "private" / "compose" / "inputs.txt").read_text().splitlines()
     own = [f for f in HANDED_OWN if f != "private/compose/inference-only.json"]
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *own]), "private/compose/inputs.sha256"]
+
+
+def test_a_hand_off_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_and_gamma(tmp_path):
+    """The compose's settings name α and Γ as the run's limits file states them (IO_LIMITS, written with the policy
+    before the serve), whatever the environment says later; a run that wrote none hands its settings on as they are."""
+    (limits := tmp_path / "limits.json").write_text(json.dumps({"alpha": [3, 7], "gamma": 14}))
+    run = _handed(tmp_path, IO_LIMITS=str(limits), ALPHA="9", GAMMA="9")
+    assert run.returncode == 0, run.stderr
+    got = _env_of(tmp_path / "serve" / "private" / "compose" / "compose.env", COMPOSES)
+    assert (got["ALPHA"], got["GAMMA"]) == ("3/7", "14")
+    run = _handed(tmp_path / "none", ALPHA="9", GAMMA="9")
+    assert run.returncode == 0, run.stderr
+    got = _env_of(tmp_path / "none" / "serve" / "private" / "compose" / "compose.env", COMPOSES)
+    assert (got["ALPHA"], got["GAMMA"]) == ("9", "9")
 
 
 def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve_wrote_one(tmp_path):

@@ -1082,7 +1082,47 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
     2> "$D/inference-only-policy.err")
   rc=$?
   say "${out:-INFERENCE-ONLY POLICY failed (exit $rc): $(tail -1 "$D/inference-only-policy.err" | cut -c1-300)}"
+  [ "$rc" != 0 ] || limits
   return "$rc"
+}
+# The limits of the policy's rate rule (verity/inference-only/v0's α and Γ, which the composite's inference-only case is
+# checked at), fixed with the policy, so before serve-openai starts: the run's ALPHA and GAMMA where both are set, else
+# α = k/c and Γ = c of the policy's own c and k, the class's public numbers. They go to IO_LIMITS beside the policy, with
+# the policy file's SHA-512, and the deferral and the compose hand-off carry them as ALPHA and GAMMA (`fixed_limits`), so
+# no later step reads them off the served window's division. The developer writes them: no auditor's device signs them.
+IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
+limits() {
+  local out
+  [ -s "$IO_POLICY" ] || return 0
+  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" <<'EOF' 2>&1
+import hashlib, json, sys
+from fractions import Fraction
+policy, out, alpha, gamma = sys.argv[1:5]
+body = open(policy, "rb").read()
+p = json.loads(body)
+given = bool(alpha and gamma)
+a, g = (Fraction(alpha), int(gamma)) if given else (Fraction(p["k"], p["c"]), int(p["c"]))
+if a < 0 or g < 1:
+    sys.exit(f"alpha {a} and gamma {g} are no limits")
+doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator, a.denominator], "gamma": g,
+       "from": "the run's ALPHA and GAMMA" if given else "the policy's c and k (alpha = k/c, gamma = c)",
+       "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer; no auditor's device signed them"}
+with open(out, "w") as f:
+    f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}")
+EOF
+) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case reads them off its own division:" \
+           "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
+  say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and signed by no" \
+      "auditor's device (inference-only-limits.json)"
+}
+fixed_limits() {  # ALPHA and GAMMA as the run fixed them before its serve (IO_LIMITS), where it did
+  local got
+  [ -s "$IO_LIMITS" ] || return 0
+  got=$("$SAY_PY" -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+print("%d/%d %d" % (d["alpha"][0], d["alpha"][1], d["gamma"]))' "$IO_LIMITS") || return 1
+  export ALPHA=${got% *} GAMMA=${got#* }
 }
 inference_only() {  # in TREE, once step 3 counted window K's circuit at the class: its verdict against the policy
   local c out rc lean=()
@@ -1162,6 +1202,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     cp "$DAY_LOG" "$DEFER_DIR/day-log.json" || return 1
     [ -z "${DAY_PARAMS:-}" ] || cp "$DAY_PARAMS" "$DEFER_DIR/day-params.json" || return 1
   fi
+  fixed_limits || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
@@ -1315,6 +1356,7 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   steps=$("$SAY_PY" "$SV" window "$D" --slots 1073741824 --window "$K" 2> "$COMPOSE_DIR/window.err" \
     | "$SAY_PY" -c 'import json, sys; print(",".join(map(str, json.load(sys.stdin)["steps"])))') \
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
+  fixed_limits || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
     AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
@@ -1958,6 +2000,7 @@ v3c_done=$SPLIT$P3C left=0
 if [ -n "$DEFER" ]; then v3c_commit; defer "$DEFER" || left=1; v3c_done=1
 elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
 comp=0
+fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
   || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
