@@ -1,0 +1,1 @@
+The two-stage guarantee is shown not to be vacuous: one reference statement satisfies every premise it takes, proved in Lean. The statement is fixed on Tue 10 Nov and its witness follows by **Fri 13 Nov 4 AM**. Two @proofs workers hold it.
