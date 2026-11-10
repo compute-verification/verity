@@ -37,9 +37,9 @@ the member's part of it (`Member.part`), and the window's projection hands each 
   `openMap` and `sampleMap` with one widening and one start for the window, every member's link points and round
   coins written into the openings at its own stops. The sample-coupled start leaves the tape from the first stop
   fresh (`windowSampleMap_fresh`) and is the uniform tape wherever the sample's coins are uniform
-  (`windowSampleMap_start`), so its premise holds within the openings' gaps and empty classes alone
-  (`windowSampleMap_couples`), and the coupling at the window follows from the decoders' premise
-  (`windowCouplingTarget_of_close`, `windowCouplingTarget_of_sample`).
+  (`windowSampleMap_start`), and each member's map writes its coins in within the stop's opening's gap
+  (`windowOpenMap_roundClose`, `windowOpenMap_linkClose`), so the coupling at the window follows from the decoders'
+  premise wherever the stops' term is at most the hiding term (`windowCouplingTarget_of_close`).
 -/
 
 @[expose] public section
@@ -622,26 +622,6 @@ theorem windowOpenMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type
       openGap E q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) := fun q G hG =>
   avg_le_writeOpening E (linkBits e) q.s' G hG
 
-/-- **The window's coin map into the openings, within the openings' gaps and empty classes** (`openMap_couples`):
-at the plays' close `E`, its widening `T` and start `start`, the joint law's tape off the empty classes
-(`linkEmpty`, `roundEmpty`) at every member's stops is within the start's term and, over every member's stops, the
-openings' gaps and empty classes of the uniform tape, wherever the start leaves the tape from the first stop fresh
-and is within `ε₀` of the uniform tape. -/
-theorem windowOpenMap_couples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : WindowDecoders V θ F c W σ) (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T]
-    (start : W.Ω × T → CoinTape (V.game θ F c) σ) {ε₀ : ℝ≥0∞}
-    (hF : WindowFirstStopFresh V θ F c W rd σ (windowOpenMap e E T start))
-    (hS : WindowStartWithin V θ F c W σ (windowOpenMap e E T start) ε₀) :
-    WindowCouplesWithin V θ F c W t rd σ D (windowOpenMap e E T start) (fun _ _ => linkEmpty e E)
-      (fun _ => roundEmpty e E)
-      (ε₀ + windowErr V θ F c W t rd σ D (windowOpenMap e E T start)
-        (fun _ q _ s => openGap E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun _ mPts q => openGap E q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-          openEmpty E q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool))) :=
-  windowCouples_of_close V θ F c W t rd σ D _ (fun _ _ => linkEmpty e E) (fun _ => roundEmpty e E)
-    (windowOpenMap_roundClose e E T start) (windowOpenMap_linkClose e E T start) hF hS
-
 /-- **The sample-coupled coin map over the window** (`sampleMap`): widened by a tape of the period's game, its start
 writes the sample's coins `κ` into the fresh frames of the sample's family (`sampleStart`), once for the window, and
 at each member's stops it writes the live coins into the stop's opening in `σ`'s play, whose log ends in the close
@@ -711,27 +691,6 @@ theorem Window.avg_byteCoins (W : Window) {m : ℕ} (hL : W.Lb 0 = m * 64) (H : 
     avg (fun ω : W.Ω => H (byteCoins W.src hL ω)) = avg H :=
   _root_.Verity.Sampled.avg_byteCoins W.hA3 hL H
 
-/-- **The sample-coupled coin map's premise over the window, within the openings' gaps and empty classes**
-(`sampleMap_couples`): the joint law's tape off the empty classes at every member's stops is within the openings'
-gaps and empty classes over the stops of the uniform tape, wherever the sample's coins are uniform. -/
-theorem windowSampleMap_couples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : WindowDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
-    (κ : W.Ω → Fin m → Fin 512 → Bool)
-    (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
-    WindowCouplesWithin V θ F c W t rd σ D (windowSampleMap e V θ F c W rd σ label after κ)
-      (fun _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmpty e (finish (V.signer θ) θ F c σ.1))
-      (windowErr V θ F c W t rd σ D (windowSampleMap e V θ F c W rd σ label after κ)
-        (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun _ mPts q =>
-          openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-            openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool))) := by
-  have h := windowOpenMap_couples e V θ F c W t rd σ D (finish (V.signer θ) θ F c σ.1)
-    (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
-    (windowSampleMap_fresh e V θ F c W rd σ label after κ) (windowSampleMap_start e V θ F c W rd σ label after κ hκ)
-  rwa [zero_add] at h
-
 omit θ F c in
 /-- **The sample-coupled coin maps over the windows** at the readings `rd` (`sampleMaps`): at each window, commitment
 and strategy, `windowSampleMap` at the family `label θ F c σ` answering `after θ F c σ` and the window's coins
@@ -786,44 +745,5 @@ theorem windowCouplingTarget_of_close (rd : WindowReadings) (K : WindowConstruct
     (fun c σ => windowCouples_of_within V θ F c
       (windowCouples_of_close V θ F c W _ _ σ _ _ (BL c σ) (B c σ) (hR c σ) (hL c σ) (hF c σ) (hS c σ)) (hε c σ))
     hD
-
-omit θ F c in
-/-- **The coupling at the window's projection with the sample-coupled coin maps**
-(`couplingTarget_withProject_of_sample`): `windowCouplingTarget_of_logged` at `windowSampleMaps` and the cut `P` and
-`Q`, off the empty classes (`linkEmpty`, `roundEmpty`) at every member's stops, whose coin map's premise holds within
-the openings' gaps and empty classes over the stops wherever the window's coins are uniform
-(`windowSampleMap_couples`), at each commitment and strategy where those terms are at most the hiding term. -/
-theorem windowCouplingTarget_of_sample (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      WindowDecoders V θ F c W σ)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
-    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
-    (κ : (W : Window) → W.Ω → Fin m → Fin 512 → Bool) (W : Window) (P : Exchange → Prop) (θ : ByteArray)
-    (F : Array ByteArray) (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
-    (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ W ω)) = avg H)
-    (ha : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
-      prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
-        ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
-          ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
-    (hq : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
-      prob (fun o => V.Verdict k .sampled o ∧ ¬ Q c σ o) (V.game θ F c) σ ≤
-        ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)))
-    (hε : ∀ c σ, windowErr V θ F c W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-      (windowSampleMaps e V rd label after κ W θ F c σ)
-      (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun _ mPts q =>
-        openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool)) ≤
-        W.hidingTerm)
-    (hD : ∀ c σ, WindowDecodes V θ F c k (fun o => P o ∧ Q c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-      (windowSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
-    WindowCouplingTarget V k (K.withProject V rd D (windowSampleMaps e V rd label after κ)) W θ F :=
-  windowCouplingTarget_of_logged V k rd K D (windowSampleMaps e V rd label after κ) W P θ F Q
-    (fun c σ _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
-    (fun c σ _ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) ha hq
-    (fun c σ => windowCouples_of_within V θ F c (windowSampleMap_couples e V θ F c W (V.cost θ F c σ) (rd W θ F c) σ
-      (D W θ F c σ) (label θ F c σ) (after θ F c σ) (κ W) hκ) (hε c σ)) hD
 
 end Verity.Sampled
