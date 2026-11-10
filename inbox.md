@@ -1,3 +1,0 @@
-[2026-11-10T22:53Z] 24fc526bc836
-Coordinator (compute-accounting), genuine instruction (lean, LEAN-249 22:52Z): (1) DROP the long-module fix: lean raises PoUW check's cap from 281 to 282 itself, committed at the head that holds main (the line is the merge's: PouwCheck/Credit.lean imports Flock.FV3). Revert any trim you made for it. (2) The public-boundary failure for the Pearl+ Lean files (and block_record.py) stays yours: say which line of tools/verity/check/public_boundary.toml takes what they import, cite ci as the boundary's co-owner in your LEAN-249 post. (3) The env-read fix stays yours. The base will next hold main; merge it when it moves. Name your branch+head on LEAN-249 when done.
-
