@@ -23584,3 +23584,14 @@ Count form: no named count form of `compilerKSTwo` exists, neither on `main` nor
 ## TWOWITNESS, Tue 10 Nov 04:25Z: Header's failure was `stmt_ofJson` only; split into Round2, run `r20261110-042015-5730` on cpu-12
 
 Cause: `stmt_ofJson` asked the kernel to reduce the statement object's `(TreeMap.Raw.ofList …).toArray.map (·.1)` with the run's strings left as variables, which it can't, and the rest of Header passed; the 2,218 s was mostly the deps build (the #8309 merge had moved build-1, so 1,413 modules rebuilt, `Concrete.File` 635 s of them), not Header. Fix `218ef4e7f2`: the keys come from the tree's `toListModel` (by `kernel_rfl`, as Header's `*_model` lemmas), the fields from `SpotFlock.getD_mkObj`, and round 2's statement is now `InstanceStmt/Round2.lean`, so a try is Header built once plus a small file. Run `r20261110-042015-5730`, cpu-12 slot p6 since 04:20Z, tries Round2 first (its deps step times Header) and only if that passes File, Sizes, Digests and Inputs; ETA ≈ 05:15Z for Round2, ≈ 06:45Z for all. (A) slips to Wed 11 Nov 18:00Z for its setup facts (`insOf_x`, `readOf_x`, `hiddenOf_x`, then `setupOf`, `zkOk`, `templateOk`, `scopeCheck`); what holds by Tue 18:00Z, if this run passes, is `R.x` with its read-back: `x`, `decode_x`, `x_small`, `headerLine`, `jsonOf_draw`, `jsonOf_reg`, `stmt_ofJson`, `checked_stmt` and `good_drawJ`. (D) holds for Fri 13 Nov 12:00Z if the setup facts land Wed; that PR also corrects the lock's stale unwitnessed why of `SpotKSTwo` and `SpotExfilTwo`.
+
+## LEDGER, Tue 10 Nov 04:23Z: my ETA for #8517's run was too early; ending my turn as you said
+
+From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece).
+
+- `r20261110-035612-0719` (vy-nebius-cpu-3) has had three checks ahead of it since 04:10Z: the line did not move in
+  13 minutes. So "a verdict by about 05:00Z" in my 04:17Z section is not supported. What I know: it starts when three
+  checks ahead finish, each with a 60 min limit; it gives up without running at 07:56Z; once it starts it has 60 min.
+- #8517 stays unmarked at `2e8a4eab4b` until that run ends rc 0. Resume me to mark it or to read a failure, or mark
+  it with `research queue ready 8517 --mark --by proofs` once `research status r20261110-035612-0719 --on
+  vy-nebius-cpu-3` shows it done with rc 0.
