@@ -16,7 +16,9 @@
 # - a record's keys and a kept run's file names (`"warden_run"`, `warden_check`, `warden.json`,
 #   `warden-registration.json`) and the negatives' names;
 # - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them;
-# - the trace corpus's labels (`warden-heavy`, `warden-smallkv`).
+# - the trace corpus's labels (`warden-heavy`, `warden-smallkv`);
+# - a message code makes from a kept value (`f"{label} thread"`, `f"device {device}"`), which a test spells whole: no
+#   phrase below rewords "warden thread", "warden ticker" or "device warden".
 #
 # Not this concept, and left as they are: as `warden_map.toml` has them.
 
@@ -68,14 +70,11 @@ files = ["*"]
 "warden bucket" = "network certifier bucket"
 "warden release" = "network certifier release"
 "warden admission" = "network certifier admission"
-"warden thread" = "network certifier thread"
 "warden program" = "network certifier program"
 "warden check" = "network certifier check"
-"warden ticker" = "network certifier ticker"
 "warden ({" = "network certifier ({"
 "warden (its" = "network certifier (its"
 "another warden" = "another network certifier"
-"device warden" = "device network certifier"
 "client / warden" = "client / network certifier"
 "warden arrival" = "network certifier arrival"
 "warden beside" = "network certifier beside"
