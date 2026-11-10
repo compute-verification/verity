@@ -134,6 +134,22 @@ def test_an_import_inside_a_function_is_told_from_one_a_test_file_runs(repo: Pat
     assert r["reached"] == 2 and r["outside_today"] == []
 
 
+def test_a_file_that_does_not_parse_is_named_and_one_that_is_not_text_reads_as_none(repo: Path) -> None:
+    assert suites(repo, WHOLE)["unparsed"] == {}
+    (repo / "old/lib/mod.py").write_text("from . import (\n")
+    (repo / "old/lib/blob.bin").write_bytes(b"\xff\xfe\x00 not text")
+    for args in (["add", "-A"], ["commit", "-q", "-m", "broken"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, env={**os.environ, **ENV})
+    r = suites(repo, WHOLE)
+    assert list(r["unparsed"]) == ["old/lib/mod.py"] and r["unparsed"]["old/lib/mod.py"].startswith("SyntaxError: ")
+    assert r["reached"] == 1                    # the module itself, and nothing it would have imported
+    m = moved(repo, WHOLE)
+    try:
+        assert m.read("old/lib/blob.bin") is None and m.read("docs.md") == TREE["docs.md"]
+    finally:
+        m.close()
+
+
 def test_an_archived_module_a_test_that_stays_imports_is_named_once(repo: Path) -> None:
     rows = PARTS.replace("new/elsewhere/deep.py", "archive/old/lib/deep.py")
     r = suites(repo, ROOTS + "[paths]\n" + rows + '[tokens]\n"old/lib/" = "new/lib/"\n')

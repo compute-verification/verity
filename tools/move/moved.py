@@ -55,10 +55,8 @@ class Moved:
         if len(head) < 3:
             return None
         data = self._cat.stdout.read(int(head[2]) + 1)[:-1]
-        try:
-            return data.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
+        text = data.decode("utf-8", errors="replace")
+        return text if text.encode("utf-8") == data else None       # a byte that is not UTF-8 doesn't encode back
 
     def close(self) -> None:
         if self._cat is not None:
