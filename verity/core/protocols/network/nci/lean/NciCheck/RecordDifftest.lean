@@ -19,6 +19,9 @@ unless, on every case:
   the refusal's code;
 * `NciCheck.RecordCount.checkDetail` gives Python's `count`: a block's Boolean gates, the verdict and the failure, or
   the first refusal's code;
+* the templates `NciCheck.Record.front` reads have the closed rows of Python's `closed`, template by template, or the
+  two refuse with one code: what each Definition passes on (`NciCheck.Record.passedOn`), held on every template
+  whether or not a wire fills its rows;
 * **the same circuit**: where the case states the instance of SPOT's `wires` piece that Python builds from its own
   layout of each template, SPOT's reader (`Spot.Wires.Wiring.ofJson`) reads from it the wiring it reads from the
   form's own (`NciCheck.Record.piece`), and the form refuses the record's wires exactly where SPOT's reader or its
@@ -44,14 +47,22 @@ def publicFields : List String := ["error", "message", "complies"]
 /-- The fields of the count compared: a refusal's code, or a block's Boolean gates and the verdict. -/
 def countFields : List String := ["error", "bool_gates", "complies", "failure"]
 
-/-- How Lean's list of `what` (the rows' kinds, or what the form exports of them) differs from Python's on case line
-`i`: both the same list, or both a refusal of one code. -/
+/-- How Lean's list of `what` (the rows' kinds, what the form exports of them, or the templates' closed rows) differs
+from Python's on case line `i`: both the same list, or both a refusal of one code. -/
 def rowsDiffer (what : String) (i : Nat) (lean py : Json) : List String :=
   let same := match lean, py with
     | .arr a, .arr b => a == b
     | .arr _, _ | _, .arr _ => false
     | _, _ => lean.getObjValD "error" == py.getObjValD "error" && lean.getObjValD "error" != Json.null
   if same then [] else [s!"instance {i}: {what}: Lean {lean.compress}, Python {py.compress}"]
+
+/-- Each template's closed rows as the form reads them (`Record.Tmpl.closed`), `[template, rows]` each, or the
+refusal of a stage as far as `own-rows`. -/
+def closedOf (inst tr : Json) : Json :=
+  match Record.front inst tr with
+  | .ok f =>
+    Json.arr (f.ts.map fun t => Json.arr #[Json.str t.tid, Json.arr (t.closed.map Json.str).toArray]).toArray
+  | .error code => NciCheck.refusal code
 
 /-- The wiring SPOT's reader reads from the `wires` piece's instance `j`, shown; `refused` where it refuses. -/
 def shown (j : Json) : String :=
@@ -98,6 +109,7 @@ def differences (i : Nat) (case py : String) : List String :=
       rowsDiffer "kinds" i (Record.kinds inst tr (c.getObjValD "rows")) (p.getObjValD "kinds") ++
       rowsDiffer "exported" i (Record.exported inst tr (c.getObjValD "rows")) (p.getObjValD "exported") ++
       compare i "count" countFields (RecordCount.checkDetail inst tr (c.getObjValD "count")) (p.getObjValD "count") ++
+      rowsDiffer "closed" i (closedOf inst tr) (p.getObjValD "closed") ++
       circuitDiffers i inst tr (c.getObjValD "spot") (detail.getObjValD "error")
 
 /-- `lake env lean --run NciCheck/RecordDifftestMain.lean CASES PYTHON N`: fails unless the two files have `N` lines

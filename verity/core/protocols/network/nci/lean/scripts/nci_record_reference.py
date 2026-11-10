@@ -27,8 +27,10 @@ a template's signature. A Definition's closure digest is the period check's (`cl
 
 Two refusals are the Lean's rule restated and then expanded, so that what the rule stands for is held on every case
 it passes. `own_rows`: the root's arguments in the form the Lean reads, then every leaf of every row of every unit
-resolved to its gate, an input gate and no other leaf's. `leaf_widths`: one width a port and the writer's dividing
-the reader's, then every leaf of the writer's output inside one leaf of each row its wire fills (`lands_whole`).
+resolved to its gate, an input gate and no other leaf's. `leaf_widths`: a wire into a closed row (one-bit leaves its
+Definition passes none of on, `passed_on`), then of every unit of that template no leaf of an output row resolved to
+a gate of the row (`hands_on`); else one width a port and the writer's dividing the reader's, then every leaf of the
+writer's output inside one leaf of each row its wire fills (`lands_whole`).
 """
 from __future__ import annotations
 
@@ -44,7 +46,7 @@ from pathlib import Path
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import is_input
-from verity.ml.circuits.refs import Affine, Concat
+from verity.ml.circuits.refs import Affine, Concat, Explicit
 from verity.ml.circuits.types import Array
 
 
@@ -123,15 +125,47 @@ def template_gates(fn) -> list[str]:
     return [codec.descriptor_id(prim) for prim, _, _ in reference.activation_gates(Scope(fn, 0, None, 0, 0))]
 
 
+def _parts(refs) -> list:
+    """A reference sequence's parts, a concatenation spliced in."""
+    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
+
+
+def passed_on(fn, memo: dict | None = None) -> frozenset[int]:
+    """The Lean's `passedOn`, of the one Definition `fn`: the parameters a leaf of its return may be, with no gate
+    between, by index. Read from its body's reference parts, callees first (`memo`, by Definition), a parameter at a
+    time: a part of a parameter is that parameter; a part of a node's output is every argument of the node, at a
+    parameter its callee passes on, by the same rule (a call, a batch and a scan alike). A primitive passes nothing
+    on."""
+    memo = {} if memo is None else memo
+    if isinstance(fn, PrimitiveDefinition):
+        return frozenset()
+    if id(fn) not in memo:
+        reach: list[frozenset[int]] = []
+
+        def of(refs) -> frozenset[int]:
+            """The parameters the parts of `refs` name, or reach through the nodes they name."""
+            named = {(s, i) for p in _parts(refs) if p.count
+                     for s, i in ({r[:2] for r in p.items} if isinstance(p, Explicit) else [(p.space, p.idx)])}
+            return frozenset().union(*({i} if s == "p" else reach[i] for s, i in named))
+
+        for n in fn.body.nodes:
+            reach.append(frozenset().union(*(of(n.args[i].refs) for i in passed_on(n.fn, memo))))
+        memo[id(fn)] = of(fn.body.ret)
+    return memo[id(fn)]
+
+
 class Template:
     """A template of the record: its Definition and units; its rows, each parameter's `(name, words, outer length)`; its
-    outputs, each return field's `(o<j>, words)`; each port's leaves' widths, leaf by leaf (`widths`); and one
-    activation's gates (`template_gates`). `templates` where a parameter is not whole u16 words, an output has no bit,
-    or two ports share a name."""
+    outputs, each return field's `(o<j>, words)`; each port's leaves' widths, leaf by leaf (`widths`); its `closed`
+    rows, the parameters whose leaves are of one bit each and none of which its Definition passes on (`passed_on`);
+    and one activation's gates (`template_gates`). `templates` where a parameter is not whole u16 words, an output
+    has no bit, or two ports share a name."""
 
     def __init__(self, tid: str, fn, units: int) -> None:
         self.tid, self.fn, self.units = tid, fn, units
         params, ret = fn.signature()
+        on = passed_on(fn)
+        self.closed = [name for i, (name, ty) in enumerate(params) if set(ty.leaf_widths()) == {1} and i not in on]
         self.rows, self.outs = [], []
         self.widths: dict[str, tuple[int, ...]] = {}
         for name, ty in params:
@@ -183,11 +217,6 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
             "over input nodes of their own, each input leaf handed once.")
 
 
-def _parts(refs) -> list:
-    """A reference sequence's parts, a concatenation spliced in."""
-    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
-
-
 def own_rows(program) -> None:
     """The Lean's `ownRows` (`own-rows`). The rule's form, restated: every argument of a root node that is no input
     node is affine runs of the root's nodes' leaves, and a batch maps every argument over its members. Then what the
@@ -226,26 +255,56 @@ def lands_whole(row, out) -> bool:
     return True
 
 
-def leaf_widths(templates: list[Template], wires: list[dict], cuts: dict) -> None:
-    """The Lean's `unwhole` (`leaf-widths`). The rule, restated: of each wire, the reader's row and the writer's
-    output each have leaves of one width, and the writer's divides the reader's; the first wire that breaks it is
-    refused, by name, with its two widths and the fix. Then what the rule stands for, leaf by leaf: every leaf of the
-    writer's output lies inside one leaf of each row of the reader's port the wire fills (`lands_whole`), a cut
-    port's row `j` of `k` its leaves `[j·n/k, (j+1)·n/k)`."""
+def hands_on(program, tid: str, port: str) -> bool:
+    """Whether some unit of template `tid` hands a leaf of its row `port` on, leaf by leaf: a leaf of its return,
+    resolved through the root (`layout.resolve_gate`), is the gate a leaf of that row is."""
+    from verity.ml.circuits.layout import Scope, resolve_gate
+    from verity.ml.circuits.parts import n_members
+    root = Scope(program.root, 0, None, 0, 0)
+    for k, node in enumerate(program.root.body.nodes):
+        if is_input(node.fn) or codec.descriptor_id(node.fn) != tid or isinstance(node.fn, PrimitiveDefinition):
+            continue
+        params, ret = node.fn.signature()
+        i = [name for name, _ in params].index(port)
+        for m in range(n_members(node)):
+            unit = root.child(k, m)
+            row = {resolve_gate(unit, ("p", i, leaf))[0] for leaf in range(params[i][1].leaves)}
+            if any(resolve_gate(unit, node.fn.body.ret[j])[0] in row for j in range(ret.leaves)):
+                return True
+    return False
+
+
+def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict) -> None:
+    """The Lean's `unwhole` (`leaf-widths`). The rule, restated: a wire is taken where the reader's row is closed
+    (`Template.closed`), or where the reader's row and the writer's output each have leaves of one width and the
+    writer's divides the reader's; the first wire that is neither is refused, by name, with its two widths and the
+    fix. Then what the rule stands for, leaf by leaf. Of a closed row: no unit of the reader's template hands a leaf
+    of it on (`hands_on`, once a row). Of the other: every leaf of the writer's output lies inside one leaf of each
+    row of the reader's port the wire fills (`lands_whole`), a cut port's row `j` of `k` its leaves
+    `[j·n/k, (j+1)·n/k)`."""
     by = {t.tid: t for t in templates}
+    kept: set[tuple[str, str]] = set()
 
     def name(ws: tuple[int, ...]) -> str:
         return f"{ws[0]} bits" if len(set(ws)) == 1 else "more than one width"
 
     for w in wires:
         row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[w["out"]]
+        if w["port"] in by[w["reader"]].closed:
+            if (w["reader"], w["port"]) not in kept:
+                assert not hands_on(program, w["reader"], w["port"])
+                kept.add((w["reader"], w["port"]))
+            continue
         if len(set(row)) != 1 or len(set(out)) != 1 or row[0] % out[0]:
             raise refused("leaf-widths", (
                 f"wire {w['writer']}.{w['out']} -> {w['reader']}.{w['port']}: the writer's leaves are of {name(out)} "
                 f"and the reader's of {name(row)}. Every leaf of a writer's output lies inside one leaf of the row "
-                "that reads it: each side's leaves have one width and the writer's divides the reader's. Fix the "
-                "Definitions, not the record: give the reader's row leaves of the writer's width or a multiple of "
-                "it, or the writer's output leaves of a width that divides the reader's."))
+                "that reads it, each side's leaves of one width and the writer's dividing the reader's; or the "
+                "reader's row is one-bit leaves and its Definition passes none of them on: its return refers to no "
+                "part of that row, itself or through a call, a batch or a scan. Fix the Definitions, not the "
+                "record: give the reader's row leaves of the writer's width or a multiple of it, or the writer's "
+                "output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and "
+                "have its Definition return gates of its own in their place."))
         k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)
         assert all(lands_whole(row[j * n // k:(j + 1) * n // k], out) for j in range(w["c0"], w["c0"] + w["C"]))
 
@@ -489,12 +548,9 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
     return is_pinned(o["reader"]) and is_theta(x.tables[o["table"]]["param"]) and covered("root") and covered("domain")
 
 
-def expand(inst, tr) -> dict:
-    """Everything the summary is read from, unit by unit: the instance's fields (`i`), the templates, the wires and
-    cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
-    of what fills a row), each template's pin where the policy pins its Definition (`pins`), and per slot the sums
-    `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
-    (`Malformed`) with the first stage's code, in `NciCheck.Record`'s order."""
+def front(inst, tr) -> tuple:
+    """`NciCheck.Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
+    the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
     try:
@@ -514,8 +570,27 @@ def expand(inst, tr) -> dict:
         raise Malformed("run-circuit")
     templates = templates_of(program, rec, digest)
     own_rows(program)
+    return i, program, desc, rec, T, templates
+
+
+def closed(inst, tr) -> list | dict:
+    """Each template's closed rows as the form reads them (`NciCheck.Record.Tmpl.closed`), `[template, rows]` each
+    in the record's order, a template's rows in its parameters'; or the refusal of a stage as far as `own-rows`."""
+    try:
+        return [[t.tid, t.closed] for t in front(inst, tr)[-1]]
+    except Malformed as m:
+        return {"error": m.code}
+
+
+def expand(inst, tr) -> dict:
+    """Everything the summary is read from, unit by unit: the instance's fields (`i`), the templates, the wires and
+    cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
+    of what fills a row), each template's pin where the policy pins its Definition (`pins`), and per slot the sums
+    `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
+    (`Malformed`) with the first stage's code, in `NciCheck.Record`'s order."""
+    i, program, desc, rec, T, templates = front(inst, tr)
     wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
-    leaf_widths(templates, wires, cuts)
+    leaf_widths(program, templates, wires, cuts)
     x = Inputs(templates, cuts, wires, rec)
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
