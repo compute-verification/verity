@@ -164,6 +164,13 @@ def test_a_package_level_whose_init_a_later_commit_deletes_is_gone(repo: Path) -
     assert (r["count"], [d["directory"] for d in r["directories"]]) == (3, ["old/lib"])
 
 
+def test_a_file_a_drop_row_deletes_is_gone(repo: Path) -> None:
+    rows = ROOTS + '[drop]\npaths = ["old/kernels/test_gpu.py", "old/pkg/tests/test_b.py"]\n[paths]\n"old/pkg/tests/test_b.py" = "x/test_b.py"\n'
+    assert suites(repo, rows)["orphans"] == suites(repo, rows)["parted"] == []
+    r = gone(repo, rows)
+    assert [(d["directory"], d["where"]) for d in r["directories"]] == [("old/kernels", ["tests/test_repository.py:1"])]
+
+
 def test_a_tokens_row_to_a_directory_that_holds_nothing_fails(repo: Path) -> None:
     r = gone(repo, ROOTS + "[paths]\n" + PARTS + '[tokens]\n"old/lib/" = "new/library/"\n')
     assert r["tokens_to_nothing"] == ["old/lib/ = new/library/"]

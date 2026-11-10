@@ -18,13 +18,16 @@ class Moved:
     def __init__(self, maps: list[str], ref: str = "origin/main", repo: Path | None = None, deleted: tuple[str, ...] = ()):
         self.repo = repo or HERE.parent.parent
         self.ref = self._git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
-        self.files = [p for p in self._git("ls-tree", "-r", "--name-only", "-z", self.ref).split("\0") if p]
-        self.tracked = set(self.files)
+        tree = [p for p in self._git("ls-tree", "-r", "--name-only", "-z", self.ref).split("\0") if p]
+        self.tracked = set(tree)
         self.layouts = [L.Layout(tomllib.loads(Path(m).read_text())) for m in maps]
-        self.new = {p: self._file(p) for p in self.files}
-        self.old_dirs = _dirs(self.files)
+        dropped = {p for lay in self.layouts for p in lay.drop}
+        #: the files the maps leave, by today's path: a `[drop]` row deletes its file
+        self.files = [p for p in tree if p not in dropped]
+        self.new = {p: self._file(p) for p in tree}
+        self.old_dirs = _dirs(tree)
         #: `deleted`: files a commit after the maps deletes (an emptied package level's `__init__.py`), by today's path
-        self.new_dirs = _dirs(n for p, n in self.new.items() if p not in deleted)
+        self.new_dirs = _dirs(n for p, n in self.new.items() if p not in dropped and p not in deleted)
         self._cat = None
 
     def _git(self, *args: str) -> str:
