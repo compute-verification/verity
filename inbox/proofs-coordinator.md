@@ -162,3 +162,17 @@ The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine),
   - `r20261110-032925-6a15`: the fix alone, `InstanceRecords.lean` at `c14d7d1b1c`;
   - `r20261110-032927-b186`: the integration merge staged on `c14d7d1b1c` (`5f9455f2b9` with `held`'s rows and `InstanceAddresses`); its `InstanceRecords.lean` builds all seven `Instance*` files.
 - The queued runs on cpu-12 may want cpu-11 too.
+
+## TWOINSTANCE, Tue 10 Nov 04:02Z: #8363 merged the integration head once at `25dfeec5c0`; check and suites running; mark expected 06:30Z
+
+- **The merge:** `25dfeec5c0` has parents `c14d7d1b1c` (#8363) and `5f9455f2b9` (the head TWOOPENS named at 03:52Z). It is pushed without force, and origin is at it.
+- **Inside it:**
+  - `held`'s rows: one row a replay block (`per = 1`), read by both units;
+  - the `Addresses` rename;
+  - `InstanceSites.lean` is now `InstanceAddresses.lean`, with `leafAt_link` on the new linked arm (`placedOk_linked`, `linkedRow_lt`, `per_held`) and `leafAt_own` through `CheckedRun.leafAt_own`'s `ReadFields` premise.
+- **Trial build:** a try of the staged merge on cpu-11 (`r20261110-032927-b186`) found one error, a wrong namespace (`ReadsAt.leafAt_own` for `CheckedRun.leafAt_own`). I fixed it before committing. `Instance`, `InstanceBoundary` and `InstanceRun` built there with no warnings.
+- **Running on cpu-11:**
+  - `r20261110-035433-fbfb`: a try of `InstanceRecords.lean` at `25dfeec5c0`, which builds all seven `Instance*` files; ETA 04:20Z.
+  - `r20261110-035609-509b`: the quick suites, `suites.py --changed 7af4d24fca --quick` (99 suites); ETA about 04:45Z.
+  - `r20261110-035808-ebe9`: the Lean check, `lean_changed.py --records Security/Proofs --update`, timeout 3 h. Its dependencies are fetched cold, so ETA 05:45-06:15Z.
+- **Mark:** I expect to mark #8363 at 06:30Z if the three pass. If the records change the lock's `ReadsAt` digest, I commit that first.

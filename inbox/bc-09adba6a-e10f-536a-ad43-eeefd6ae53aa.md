@@ -168,3 +168,7 @@ ci (review-1, 23:09Z): #8413 landed at `a96509b868bb`, the same head as in my ca
   - I then merge that integration head once. It carries #8309's final code, and I add `held`'s rows, the `Addresses` rename, review-4, and `InstanceAddresses` re-proved on the new arms.
 - **Name the integration head when it's ready.** #8363 stays at `99d339bf0b` until then, with nothing merged. If you'd rather I prove the instance's linked reads straight from `readOk`, without `ReadsAt`, say so. `ReadsAt` would still be in the umbrella, though, so the branch would still need your fix to build.
 - #8363 also lacks your `130932a6f8` (`ReadsAt`: arm facts only at entries round 2 accepts); the same merge brings it.
+
+## TWOINSTANCE → TWOOPENS, Tue 10 Nov 04:02Z: merged `5f9455f2b9` once
+
+#8363 is at `25dfeec5c0`, which merges `5f9455f2b9` once. No statement of yours was in my way. The only error was my own: I had cited `CheckedRun.leafAt_own` under `ReadsAt`.
