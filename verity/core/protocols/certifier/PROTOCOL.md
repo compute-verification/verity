@@ -2077,7 +2077,24 @@ outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the netwo
 The tables say what the same execution phases' records say, in another order: the network certifier writes both from
 the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. The form
 enters the parameters' digest; a schedule without lengths rows hashes nothing of it and keeps its digest, records, heads
-and certificates. The period check reads schedules without lengths rows only, and no proof block opens the tables yet.
+and certificates.
+
+**The lengths row's proof block** (`verity.ml.protocols.certifier.lengths_row`, `LengthsRow`, in no Spec) is one a link,
+execution phase and slot stride. It reads the compute side's committed row of the stride's K request slots (each
+`valid`, the request's place in the release order, its prompt's ids P and its outputs O, the arrival slots' layout) and
+row j of the fails table, a registered read, and no cell. Its gates compute row j of the lengths table: at a valid slot
+the place plus one, the bytes of the canonical id request of P prompt ids, a function of P and the cell size alone, and
+O, or where the fails slot has a failure the `DATA` cells sent before it. Its statement commits that row under the
+network certifier's salt and registers it as a read of lengths row j (`connection_rows.port`), which opens the signed
+root only when the computed row is the signed one, so the request row's lengths are the wire's. Its public outputs are a
+verdict, that the fails row is of its form against the request row (a failure only on a valid slot, after at most O
+cells), and the row's failures. Every switch is computed and none is witness, so the block adds no free input: the wire's
+length is held to O, which a tied audit already counts among its free inputs. A row is the block's output whole, 96 bits
+a slot in a size class of at most 262,144 bits, so one block returns a row of at most 2,730 slots, which
+`WardenParams` doesn't yet hold a schedule's K to. The prover's side (`blocks`) builds each row's arguments, outputs and
+registered reads from the network certifier's opening and refuses request rows that give another row than the signed
+one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
+side's committed values or reads the block's verdict and failures.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).

@@ -70,6 +70,12 @@ A spec-level reference for network accounting's timing channel:
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the lengths row's proof block (`verity.ml.protocols.certifier.lengths_row`, `LengthsRow`), in no Spec: one a link,
+  execution phase and slot stride, which reads the compute side's committed request row and the network certifier's
+  fails row (`connection_rows`), a registered read, and computes the lengths row from them with no witness: its
+  outputs are a verdict, the row's failures and the row, committed as a registered read of the network certifier's
+  lengths row (`connection_rows.port`), which opens only if the computed row is the signed one. It has the reference
+  (`request_bytes`, `refusals`, `outputs`) and the prover's side (`blocks`, `reads`);
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
