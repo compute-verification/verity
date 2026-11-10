@@ -992,7 +992,8 @@ def test_core_never_reads_the_census() -> None:
     assert not offenders, offenders
 
 
-#: The listing: the tree's directories, bottom first, and the ties against that order, by pair of directories.
+#: The listing: the tree's directories, bottom first; the directories under ``verity/`` that are distributions of their own;
+#: the ties against the order; and for each verifier and device, what its Python loads and reaches and what loads it.
 ORDER = ROOT / "tests" / "import_order.toml"
 #: The files the order reads as loaders: Python, Lean, and a Lake package's requirements.
 LOADERS = (".py", ".lean", "lakefile.toml")
@@ -1009,19 +1010,23 @@ class Load(NamedTuple):
     #: package`` (the ``__init__.py`` of a package above an imported module), ``lean import`` or ``lake require``
     kind: str
     name: str
-    #: whether loading ``loader`` runs it: outside every function body, as every Lean import and Lake requirement is
-    at_load: bool
 
     def __str__(self) -> str:
         return f"{self.loader}:{self.line}: {self.kind} {self.name} loads {self.loaded}"
 
 
+#: The lists of a verifier's or a device's entry in the listing.
+TRUSTED = ("loads", "reaches", "loaded_by")
+
+
 class Listing(NamedTuple):
     """``ORDER`` as the tests read it."""
 
-    steps: dict[str, int]                                   # each listed directory's step: the bottom row's 0, one a row
-    against: dict[tuple[str, str], set[tuple[str, str]]]    # each excepted pair of directories: its ties, (loader, loaded)
-    verifiers: dict[str, tuple[set[str], set[str]]]         # each verifier's directory: what its Python loads and reaches
+    steps: dict[str, int]                               # each listed directory's step: the bottom row's 0, one a row
+    distributions: dict[str, dict[str, str]]            # each distribution of its own under ``verity/``, by directory
+    against: dict[tuple[str, str], set[str]]            # each excepted pair of rows: the first's files that load the second
+    #: each verifier's and device's directory: the places its Python ``loads`` and ``reaches``, and the files it is ``loaded_by``
+    trusted: dict[str, dict[str, set[str]]]
 
 
 def _listing(text: str | None = None) -> Listing:
@@ -1029,8 +1034,9 @@ def _listing(text: str | None = None) -> Listing:
     doc = tomllib.loads(ORDER.read_text(encoding="utf-8") if text is None else text)
     steps = {d: n for n, row in enumerate(doc["order"]) for d in row}
     assert "." in steps and len(steps) == sum(map(len, doc["order"])), "the order lists `.` and each directory once"
-    return Listing(steps, {(e["loader"], e["loaded"]): {(a, b) for a, b in e["ties"]} for e in doc.get("against", [])},
-                   {e["directory"]: (set(e["loads"]), set(e["reaches"])) for e in doc.get("verifier", [])})
+    return Listing(steps, {e["directory"]: {k: v for k, v in e.items() if k != "directory"} for e in doc.get("distribution", [])},
+                   {(e["loader"], e["loaded"]): set(e["files"]) for e in doc.get("against", [])},
+                   {e["directory"]: {k: set(e.get(k, ())) for k in TRUSTED} for e in doc.get("trusted", [])})
 
 
 def _row(path: str, steps: dict[str, int]) -> str:
@@ -1041,21 +1047,45 @@ def _row(path: str, steps: dict[str, int]) -> str:
     return d or "."
 
 
-#: The directories a protocol's own directory is split into: what decides a verdict, what a serving node runs to be
-#: audited, and the programs of an auditor-trusted device.
-PARTS = ("verifier", "prover", "device")
-
-
-def _part(path: str, names: tuple[str, ...] = PARTS) -> str | None:
-    """The outermost directory above ``path`` named one of ``names``, or None."""
-    parts = path.split("/")[:-1]
-    at = next((i for i, part in enumerate(parts) if part in names), None)
-    return None if at is None else "/".join(parts[:at + 1])
-
-
 def _place(path: str, steps: dict[str, int]) -> str:
-    """Where ``path`` is, as the verifiers' lists name it: its part (``_part``), or its row for a file under none."""
-    return _part(path) or _row(path, steps)
+    """Where ``path`` is, as a verifier's lists name it: the directory one level below its row that holds it (a protocol's
+    ``verifier/``, ``prover/`` or ``device/``, the directory of one package of a row), or its row for a file directly in it."""
+    row = _row(path, steps)
+    below = posixpath.dirname(path)[0 if row == "." else len(row) + 1:].split("/")[0]
+    return row if not below else below if row == "." else f"{row}/{below}"
+
+
+def _part(path: str, name: str) -> str | None:
+    """The outermost directory above ``path`` named ``name`` (``verifier``, ``prover``), or None."""
+    parts = path.split("/")[:-1]
+    return "/".join(parts[:parts.index(name) + 1]) if name in parts else None
+
+
+def _trusted(path: str) -> str | None:
+    """The verifier's or the device's directory ``path`` is in: the outermost ``verifier/`` or ``device/`` directory above
+    it under ``verity/``, or None."""
+    parts = path.split("/")[:-1]
+    at = next((i for i, part in enumerate(parts) if part in ("verifier", "device")), None)
+    return "/".join(parts[:at + 1]) if at is not None and parts[0] == "verity" else None
+
+
+def _distribution(path: str, listing: Listing) -> str | None:
+    """The distribution of its own that ``path`` is in: a directory of the listing's ``distribution`` above it and in its
+    row, so that a row listed below a distribution (Flock's verifier, below Flock) is no part of it."""
+    row = _row(path, listing.steps)
+    return next((d for d in listing.distributions if path.startswith(d + "/") and _row(d + "/_", listing.steps) == row), None)
+
+
+def _lean_script(path: str) -> bool:
+    """Whether ``path`` is a script beside a Lean package: Python under a ``lean/`` directory, which writes the Lean's test
+    vectors from the Python it is held to, is run by path and is no part of what decides a verdict."""
+    return path.endswith(".py") and "lean" in path.split("/")[:-1]
+
+
+def _source(path: str, listing: Listing) -> bool:
+    """Whether ``path`` is Python of the distribution ``verity``: under ``verity/``, in no distribution of its own, and no
+    script beside a Lean package.  (Tests and circuit-check's bindings are no loaders at all.)"""
+    return path.startswith("verity/") and path.endswith(".py") and not _lean_script(path) and _distribution(path, listing) is None
 
 
 @functools.cache
@@ -1063,26 +1093,6 @@ def _public_boundary() -> Any:
     """``tools/verity/check/public_boundary.py``, whose ``Tree`` resolves a Python import and a Lake package as the public
     boundary reads them.  Loaded on first use, since it loads this file for ``_imports``."""
     return _load_tool("public_boundary_of_the_order", ROOT / "tools/verity/check/public_boundary.py")
-
-
-def _naming(tree: ast.AST) -> tuple[list[ast.AST], list[ast.AST]]:
-    """The nodes of ``tree`` that can name a module (an import, a call on a string, a string with a colon), in two lists:
-    those loading the file runs, and those inside a function's body.  A class's body runs at load, and so do a function's
-    decorators, defaults and annotations."""
-    out: tuple[list[ast.AST], list[ast.AST]] = ([], [])
-    todo = [(tree, True)]
-    while todo:
-        node, at_load = todo.pop()
-        if isinstance(node, (ast.Import, ast.ImportFrom)) or (
-                isinstance(node, ast.Constant) and isinstance(node.value, str) and ":" in node.value) or (
-                isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)):
-            out[not at_load].append(node)
-        if at_load and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            head = [*getattr(node, "decorator_list", ()), node.args, *([node.returns] if getattr(node, "returns", None) else [])]
-            todo += [(c, any(c is h for h in head)) for c in ast.iter_child_nodes(node)]
-        else:
-            todo += [(c, at_load) for c in ast.iter_child_nodes(node)]
-    return out
 
 
 def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
@@ -1118,23 +1128,23 @@ def _named(tree: Any, name: str, directory: str, roots: tuple[str, ...]) -> tupl
 
 
 def _python_loads(tree: Any, f: str) -> list[Load]:
-    """What the Python file ``f`` loads: for each module it names (``_imports``; a relative name resolved from the root),
-    the files ``_named`` gives, and for ``from M import a`` the module ``M.a`` when it is one."""
+    """What the Python file ``f`` loads, at load or inside a function: for each module it names (``_imports``; a relative
+    name resolved from the root), the files ``_named`` gives, and for ``from M import a`` the module ``M.a`` when it is one."""
     text = tree.text(f)
     parsed = ast.parse(text, filename=f)
     path, directory, roots = tree.root / f, posixpath.dirname(f), _path_roots(tree, f, parsed, text)
-    out: dict[tuple[str, bool], Load] = {}
-    for at_load, nodes in zip((True, False), _naming(parsed)):
-        names = _imports(path, tree.root, (), nodes)
-        froms = [n for n in nodes if isinstance(n, ast.ImportFrom) and n.module]
-        names += [(f"{name}.{a.name}", line, True) for n, (name, line, _) in zip(froms, _imports(path, tree.root, (), froms))
-                  for a in n.names]
-        for name, line, imported in names:
-            modules, above = _named(tree, name, directory, roots)
-            for kind, files in (("python import" if imported else "python string", modules), ("python package", above)):
-                for t in files:
-                    if t != f:
-                        out.setdefault((t, kind == "python string"), Load(f, t, line, kind, name, at_load))
+    nodes = list(ast.walk(parsed))
+    froms = [n for n in nodes if isinstance(n, ast.ImportFrom) and n.module]
+    names = _imports(path, tree.root, (), nodes)
+    names += [(f"{name}.{a.name}", line, True) for n, (name, line, _) in zip(froms, _imports(path, tree.root, (), froms))
+              for a in n.names]
+    out: dict[tuple[str, str], Load] = {}
+    for name, line, imported in sorted(names, key=lambda n: n[1]):
+        modules, above = _named(tree, name, directory, roots)
+        for kind, files in (("python import" if imported else "python string", modules), ("python package", above)):
+            for t in files:
+                if t != f:
+                    out.setdefault((t, kind), Load(f, t, line, kind, name))
     return list(out.values())
 
 
@@ -1179,7 +1189,7 @@ def _lean_loads(tree: Any, f: str) -> list[Load]:
     for imp, at in zip(header.imports, starts):
         for t in _lean_module(tree, tree.lake[1].get(f), imp.module):
             if t != f:
-                out.setdefault(t, Load(f, t, text.count("\n", 0, at) + 1, "lean import", imp.module, True))
+                out.setdefault(t, Load(f, t, text.count("\n", 0, at) + 1, "lean import", imp.module))
     return list(out.values())
 
 
@@ -1190,14 +1200,19 @@ def _loads(tree: Any, f: str) -> list[Load]:
         return _python_loads(tree, f)
     if f.endswith(".lean"):
         return _lean_loads(tree, f)
-    return [Load(f, e.target, e.line, e.kind, e.what, True) for e in tree._lakefile(f) if e.kind == "lake require"]
+    return [Load(f, e.target, e.line, e.kind, e.what) for e in tree._lakefile(f) if e.kind == "lake require"]
 
 
 def _all_loads(tree: Any) -> tuple[Load, ...]:
-    """Every load of ``tree``'s files, tests left out as loaders (``_is_test``: they are suites of their own, which declare
-    what they read) and circuit-check's bindings with them (``SIDECAR``)."""
-    return tuple(x for f in sorted(tree.files) if f.endswith(LOADERS) and not f.endswith(SIDECAR) and not _is_test(f)
+    """Every load of ``tree``'s Python, Lean and Lake files; of its tests, the Python ones'."""
+    return tuple(x for f in sorted(tree.files) if f.endswith(LOADERS) and (f.endswith(".py") or not _is_test(f))
                  for x in _loads(tree, f))
+
+
+def _held(x: Load) -> bool:
+    """Whether the order reads ``x``: its loader is no test (``_is_test``: a suite of its own, which declares what it
+    reads) and no circuit-check binding (``SIDECAR``)."""
+    return not _is_test(x.loader) and not x.loader.endswith(SIDECAR)
 
 
 @functools.cache
@@ -1207,90 +1222,71 @@ def _tree_loads() -> tuple[frozenset[str], tuple[Load, ...]]:
     return tree.dirs, _all_loads(tree)
 
 
-def _held(x: Load) -> bool:
-    """Whether the order holds ``x``: every load that loading its file runs, and inside ``verity/`` an import inside a
-    function and a module named in a string as well."""
-    return (x.at_load and x.kind != "python string") or (x.loader.startswith("verity/") and x.loaded.startswith("verity/"))
-
-
-Ties = dict[tuple[str, str], dict[tuple[str, str], Load]]
-
-
-def _ties(loads: Iterable[Load], pair: Callable[[Load], tuple[str, str] | None]) -> Ties:
-    """The loads ``pair`` names a pair of directories for, by that pair: each ``(loader, loaded)`` with its first load.
-    A package above an imported module is a tie only where the module is none: a module that is one brings its packages
-    with it."""
-    out: Ties = {}
-    brought = set()
+def _against(loads: Iterable[Load], steps: dict[str, int]) -> dict[tuple[str, str], dict[str, Load]]:
+    """The ties against the order among ``loads``, by pair of rows, the first listed before the second: each file of the
+    first that loads a file of the second, with one such load (a module's before a package's above one).  A test's and a
+    binding's loads count only into the last row, which nothing outside it loads."""
+    last = max(steps.values())
+    out: dict[tuple[str, str], dict[str, Load]] = {}
     for x in sorted(loads, key=lambda x: x.kind == "python package"):
-        if (x.loader, x.name) not in brought and (at := pair(x)) is not None:
-            out.setdefault(at, {}).setdefault((x.loader, x.loaded), x)
-            if x.kind != "python package":
-                brought.add((x.loader, x.name))
+        a, b = _row(x.loader, steps), _row(x.loaded, steps)
+        if steps[a] < steps[b] and (_held(x) or steps[b] == last):
+            out.setdefault((a, b), {}).setdefault(x.loader, x)
     return out
 
 
-def _against(loads: Iterable[Load], steps: dict[str, int]) -> Ties:
-    """The ties against the order among ``loads``, by pair of listed directories: each load whose loader's row is listed
-    before the loaded file's."""
-    def pair(x: Load) -> tuple[str, str] | None:
-        a, b = _row(x.loader, steps), _row(x.loaded, steps)
-        return (a, b) if steps[a] < steps[b] else None
-    return _ties(loads, pair)
-
-
-def _verifier_script(path: str) -> bool:
-    """Whether ``path`` is a script beside a verifier's Lean: Python under a ``lean/`` directory, which writes the Lean's
-    test vectors from the Python it is held to and is no part of what decides a verdict."""
-    return path.endswith(".py") and "lean" in path.split("/")[:-1]
-
-
-def _to_provers(loads: Iterable[Load]) -> Ties:
-    """The loads of a file under a ``prover/`` by a file under a ``verifier/``, by that pair of directories."""
-    def pair(x: Load) -> tuple[str, str] | None:
-        v, p = _part(x.loader, ("verifier",)), _part(x.loaded, ("prover",))
-        return (v, p) if v and p and not _verifier_script(x.loader) else None
-    return _ties(loads, pair)
-
-
-def _to_prover(pair: tuple[str, str]) -> bool:
-    """Whether a pair of ``against`` excepts "a verifier loads no prover code" and not the order: no row ends in ``prover``."""
-    return posixpath.basename(pair[1]) == "prover"
-
-
-def _only_listed(found: Ties, listed: dict[tuple[str, str], set[tuple[str, str]]], rule: str) -> None:
-    """Fail unless the ties ``found`` are exactly the ``listed`` ones: ``against`` only shrinks."""
-    new = [f"{x} ({a} -> {b})" for (a, b), ties in sorted(found.items())
-           for tie, x in sorted(ties.items()) if tie not in listed.get((a, b), ())]
-    assert not new, f"{rule} `against` (tests/import_order.toml) only shrinks, so a new tie is cut, never listed:\n" + "\n".join(new)
-    done = [f"{a} -> {b}" for (a, b), ties in sorted(listed.items()) if not ties & set(found.get((a, b), ()))]
+def _hold_order(loads: Iterable[Load], listing: Listing) -> None:
+    found = _against(loads, listing.steps)
+    new = [f"{x} ({a} -> {b})" for (a, b), files in sorted(found.items())
+           for f, x in sorted(files.items()) if f not in listing.against.get((a, b), ())]
+    assert not new, ("a file loads only what its own row or an earlier row of tests/import_order.toml holds: move what the "
+                     "loader needs down to its row or an earlier one, or pass it in.  `against` only shrinks, so a new tie "
+                     "is cut, never listed:\n" + "\n".join(new))
+    done = [f"{a} -> {b}" for (a, b), files in sorted(listing.against.items()) if not files & set(found.get((a, b), ()))]
     assert not done, f"pairs of `against` (tests/import_order.toml) no file needs any more; delete them: {done}"
-    gone = [f"{a} -> {b}: {loader} no longer loads {loaded}" for (a, b), ties in sorted(listed.items())
-            for loader, loaded in sorted(ties - set(found[a, b]))]
-    assert not gone, "ties of `against` (tests/import_order.toml) the tree no longer has; delete them:\n" + "\n".join(gone)
+    gone = [f"{a} -> {b}: {f}" for (a, b), files in sorted(listing.against.items()) for f in sorted(files - set(found[a, b]))]
+    assert not gone, ("files of `against` (tests/import_order.toml) that no longer load a file of the later row; delete "
+                      "them:\n" + "\n".join(gone))
 
 
-def _verifiers(loads: Iterable[Load], steps: dict[str, int]) -> dict[str, tuple[dict[str, Load], dict[str, list[str]]]]:
-    """For each ``verifier/`` directory under ``verity/`` whose Python loads a file outside it: the places (``_place``) its
-    Python loads, each with one such load, and the places it reaches through those files' own loads and so on, each with
-    the chain of files to it.  Every Python load counts, at load, inside a function or named in a string; a verifier's
-    scripts (``_verifier_script``) and its Lean do not start a chain."""
+def _to_provers(loads: Iterable[Load]) -> list[Load]:
+    """The loads of a file under a ``prover/`` by a file under a ``verifier/``, scripts beside a verifier's Lean aside."""
+    return [x for x in loads if _held(x) and _part(x.loader, "verifier") and _part(x.loaded, "prover") and not _lean_script(x.loader)]
+
+
+def _into_distributions(loads: Iterable[Load], listing: Listing) -> list[Load]:
+    """The loads of a file of a distribution of its own by Python of ``verity`` (``_source``)."""
+    return [x for x in loads if _held(x) and _source(x.loader, listing) and _distribution(x.loaded, listing) is not None]
+
+
+def _trusted_loads(loads: Iterable[Load], listing: Listing) -> dict[str, tuple[dict[str, Load], dict[str, list[str]], dict[str, Load]]]:
+    """For each verifier's and each device's directory (``_trusted``): the places (``_place``) outside it that its Python
+    (``_source``) loads, each with one such load; the places it reaches through those files' own loads and so on, each with
+    the chain of files to it; and the Python files under ``verity/`` outside every verifier and device that load a file
+    of it, a test or a binding included, each with one such load.  Every load counts, at load, inside a function or named
+    in a string."""
     by: dict[str, list[Load]] = {}
+    loaders: dict[str, dict[str, Load]] = {}
     for x in loads:
         if x.loader.endswith(".py"):
-            by.setdefault(x.loader, []).append(x)
+            if _held(x):
+                by.setdefault(x.loader, []).append(x)
+            if x.loader.startswith("verity/") and _trusted(x.loader) is None and (d := _trusted(x.loaded)) is not None:
+                loaders.setdefault(d, {}).setdefault(x.loader, x)
     own: dict[str, list[str]] = {}
-    for f in by:
-        if f.startswith("verity/") and not _verifier_script(f) and (v := _part(f, ("verifier",))) is not None:
-            own.setdefault(v, []).append(f)
+    for f in sorted(by):
+        if _source(f, listing) and (d := _trusted(f)) is not None:
+            own.setdefault(d, []).append(f)
     out = {}
-    for v, files in sorted(own.items()):
+    for d in sorted(own.keys() | loaders.keys()):
+        files = own.get(d, [])
+        inside = lambda f: _trusted(f) == d and _distribution(f, listing) is None  # noqa: E731, B023
         direct: dict[str, Load] = {}
-        for x in (x for f in sorted(files) for x in by[f]):
-            if (at := _place(x.loaded, steps)) != v:
-                direct.setdefault(at, x)
+        for x in (x for f in files for x in by[f]):
+            if not inside(x.loaded):
+                direct.setdefault(_place(x.loaded, listing.steps), x)
         via: dict[str, str | None] = dict.fromkeys(files)
-        todo = sorted(files)
+        todo = files[::-1]
         while todo:
             f = todo.pop()
             for x in by.get(f, ()):
@@ -1299,53 +1295,58 @@ def _verifiers(loads: Iterable[Load], steps: dict[str, int]) -> dict[str, tuple[
                     todo.append(x.loaded)
         reach: dict[str, list[str]] = {}
         for f in sorted(via):
-            if (at := _place(f, steps)) != v and at not in reach:
+            if not inside(f) and (at := _place(f, listing.steps)) not in reach:
                 chain = [f]
                 while (before := via[chain[-1]]) is not None:
                     chain.append(before)
                 reach[at] = chain[::-1]
-        if direct:
-            out[v] = (direct, reach)
+        out[d] = (direct, reach, loaders.get(d, {}))
     return out
 
 
-def _hold_order(loads: Iterable[Load], listing: Listing) -> None:
-    _only_listed(_against(filter(_held, loads), listing.steps),
-                 {pair: ties for pair, ties in listing.against.items() if not _to_prover(pair)},
-                 "a file loads only what its own row or an earlier row of tests/import_order.toml holds. Move what the "
-                 "loader needs down to its row or an earlier one, or pass it in.")
+def _hold_trusted(loads: Iterable[Load], listing: Listing) -> None:
+    found = _trusted_loads(loads, listing)
+    listed = lambda d, kind: listing.trusted.get(d, {}).get(kind, ())  # noqa: E731
+    grown = [f"{d} loads {at}: {x}" for d, (direct, _, _) in found.items()
+             for at, x in sorted(direct.items()) if at not in listed(d, "loads")]
+    grown += [f"{d} reaches {at}: {' -> '.join(chain)}" for d, (_, reach, _) in found.items()
+              for at, chain in sorted(reach.items()) if at not in listed(d, "reaches")]
+    assert not grown, ("a verifier or a device gains no load, and what it reaches gains no place (`trusted` in "
+                       "tests/import_order.toml only shrinks): state it in Lean, or take the value as an argument:\n"
+                       + "\n".join(grown))
+    new = [f"{d} is loaded by {x}" for d, (_, _, loaders) in found.items()
+           for f, x in sorted(loaders.items()) if f not in listed(d, "loaded_by")]
+    assert not new, ("under verity/, outside the verifiers and the devices, only the files a verifier's or a device's "
+                     "`loaded_by` lists load it (`trusted` in tests/import_order.toml), and the list only shrinks: move "
+                     "what the file needs to a row both load, or pass it in:\n" + "\n".join(new))
+    stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.trusted.items())
+             for kind, now in zip(TRUSTED, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
+    assert not stale, ("entries of `trusted` (tests/import_order.toml) the tree no longer has; delete them, and a "
+                       f"directory left with none: {stale}")
 
 
-def _hold_provers(loads: Iterable[Load], listing: Listing) -> None:
-    _only_listed(_to_provers(loads), {pair: ties for pair, ties in listing.against.items() if _to_prover(pair)},
-                 "a verifier loads no prover code: move what both sides read into the verifier's directory, where the "
-                 "prover loads it, or state it in Lean.")
-
-
-def _hold_verifiers(loads: Iterable[Load], listing: Listing) -> None:
-    found = _verifiers(loads, listing.steps)
-    grown = [f"{v} loads {at}: {x}" for v, (direct, _) in found.items()
-             for at, x in sorted(direct.items()) if at not in listing.verifiers.get(v, ((), ()))[0]]
-    grown += [f"{v} reaches {at}: {' -> '.join(chain)}" for v, (_, reach) in found.items()
-              for at, chain in sorted(reach.items()) if at not in listing.verifiers.get(v, ((), ()))[1]]
-    assert not grown, ("a verifier gains no load, and what it reaches gains no place (`verifier` in tests/import_order.toml "
-                       "only shrinks): state it in Lean, or take the value as an argument:\n" + "\n".join(grown))
-    stale = [f"{v}: {kind} {at}" for v, lists in sorted(listing.verifiers.items())
-             for kind, was, now in zip(("loads", "reaches"), lists, found.get(v, ({}, {}))) for at in sorted(was - set(now))]
-    assert not stale, ("places of `verifier` (tests/import_order.toml) a verifier's Python no longer loads or reaches; "
-                       f"delete them, and an entry left with none: {stale}")
+def _hold_distributions(dirs: Set[str], loads: Iterable[Load], listing: Listing) -> None:
+    form = [d for d, e in sorted(listing.distributions.items())
+            if not (d.startswith("verity/") and e.get("owner") and len(e.keys() & {"date", "reason"}) < 2
+                    and re.fullmatch(r"\d{4}-\d{2}-\d{2}", e.get("date", "2000-01-01")))]
+    assert not form, ("each `distribution` of tests/import_order.toml is a directory under verity/ with its owner and, of "
+                      f"the date it becomes part of `verity` (YYYY-MM-DD) and the reason it stays its own, at most one: {form}")
+    gone = sorted(set(listing.distributions) - dirs)
+    assert not gone, f"directories of `distribution` (tests/import_order.toml) that hold no tracked file; delete them: {gone}"
+    loaded = _into_distributions(loads, listing)
+    assert not loaded, ("`verity` loads no other distribution, one under verity/ included (`distribution` in "
+                        "tests/import_order.toml): move what both read into `verity`, or pass it in:\n" + "\n".join(map(str, loaded)))
 
 
 def test_a_file_loads_only_its_own_row_or_an_earlier_one() -> None:
     """The import order.  ``tests/import_order.toml`` lists the tree's directories bottom first; a file belongs to the
-    deepest listed directory above it, and loads only files of its own row or an earlier one, in Python (an import, the
-    packages above the imported module, a bare import under a directory the file puts on ``sys.path``), in Lean (an
-    import) and in Lake (a package required by path).  The order holds what loading a file runs; inside ``verity/`` it
-    holds an import inside a function and a module named in a string as well (``_held``).  The ties against it are the
-    listing's ``against``, by pair of directories and by file, which only shrinks: a tie it doesn't list fails, and so
-    does a listed tie the tree no longer has, naming the pair to delete once its last tie is gone.  Reading every tracked
-    Python and Lean file takes some twenty seconds, which nothing cheaper replaces: an order over the whole tree is only
-    held by reading the whole tree."""
+    deepest listed directory above it, and loads only files of its own row or an earlier one: in Python (an import at
+    load or inside a function, a module named in a string, the packages above the imported module, a bare import under a
+    directory the file puts on ``sys.path``), in Lean (an import) and in Lake (a package required by path).  The ties
+    against it are the listing's ``against``: for a pair of rows, each file of the first that loads the second.  It only
+    shrinks: a file it doesn't list fails, and so does a listed file that no longer loads the later row, naming the pair to
+    delete once its last file is gone.  Reading every tracked Python and Lean file takes some twenty seconds, which
+    nothing cheaper replaces: an order over the whole tree is only held by reading the whole tree."""
     listing = _listing()
     dirs, loads = _tree_loads()
     empty = sorted(d for d in listing.steps if d != "." and d not in dirs)
@@ -1354,24 +1355,44 @@ def test_a_file_loads_only_its_own_row_or_an_earlier_one() -> None:
 
 
 def test_a_verifier_loads_no_prover_code() -> None:
-    """No file under a ``verifier/`` directory loads a file under a ``prover/`` directory.  It is an assertion of its own
-    and no consequence of the order, which lists a protocol's verifier and its prover in one row.  The form: a verifier is
-    what the tree has under ``verifier/``, Lean and Python alike, so a protocol's Python verifier is held as its Lean is
-    until its Lean decides its verdicts; a file changes sides by moving between ``verifier/`` and ``prover/``, and what
-    both sides read is the verifier's, which the prover loads.  Every load counts: at load, inside a function, a module
-    named in a string, a Lean import, a Lake requirement.  Tests are no loaders here, and neither are the scripts beside a
-    verifier's Lean (``_verifier_script``).  The exceptions are ``against``'s pairs that end in ``prover``, by file."""
-    _hold_provers(_tree_loads()[1], _listing())
+    """No file under a ``verifier/`` directory loads a file under a ``prover/`` directory, with no exception.  It is an
+    assertion of its own and no consequence of the order, which lists a protocol's verifier and its prover in one row.
+    The form: a verifier is what the tree has under ``verifier/``, Lean and Python alike, so a protocol's Python verifier
+    is held as its Lean is until its Lean decides its verdicts; a file changes sides by moving between ``verifier/`` and
+    ``prover/``, and what both sides read is the verifier's, which the prover loads.  Every load counts: at load, inside a
+    function, a module named in a string, a Lean import, a Lake requirement.  Tests are no loaders here, and neither are
+    the scripts beside a verifier's Lean (``_lean_script``)."""
+    found = _to_provers(_tree_loads()[1])
+    assert not found, ("a verifier loads no prover code: move what both sides read into the verifier's directory, where "
+                       "the prover loads it, or state it in Lean:\n" + "\n".join(map(str, found)))
 
 
-def test_a_verifier_gains_no_load() -> None:
+def test_a_verifier_or_a_device_gains_no_load_and_no_loader() -> None:
     """Until a protocol's Lean verifier decides its verdicts, its Python verifier does, and that Python and everything it
-    loads is on the soundness path.  The listing's ``verifier`` entries freeze it for each ``verifier/`` directory under
-    ``verity/``: ``loads``, the places outside it that its Python loads, and ``reaches``, the places those files load in
-    turn, and so on.  A place is a protocol's ``verifier/``, ``prover/`` or ``device/`` directory, or the row of a file
-    under none.  Both only shrink, as each verifier becomes its Lean: a place the tree adds fails, with the chain of files
-    that reaches it, and so does a listed place nothing reaches any more."""
-    _hold_verifiers(_tree_loads()[1], _listing())
+    loads is on the soundness path; a device's Python is trusted the same way.  The listing's ``trusted`` entries freeze
+    it for each ``verifier/`` and ``device/`` directory under ``verity/``: ``loads``, every place outside it that its
+    Python loads, other verifiers and devices among them; ``reaches``, the places those files load in turn, and so on;
+    and ``loaded_by``, the Python files under ``verity/`` outside every verifier and device that load it, a prover's
+    and a test's alike.  A place is the directory one level below a row (``_place``).  All three only shrink, as each
+    verifier becomes its Lean and what a prover needs leaves its verifier: a place or a file the tree adds fails, a place
+    with the chain of files that reaches it, and so does a listed one the tree no longer has.  AGENTS.md names each row
+    reached."""
+    listing = _listing()
+    _hold_trusted(_tree_loads()[1], listing)
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    rows = {_row(at + "/_", listing.steps) for lists in listing.trusted.values() for at in lists["reaches"]}
+    missing = sorted(r for r in rows if f"`{r}`" not in agents and f"`{r}/`" not in agents)
+    assert not missing, f"AGENTS.md doesn't name {missing}, which the verifiers' and the devices' Python reaches"
+
+
+def test_verity_loads_no_distribution_of_its_own() -> None:
+    """A directory under ``verity/`` with an import root of its own is a distribution of its own (the listing's
+    ``distribution``, each with its owner and the date it becomes part of ``verity`` or the reason it stays its own), and
+    ``verity`` loads none of them, a verifier's Python least of all: no Python of ``verity`` (``_source``) loads a file of
+    one, by its own name or as a module of ``verity``.  The list only shrinks: a listed directory with no tracked file
+    fails, and a directory not listed is ``verity``'s, held to its rules."""
+    dirs, loads = _tree_loads()
+    _hold_distributions(dirs, loads, _listing())
 
 
 #: A tree with one load of each kind the order reads, for the test below.
@@ -1383,9 +1404,13 @@ ORDER_TREE = {
     "verity/circuits/in_string.py": "TOOL = 'verity.definitions.ops:run'\n",
     "verity/circuits/tests/test_a.py": "import verity.definitions.ops\n",
     "verity/circuits/at_load.circuit-check.py": "import verity.definitions.ops\n",
+    "verity/commitments/__init__.py": "",
+    "verity/commitments/crypto/__init__.py": "",
+    "verity/commitments/crypto/lms.py": "",
     "verity/definitions/__init__.py": "",
     "verity/definitions/ops.py": "import verity.circuits.at_load\n",
     "verity/flock/__init__.py": "",
+    "verity/flock/prover/stage.py": "import verity.protocols.pouw.verifier.check\n",
     "verity/flock/verifier/__init__.py": "",
     "verity/flock/verifier/interface.py": "",
     "verity/flock/verifier/lakefile.toml": ('name = "flock"\n[[lean_lib]]\nname = "Flock"\n'
@@ -1399,79 +1424,117 @@ ORDER_TREE = {
                                "sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'workloads' / 'e2e'))\nimport prof\n"),
     "workloads/e2e/prof.py": "",
     "tools/lazy.py": "def f():\n    from benchmarks.probe import run\n",
-    "tools/eager.py": "from benchmarks.probe import run\n",
-    "benchmarks/probe/run.py": "import tools.eager\n",
+    "benchmarks/probe/run.py": "import tools.lazy\n",
+    "benchmarks/probe/tests/test_run.py": "import infra.cluster.usage\n",
+    "infra/cluster/usage.py": "import benchmarks.probe.run\n",
     "verity/protocols/__init__.py": "",
     "verity/protocols/pouw/__init__.py": "",
     "verity/protocols/pouw/verifier/__init__.py": "",
-    "verity/protocols/pouw/verifier/check.py": ("from verity.circuits import at_load\n\n\n"
+    "verity/protocols/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
                                                 "def f():\n    from verity.protocols.pouw.prover import build\n"),
     "verity/protocols/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.pouw.prover.build\n",
     "verity/protocols/pouw/verifier/tests/test_check.py": "import verity.protocols.pouw.prover.build\n",
+    "verity/protocols/pouw/verifier/check/interop.py": "import verity.flock.prover.stage\n",
+    "verity/protocols/pouw/device/__init__.py": "",
+    "verity/protocols/pouw/device/serve.py": "from verity.protocols.pouw.verifier import check\n",
     "verity/protocols/pouw/prover/__init__.py": "",
     "verity/protocols/pouw/prover/build.py": "from verity.protocols.pouw.verifier import check\n",
+    "verity/protocols/pouw/prover/tests/test_build.py": "from verity.protocols.pouw.device import serve\n",
 }
 
 
 def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
-    """The three checks above aren't vacuous.  Against the listing's order: an import at load, the package above a module
-    of an earlier row, a bare import under a directory put on ``sys.path``, a Lean import from a package required by path
-    and that requirement, and inside ``verity/`` an import inside a function and a module named in a string; not a load
-    with the order, a test's, a sidecar's, a module no tracked file holds, or outside ``verity/`` an import inside a
-    function.  From a verifier: its import of its prover inside a function, the places it loads and the place it reaches
-    only through another file; not its prover's import of it, nor its test's or its Lean script's of the prover."""
+    """The four checks above aren't vacuous.  Against the listing's order: an import at load, inside a function and as a
+    module named in a string, the package above a module of an earlier row, a bare import under a directory put on
+    ``sys.path``, a Lean import from a package required by path and that requirement, and a test's import of the last
+    row; not a load with the order, a test's of another row, a sidecar's, or a module no tracked file holds.  From a
+    verifier: its import of its prover inside a function and that of a distribution inside it, the places it loads, at
+    the grain of a row's packages, and the place it reaches only through another file; not its prover's import of it,
+    its test's or its Lean script's of the prover, nor, among its places, what a distribution inside it loads.  Into a
+    verifier or a device: a prover's file and a prover's test; not a device's file."""
     for f, text in ORDER_TREE.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text, encoding="utf-8")
+    tree = _public_boundary().Tree(tmp_path, files=ORDER_TREE)
+    loads = _all_loads(tree)
+    verifier, prover, device, check = (f"verity/protocols/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
+    own = {"verity/flock": {"owner": "proofs", "reason": "Flock's distribution"}, check: {"owner": "memory-accounting"}}
     steps = _listing().steps
-    loads = _all_loads(_public_boundary().Tree(tmp_path, files=ORDER_TREE))
-    found = {pair: sorted(ties) for pair, ties in _against(filter(_held, loads), steps).items()}
+    listing = Listing(steps, own, {}, {})
+    found = {pair: sorted(files) for pair, files in _against(loads, steps).items()}
     assert found == {
-        ("verity/circuits", "verity/definitions"): [
-            ("verity/circuits/at_load.py", "verity/definitions/__init__.py"),
-            ("verity/circuits/at_load.py", "verity/definitions/ops.py"),
-            ("verity/circuits/in_function.py", "verity/definitions/ops.py"),
-            ("verity/circuits/in_string.py", "verity/definitions/ops.py")],
-        ("verity/difftest", "verity/flock"): [("verity/difftest/package_above.py", "verity/flock/__init__.py")],
-        ("verity/flock/verifier", "verity/spot"): [
-            ("verity/flock/verifier/Flock/V.lean", "verity/spot/lean/Spot/X.lean"),
-            ("verity/flock/verifier/lakefile.toml", "verity/spot/lean/lakefile.toml")],
-        ("verity/spot", "workloads"): [("verity/spot/by_path.py", "workloads/e2e/prof.py")],
-        ("tools", "benchmarks"): [("tools/eager.py", "benchmarks/probe/run.py")],
+        ("verity/circuits", "verity/definitions"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
+        ("verity/difftest", "verity/flock"): ["verity/difftest/package_above.py"],
+        ("verity/flock/verifier", "verity/spot"): ["verity/flock/verifier/Flock/V.lean", "verity/flock/verifier/lakefile.toml"],
+        ("verity/flock", "verity/protocols/pouw"): ["verity/flock/prover/stage.py"],
+        ("verity/spot", "workloads"): ["verity/spot/by_path.py"],
+        ("tools", "benchmarks"): ["tools/lazy.py"],
+        ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
     }, found
     assert _row("verity/settings.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
         and _row("verity/flock/verifier/Flock/V.lean", steps) == "verity/flock/verifier"
-    verifier, prover = "verity/protocols/pouw/verifier", "verity/protocols/pouw/prover"
-    assert {pair: sorted(ties) for pair, ties in _to_provers(loads).items()} == {
-        (verifier, prover): [(f"{verifier}/check.py", f"{prover}/__init__.py"), (f"{verifier}/check.py", f"{prover}/build.py")]}
-    found = _verifiers(loads, steps)
-    assert list(found) == [verifier], found
-    direct, reach = found[verifier]
-    assert sorted(direct) == ["verity", "verity/circuits", "verity/protocols/pouw", prover], direct
-    assert sorted(reach) == ["verity", "verity/circuits", "verity/definitions", "verity/protocols/pouw", prover], reach
+    assert [_place(f, steps) for f in ("verity/commitments/crypto/lms.py", "verity/commitments/merkle.py", "verity/errors.py",
+                                       f"{prover}/circuit/words.py", "examples/a/b.py", "conftest.py")] == [
+        "verity/commitments/crypto", "verity/commitments", "verity", prover, "examples", "."]
+    assert [_distribution(f, listing) for f in ("verity/flock/prover/stage.py", "verity/flock/verifier/interface.py",
+                                                f"{check}/interop.py", f"{verifier}/check.py")] == ["verity/flock", None, check, None]
+    assert [_trusted(f) for f in (f"{check}/interop.py", f"{device}/serve.py", f"{prover}/build.py", "tools/verifier/run.py")] == [
+        verifier, device, None, None]
+    assert sorted({(x.loader, x.line, x.loaded) for x in _to_provers(loads)}) == [
+        (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
+        (f"{check}/interop.py", 1, "verity/flock/prover/stage.py")]
+    assert [str(x) for x in _into_distributions(loads, listing)] == [
+        "verity/difftest/package_above.py:1: python package verity.flock.verifier.interface loads verity/flock/__init__.py"]
+    found = _trusted_loads(loads, listing)
+    assert list(found) == ["verity/flock/verifier", device, verifier], list(found)
+    direct, reach, loaders = found[verifier]
+    assert sorted(direct) == ["verity", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+                              "verity/protocols", "verity/protocols/pouw", prover], direct
+    assert sorted(reach) == [*sorted(direct)[:4], "verity/definitions", "verity/protocols", "verity/protocols/pouw", prover], reach
     assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/__init__.py"]
-    assert _place(f"{prover}/circuit/words.py", steps) == prover and _place("verity/spot/plan.py", steps) == "verity/spot"
+    assert sorted(loaders) == ["verity/flock/prover/stage.py", f"{prover}/build.py"], loaders
+    assert [sorted(x) for x in found[device]] == [["verity", "verity/protocols", "verity/protocols/pouw", verifier],
+                                                  sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
+    assert [sorted(x) for x in found["verity/flock/verifier"]] == [[], [], ["verity/difftest/package_above.py"]]
 
-    ties = {pair: set(found) for pair, found in {**_against(filter(_held, loads), steps), **_to_provers(loads)}.items()}
-    listing = Listing(steps, ties, {verifier: (set(direct), set(reach))})
-    for hold in (_hold_order, _hold_provers, _hold_verifiers):
-        hold(loads, listing)
-    left = {("verity/windows", "tools"): {("verity/windows/rows.py", "tools/eager.py")}}
+    held = Listing(steps, own, {pair: set(files) for pair, files in _against(loads, steps).items()},
+                   {d: dict(zip(TRUSTED, map(set, lists))) for d, lists in found.items()})
+    _hold_order(loads, held)
+    _hold_trusted(loads, held)
+    _hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
+    pair = ("verity/circuits", "verity/definitions")
     with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/windows -> tools'\]"):
-        _hold_order(loads, listing._replace(against=ties | left))
+        _hold_order(loads, held._replace(against=held.against | {("verity/windows", "tools"): {"verity/windows/rows.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.ops loads"):
-        _hold_order(loads, listing._replace(against=ties | {("verity/circuits", "verity/definitions"): {
-            tie for tie in ties["verity/circuits", "verity/definitions"] if "in_string" not in tie[0]}}))
-    with pytest.raises(AssertionError, match="tree no longer has; delete them:\n.*at_load.py no longer loads tools/eager.py"):
-        _hold_order(loads, listing._replace(against=ties | {("verity/circuits", "verity/definitions"): {
-            *ties["verity/circuits", "verity/definitions"], ("verity/circuits/at_load.py", "tools/eager.py")}}))
-    with pytest.raises(AssertionError, match=f"loads no prover code.*\n.*{verifier}/check.py:5: python import"):
-        _hold_provers(loads, listing._replace(against={pair: found for pair, found in ties.items() if not _to_prover(pair)}))
+        _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
+        _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))
+    with pytest.raises(AssertionError, match="no longer load a file of the later row; delete them:\n.*verity/circuits/gone.py"):
+        _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] | {"verity/circuits/gone.py"}}))
+
+    def without(d: str, **gone: str) -> Listing:
+        return held._replace(trusted=held.trusted | {d: {kind: places - {gone.get(kind)} for kind, places in held.trusted[d].items()}})
+
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} loads {prover}: .*\n\\s*{verifier} reaches {prover}: "):
-        _hold_verifiers(loads, listing._replace(verifiers={verifier: (set(direct) - {prover}, set(reach) - {prover})}))
+        _hold_trusted(loads, without(verifier, loads=prover, reaches=prover))
+    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} loads verity/commitments/crypto: "):
+        _hold_trusted(loads, without(verifier, loads="verity/commitments/crypto"))
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/definitions: {verifier}/check.py -> "):
-        _hold_verifiers(loads, listing._replace(verifiers={verifier: (set(direct), set(reach) - {"verity/definitions"})}))
-    with pytest.raises(AssertionError, match=f"delete them, and an entry left with none: \\['{verifier}: reaches tools'"):
-        _hold_verifiers(loads, listing._replace(verifiers={verifier: (set(direct), set(reach) | {"tools"})}))
-    with pytest.raises(AssertionError, match="left with none: \\['verity/spot/verifier: loads verity'"):
-        _hold_verifiers(loads, listing._replace(verifiers={**listing.verifiers, "verity/spot/verifier": ({"verity"}, set())}))
+        _hold_trusted(loads, without(verifier, reaches="verity/definitions"))
+    with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{device} is loaded by {prover}/tests/test_build.py:1: "):
+        _hold_trusted(loads, without(device, loaded_by=f"{prover}/tests/test_build.py"))
+    with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{verifier} is loaded by {prover}/build.py:1: "):
+        _hold_trusted(loads, without(verifier, loaded_by=f"{prover}/build.py"))
+    with pytest.raises(AssertionError, match=f"delete them, and a directory left with none: \\['{verifier}: reaches tools'"):
+        _hold_trusted(loads, held._replace(trusted=held.trusted | {
+            verifier: held.trusted[verifier] | {"reaches": held.trusted[verifier]["reaches"] | {"tools"}}}))
+    with pytest.raises(AssertionError, match="left with none: \\['verity/spot/verifier: loaded_by verity/spot/plan.py'"):
+        _hold_trusted(loads, held._replace(trusted=held.trusted | {
+            "verity/spot/verifier": {"loads": set(), "reaches": set(), "loaded_by": {"verity/spot/plan.py"}}}))
+    with pytest.raises(AssertionError, match="loads no other distribution.*\n.*package_above.py:1: python package"):
+        _hold_distributions(tree.dirs, loads, held)
+    for entry in ({"reason": "no owner"}, {"owner": "proofs", "date": "2026-11-18", "reason": "both"}, {"owner": "proofs", "date": "soon"}):
+        with pytest.raises(AssertionError, match=r"its owner and.*at most one: \['verity/flock'\]"):
+            _hold_distributions(tree.dirs, (), held._replace(distributions=own | {"verity/flock": entry}))
+    with pytest.raises(AssertionError, match=r"hold no tracked file; delete them: \['verity/rho'\]"):
+        _hold_distributions(tree.dirs, (), held._replace(distributions=own | {"verity/rho": {"owner": "training"}}))
