@@ -135,9 +135,11 @@ def _args(rows, level, root):
     return [x for r in rows for w in r for x in _b(w)], _b(level), [x for w in root for x in _b(w)]
 
 
-@pytest.mark.parametrize("P, S", [(2, 3), (3, 3), (6, 3), (4, 0), (3, 8)])
+@pytest.mark.parametrize("P, S", [(2, 3), (3, 3), (6, 3), (4, 0), (3, 8), (16, 3)])
 def test_bits_are_the_word(P, S):
-    """On honest execution phases and on ones a few edits from honest, the gates' ok is `window_problem`'s verdict."""
+    """On honest execution phases and on ones a few edits from honest, the gates' ok is `window_problem`'s verdict. At
+    16 entries, the served bound, this is the comparison with the reference: the unit is past the ANDs circuit-check
+    lowers a whole Definition within, so it compares no realization there."""
     rng, cases = random.Random(100 * P + S), []
     for i in range(240):
         es, level = _honest(rng, P, S)
