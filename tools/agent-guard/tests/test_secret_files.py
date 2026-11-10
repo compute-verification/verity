@@ -112,10 +112,13 @@ REFUSED = [
     "rg --type=py -n KEY /root/.config/verity/r2.env",
     "rg -g '*.env' -e TOKEN ~/.ssh/id_rsa",
     "rg -C3 KEY x.env",
+    "rg -tc KEY x.env",                                   # the type c, not rg's -c
     "rg -m1 -- -KEY x.env",
     # the other commands that write out what they read
     "sort x.env",
     "sort -u /root/.config/verity/*.env",
+    "sort -t= -k1,1 x.env",
+    "sort -to x.env",                                     # a field separator, not sort's -o
     "uniq x.env",
     "paste -sd, x.env",
     "column -t -s= x.env",
@@ -124,6 +127,7 @@ REFUSED = [
     "hexdump -C key.pem",
     "diff a.env b.env",
     "diff -u /etc/vy/env/research.env ~/.config/verity/research.env",
+    "diff -Iq a.env b.env",                               # lines to ignore, not diff's -q
     "comm a.env b.env",
     "cmp -l a.key b.key",
     "git diff --no-index /dev/null ~/.ssh/id_rsa",
@@ -147,6 +151,7 @@ REFUSED = [
     "ls /root/.config/verity/* | xargs cat",
     "find ~/.ssh -type f | xargs head -1",
     "find / -name '*.pem' | xargs -n1 cat",
+    "find /etc/ssl -name '*.key' | xargs -n1 openssl rsa -in",
     "find /etc/vy/env -name '*.env' -print0 | xargs -0 cut -d= -f1",
     "printf '%s\\n' a.env b.env | xargs sed 's/=.*//'",
     "ls ~/.ssh | grep -v pub | xargs -I{} cat ~/.ssh/{}",
@@ -159,6 +164,9 @@ REFUSED = [
     "echo $( < x.env )",
     "KEY=$(<~/.ssh/id_rsa)",
     "K=$(< key.pem); echo ok",
+    "read -r KEY < key.pem",
+    "IFS= read -r -d '' KEY < ~/.ssh/id_rsa; echo ok",
+    "mapfile -t LINES < x.env",
     # an interpreter's code that names the file and opens, reads or prints
     "python3 -c \"print(open('/root/.config/verity/r2.env').read())\"",
     "python3 -c \"import os; os.system('cat x.env')\"",
@@ -279,6 +287,7 @@ ALLOWED = [
     "cmp a.key b.key",
     "cmp -s a.key b.key",
     "sort -o x.env x.env",
+    "sort -u -o names.env names.env",
     "dd if=key.pem of=/tmp/k.bak",
     "echo FOO=1 | sudo tee -a /etc/vy/env/extra.env",
     "echo \"$X\" | tr -d '\\n' > x.env",
@@ -310,6 +319,7 @@ ALLOWED = [
     "while read f; do echo \"$f\"; done < files.txt",
     "while read l; do echo $l; done < <(ls ~/.ssh)",
     "echo \"$(<README.md)\"",
+    "read -r first < README.md",
     "python3 -c 'print(1+1)'",
     "python3 script.py --key key.pem",
     "python3 -m pytest tests/test_secret_files.py -q",
@@ -346,6 +356,16 @@ def test_a_command_that_shows_no_secret_files_contents_passes(hook, command):
 
 @pytest.mark.parametrize("command, reader, path, kind", [
     ("ssh n1 'head -1 /data/state/secrets/verity-drive.pem'", "head", "/data/state/secrets/verity-drive.pem", "a private key"),
+    ("ssh n1 'while read l; do echo ${l%%=*}; done < /etc/vy/env/root.env'", "while read", "/etc/vy/env/root.env",
+     "an env or credentials file"),
+    ("IFS= read -r KEY < deploy.key", "read", "deploy.key", "a private key"),
+    ("echo \"$(<x.pem)\"", "$(<", "x.pem", "a private key"),
+    ("ls /root/.config/verity/* | xargs cat", "cat", "/root/.config/verity/*", "a file of a secrets directory"),
+    ("find /srv -name '*.key' | xargs -n1 openssl rsa -in", "openssl rsa", "*.key", "a private key"),
+    ("python3 -c \"print(open('/root/.config/verity/r2.env').read())\"", "python3", "/root/.config/verity/r2.env",
+     "an env or credentials file"),
+    ("dd if=key.pem bs=64 count=1", "dd", "key.pem", "a private key"),
+    ("tr -d '\\n' < key.pem", "tr", "key.pem", "a private key"),
     ("cut -d= -f1 /root/.config/verity/relay.env", "cut", "/root/.config/verity/relay.env", "an env or credentials file"),
     ("for f in /root/.config/verity/*; do sed 's/=.*//' $f; done", "sed", "/root/.config/verity/*", "a file of a secrets directory"),
 ])
@@ -361,7 +381,7 @@ def test_an_openssl_refusal_names_the_options_that_keep_the_key_in(hook):
 
 
 def test_a_capture_into_a_variable_is_refused_and_told_where_to_read_the_file(hook):
-    for command in ("KEY=$(cat x.pem)", "export TOKEN=\"$(cat ~/.config/verity/r2.env)\"", "KEY=$(<x.pem); ./run"):
+    for command in ("KEY=$(cat x.pem)", "export TOKEN=\"$(cat ~/.config/verity/r2.env)\"", "KEY=$(<x.pem); ./run", "read -r KEY < x.pem"):
         assert "reads the file inside the program that needs it" in hook.secret_file_reason(command), command
 
 
@@ -449,6 +469,7 @@ NOT_TRACKED = [
     "ssh n1 'cat conf/env/a.env'",
     "research pods ssh vy-nebius-1 -- cat conf/env/a.env",
     "tools/infra/on-node.sh 'cat conf/env/a.env'",
+    "bash tools/infra/on-node.sh n1 'cat conf/env/a.env'",
     "docker run -v $PWD:/w img cat /w/conf/env/a.env",
     "ls conf/env/*.env | xargs cat",
     "find conf -name '*.env' -exec cat {} +",
@@ -521,7 +542,7 @@ def test_the_hook_reads_the_commands_directory_from_the_event_and_guesses_none(c
     for command, cwd in (("cat changed.env", checkout), ("ssh n1 cat conf/env/a.env", checkout), ("cat conf/env/a.env", "")):
         out = ask(command, cwd=cwd)
         assert out["permission"] == "deny" and "would print an env or credentials file" in out["agent_message"], command
-    stated_nowhere = subprocess.run([sys.executable, HOOK], input=json.dumps({"command": "cat conf/env/a.env", "workspace_roots": [checkout]}),
-                                    capture_output=True, text=True, check=True, cwd=checkout,
+    event = json.dumps({"command": "cat conf/env/a.env", "workspace_roots": [checkout]})        # the workspace's root is a guess at it
+    stated_nowhere = subprocess.run([sys.executable, HOOK], input=event, capture_output=True, text=True, check=True, cwd=checkout,
                                     env={**os.environ, "AGENT_INBOX_POLL_S": "off", "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
     assert json.loads(stated_nowhere)["permission"] == "deny"

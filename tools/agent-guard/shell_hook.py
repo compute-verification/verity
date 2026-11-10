@@ -20,16 +20,17 @@ A secret file is refused the same way: a command that writes what it reads to it
 (`*.env`, `.netrc`, `credentials`, `credentials.*`) or anything in a secrets directory (`.ssh/`, `.config/verity/`, a
 `secrets/`), named as an argument, a glob, its input (`< FILE`), a `for` loop's variable or, behind `xargs`, by the commands
 piped into it, wherever the command sits: over ssh, after `research pods ssh POD --`, in a quoted string handed to a wrapper
-script. So are `tr` and `tee` with such a file as their input, `dd if=FILE` with no `of=`, `while read ...; done < FILE`,
-`$(<FILE)`, the code of `python -c`, `perl -e` or `ruby -e` that names such a file and opens, reads or prints, and `openssl
-pkey|rsa|ec|dsa|pkcs8 -in KEY` with neither `-pubout` nor `-noout`, or with `-text`, which writes the private key out. A glob
-over a secrets directory matches the key files beside the env files, and a filter that cuts each line at its `=` prints every
-line of a key. `envnames.py FILE...` lists an env file's variable names instead and prints nothing of a file that isn't one.
-What shows no contents passes (`ls`, `stat`, `wc`, `sha256sum`, `cp`, writing or sourcing the file, `sed -i`, `diff -q`, `cmp`,
-`openssl pkey -pubout`, `openssl x509`, `ssh-keygen -l`), as do public halves (`*.pub`, `*-pub.pem`, `authorized_keys`,
-`known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc (`credentials.py`), the fixtures under a
-`tests/` directory, and a file git tracks in the checkout, unchanged, read there by the command itself: every agent can read
-it already, while over ssh the hook can't know. `AGENT_GUARD_LOCAL_OK=1` does not lift it.
+script. So are `tr` and `tee` with such a file as their input, `dd if=FILE` with no `of=`, the shell's own reads (`while read
+...; done < FILE`, `read KEY < FILE`, `$(<FILE)`), the code of `python -c`, `perl -e` or `ruby -e` that names such a file and
+opens, reads or prints, and `openssl pkey|rsa|ec|dsa|pkcs8 -in KEY` with neither `-pubout` nor `-noout`, or with `-text`, which
+writes the private key out. A glob over a secrets directory matches the key files beside the env files, and a filter that cuts
+each line at its `=` prints every line of a key. `envnames.py FILE...` lists an env file's variable names instead and prints
+nothing of a file that isn't one. What shows no contents passes (`ls`, `stat`, `wc`, `sha256sum`, `cp`, writing or sourcing the
+file, `sed -i`, `diff -q`, `cmp`, `openssl pkey -pubout`, `openssl x509`, `ssh-keygen -l`), as do public halves (`*.pub`,
+`*-pub.pem`, `authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc
+(`credentials.py`), the fixtures under a `tests/` directory, and a file git tracks in the checkout, unchanged, read there by
+the command itself: every agent can read it already, while over ssh the hook can't know. `AGENT_GUARD_LOCAL_OK=1` does not lift
+it.
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -315,7 +316,9 @@ VALUED = {"grep": GREP_VALUED, "egrep": GREP_VALUED, "fgrep": GREP_VALUED,
                                     "field-match-separator", "field-context-separator", "path-separator", "pre", "pre-glob",
                                     "engine", "ignore-file", "dfa-size-limit", "regex-size-limit"}),
           "sed": ("efl", {"expression", "file", "line-length"}),
-          "awk": ("fFveil", {"file", "field-separator", "assign", "source", "include", "load"})}
+          "awk": ("fFveil", {"file", "field-separator", "assign", "source", "include", "load"}),
+          "sort": ("koStT", {"key", "output", "buffer-size", "field-separator", "temporary-directory"}),
+          "diff": ("UCIxXLFWD", set())}
 #: the options under which a reader shows no line of what it reads: a grep that lists files, counts or only tests (rg's -L
 #: follows symlinks), a sed that edits in place, a diff that only says whether the files differ, a sort into a file
 GREP_SILENT = {"l", "c", "q", "files-with-matches", "files-without-match", "count", "quiet", "silent"}
@@ -325,6 +328,8 @@ SILENT = {"grep": GREP_SILENT | {"L"}, "egrep": GREP_SILENT | {"L"}, "fgrep": GR
 CMP_BYTES = {"l", "b", "verbose", "print-bytes"}
 #: the openssl commands that write out the private key they read, unless `-pubout` or `-noout` is given
 KEY_COMMANDS = {"pkey", "rsa", "ec", "dsa", "pkcs8"}
+#: the shell's own readers of a command's input, which put it in a variable: one `echo` from the transcript
+SHELL_READS = {"read", "mapfile", "readarray"}
 #: interpreters whose `-c CODE` or `-e CODE` is judged, and what in CODE says it shows a file it names
 INTERPRETER = re.compile(r"python[\d.]*|perl|ruby")
 CODE_OPTION = re.compile(r"-\w*[ce]")
@@ -452,8 +457,8 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
     simple command the first of PRINTERS, or INTERPRETER given code, wherever it stands (after `sudo`, as ssh's remote command,
     after `research pods ssh POD --`, behind `xargs`, as `find`'s `-exec`), is judged on the files it names, its input
     (`< FILE`), the variable of a `for` loop over such files and, behind `xargs`, the names the commands piped into it carry;
-    so are a loop's input (`done < FILE`) and `$(<FILE)`. The quoted strings before it are read as commands in turn, which is
-    how a wrapper script's argument and `bash -c`'s are seen. `git`'s arguments and those of a `research` command that runs
+    so are a loop's or `read`'s input (`done < FILE`) and `$(<FILE)`. The quoted strings before it are read as commands in
+    turn, which is how a wrapper script's argument and `bash -c`'s are seen. `git`'s arguments and those of a `research` command that runs
     nothing (no `--`) are prose and are not read. `where` is the directory the commands run in when they run on this machine,
     None on another or once a `cd` can't be followed: there a command that reads a file itself (behind nothing but `sudo`,
     `timeout` and the like without options, or in such a `bash -c`) reads one git has committed freely (`tracked`)."""
@@ -483,14 +488,15 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
         name, args = (os.path.basename(words[at]), words[at + 1:]) if at < len(words) else ("", [])
         if opened or (inputs and not words):             # `$(<FILE)`: the shell itself reads the file into the command line
             name, files, at = "$(<", words[:1] + inputs, len(words)
-        elif words[:1] == ["done"] and inputs:           # `while read ...; done < FILE`
-            name, files = "while read", inputs
+        elif inputs and (words[:1] == ["done"] or prog in SHELL_READS):   # `while read ...; done < FILE`, `read -r KEY < FILE`
+            name, files = "while read" if words[:1] == ["done"] else prog, inputs
         elif name == "openssl":
             name, files = " ".join(words[at:at + 2]), key_printed(args, inputs)
         elif name in PRINTERS:
             files = files_printed(name, args, inputs)
         else:
             files = code_printed(args, inputs) if name else None
+        keys = files if name.startswith("openssl") else None   # the file an openssl key command names is a key, whatever its name
         if files is not None and at < len(words):        # `find -exec READER {} +` reads what find names, `xargs READER` what is piped in
             files = files + (words[:at] if "{}" in args else []) + (upstream if "xargs" in map(os.path.basename, words[:at]) else [])
         here = where if where is not None and not any(w.startswith("-") for w in words[:len(words) - len(run)]) else None
@@ -498,11 +504,12 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
         for a in files or []:
             var = re.fullmatch(r"\$\{?(\w+)\}?", a)
             for f in var and loops.get(var[1]) or [a]:
-                kind = "a private key" if name.startswith("openssl") and not public_file(f) else secret_file(f)
+                kind = "a private key" if keys and a in keys and not public_file(f) else secret_file(f)
                 if kind and not (local and tracked(f, where)):
                     return name, f, kind
-        for w in words[:at]:
-            if re.search(r"\s|\$\(", w) and (found := secret_read(w, here if prog in SHELLS else None)):
+        for i, w in enumerate(words[:at]):               # a shell's `-c CODE` runs here; any other string may run anywhere
+            code = prog in SHELLS and i and re.fullmatch(r"-\w*c\w*", words[i - 1])
+            if re.search(r"\s|\$\(", w) and (found := secret_read(w, here if code else None)):
                 return found
     return None
 
