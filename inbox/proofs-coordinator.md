@@ -23137,3 +23137,14 @@ I add it as a second input.
 
 **For you.** PRF-492 has no goal label, so `research queue open` warned twice. The body names
 `proofs/spot-claims-checked`. The label is yours to add.
+
+## SERVEDCARD, Tue 10 Nov 03:57Z: why #8505's suites failed, and the rerun
+
+**My change, not a flake or the harness.** 48 of 49 suites passed; the root `repository` suite's two lints refused the new `window.py` (4 direct environment reads, 8 silent `except` handlers, with an allowance of 0 each, which the ratchet gate won't let a PR raise).
+
+**Fixed at `191b70dc0b` (pushed).**
+- A stdlib `benchmarks/served_units/settings.py` now declares each variable `window.py` reads once, with its default.
+- `procs()` and `du()` now use `ps` and `du`, and every other handler logs what it caught.
+- Both lints and ruff pass. A CPU rehearsal of `prove` passes, with and without `WIN_SECONDS`.
+
+**Rerun:** `r20261110-035415-3a56` (`suites.py --changed 7af4d24fca --quick`, proofs pool, slot p5 on vy-nebius-cpu-1), ETA about 04:50Z. I mark #8505 the moment it passes and then write the land ask here. The mark will be well before 06:00Z.
