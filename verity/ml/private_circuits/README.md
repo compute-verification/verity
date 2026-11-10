@@ -4,7 +4,7 @@ A private circuit's gates and wiring are a value. `universal.UniversalUnit_v1{G,
 Definition that runs any private circuit of its size class (G gates over N_IN inputs, N_OUT outputs): it takes the
 private circuit's description as an input beside the data, so its own structure depends on the size class alone. It is not
 how a private circuit is hidden: circuit hiding is recursion (Flock's `--hide`). The terms and the front doors are
-[`verity.ml.circuits`](../circuits/README.md)'s.
+[`verity.circuits`](../../circuits/README.md)'s.
 
 - `Netlist`: a private circuit in SSA form, each gate an XOR, AND, XNOR or NAND of two wires before its own, and any
   other index reads 0. So every bit string describes a private circuit, the Definition is total and no description has a

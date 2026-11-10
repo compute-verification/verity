@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_torch_words as BW
 
     return [bind(d) for d in (BW.I64Add, BW.I64Le, BW.I64Shl, BW.I64Shr, BW.I64And, BW.SelectI64, BW.I64ToU8, BW.U8ToI64,

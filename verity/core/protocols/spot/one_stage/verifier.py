@@ -44,9 +44,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits import codec
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from . import audit, draw as D, hello as H, registration as R
 from .verdict import Verdict

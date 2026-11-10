@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean.gf2k import mul
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as L
 from verity_flock import rec_sparse as RS

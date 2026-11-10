@@ -623,9 +623,9 @@ def _gemm_window(external: bool = True) -> dict:
     """A window circuit record of four ``Gemm_v2{K=16, N=16}`` proof blocks (``x`` 256 bits, ``w`` 4,096 a unit), every
     unit's ``w`` a registered read of the 256 leaves of ``weights``: with ``external``, every ``x`` the system's I/O, else
     units 2 and 3 read units 0 and 1's ``o0`` through a wire and units 0 and 1's ``x`` are free."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
     from verity.ml.windows import interface as I
 
     gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -652,9 +652,9 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
     ``Gemm_v2{K=16, N=16}`` units reading their ``x`` cut in two from six ``N=8`` slices leave none of it free. Matching
     a cut row's element ports ``x[r]`` against the wire's ``x`` took out none. An external cut port stays free, and two
     wires filling one row are refused."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
     from verity.ml.windows import interface as I
 
     gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)

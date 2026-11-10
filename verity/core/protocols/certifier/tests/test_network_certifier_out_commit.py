@@ -10,9 +10,9 @@ import json
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import out_commit as O
 from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner, SignerRefused

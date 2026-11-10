@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.ml.definitions.numerics import derived_rows as DR
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
@@ -392,7 +392,7 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(launch: str):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import moe
 
     if launch not in _PROGRAMS:
@@ -402,7 +402,7 @@ def _program(launch: str):
 
 def program_row(job: tuple[str, np.ndarray, np.ndarray]) -> list[int]:
     """`MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL=launch}` on one row (the reference evaluator): 8 weights, 8 ids."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     launch, x, b = job
     return [int(v) for v in evaluate(_program(launch), [int(v) for v in x] + [int(v) for v in b])]

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape

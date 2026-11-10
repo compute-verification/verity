@@ -30,13 +30,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as EMB
 from verity.ml.commitments.indexed import RangeIndexedDomain

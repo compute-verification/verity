@@ -20,15 +20,15 @@ import os
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import operations as O
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits.program import Program
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import operations as O
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits.program import Program
 from verity.ml.definitions.registry import boolean_tanh as BT
 from verity.ml.definitions.registry import dense as D
 from verity.ml.definitions.registry import prims as P
@@ -46,7 +46,7 @@ PINS = {
 TABLE_SHA256 = {"tanh_rn": "32fb35b4a1d0402a8f4b96a601c8ffc5e986266d20666a224eaf3bffeace308a",
                 "gelu_tanh_bf16": "892c2fbca46fed05daf5b4fca3b49a392e93fdc6b826f8fd7bfa3c9bae0d8865"}
 #: the reads the arithmetic replaces: the multiplexer tree over 2^IB entries of EW words, (2^IB - 1) 16 EW ANDs
-#: (`verity.ml.circuits.boolean.table`)
+#: (`verity.circuits.boolean.table`)
 MUX_ANDS = {"gelu_tanh_bf16": ((1 << 16) - 1) * 16, "tanh_rn": ((1 << 27) - 1) * 32}
 BF16_ONE = 0x3F80
 

@@ -95,7 +95,7 @@ def test_the_rows_bound_the_unrolled_blocks():
     per activation of a block Definition outside every block: their gates are the computed gates, each once; each holds
     its row's Boolean gates, by the table; and the gates outside it that it reads, θ's gates aside, are at most its row's
     fresh bits wide."""
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
     insts = [vectors.instance(s)["instance"] for s in _seeds()] + vectors.hands()
     checked = 0
     for inst in insts:

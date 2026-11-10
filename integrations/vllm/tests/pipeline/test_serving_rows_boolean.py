@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import REGISTRY, bind
 from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW

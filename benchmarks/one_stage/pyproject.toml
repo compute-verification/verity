@@ -73,4 +73,4 @@ inputs = ["verity", "verity/core/service/spot/lakefile.toml", "benchmarks/live_c
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_bundle.py", "tests/test_prove_leg_served.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/circuits/ops"]

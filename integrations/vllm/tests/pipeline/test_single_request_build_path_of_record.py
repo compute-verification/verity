@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_single_request_build_path import VLLM_DIR, _compose, _decode_cold, _run
-from verity.ml.circuits.codec import canonical_json, program_digest
+from verity.circuits.codec import canonical_json, program_digest
 
 #: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)

@@ -29,11 +29,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import BF16, BIT, F32, I32, SelectF32
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BF16, BIT, F32, I32, SelectF32
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, Value
 from verity.ml.definitions.registry.topp_keep_builder import (INF, NEG_INF, ONE_F, Engine, Vec, bfly, cat, pad, put, reduce, scan,
                                                               tree1d)
 from verity.ml.definitions.registry.topp_split import fma32

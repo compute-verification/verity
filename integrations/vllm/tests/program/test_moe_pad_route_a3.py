@@ -20,13 +20,13 @@ import re
 
 import pytest
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.codec import decode_program, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, composite
+from verity.circuits import Program, bind
+from verity.circuits.codec import decode_program, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, composite
 from verity.ml.definitions.registry import b1, lifted as L, moe_pad as MP
 from verity.ml.definitions.numerics import serve3_reference as ref
 from verity.ml.definitions.registry.prims import BF16
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, WG_T, X_T, MoeIndexedReadRef, run, token_for_route,
                                   unlifted_inputs, weights)  # noqa: F401  (weights: the shared fixture)

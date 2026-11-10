@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`DsaRMSNorm_v1` at the two rows GLM-5.3 runs: q_a_layernorm (2048) and kv_a_layernorm (512), eps 1e-5; `TritonBlockRMSNorm_v1` at
     DeepSeek-V4's (q 1536 and kv 512 of a 2048 block on 8 warps, eps 1e-6); `DsaLatentRow_v1` at GLM-5.3's latent row (kv_c 512,
     k_pe 64)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_norm
 
     return [

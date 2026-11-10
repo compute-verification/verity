@@ -373,8 +373,8 @@ def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
 
 def rope_forms_exact(x1: int, x2: int, c: int, s: int) -> dict[str, int]:
     """`rope_forms` of one quadruple through core's exact bit functions (the non-flushing forms)."""
-    from verity.ml.circuits.ops.fp32 import f32_add_bits as add, f32_fma_bits as fma, f32_mul_bits as mul, f32_sub_bits as sub
-    from verity.ml.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+    from verity.circuits.ops.fp32 import f32_add_bits as add, f32_fma_bits as fma, f32_mul_bits as mul, f32_sub_bits as sub
+    from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 
     X1, X2, Cc, Ss = ((v & 0xFFFF) << 16 for v in (x1, x2, c, s))
     n = 0x80000000
@@ -797,8 +797,8 @@ def phase_q(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], lis
 def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> dict[str, Any]:
     """Which candidate contraction the k_pe and q_pe words are (served tokens and the subnormal probe), the reference
     `RoPEHeadGptJ_v1` on a sample of them against the L_a/H_a candidate words."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import ref_prims as RP
 
     pos = o["pos"].cpu().numpy()
@@ -985,8 +985,8 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     """vLLM's top-k kernels: prefill on the served logits (twice) and on synthetic rows from row start 5; the decode kernels on
     synthetic rows; the reference `DsaTopKShortRow_v1{2048}` on the lengths the rows take."""
     import torch
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
@@ -1117,8 +1117,8 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache slots [r0, r1): their bytes and scale against `DsaIndexerKRow_v1{128,64,1e-06}` (the reference itself)."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
@@ -1136,8 +1136,8 @@ def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [r0, r1): index_q_fp8 and index_weights_out against `DsaIndexerQ_v1{32,128,64}` (the reference itself)."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
@@ -1155,8 +1155,8 @@ def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, the reference on the first two."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
@@ -1183,8 +1183,8 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One (token, head) of FA3's sparse output against `SparseMlaHead_v1{T,...}`, or `SparseMlaHeadSplit_v1{T,NS,...}` where
     the launch splits the token's keys (the reference itself)."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import sparse_mla as M
     from verity.ml.definitions.registry import sparse_mla_split as W
 
@@ -1255,7 +1255,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_rope as BR
     from verity.ml.definitions.registry import dsa
     from verity.ml.definitions.registry import sparse_mla as M

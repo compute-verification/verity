@@ -18,8 +18,8 @@ import torch
 
 from tests.acquire.test_glm53_sources import Committer
 from tests.program.test_marlin_moe import _vllm_align
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW

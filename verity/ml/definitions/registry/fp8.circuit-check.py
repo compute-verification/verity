@@ -8,8 +8,8 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`verity.ml.definitions.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity.ml.definitions.registry import fp8
     from verity.ml.definitions.tiny import TINY_FP8
 

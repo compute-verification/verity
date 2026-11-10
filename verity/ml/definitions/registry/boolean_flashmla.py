@@ -20,18 +20,18 @@ and `-x` one NOT gate on x's sign bit.  No table or lookup gate.  Each composite
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition, trace
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.ops.boolean import attention as BA
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, or_reduce, sub
+from verity.circuits.boolean.trace import definition, trace
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import flashmla as F
 from verity.ml.definitions.registry.boolean_attention import _Bits
 from verity.ml.definitions.registry.boolean_dsa import I32SubV2, I32ToF32V2, U32AndV2, flat, replay

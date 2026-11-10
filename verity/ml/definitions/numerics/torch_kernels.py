@@ -80,7 +80,7 @@ def bf16_add(a, b):
 
 
 def _libdevice(defn, x) -> np.ndarray:
-    from verity.ml.circuits.evaluation.bits import evaluate_words
+    from verity.circuits.evaluation.bits import evaluate_words
 
     x = np.asarray(x, U32)
     return canon(np.asarray(evaluate_words(defn, x.reshape(-1)), U32).reshape(x.shape))

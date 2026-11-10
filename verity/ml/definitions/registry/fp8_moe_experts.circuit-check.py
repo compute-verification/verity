@@ -18,8 +18,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (`SERVED_GLM53_H200`), which verity-vllm's `test_moe_fp8_served` holds to the compiler's tile rule.  Each is over
     `targets.MAX_GATES`, and its ``digests`` pin keeps it whole in ``--all``: its expert stack is read lazily
     (`targets.LAZY_OPERANDS`), and its gathers resolve only the expert a vector selects."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import fp8_moe_experts
 
     return [

@@ -13,7 +13,7 @@ def _boolean_roots() -> list[Any]:
     chunk rows of 8 (no gate).  The multimem row is over
     `circuit_check.targets.MAX_GATES` at either FTZ, so `select` would keep only the smaller, IEEE one: FTZ changes only the
     vectors it calls, whose FTZ form `boolean_tp_allreduce`'s sidecar pins."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_tp_combine as BC
     from verity.ml.definitions.registry import tp_allreduce as TA
 

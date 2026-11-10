@@ -11,7 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     multiplexer levels and lanes past a row of 4 blocks; the served SWA window (a block-table row of 16,384, over
     `targets.MAX_GATES`, so checked when named) and the served c128a length (width 8192).  The served c128a row is
     `Dsv4ShortContextTopK_v2{8192,128}`, 4096 Calls of the slot and the length."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsv4_decode_metadata as BX
 
     return [

@@ -10,9 +10,9 @@ communicator calls, with no rank processes to spawn):
 Rank r contributes operand r; every rank must receive the same words (asserted), and rank 0's are the production output."""
 from __future__ import annotations
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array
 from verity.ml.definitions.registry.b1_tp2 import AllGather2, AllReduce2
 from verity.ml.definitions.registry.prims import BF16
 

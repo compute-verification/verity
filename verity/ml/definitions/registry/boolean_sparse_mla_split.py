@@ -10,7 +10,7 @@ the same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHeadSplit_v2{T,NS,DR,DV,BN,DOT,INV,SCALE}    DOT: `gemm.HopperBF16WgmmaDot16_v2`; the blocks and the NS = 1 head are
     SparseMlaSplit_v2{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}     `boolean_sparse_mla`'s
 
-MUFU.LG2 on bits is core's table read (`verity.ml.circuits.ops.boolean.mufu.table_word`) over `mufu_lg2.json`: 2 v as one
+MUFU.LG2 on bits is core's table read (`verity.circuits.ops.boolean.mufu.table_word`) over `mufu_lg2.json`: 2 v as one
 carry-save sum of the rows ``u XOR n_k``, ``Q(u) XOR n_k`` (Q the truncated square from column 19, at square_shift 1) and C0 with
 the digits' constants folded in, every n_k and C0 bit the XOR of the monomials of the 6 segment bits (`_lg2_plan`), so the
 products cost no AND.  Then the module docstring's rule: v cleared at m = 0, M = (t << 36 | v) XOR (E < 127), its leading-zero
@@ -23,12 +23,12 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.ops.boolean import scalar as BSC
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as BSC
 from verity.ml.definitions.registry import boolean_sparse_mla as BSM
 from verity.ml.definitions.registry import sparse_mla as M
 from verity.ml.definitions.registry import sparse_mla_split as W

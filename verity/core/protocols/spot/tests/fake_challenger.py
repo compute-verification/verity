@@ -24,7 +24,7 @@ from typing import Any, Mapping
 from verity.core.protocols.spot import (challenger as C, coins as T, remote as R, second_stage as SS,
                                                   service as S)
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
-from verity.ml.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.codec import canonical_json, descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.commitments.window import window_binding
 

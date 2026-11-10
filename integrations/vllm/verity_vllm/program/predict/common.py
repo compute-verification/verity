@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.refs import Coll, Refs, concat
-from verity.ml.circuits.types import Array, Type, Value
+from verity.circuits.refs import Coll, Refs, concat
+from verity.circuits.types import Array, Type, Value
 
 
 class Unexpressible(Exception):
@@ -65,7 +65,7 @@ def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Col
     verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
     Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
     refused unless a declared relation computes it (`program.inputs.check`)."""
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits.types import Tuple
     from verity_vllm.program import inputs
     from verity_vllm.program.frontend import stop_rule as SR
     checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
@@ -88,7 +88,7 @@ def with_edge(model, out: Coll, edge: tuple[str, ...]) -> Coll:
     each history group of `edge` (`dsa._Model.edge_rows`), so a window's edge reads them at the fields after its samples and checks."""
     if not edge:
         return out
-    from verity.ml.circuits.types import Tuple, field_types
+    from verity.circuits.types import Tuple, field_types
     rows = model.edge_rows(tuple(edge))
     head = field_types(out.type) if isinstance(out.type, Tuple) else (out.type,)
     return Coll(Tuple(*head, *(r.type for r in rows)), concat([out.refs, *[r.refs for r in rows]]))

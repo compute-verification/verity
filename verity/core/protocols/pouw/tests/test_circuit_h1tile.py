@@ -8,14 +8,14 @@ import random
 
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat, runs
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat, runs
+from verity.circuits.types import Array
 from verity.ml.protocols.pouw.circuit import compile as C
 from verity.ml.protocols.pouw.circuit import h1tile as H
 from verity.ml.protocols.pouw.circuit import seeds as SD

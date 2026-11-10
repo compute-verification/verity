@@ -16,14 +16,14 @@ from verity_vllm.program.prune import (_read, _renumbered, batched_form, dead_fr
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import b1, gemm_bias, topp_words as TW
 
-from verity.ml.circuits.defs import Body, Node, bind
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.liveness import dead_gates
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.prims import BF16
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import Body, Node, bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.liveness import dead_gates
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import BF16
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
+from verity.circuits.types import Array
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
@@ -103,7 +103,7 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
 def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
     """A batch node's function can be a primitive (the mask form's top-level batches of a `Const`), which has no `base_id`;
     `swapped` leaves it as it is rather than reading one."""
-    from verity.ml.circuits.ops.prims import const
+    from verity.circuits.ops.prims import const
     c = const(16, 0)
     body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
     assert swapped(body) is body

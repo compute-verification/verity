@@ -34,11 +34,11 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, concat
+from verity.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 

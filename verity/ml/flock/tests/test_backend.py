@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import pytest
-from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
+from verity.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
 
 from verity_flock import lowering
 from verity_flock.backend import FLOCK_FRAME_V3_BLAKE3 as FLOCK, GemmSub, Supported, Unavailable, Unsupported
@@ -67,7 +67,7 @@ def test_a_spine_input_set_is_written_on_its_chain_and_refused_when_its_y_differ
     import json
 
     import numpy as np
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
 
     from verity_flock import instance_file
 

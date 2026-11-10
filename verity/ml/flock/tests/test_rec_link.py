@@ -140,7 +140,7 @@ def test_the_m0_unit_computes_the_reference():
 @pytest.mark.slow
 def test_the_definition_computes_the_reference():
     """`RecLink{UB, PB}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     cases, _, _ = _cases()
     d = R.definition(UB, PB)

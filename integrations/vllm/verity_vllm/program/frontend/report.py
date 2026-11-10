@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from verity.ml.circuits.defs import SpecializedDefinition
-    from verity.ml.circuits.liveness import DeadGateReport
-    from verity.ml.circuits.program import Program
+    from verity.circuits.defs import SpecializedDefinition
+    from verity.circuits.liveness import DeadGateReport
+    from verity.circuits.program import Program
     from verity_vllm.program.frontend.outcomes import Unsupported
 
 

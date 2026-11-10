@@ -40,14 +40,14 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.ml.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
-from verity.ml.circuits.intervals import full
-from verity.ml.circuits.liveness import Liveness
-from verity.ml.circuits.ops.fp32 import F32AddFtz
-from verity.ml.circuits.ops.prims import ZERO32, const
-from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
+from verity.circuits.intervals import full
+from verity.circuits.liveness import Liveness
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.prims import ZERO32, const
+from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
+from verity.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16, ZERO16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
 from verity.ml.definitions.registry.prims import BF16, I32

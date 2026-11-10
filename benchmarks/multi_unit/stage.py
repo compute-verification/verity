@@ -54,7 +54,7 @@ def draw(K: int, N: int, n: int, seed: int = 0):
 
 
 def definition(K: int, N: int):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_fp8 as BF
 
     return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
@@ -62,7 +62,7 @@ def definition(K: int, N: int):
 
 def reference(K: int, N: int, rows: dict) -> np.ndarray:
     """The whole Definition's IR reference on each instance's leaves (the rows' bits, low first)."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     d = definition(K, N)
     out = []

@@ -8,12 +8,12 @@ import json
 
 import pytest
 
-import verity.ml.circuits.ops.scalar  # noqa: F401
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Value
+import verity.circuits.ops.scalar  # noqa: F401
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, Value
 from verity.core.protocols.spot.one_stage import partition as P, registered as G, registration as R
 from verity.core.protocols.spot.one_stage.served import ServedTree, register_served
 

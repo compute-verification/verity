@@ -1,5 +1,5 @@
 """`ref_prims`' correctly rounded transcendental primitives as Boolean Definitions: the next version of each word primitive, the
-same function on bits (`verity.ml.circuits.boolean.trace`).
+same function on bits (`verity.circuits.boolean.trace`).
 
     F32ExpRn_v2   (x: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32ExpRn_v1 (ref_prims)
     F32LogRn_v2   (x: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32LogRn_v1 (ref_prims)
@@ -63,11 +63,11 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, lzc, mux, or_reduce, shr, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, lzc, mux, or_reduce, shr, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
 
 from . import ref_prims as R
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.registry import stop_check as X
 from verity.ml.definitions.registry import stop_rule as SR
 

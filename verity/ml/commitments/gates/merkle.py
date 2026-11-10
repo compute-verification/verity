@@ -33,12 +33,12 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.types import Array
 
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import and_reduce, const_bits
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import and_reduce, const_bits
 from .sha512 import IV, compress_gadget, pad_tail, words_be
 
 __all__ = ["ARITIES", "MerkleRead", "arguments", "build", "node_ref", "opens", "root_ref", "traced"]
@@ -89,7 +89,7 @@ def _digest_bits(d: bytes) -> list[int]:
 
 def arguments(ARITY: int, root: bytes, leaf: bytes, pos: int, path: Sequence[Sequence[bytes]]) -> tuple[list[int], ...]:
     """``MerkleRead_v1{ARITY, D = len(path)}``'s four arguments, each a flat list of bits in leaf order
-    (`verity.ml.circuits.evaluation.evaluate`'s form)."""
+    (`verity.circuits.evaluation.evaluate`'s form)."""
     D = len(path)
     _check(ARITY, D)
     if any(len(s) != ARITY - 1 for s in path) or not 0 <= pos < ARITY ** D:

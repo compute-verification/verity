@@ -9,15 +9,15 @@ import tracemalloc
 
 import pytest
 
-import verity.ml.circuits.ops.scalar  # noqa: F401
+import verity.circuits.ops.scalar  # noqa: F401
 from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
+from verity.circuits.types import Array, Value
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registered as G, registration as R

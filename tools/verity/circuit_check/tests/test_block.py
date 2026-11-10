@@ -13,8 +13,8 @@ OPTS = CK.Options()
 
 
 def _toy():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
     from verity.ml.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
@@ -42,8 +42,8 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
 
 
 def _rows():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
 
     return bind(CompositeDefinition("CircuitCheckBlockRows", 1, (), lambda S: ((("x", Array(1 << 17, Value(16))),), Array(1 << 17, Value(16))),
                                     lambda B, S, x: x, register=False))
@@ -150,7 +150,7 @@ def test_a_held_id_the_catalog_no_longer_checks_fails(monkeypatch):
 def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import sparse_mla as M
 
     F = CK.Findings()

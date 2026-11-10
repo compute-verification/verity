@@ -18,7 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_open as R

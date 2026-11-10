@@ -33,7 +33,7 @@ from verity.ml.protocols.pouw.circuit import reference as R
 from verity.ml.protocols.pouw.circuit.ncp2 import D, Shape
 
 from verity.ml.kernels.tc import f32_to_bf16_rn_batch
-from verity.ml.circuits.ops.scalar import F32_NAN_PTX
+from verity.circuits.ops.scalar import F32_NAN_PTX
 from verity_vllm.protocols.pouw import circuit as PC
 
 M32 = 0xFFFFFFFF

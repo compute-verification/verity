@@ -60,7 +60,7 @@ outer verdict needs both, the served default's read-backs among it, so `served_d
              `MLAAttention.process_weights_after_loading` leaves them (views of the dequantized kv_b_proj weight's transpose,
              mla_attention.py:1154-1252): every word against `bmm_rows`.
   reference  on rows 0, 3 and M - 1 of every launch, three coordinates each, the plain-integer reference
-             (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
+             (`verity.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
   profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the `SPLIT_K` pinned by shape and M
@@ -1075,11 +1075,11 @@ TOTALS = ("words", "mismatch", "dotprod_words", "fma1_mismatch", "fma0_mismatch"
 
 def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fma: int | None) -> tuple[int, ...]:
     """The plain-integer reference of the word Definition at one output coordinate (row r, column n; head n // N for bmm)."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.ops import gemm as CG
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.ops import gemm as CG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
     from verity.ml.definitions.registry import ll_bf16 as LL
 
@@ -1177,11 +1177,11 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------------------------------------------ bind
 def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Every Definition binds at each model's statics, including each default split count pinned from the profiled route."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.batch import type_shape
-    from verity.ml.circuits.ops import gemm as CG
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.circuits.ops import gemm as CG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import bf16_gemm_check as BC
     from verity.ml.definitions.registry import cublas_bf16 as CB
     from verity.ml.definitions.registry import ll_bf16 as LL

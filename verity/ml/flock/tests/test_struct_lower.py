@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.ml.circuits.boolean import forms as F
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.ops import prims as OP
-from verity.ml.circuits.ops.fp32 import F32Mul
-from verity.ml.circuits.ops.boolean import gemm as GB
-from verity.ml.circuits.ops.boolean import scalar as SB
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.boolean import forms as F
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ops import prims as OP
+from verity.circuits.ops.fp32 import F32Mul
+from verity.circuits.ops.boolean import gemm as GB
+from verity.circuits.ops.boolean import scalar as SB
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 from verity_flock import ir_lower as IL
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T

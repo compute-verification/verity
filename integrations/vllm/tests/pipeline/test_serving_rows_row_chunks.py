@@ -17,11 +17,11 @@ from verity.ml.definitions.registry import fa2_check_inf as FA2
 from verity.ml.definitions.registry import fa3_check_inf as FA3
 from verity.ml.definitions.registry import hopper as HP
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops import prims as OP
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops import prims as OP
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import interface as IF
 

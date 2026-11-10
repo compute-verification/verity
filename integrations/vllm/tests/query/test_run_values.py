@@ -105,11 +105,11 @@ def test_the_checks_a_program_returns_are_never_required():
 
 def test_a_descriptors_last_returned_leaves_are_its_checks():
     """`from_descriptor(checks=n)`: the Values of the return's last n leaves are the view's checks, still among its outputs."""
-    from verity.ml.circuits.codec import encode_program
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Tuple, Value
+    from verity.circuits.codec import encode_program
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Tuple, Value
     from verity.ml.definitions.registry import prims
 
     i32 = Value(32)

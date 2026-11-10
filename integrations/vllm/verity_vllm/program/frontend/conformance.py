@@ -3,7 +3,7 @@
     verity-vllm conformance [--out record.json]
 
 One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
-`verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
+`verity.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
 or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
 recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them
 (`tests/program/test_conformance_record.py`).
@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
 from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
 

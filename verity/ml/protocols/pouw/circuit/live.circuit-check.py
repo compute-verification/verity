@@ -13,7 +13,7 @@ def _pouw_roots() -> list[Any]:
     counts. `PouwLiveRows_v1` at T = 16 with pieces of R = 4 and at T = 8192 with R = 64 (a V3 prefill round's, 128
     pieces): R header and cap tests, R row tests against N, m and base, and each row's interval test against the request
     it names; it grows as R², not with T."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.pouw.circuit import live as LV
 
     return [*(bind(d, T=t) for d in (LV.PouwLiveSlots, LV.PouwLiveSlotsV2) for t in (32, 96)),

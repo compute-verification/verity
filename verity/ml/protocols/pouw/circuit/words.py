@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import struct
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Array, Value
-from verity.ml.circuits.ops import prims as _prims
-from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
-from verity.ml.circuits.ops.ncp import PouwI32ToF32Rn, i32_to_f32_rn  # noqa: F401  (ncp-v2's dequantization, registered in ops)
-from verity.ml.circuits.silicon import cast as _cast
+from verity.circuits.defs import primitive
+from verity.circuits.types import Array, Value
+from verity.circuits.ops import prims as _prims
+from verity.circuits.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
+from verity.circuits.ops.ncp import PouwI32ToF32Rn, i32_to_f32_rn  # noqa: F401  (ncp-v2's dequantization, registered in ops)
+from verity.circuits.silicon import cast as _cast
 
 U32, U8, I7, F32, BF16, E2M1 = Value(32), Value(8), Value(7), Value(32), Value(16), Value(4)
 M32 = (1 << 32) - 1

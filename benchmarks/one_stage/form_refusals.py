@@ -38,11 +38,11 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.ops.fp32 import F32AddFtz  # noqa: E402
-from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.ops.fp32 import F32AddFtz  # noqa: E402
+from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
+from verity.circuits.types import Array, Value  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402

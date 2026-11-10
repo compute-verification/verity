@@ -1737,6 +1737,11 @@
         "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
         "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/circuits/": "verity/circuits/"
+      }
     }
   ]
 }

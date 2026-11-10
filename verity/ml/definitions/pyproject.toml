@@ -14,4 +14,4 @@ inputs = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_catalog.py"]
-paths = ["verity/ml/circuits/ops/kv_cache.py"]
+paths = ["verity/circuits/ops/kv_cache.py"]

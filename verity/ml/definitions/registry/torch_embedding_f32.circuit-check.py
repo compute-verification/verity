@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The f32 table's gradient on the feature kernel (40 tokens of a 9-word vocabulary, 3 features) and on the sort path at
     the least M it runs at (3073 tokens, 2 words, 1 feature), whose bodies reach every Definition here."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import torch_embedding_f32 as TF
     from verity.ml.definitions.registry.torch_embedding import FEATURE_MAX
 

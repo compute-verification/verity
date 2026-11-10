@@ -9,8 +9,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity.ml.definitions.registry import b1
 from verity_vllm.program import moe_difftest as MD
 from verity_vllm.properties.difftests import rope_difftest as RD

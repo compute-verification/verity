@@ -66,10 +66,10 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce, sub, add
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce, sub, add
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
 
 STATICS = ("N", "U", "TW", "RW", "L")

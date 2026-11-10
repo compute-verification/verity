@@ -21,8 +21,8 @@ from typing import Any
 
 import torch
 
-from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
-from verity.ml.circuits.types import RecordType
+from verity.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
+from verity.circuits.types import RecordType
 from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
 from verity_vllm.program.prune import kept_records
@@ -38,7 +38,7 @@ MAX_SPANS = 1 << 9   # an argument read from several fx inputs is resolved run b
 
 
 def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | None:
-    """`verity.ml.circuits.refs.runs` with a budget: the maximal contiguous runs `(space, idx, lo, hi)` of `refs` in sequence order, or None
+    """`verity.circuits.refs.runs` with a budget: the maximal contiguous runs `(space, idx, lo, hi)` of `refs` in sequence order, or None
     once more than `max_runs` runs would be produced (the walk stops there instead of enumerating leaves)."""
     out: list[tuple[str, int, int, int]] = []
 

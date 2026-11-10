@@ -36,7 +36,7 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
@@ -564,7 +564,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
@@ -699,7 +699,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)",
+         "files": ["descriptor.json.gz (verity.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)",
                    "census.json.gz, kv_rows.json.gz (a request Program's census/v1 and KV rows: pipeline.memory_map.cache)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):

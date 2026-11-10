@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import Array, bind
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Tuple
+from verity.circuits import Array, bind
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.ops.scalar import BIT, F32, F32Eq
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple
 
 from circuit_check import checks as CK
 from circuit_check import targets as TG

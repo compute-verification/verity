@@ -16,9 +16,9 @@ from types import SimpleNamespace
 import pytest
 
 from tests.program.predict.test_predict import TINY, _phi
-from verity.ml.circuits import Array, Program, Value
-from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits import Array, Program, Value
+from verity.circuits.codec import descriptor_id, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity_vllm.check.replay import definitions as DF
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline.build import _instance_rows

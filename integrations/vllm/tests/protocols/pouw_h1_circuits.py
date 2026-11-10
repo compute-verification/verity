@@ -81,8 +81,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     from verity.core.protocols.pouw import credit as CR
     from verity.ml.protocols.pouw.circuit import h1tile as HT
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits import partition_object as PO
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits import partition_object as PO
+    from verity.circuits.codec import descriptor_id
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
 
@@ -158,7 +158,7 @@ def rebuilt(descriptor: bytes) -> Any:
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
     from verity.core.protocols.pouw import credit as CR
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     layout, why = CR.layout_of(descriptor)
     if why is not None:
         raise ValueError(f"the declared Program's layout: {why[1]}")

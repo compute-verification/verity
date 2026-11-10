@@ -108,8 +108,8 @@ def test_the_keep_word_counts_every_split_counts_pipeline():
 
 def _primitives(d) -> dict:
     """The primitives ``d``'s specialized Definitions hold, by id, each Definition walked once."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.evaluation.reference import resolve
 
     prims, seen = {}, set()
 
@@ -130,7 +130,7 @@ def _primitives(d) -> dict:
 def test_the_word_gate_keep_word_has_a_piece_for_every_gate(S):
     """What a served top-p select is proved through: at each split count the word-gate keep word (`TopPKeepWord_v2{V,S}`)
     holds only gates Flock has a piece for, so a partition cuts it into proof blocks of word gates."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF
     from verity_flock import ir_lower as IL
 
@@ -143,8 +143,8 @@ def test_the_word_gate_keep_word_has_a_piece_for_every_gate(S):
 def test_the_word_gate_keep_words_descriptor_grows_with_its_blocks_not_its_lanes():
     """The verifier reads the word-gate keep word's descriptor, which grows with the pipeline's block counts, not its lanes:
     128 times the lanes is under 1.5 times the nodes (a node a batch of one word gate over every lane it touches)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import resolve
     from verity.ml.definitions.registry import dead_free as DF
 
     nodes = {V: len(resolve(bind(DF.TopPKeepWordV2, V=V, S=32)).body.nodes) for V in (16, 2048)}

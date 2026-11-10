@@ -20,7 +20,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
 from verity.ml.windows import flock_inputs as FI, rows as SR
 from verity_vllm.commit import index as IX

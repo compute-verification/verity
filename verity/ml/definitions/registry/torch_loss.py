@@ -70,17 +70,17 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.ops.boolean.scalar import gt_u
-from verity.ml.circuits.ops.boolean.softmax import f32_gt
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.scalar import gt_u
+from verity.circuits.ops.boolean.softmax import f32_gt
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
 
 from . import boolean_moe as BMOE
 from .boolean_dsa_topk import DsaTopKOneHot, popcount

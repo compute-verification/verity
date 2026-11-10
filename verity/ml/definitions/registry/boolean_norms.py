@@ -28,7 +28,7 @@ Each is the word body's dataflow, in the word body's operand order, over these p
     RMSNormOutRowTriton_v1{N}      bf16_rn((inv * f32(x_j)) * f32(w_j))   (`RMSNormOutTriton_v1`)
 
 The leaf pieces are traced from `fp`'s builders, so the bf16 operands' 16 constant-zero bits and the constants N, 1 / N and EPS
-specialize them. The f32 adds, divide, multiply and FMA between them are `verity.ml.circuits.ops.boolean.elementwise`'s Calls. The lanes,
+specialize them. The f32 adds, divide, multiply and FMA between them are `verity.circuits.ops.boolean.elementwise`'s Calls. The lanes,
 warps and output rows are separable (each node reads only parameters and every leaf it makes is returned), so `Q_word` cuts them
 member by member; the norm itself is not, so a served Program calls the parts at its root (the two emitters above), never the
 whole norm, whose flat circuit is millions of gates at a served width.
@@ -40,7 +40,7 @@ returns beside its sum (`RMSNormSquare_v1`, `RMSNormSquareFma_v1`, `RMSNormThrea
 own, shared through `forms`' CSE); the rest are the output piece, which reads both decodes. So the row's members share no gate,
 and Triton's output pass recomputes nothing of the thread pass that reads the same x.
 
-MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits (`verity.ml.circuits.ops.boolean.mufu`) whose
+MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits (`verity.circuits.ops.boolean.mufu`) whose
 word Definitions are `RsqrtApprox_v1`, `MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and
 `DivFullRcp_v1`, or those word ids themselves (`MUFU_WORD`). A word id is called on words: the norm packs a value into its word
 (`PackF32_v1`) and unpacks a word into bits (`UnpackF32_v1`) once each, when a Call first needs that form (`_F32`), so Triton's
@@ -59,18 +59,18 @@ from typing import Callable
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind, composite
-from verity.ml.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.ops.prims import const
+from verity.circuits.evaluation import evaluate
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind, composite
+from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ONE, ZERO
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.ops.prims import const
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import value_inputs as VI

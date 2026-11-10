@@ -10,7 +10,7 @@ the same line's results from
 which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lean_difftest.py` checks that this script
 still writes them.
 
-A declaration is a descriptor v1 Program built with `verity.ml.circuits` in one of five shapes: a random DAG, a chain, a
+A declaration is a descriptor v1 Program built with `verity.circuits` in one of five shapes: a random DAG, a chain, a
 reduction tree, a chain of matrix-vector products (the inference-only policy draft's updated multiplications: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
@@ -34,12 +34,12 @@ import random
 from fractions import Fraction
 from pathlib import Path
 
-import verity.ml.circuits
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+import verity.circuits
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
@@ -405,7 +405,7 @@ def hand() -> str:
 def hand_const() -> str:
     """A declaration with a constant: a: Value<8> (registered), b: Value<8> (bound per run); k = `Const8[0x2a]`, which
     reads nothing; c = f(a, k): Value<8>; d = g(c, b): Value<4>. Gates, and root nodes, 0 a, 1 b, 2 k, 3 c, 4 d."""
-    from verity.ml.circuits.ops.prims import const
+    from verity.circuits.ops.prims import const
 
     k, f, g = const(8, 0x2A), prim((8, 8), 8), prim((8, 8), 4)
 
@@ -477,13 +477,13 @@ def write(out: Path, count: int = COUNT) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits reads the programs")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits reads the programs")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=COUNT)
     a = ap.parse_args()
-    here = Path(verity.ml.circuits.__file__).resolve()
+    here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.ml.circuits comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

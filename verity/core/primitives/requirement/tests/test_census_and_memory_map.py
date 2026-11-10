@@ -45,9 +45,9 @@ import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay
-from verity.ml.circuits import requirement as R
-from verity.ml.circuits.census import census, step_ends, step_of
-from verity.ml.circuits.program import REGISTRATION, Program, is_input
+from verity.circuits import requirement as R
+from verity.circuits.census import census, step_ends, step_of
+from verity.circuits.program import REGISTRATION, Program, is_input
 
 server = D.server_fixture(PORT)
 

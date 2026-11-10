@@ -10,7 +10,7 @@ import random
 
 import numpy as np
 import pytest
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import rec_live as RL
 from verity_flock import rec_open as R
 from verity_flock import rec_vstar as V
@@ -187,7 +187,7 @@ def test_the_m0_unit_computes_the_reference(H):
 @pytest.mark.parametrize("H", [0, 1, 17])
 def test_the_definition_computes_the_reference(H):
     """`RecOpen{8, H}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     cases = _cases(H)
     d = R.definition(8, H)

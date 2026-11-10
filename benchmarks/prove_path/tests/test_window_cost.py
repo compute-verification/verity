@@ -168,13 +168,13 @@ def test_at_4_32_4_F_leaves_out_37_percent_of_serving_s_stream():
 
 
 def _ands(t) -> int:
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits.evaluation import bits as BS
     return BS.compile(t).counts["and"]
 
 
 def test_the_h200s_small_and_counts_are_bs_compiles():
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import boolean_attention as BA
     assert _ands(bind(BG.ScaledMmS8Coordinate, K=2048, **BG.GEMM_SM90_S8)) == W.S8_COORD[2048]
     assert _ands(bind(BG.GemmCoordinate, K=2048, DOT=BG.HopperBF16WgmmaDot16)) == W.BF16_COORD[2048]
@@ -188,8 +188,8 @@ def test_the_h200s_large_and_counts_are_bs_compiles():
     """The quantizer at K 2,048, FA3's full blocks at 128 and 192 keys and its last first block: each 8 to 12 million ANDs,
     tens of seconds and a few GB a compile, and their counts move apart from the small blocks' (the online softmax over a
     block, the quantizer's row max), which the quick test can't see."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import boolean_attention as BA
     from verity.ml.definitions.registry import boolean_int8 as X
     assert _ands(bind(X.Int8RowQuantV2, K=2048)) == W.ROW_QUANT[2048]

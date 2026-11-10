@@ -1,5 +1,5 @@
 """The Lean evaluator (`verity-evaluate`, `Evaluate.evaluateFn`) against the Python reference, output for output and refusal
-for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
+for refusal, on Programs encoded as descriptor v1 (`verity/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis sampling deterministically).
 
 The reference is `python_answer`: `codec.decode_program`, then `reference.evaluate_region` over each of the root's nodes that
@@ -55,22 +55,22 @@ from hypothesis import strategies as st
 from verity_difftest import settings
 
 from verity.ml.protocols.pouw.circuit import words as W
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation import reference
-from verity.ml.circuits.ops import fp32 as FP
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.ops.boolean import cast as BC
-from verity.ml.circuits.ops.boolean import elementwise as BE
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import REGISTRATION, Program, input_id
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, type_from_json
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import partition_object as PO
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import reference
+from verity.circuits.ops import fp32 as FP
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as BE
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import REGISTRATION, Program, input_id
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple, type_from_json
 from verity.ml.definitions.registry import act as ACT
 from verity.ml.definitions.registry import dense as DENSE
 from verity.ml.definitions.registry import dsa as DSA
@@ -1308,7 +1308,7 @@ def test_the_rtx5090_nvfp4_vectors(server):
 
 # ---- E3: the traced Boolean steps ---------------------------------------------------------------------------------------
 
-#: the traced Boolean Definition of each dot step (`verity.ml.circuits.ops.boolean.gemm`, 19,156 to 28,099 gates)
+#: the traced Boolean Definition of each dot step (`verity.circuits.ops.boolean.gemm`, 19,156 to 28,099 gates)
 TRACED = {P.AmpereBF16TcDot16: BG.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16: BG.HopperBF16WgmmaDot16,
           P.HopperE4m3QgmmaDot32: BG.HopperE4m3QgmmaDot32, P.BlackwellE4m3QmmaDot32: BG.BlackwellE4m3QmmaDot32,
           P.BlackwellE5m2QmmaDot32: BG.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64: BG.BlackwellNvf4OmmaDot64,
@@ -1780,7 +1780,7 @@ def _library_sha512(server, name: str) -> str:
 def test_the_mufu_tables_are_the_library_tables(server, name):
     """The Lean evaluator's ex2, rcp, rsq and sqrt tables (their interpolants), as the library stores them, have the
     library's SHA-512: every word of each, which the grids reach only a few of (about 6 s a table)."""
-    from verity.ml.circuits import library
+    from verity.circuits import library
 
     assert _library_sha512(server, name) == library.table(name).sha512
 
@@ -1790,7 +1790,7 @@ def test_the_tanh_table_is_the_library_table(server):
     """The Lean evaluator's MUFU.TANH table, as the library stores it (`tanh_mufu`, 2^27 words), has the library's SHA-512:
     all 92 million words of MUFU.TANH's eleven binades, against the measured shard's, which no cheaper test reaches (about
     2 min)."""
-    from verity.ml.circuits import library
+    from verity.circuits import library
 
     assert _library_sha512(server, "tanh_mufu") == library.table("tanh_mufu").sha512
     assert server.call("library_table", {"name": "tanh_rn"})[0] == "reject"

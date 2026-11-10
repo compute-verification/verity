@@ -1,22 +1,22 @@
 # verity.ml.definitions
 
 The Definitions of the kernels served models run: each kernel vLLM launches (a GEMM, an RMSNorm, attention, MoE routing,
-sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.ml.circuits.ops`,
+sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.circuits.ops`,
 gate for gate what the kernel computes on the GPU, together with its Boolean version, the fast evaluators that reproduce
 it, and the partition of a served Program into proof blocks. The integrations (`integrations/vllm/`) build served
 Programs from these Definitions. The terms and the front doors (building, evaluating, checking, regenerating pins) are
-[`verity.ml.circuits`](../circuits/README.md)'s.
+[`verity.circuits`](../../circuits/README.md)'s.
 
 No verifier reads this package, so it is off the soundness path: a verifier holds a Program and the semantics in
-`verity.ml.circuits`, never this code.
+`verity.circuits`, never this code.
 
 ## Example
 
 Load every registered Definition, bind one, and find its Boolean version:
 
 ```python
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.boolean import is_boolean
+from verity.circuits import Program, bind
+from verity.circuits.boolean import is_boolean
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import catalog
 
@@ -33,7 +33,7 @@ is_boolean(bits), Program(bits).gates
 
 ## The registry
 
-`registry/` holds one module per kernel family, each registering its Definitions in `verity.ml.circuits.defs.REGISTRY`
+`registry/` holds one module per kernel family, each registering its Definitions in `verity.circuits.defs.REGISTRY`
 under `Name_vN`: word Definitions in modules named for the kernel (`fp8`, `deepgemm`, `fa2_split`, `sampling`, ...) and
 their Boolean versions in the matching `boolean_*` modules. `value_inputs` holds the versions that take what a program
 brings (a norm's epsilon, the softmax scale, a softcap) as an input value rather than a static. A module's docstring lists
@@ -49,7 +49,7 @@ its Definitions with their signatures.
 ## Boolean versions
 
 `boolean.boolean_version(spec)` is the registered Boolean Definition whose word Definition is `spec`, found among every module
-of `verity.ml.circuits.ops.boolean` and of the registry, with each function-valued static bound to its own Boolean
+of `verity.circuits.ops.boolean` and of the registry, with each function-valued static bound to its own Boolean
 version; it raises `NoBooleanVersion` naming the Definitions it finds none for. The same module measures how far a served
 Program is from pure bits.
 
@@ -65,7 +65,7 @@ Program is from pure bits.
 
 ## Fast evaluators: `numerics/`
 
-The Definitions are evaluated gate by gate by the reference in `verity.ml.circuits.evaluation`. `numerics/` holds the
+The Definitions are evaluated gate by gate by the reference in `verity.circuits.evaluation`. `numerics/` holds the
 evaluators that reproduce them fast, each registered as an evaluation kernel against the Definition id it computes
 (`numerics.kernel_registry.register`) and held to the reference by `self_check`; where one cannot be exact on an input it
 declines that input, and the reference computes it.

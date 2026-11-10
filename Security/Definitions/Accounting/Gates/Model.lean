@@ -13,8 +13,8 @@ public import Mathlib.Data.Rat.Init
 
 One model of what a declared circuit `W` computes, for the lower bounds every resource audit proves over it: the
 stacking property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and
-fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
-(`verity/ml/circuits/census.py`, `stacking.py`) can be held to it by difftest.
+fan-in floor. It follows the IR (`verity/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
+(`verity/circuits/census.py`, `stacking.py`) can be held to it by difftest.
 
 * **Values.** Every value is an integer (`ℤ`): a `Value<w>` leaf read as the integer its Definition gives it, two's
   complement for a signed word, and a float's encoding read signed at its width as property/v1 reads it (an f32 as
@@ -35,7 +35,7 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
   `2·K/32` of them, `256` at `K = 4096`, each checkpoint's two halves (`Place.parts`), never its `z` or a lane's own
   value.
 * **Inputs.** An input gate reads slot `i` of the input assignment `x : ι → ℤ`, by its binding time (circuits' input
-  origins, `verity/ml/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
+  origins, `verity/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
   parameters) is bound before the audit's coins; a `coin` input is a live verifier coin (a noise or fold key), passed
   through untouched; a `run` input (a request's tokens, anything the prover sends a running circuit) is bound after
   the coins it follows. Compose's live commit order (`LayerCommitted`, a premise today's coins don't meet) puts it
@@ -44,7 +44,7 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
   noise. Only run inputs are charged, and only they count against `R_in`.
 * **Classes.** Free (no unit in any cap): an input, a constant (an operation's own bits), an exact integer affine map
   with constant coefficients (`I32Add`, `I32Sub`, and `Bf16ToF32`, `×2^16` on the readings), proven within s32, and
-  an s8-family step (`mma`: the exact int8 dot of `verity/ml/circuits/silicon/integer.py`, `D = C + Σ a_k·b_k` with
+  an s8-family step (`mma`: the exact int8 dot of `verity/circuits/silicon/integer.py`, `D = C + Σ a_k·b_k` with
   s8 or u8 operands and s32 accumulation, clamped by `.satfinite` or wrapped mod 2^32 outside the s32 range).
   Budgeted: a rounding (`ρ_b(x) = ⌊x/2^b⌋`, and every cast, quantizer, requantizer, FP op, integer floor, mod,
   division, product reduced mod `2^w`, bit op on words, field extraction, limb split and word reinterpretation, but
