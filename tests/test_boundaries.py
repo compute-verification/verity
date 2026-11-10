@@ -138,8 +138,10 @@ DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
-#: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
+#: which holds it to the wire's Python reference through ``verity_difftest``.  The machine model (``verity_machine_model``,
+#: on scipy and numpy, with the census as its data) is one where the layout puts it, beside the card files: the cards
+#: stay stdlib-only and the model never becomes part of ``verity``.
+SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check", "hardware/machine_model")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
