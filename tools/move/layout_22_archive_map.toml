@@ -1,5 +1,5 @@
-# The layout move of the inference-only policy, to `verity/protocols/inference_only`: what `tools/move/layout.py
-# --map tools/move/layout_10_inference_only_map.toml` moves and rewrites. 107 files in 3 rows. Written by
+# The layout move of what the layout archives, to `archive`: what `tools/move/layout.py --map
+# tools/move/layout_22_archive_map.toml` moves and rewrites. 82 files in 4 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -13,9 +13,10 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"benchmarks/nci/" = "verity/protocols/inference_only/nci/"
-"benchmarks/rho/" = "verity/protocols/inference_only/rho/"
-"verity/core/protocols/network/nci/" = "verity/protocols/inference_only/verifier/nci/"
+"benchmarks/network_traces/demo_chain.sh" = "archive/benchmarks/network_traces/demo_chain.sh"
+"benchmarks/network_traces/demo_endpoint.py" = "archive/benchmarks/network_traces/demo_endpoint.py"
+"benchmarks/network_traces/tests/test_demo_endpoint.py" = "archive/benchmarks/network_traces/tests/test_demo_endpoint.py"
+"examples/h200/" = "archive/examples/h200/"
 
 [retired]
 paths = []
@@ -39,6 +40,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.nci" = "verity.protocols.inference_only.nci"
-"benchmarks.rho" = "verity.protocols.inference_only.rho"
-"verity.core.protocols.network.nci" = "verity.protocols.inference_only.verifier.nci"
+"benchmarks.network_traces.demo_endpoint" = "archive.benchmarks.network_traces.demo_endpoint"
+"benchmarks.network_traces.tests.test_demo_endpoint" = "archive.benchmarks.network_traces.tests.test_demo_endpoint"
+"examples.h200" = "archive.examples.h200"

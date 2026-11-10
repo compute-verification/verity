@@ -1,5 +1,5 @@
 # The layout move of the claims' ids and the reporting grid, to `verity`: what `tools/move/layout.py --map
-# tools/move/layout_16_verity_map.toml` moves and rewrites. 5 files in 3 rows. Written by
+# tools/move/layout_17_verity_map.toml` moves and rewrites. 5 files in 3 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already

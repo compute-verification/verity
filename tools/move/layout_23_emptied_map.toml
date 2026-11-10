@@ -7,12 +7,12 @@
 # row a file. Nothing is edited or deleted.
 # The layout's maps run in the order of their names. This one runs after `layout_01_definitions_map.toml`,
 # `layout_02_circuits_map.toml`, `layout_03_flock_verifier_map.toml`, `layout_04_flock_prover_map.toml`,
-# `layout_05_flock_map.toml`, `layout_06_spot_map.toml`, `layout_07_pouw_map.toml`, `layout_08_poub_map.toml`,
-# `layout_09_certifier_map.toml`, `layout_10_inference_only_map.toml`, `layout_11_composite_map.toml`,
-# `layout_12_hardware_map.toml`, `layout_13_configuration_map.toml`, `layout_14_windows_map.toml`,
-# `layout_15_difftest_map.toml`, `layout_16_verity_map.toml`, `layout_17_vllm_map.toml`,
-# `layout_18_commitments_map.toml`, `layout_21_archive_map.toml`, `layout_22_pous_map.toml`: it renames a package
-# that those maps take modules out of, and would rename their modules with it. The format is `layout_map.toml`'s.
+# `layout_05_flock_map.toml`, `layout_06_spot_map.toml`, `layout_07_pouw_map.toml`, `layout_08_pous_map.toml`,
+# `layout_09_poub_map.toml`, `layout_10_certifier_map.toml`, `layout_11_inference_only_map.toml`,
+# `layout_12_composite_map.toml`, `layout_13_hardware_map.toml`, `layout_14_configuration_map.toml`,
+# `layout_15_windows_map.toml`, `layout_16_difftest_map.toml`, `layout_17_verity_map.toml`,
+# `layout_18_vllm_map.toml`, `layout_19_commitments_map.toml`: it renames a package that those maps take modules out
+# of, and would rename their modules with it. The format is `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }

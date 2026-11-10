@@ -1,5 +1,5 @@
-# The layout move of what the layout archives, to `archive`: what `tools/move/layout.py --map
-# tools/move/layout_21_archive_map.toml` moves and rewrites. 126 files in 20 rows. Written by
+# The layout move of the inference-only policy, to `verity/protocols/inference_only`: what `tools/move/layout.py
+# --map tools/move/layout_11_inference_only_map.toml` moves and rewrites. 107 files in 3 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -13,26 +13,9 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"benchmarks/bandwidth/gpu.py" = "archive/benchmarks/bandwidth/gpu.py"
-"benchmarks/bandwidth/pyproject.toml" = "archive/benchmarks/bandwidth/pyproject.toml"
-"benchmarks/bandwidth/reference.py" = "archive/benchmarks/bandwidth/reference.py"
-"benchmarks/bandwidth/run.sh" = "archive/benchmarks/bandwidth/run.sh"
-"benchmarks/bandwidth/run_stream.sh" = "archive/benchmarks/bandwidth/run_stream.sh"
-"benchmarks/bandwidth/stream.cu" = "archive/benchmarks/bandwidth/stream.cu"
-"benchmarks/bandwidth/stream.py" = "archive/benchmarks/bandwidth/stream.py"
-"benchmarks/bandwidth/stream_host.cpp" = "archive/benchmarks/bandwidth/stream_host.cpp"
-"benchmarks/bandwidth/summarize.py" = "archive/benchmarks/bandwidth/summarize.py"
-"benchmarks/bandwidth/tagger.cu" = "archive/benchmarks/bandwidth/tagger.cu"
-"benchmarks/bandwidth/tests/" = "archive/benchmarks/bandwidth/tests/"
-"benchmarks/network_traces/demo_chain.sh" = "archive/benchmarks/network_traces/demo_chain.sh"
-"benchmarks/network_traces/demo_endpoint.py" = "archive/benchmarks/network_traces/demo_endpoint.py"
-"benchmarks/network_traces/tests/test_demo_endpoint.py" = "archive/benchmarks/network_traces/tests/test_demo_endpoint.py"
-"benchmarks/pous/hbm_audit/" = "archive/benchmarks/pous/hbm_audit/"
-"benchmarks/resource_accounting/" = "archive/benchmarks/resource_accounting/"
-"examples/h200/" = "archive/examples/h200/"
-"verity/core/protocols/bandwidth/" = "archive/verity/core/protocols/bandwidth/"
-"verity/core/protocols/pous/period_reports.py" = "archive/verity/core/protocols/pous/period_reports.py"
-"verity/core/protocols/pous/tests/test_pous_period_reports.py" = "archive/verity/core/protocols/pous/tests/test_pous_period_reports.py"
+"benchmarks/nci/" = "verity/protocols/inference_only/nci/"
+"benchmarks/rho/" = "verity/protocols/inference_only/rho/"
+"verity/core/protocols/network/nci/" = "verity/protocols/inference_only/verifier/nci/"
 
 [retired]
 paths = []
@@ -56,16 +39,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.bandwidth.gpu" = "archive.benchmarks.bandwidth.gpu"
-"benchmarks.bandwidth.reference" = "archive.benchmarks.bandwidth.reference"
-"benchmarks.bandwidth.stream" = "archive.benchmarks.bandwidth.stream"
-"benchmarks.bandwidth.summarize" = "archive.benchmarks.bandwidth.summarize"
-"benchmarks.bandwidth.tests" = "archive.benchmarks.bandwidth.tests"
-"benchmarks.network_traces.demo_endpoint" = "archive.benchmarks.network_traces.demo_endpoint"
-"benchmarks.network_traces.tests.test_demo_endpoint" = "archive.benchmarks.network_traces.tests.test_demo_endpoint"
-"benchmarks.pous.hbm_audit" = "archive.benchmarks.pous.hbm_audit"
-"benchmarks.resource_accounting" = "archive.benchmarks.resource_accounting"
-"examples.h200" = "archive.examples.h200"
-"verity.core.protocols.bandwidth" = "archive.verity.core.protocols.bandwidth"
-"verity.core.protocols.pous.period_reports" = "archive.verity.core.protocols.pous.period_reports"
-"verity.core.protocols.pous.tests.test_pous_period_reports" = "archive.verity.core.protocols.pous.tests.test_pous_period_reports"
+"benchmarks.nci" = "verity.protocols.inference_only.nci"
+"benchmarks.rho" = "verity.protocols.inference_only.rho"
+"verity.core.protocols.network.nci" = "verity.protocols.inference_only.verifier.nci"
