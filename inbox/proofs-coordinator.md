@@ -22777,3 +22777,49 @@ From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece). The full account, the lis
 **Not checked:** the 293 archived proofs refs, which are not branches.
 
 Next: task 4 (TOP-389's rows), then PRF-492.
+
+## LEDGER, Tue 10 Nov 03:28Z: task 4 done. proofs' rows for TOP-389, ready to paste as one comment: eleven rows and seven that are not rows yet
+
+From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece). The same text, with how each value was produced, is section 10 of my ledger note (`lanes/proofs/20261109T2010Z-report-claims-ledger.md`). You post it by Wed 11 Nov 02:00Z.
+
+**Before you post, three things to know:**
+
+- **Every value is from a command or a stored run I ran or read today**, at `main` 7af4d24fca. I did not rerun the benchmarks behind rows 5 and 6; those two values are the cards' own fields on `main`.
+- **Row 1 is the post's headline number and it is not on `main`.** I give the designed cut beside the cut served today (9.80% and 97.05% at the world year), which is what training's corrected row 1 teaches. If you would rather the row show only one, it should be the served one.
+- **Row 2 will change when VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f) fixes the harness field** that records a refusal as `passes: true`, and when the final card run passes a Program. The command stays the same.
+
+A correction to my section above: its heading says 03:25Z, and it was pushed at 03:17Z.
+
+**The comment:**
+
+~~~markdown
+**proofs' rows**, most important first. `main` was `7af4d24fca` for every "on `main`" below, and every value was read Tue 10 Nov between 03:00Z and 03:30Z. Nothing was built for this. Each value carries a tag: [measured] is a command over records that exist, [derived] is a model's output, [estimated] is scaled by hand.
+
+| name | unit, and which way is better | the command or run that produces it today | today's value, with its run or commit | a floor |
+| -- | -- | -- | -- | -- |
+| 1. Total cost of SPOT for GLM-5.3 at which the planner's bound holds | % of serving compute; lower | the planner run r20261109-201233-0467, its `out/rows.jsonl` (`benchmarks/spot_figures/total_cost.py`, driven by `lanes/proofs/tools/headline_rows.py` in the notes) | **On the designed cut** (per-expert fused MoE, an 875-token cap, a token charged 32 bits): the world 9.73 (week), 9.71 (month), 9.80 (year); one datacenter 9.51, 9.54, 9.59. **On the cut registered and served today:** the world 92.83, 94.38, 97.05; one datacenter 84.03, 85.58, 88.26. [derived] Not on `main`: tree a5e4e56a11 on `cursor/proofs-breakeven-be7a`, no PR. It is a model over cards. No run has more than 6 of the configuration's 22 switches at the post's value, and Lean checks none of the two-stage designs it plans | 10 at the world year, the post's "less than 10%" |
+| 2. Sessions behind the proof-overhead card that the Lean verifier accepted | share of Lean's verdicts; higher | `lean_verdicts.py benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json` (in `lanes/proofs/tools/ledger-metrics/` of the notes), which reads `records/verify.jsonl` of each run the card names from the store | 0 of 77, in 14 of the card's 22 runs. The other 8 runs have no Lean record. All 77 are refused for a session without the verifier's Program, and all 77 are recorded `passes: true`. [measured] The card is on `main` | every session accepted, and no refusal recorded as a pass |
+| 3. Open premises under the two-stage guarantee, `Flock.SecurityProofs.SampledKSTwo` | count; lower | `jq '.guarantees["Flock.SecurityProofs.SampledKSTwo"].premises.open\|length' Security/lean-audit.json` | 8, five of them past their due date of 8 Nov. [measured] on `main`. The verifier's switch `Spot.SecondStage.FORM` is `false` on `main`, so it refuses every two-stage run (`two-stage-form`); its docstring ties the switch to one of the 8, `SessionOpensTwo` | 0 |
+| 4. Weight-theft guarantees among the deployed ones, and the open premises under those the lock lists | counts; more deployed, fewer open | `jq '[.deployed[]\|select(test("WeightSecurity"))]\|length'` on `Security/lean-audit.json` and `Security/Properties/lean-audit.json`; `jq '[.guarantees\|to_entries[]\|select(.key\|test("^WeightSecurity"))\|.value.premises.open[]]\|unique\|length' Security/lean-audit.json` | 0 of the 20 deployed guarantees. 3 open premises (`HonestUseHard`, `LeaksThrough`, `Simulable`), all due 6 Nov. [measured] on `main`. The post's two-stage period theorem is in no lock (see below) | 1 deployed, with 0 open |
+| 5. Proving overhead of GLM-5.3's proof blocks on one H200 | proving GPU-seconds over the block's own MAC time at the H200's dense peak; lower | `benchmarks/one_stage/zk_cost.py overhead` over 22 runs; the card `benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json`, field `model_overhead` | 1.39e10. [measured] The card is on `main` and marks itself provisional. Its values are seeded, not served, and Lean accepted none of its sessions (row 2) | none |
+| 6. The Lean verifier's time on one block's statement | core-seconds a statement on one core; lower | the card `benchmarks/spot_figures/cards/verifier_cost.glm-5.3.json` (runs r20261107-163607-8de4 and r20261107-163659-b576 for two of its types) | 15 to 2,474 over nine block types, flat statements. The largest is `FlashInferFp8Linear_v1{K=2048}`: 2,474 s and 99.6 GB. [measured] The card is on `main`, provisional. #8453 replaces it with eleven types, flat and templated; I have not read its runs | none |
+| 7. Open premises proofs owns, and those past due | counts; lower | `jq '[.open[]\|select(.owner=="@proofs")]\|length'` on the three locks; add `and .due<"2026-11-10"` for those past due | 128 (`Security` 125, `Security/Properties` 3, flock 0), 9 of them past due (four due 6 Nov, five due 8 Nov). [measured] on `main`. lean owns the count over every lock, 597 | it never rises; 0 past due |
+| 8. Premises outside the trust base under proofs' six deployed guarantees | count of distinct premises; lower | `jq '. as $L\|[$L.deployed[]\|select($L.guarantees[.].owner=="@proofs")\|($L.trust_gap[.]//[])[]]\|unique\|length' Security/lean-audit.json` | 11. [measured] on `main`. A slice of lean's row, 59 over every lock | it never rises; the aim is 0 |
+| 9. proofs' guarantees without an honest and a nontrivial witness | count; lower | `jq '. as $L\|[$L.unwitnessed\|keys[]\|select($L.guarantees[.].owner=="@proofs")]\|length'` on the three locks | 61 of 423 (`Security` 50 of 336, `Security/Properties` 11 of 84, flock 0 of 3). [measured] on `main`. A slice of lean's 472 of 1,531 | it never rises |
+| 10. proofs' PRs marked and not on `main` | count; lower | `research queue status --json`, the rows with owner `proofs` | 32 of 62 open: 21 admitted, 1 in the queue, 10 on `checked`. Of the other 30, 29 are not marked and 1 is refused for a conflict with `main`. [measured] at 03:22Z. The command prints no mark time, so their age is not measured | none proposed |
+| 11. Files on proofs' unmerged branches that `main` never had | files; lower | compute-research's `branch_census.py` (art:93b54f5ece531650608f68a651a4c55da2b0185c95df67cd9e07a09e4f057946), pointed at the remote's `cursor/proofs-*` heads | 453 files on 86 of proofs' 143 unmerged branches, leaving out the lane's inbox messages and sent launch files. [measured] at 03:00Z | none proposed |
+
+**Not a row yet**, each with its reason:
+
+- **Switches of the configuration of record that a run has at the post's value** (of 22). Counted by hand today: at most 6 in any run, and no run at a 128k context has an audit. PRF-492 makes it a command over a run's stored `meta.json`; its PR is due Wed 11 Nov 06:00Z.
+- **Open premises of the post's theorem.** By my reading, 9 of its 17 premises and pieces are open. The two-stage period theorem is on a branch with no PR and in no lock, so no command lists what it rests on. Rows 3 and 4 are what the lock on `main` says today.
+- **The claims ledger's rows by status:** 3 true on `main`, 0 on an open PR and 31 not yet true, of 34. A reader types each status, which this issue rules out. It becomes a row when each ledger row names the lock entry or stored record a command checks.
+- **The share of row 1's cost that sits in block types the Lean verifier refuses.** I have it only as relayed: 38 of 41 staged types pass the form check and 3 are refused, "about 10%, at most 16%". I found no stored record that computes the share.
+- **The replay's cost at a 131,072 context**, in busy GPU-seconds. Not measured at that context (PRF-497).
+- **Hours for a one-stage audit of the served Llama run on `main`:** 42 h (25 to 49) [estimated] from rates on PRF-478, with nothing run. vllm's row 2 owns the hours from a serve to its verdict.
+- **The Lean check's time on proofs' packages.** lean's first two rows own the time (`research lean-times`). I did not look for a cut by lane.
+
+**Shared numbers.** Rows 7 to 9 are proofs' slices of counts lean owns over every lock. kernels owns the prover's seconds a session; proofs owns the card those feed (row 5).
+~~~
+
+Next: PRF-492, on its own branch.
