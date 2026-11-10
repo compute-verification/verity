@@ -109,13 +109,7 @@ def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
 
 structure Evidence where
   digests : ByteArray
-<<<<<<< ours
-  session : Run.ChallengerRecord
-||||||| base
-  session : Run.Session
-=======
   session : Run.ChallengePhaseRecord
->>>>>>> theirs
   setup : SetupEvidence
 
 def Evidence.toJson (e : Evidence) : Json :=
@@ -125,17 +119,9 @@ def Evidence.toJson (e : Evidence) : Json :=
 `C*`'s hex inside it, so its text is kept to compare the evidence's encoding against rather than written again. -/
 def decodeEvidence (b : ByteArray) : V Evidence := do
   let (j, s) ← Core.Canonical.read b
-<<<<<<< ours
-  let e : Evidence := ⟨← hexAt j "digests" "evidence",
-    ← Run.ChallengerRecord.ofJson (← J.get j "session" "evidence"), ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
-||||||| base
-  let e : Evidence := ⟨← hexAt j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
-    ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
-=======
   let e : Evidence := ⟨← hexAt j "digests" "evidence",
     ← Run.ChallengePhaseRecord.ofJson (← J.get j "session" "evidence"),
     ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
->>>>>>> theirs
   if !(← Core.Canonical.writes e.toJson s) then
     throw "not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)"
   pure e
@@ -156,9 +142,9 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   else none
 
 /-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+(`P2RingRoundSecureWide`, `RingDeviceAt`). -/
 def WIDE_CLAIMS : List String :=
-  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
+  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at"]
 
 /-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
 any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
