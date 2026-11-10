@@ -343,11 +343,11 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     return max(len(running), 1), len(free), waiting, why
 
 
-def _lean(doc: Any, pool: str | None) -> tuple[float, str]:
+def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
     0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
-    waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read. LookupError when they give the
-    pool none."""
+    waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read; None, with why, when they give
+    the pool none, so the run would never get one there."""
     if not pool:
         return 0, ""
     lean = doc.get("lean") if isinstance(doc, dict) else None
@@ -356,7 +356,7 @@ def _lean(doc: Any, pool: str | None) -> tuple[float, str]:
     if (pools := lean.get("pools")) is None:
         return 0, "; no Lean slots to wait for there"
     if not (n := (pools.get(pool) or {}).get("n")):
-        raise LookupError(f"its Lean slots give `{pool}` none")
+        return None, f"its Lean slots give `{pool}` none"
     free = sum(s.get("holder") is None for s in pools[pool].get("slots") or [])      # a slot past N is listed only while held
     waiting = len(pools[pool].get("waiters") or [])
     return (0 if free > waiting else (waiting + 1) / n), f"; Lean `{pool}`: {free} of {n} free, {waiting} waiting"
@@ -380,22 +380,22 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
         doc = docs.get(machine)
         try:
             line, lean = _lean(doc, lean_pool)
+            if line is None:
+                notes.append(f"{machine}'s {pool} pool skipped: {lean}")
+                continue
             fit, free, waiting, why = _pool(doc.get(pool) if isinstance(doc, dict) else doc, cpus, mem_gb)
         except Stalled as e:
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             stalled.append((e.waiting, i, (machine, pool)))
             continue
-        except (ValueError, LookupError, TypeError, AttributeError) as e:
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             continue
         notes.append(f"{machine}'s {pool} pool: {why}{lean}")
         if free > waiting and not line:
             return (machine, pool), "; ".join(notes) + ": a slot is free there now" + (f", and one{of} with it" if of else "")
         ranked.append((line, 0 if free > waiting else (waiting + 1) / fit, i, (machine, pool)))
-    try:
-        starts = share is not None and share.get("fits") and not share["waiters"] and not _lean(n2, lean_pool)[0]
-    except LookupError:
-        starts = False
+    starts = share is not None and share.get("fits") and not share["waiters"] and _lean(n2, lean_pool)[0] == 0
     if ranked and starts:
         return None, "; ".join(notes) + (f": no pool has a slot and one{of} free" if of else ": no pool slot is free") + \
             f", and it starts on {AUTO_NODE} now"

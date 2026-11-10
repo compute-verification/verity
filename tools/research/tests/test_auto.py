@@ -332,8 +332,7 @@ def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_p
     assert doc["lean"]["pools"]["build"] == {"n": 2, "slots": [{"index": i, "past_n": False, "holder": None} for i in range(2)], "waiters": []}
     assert auto._lean(doc, "build") == (0, "; Lean `build`: 2 of 2 free, 0 waiting")
     for absent in ("audit", "check"):                                   # commented out, and listed with no slot
-        with pytest.raises(LookupError, match=f"its Lean slots give `{absent}` none"):
-            auto._lean(doc, absent)
+        assert auto._lean(doc, absent) == (None, f"its Lean slots give `{absent}` none")
     line = slots.parent / "lean-line-build"
     line.mkdir()
     waiters = [cores.locked(line / f"{10**18 + i:020d}-{7 + i}", "{}\n") for i in range(2)]
