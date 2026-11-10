@@ -295,6 +295,25 @@ private def SAMPLE : Array Nat := #[1, 3, 4, 7, 9]
   (refusal (held (some 2) SAMPLE proved)).startsWith "the evidence names "
 #guard !several none SAMPLE && !several (some 8) SAMPLE && several (some 4) SAMPLE && several (some 2) SAMPLE
 
+/-- A public file naming `SAMPLE`'s proof blocks, and a session's record that samples them at `positions`. -/
+private def PUB_FILE : ByteArray := "{\"units\":{\"indices\":[1,3,4,7,9]}}\nrest".toUTF8
+private def recordT (positions : String) : ByteArray := ("{\"unit_draw\":{\"units\":" ++ positions ++ "}}").toUTF8
+
+/-- `partsHeld` on sessions whose records are `records`, each named by its SHA-512 on the blobs that hold them. -/
+private def heldOn (bound : Option Nat) (records : Array ByteArray) : V Unit :=
+  partsHeld bound PUB_FILE SAMPLE (records.map fun r => ⟨"s", Flock.hexOf (Flock.Sha512.hash r), #[]⟩)
+    (Core.Blobs.ofArray records)
+
+-- The same on the sessions' records, read from the blobs as the check reads them.
+#guard (heldOn (some 2) #[recordT "[1,0]", recordT "[2,3]", recordT "[4]"]).toBool
+#guard refusal (heldOn (some 2) #[recordT "[2,3]", recordT "[0,1]", recordT "[4]"]) ==
+  "session 0 proved other proof blocks than part 0 of the sample"
+#guard refusal (heldOn (some 2) #[recordT "[0,1]", recordT "[2]", recordT "[4]"]) ==
+  "session 1 proved other proof blocks than part 1 of the sample"
+#guard (heldOn none #[recordT "[0,1,2,3,4]"]).toBool && (heldOn (some 8) #[recordT "[4,3,2,1,0]"]).toBool
+#guard (refusal (partsHeld (some 2) PUB_FILE SAMPLE #[⟨"s", "", #[]⟩] Core.Blobs.empty)).startsWith
+  "session s's record"
+
 private def openT (tree stream : String) : String :=
   "{\"after\":\"cd\",\"coins\":\"ef\",\"event\":\"tree-open\",\"n\":1,\"round\":0,\"stream\":\"" ++ stream ++
     "\",\"tree\":\"" ++ tree ++ "\"}"
