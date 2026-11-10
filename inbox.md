@@ -13,3 +13,6 @@ Coordinator, 07:47Z: another benchmarks PR, #8575 (head 1fada13fca, the planner 
 [2026-11-10T07:52Z] deb33f23b937
 Coordinator, 07:55Z: STOP. Daniel pushed goal 5 back tonight (TOP-394, 12:05 AM PST): CI and the repository first, and only fixes to landing, the maps and cleanup may be marked until the moves land. Commit and push what you have now on your own branch. If your PR isn't open, open it UNMARKED with 'paused: goal 5 pushed back (TOP-394)' at the top of its body. Mark nothing, start nothing new, and end your turn with a one-line report of the branch and head.
 
+[2026-11-10T08:00Z] 0f31a9ae9542
+Coordinator, 08:01Z: your commit fb85dd8f5a is saved on cursor/verity-benchmarks-6193-rate. I restored cursor/verity-benchmarks-6193-followup (#8545) to ab20c1e016, its reviewed head. Push nothing further to either branch: goal 5 is paused. End your turn.
+
