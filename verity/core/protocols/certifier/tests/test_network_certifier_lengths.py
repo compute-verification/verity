@@ -14,7 +14,7 @@ from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, id_request
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, run
 from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams,
-                                                    cells)
+                                                    audit, cells, read_reason, reason_frame)
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
@@ -180,3 +180,53 @@ def test_a_connection_that_is_never_released_holds_its_lane_through_its_delay(na
         later, _, _ = run(answers, {0: arrivals[0], D + 1: arrivals[2]}, params=without, windows=3)
         assert {e["ordinal"]: e["admitted"] for e in later.log}[3] == D + 1
         assert scanned(later, {1: out, 3: out}) is not None
+
+
+# --- the audit ---------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(failed_clients()))
+def test_a_connection_that_is_never_released_fails_no_window_of_the_audit(name):
+    """With lengths rows the read of the records in the clear accepts a window in which a client failed before its
+    request's release: no server saw the request, and the connection's entry still names its reason. The same records
+    read as a schedule's without lengths rows fail their window, as every `FAIL` does there, and the records of the run
+    without lengths rows, whose `FAIL` is before s + D, are not this schedule's."""
+    data, other, why, _, _ = failed_clients()[name]
+    params, out = dataclasses.replace(LEN, **other), (7, 8)
+    arrivals, answers = {0: [cells(id_req(1, 3), B), data]}, [answer(out), []]
+    warden, _, _ = run(answers, arrivals, params=params, windows=2)
+    verdict = audit(params, *records(warden))
+    assert verdict["accepted"] and not any(w["problems"] for w in verdict["windows"])
+    entry = verdict["connections"][1]
+    assert (entry["ordinal"], entry["ingress_end"], entry["failed"], entry["failed_at"]) == (2, None, why, 0)
+    without = dataclasses.replace(params, lengths=None)
+    assert audit(without, *records(warden))["windows"][0]["problems"] == \
+        [f"connection 2 failed closed ({why}) at egress cell 0"]
+    plain, _, _ = run(answers, arrivals, params=without, windows=2)
+    assert "connection 2: its egress isn't padding to s + D, data in every slot, one END or FAIL, padding" in \
+        audit(params, *records(plain))["windows"][0]["problems"]
+
+
+def test_the_audit_holds_each_failure_to_the_side_that_can_cause_it():
+    """With lengths rows a released connection's `FAIL` is the server's and still fails its window; and records in
+    which a client's reason goes with a released request, or a server's with one never released, are no records of
+    this schedule."""
+    arrivals = {0: [cells(id_req(1, 3), B), cells(id_req(2, 40), B)[:-10]], 8: [cells(id_req(3, 3), B)]}
+    warden, _, _ = run([answer((7, 8)), [], []], arrivals, params=LEN, windows=2)
+    ingress, egress, fails = records(warden)
+    verdict = audit(LEN, ingress, egress, fails)
+    assert [(c["ordinal"], c["failed"]) for c in verdict["connections"]] == [(1, None), (2, "malformed"), (3, "late")]
+    assert [w["problems"] for w in verdict["windows"]] == [["connection 3 failed closed (late) at egress cell 0"], []]
+
+    def swapped(ordinal: int, why: str):
+        """The `fails` records with `ordinal`'s reason replaced."""
+        grid = tuple(tuple(reason_frame(ordinal, why, B) if f is not None and read_reason(f, B)[0] == ordinal else f
+                           for f in row) for row in fails[0].grid)
+        return [dataclasses.replace(fails[0], grid=grid), *fails[1:]]
+
+    assert audit(LEN, ingress, egress, swapped(3, "malformed"))["windows"][0]["problems"] == [
+        "connection 3: it failed (malformed) and its request was released",
+        "connection 3 failed closed (malformed) at egress cell 0"]
+    assert audit(LEN, ingress, egress, swapped(2, "late"))["windows"][0]["problems"] == [
+        "connection 2: it failed (late) and its request was never released",
+        "connection 2 failed closed (late) at egress cell 0", "connection 3 failed closed (late) at egress cell 0"]

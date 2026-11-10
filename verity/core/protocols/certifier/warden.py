@@ -123,7 +123,8 @@ cells the network certifier sent that way: every connection's r cells of the buc
 So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The
 third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
-schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed.
+schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed (with lengths rows, none
+that was released).
 
 `PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and
 `verity`.
@@ -158,6 +159,8 @@ KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refu
 #: request past the response cap (a schedule without one has the first six, `WardenParams.reasons`); only the `fails`
 #: record holds them
 REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format", "cap")
+#: the reasons a client's own bytes give; the rest are the server's
+CLIENT_REASONS = ("ingress", "malformed", "cap")
 #: what egress releases (the module docstring's egress form): the egress record's id-form cells, or any bytes
 EGRESS_FORMS = ("id", "bytes")
 #: the bytes the network certifier reads from a server at once
@@ -874,7 +877,10 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
     request cell as the network certifier read it: a request cut into cells has one at most the cap, its response at
     most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
-    records are complete, its cells are the schedule's and the egress form's and no connection failed in it. Each
+    records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
+    lengths rows every `FAIL` is at an egress slot, a client's reason (`CLIENT_REASONS`) is a connection's whose request
+    has no `END` and a server's one whose request has, and a connection that was never released fails no window: its
+    failure is its client's, no server saw its request, and its entry still names its reason. Each
     connection's entry has its buckets, cells, outcome, its failure's reason, its `max_tokens` under a response cap
     (else None) and the SHA-256 of each direction's bytes; the verdict names the schedule's `max_tokens_cap`."""
     T, r, D, cap = params.window, params.slots, params.delay, params.max_tokens_cap
@@ -943,7 +949,8 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
         failed = failed_at = None
         if live:
             last = live[-1]
-            lead = kinds.index(FAIL) if live == [FAIL] and kinds.index(FAIL) < D * r else D * r
+            early = live == [FAIL] and kinds.index(FAIL) < D * r and params.lengths is None
+            lead = kinds.index(FAIL) if early else D * r
             expected = [PAD] * lead + [DATA] * (len(live) - 1) + [last]
             expected += [PAD] * (-len(expected) % r)
             if last not in (END, FAIL) or kinds != expected:
@@ -968,12 +975,15 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
                 problems.append(f"its response has {live.count(DATA)} DATA cells, past its max_tokens ({max_tokens})")
         if failed == "cap" and requested:
             problems.append("it was refused (cap) after its request was released")
+        clients = failed in CLIENT_REASONS
+        if params.lengths is not None and failed not in (None, "fail") and clients != (a is None):
+            problems.append(f"it failed ({failed}) and its request was {'never ' if a is None else ''}released")
         data_in = b"".join(p for k, p in ing_cells if k in (DATA, END))
         data_out = b"".join(p for k, p in eg_cells if k in (DATA, END))
         ended = max(eg) if live and live[-1] in (END, FAIL) else None
         for problem in problems:
             verdicts[s // T].append(f"connection {o}: {problem}")
-        if failed:
+        if failed and not (params.lengths is not None and clients and a is None):
             verdicts[max(eg) // T].append(f"connection {o} failed closed ({failed}) at egress cell {failed_at}")
         connections.append({"ordinal": o, "admitted": s, "ingress_end": a, "ended": ended,
                             "egress_cells": len(live), "ingress_bytes": len(data_in), "egress_bytes": len(data_out),
