@@ -274,7 +274,9 @@ rule for each case: the team skill's Landing.
   `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
   `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
   over its directory, which matches the keys beside it. Look at a key with `stat`, `sha256sum` or
-  `openssl pkey -in FILE -pubout`.
+  `openssl pkey -in FILE -pubout`. A process's command line can hold a token: never print one (`ps` with `args` or
+  `cmd`, `ps aux`, `ps -ef`, `pgrep -a`, `/proc/PID/cmdline`), filtered or for one pid;
+  `python3 tools/agent-guard/procs.py PATTERN` lists them masked.
 
 ## Where writing goes
 

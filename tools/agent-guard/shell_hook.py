@@ -8,11 +8,20 @@ agent's transcript. Refused, anywhere in the command (pipelines,
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (tmux's global environment through `cut -d= -f1` prints a
 multi-line key's lines too).
-`compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
-(`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
-token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
-lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+`compgen -e` lists names only and passes. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+
+A process's command line is refused the same way, whoever's it is and however few are asked for: a daemon's or a git child's
+token sits in its arguments, and a filter after the listing keeps the very line that holds it, as does asking for the one
+pid. Refused: `ps` unless it surely shows no arguments and no environment (`ps_shows`: `ps aux`, `ps -ef`, `ps -eo pid,args |
+grep NAME`, `ps -p PID -o args`, `ps -fp $(pgrep NAME)`, `ps PID`, and what it reads as those), `pgrep -a` and `pgrep -fl`,
+`pstree -a`, `top -c`, behind `xargs` too, and any path `/proc/.../cmdline` or `/proc/.../environ`, for a pid, `self`, a
+variable or a glob. What names processes without their arguments passes: `ps -eo pid,stat,etimes,comm`, `ps -o pid,etimes,comm
+-p PID`, `pgrep -f PATTERN`. For the command lines themselves there is `procs.py [PATTERN] [-p PID]` beside this file, which
+prints them with whatever may be a credential masked and matches PATTERN against the masked line; install.sh puts it on PATH
+as `procs` and, as a filter, in front of `ps` and `pgrep`, for the VM whose hook didn't load. This guards against accidents and
+is no boundary: a program that opens `/proc/PID/cmdline` itself (a script, `python3 -c`, a debugger) is not seen, nor is
+another tool that prints arguments (`pmap`, `htop`, `systemctl status`), and what would close it is for no program to take a
+token in its arguments, which for the exec daemon is Cursor's to change.
 
 A secret file is refused the same way: a command that writes what it reads to its output (READERS: `cat`, `head`, `tail`,
 `sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, `zcat` and its kin, and a `grep`/`rg` that prints lines, one
@@ -92,16 +101,22 @@ KEYWORDS = {"{", "}", "!", "if", "then", "elif", "else", "do", "while", "until"}
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SSH_ARG_OPTIONS = set("bcDEeFIiJLlmOopQRSWw")
 TMUX_ARG_OPTIONS = set("cfLST")
-ENVIRON = re.compile(r"/proc/[^\s'\"]*environ|/proc/\*/cmdline")
+#: a process's environment or arguments as a path, whatever names the process: a pid, `self`, `"$pid"`, `$(pgrep X)`, a glob,
+#: or a variable for its whole directory (`for p in /proc/[0-9]*; do cat $p/cmdline`)
+ENVIRON = re.compile(r"""/proc/(?:[^\s|;&]|\$\([^)]*\))*?(?:environ|/cmdline)|\$\{?\w+\}?["']?/(?:environ|cmdline)(?![\w.-])""")
+SUBSTITUTION = re.compile(r"\$\(([^()]*)\)")
 FILTERS = {"grep", "egrep", "fgrep", "rg"}
 FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])|show-?env", re.M)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
 
+PROCS = "tools/agent-guard/procs.py"
 REASON = ("this command would print environment variables' values (a multi-line secret's later lines print even through "
-          "`cut -d= -f1`) or every process's full command line (tokens sit in some daemons' argv). List variable names with "
-          "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
-          "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
-          "`ps -eo pid,args | grep \"[p]attern\"` (not `grep -v`, which prints every other line) or `pgrep -af PATTERN`.")
+          "`cut -d= -f1`) or a process's command line or environment (tokens sit in some daemons' arguments, and a filter "
+          "after the listing keeps the line that holds one). List variable names with `compgen -e` (filter with "
+          "`compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. List processes with "
+          "`ps -eo pid,stat,etimes,comm`, find one with `pgrep -f PATTERN` and look at it with `ps -o pid,etimes,comm -p PID`. "
+          f"For command lines, `python3 {PROCS} PATTERN` prints the matching ones with credentials masked (one process: "
+          f"`python3 {PROCS} -p PID`; on another machine: `ssh HOST python3 - PATTERN < {PROCS}`).")
 
 
 def secret(name: str) -> bool:
@@ -186,29 +201,112 @@ def assigned(words: list[str], name: str) -> str:
     return ""
 
 
-def one_pid(args: list[str]) -> bool:
-    """Whether `ps ARGS` selects exactly one process by pid (`-p PID`, `--pid PID`) and nothing else."""
-    sel = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in ("-p", "--pid", "-q", "--quick-pid")]
-    others = any(a in ("--ppid", "-C", "-u", "-U", "-g", "-G", "-t", "--user", "--group", "--sid", "-s") or a.startswith("--ppid=")
-                 for a in args)
-    return len(sel) == 1 and re.fullmatch(r"\d+", sel[0][1]) is not None and not others
+#: `ps`'s options that show no arguments and no environment, the only ones it passes on. `ps` reads its arguments twice: as
+#: written and, when that reading fails (an option it lacks, a user it doesn't know, two options at odds), all of them over
+#: again as BSD's, where `-e` is `e`, the environment, and no format means full command lines (`ps -aux`, `ps -e -x`, `ps -e
+#: -T --forest`). So none is here whose failure the second reading survives: not `-c`, `-M`, `-H` or `-T`.
+PS_FLAGS = set("AadeNwljyLmZP")
+PS_VALUED = set("CDGgopqstUu")
+#: the valued ones that stand alone in BSD's reading (`-u` is its `u`): each takes a word of its own, written out, since a
+#: value `ps` can't use, or none (`-u $EMPTY`), leaves the BSD listing; and `-D`, which reads a value in its own word as
+#: further options (`-Df` is `-D f -f`)
+PS_NAMED = set("CDgstu")
+PS_LONG = {"cumulative", "deselect", "forest", "header", "headers", "heading", "headings", "help", "info", "no-header",
+           "no-headers", "no-heading", "no-headings", "noheader", "noheaders", "noheading", "noheadings", "signames", "version"}
+PS_LONG_VALUED = {"Group", "User", "cols", "columns", "date-format", "format", "group", "lines", "pid", "ppid", "quick-pid",
+                  "rows", "sid", "sort", "tty", "user", "width"}
+#: BSD's options (no dash) that take the rest of their word, else the next word, as their value
+PS_BSD_VALUED = set("kopqtU")
+#: the columns that hold a process's arguments
+PS_ARGV = {"args", "cmd", "command"}
 
 
-def every_argv(args: list[str]) -> bool:
-    """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
-    `--ppid N`, `-C NAME` or `-u USER` (`ps -o pid,etime,cmd --ppid N` prints a git child's token-bearing URL)."""
-    fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
-                if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
-    fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
-    shown = fmt is None or bool(re.search(r"\b(args|cmd|command)\b", fmt))
-    bsd = [a for i, a in enumerate(args) if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt
-           and not (i and args[i - 1].startswith("-"))]
-    short = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
-    if any(set(b) & set("ax") for b in bsd):
-        return shown and not any("c" in b for b in bsd)
-    if one_pid(args):
-        return False
-    return bool(set(short) & set("fF")) if fmt is None else shown
+def ps_shows(args: list[str]) -> bool:
+    """Whether `ps ARGS` may print a command line or an environment: True unless it surely doesn't. It doesn't when every
+    option is one of PS_FLAGS, PS_VALUED, PS_LONG or PS_LONG_VALUED and either each format given (`-o`, `--format`) names no
+    column of PS_ARGV, no macro of several columns (`DefBSD`: every one has a capital) and no AIX `%a`, or none is given and
+    nothing brings BSD's defaults, whose format ends in the arguments: a BSD option (`ps ax`), a pid after the options (`ps
+    1234`), or a `$VARIABLE` or `$(...)`, which may hold several pids (`ps -p $(pgrep X)` is `ps -p 12 34`). BSD's `c` (`ps
+    axc`) keeps the name alone; its `e` adds the environment even then, and its `O`, like `-O`, a format that ends in the
+    command."""
+    formats, bsd, names_only, i = [], False, False, 0
+    while i < len(args):
+        word = args[i]
+        i += 1
+        if word.startswith("--"):
+            name, sep, value = re.fullmatch(r"--([^=:]*)([=:]?)(.*)", word, re.S).groups()
+            if name in PS_LONG:
+                continue
+            if name not in PS_LONG_VALUED or (not sep and i == len(args)):
+                return True
+            value, i = (value, i) if sep else (args[i], i + 1)
+            bsd |= "$" in value
+            formats += [value] if name == "format" else []
+        elif re.match(r"-[A-Za-z]", word):
+            for at, letter in enumerate(word[1:], 2):
+                if letter in PS_FLAGS:
+                    continue
+                if letter not in PS_VALUED or (at == len(word) and i == len(args)):
+                    return True
+                value, i = (word[at:], i) if at < len(word) else (args[i], i + 1)
+                if letter in PS_NAMED and (not value.isdigit() if at < len(word) else value.startswith("-") or "$" in value):
+                    return True
+                bsd |= "$" in value
+                formats += [value] if letter == "o" else []
+                break
+        elif re.match(r"[A-Za-z]", word):
+            bsd = True
+            for at, letter in enumerate(word, 1):
+                if letter in "eO":
+                    return True
+                names_only |= letter == "c"
+                if letter in PS_BSD_VALUED:
+                    value, i = (word[at:], i) if at < len(word) or i == len(args) else (args[i], i + 1)
+                    formats += [value] if letter == "o" else []
+                    break
+        elif re.match(r"[-+]?\d|\$", word):               # pids, to the last word: no option after them counts
+            bsd = True
+            break
+        else:
+            return True
+    columns = [re.split(r"[=:]", column)[0] for f in formats for column in re.split(r"[,\s]+", f)]
+    if formats:
+        return any(c in PS_ARGV or c != c.lower() or ("%" in c and c not in ("%cpu", "%mem")) for c in columns)
+    return bsd and not names_only
+
+
+#: the option of each of these that prints processes' arguments, as (program, letter, long name, the fewest of its
+#: characters getopt takes it by)
+ARGV_OPTIONS = (("pgrep", "a", "list-full", 6), ("pstree", "a", "arguments", 2), ("top", "c", "cmdline-toggle", 1))
+#: xargs's own options that take the next word as their value
+XARGS_VALUED = ("adEILnPs", {"arg-file", "delimiter", "max-args", "max-procs", "max-chars", "process-slot-var"})
+
+
+def asked(given: dict[str, list[str]], letter: str, name: str, least: int) -> bool:
+    """Whether the options `given` (`operands`) hold `-LETTER` or `--NAME`, the long one cut as short as `least` characters."""
+    return letter in given or any(least <= len(g) > 1 and name.startswith(g) for g in given)
+
+
+def xargs_command(args: list[str]) -> tuple[list[str], bool]:
+    """(the command `xargs ARGS` runs, after xargs's own options; whether xargs puts what it reads in place of a word of it
+    (`-I {}`) and not after its last one)."""
+    i, replaces = 0, False
+    while i < len(args) and args[i].startswith("-") and len(args[i]) > 1:
+        word = args[i]
+        i += 1
+        if word == "--":
+            break
+        if word.startswith("--"):
+            name, valued, _ = word[2:].partition("=")
+            replaces |= len(name) > 1 and "replace".startswith(name)
+            i += not valued and any(long.startswith(name) for long in XARGS_VALUED[1])
+            continue
+        for at, letter in enumerate(word[1:], 2):
+            replaces |= letter in "Ii"
+            if letter in XARGS_VALUED[0] + "eil":           # `-e`, `-i` and `-l` take a value only in their own word
+                i += letter in XARGS_VALUED[0] and at == len(word)
+                break
+    return args[i:], replaces
 
 
 def ssh_words(args: list[str]) -> list[str]:
@@ -219,10 +317,13 @@ def ssh_words(args: list[str]) -> list[str]:
     return args[i + 1:]
 
 
-def refused(words: list[str], filtered: bool = False) -> bool:
+def refused(words: list[str], fed: bool = False) -> bool:
+    """Whether the simple command `words` would print the environment or a process's command line. `fed` says xargs runs it,
+    with what it reads as further words after the last."""
     if any(refused_text(w.split("$(", 1)[1]) for w in words if "$(" in w):
         return True
-    words = unwrap(strip_redirections(words))
+    given = strip_redirections(words)
+    words = unwrap(given)
     if not words:
         return False
     name, args = os.path.basename(words[0]), words[1:]
@@ -232,7 +333,8 @@ def refused(words: list[str], filtered: bool = False) -> bool:
         run = env_command(args)
         if not run:
             return True
-        return refused_text(run[0]) if len(run) == 1 and " " in run[0] else refused(run)
+        ps_settings = [a for a in args[:len(args) - len(run)] if a.startswith("PS_")]
+        return refused_text(run[0]) if len(run) == 1 and " " in run[0] else refused(ps_settings + run)
     if name == "printenv":
         return not names or any(secret(n) for n in names)
     if name == "set":
@@ -249,8 +351,13 @@ def refused(words: list[str], filtered: bool = False) -> bool:
         return refused_text(" ".join(ssh_words(args)))
     if name == "research" and "ssh" in args and "--" in args:
         return refused_text(" ".join(args[args.index("--") + 1:]))
-    if name == "ps":
-        return not filtered and every_argv(args)
+    if name == "ps":                                     # $PS_FORMAT is the format when none is given, $PS_PERSONALITY the reading
+        return any(w.startswith("PS_") for w in given[:len(given) - len(words)]) or ps_shows(args + ["$"] if fed else args)
+    for program, letter, long, least in ARGV_OPTIONS:
+        if name == program:
+            options, _ = operands(name, args)
+            return asked(options, letter, long, least) or (
+                name == "pgrep" and asked(options, "l", "list-name", 6) and asked(options, "f", "full", 1))
     if name == "tmux":
         i = 0
         while i < len(args) and args[i].startswith("-"):
@@ -266,39 +373,22 @@ def refused(words: list[str], filtered: bool = False) -> bool:
             return not shown or any(secret(n) for n in shown)
         return False
     if name == "xargs":
-        rest = [a for a in args if not a.startswith("-")]
-        return bool(rest) and refused(rest)
-    return False
-
-
-def filter_cmd(words: list[str]) -> bool:
-    words = unwrap(strip_redirections(words))
-    return bool(words) and os.path.basename(words[0]) in FILTERS
-
-
-def inverted(words: list[str]) -> bool:
-    """Whether a `grep`/`rg` prints the lines that don't match: `-v`, alone or in a cluster such as `-iv`, or `--invert-match`,
-    which GNU grep takes from `--inv` on."""
-    return any(a.startswith("--inv") and "--invert-match".startswith(a) or re.fullmatch(r"-\w*v\w*", a)
-               for a in unwrap(strip_redirections(words))[1:])
-
-
-def filtered(commands: list[tuple[list[str], str]], i: int) -> bool:
-    """Whether command `i` pipes straight into a `grep`/`rg` that keeps only matching lines, read past inverted ones
-    (`ps -ef | grep -v grep | grep NAME`)."""
-    while commands[i][1] == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]):
-        i += 1
-        if not inverted(commands[i][0]):
-            return True
+        run, replaces = xargs_command(args)
+        return bool(run) and refused(run, not replaces)
     return False
 
 
 def refused_text(text: str) -> bool:
+    """Whether a command of `text` is `refused`. Each `$(...)` is judged as text of its own, and where it stood is a lone `$`,
+    so the command it stands in keeps the words after it: `ps -p $(pgrep X) -o args` is one `ps`."""
     if ENVIRON.search(text):
         return True
+    parts = [text]
+    while (inner := SUBSTITUTION.search(parts[0])):
+        parts[0] = parts[0][:inner.start()] + "$" + parts[0][inner.end():]
+        parts.append(inner[1])
     try:
-        commands = words_of(text)
-        return any(refused(w, filtered(commands, i)) for i, (w, _) in enumerate(commands))
+        return any(refused(words) for part in parts for words, _ in words_of(part))
     except ValueError:                                   # unbalanced quotes: judge the raw text
         return bool(FALLBACK.search(text))
 
@@ -332,6 +422,11 @@ VALUED = {"grep": GREP_VALUED, "egrep": GREP_VALUED, "fgrep": GREP_VALUED,
           "awk": ("fFveil", {"file", "field-separator", "assign", "source", "include", "load"}),
           "sort": ("koStT", {"key", "output", "buffer-size", "field-separator", "temporary-directory"}),
           "diff": ("UCIxXLFWD", set()), "zip": ("bnPtO", set()),
+          "pgrep": ("dFgGOPrstuU", {"delimiter", "pidfile", "pgroup", "group", "older", "parent", "runstates", "session",
+                                    "terminal", "euid", "uid", "signal", "cgroup", "ns", "nslist"}),
+          "pstree": ("HN", {"highlight-pid", "ns-sort"}),
+          "top": ("dEenopUu", {"delay", "scale-summary-mem", "scale-task-mem", "iterations", "sort-override", "pid",
+                               "filter-any-user", "filter-only-euser"}),
           "tar": ("bCfFgHIKLNTVX", {"file", "directory", "files-from", "exclude", "exclude-from", "transform", "xform", "owner",
                                     "group", "mode", "mtime", "newer", "format", "label", "sort", "strip-components",
                                     "use-compress-program", "to-command", "checkpoint-action", "info-script", "rsh-command"})}

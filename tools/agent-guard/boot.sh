@@ -10,7 +10,7 @@
 # `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): Cursor reads hooks once,
 # early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
 # copies the files of origin/main's `tools/agent-guard` (not its tests) to DEST (default /opt/agent-guard), or keeps an
-# earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
+# earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env`, the git guard and the masking `ps` and `pgrep` ahead of
 # /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
 # and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
 # names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone

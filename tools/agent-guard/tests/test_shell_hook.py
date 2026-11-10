@@ -1,6 +1,8 @@
-"""`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
+"""`.cursor/hooks.json`'s shell hook refuses commands that print the environment or a process's command line and lets
+everything else through."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -104,7 +106,7 @@ def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_ca
     "ps -f -u research",
     "ps -o args -C git",
     "ps -p 1,2 -o args",
-    "ps -ef --forest | grep -v -E 'xfce|dbus' | tail -30",  # an inverted filter prints every other line
+    "ps -ef --forest | grep -v -E 'xfce|dbus' | tail -30",  # a filter after the listing, whichever lines it keeps
     "ps -eo pid,etime,args | grep -v kworker",
     "ps aux | grep -iv lake",
     "ps aux | rg --invert-match lake",
@@ -119,6 +121,133 @@ def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_ca
 ])
 def test_a_command_that_would_print_the_environment_is_refused(command):
     assert verdict(command) == "deny"
+
+
+@pytest.mark.parametrize("command", [
+    "ps -eo pid,lstart,cmd | rg -i PATTERN | rg -v PATTERN | head -5 | cut -c1-160",   # the filter keeps the line with the token
+    "ps -eo pid,args | grep \"[p]ytest\"",
+    "ps aux | rg -i lake",
+    "ps -ef | grep -v grep | grep \"[p]ython\"",
+    "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
+    "ps -p 1234 -o pid,args",                             # one process: the one asked for may be the one that holds it
+    "ps -p 1234 -o args",
+    "ps -o args= -p 1234",
+    "ps -o pid,cmd:40 -p 1234",
+    "ps -fp 1234",
+    "ps -o pid,comm -p 1234 -f",                          # under -f the name column is the command line
+    "ps 1234",                                            # pids after the options: BSD's defaults, which end in the command
+    "ps -p 1234 5678",
+    "ps -p $(pgrep -f quick_tier)",                       # a substitution may hold several pids: the same
+    "ps -p \"$pid\"",
+    "ps -fp $(pgrep -f quick_tier)",
+    "ps -p $(pgrep -f quick_tier) -o args",               # the words after a substitution are still the command's
+    "ps -eo pid,comm e",                                  # BSD's e appends the environment
+    "ps e -p 1234 -o comm",
+    "ps -eO pid",                                         # -O ends in the command
+    "ps -eo DefBSD",                                      # a macro of several columns
+    "ps -eo %p%a",
+    "ps -eo pid,comm,args=CMD",
+    "ps -e --context",
+    "ps -aux",                                            # a first reading that fails is read again as BSD's: environment and all
+    "ps -e -x -o pid,comm",
+    "ps -uax",
+    "ps -e -T --forest",
+    "ps -ejH",
+    "ps -e -Df",
+    "ps -uroot",
+    "ps -u $USER",                                        # an unset variable, a user ps doesn't know: the same
+    "ps -e --no-such-option",
+    "PS_FORMAT=pid,args ps -e",                           # the format when none is given
+    "env PS_FORMAT=pid,args ps -e",
+    "PS_PERSONALITY=bsd ps -e",
+    "pgrep -af quick_tier",
+    "pgrep -a python",
+    "pgrep --list-full python",
+    "pgrep --list-f python",
+    "pgrep -u research -fa quick_tier",
+    "pgrep -fl quick_tier",                               # the whole line on an older pgrep
+    "pgrep -l -f quick_tier",
+    "pstree -a",
+    "pstree -ap 1234",
+    "pstree --arguments",
+    "top -b -n 1 -c",
+    "top -bcn1",
+    "pgrep -f quick_tier | xargs ps -fp",                 # behind xargs, which adds the pids as words
+    "pgrep quick_tier | xargs ps",
+    "pgrep quick_tier | xargs -r ps -o pid,args -p",
+    "pgrep quick_tier | xargs -I{} ps -p {} -o args",
+    "pgrep quick_tier | xargs -n 1 pgrep -a -P",
+    "cat /proc/1234/cmdline | tr '\\0' ' '",
+    "tr '\\0' ' ' < /proc/self/cmdline",
+    "cat /proc/$pid/cmdline",
+    "cat /proc/\"$pid\"/cmdline",
+    "cat /proc/${pid}/cmdline",
+    "cat /proc/$(pgrep -f quick_tier)/cmdline",
+    "xargs -0 < /proc/1234/task/1234/cmdline",
+    "for p in /proc/[0-9]*; do tr '\\0' ' ' < $p/cmdline; echo; done",
+    "for p in /proc/[0-9]*; do cat \"$p\"/environ; done",
+    "cat /proc/\"$pid\"/environ",
+    "bash -c 'ps -eo pid,args | grep quick_tier'",
+    "echo \"$(ps -p 1234 -o args=)\"",
+    "line=$(pgrep -af quick_tier)",
+    "sudo ps -p 1 -o cmd",
+    "timeout 5 pgrep -fa quick_tier",
+    "ssh n1 'pgrep -af slot.py'",
+    "ssh n1 \"ps -p 1234 -o args\"",
+    "research pods ssh vy-mig-check-20 -- 'ps -ef | grep vllm'",
+    "research pods ssh vy-mig-check-20 -- pgrep -af vllm",
+])
+def test_a_command_that_would_print_a_processs_command_line_is_refused(command):
+    """Filtered or not, for one process or all: the line that holds a token is the one a filter keeps."""
+    assert verdict(command) == "deny"
+
+
+#: what names processes without their arguments, with `{pid}` for a process and `{mark}` for a word of its command line; the
+#: ones that run here are also run, on a process made for it (`test_no_process_listing_that_passes_shows_...`)
+LISTINGS = [
+    "ps -eo pid,stat,etimes,comm",
+    "ps -e",
+    "ps -el",
+    "ps -u root",
+    "ps -o pid,etimes,comm -p {pid}",
+    "ps -o pid=,comm= -p {pid},1",
+    "ps -o pid,etimes,comm -p $(pgrep -f {mark})",
+    "ps -eo pid,ppid,pgid,sid,tty,stat,etimes,rss,vsz,%cpu,%mem,comm --sort=-rss | head",
+    "ps -eo pid,comm:20,etimes=SECONDS",
+    "ps -C python3 -o pid,etimes",
+    "ps --ppid {pid} -o pid,comm",
+    "ps -u root -o pid,etimes,comm",
+    "ps -eL -o pid,tid,comm",
+    "ps -e --forest -o pid,comm",
+    "ps -eo pid,comm | grep -v kworker",
+    "ps axc",
+    "ps ax -o pid,comm",
+    "ps c {pid}",
+    "pgrep -f {mark}",
+    "pgrep -fc {mark}",
+    "pgrep -l python",
+    "pgrep -u root -x python3",
+    "pgrep -f {mark} | xargs -r ps -o pid,etimes,comm -p",
+    "pgrep -f {mark} | xargs -I{{}} ps -o pid,comm -p {{}}",
+    "pstree -p",
+    "pstree -p {pid}",
+    "top -b -n 1 | head -20",
+    "cat /proc/cmdline",
+    "cat /proc/{pid}/status",
+    "cat /proc/loadavg /proc/meminfo",
+    "ssh n1 'ps -eo pid,etimes,comm | grep slot'",
+    "ssh n1 'pgrep -f {mark}'",
+    "research pods ssh vy-mig-check-20 -- 'pgrep -f {mark} | xargs -r ps -o pid,etimes,comm -p'",
+    "python3 tools/agent-guard/procs.py {mark}",
+    "python3 tools/agent-guard/procs.py -p {pid}",
+    "ssh n1 python3 - {mark} < tools/agent-guard/procs.py",
+    "procs {mark}",
+]
+
+
+@pytest.mark.parametrize("command", LISTINGS)
+def test_a_listing_of_processes_without_their_arguments_passes(command):
+    assert verdict(command.format(pid=1234, mark="quick_tier")) == "allow"
 
 
 @pytest.mark.parametrize("command", [
@@ -148,22 +277,11 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "echo \"$(git rev-parse HEAD)\"",
     "ls 2>/dev/null",
     "timeout 30 make test",
-    "ps -eo pid,stat,etimes,comm",
-    "ps -e",
-    "ps axc",
-    "ps ax -o pid,comm",
     "ps",
-    "ps -p 1234 -o pid,args",
     "ps -o pid,etime,comm --ppid 4242",
     "ps -u research",
-    "ps -eo pid,args | grep \"[p]ytest\"",
-    "ps aux | rg -i lake",
-    "ps -ef | grep -v grep | grep \"[p]ython\"",
-    "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
-    "pgrep -af quick_tier",
     "tmux show-environment -g DISPLAY",
     "tmux -f /exec-daemon/tmux.portal.conf send-keys -t build:0.0 'make' C-m",
-    "cat /proc/1234/cmdline | tr '\\0' ' '",
     "",
 ])
 def test_everything_else_passes(command):
@@ -186,6 +304,55 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert "compgen -e" in json.loads(out)["agent_message"]
     out = subprocess.run([sys.executable, HOOK], input="env", capture_output=True, text=True, check=True).stdout
     assert json.loads(out)["permission"] == "deny"
+
+
+def recommended() -> list[str]:
+    """Every command the refusal's text gives, each in backticks."""
+    return re.findall(r"`([^`]+)`", answer("ps -eo pid,args | grep quick_tier")["agent_message"])
+
+
+def test_every_command_the_refusal_recommends_passes():
+    """A refusal that names a refused command sends the agent round again, and the next form it tries is a worse one."""
+    commands = recommended()
+    assert {"compgen -e", "ps -eo pid,stat,etimes,comm", "pgrep -f PATTERN", "ps -o pid,etimes,comm -p PID",
+            "python3 tools/agent-guard/procs.py PATTERN", "python3 tools/agent-guard/procs.py -p PID",
+            "ssh HOST python3 - PATTERN < tools/agent-guard/procs.py"} <= set(commands)
+    assert [c for c in commands if verdict(c) != "allow"] == []
+
+
+ARGV_MARK, ENVIRONMENT_MARK = "argv-mark-not-a-secret", "environment-mark-not-a-secret"
+
+
+def shown(command: str, pid: int, home: Path) -> set[str]:
+    """What `command`, run here by the real programs, prints of process `pid`: its "pid", its "arguments" (ARGV_MARK), its
+    "environment" (ENVIRONMENT_MARK). Only that leaves this function: where a command does print command lines, its output
+    holds every other process's too, and belongs in no test's failure message."""
+    out = subprocess.run(["bash", "-c", command], capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                         env={"PATH": "/usr/bin:/bin", "HOME": str(home)}).stdout
+    found = {"pid": re.search(rf"\b{pid}\b", out), "arguments": ARGV_MARK in out, "environment": ENVIRONMENT_MARK in out}
+    return {what for what, there in found.items() if there}
+
+
+@pytest.mark.skipif(not (os.path.exists("/usr/bin/ps") and os.path.exists("/usr/bin/pgrep")), reason="needs procps's ps and pgrep")
+def test_no_process_listing_that_passes_shows_a_command_line_or_an_environment(tmp_path):
+    """The verdicts above say what the hook passes; this holds the programs to it. A process is started with one mark among
+    its arguments and another in its environment. `ps` asked for each shows it, so the test can fail; then every listing the
+    hook passes or recommends is run, and none shows either mark, while the recommended ones do list the process."""
+    held = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", ARGV_MARK], stdin=subprocess.PIPE,
+                            env={"DUMMY_MARK": ENVIRONMENT_MARK})
+    try:
+        pid = held.pid
+        assert shown(f"ps -o pid=,args= -p {pid}", pid, tmp_path) == {"pid", "arguments"}
+        assert shown(f"ps e -o pid=,comm= -p {pid}", pid, tmp_path) == {"pid", "environment"}
+        advised = [c.replace("PID", str(pid)).replace("PATTERN", ARGV_MARK) for c in recommended() if c.split()[0] in ("ps", "pgrep")]
+        assert len(advised) == 3 and {c: shown(c, pid, tmp_path) for c in advised} == dict.fromkeys(advised, {"pid"})
+        listings = [c.format(pid=pid, mark=ARGV_MARK) for c in LISTINGS
+                    if c.split()[0] in ("ps", "pgrep", "pstree", "top", "cat") and shutil.which(c.split()[0], path="/usr/bin:/bin")]
+        assert len(listings) >= 20
+        assert {c: leak for c in listings if (leak := shown(c, pid, tmp_path) - {"pid"})} == {}
+    finally:
+        held.stdin.close()
+        held.wait()
 
 
 def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_it_is_short_of_memory(tmp_path):
