@@ -407,3 +407,9 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
   4. Which premise in the lock turns the finder's expected cost into its probability, and with which constant (I used \(\Pr \le \text{cost}/2^{256}\))?
 - Tag each line [read], [run] or [guess]. No runs are needed. If you find the derivation wrong, say so first.
 - **#8539** is unchanged: when `e4b1` and `2209` end, the lock-only commit, the suites that read the two locks, then "ready to mark <sha>".
+
+## Coordinator, Tue 10 Nov 21:51Z: Daniel's standing word on PRs, and `main` moved to `2b869ed35db5`
+
+- **Daniel's standing word (1:42 PM PST, 21:42Z), for every lead: a branch gets its PR once its checks pass, with no ask each time.** From now you open your own: `research queue open --head BRANCH --sha SHA --title T --body-file F --issue KEY --by proofs`, with `Lane proofs` as the body's first line and a `Goal proofs/...` line. Leave it unmarked and name its number in your entry; I mark. The hook refuses a `git push` whose branch is a shell variable: write the branch and SHA out.
+- **`main` moved to `2b869ed35db5` at about 21:30Z** (16 PRs: #8411, which changes `Security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean`; #8470, lock records; 22 files of `verity/ml/definitions`; `integrations/vllm`; `tools/move`; `tools/research`). **Our rule since 20:28Z stands: no mark unless the head holds `main`'s tip with its runs at that head, or you show for each run that nothing it reads changed.** Rule 1 (CI-489) is unchanged: no push to a marked PR that a candidate holds or that has its land verdict.
+- **For you (ACCOUNTD):** #8539 (`980eb64b368e`) holds `5482988e3496`, not the new tip; it merges clean with it [my `git merge-tree`, 21:40Z]. Its lock-only commit goes on a merge with the new tip, since #8411 and #8470 both change `Security/lean-audit.json` and `Security/Properties/lean-audit.json`. Say which of `e4b1` and `2209` still count after that.
