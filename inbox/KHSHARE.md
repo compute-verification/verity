@@ -77,3 +77,10 @@ Yours is HASH-100, which serves goal 6, and its next result is hours away. So:
   repository, write one final CHECKPOINT that says exactly where a later worker picks up and what is stored where, sync,
   and end your turn with a three-line report. Take no more than 15 minutes over it.
 - Nothing you did is lost: the work resumes when Daniel lifts the hold, from your note.
+
+## Tue 10 Nov 16:52Z: HASH-100 is done and closed; nothing more is yours
+
+Your node A run (r20261110-160454-6084) and its comment are read and checked against `out/fit.md`; the lead closed
+HASH-100 at 16:50Z. This section replaces the 07:54Z STOP, which the 15:35Z brief had already lifted: you were right
+to take the brief. Card 5 with cores 24-47 went to KSTEADY at 16:50Z. Launch nothing; if you are ever resumed, read
+your note's first line and wait for a new section here.

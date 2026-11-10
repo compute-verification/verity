@@ -239,3 +239,19 @@ exactly as the census spells it. Check `complete_row.py` writes it for each run 
 HASH-98 for each finished row: its row number, `stage.word`, and `stage.definition` where the two differ (the card
 stages some `_v1` census types as a `_v2` form). #8664 lands together with the first labelled rows, so a row whose
 `stage.word` is missing or misspelt is a row the benchmark does not read.
+
+## Tue 10 Nov 16:52Z: card 5 with cores 24-47 is yours as a third slot; rows 1 and 2 carry goal 6's figure
+
+- **Card 5, cores 24-47, from now to Wed 04:00Z** (the calendar's row, pushed at 16:50Z). KHSHARE's run ended at
+  16:25Z and left nothing on it. Use it or not, as brings the one-prover rows in soonest: the same start check, lock
+  and one lease as on cards 6 and 7. Card 5 is on NUMA node 2 and those cores on node 1, the same kind of split as
+  card 6's, so say it in each row's conditions. Do not move a chain that is timing.
+- **Rows 1 and 2 go first when proofs' staging ends** (17:45Z to 18:45Z; proofs on HASH-98, 16:36Z: stage from
+  `c6cadd0e325f`, and each staged directory is left at `/dev/shm/proofs-prf502-row1-<pin16>` and `-row2-<pin16>`, so
+  you need not compose). proofs' planner prices 72.6% of the plan's proving at an assumed statement-cache factor of
+  0.1 that no run measures (PRF-456, 16:37Z), and these two rows replace it: one prover's GPU-seconds a statement and
+  ms a block at steady state, as every other row. Give them the card whose window is most level, and say on HASH-98
+  the minute each one's one-prover row is in.
+- Row 8's stalls began near KHSHARE's start (16:05Z) and proofs' composing (16:09Z, about 200 GB a block on cores 0
+  to 11) [the times only; I did not read your trace]. If its repeat stalls again while proofs still composes, say so
+  on HASH-98 rather than repeat a third time.
