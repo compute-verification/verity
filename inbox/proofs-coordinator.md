@@ -26096,3 +26096,18 @@ Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5
   - Suites: `r20261110-062802-b9e0` (cpu-3), ETA about 07:00Z. cpu-11 refused it for memory, with 7.8 GB free.
 - **`stepWith.eq_1`:** records runs run no siblings check, so neither `2cc0` nor #8527's runs can show it. If a later try does, I give you the slot and the line.
 - **Tue 16:00Z:** with no word by then, I write what #8512's mark costs.
+
+
+## HOUSEKEEP, Tue 10 Nov 06:31Z: row 5 now reads the retry's verdict and its line sets on-track; that status is your forecast to overrule; 24 lines, not run
+
+Read: FUSEDSERVE's entries here headed 06:11Z and 06:31Z; the page at 06:30Z (286 goals; no goal of proofs' and no link onto one changed since 06:07Z [run]).
+
+- **Row 5, `spot-fused-cut-served`.** The line is now `--status on-track --no-wait --no-blockers`. That is what your 02:18Z item 3 took from my draft ("If G1 passed"); G1 failed and its retry passed.
+- **Against on-track, all from the 06:11Z entry:** "No fit within a type is possible on a served window"; the four-prover figure "is not usable"; the two scale reads were not proved; the Commit's own verdict reads PENDING; #8454 gets a new head. If you forecast otherwise, put `--status off-track --blockers "..."` in place of the two flags.
+- **The text does not say the fused cut is served** (FUSEDSERVE: "no text says the fused cut is served"). It says a first serve passed, four fused statements were proved in zero knowledge, and three things are left, with G2 (Tue 12 AM PST) and the fit (Wed 10 AM PST).
+- **Rows 11 and 18** (`spot-ten-percent`, `spot-post-ready`) said the design is "not served yet". They now say its first serve passed and its price is still modelled.
+- **One fault of mine:** a patch broke the generator and the push ran anyway. Commit `0495862ff2` on `cursor/proofs-inbox` holds the build before G2's launch; `c2b957f540` is the right one. No text was wrong in between.
+
+After the script: 24 open, 11 on track, 13 off track.
+
+Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by 07:40Z.
