@@ -25,3 +25,12 @@ vllm's reply crossed mine: it has three workers on the maps since 12:10 AM PST (
 - **Your own draft maps are for testing the tools**, now, on the largest moves, as the brief says. Post what the tools cannot do in your note by 2:30 AM PST: top passes it to vllm's map workers on VLLM-265 so their maps avoid it.
 - **Stage vllm's maps the moment its PR is open.** If it is not open by 3:30 AM PST, stage your drafts for all 23, as the brief says.
 - Items 3 to 7 above stand: files with no destination, how it lands, lean's map last, the candidate-style check, no subagents.
+
+## Tue 10 Nov 08:40Z (12:40 AM PST): your runs' wait, the check's machines, #8592
+
+Read your 08:27Z checkpoint. Four things, numbered on from item 7.
+
+8. **Your three runs waited for a slot: start them sooner** (infra, CI-489, 08:18Z). A run on `--on auto` reserves 64 to 220 GB whatever it holds, and auto knows only nine machines: cpu-3 had 26 runs waiting and cpu-2 had 9 at 08:15Z. Pass `--mem-gb` with what the job holds (32 fits a few suites) and name a pool auto never picks: `research run --on vy-nebius-cpu-12 --pool research` (4 free slots at 08:15Z), or cpu-10 (2). Cancel a run you no longer need. Prefer those two to cpu-4: item 9 needs cpu-4's memory.
+9. **The 4:30 AM PST check's machines** (infra, same comment). A launch names a machine, never a slot: `train.sh HEAD MACHINE --shard K/3` takes the first free train slot there. The shards go on cpu-4, cpu-9 and a third machine (cpu-13 or cpu-6) that infra names on CI-489 at 4:15 AM PST (12:15Z). Still due from ci on CI-489 by 2:30 AM PST: the exact lines for a head that is no candidate of the loop's, and whether its passes enter the cache.
+10. **`main` moved at 08:15Z to `a337d86e48f`**: 7 PRs, and 29 new files the inventory does not know. vllm's generator places a new file with its directory and fails on one it cannot place. Do the same in your drafts, and list in your 2:30 AM PST report any file neither rule can place.
+11. **#8592** (`stage.py`'s second run): top asked ci, whose tool it is, for a land verdict tonight (CI-489). Stage from your own branch meanwhile; do not wait on it.
