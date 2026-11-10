@@ -74,7 +74,8 @@ any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RL
 
 **The statement's honest lemma.** `PeriodLeakChecked_honest`: its premises at the toy code, as `PeriodLeakAccepted`'s
 (`PeriodLeakAccepted_honest`), over a monitoring period of no windows. The toy code gives no statement a partition, so
-it places no window: the lemma shows the premises hold together, and holds no window's check to `CheckedUnique`.
+it places no window, and its verifier rejects every run: the lemma shows the premises hold together. It shows no run
+that passes, holds no window's check to `CheckedUnique` and states no window's good event.
 -/
 
 @[expose] public section
@@ -551,7 +552,9 @@ code places, since it gives no statement a partition: `Compiled.KS` and the comm
 (`PeriodLeakAccepted_honest`); the windows' registrations (`WindowsPlaced`) and their checks' pinning
 (`CheckedUnique`), of which that period has none; and, at the record format of no connection (`noFormat`), the
 read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret (`PeriodChannelReg`),
-whose view holds no cell. -/
+whose view holds no cell. The toy code parses no statement and its verifier rejects every run, so the lemma shows that
+the premises hold together and nothing of a window: no run passes there, and a period of no windows states no window's
+good event (`WindowGoodChecked`). -/
 theorem PeriodLeakChecked_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧

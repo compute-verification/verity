@@ -4583,6 +4583,7 @@
    "kind": "exclusion"
   },
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   }
  },
@@ -5342,12 +5343,6 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
   "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
-  "NetTiming.SecurityProofs.PooledLeakAccepted": {
-   "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
-   "missing": "honest",
-   "why": "honest instance needs each window's escape bound and leak relation's error (its hypotheses hesc and hleak) at the deployed verifier, which SampledLeakAccepted gives one window from Compiled.KS and no lemma states at this guarantee's hypotheses",
-   "unfolded_hash": "d339cc8ffd4bdca709ea2be68156cbfdfc72778e0544bab00fa6ce85d2386463"
-  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
    "missing": "honest",
@@ -19363,6 +19358,58 @@
     "reads": ["NetTiming.RegisteredInputsHeld", "Verity.Assumptions.TrustedHost"]
    },
    "type_hash": "c3f48cefd02438a99334cc483d74aa562428484bc909c74f982be7bc20bb3ec2"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakAccepted_honest :",
+    "  And",
+    "    (∀ (z : Unit),",
+    "      Set.instMembership.mem Set.univ z →",
+    "        ∀ (x : Fin 1)",
+    "          (x :",
+    "            Fin 1 →",
+    "              Fin",
+    "                  ((SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                          fun x x_1 x_2 => List.nil).V.k",
+    "                    List.nil) →",
+    "                FlockDeploy.Coin),",
+    "          Real.instLE.le",
+    "            (Claims.Pr fun r =>",
+    "              Eq",
+    "                (Claims.run FlockDeploy.sha512 Claims.Witness.silentP",
+    "                    (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                        fun x x_1 x_2 => List.nil).V",
+    "                    List.nil Unit.unit r).out",
+    "                Claims.Out.acc)",
+    "            (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 1) (Finset.instSingleton.singleton 0).card) 0))",
+    "    (∀ (z : Unit),",
+    "      Set.instMembership.mem Set.univ z →",
+    "        ∀ (i : Fin 1),",
+    "          Real.instLE.le",
+    "            (Claims.Pr fun ω =>",
+    "              And",
+    "                (Eq",
+    "                  (Claims.run FlockDeploy.sha512 Claims.Witness.silentP",
+    "                      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                          fun x x_1 x_2 => List.nil).V",
+    "                      List.nil Unit.unit (ω i)).out",
+    "                  Claims.Out.acc)",
+    "                (Not",
+    "                  (NetTiming.LeakAt (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "                    (fun x => Finset.instEmptyCollection.emptyCollection) 1 Claims.Witness.SamplingGeneric.notStmt",
+    "                    Claims.Witness.SamplingGeneric.notPart (fun x => Bool.false)",
+    "                    (fun x x_1 => List.cons Bool.false List.nil) (Finset.instSingleton.singleton 0) List.nil)))",
+    "            0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "849836d00d097234daeca272ffe7cd39c7e8336dc94f80fdfbfb4e1e4fb4ed4a"
   },
   "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
    "owner": "@network-accounting",
@@ -54430,12 +54477,12 @@
    }
   },
   "Proofs.Flock.SpotFlock.FrameIsAt": {
-   "digest": "52a46e1bd6e59fd61f543921d4e5e85df65a78555610030fa5c37af62fd718dd",
+   "digest": "213d63e005d4183fefcdc1d793b08fb15403ffd6ca863986683e4552dabcfab4",
    "definitions": {
-    "SpotFlock.readKey": "70b32cdfb264f29efbd987e22776fcc9aae3ee592a10d6d8e4d6a1f1488cdf05",
+    "SpotFlock.readKey": "bbfd28f71fb2fe3a6fff364f0ad8b71ab2cfe2c857d9a65ff602ac19b66b5d71",
     "SpotFlock.readKeyAt": "3d56f974fe675daa231a7a410d59f058ac0107e6775c2b9bd0624f68df8e35cf",
     "SpotFlock.readRoots": "6a6ad67417da3c5cff920562be415492a2812df5f932c002e49aaca54a8d8a96",
-    "SpotFlock.readsInterior": "6ecac38e9d1811fb6d0bd5a02a91243cfddf13fb833c507cc17f28ba1f4c6907"
+    "SpotFlock.readsInterior": "ab04560bc4f8404ae016141b7a0e8ea4d4367d68613bc3e9df107a442e7fbd0a"
    }
   },
   "Proofs.Flock.SpotFlock.FrameIsBuilt": {
@@ -56531,7 +56578,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "47e70bba011fe9d5f0776cd32165ea64e989b10480e2d17b7b6802b71e5a577f",
+   "digest": "475195c6a08ddb4930ce0d503b4ae8e05ba3b695be2ee31ccb9828154fff97a9",
    "definitions": {
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
@@ -56612,7 +56659,7 @@
     "Spot.SecondStage.portOf": "c1967fc629b74c9ad002805342bb69242a252d54d37870319256adbcb02e5229",
     "Spot.SecondStage.posOf": "02385fb4fb2e0b22c1ed739e61259071d1b49d727dae0a74bfd4e916a152b907",
     "Spot.SecondStage.putAt": "323fb65624aa3d6eb14c574e83795fbb65c99eb62e128ffa94630b66c5a1761b",
-    "Spot.SecondStage.readOk": "10b6dfdbb6811991d775369dc841d26c22d8e5ff7df70cc319dfdbba2671c21c",
+    "Spot.SecondStage.readOk": "edc579139345ea815cb35618b10916bef22e5576defa22c1b1758b5da4b69a53",
     "Spot.SecondStage.refOf": "cd9a86dfcc668788774ec382d31696c4fe04f91aa0e8c22057e01ccab0bb9825",
     "Spot.SecondStage.refReadsOf": "184901e7d161373ea20732b6d2a62adfbe37ba3b0de114d7690306315106b81f",
     "Spot.SecondStage.refsOk": "b5433edee01d43b2ffad82171bdb9780c8682b7fb64b08e12ded8e43b295bc73",
