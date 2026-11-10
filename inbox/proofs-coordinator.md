@@ -32456,3 +32456,110 @@ Adds to my 20:19Z entry; nothing else in it changes.
 - **#8438's rerun**, `r20261110-201236-0ccc` on cpu-8: 5 checks ahead of it at 20:25Z [run], done about 21:15Z [guess].
 
 The two guesses rest on this: a quick tier of about 70 suites held its slot for 32 minutes in both `cc55` and `a7c6` [run], and the line ahead of `78bc` fell from 4 to 2 in nine minutes [run]. I corrected the 20:19Z entry's dates for both by this.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 20:28Z: head `da7f0b5167b3` holds the base's `b5718e205aad`; 26 of 26 files and 79 of 79 places closed, no marker in my four directories; `f867` failed because six `one_stage` test files did not import, each on another lane's file or my stand-in for it; `a3c6` ran `one_stage` (827 passed, 51 failed, 9 errors) and found three breaks in my directory, mended; one closed file changed again, `one_stage/served_cases.py` (docstring only); `r20261110-202210-474a` reruns both suites at this head; no file of ours reads `h200.py --card h200`'s plan
+
+All times UTC, read from the clock. [run] I ran it, [read] I read it, [guess] neither.
+
+**Heads since 19:34Z** [run]
+
+| Head | What it holds |
+|---|---|
+| `cacfabeaa8` | the base's `f2c9454144a1`, merged |
+| `da0cd891e326` | `one_stage/served_cases.py`: the docstring no longer names `OneStageZk.MULTI_REFUSED` |
+| `fe170db30920` | `sampling_plan/int8_llama.py` closed: the last two places |
+| `1b68bd8daaab` | `one_stage/tests/test_served_cases.py`: the toy v2 case's key at the deployed LMS parameters |
+| `479871466add`, `0d835a0163ca` | `one_stage/inference_only.py` and its test under `main`'s names |
+| `da7f0b5167b3` | the base's `b5718e205aad`, merged |
+
+**Your 20:20Z, point by point**
+
+1. **Merged.** `da7f0b5167b3` is a merge of the base's head `b5718e205aad` [run: fetched 20:20Z; `git merge-base --is-ancestor`]. The merge was automatic and changed no file under my four directories. No file there holds a marker, the eleven you list among them [run: `git grep`]. Against the base my head changes 19 files, all under `benchmarks/one_stage`, `sampling_plan`, `live_challenger` and `verifier_cost`: no `.lean`, lakefile, manifest or lock [run: `git diff --name-only`]. Nobody else closed a file of mine on the base.
+2. **`f867`**: next section. No test of mine failed in it; `one_stage` ran no test at all.
+3. **Rerun.** `r20261110-202210-474a` on `vy-nebius-cpu-1`, launched 20:22Z at `da7f0b5167b3`, running at 20:25Z. It runs the two suites whole: a suite is the unit a node runs, the mends are all in `one_stage`'s, and `sampling_plan`'s is 40 s more. I expect it by 20:40Z [guess: `a3c6` ran 11 minutes, 19:43Z to 19:54Z].
+4. **Final head.** `da7f0b5167b3`, unless `474a` shows a failure a file of mine causes. I say which in a heading when it ends, before 22:15Z.
+
+**`r20261110-193050-f867`** (at `5e87d3f088b4`; rc 1) [run: its `out/suites.txt` and logs]
+
+- `benchmarks/sampling_plan`: passed, 57 tests in 31 s.
+- `benchmarks/one_stage`: "no tests in 9 s". Six test files failed at import, so pytest ran nothing. None of the six causes is a file of mine.
+
+| Test file | Fails at import on | Whose | At `da7f0b5167b3` |
+|---|---|---|---|
+| `test_a5_tp_gates.py`, `test_a5_warden.py` | `benchmarks/network_traces/warden_zk.py:77` imports `verity.core.protocols.sampled_proofs.one_stage`; `main` moved that package to `spot` | network-accounting | repointed on the base [run: `git grep`] |
+| `test_served_pearlplus_lean.py` | `benchmarks/pouw/tests/test_pearl_c_vllm.py:26`, the same old path | compute-accounting | repointed on the base [run] |
+| `test_pouw_piece.py` | `integrations/vllm/verity_vllm/protocols/pouw/h1/answers.py:31`, the same old path, on an unmarked line | vllm | still there [run] |
+| `test_serve_load.py` | `integrations/vllm/verity_vllm/pipeline/serve_pearl.py:43` imports `verity.core.protocols.pouw.schemes`; `main` moved it to `verity.ml.protocols.pouw.schemes` | vllm | still there [run] |
+| `test_prove_bundle.py` | `benchmarks/prove_path/records_audit.py:175` reads `SCAN_STATE` from `certifier/blocks.py` | nobody's: my stand-in closed `blocks.py` to the side's line while `records_audit.py` was `main`'s | both are closed on the base now; the test passes [run, scratch] |
+
+**`r20261110-194316-a3c6`** (at `da0cd891e326`, the stand-ins adjusted; rc 1) [run: its logs, fetched]
+
+- `benchmarks/sampling_plan`: passed, 57 tests in 41 s, `int8_llama.py`'s close among them.
+- `benchmarks/one_stage`: 827 passed, 51 failed, 9 errors in 318 s. By cause:
+
+| Tests | Count | Cause | Whose | At `da7f0b5167b3` [run, scratch: named files, no `lake`] |
+|---|---|---|---|---|
+| `test_inference_only.py` | 27 failed | 22 on vllm's marked `program/predict/block_counts.py`, which my stand-in closed to `main`'s line: it unpacks `blocks, _ = IF.Blocks.of(...)` while the head's `verity/ml/windows/interface.py` returns one `Blocks`. 4 on vllm's marked `program/prune.py:35`, same stand-in: `main`'s line imports `Node`, the head's `defs.py` has `BodyNode`. Under those, three breaks in my directory (below) | vllm's two marked files; three mine, mended | 27 of 28 pass with the side's line in both files; the last needs `lake` |
+| `test_prove_leg_served.py` | 11 failed | `prune.py:35`, as above | vllm, marked | 11 pass with the side's line |
+| `test_a5_warden.py` | 9 errors | `verity/core/protocols/certifier/warden.py:369`: `NameError: watermark` in my stand-in | network-accounting, closed on the base now | all pass but the one that needs `lake` |
+| `test_pouw_piece.py` | 4 failed | `verity/core/protocols/pouw/weights.py:306`: `NameError: fold_roots` in my stand-in | compute-accounting, closed on the base now | pass |
+| `test_served_cases.py` | 3 failed | Two: my toy v2 case's key, below. One: the inference-only case, on `block_counts.py` as above | two mine, mended; one vllm's | 58 pass; the 15 `@lean` ones are `474a`'s |
+| `test_served_verdicts.py` | 2 failed | "BLOCK-COUNTS class 4,32,4 refused: TypeError: cannot unpack non-iterable Blocks object": `block_counts.py` as above | vllm, marked | 3 pass with the side's line |
+| `test_warden_replay.py` | 1 failed | `benchmarks/network_traces/warden_serve.py:1074`: `NameError: INTEGER_FIELDS` in my stand-in | network-accounting, closed on the base now | 3 pass |
+| `test_served_pearlplus_lean.py` | 1 failed | `benchmarks/pouw/tests/test_pearl_c_vllm.py:1072`: `NameError: n0` in my stand-in | compute-accounting, closed on the base now | `474a`'s |
+| `test_a5_history.py` | 1 failed | `verity.ml.windows.interface` has no `History`: `main`'s `fff33e8dd3` (history tables) is not in the base's file, closed at `9181ce73cf` with vllm's 39 files. REMOTECORE's finding; I confirm it | vllm's close on the base | still fails: `test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_bodies` |
+| `test_a10_rewritten.py` | 1 failed | vllm's marked `commit/step_rows.py:131`: `InvalidArtifact: names must be a 64-byte digest`, with `main`'s line and with the side's | vllm, marked | still fails: `test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root` |
+
+**The three breaks in my directory, mended.** Each is in a file only the side has, which names something `main` renamed or moved after the lines split. None held a marker.
+
+- **`tests/test_served_cases.py`** (`1b68bd8daaab`). The toy v2 case's stand-in key was `{"H": 5, "W": 4}`. v2's Lean at the head reads a challenger's key only at the deployed parameters (W = 1, H = 20) and refuses any other before it reads the record, so its answer named no record: `test_v2s_lean_names_the_records_digest_so_its_rejection_is_written` and `test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name` failed. The key is now at `lms.DEPLOYED`. Not yet seen passing: these two run only where `lake` is, so `474a` decides.
+- **`inference_only.py:262`** (`479871466add`): `PV2.definition_digest(fn)` is `PV2.id_digest(fn)`, `main`'s rename.
+- **`inference_only.py`'s gate table and its test** (`479871466add`, `0d835a0163ca`). `main` made one gate table, `verity.ml.definitions.boolean.gate_table(fns)`, and its `block_counts.py` has no `primitives` or `gate_table`. `table_of` now reads the one table. That table prices `BitAtx32_v1` itself, at 147 gates, the count this file's explicit circuit gives; `PRICES` stays for a primitive the table can't price. `main` also split `nci_reference.check_count`: it returns only `complies`, and `check_count_detail` gives the whole verdict the test compares.
+
+**Tests changed to what the merged code does, since 19:34Z**
+
+- `test_inference_only.py::test_the_verdicts_rule_is_the_count_rules_on_its_rows`: calls `check_count_detail` where it called `check_count`; the assertions are unchanged.
+- `test_inference_only.py::test_a_block_reading_bit_at_is_priced_and_one_with_no_price_is_undecided`: it asserted the gate table can't price `BitAtx32_v1` and `PRICES` gives 147. It now asserts three things: the gate table prices it at 147 and `priced` is empty; with the table's price taken away, `PRICES` gives the same 147, table and count; with neither, `Undecided` (`gate-table`), as before.
+- `test_served_cases.py`'s toy key, above. No test was dropped.
+
+**`sampling_plan/int8_llama.py`, the last row of the table** (`fe170db30920`, on your yes)
+
+| File | Places | What was taken | Why | Checked beyond compile and ruff |
+|---|---|---|---|---|
+| `sampling_plan/int8_llama.py` | 2 | The side's `inputs.cap` and `TensorCommit` under `main`'s `spot` paths and `ReplayGrain` | Different additions: the side's cap and cuts, `main`'s request replay | ε at 2^-40, B budget 0.5: the side 1.9000%, `main` 1.8156%, merged 1.9051%, named in the commit message. `plan.json` and `cost-model.json` at the head equal my 19:34Z output byte for byte [run]. 57 passed on a node (`a3c6`) |
+
+The other 25 rows are in my 19:34Z entry and stand, with one change: `one_stage/served_cases.py`.
+
+**`MULTI_REFUSED`, one line.** Not a decision: `v2_case.py` stopped naming it at `04622846ec`, and `served_cases.py`'s docstring still held the name of a constant the Lean at the head no longer has. `da0cd891e326` rewrites that sentence ("v2 verifies one table's `--zk` session on its circuit and public file"). No code changed, and no file under my directories names it now [run: `git grep`].
+
+**Your question 3: does any file of ours read `h200.py --card h200`'s plan? No.** [run: `git grep`; read]
+
+- No file of `benchmarks/spot_figures` or `benchmarks/prove_path` names `sampling_plan`, `h200.py`, `ZK_H200` or `CARDS`. Nothing outside `sampling_plan` reads that plan. The other users of `--card h200` are `benchmarks/harness`'s overhead door, another thing.
+- Two files outside read other `sampling_plan` code:
+  - `benchmarks/pouw/budget.py --sampling-sweep TREE` imports `int8_llama.py` and `inputs.I` from a tree and writes `benchmarks/pouw/budget_sampling.json`. That file is one recorded table, the same bytes on the side, `main` and the merge, written "at 77776aa95b"; no test recomputes it. It reproduces on neither tip today: regenerated on `main`'s tip it has 143 points against the recorded 147, and none equals the recorded point at its budget [run]. Regenerated on the merged tree it follows the merged plan: against `main`'s regenerated table, ε is 1.4% to 5.9% higher in the two `sessions/256` regimes and up to 22.7% higher in the plain one. Against the side's it is up to 3.8 times higher in the prefix regime, which is `main`'s request replay arriving. This is compute-accounting's file; I changed nothing.
+  - `examples/h200/interfaces/verity_e2e_demo/report.py` reads a recorded run of `demo_a.py --spans week`. That plan does not move: `frontier.json`, `m3.json` and `plan_of_record-week.json` are byte-identical on the side, `main` and the merge [run].
+- `glm53.py` (only `main` has it): the merged output equals `main`'s byte for byte [run]. `recursion.py`: not compared three ways; it needs a `--result` file I do not have. Its two tests pass.
+
+So the figures that move with the merge are three: `h200.py --card h200`'s plan, `int8_llama.py`'s default plan, and a regenerated `budget_sampling.json`.
+
+**The suite on the base today.** At `da7f0b5167b3` with no stand-in, `benchmarks/one_stage`'s test files still do not import: vllm's `commit/step_rows.py` and `program/predict/block_counts.py` hold markers [run: `--collect-only` on five named files]. 38 files that are not `.md` hold markers at this head, 26 of them under `integrations/vllm` [run: `git grep`]. So `474a` again closes those in its clone only (36 to `main`'s line; `block_counts.py` and `prune.py` to the side's) and repoints 13 files' old imports. It shows my files agree with the head, not that the merged tree passes.
+
+**Text ready to paste for other lanes**
+
+- **vllm** (`benchmarks/one_stage` reaches each of these):
+  - `program/predict/block_counts.py` and `program/prune.py`, both marked: the side's line is the one that fits the head. `main`'s `block_counts.py` unpacks `blocks, _ = IF.Blocks.of(...)`, and the head's `interface.py` returns one `Blocks`; `main`'s `prune.py:35` imports `Node`, and the head's `defs.py` has `BodyNode`. The side's `block_counts.py` still calls `PV2.definition_digest(fn)`, which `main` renamed `id_digest`. `benchmarks/one_stage/inference_only.py` no longer needs `block_counts.gate_table` or `primitives`; it reads `definitions.boolean.gate_table`.
+  - `commit/step_rows.py`, marked: with either line taken whole, `benchmarks/one_stage/tests/test_a10_rewritten.py` fails at line 131, "names must be a 64-byte digest".
+  - `verity/ml/windows/interface.py` on the base lacks `main`'s `fff33e8dd3` (`History`): `benchmarks/one_stage/tests/test_a5_history.py:55` fails.
+  - Old paths on unmarked lines. `verity.core.protocols.sampled_proofs` is `verity.core.protocols.spot`, and `verity.core.protocols.pouw.schemes` is `verity.ml.protocols.pouw.schemes`: `verity_vllm/pipeline/serve_pearl.py:43,44`, `program/predict/weights_tie.py:59`, `window_class.py:39`, `protocols/pouw/__init__.py:59`, `protocols/pouw/h1/answers.py:31`, `protocols/pouw/pearl_c/window.py:40`; `tests/pipeline/test_serve_day.py:15`, `tests/program/predict/test_weights_tie.py:29-31`, `test_window_circuit_pearl.py:34,35`, `test_window_circuit_tables.py:29` (marked), `tests/protocols/test_pouw_h1_answers.py:21`, `test_pouw_h1_nodes.py:13`, `test_pouw_pearl_c_window.py:28`, `tests/remotetie_demo.py:43,44`.
+  - From 19:34Z, still so: `benchmarks/sampling_plan/pyproject.toml` lists `verity/ml/windows` twice. A plan printed from `h200.py --card h200` or `int8_llama.py` before the merge does not reproduce after it.
+- **compute-accounting:** `verity/ml/definitions/registry/pearl_c_tile.py:15,60` imports `verity.core.protocols.pouw.schemes`, the old path [guess: yours; it is the Pearl-C tile's Definition]. `benchmarks/pouw/budget_sampling.json` reproduces on neither tip and a regeneration moves with the merged `int8_llama.py` plan, above.
+- **network-accounting:** nothing left. The old imports in `warden_zk.py` and `egress_zk.py` are repointed on the base, and `test_warden_replay.py` passes.
+- **top and lean:** as at 19:34Z ("C-Flock" and "drawn units" in the side's unmarked text of `sampling_plan`). Two more. `tests/test_lean_vocabulary.py:739` at the base's head still lists `benchmarks/sampling_plan/h200.py::Window` ("homonym, one subcircuit's sampling block: rename (proofs)"). The side made that rename: the class is `SamplingBlock`, so the entry is stale and can go [run: `git grep`]. By that file's docstring a stale entry does not fail. And `MULTI_REFUSED` is named by one file at the head, `Security/Properties/lean-audit.json`, and by no `.lean` file [run: `git grep`].
+
+**Lean's rule 5** is as at 19:34Z. `int8_llama.cap` is dropped (the side's deletion; `inputs.cap` replaces it), now committed. The three files mended since declare every name they declared before [run: `git diff`].
+
+**Open questions:** none of mine. Your two of 19:41Z are done as you said.
+
+**Runs I launched:** `r20261110-193050-f867` (failed, above), `r20261110-194316-a3c6` (failed, above), `r20261110-201826-e7a8` (cancelled by me at 20:21Z after 3 minutes waiting for a slot, before its check started: the base had moved), `r20261110-202210-474a` (running).
+
+Next entry when `474a` ends, by 21:25Z at the latest.
