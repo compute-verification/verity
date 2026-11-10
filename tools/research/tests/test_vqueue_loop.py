@@ -2785,7 +2785,22 @@ def test_merged_root_takes_the_codemod_s_worktrees_off_tmpdir_and_sweeps_one_a_k
     assert not left.exists() and not list(fast.iterdir()) and not list(tmp.iterdir())
 
 
+def test_the_loops_landings_post_through_it_on_its_clock_and_the_one_beside_each_check_takes_drive_tomls_on_and_warn_steps(
+        env):
+    """The loop's `Landing`s, the one its after-steps run on (`World.driver`) and the one beside each check and each records
+    run (`World.slim_driver`), post through the loop and read its clock; the second launches on drive.toml's `on` at `main`
+    and keeps its `warn_steps`, which no check that gates is judged on."""
+    _main_to(env, {Q.DRIVE_FLAGS: 'on = ["m1", "m2"]\nwarn_steps = ["ratchet-gate"]\n'})
+    loop = env.loop(policy)
+    assert loop.tick() == []                                    # it fetched `main`
+    w = loop.world
+    d, s = w.driver(), w.slim_driver()
+    assert (d.on, s.on, s.warn_steps) == ("", "m1,m2", ("ratchet-gate",))
+    assert d.post is s.post is w.post and d.now is s.now is w.now
+
+
 # -- the check that gates (`--gate check`)
+
 
 #: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are
 #: split over the last two

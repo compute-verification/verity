@@ -40,6 +40,11 @@ def world(tmp_path):
     return World(tmp_path)
 
 
+def test_a_driver_is_a_landing_on_drive_tomls_machines_and_warn_steps(world):
+    d = Driver(world.queue(), on="m1,m2", warn_steps=("ratchet-gate",))
+    assert (d.on, d.warn_steps) == ("m1,m2", ("ratchet-gate",))
+
+
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
     """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or

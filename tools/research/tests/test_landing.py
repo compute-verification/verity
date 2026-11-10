@@ -443,6 +443,45 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
+def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping_where_train_sh_takes_it(
+        tmp_path, monkeypatch):
+    """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_postland` and
+    `launch_locks`), a candidate's check with the loop's own train.sh when given one (``train_from``), and the records run with
+    `--bookkeeping-warn` where the clone's train.sh takes it (`takes_bookkeeping`)."""
+    import types
+
+    from research.landing import launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
+    repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261110-100000-aaaa"
+    for path, who in ((repo / "tools" / "verity" / "check" / "train.sh", "clone"), (own, "own")):
+        path.parent.mkdir(parents=True)
+        path.write_text(f'# --bookkeeping-warn\necho "{who} n=$GIT_CONFIG_COUNT argv=[$*]"\necho "RUN {rid}"\n')
+    d = Landing(types.SimpleNamespace(auth=("-c", "credential.helper="), workdir=repo), on="m1")
+
+    def tail(job: dict) -> str:
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        return launched(job)[1]
+
+    assert d.launch(repo, "c" * 40, "m1", False) == ([rid], f"clone n=1 argv=[{'c' * 40} m1]\nRUN {rid}")
+    assert f"own n=1 argv=[{'c' * 40} m1 --deferred pytest]" in tail(
+        d.launch_postland(repo, "c" * 40, "m1", "pytest", train_from=own))
+    assert f"clone n=1 argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(
+        d.launch_locks(repo, "c" * 40, "m1"))
+
+
+def test_a_landing_on_an_injected_launch_launches_a_candidates_check_and_its_records_run_through_it(world):
+    """With ``launch`` injected, `launch_postland` and `launch_locks` launch through it, on the machines asked for."""
+    got = []
+    d = Landing(world.queue(), on="m1", launch=lambda repo, commit, machine, agreement: got.append(
+        (commit, machine, agreement)) or (["r1"], ""))
+    assert d.launch_postland(d.repo, "c" * 40, "m2", "pytest", shard="1/3") == d.launch_locks(d.repo, "d" * 40, "m3") == (
+        ["r1"], "")
+    assert got == [("c" * 40, "m2", False), ("d" * 40, "m3", False)]
+
+
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
     """`detach`'s job, with a stand-in for train.sh that prints its `RUN` line only once the test lets it."""
     from research.landing import LAUNCHES, detach, launched
@@ -696,7 +735,7 @@ def test_every_notice_the_loop_sends_passes_msg_sends_own_refusals(monkeypatch, 
 
 def test_a_refused_notice_is_told_again_and_one_told_is_not(world, monkeypatch):
     """`tell` keeps what it told (``state["told"]``) only once the post went through, so the next tick tells a refused one
-    again; with --dry-run it only logs."""
+    again; a notice is told unless every one of its keys was; with --dry-run it only logs."""
     h = Harness(world, monkeypatch)
     logged, ok, sent = [], [False], []
     h.q.log = logged.append
@@ -709,9 +748,12 @@ def test_a_refused_notice_is_told_again_and_one_told_is_not(world, monkeypatch):
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @circuits @lean")
     assert sent[-1] == ("@circuits @lean queue: #1 conflicts", ("@circuits", "@lean"))
     h.d.tell(state, ["k"], "#1 conflicts", "circuits")
+    assert len(sent) == 2
+    h.d.tell(state, ["k", "k3"], "#3 conflicts", "circuits")
+    assert sent[-1] == ("@circuits queue: #3 conflicts", ("@circuits",)) and state["told"] == ["k", "k3"]
     h.d.dry_run = True
     h.d.tell(state, ["k2"], "#2 conflicts", None)
-    assert len(sent) == 2 and state["told"] == ["k"] and logged[-1].endswith("would tell @ci: #2 conflicts [dry run]")
+    assert len(sent) == 3 and state["told"] == ["k", "k3"] and logged[-1].endswith("would tell @ci: #2 conflicts [dry run]")
 
 
 def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_merge_main(world, monkeypatch):
@@ -744,6 +786,32 @@ def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_mer
     h.posts.clear()
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
     assert h.posts == [], "once per (PR, base)"
+
+
+def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacked_prs_told_and_the_sweep_keeps_the_closed(
+        world, monkeypatch):
+    """What follows members reaching `main` (`Landing._on_main`, the loop's after-steps): the PRs stacked on them told
+    (`_stacked`), each member's commit and the tip caught up from ``since`` with ``attempt`` as their run (`merge.caught_up`),
+    and the PR sweep keeping the branches ``state["stale_closed"]`` names (`merge._sweep_after`)."""
+    gh = world.gh
+    gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    gh.put(2, world.change({"b.txt": "2\n"}, base=h1), ready=False)
+    h = Harness(world, monkeypatch)
+    h.q.handle = lambda pr: pr.owner
+    swept = []
+    monkeypatch.setattr(merge, "_sweep_after", lambda repo, into, remote, keep=(): swept.append((into, remote, keep)))
+    since = _main(world)
+    above = world.change({"z.txt": "z\n"}, base=h1)
+    _git(world.dev, "push", "-q", "origin", f"{above}:refs/heads/main")
+    h.q._clone()
+    h.q.fetch()
+    tip = _main(world)
+    state = {"told": [], "stale_closed": {"cursor/w-9": 9}}
+    h.d._on_main(state, [Member(1, h1, "lane-1", h1)], since, tip, "r1 r2")
+    assert h.after == [(since, {h1: "r1 r2", tip: "r1 r2"})]
+    assert swept == [("main", "origin", {"cursor/w-9": 9})]
+    assert state["told"] == ["stacked:2<1"]
+    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
 
 
 # -- the loop's modules

@@ -99,6 +99,21 @@ def test_a_lean_member_lands_on_its_verdict_and_main_moves_only_to_its_lock_comm
     assert _main(world) == lock and h.after[-1][0] == main and len(h.launched) == 1, world.logs
 
 
+def test_a_lock_commit_the_merge_gate_refuses_is_held_and_ci_told(world, monkeypatch):
+    """The merge gate refusing a lock commit (`vqueue_records.unvouched`) holds it off `checked`, `CI` told why."""
+    import research.vqueue_records as R
+
+    h = _locks(world, monkeypatch)
+    tip = _lands(h, {1: LEAN})
+    (rid,) = h.lock_ids()
+    _passes(h, rid, tip, {"pkg": '{"records": 2}\n'})
+    monkeypatch.setattr(R, "unvouched", lambda driver, rid, commit="HEAD": "the merge gate refuses its lock commit")
+    h.tick()
+    assert _checked(world) == tip and h.postland()["locks"]["state"] == "passed", world.logs
+    assert any(f"the lock run {rid} of `checked` {tip[:12]} passed, but the merge gate refuses its lock commit" in p
+               for p in h.posts), h.posts
+
+
 def test_the_bookkeeping_a_lock_run_repaired_is_committed_with_its_records_and_told(world, monkeypatch):
     """Drive's lock run under `--bookkeeping warn`: a file of `merge.REPAIRED` its Lean report's `repaired`
     names is committed at its repository path beside the regenerated locks, which the merge gate vouches for against the run

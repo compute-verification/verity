@@ -11,7 +11,7 @@ import re
 import pytest
 
 from research import merge
-from research.landing import CI, LAUNCH_LOST_S, LEAN_STEP, NOT_STARTED
+from research.landing import CI, LAUNCH_LOST_S, LEAN_STEP, LOST_AFTER_S, NOT_STARTED
 from research.vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
 from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, start
 from test_landing import Harness, _live_run, _steps_run
@@ -155,6 +155,50 @@ def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_rese
     assert got.state == FAIL and again in got.why and len(h.launched) == 2
 
 
+@pytest.mark.parametrize("rows, log, why", [
+    ([{"step": LEAN_STEP, "status": "passed"}, {"step": "lean-suites", "status": "failed", "rc": 1}], "",
+     f"failed after its {LEAN_STEP} passed"),
+    ([{"step": LEAN_STEP, "status": "failed", "rc": 137}], "", "killed"),
+    ([{"step": LEAN_STEP, "status": "failed", "rc": 1, "log": f"{LEAN_STEP}.log"}], "error: No space left on device\n",
+     f"failed in {LEAN_STEP} by its machine (No space left on device)"),
+], ids=["after-audit", "killed-step", "enospc"])
+def test_a_records_run_that_exited_1_by_its_machines_fault_runs_again_once_elsewhere(world, monkeypatch, rows, log, why):
+    """A records run that exited 1 failed by its machine when its run dir says so (`machine_fault`): lean-audit passed and a
+    step after it failed, a step was killed, or a failed step's log says its machine ran out of disk."""
+    h, sha = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    rec = start(h.d, sha)
+    (rid,) = rec["ids"]
+    h.run_state[rid] = ("failed", 1, None, None, "m1")
+    (d := h.world.tmp / rid).mkdir()
+    (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    if log:
+        (d / f"{LEAN_STEP}.log").write_text(log)
+    h.evidence = [d]
+    assert judge(h.d, rec) == RecordsRun(PENDING) and h.launched == [(sha, "m1,m2", False), (sha, "m2", False)]
+    assert any(f"the records run of candidate {sha[:12]} was {why}, a machine's fault: again, once, on m2: {rec['ids'][0]}"
+               in x for x in world.logs), world.logs
+
+
+def test_a_records_run_lost_runs_again_once_elsewhere_and_its_resend_lost_refuses(world, monkeypatch):
+    """A records run whose state can't be read for `LOST_AFTER_S` since its launch is lost (`Landing._lost`), a machine's
+    fault as a killed one is: it runs again once elsewhere, and its resend lost too refuses."""
+    h, sha = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    rec = start(h.d, sha)
+    (rid,) = rec["ids"]
+    h.run_state[rid] = ("unknown", None, None, None, "m1")
+    assert judge(h.d, rec) == RecordsRun(PENDING) and len(h.launched) == 1
+    h.clock += LOST_AFTER_S + 1
+    assert judge(h.d, rec) == RecordsRun(PENDING) and h.launched[1:] == [(sha, "m2", False)]
+    (again,) = rec["ids"]
+    assert any(f"the records run of candidate {sha[:12]} was lost, a machine's fault: again, once, on m2: {again}" in x
+               for x in world.logs), world.logs
+    h.run_state[again] = ("unknown", None, None, None, "m2")
+    h.clock += LOST_AFTER_S + 1
+    assert judge(h.d, rec) == RecordsRun(FAIL, f"it failed: {again} lost on its resend") and len(h.launched) == 2
+
+
 def test_a_records_run_that_never_ran_or_registered_no_run_is_infra(world, monkeypatch, tmp_path):
     h, sha = _harness(world, monkeypatch)
     assert judge(h.d, None) == RecordsRun(INFRA, "it registered no run")
@@ -276,8 +320,8 @@ def test_the_records_commit_is_a_lock_commit_on_the_candidate_which_the_merge_ga
     assert _git(wd, "diff", "--name-only", sha, made) == "pkg/lean-audit.json"
     body = _git(wd, "log", "-1", "--format=%B", made)
     assert body == lock_message("#1 #2", rid, f"queue/{sha[:12]}", sha, [], files).strip(), body
-    assert body.startswith(f"{LOCK_SUBJECT}#1 #2\n\nChecked: {rid} (the lock run of `queue/{sha[:12]}` {sha[:12]}, passed "
-                           "by regenerating them)\nRegenerated: pkg/lean-audit.json"), body
+    assert body.startswith(f"Lock records regenerated for #1 #2\n\nChecked: {rid} (the lock run of `queue/{sha[:12]}` "
+                           f"{sha[:12]}, passed by regenerating them)\nRegenerated: pkg/lean-audit.json"), body
     assert re.search(rf"^Checked: {rid} ", body, re.M) and re.search(r"^Regenerated: \S", body, re.M)
     assert _git(wd, "log", "-1", "--format=%an <%ae>", made) == "research queue <queue@research.invalid>"
     assert _vouched(h, made, rid) == rid
@@ -325,3 +369,37 @@ def test_a_records_commit_is_held_while_its_records_cant_be_read_or_the_gate_won
         {}, f"its regenerated lock records can't be read: OSError: [Errno 28] No space left on device: '{scratch / rid / 'pkg'}'"))
     got = commit(h.d, sha, rid, (1,))
     assert got == commit(h.d, sha, rid, (1,)) and got.endswith(f"device: '<scratch>/{rid}/pkg'"), got   # rung once, not each tick
+
+
+def test_a_records_commit_is_held_while_no_lean_report_says_whether_lean_audit_regenerated_records_unless_it_was_skipped(
+        world, monkeypatch):
+    """Records neither the store nor the run dir on its node holds hold the records commit, with why, while lean-audit may
+    have regenerated some (`lean_audit_ran`); a run whose steps.jsonl says lean-audit was skipped regenerated none, and makes
+    no commit."""
+    h, sha = _harness(world, monkeypatch)
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha)
+    h.d.fetch = lambda r, names: None
+    refs = _git(h.q.workdir, "for-each-ref")
+    assert commit(h.d, sha, rid, (1,)) == (f"its {merge.AUDIT}, which says whether it regenerated lock records, can't be read "
+                                           "from the store or from its run dir on its node")
+    h.evidence = [_steps_run(h.world.tmp / "skipped", rid, {LEAN_STEP: "skipped"})]
+    assert commit(h.d, sha, rid, (1,)) is None and _git(h.q.workdir, "for-each-ref") == refs
+
+
+def test_lean_audit_ran_reads_the_stored_result_and_takes_a_store_it_cant_read_as_ran(monkeypatch, tmp_path):
+    """`lean_audit_ran` of a run whose result is in the store: lean-audit skipped or absent there regenerated nothing; a run
+    the store can't be read of may have."""
+    import types
+
+    from research.vqueue_records import lean_audit_ran
+
+    class Store:
+        def get_attempt(self, rid):
+            if rid == "unreadable":
+                raise OSError("the store is down")
+            return {"outputs": {"result": "sha512:r"}}
+
+    monkeypatch.setattr(merge, "step_status", lambda store, rid, step: rid)
+    d = types.SimpleNamespace(q=types.SimpleNamespace(store=Store()), repo=tmp_path, evidence=lambda repo, ids: [])
+    assert [lean_audit_ran(d, r) for r in ("passed", "skipped", "absent", "unreadable")] == [True, False, False, True]
