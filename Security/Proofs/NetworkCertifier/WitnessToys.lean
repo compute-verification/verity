@@ -15,7 +15,8 @@ public import Definitions.NetworkCertifier.Assumptions
 
 Each built by hand, at a positive instance where the guarantee allows one: several steps, two execution blocks of one
 advice bit each, a non-empty incorrect set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
-witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `leakD`, which these extend.
+witnesses; `Witnesses` has the steps `obs0` and `obs1` and the accepting verifiers at the negation `notStmt` (`leakL`,
+`certL`), which these extend.
 
 * `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
   rows, so `P` accepts its run over every number of steps (`honestI_accepted`, `honestI_mem`).
@@ -33,9 +34,9 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
   sampled Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible incorrect sets
   (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
   (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
-* `tapD`: `leakD` with every opening passing, where the network certifier's openings `tapOps` register `obs0`
-  (`tapOps_opens`), so at every `δ` no witness is in `RLeakCertifier` (`tapD_noRLeakCertifier`), and at `δ = 1/8` the per-window
-  leak bound of `PeriodLeakAccepted` fails at its silent prover (`tapD_bound_fails`).
+* `tapOps`: the network certifier's openings at `notStmt` that register `obs0` under every opening passing
+  (`tapOps_opens`), which no possible incorrect set accepts at any `δ` (`obs0_notAcc`). The accepting verifier at
+  which `PeriodLeakAccepted`'s per-window bound fails is `certL` (`Witnesses`, `certL_bound_fails`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
@@ -47,6 +48,7 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
 namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
+open Claims.Witness.SamplingGeneric (notProg notStmt notPart)
 
 /-! ## The honest certifier -/
 
@@ -308,9 +310,6 @@ theorem sampAs_encard : (AsReg sampProg notLay 1 ∅ fun _ => false).encard ≤ 
   have h := encard_asReg_le sampProg notLay 1 ∅ fun _ => false
   rwa [sampFree] at h
 
-/-- One step: an empty frame on the link, every status complete, what the negation of the ingress `false` holds. -/
-def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
-
 /-- **`obs1` is accepted with the empty incorrect set**, its free input `false`, at one step at `δ = 1/4`. -/
 theorem obs1_sampAcc :
     [obs1] ∈ AccSeqsSampled sampProg sampPart sampDesign notLay 1 (AsReg sampProg notLay 1 ∅ fun _ => false) (1 / 4)
@@ -378,14 +377,6 @@ theorem obs0_notAcc (δ : ℝ) (As : Set (ℕ → Bool)) :
 /-- The network certifier's openings at `notStmt`: the input `false` and the negation's presence gate `false`. -/
 def tapOps : List (Opening Bool) := [⟨0, false, []⟩, ⟨1, false, []⟩]
 
-section Toy
-
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
-/-- `leakD` with every opening passing. -/
-noncomputable def tapD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
-  { leakD Coin with commit := accCm }
-
 /-- **The network certifier's openings register `obs0`**, under every opening passing: they open the input and the
 egress slot's presence gate, both `false`, so the step's row holds no frame and its ingress is `false`. -/
 theorem tapOps_opens (H : Msg → Msg) :
@@ -401,78 +392,6 @@ theorem tapOps_opens (H : Msg → Msg) :
     exact ⟨⟨0, false, []⟩, by simp [tapOps], rfl⟩
   · funext σ
     rfl
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakCertifier`** at `tapD`, at one step at every `δ`, whatever the inputs `As` admits: the network
-certifier registers `obs0` (`tapOps_opens`), which no possible incorrect set accepts (`obs0_notAcc`). -/
-theorem tapD_noRLeakCertifier (H : Msg → Msg) (δ : ℝ) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
-    (x : Msg) (w : Claims.Sampling.Wit) :
-    ¬ RLeakCertifier H (tapD Coin).commit (tapD Coin).parse (tapD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) δ
-      As 1 (fun _ => tapOps) x w := by
-  rintro ⟨s, P, hs, hP, h⟩
-  obtain rfl : notStmt = s := Option.some.inj hs
-  obtain rfl : notPart = P := Option.some.inj hP
-  exact obs0_notAcc δ _ (h (fun _ _ => [false]) [obs0] (tapOps_opens H) obs0_covered rfl (by simp [obs0]))
-
-theorem tapD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Bext H (tapD Coin).V (Claims.Sampling.E (tapD Coin) decode) Unit silentP x).Pr H = 0 := by
-  simp only [Bext]
-  rw [dite_eq_left (show 0 < (tapD Coin).V.k x from Nat.one_pos)]
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp [ownLog_noHash _ _ _ (noHash_E (tapD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
-  exact Pr_false
-
-/-- With every opening passing at no call, `B_tap` checks the network certifier's openings at no call either. -/
-theorem tapD_btap (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Btap H (tapD Coin).V (Claims.Sampling.E (tapD Coin) decode) (tapD Coin).commit (tapD Coin).parse
-      (fun _ => tapOps) Unit silentP x).Pr H = 0 := by
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Btap, ownLog_noHash _ _ _ (noHash_E (tapD Coin) (fun _ _ _ => rfl) _ _ _ _)]
-    simp [certifierLog, tapD, leakD, accCm, OC.eval, tapOps, findColl])]
-  exact Pr_false
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- At `δ = 1/8` the accepting verifier's knowledge error is below `1`: at `δ = 0` it is below `1/3` (`sksD_κ`), and
-`δ` adds `c²·δ ≤ 4δ`. -/
-theorem tapD_κ_eighth (x : Msg) : Claims.Sampling.κ (tapD Coin) (1 / 8) x < 1 := by
-  have h0 : Claims.Sampling.κ (tapD Coin) 0 x < 1 / 3 := sksD_κ (Coin := Coin) x
-  have hs := Claims.Witness.Sampling.slack_le_two
-  have hp := Claims.Witness.Sampling.slack_pos
-  have hsq : Claims.Sampling.slack ^ 2 ≤ 4 := by nlinarith
-  have hκ : Claims.Sampling.κ (tapD Coin) (1 / 8) x =
-      Claims.Sampling.κ (tapD Coin) 0 x + Claims.Sampling.slack ^ 2 * (1 / 8) := by
-    unfold Claims.Sampling.κ
-    ring
-  rw [hκ]
-  linarith
-
-end Toy
-
-/-- **`PeriodLeakAccepted`'s per-window bound fails at the accepting verifier** `tapD`, at every hash, at one step at
-`δ = 1/8` with no input registered and the statement `[]` in scope (`leakD_scopeAcc`): no witness is in `RLeakCertifier`
-(`tapD_noRLeakCertifier`), so the silent prover's run fails it with probability `1`, while `κ < 1` and the finders find
-nothing. -/
-theorem tapD_bound_fails (H : Msg → Msg) :
-    ¬ PrBad H (tapD Unit).V
-        (RLeakCertifier H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
-          (1 / 8) (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
-        (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
-      Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
-          Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB H (tapD Unit).V silentP []) +
-        (Bext H (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr H +
-        (Btap H (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
-          (fun _ => tapOps) Unit silentP []).Pr H := by
-  intro h
-  have hp : PrBad H (tapD Unit).V
-      (RLeakCertifier H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
-        (1 / 8) (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
-      (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP = 1 :=
-    prBad_accV H _ _ [] silentP (tapD_noRLeakCertifier H _ _ [])
-  have hb : PrB H (tapD Unit).V silentP [] = 0 := prB_accV H silentP []
-  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapD_bext, tapD_btap] at h
-  linarith [tapD_κ_eighth (Coin := Unit) []]
 
 /-! ## The monitoring period, pooled -/
 
