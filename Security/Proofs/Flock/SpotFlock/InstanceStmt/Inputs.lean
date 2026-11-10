@@ -107,7 +107,8 @@ theorem ofJson_reg : Registered.ofJson regJ = .ok regPorts := by kernel_rfl
 unfolded, it is a `Functor.map` with a projection at its head, which no rule matches. Its side condition is walked. -/
 theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     (some a).mapM f = .ok (some b) := by
-  rw [Option.mapM_some, h] <;> rfl
+  rw [Option.mapM_some, h]
+  rfl
 
 theorem map_norm_draw : (some drawJ).map Flock.norm = some drawJ := congrArg some norm_draw
 

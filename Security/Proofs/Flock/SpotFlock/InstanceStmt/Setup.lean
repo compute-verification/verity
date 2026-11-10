@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
 public import Proofs.Flock.SpotFlock.InstanceStmt.File
+public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -78,9 +79,6 @@ set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
 
-/-- The coins `Read.setup` hands the statement: the keyed coin tree of its one table. -/
-abbrev coinsX : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
-
 /-! ## The public file -/
 
 theorem extract_hdr (r : Run) (circ cls : String) :
@@ -117,12 +115,6 @@ fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A'
   shallow [metaText]
 
 /-! ## The statement -/
-
-/-- The drawn statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
-of the two, and the drawn instance's units. -/
-def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
-  ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
-    "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
 
 def oA (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).1
 def oB (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).2
