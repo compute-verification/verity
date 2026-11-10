@@ -9,6 +9,9 @@ public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
 public import Proofs.WeightSecurity.Two
+public import Proofs.WeightSecurity.TwoReg
+public import Proofs.WeightSecurity.TwoRegPeriod
+public import Proofs.WeightSecurity.TwoRegWitnesses
 
 /-!
 # Model weight security's proofs
@@ -23,5 +26,9 @@ leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`,
 deployment. `Stop`: the incorrect proof blocks a period leaves undetected, over SPOT's period machinery. `Deployed`:
 `TheftServed` at the deployment audits (`TheftServedDeployed`). `Pressure`: a registered window's `pa B ≤ x^|B|`, the
 pressure `TheftServedDeployed` takes. `Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget
-`T·(K − 1) + 1` from the cap `WindowCap`.
+`T·(K − 1) + 1` from the cap `WindowCap`. `TwoReg`: a period of two-stage windows at the committed traces, the
+statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodTwoReg` from each window's committed
+form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
+`TwoRegWitnesses`: its premises hold together at `twoLTwo` (`periodTwoReg_honest`), and `PeriodTwoReg` fails at
+`sksLTwo` (`periodTwoReg_nontrivial`).
 -/

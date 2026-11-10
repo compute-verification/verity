@@ -101,6 +101,11 @@
    "digest": "d389c19a2ddbe109cebd6de895b010c96712878d4b5604219783c0394c18faf0",
    "why": "The compiled verifiers whose sampled sessions are the proof system's honest runs among the first `K` slots, at an error covering theirs: the ones `CompilerComplete` is stated for. (met by `compilerComplete_honest`)"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+   "owner": "@proofs",
+   "digest": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+   "why": "`CompilerHeadlineTwo` is stated at a compiled two-stage verifier that meets the committed form at two stages, which `CompilerKSRegTwo` proves at the contract's premises. (met by `compilerHeadlineTwo_honest`)"
+  },
   "Claims.ZKMal.RefSession.UnCausal": {
    "owner": "@proofs",
    "digest": "89ed8050e4e652dc3a78971a605b86e10dea446f111f2db071e4923ddda4df7e",
@@ -3850,6 +3855,30 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -3953,6 +3982,9 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
+   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
+   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
+   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
@@ -4201,6 +4233,18 @@
   "Claims.SamplingGeneric.compilerKSTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
   },
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
@@ -11908,6 +11952,22 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "8bbf0baef0980cda282840b9a7c3a249b2dcb41025cbd7a9bac830a14b645b95"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11923,6 +11983,21 @@
    },
    "type_hash": "3ce579edc550a7489aba9d13e5f6c39c62013d660319cdef679ea5ff381bdfa2"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "827072448093bd2c3f6a5472aa999f6bfaa42aeab5c0ce5bda3eeba65756257b"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11937,6 +12012,23 @@
     "reads": []
    },
    "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A =>",
+    "    Exists fun L => Exists fun r₁ => Exists fun r₂ => Not (Claims.SamplingGeneric.CompiledTwo.MissTwo H L r₁ r₂)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "f6366dd9df27f88e399847c8855b57720ee0d44fbccc390f9fe14217840590d9"
   },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
@@ -12169,6 +12261,62 @@
    },
    "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
   },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerHeadlineTwo : Claims.SamplingGeneric.CompilerHeadlineTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.SamplingGeneric.CompiledTwo.KSRegTwo"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "4f3cf3f0f5f4afa46b847df6344ae963d3e424c8a7753fd916e3d8fc1eb7dc3c",
+   "unfolded_hash": "7c27b70db67105e02dde2cc0375fbb1046f5d7455500664eec7b4d129add3316"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "      (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "        (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Bool).V.k List.nil) → Bool),",
+    "          And",
+    "            (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).replaySample List.nil r)",
+    "              (List.cons 0 (List.cons 1 List.nil)))",
+    "            (And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).checked List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (Eq",
+    "                (Claims.run FlockDeploy.sha512 Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Bool).V",
+    "                    List.nil Unit.unit r).out",
+    "                Claims.Out.acc)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "a59f9d5dc20ff1709b7e84ce883c2f29fa1dd17711b48b251c086f31b0ae7b7e"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "84640a2ea982221426dcf5d427d69364ad9d6bb442b55b38c05325de2e686379"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerKS : Claims.SamplingGeneric.CompilerKS"],
@@ -12301,6 +12449,38 @@
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
   },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegTwo : Claims.SamplingGeneric.CompilerKSRegTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "f8899549b5c969e59c9031eec083b963a4760b6e9a22f295751a8fca993aa583",
+   "unfolded_hash": "b90bb396af25024e57bb64cf5d19957bbdd8d6af2e99e66826b6bb7e740624fc"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "d98dc4c4a57e488a69e3b06f203b255b8fba677042501957106d4517399edcf5"
+  },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -12418,6 +12598,52 @@
     "reads": []
    },
    "type_hash": "2ee399e11183db0f7c3f301abcaf97a5683eac1f2825d864e2773d817b536a31"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerMissTwo : Claims.SamplingGeneric.CompilerMissTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "09e401bb1e532c53972c7511f4a7c2436377179c3d62d1ac7cd2d3d024da0dd4",
+   "unfolded_hash": "e5ae09e75ec49ad1ca61372ddf5caa9a668f37ea214540be5f58cb0bd7bb0361"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "      (And (Claims.Witness.SamplingGeneric.twoTwo.FirstRate 1)",
+    "        (Claims.Witness.SamplingGeneric.twoTwo.SecondRate Claims.Witness.SamplingGeneric.twoPart 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "918f05b8878ef4e8452f0f3219f8523b1ace2fabc6d8723256e2a6976aa1a41e"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.MissTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool) 1 1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
@@ -26838,10 +27064,7 @@
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ D δ (R.stmt ξ i)) δ) (instHMul.hMul (Claims.Sampling.γ D (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V (Claims.Sampling.E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27486,19 +27709,19 @@
    },
    "Flock.SecurityProofs.EndToEndRegistered": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -32503,6 +32726,25 @@
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
     "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
+   }
+  },
+  "Definitions.Claims.SamplingTwoReg": {
+   "digest": "70bb7f2f3d79480cfd57d5f23e95b5ae205df3248a3a070aea396a25de66783f",
+   "definitions": {
+    "Claims.Sampling.footprintAt": "bdb45a41848f36d679afb8b2988f9bd7b92102ca919b459e7ddb15972b25ff33",
+    "Claims.Sampling.wrongAtBoundaryAt": "19bcd2a24169ac820763603a0019fffe5dfedc5755d8becdf941a3fa29b3db07",
+    "Claims.Sampling.wrongInAt": "2dc7b771cb91a91a74342ab136ff97e0c8f471607ccc78c7e73ac0a2b385b07b",
+    "Claims.SamplingGeneric.CompiledTwo.BconfTwo": "e5f5b712fc8f5b3a2c1396c1eac60786f8a6bd3a7aff2abba24a31824be6baa1",
+    "Claims.SamplingGeneric.CompiledTwo.FregTwo": "5bb3997a29529aa961f76995c0d820df9b2e653ce1447a630f38f4126d6a2451",
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": "4b82947bc9af2358e1b87dd9c34f07f4c9ab8fa74e0b3804ac9ceb86686b8d30",
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo": "8bae0f8395baf1814f833c3ab207b377f4f48ec7d5f2bbc5639f27eef714ca88",
+    "Claims.SamplingGeneric.CompiledTwo.iopensAt": "3056f123e7f2f0af6d6a4e2107bd27ced8a0863134f924549fd6ea13c46e295e",
+    "Claims.SamplingGeneric.CompiledTwo.iregVal": "f3ae1e623ee37512210dda6461933a5611b8d3ac8d680870ac355775b55c28c9",
+    "Claims.SamplingGeneric.CompiledTwo.εregTwo": "e217bd0447e89558decc85ffbe6e93b89358e4c57209e30c8bc9b28c91108ab1",
+    "Claims.SamplingGeneric.CompilerHeadlineTwo": "0d020f75cde0338220c50766a1d2fde92dd2697de56cedc9d9e2b1d70d9a2e71",
+    "Claims.SamplingGeneric.CompilerKSRegTwo": "4b00069b6670e336421312c9b951ec2adccc632e7fad7aa23b51462c24c8f854",
+    "Claims.SamplingGeneric.CompilerMissTwo": "11b4a616ec6b83b8b1af9828590558a1ca7f432d10c359bc362fbe232f8d9dd4"
    }
   },
   "Definitions.Claims.ZKOut": {
