@@ -29,7 +29,7 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
-$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # only the suites your change touches: the pre-mark run
+$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # the pre-mark run, as the mark's quick tier runs it
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -93,10 +93,12 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 
 - **A test over about 5 s gets `@pytest.mark.slow`**, which `--quick` and `-m "not slow"` skip and `check` runs; the
   runner lists slower tests without the mark. A suite's quick tier should finish in about a minute: make slow tests
-  smaller before marking more.
+  smaller before marking more. The pre-mark run (`--changed REV --quick`, also the tier `research queue ready` runs before a
+  mark) keeps the slow tests of each test module the change adds or modifies, or that imports one or a changed helper by
+  name; those of the code under test run in `check`.
 - **Minutes-long or machine-bound checks are opt-in**, skipping unless a variable asks (`VERITY_POUS_SLOW`,
-  `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
-  how long it takes.
+  `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`, which `check`, the quick tier and `suites.py` inside a
+  `research run` set). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason how long it takes.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
   integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
   pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
@@ -155,5 +157,5 @@ and false-positive rulings live in its dashboard, not the repository.
 
 ## Before a PR
 
-The suites your change touches pass with no read outside their inputs (the pre-mark run, AGENTS.md "Lanes"), and a new or
+The suites your change touches pass with no read outside their inputs (the pre-mark run, the team skill), and a new or
 changed circuit passes `circuit-check` (AGENTS.md "Circuits").
