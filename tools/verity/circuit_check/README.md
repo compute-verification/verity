@@ -4,6 +4,20 @@
 template or one of its subcircuits, a served workload's request Program, and their Boolean lowerings. A change that adds or
 modifies a circuit puts its report in the PR, and `check` runs `circuit-check --all`.
 
+## Interface
+
+- **Provides:** the `circuit-check` command (`circuit_check.cli:main`) and its report. `targets` (what a target string
+  names) and `structural` are imported as modules too.
+- **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
+  that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
+  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/ml/flock/pod/catalog.py`); and a migration tool under
+  `integrations/vllm/tools`.
+- **Loads:** every Definition module's sidecar and pins, `verity.ml.circuits`, `verity.ml.definitions` and Flock
+  (`verity_flock`), and the vLLM integration (`verity_vllm`), imported only inside the functions that read its frontend
+  vocabularies, a request Program or its batch templates.
+
+## Commands and modules
+
 ~~~sh
 uv run circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'    # Definitions, at a binding
 uv run circuit-check MODULE.circuit-check.py                         # what a sidecar's bindings reach in its module

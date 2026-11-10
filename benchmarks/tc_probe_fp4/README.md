@@ -56,3 +56,10 @@ uv run python benchmarks/tc_probe_fp4/f1_rates.py build --out DIR               
 OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh                                           # on a B200
 uv run tools/verity/check/suites.py benchmarks/tc_probe_fp4                                # the CPU suite
 ~~~
+
+## Interface
+
+- **Provides:** the Blackwell probes, the price microbenchmarks and the searches above, run on a GPU, and their store
+  declarations (`tool.py`).
+- **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name. Nothing else.
+- **Loads:** `verity.ml.circuits.silicon`, `verity_config`, and `research` in `tool.py`.

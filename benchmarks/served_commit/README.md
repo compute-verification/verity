@@ -36,3 +36,12 @@ labeled run, `served.py` the served arm's runs).
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
 invariance), and each arm is gated token for token against `stock` before anything is timed. The acquisition under CUDA
 graphs is `integrations/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
+
+## Interface
+
+- **Provides:** the arms the shared harness runs (`arm.py`, `served_arm.py`, `prof_arm.py`), the tensor-parallel decode
+  step (`tp_decode.py`) and the scripts that launch and profile them.
+- **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/moe_align`,
+  which imports `tp_decode`.
+- **Loads:** the vLLM integration's `commit`, `acquire`, `engine` and `pipeline` packages, `benchmarks/harness`
+  (`verity_bench`), torch and vLLM.
