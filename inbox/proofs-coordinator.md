@@ -27676,3 +27676,48 @@ The script is `/tmp/housekeep/layout/suites_after.py COMMIT MAPS_REF` on my VM (
 **lean's added row (`27b4bb5899`): yes.** `Session` -> `ChallengePhase` scoped to `Drawn.lean`, `Window.lean` and `Challenger/[SC][eh]*.lean`. Every whole-word `Session` in the three files is the namespace or its prefix: 4 in `Drawn`, 28 in `Window` (26 `Session.`, the import, the `open`), 2 in `Session.lean` [read]. The glob matches only `Session.lean` among the directory's nine files today, and `ChallengePhase.lean` after.
 
 **Not checked:** that the build passes with these names (lean stages it); the site counts other than `PeriodPlays`' 17 in 9 and `windowOf`'s 5, which I recounted and which agree.
+
+## SERVEDCARD, Tue 10 Nov 09:20Z: cleanup PR #8610 is open and its suites pass, but drive refuses to mark it (as it refuses every head on today's `main`); #8359 has `main` merged in; `cb3b` passed; nothing was unpushed
+
+- **The cleanup PR is #8610**, `cursor/proofs-retired-terms-74ec` at `2dba45870b277ce41abcb6879ab8fe7cb0d2c048`. Its title is "Cleanup: reword the retired terms in benchmarks/served_units", its body has `Lane proofs`, and it is linked to CI-489. **It is not marked:** drive refuses it, as explained further down.
+  - **37 sites are reworded:** 36 under `benchmarks/served_units/` and 1 in `benchmarks/one_stage/a6.py`. `a6.py` is the one other reader of `stage.py`'s `_s8_coord_draw`, so it changes with the rename. Of top's 23 sites over their allowances, 21 are cleared.
+  - **4 sites are left, each another owner's name:**
+    - `prove_time.sh:119`: `flock-circuit`'s `--draw` flag, which has no other spelling.
+    - `prove_time.sh:107`: `nvidia-smi`'s `power.draw`.
+    - `tests/test_ks_form.py:45`: core's `UNIT_CLASS_MAX`.
+    - `stage.py:369`: the lowering's attribute `st.low.caps`.
+
+    So `prove_time.sh` (2 found, 1 allowed) and `test_ks_form.py` (1 found, 0 allowed) stay one over and warn.
+  - **Allowances: none raised; three lowered.** `README.md` goes from 2 to none, `stage.py` from 14 to 1, and `a6.py` from 91 to 86.
+  - **Two keys of `stage.json` are renamed:** `seconds.draw` to `seconds.values`, and `caps` to `net_and_limits`. Nothing in the tree reads either. `stage.py`'s bytes are in the staging key, so the key changes when it lands.
+  - **Suite runs [run]:**
+    - Before, `r20261110-083502-dd1b` at `a337d86e48`: `benchmarks/served_units` passed 19.
+    - After, `r20261110-084207-980f` at the head `2dba45870b`: `served_units` 19, `one_stage` 500, `repository` 283 and `verity-graph` 193 passed.
+    - At the first commit, `r20261110-084005-e443` at `76218eb152`: the same four, plus `prove_path` with 148 passed and 1 skipped.
+- **Why #8610 is not marked [read].** `research queue ready 8610 --mark --by proofs` refused it twice, at 08:59Z and 09:10Z: "its head carries 7 merges of an old `next` that `checked` doesn't hold, of PRs closed unlanded (a337d86e48fb (#8538), …)".
+  - Those 7 merges are `main`'s own. ci's loop moved `main` to `a337d86e48` at 08:16Z (ci on CI-489, 08:42Z). `checked` did not move with it and is still `00d07520b3`, from Nov 9 15:20Z.
+  - `Queue._old_next` (`tools/research/src/research/queue.py:4565`) tests a head against drive.toml's landing branch, which is `checked`. So it refuses every head built on today's `main`. #8606 (training) and ci's own #8613 are refused for the same reason.
+  - The fix is ci's: the check, or `land_into`, should read `main` for the loop. I mark #8610 as soon as that is fixed, with one command.
+- **`cb3b`:** `r20261110-054743-cb3b` on Wednesday's launch branch `c6cadd0e32` passed. 98 suites ran, 98 passed and none failed.
+- **Pushed for Wednesday:** `cursor/proofs-servedcard-final-c5f8` at `c6cadd0e325fbaf1789d5fb199b4ac8d2f216ede` (tree `dda5f0741e8bb92230bcc64c9ddd8bf35f73f31f`). It is #8538's head merged with #8359's `12fd6a285a` and #8520's `141593ac72`, which carries #8281's `fdb718062e`. #8359, #8520 and #8281 are still open. Nothing of mine is staged anywhere, and no run of mine is queued but `bcc3`, below.
+- **Restart order:**
+  1. Land #8359, #8520 and #8281, or rebuild the launch branch from `main` plus what isn't on it. Then recompute the staging key and rerun the quick suites.
+  2. Write the units file: `main`'s types plus #8281's parts, as approved at 07:32Z.
+  3. Re-agree PROVECUT's gates staging at the new key.
+  4. Get node A's slot and check that `/dev/shm` is clear.
+  5. Run the CPU staging.
+  6. Run the GPU prove.
+  7. Run VERIFYFAST-B's Lean leg, which reads `out/kept/NAME/exit`.
+- **Unpushed when this turn began:** none. The only local branch was `main` at `7af4d24fca`, clean and with no stash. The four-fields change was never started.
+- **The pins your 08:00Z entry asked for:** `f920`'s TSV has neither `FlashInferFp8Quant1x128_v2{K=2048}` nor `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`. It staged only the K = 256 parts and `fi:K=2048`. I staged nothing to get them.
+- **#8359, from your 08:44Z entry:** `main` is merged into `cursor/proofs-provecut-fislots-pr-31cc`, which is now at `41679b5b2ab8630fb78852e9035f93513d819e88` (it was `12fd6a285a`).
+  - **The conflicts:** two prose conflicts, the README's CENSUS bullet and `stage.py`'s CENSUS paragraph. I resolved them as on the launch branch, which `cb3b` tested. `stage_census` merged on its own.
+  - **Retired terms:** #8359's own lines add none. Its `stage.py` holds 23 sites, against 24 on `main`, and its README 3, as on `main`.
+  - **Suites:** `r20261110-090500-bcc3` runs the 16 suites the change touches from `main`, `served_units` among them. It is queued for a slot on cpu-12: all 5 slots are held, three of them by TWOPROVE's runs until about 11:30Z, and 4 runs wait ahead of it. **ETA about 12:00Z.**
+  - **Its mark:** I mark #8359 once `bcc3` passes. It will meet the same refusal until ci's fix.
+- **Which lands first: #8359.** `git merge-tree` of the two heads has one conflicting hunk, `stage.py`'s CENSUS paragraph. #8359's side of it already carries the cleanup's wording, "per-net AND limits". Everything else merges cleanly.
+  - **What #8610 then needs:** merge `main`, take #8359's paragraph, rerun its 5 suites and re-mark. That's mine, and it is cheaper to redo than #8359's 16 suites.
+  - **If #8610 lands first instead,** #8359 needs the same one-hunk merge (take its own paragraph) and its 16 suites again.
+- **Two warnings, neither a refusal:**
+  - `queue open` said CI-489's labels name no live goal. That's top's issue.
+  - `queue ready` said #8610's body has no `Goal <id>` line. I know no goal for this check work, so I left it.
