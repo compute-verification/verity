@@ -25,7 +25,7 @@ subdirectory has its own README with the detail; this page maps each machine and
 | Loop | Code |
 |---|---|
 | Boot: links and services from the network volume | `infra/control/post_start.sh` |
-| Drive, the landing automation's ticks, and promote | `infra/control/drive.sh`, `infra/control/promote-loop.sh` |
+| Drive, the landing automation's ticks | `infra/control/drive.sh` |
 | The agent watch: frees held runs, records idle workers and run ends | `infra/ops/verity_ops/agent_watch.py`, run by `infra/control/agent_watch.sh` |
 | The agent watch's relay to Slack | `infra/control/agent_watch_relay.py` |
 | The cloud watch: loop health, R2, Neon, spend against budgets | `infra/control/cloud_watch.py` and `cloud_watch.toml` |
