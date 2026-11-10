@@ -311,7 +311,7 @@
   "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 : Prop := ∀ n : Nat, 0 + n = n"],
               "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Twice : Prop := Hyp ∧ Hyp\n\ndef Sneaky : Prop := Hyp ∧ Hyp2\n\ntheorem twice_thm (_h : Twice) : True := trivial\n\ntheorem sneaky_thm (_h : Sneaky) : True := trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
   "policy": {"guarantees": {"Control.sneaky_thm": {"owner": "@lean"}, "Control.twice_thm": {"owner": "@lean"}}},
-  "fails": "open: Control.Sneaky is a premise of Control.sneaky_thm, declared in Control.Thms rather than Control.Assumptions: an open premise the lock doesn't list. Discharge it (prove it, or drop it from the statements); or, if it is a real assumption, move its definition into Control.Assumptions; or list it, writing \"Control.Sneaky\": {\"owner\": \"@lean\", \"digest\": ",
+  "fails": "open: Control.Sneaky is a premise of Control.sneaky_thm, declared in Control.Thms rather than Control.Assumptions: an open premise the lock doesn't list. Discharge it (prove it, or drop it from the statements); or, if it is a real assumption, move its definition into Control.Assumptions; or list it, writing \"Control.Sneaky\": {",
   "not": ["assumptions: Control.Twice", "open: Control.Twice", "guarantees: Control.twice_thm assumes"]
  },
  "premise_abbrev_hiding": {
