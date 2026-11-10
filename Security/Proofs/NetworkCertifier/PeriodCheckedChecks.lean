@@ -71,6 +71,10 @@ frame at the slot, which every run of the circuit that holds no gate meets. The 
 verifier `certL`, as `PeriodLeakAccepted`'s does, at the check every run passes, which misses with probability `0` on
 any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
 (`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
+
+**The statement's honest lemma.** `PeriodLeakChecked_honest`: its premises at the toy code, as `PeriodLeakAccepted`'s
+(`PeriodLeakAccepted_honest`), over a monitoring period of no windows. The toy code gives no statement a partition, so
+it places no window: the lemma shows the premises hold together, and holds no window's check to `CheckedUnique`.
 -/
 
 @[expose] public section
@@ -538,5 +542,32 @@ theorem PeriodLeakChecked_nontrivial :
   certL_bound_fails FlockDeploy.sha512 _ ((certL Bool).κ 0 [] + 0 + 0) []
     (fun w hw => certL_noWit FlockDeploy.sha512 _ [] w (rLeakCertifier_of_rLeakCertifierChecked hw))
     (by linarith [certL_κ (Coin := Bool) []])
+
+/-! ## The statement's honest lemma -/
+
+set_option synthInstance.maxSize 1024 in
+/-- **`PeriodLeakChecked`'s premises at the toy code**, over a monitoring period of no windows, the one period the toy
+code places, since it gives no statement a partition: `Compiled.KS` and the commitment's binding
+(`PeriodLeakAccepted_honest`); the windows' registrations (`WindowsPlaced`) and their checks' pinning
+(`CheckedUnique`), of which that period has none; and, at the record format of no connection (`noFormat`), the
+read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret (`PeriodChannelReg`),
+whose view holds no cell. -/
+theorem PeriodLeakChecked_honest :
+    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+        (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
+      (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+        (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
+      WindowsPlaced
+        (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+          (fun _ _ _ => [])).partition 0 (Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) Fin.elim0 Fin.elim0 ∧
+      (∀ i : Fin 0, CheckedUnique ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).prog
+        ((Fin.elim0 : Fin 0 → Claims.Sampling.Partition) i)
+        ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).design trivLay 1 ∅ fun _ => True ∧ True) ∧
+      noFormat.ReadsBy (fun (_ : Unit) _ c => c.elim) (fun _ _ => True) ∧
+      PeriodChannelReg noFormat (fun (_ : Unit) _ => True) Set.univ (Set.univ : Set Unit)
+        (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
+        (fun p => (recordingCode noFormat p.1 fun c => c.elim).1) :=
+  ⟨PeriodLeakAccepted_honest.1, PeriodLeakAccepted_honest.2, ⟨fun i => i.elim0, fun i => i.elim0⟩, fun i => i.elim0,
+    fun _ _ _ _ _ => funext fun c => c.elim, ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩⟩
 
 end NetTiming.Witness
