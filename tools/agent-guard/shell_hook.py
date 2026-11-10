@@ -15,23 +15,29 @@ lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` i
 NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 
 A secret file is refused the same way: a command that writes what it reads to its output (READERS: `cat`, `head`, `tail`,
-`sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, and a `grep`/`rg` that prints lines, one without `-l`, `-L`,
-`-c` or `-q`) applied to a private key (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`), an env or credentials file
-(`*.env`, `.netrc`, `credentials`, `credentials.*`) or anything in a secrets directory (`.ssh/`, `.config/verity/`, a
-`secrets/`), named as an argument, a glob, its input (`< FILE`), a `for` loop's variable or, behind `xargs`, by the commands
-piped into it, wherever the command sits: over ssh, after `research pods ssh POD --`, in a quoted string handed to a wrapper
-script. Every word that names such a command is judged, so a host, an image or a directory of that name hides no reader
-after it. So are `tr` and `tee` with such a file as their input, `dd if=FILE` with no `of=`, the shell's own reads (`while read
-...; done < FILE`, `read KEY < FILE`, `$(<FILE)`), the code of `python -c`, `perl -e` or `ruby -e` that names such a file and
-opens, reads or prints, and `openssl pkey|rsa|ec|dsa|pkcs8 -in KEY` with neither `-pubout` nor `-noout`, or with `-text`, which
-writes the private key out. A glob over a secrets directory matches the key files beside the env files, and a filter that cuts
-each line at its `=` prints every line of a key. `envnames.py FILE...` lists an env file's variable names instead and prints
-nothing of a file that isn't one. What shows no contents passes (`ls`, `stat`, `wc`, `sha256sum`, `cp`, writing or sourcing the
-file, `sed -i`, `diff -q`, `cmp`, `openssl pkey -pubout`, `openssl x509`, `ssh-keygen -l`), as do public halves (`*.pub`,
-`*-pub.pem`, `authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc
-(`credentials.py`), the fixtures under a `tests/` directory, and a file git tracks in the checkout, unchanged, read there by
-the command itself: every agent can read it already, while over ssh the hook can't know. `AGENT_GUARD_LOCAL_OK=1` does not lift
-it.
+`sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, `zcat` and its kin, and a `grep`/`rg` that prints lines, one
+without `-l`, `-L`, `-c` or `-q`) applied to a private key (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`), an env or
+credentials file (`*.env`, `.netrc`, `credentials`, `credentials.*`), a compressed or archived copy of one (`x.env.gz`) or
+anything in a secrets directory (`.ssh/`, `.config/verity/`, a `secrets/`), named as an argument, a glob, its input
+(`< FILE`), a `for` loop's variable or, behind `xargs`, by the commands piped into it, wherever the command sits: over ssh,
+after `research pods ssh POD --`, in a quoted string handed to a wrapper script. Every word that names such a command is
+judged, so a host, an image or a directory of that name hides no reader after it. So are `tr` and `tee` with such a file as
+their input, `dd if=FILE` with no `of=`, the shell's own reads (`while read ...; done < FILE`, `read KEY < FILE`, `$(<FILE)`),
+the code of `python -c`, `perl -e` or `ruby -e` that names such a file and opens, reads or prints, `openssl enc -in FILE` with
+no `-out`, and `openssl pkey|rsa|ec|dsa|pkcs8 -in KEY` with neither `-pubout` nor `-noout`, or with `-text`, which writes the
+private key out. An archiver or a compressor that writes to its output is such a command too: `tar -c` with `-f -` or no `-f`
+(only a terminal stops it, and an agent's shell has none), `tar -x` with `-O`, `zip - FILE`, `unzip -p`, `cpio -o` and `gzip
+-c`, `bzip2 -c`, `xz -c`, `zstd -c` and their kin. One pipe passes, the copy between machines: `tar -cf - FILE... | ssh HOST tar
+-xf - -C DIR`, where the archive goes straight into a `tar` that extracts from its input to disk, each end run here or by
+`ssh HOST` or `research pods ssh POD --`, the far one beside nothing but `umask`, `mkdir`, `chmod`, `chown` and `cd`. That list
+is closed: any other consumer (`cat`, `base64`, `gzip`, a redirect, a subshell) may write the archive on. A glob over a secrets
+directory matches the key files beside the env files, and a filter that cuts each line at its `=` prints every line of a key.
+`envnames.py FILE...` lists an env file's variable names instead and prints nothing of a file that isn't one. What shows no
+contents passes (`ls`, `stat`, `wc`, `sha256sum`, `cp`, writing or sourcing the file, `sed -i`, `diff -q`, `cmp`, `tar -cf
+OUT.tar`, `gzip -k`, `openssl pkey -pubout`, `openssl x509`, `ssh-keygen -l`), as do public halves (`*.pub`, `*-pub.pem`,
+`authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc (`credentials.py`), the
+fixtures under a `tests/` directory, and a file git tracks in the checkout, unchanged, read there by the command itself: every
+agent can read it already, while over ssh the hook can't know. `AGENT_GUARD_LOCAL_OK=1` does not lift it.
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -205,12 +211,12 @@ def every_argv(args: list[str]) -> bool:
     return bool(set(short) & set("fF")) if fmt is None else shown
 
 
-def ssh_command(args: list[str]) -> str:
-    """What `ssh ARGS` runs on the far side ("" for a login shell)."""
+def ssh_words(args: list[str]) -> list[str]:
+    """The words of what `ssh ARGS` runs on the far side (none for a login shell)."""
     i = 0
     while i < len(args) and args[i].startswith("-"):
         i += 2 if args[i][-1] in SSH_ARG_OPTIONS and len(args[i]) == 2 else 1
-    return " ".join(args[i + 1:])
+    return args[i + 1:]
 
 
 def refused(words: list[str], filtered: bool = False) -> bool:
@@ -240,7 +246,7 @@ def refused(words: list[str], filtered: bool = False) -> bool:
     if name in SHELLS and "-c" in args[:-1]:
         return refused_text(args[args.index("-c") + 1])
     if name == "ssh":
-        return refused_text(ssh_command(args))
+        return refused_text(" ".join(ssh_words(args)))
     if name == "research" and "ssh" in args and "--" in args:
         return refused_text(" ".join(args[args.index("--") + 1:]))
     if name == "ps":
@@ -299,10 +305,16 @@ def refused_text(text: str) -> bool:
 
 #: commands that write what they read to their output
 READERS = {"cat", "head", "tail", "less", "more", "tac", "nl", "sed", "awk", "cut", "xxd", "od", "hexdump", "strings", "base64",
-           "sort", "uniq", "paste", "column", "fold", "rev", "diff", "comm", "cmp"} | FILTERS
+           "base32", "basenc", "uuencode", "sort", "uniq", "paste", "column", "fold", "rev", "diff", "comm", "cmp"} | FILTERS
 #: commands that print only their input (`tr a-z A-Z < FILE`): `tr`'s arguments are sets, and `tee`'s are files it writes
 INPUT_PRINTERS = {"tr", "tee"}
-PRINTERS = READERS | INPUT_PRINTERS | {"dd", "openssl"}
+#: archivers and compressors, which write what they pack to their output only when told to (`packed`)
+TARS = {"tar", "gtar", "bsdtar"}
+PACKERS = TARS | {"zip", "unzip", "cpio", "gzip", "gunzip", "bzip2", "bunzip2", "xz", "unxz", "lzma", "unlzma", "zstd", "unzstd",
+                  "lz4", "unlz4", "pigz", "unpigz", "pbzip2", "compress", "uncompress"}
+PRINTERS = READERS | INPUT_PRINTERS | PACKERS | {"dd", "openssl"}
+#: `zcat`, `bzgrep`, `xzless` and the like read a compressed file, or a plain one, as the tool they wrap does
+WRAPS = re.compile(r"^(g?z|bz|xz|lz4?|zstd)(?=(cat|less|more|grep|egrep|fgrep|diff|cmp)$)")
 #: readers whose first argument is a pattern or a script, not a file, unless an option of SCRIPT_GIVEN gave it
 SCRIPTED = {"sed", "awk"} | FILTERS
 SCRIPT_GIVEN = {"e", "f", "regexp", "file", "expression", "source"}
@@ -319,7 +331,10 @@ VALUED = {"grep": GREP_VALUED, "egrep": GREP_VALUED, "fgrep": GREP_VALUED,
           "sed": ("efl", {"expression", "file", "line-length"}),
           "awk": ("fFveil", {"file", "field-separator", "assign", "source", "include", "load"}),
           "sort": ("koStT", {"key", "output", "buffer-size", "field-separator", "temporary-directory"}),
-          "diff": ("UCIxXLFWD", set())}
+          "diff": ("UCIxXLFWD", set()), "zip": ("bnPtO", set()),
+          "tar": ("bCfFgHIKLNTVX", {"file", "directory", "files-from", "exclude", "exclude-from", "transform", "xform", "owner",
+                                    "group", "mode", "mtime", "newer", "format", "label", "sort", "strip-components",
+                                    "use-compress-program", "to-command", "checkpoint-action", "info-script", "rsh-command"})}
 #: the options under which a reader shows no line of what it reads: a grep that lists files, counts or only tests (rg's -L
 #: follows symlinks), a sed that edits in place, a diff that only says whether the files differ, a sort into a file
 GREP_SILENT = {"l", "c", "q", "files-with-matches", "files-without-match", "count", "quiet", "silent"}
@@ -327,7 +342,15 @@ SILENT = {"grep": GREP_SILENT | {"L"}, "egrep": GREP_SILENT | {"L"}, "fgrep": GR
           "rg": GREP_SILENT | {"count-matches", "files"}, "sed": {"i", "in-place"}, "diff": {"q", "brief"}, "sort": {"o", "output"}}
 #: `cmp` says only where two files first differ, unless one of these has it print their bytes
 CMP_BYTES = {"l", "b", "verbose", "print-bytes"}
-#: the openssl commands that write out the private key they read, unless `-pubout` or `-noout` is given
+#: an archive's name that puts it on `tar`'s output or a terminal, not in a file (so does no `-f` at all), and `tar`'s options
+#: that write a member to its output or run a program: without them a `tar` extracting from its input only unpacks to disk
+ON_OUTPUT = re.compile(r"-$|/(dev|proc)/(?!null$)")
+TAR_SHOWS = {"O", "to-stdout", "to-command", "I", "use-compress-program", "checkpoint-action", "F", "info-script",
+             "new-volume-script", "rsh-command"}
+#: what the far side of a copy may run beside the `tar` that unpacks it
+SETUP = {"umask", "mkdir", "chmod", "chown", "cd"}
+#: the openssl commands that write out the private key they read, unless `-pubout` or `-noout` is given; `enc` writes out
+#: any file it reads, encoded or enciphered
 KEY_COMMANDS = {"pkey", "rsa", "ec", "dsa", "pkcs8"}
 #: the shell's own readers of a command's input, which put it in a variable: one `echo` from the transcript
 SHELL_READS = {"read", "mapfile", "readarray"}
@@ -342,6 +365,8 @@ SECRET_FILES = {"a private key": ("*.pem", "*.key", "id_rsa*", "id_ed25519*", "i
                 "an env or credentials file": ("*.env", ".netrc", "credentials", "credentials.*")}
 #: names that hold no secret: a key's public half, ssh's public files, a template, a module or a doc (`credentials.py`)
 PUBLIC_FILES = ("*.pub", "*-pub.pem", "authorized_keys*", "known_hosts*", "*.example", "*.template", "*.py", "*.md")
+#: the suffix of a compressed or archived copy, which holds what the file named without it holds
+PACKED = re.compile(r"((\.tar)?\.(gz|bz2|xz|zst|lz4|lzma|Z)|\.tgz|\.tar|\.zip)$")
 #: directories where every file counts, so a glob over one does (`/root/.config/verity/*` matches the key beside the env files)
 SECRET_DIRS = re.compile(r"(^|/)(\.ssh|\.config/verity|secrets)(/|$)")
 #: what a reader's line names when the parse itself fails: cruder, and it errs toward refusing
@@ -359,14 +384,18 @@ def public_file(path: str) -> bool:
 
 def secret_file(path: str) -> str | None:
     """What the file name or glob `path` says it holds, when that is secret: a private key, an env or credentials file, or a
-    file of a secrets directory (`.ssh/`, `.config/verity/` under any home, a `secrets/`). None for a `public_file`."""
-    if public_file(path):
-        return None
-    name = path.rstrip("/").split("/")[-1]
-    for kind, patterns in SECRET_FILES.items():
-        if any(fnmatch.fnmatchcase(name, p) for p in patterns):
-            return kind
-    return "a file of a secrets directory" if SECRET_DIRS.search(path) else None
+    file of a secrets directory (`.ssh/`, `.config/verity/` under any home, a `secrets/`), under its own name or the one a
+    compressed or archived copy is a copy of (PACKED). None for a `public_file`."""
+    for whole in dict.fromkeys((path, PACKED.sub("", path.rstrip("/")))):
+        if public_file(whole):
+            continue
+        name = whole.rstrip("/").split("/")[-1]
+        for kind, patterns in SECRET_FILES.items():
+            if any(fnmatch.fnmatchcase(name, p) for p in patterns):
+                return kind
+        if SECRET_DIRS.search(whole):
+            return "a file of a secrets directory"
+    return None
 
 
 def tracked(path: str, where: str) -> bool:
@@ -386,24 +415,25 @@ def tracked(path: str, where: str) -> bool:
     return committed.returncode == here.returncode == 0 and committed.stdout == here.stdout != ""
 
 
-def operands(reader: str, args: list[str]) -> tuple[set[str], list[str]]:
-    """(the options given, the other arguments) of `reader ARGS`: short options as letters and long ones by name, with the
-    value of an option that takes one (VALUED: the rest of its word, else the next word) in neither."""
+def operands(reader: str, args: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """(the options given, the other arguments) of `reader ARGS`: short options as letters and long ones by name, each with
+    the values given it when it takes one (VALUED: the rest of its word, else the next word), which are no other argument."""
     shorts, longs = VALUED.get(reader, ("", ()))
-    given, rest, i = set(), [], 0
+    given, rest, i = {}, [], 0
     while i < len(args):
         a = args[i]
         i += 1
         if a == "--":
             return given, rest + args[i:]
         if a.startswith("--"):
-            name, valued, _ = a[2:].partition("=")
-            given.add(name)
+            name, valued, value = a[2:].partition("=")
+            given.setdefault(name, []).extend([value] if valued else args[i:i + 1] if name in longs else [])
             i += name in longs and not valued
         elif a.startswith("-") and len(a) > 1:
             for at, letter in enumerate(a[1:], 2):
-                given.add(letter)
+                given.setdefault(letter, [])
                 if letter in shorts:
+                    given[letter] += [a[at:]] if at < len(a) else args[i:i + 1]
                     i += at == len(a)
                     break
         else:
@@ -420,17 +450,85 @@ def files_printed(reader: str, args: list[str], inputs: list[str]) -> list[str] 
     if reader == "dd":
         return None if any(a.startswith("of=") for a in args) else [a[3:] for a in args if a.startswith("if=")] + inputs
     given, rest = operands(reader, args)
-    if given & SILENT.get(reader, set()) or (reader == "cmp" and not given & CMP_BYTES):
+    if given.keys() & SILENT.get(reader, set()) or (reader == "cmp" and not given.keys() & CMP_BYTES):
         return None
-    return (rest[1:] if reader in SCRIPTED and not given & SCRIPT_GIVEN else rest) + inputs
+    return (rest[1:] if reader in SCRIPTED and not given.keys() & SCRIPT_GIVEN else rest) + inputs
+
+
+def tar_options(args: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """`operands` of `tar ARGS`, whose first word may be its options without a dash, their values after it (`tar czf OUT DIR`)."""
+    if args and not args[0].startswith("-"):
+        spelled, values = [], args[1:]
+        for letter in args[0]:
+            spelled += ["-" + letter, *values[:letter in VALUED["tar"][0]]]
+            values = values[letter in VALUED["tar"][0]:]
+        args = spelled + values
+    return operands("tar", args)
+
+
+def packed(tool: str, args: list[str], inputs: list[str], piped: list[str], sunk: bool) -> list[str] | None:
+    """The files the archiver or compressor `tool ARGS` writes to its output, or None when it writes none there. `tar`
+    creating an archive on its output (ON_OUTPUT, or no `-f`: only a terminal stops it) writes the files it names, each also
+    as a member of each `-C DIR`, and with `-T -` the names piped in, unless that output is `sunk`, handed to a command that
+    only unpacks it (`unpacks`), and the `tar` itself runs no program (TAR_SHOWS). `tar -x` writes them with `-O`. So do
+    `zip` with `-` for its archive, `unzip -p|-c`, `cpio -o` with no archive file, of the names piped in, and a compressor
+    with `-c`, or of its input."""
+    given, rest = tar_options(args) if tool in TARS else operands(tool, args)
+    if tool in TARS:
+        archives = given.get("f", []) + given.get("file", [])
+        if given.keys() & {"x", "extract", "get"}:
+            return archives + rest + inputs if given.keys() & {"O", "to-stdout"} else None
+        if not given.keys() & {"c", "create"} or (archives and not any(map(ON_OUTPUT.match, archives))):
+            return None
+        if sunk and set(archives) <= {"-"} and not given.keys() & TAR_SHOWS:
+            return None
+        names = rest + (piped if "-" in given.get("T", []) + given.get("files-from", []) else [])
+        return names + [os.path.join(d, n) for d in given.get("C", []) + given.get("directory", []) for n in names]
+    if tool == "zip":
+        return rest[1:] + (piped if "@" in given else []) if rest[:1] == ["-"] else None
+    if tool == "unzip":
+        return rest if given.keys() & {"p", "c"} else None
+    if tool == "cpio":
+        return piped if given.keys() & {"o", "create"} and not given.keys() & {"F", "O", "file"} else None
+    return (rest if given.keys() & {"c", "stdout", "to-stdout"} else []) + inputs
+
+
+def far_words(run: list[str]) -> list[str]:
+    """The last words of the command `run` when they are what it has another machine's shell run on `run`'s own input and
+    output: ssh's remote command or `research pods ssh POD --`'s. None for any other command."""
+    prog = os.path.basename(run[0]) if run else ""
+    if prog == "ssh":
+        return ssh_words(run[1:])
+    return run[run.index("--") + 1:] if prog == "research" and run[1:3] == ["pods", "ssh"] and "--" in run else []
+
+
+def unpacks(words: list[str]) -> bool:
+    """Whether the command `words` does nothing with its input but unpack it to disk, so that an archive piped into it shows
+    nowhere: a `tar` that extracts from its input under none of TAR_SHOWS, run here (after `sudo` and the like) or as the
+    command ssh or `research pods ssh` has the far side run (`far_words`), where commands of SETUP may stand beside it,
+    joined by `;` or `&&`. The list is closed: any other program may write what it reads to its output."""
+    run = unwrap(strip_redirections(words))
+    if run[:1] and os.path.basename(run[0]) in TARS:
+        given, _ = tar_options(run[1:])
+        return bool(given.keys() & {"x", "extract", "get"}) and not given.keys() & TAR_SHOWS and set(
+            given.get("f", []) + given.get("file", [])) <= {"-"}
+    try:
+        commands = words_of(" ".join(far_words(run)))
+    except ValueError:
+        return False
+    steps = [unwrap(strip_redirections(w)) for w, _ in commands]
+    return (all(op in (";", "&&", "") for _, op in commands) and any(map(unpacks, steps))
+            and all(os.path.basename(s[0]) in SETUP or unpacks(s) for s in steps if s))
 
 
 def key_printed(args: list[str], inputs: list[str]) -> list[str] | None:
-    """The key `openssl ARGS` writes to its output, or None: one of KEY_COMMANDS writes out the private key it reads (`-in
-    FILE`, else its input) unless `-pubout` or `-noout` is given, and the key's private numbers with `-text` even then.
-    `-out FILE` writes a file instead, and `-pubin` reads a public key."""
+    """The file `openssl ARGS` writes to its output, or None: one of KEY_COMMANDS writes out the private key it reads (`-in
+    FILE`, else its input) unless `-pubout` or `-noout` is given, and the key's private numbers with `-text` even then; `enc`
+    writes out the file it reads. `-out FILE` writes a file instead, and `-pubin` reads a public key."""
     given = set(args)
-    if not KEY_COMMANDS & set(args[:1]) or given & {"-out", "-pubin"} or ("-text" not in given and given & {"-pubout", "-noout"}):
+    if not (KEY_COMMANDS | {"enc"}) & set(args[:1]) or given & {"-out", "-pubin"}:
+        return None
+    if "-text" not in given and given & {"-pubout", "-noout"}:
         return None
     return [args[i + 1] for i, a in enumerate(args[:-1]) if a == "-in"] or inputs
 
@@ -455,18 +553,20 @@ def piped_names(run: list[str]) -> list[str]:
     if prog not in SCRIPTED:
         return run
     given, rest = operands(prog, run[1:])
-    return rest if given & SCRIPT_GIVEN else rest[1:]
+    return rest if given.keys() & SCRIPT_GIVEN else rest[1:]
 
 
-def printed(words: list[str], at: int, inputs: list[str], piped: list[str]) -> tuple[str, list[str] | None, list[str]]:
+def printed(words: list[str], at: int, inputs: list[str], piped: list[str], sunk: bool) -> tuple[str, list[str] | None, list[str]]:
     """(the command as a refusal names it, the files it writes to its output or None, those of them that are keys whatever
     their names) for the printer or the interpreter `words[at]`, judged on the words after it, its input `inputs` and, behind
-    `xargs`, the names `piped` into it."""
-    name, args = os.path.basename(words[at]), words[at + 1:]
-    said, keys = name, None
+    `xargs` or as an archiver's list, the names `piped` into it."""
+    said, args = os.path.basename(words[at]), words[at + 1:]
+    name, keys = WRAPS.sub("", said), None
     if name == "openssl":                                # the file a key command names is a key, whatever its name
-        said, files = " ".join([name, *args[:1]]), key_printed(args, inputs)
-        keys = files
+        said, files = " ".join([said, *args[:1]]), key_printed(args, inputs)
+        keys = files if args[:1] != ["enc"] else None
+    elif name in PACKERS:
+        files = packed(name, args, inputs, piped, sunk)
     else:
         files = files_printed(name, args, inputs) if name in PRINTERS else code_printed(name, args, inputs)
     if files is not None:                                # `find -exec READER {} +` reads what find names, `xargs READER` what is piped in
@@ -474,7 +574,7 @@ def printed(words: list[str], at: int, inputs: list[str], piped: list[str]) -> t
     return said, files, keys or []
 
 
-def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | None:
+def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tuple[str, str, str] | None:
     """(command, file, what the file holds) of the first command in `text` that would print a secret file, or None. In each
     simple command every word that names one of PRINTERS, or INTERPRETER given code, wherever it stands (after `sudo`, as
     ssh's remote command, after `research pods ssh POD --`, behind `xargs`, as `find`'s `-exec`), is judged on the files it
@@ -486,20 +586,29 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
     arguments and those of a `research` command that runs nothing (no `--`) are prose and are not read. `where` is the
     directory the commands run in when they run on this machine, None on another or once a `cd` can't be followed: there a
     command that reads a file itself (behind nothing but `sudo`, `timeout` and the like without options, or in such a
-    `bash -c`) reads one git has committed freely (`tracked`)."""
+    `bash -c`) reads one git has committed freely (`tracked`). `sunk` says the output of `text` as a whole goes to a command
+    that only unpacks it. Inside `text` a command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no
+    other command (no subshell or group), or `text`'s own does and the command is piped nowhere, and it is redirected nowhere
+    but to `/dev/null`; so then does the output of the command it has another machine run (`far_words`). Only a `tar` that
+    is the command itself, here or there, is let through on it."""
     try:
         commands = words_of(text)
     except ValueError:                                   # unbalanced quotes: the words between the shell's operators, unquoted
-        commands, where = [(re.findall(r"[<>]+|[^\s'\"<>]+", part), "") for part in re.split(r"[|;&()`\n]", text)], None
+        commands = [(re.findall(r"[<>]+|[^\s'\"<>]+", part), "") for part in re.split(r"[|;&()`\n]", text)]
+        where, sunk = None, False
     plain = "`" not in text and not any(set(op) & set("()") for _, op in commands)
     loops = {m[1]: [w for w in re.split(r"[\s'\"`$()]+", m[2]) if secret_file(w)]
              for m in re.finditer(r"\bfor\s+(\w+)\s+in\s([^;\n]*)", text)}
     piped, before = [], ""
-    for words, op in commands:
+    for n, (words, op) in enumerate(commands):
         inputs = [words[i + 1] for i, w in enumerate(words[:-1]) if w == "<"]
+        whole = all(to == "/dev/null" for w, to in zip(words, words[1:] + [""]) if ">" in w and set(w) <= set("&<>|"))
+        taker = commands[n + 1][0] if op in ("|", "|&") and n + 1 < len(commands) else None
+        into = whole and (plain and taker[0] != "{" and unpacks(taker) if taker else sunk and op not in ("|", "|&"))
         words, upstream, opened, after = strip_redirections(words), piped, before.endswith("(<"), before
         run, before = unwrap(words), op
-        prog, first = os.path.basename(run[0]) if run else "", len(words) - len(run)
+        prog, first, far = os.path.basename(run[0]) if run else "", len(words) - len(run), far_words(run)
+        direct = {first, len(words) - len(unwrap(far))} if far else {first}   # where the command stands, here or on the far side
         prose = (prog == "git" and "--no-index" not in run) or (prog == "research" and "--" not in run)
         piped = upstream + piped_names(run) if op in ("|", "|&") and not prose else []
         if prose:
@@ -508,10 +617,10 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
             followed = (plain and words[0] == "cd" and len(words) == 2 and re.fullmatch(r"[\w./@+][\w./@+-]*", words[1])
                         and op in ("&&", ";") and after in ("", "&&", ";"))
             where = os.path.join(where, words[1]) if followed else None
-        ats = [i for i, w in enumerate(words) if os.path.basename(w) in PRINTERS
+        ats = [i for i, w in enumerate(words) if WRAPS.sub("", os.path.basename(w)) in PRINTERS
                or INTERPRETER.fullmatch(os.path.basename(w)) and any(CODE_OPTION.fullmatch(a) for a in words[i + 1:-1])]
         last = next((i for i in ats if os.path.basename(words[i]) in SCRIPTED), len(words))
-        reads = [(at, *printed(words, at, inputs, upstream)) for at in ats if at <= last]
+        reads = [(at, *printed(words, at, inputs, upstream, into and at in direct)) for at in ats if at <= last]
         if opened or (inputs and not words):             # `$(<FILE)`: the shell itself reads the file into the command line
             reads.append((first, "$(<", words[:1] + inputs, []))
         elif inputs and (words[:1] == ["done"] or prog in SHELL_READS):   # `while read ...; done < FILE`, `read -r KEY < FILE`
@@ -526,7 +635,7 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
                         return name, f, kind
         for i, w in enumerate(words[:last]):             # a shell's `-c CODE` runs here; any other string may run anywhere
             code = prog in SHELLS and i and re.fullmatch(r"-\w*c\w*", words[i - 1])
-            if re.search(r"\s|\$\(", w) and (found := secret_read(w, here if code else None)):
+            if re.search(r"\s|\$\(", w) and (found := secret_read(w, here if code else None, into and w in far and "$(" not in w)):
                 return found
     return None
 
@@ -551,7 +660,11 @@ def secret_file_reason(command: str, cwd: str = "") -> str | None:
     if found is None:
         return None
     reader, path, kind = found
-    why = ("`openssl` writes out the private key it reads: add `-pubout` for its public half or `-noout` to only check it, and "
+    why = ("An archive, a compressed or an encoded copy on the output is the file itself, and only a terminal stops `tar`. Write "
+           "it to a file (`tar -cf OUT.tar FILE...`, `gzip -k FILE`), or copy it to another machine with `tar -cf - FILE... | ssh "
+           "HOST tar -xf - -C DIR`: a `tar` that only unpacks its input is the one place such an archive may go. "
+           if reader.split()[0] in PACKERS or reader == "openssl enc"
+           else "`openssl` writes out the private key it reads: add `-pubout` for its public half or `-noout` to only check it, and "
            "never `-text`, which prints the private numbers (`-text_pub` prints the public ones). " if reader.startswith("openssl")
            else "A filter after it (`cut -d= -f1`, `sed 's/=.*//'`) still prints a key file's lines and a multi-line value's later "
            "ones, which hold no `=`. ")
@@ -692,7 +805,7 @@ def blocks_words(words: list[str]) -> float:
     elif name in SHELLS and "-c" in args[:-1]:
         s = max(s, blocks_text(args[args.index("-c") + 1]))
     elif name == "ssh":
-        s = max(s, blocks_text(ssh_command(args)))
+        s = max(s, blocks_text(" ".join(ssh_words(args))))
     elif name == "research" and args[:1] == ["run"]:
         opts = args[:args.index("--")] if "--" in args else args
         given = [opts[i + 1] for i, a in enumerate(opts[:-1]) if a == "--wait-max"]
