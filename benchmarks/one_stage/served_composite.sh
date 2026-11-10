@@ -15,11 +15,11 @@
 # whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ as the auditor's gate signed them before the
 # serve, where it did: POLICY_PIECE is PoUW's piece directory as the record read it (`served_verdicts.sh` sets it beside
-# its `record --pieces`), and where it holds the gate's ledger and the serve dir Pearl+'s case's parts,
-# `served_cases.py`'s `signed_policy` reads them from the open the serve's session joined, under the key pin
-# H1_KEY_SHA512; no caller names the session or the period. Where that open signed no policy, or there is no such
-# piece, a development run's ALPHA and GAMMA where both are set, which nobody signed; without either no inference-only
-# case is written, and none is read off the served window's division.
+# its `record --pieces`), and `served_cases.py`'s `signed_policy` reads them there from the open the serve's session
+# joined, under the key pin H1_KEY_SHA512; the session is the live one the piece's own check held Pearl+'s passes to,
+# so no caller names it or the period. Where that open signed no policy, or the piece holds no such session or is
+# absent, a development run's ALPHA and GAMMA where both are set, which nobody signed; without either no
+# inference-only case is written, and none is read off the served window's division.
 # Its log is the serve's H1 log through R's previous record;
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
@@ -107,10 +107,8 @@ fi
 if [ -f benchmarks/one_stage/served_cases.py ]; then
   ag=()
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
-  if [ -n "${POLICY_PIECE:-}" ] && [ -f "$POLICY_PIECE/ledger.jsonl" ] \
-     && [ -f "$D/private/pearlplus/case/parts.json" ]; then
-    ag+=(--policy-piece "$POLICY_PIECE" ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"})
-  fi
+  [ -z "${POLICY_PIECE:-}" ] || [ ! -d "$POLICY_PIECE" ] \
+    || ag+=(--policy-piece "$POLICY_PIECE" ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"})
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }

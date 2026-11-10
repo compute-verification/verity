@@ -34,11 +34,12 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ, as the auditor's gate signed them before the serve,
     `signed_policy`: ``--policy-piece``, PoUW's piece directory as the compose holds it, with the gate's ledger as its
     ``ledger`` verb gave it and the serve's session's tree, whose challenger key is held to the verifier's pin
-    ``--key-sha512``. The serve's session is the one salt session Pearl+'s case's passes name (`salt_session`), so no
-    caller names it, and the open read is the one that session joined: its prover's period open at its reserve, which
-    must sign the registration θ is read from, the digest of the first record of this case's log. α's pair is copied
-    as signed, unreduced. Where that open signs no policy, or no piece is given, a development run's ``--alpha`` and
-    ``--gamma`` are the case's, which nobody signed; beside a signed policy they are not read. The case's private
+    ``--key-sha512``. The serve's session is the live one the piece's own check held Pearl+'s passes to
+    (`live_session`), which the record's Pearl+ row reads too, so no caller names it, and the open read is the one that
+    session joined: its prover's period open at its reserve, which must sign the registration θ is read from, the
+    digest of the first record of this case's log. α's pair is copied as signed, unreduced. Where that open signs no
+    policy, the piece holds no such session or no piece is given, a development run's ``--alpha`` and ``--gamma`` are
+    the case's, which nobody signed; beside a signed policy they are not read. The case's private
     ``policy.json`` and its CASE line's ``policy`` say which, and whose choice a signed policy is (`AUDITORS`,
     `LANES`, `UNSIGNED`); without either no case is written, and none is read off the served window's own
     division), ``log`` (the deployment's records before R, from its
@@ -331,32 +332,37 @@ def _ratio(x: Fraction | int | str | Sequence[int]) -> list[int]:
     return [f.numerator, f.denominator]
 
 
-def salt_session(parts: Path) -> str:
-    """The serve's session as Pearl+'s case's parts (``parts``) name it: the one session its retained passes with calls
-    took their salt from, each such manifest's ``session`` (the gate's open answer for it), as the compose off the
-    served node takes it (`served_sources.pouw_row`). Refused unless they name exactly one."""
-    doc = _json(parts / "parts.json")
-    manifests = doc.get("manifests") if isinstance(doc, dict) else None
-    _need(isinstance(manifests, list), f"{parts}/parts.json holds no manifests, so nothing names the serve's session")
-    named = [m.get("session") for m in manifests if isinstance(m, dict) and m.get("matmuls")]
-    salts = sorted({str(x.get("session") if isinstance(x, dict) else None) for x in named})
-    _need(len(salts) == 1, f"Pearl+'s case's passes name {len(salts)} salt sessions, not one, so nothing names the "
-          "serve's session")
-    return salts[0]
+def live_session(piece: Path) -> str | None:
+    """The serve's session as PoUW's piece directory ``piece`` holds it: the live session Pearl+'s piece's own check
+    held its passes with calls to (its document's ``coins.check``, `served_verdicts.pearlplus_coins`'), which is the
+    session the record's Pearl+ row reads there (`served_verdicts.pearlplus_of_record`, its first condition). None
+    where the piece wrote no document, is not Pearl+'s, took its coins from no live session, or its check held no
+    pass: no session of the gate's is then the serve's, so no open signed a policy for it."""
+    import served_verdicts as S
+
+    if not (piece / S.DEVELOPMENT).is_file():
+        return None
+    doc = _json(piece / S.DEVELOPMENT)
+    coins = doc.get("coins") if isinstance(doc, dict) else None
+    check = coins.get("check") if isinstance(coins, dict) else None
+    held = (isinstance(check, dict) and doc.get("piece") == "pearlplus" and doc.get("coin_source") == S.LIVE_SOURCE
+            and check.get("reason") is None and bool(check.get("passes")) and isinstance(check.get("session"), str))
+    return check["session"] if held else None
 
 
-def signed_policy(piece: Path, session: str, pin: str, first: str, verify: Ch.Verify = CC.lms_verify
+def signed_policy(piece: Path, pin: str | None, first: str, verify: Ch.Verify = CC.lms_verify
                   ) -> dict[str, Any] | None:
-    """The inference-only policy the auditor's gate signed before the serve whose session is ``session``, read where
-    the compose holds that session: PoUW's piece directory ``piece``, as `served_verdicts.pearlplus_of_record` reads
-    it. The session's challenger key (``session/<id>/out/key.json``) is held to the verifier's pin ``pin``
+    """The inference-only policy the auditor's gate signed before the serve, read where the compose holds the serve's
+    session: PoUW's piece directory ``piece``, as `served_verdicts.pearlplus_of_record` reads it, and its
+    `live_session`. The session's challenger key (``session/<id>/out/key.json``) is held to the verifier's pin ``pin``
     (`challenger.pinned_key`); the gate's ledger (``ledger.jsonl``) is checked under it as every reader of the ledger
     checks it (`challenger.ledger_head`); and the open is the one the session joined, its prover's period open at its
     reserve (`served_verdicts._ledger_period`), so it precedes the serve's first coin and its α and Γ were not read
-    off what was served. None where that open signs none of `served_verdicts.PERIOD_POLICY`: the gate signed no policy
-    for this serve. Otherwise it must sign all four, with the policy's id `INFERENCE_ONLY` (another id's α and Γ are
-    in another form) and with ``registration`` ``first``, the digest of the first record of the case's log, so θ is
-    read from the registration the auditor held before the serve and from no other.
+    off what was served. None where the piece holds no live session or that open signs none of
+    `served_verdicts.PERIOD_POLICY`: the gate signed no policy for this serve. Otherwise it must sign all four, with
+    the policy's id `INFERENCE_ONLY` (another id's α and Γ are in another form) and with ``registration`` ``first``,
+    the digest of the first record of the case's log, so θ is read from the registration the auditor held before the
+    serve and from no other.
 
     Returns ``alpha`` (the signed pair, unreduced) and ``gamma``, with what the case's ``policy.json`` keeps of where
     they come from: the period, the session, ``by`` and ``policy_name`` as signed, and ``whose``, `AUDITORS` when the
@@ -365,6 +371,10 @@ def signed_policy(piece: Path, session: str, pin: str, first: str, verify: Ch.Ve
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
+    session = live_session(piece)
+    if session is None:
+        return None
+    _need(pin is not None, "the gate's ledger is read under the verifier's key pin, and --key-sha512 is not given")
     try:
         key = PHC.pinned_key(piece / "session" / session / "out" / remote.KEY, pin)
         lines = Ch.ledger_head([remote.ledger_lines(piece / "ledger.jsonl")], key, verify)
@@ -658,16 +668,13 @@ def produce(a: argparse.Namespace) -> int:
         _need(isinstance(log, list), "--log is a JSON list of registration records")
         policy = None
         if a.policy_piece is not None:
-            _need(a.key_sha512 is not None, "the gate's ledger is read under the verifier's key pin, and --key-sha512 "
-                  "is not given")
-            _need(pearlplus is not None, "the serve's session is the one Pearl+'s case's passes name, and there are no "
-                  "parts of that case (--pearlplus)")
             _chain(log, rec)
-            policy = signed_policy(a.policy_piece, salt_session(pearlplus), a.key_sha512, R.digest([*log, rec][0]))
+            policy = signed_policy(a.policy_piece, a.key_sha512, R.digest([*log, rec][0]))
         if policy is None:
             _need(a.alpha is not None and a.gamma is not None,
-                  "the period the serve's session joined was opened with no policy signed, and the run gives no "
-                  "--alpha and --gamma of its own" if a.policy_piece is not None else
+                  "the gate signed no policy for this serve (PoUW's piece holds no live session, or the period it "
+                  "joined was opened with none), and the run gives no --alpha and --gamma of its own"
+                  if a.policy_piece is not None else
                   "α and Γ are the policy's, not the run's: pass the piece holding the gate's ledger, where the gate "
                   "signed them (--policy-piece, --key-sha512), or on a development run --alpha and --gamma")
             policy = {"alpha": _ratio(a.alpha), "gamma": a.gamma, "whose": UNSIGNED}
@@ -702,9 +709,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--audit", type=Path, help="the window's records_audit.py out directory")
     where.add_argument("--serve-dir", type=Path, help="the serve dir, whose one v3c-w*/audit is the audit")
     ap.add_argument("--private", type=Path, required=True, help="where each case's directory goes (0700)")
-    ap.add_argument("--policy-piece", type=Path, help="PoUW's piece directory as the compose holds it (the gate's "
-                    "ledger.jsonl and the serve's session's tree), where the open the serve's session joined signed "
-                    "the policy's α and Γ before the serve (signed_policy)")
+    ap.add_argument("--policy-piece", type=Path, help="PoUW's piece directory as the compose holds it (its document, "
+                    "the gate's ledger.jsonl and the serve's session's tree), where the open the serve's session "
+                    "joined signed the policy's α and Γ before the serve (signed_policy)")
     ap.add_argument("--key-sha512", help="with --policy-piece: the SHA-512 of the auditor's challenger key, the "
                     "verifier's pin")
     ap.add_argument("--alpha", type=Fraction, help="a development run's α, N/D: fresh-input bits a gate; signed by no "

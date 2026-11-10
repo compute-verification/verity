@@ -29,10 +29,10 @@ answer's reason. The slow test makes the inference-only case on the 4,32,4 class
 
 The policy's α and Γ are the ones the auditor's gate signed before the serve (`signed_piece`): those of the open the
 serve's session joined, read from the gate's ledger in PoUW's piece under the verifier's pinned challenger key, as
-signed, with the registration the open names the first record of the case's log. The session is the one Pearl+'s
-case's passes name, and no option names it or the period (`--from-division` and a session's option are usage errors);
-each other ledger, key, registration or session is refused, an open that signed no policy leaves the run's own α and Γ,
-and the case says whose policy they are."""
+signed, with the registration the open names the first record of the case's log. The session is the live one the
+piece's own check held Pearl+'s passes to, and no option names it or the period (`--from-division` and a session's
+option are usage errors); each other ledger, key, registration or session is refused, an open that signed no policy, or
+a piece with no live session, leaves the run's own α and Γ, and the case says whose policy they are."""
 
 from __future__ import annotations
 
@@ -545,8 +545,21 @@ OLD, EARLY, SERVED, NOWHERE = (f"s20261020T{t}Z-{x}" for t, x in (("110500", "a0
                                                                  ("120500", "ab12"), ("130000", "ffff")))
 
 
-def signed_piece(root: Path, first: str, *, private: lms.PrivateKey = GATE_KEY, **changes) -> list[str]:
-    """PoUW's piece directory as the compose holds it: the gate's ledger as its ``ledger`` verb gave it
+def piece_document(root: Path, session: str | None = SERVED, source: str = "challenger", piece: str = "pearlplus",
+                   **check) -> None:
+    """Pearl+'s piece's document in PoUW's piece directory ``root`` (``development.json``), as far as the policy's
+    reader reads it: the piece's name ``piece``, its coins from ``source`` (a live session's: the challenger's) and its
+    check holding two passes to ``session``; ``check`` replaces fields of that check."""
+    doc = {"piece": piece, "verdict": "accept", "coin_source": source,
+           "coins": {"check": {"session": session, "closed": True, "passes": 2, "reason": None, **check}}}
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "development.json").write_text(json.dumps(doc, sort_keys=True))
+
+
+def signed_piece(root: Path, first: str, *, private: lms.PrivateKey = GATE_KEY, session: str = SERVED,
+                 **changes) -> list[str]:
+    """PoUW's piece directory as the compose holds it: Pearl+'s piece's document, whose check held its passes to the
+    live session ``session`` (`piece_document`), the gate's ledger as its ``ledger`` verb gave it
     (``root/ledger.jsonl``), each entry signed under ``private`` at its next leaf, and each session's tree with the
     challenger's ``key.json`` (``root/session/<id>/out``). The lane opened period ``p-old``, reserved `OLD` in it and
     closed it, reserved `EARLY`, opened period ``p-0`` and reserved `SERVED`. Each open signs the lane's own
@@ -571,7 +584,7 @@ def signed_piece(root: Path, first: str, *, private: lms.PrivateKey = GATE_KEY, 
                ("reserve", EARLY, at("11:50", "12:20")),
                ("period-open", None, {k: v for k, v in opened.items() if v is not None}),
                ("reserve", SERVED, at("12:05", "12:35"))]
-    root.mkdir(parents=True, exist_ok=True)
+    piece_document(root, session)
     lms.LeafState.create(root / "key.lms", public, private.params.H)
     lines: list[str] = []
     with lms.LeafState(root / "key.lms", public, private.params.H) as state:
@@ -586,14 +599,12 @@ def signed_piece(root: Path, first: str, *, private: lms.PrivateKey = GATE_KEY, 
     return ["--policy-piece", root, "--key-sha512", GATE_SHA]
 
 
-def signed_run(capsys, root: Path, policy: list, sessions: tuple[str, ...] | None = (SERVED,), *more):
-    """`run` on the toy's audit with the policy's options ``policy`` (`signed_piece`'s) and Pearl+'s case's parts whose
-    passes with calls name ``sessions`` (None: no parts), so its cases are v1's, sampled proofs', the inference-only
-    case and Pearl+'s."""
+def signed_run(capsys, root: Path, policy: list, *more):
+    """`run` on the toy's audit with the policy's options ``policy`` (`signed_piece`'s), so its cases are v1's, sampled
+    proofs' and the inference-only case."""
     program, query = toy()
     v1 = v1_case(program, query)
-    parts = [] if sessions is None else ["--pearlplus", pearlplus_parts(root / "serve", sessions=sessions)[0]]
-    return run(capsys, "--audit", audit_dir(root, v1), "--private", root / "private", *policy, *parts, *more,
+    return run(capsys, "--audit", audit_dir(root, v1), "--private", root / "private", *policy, *more,
                *stand_ins(root, v1))
 
 
@@ -610,15 +621,15 @@ def test_alpha_and_gamma_are_the_ones_the_gate_signed_in_the_open_the_serves_ses
                                                                                          session, signed, whose):
     """The case's α and Γ are those of the open the serve's session joined, as signed (α's pair unreduced), read from
     the gate's ledger in PoUW's piece under the pinned key, where the open names the first record of the case's log.
-    The session is the one Pearl+'s case's passes with calls name, so a session of the lane's earlier period reads
+    The session is the live one the piece's check held its passes to, so a session of the lane's earlier period reads
     that period's open and no other. The CASE line says whose policy they are, the auditor's only where the open names
     a registered policy or is vy-admin's own; a run's own --alpha and --gamma beside a signed policy are not read; and
     nothing printed holds α or Γ, which stay in the private ``policy.json`` beside where they come from."""
     alpha, gamma, period = signed
-    rc, cases, refused, out = signed_run(capsys, tmp_path, signed_piece(tmp_path / "pouw", FIRST, **changes),
-                                         (session,), "--alpha", "1/2", "--gamma", 7)
+    rc, cases, refused, out = signed_run(capsys, tmp_path, signed_piece(tmp_path / "pouw", FIRST, session=session,
+                                                                        **changes), "--alpha", "1/2", "--gamma", 7)
     assert rc == 0 and refused == [], out
-    assert [c.get("policy") for c in cases] == [None, None, whose, None]
+    assert [c.get("policy") for c in cases] == [None, None, whose]
     d = tmp_path / "private" / "inference-only"
     params = json.loads((d / "case.json").read_text())["params"]
     assert (params["alpha"], params["gamma"]) == (alpha, gamma)
@@ -637,15 +648,49 @@ def test_an_open_that_signed_no_policy_leaves_the_runs_own_alpha_and_gamma_signe
     none = {"policy": None, "alpha": None, "gamma": None, "registration": None}
     rc, cases, refused, out = signed_run(capsys, tmp_path / "given", signed_piece(tmp_path / "given" / "pouw", FIRST,
                                                                                   **none),
-                                         (SERVED,), "--alpha", "1/2", "--gamma", 7)
-    assert rc == 0 and [c.get("policy") for c in cases] == [None, None, SC.UNSIGNED, None], out
+                                         "--alpha", "1/2", "--gamma", 7)
+    assert rc == 0 and [c.get("policy") for c in cases] == [None, None, SC.UNSIGNED], out
     d = tmp_path / "given" / "private" / "inference-only"
     assert json.loads((d / "policy.json").read_text()) == {"alpha": [1, 2], "gamma": 7, "whose": SC.UNSIGNED}
     rc, cases, refused, out = signed_run(capsys, tmp_path / "none", signed_piece(tmp_path / "none" / "pouw", FIRST,
                                                                                  **none))
     assert rc == 1 and [r["protocol"] for r in refused] == [INF], out
-    assert ("the period the serve's session joined was opened with no policy signed, and the run gives no --alpha and "
-            "--gamma of its own") in refused[0]["reason"]
+    assert "the gate signed no policy for this serve" in refused[0]["reason"]
+    assert "the run gives no --alpha and --gamma of its own" in refused[0]["reason"]
+
+
+@pytest.mark.parametrize("document", [
+    None,
+    {"piece": "h1", "coin_source": "challenger", "session": {"session": SERVED}, "check": {"ok": True}},
+    lambda root: piece_document(root, piece="h1"),
+    lambda root: piece_document(root, source="in-process"),
+    lambda root: piece_document(root, reason="pass 1's salt is not the session's coin"),
+    lambda root: piece_document(root, passes=0),
+    lambda root: piece_document(root, None),
+], ids=["no-document", "h1s", "not-pearl-plus", "in-process-coins", "check-refused", "no-pass-held", "no-session"])
+def test_a_piece_with_no_live_session_leaves_the_runs_own_alpha_and_gamma_signed_by_no_one(tmp_path, capsys, document):
+    """Where PoUW's piece names no live session its check held Pearl+'s passes to (it wrote no document, or H1's, or
+    one that isn't Pearl+'s; its coins were in-process; its check refused, or held no pass, or names no session), no
+    session of the gate's is the serve's, so whatever the ledger beside it signed is not read: the case is at the
+    run's own --alpha and --gamma and says nobody signed them, with no pin needed, and without them there is no
+    case."""
+    def piece(root: Path) -> list[str]:
+        argv = signed_piece(root, FIRST)[:2]
+        (root / "development.json").unlink()
+        if callable(document):
+            document(root)
+        elif document is not None:
+            (root / "development.json").write_text(json.dumps(document))
+        return argv
+
+    rc, cases, refused, out = signed_run(capsys, tmp_path / "given", piece(tmp_path / "given" / "pouw"),
+                                         "--alpha", "1/2", "--gamma", 7)
+    assert rc == 0 and [c.get("policy") for c in cases] == [None, None, SC.UNSIGNED], out
+    assert json.loads((tmp_path / "given" / "private" / "inference-only" / "policy.json").read_text()) == {
+        "alpha": [1, 2], "gamma": 7, "whose": SC.UNSIGNED}
+    rc, cases, refused, out = signed_run(capsys, tmp_path / "none", piece(tmp_path / "none" / "pouw"))
+    assert rc == 1 and [r["protocol"] for r in refused] == [INF], out
+    assert "PoUW's piece holds no live session" in refused[0]["reason"]
 
 
 def test_the_signed_registration_is_the_first_record_of_the_cases_log(tmp_path, capsys):
@@ -659,7 +704,7 @@ def test_the_signed_registration_is_the_first_record_of_the_cases_log(tmp_path, 
     serve = tmp_path / "serve"
     audit_dir(serve / "v3c-w0-4-32-4", v1)
     (serve / SC.DEPLOYMENT).write_text(json.dumps(first, sort_keys=True))
-    pearlplus_parts(serve, w, sessions=(SERVED,))
+    pearlplus_parts(serve, w)
     for name, signed, ok in (("first", R.digest(first), True), ("w", R.digest(w), False), ("r", digest_of(v1), False)):
         policy = signed_piece(tmp_path / name, signed)
         rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / name / "private", *policy,
@@ -692,12 +737,19 @@ def _edited(root: Path, first: str) -> list[str]:
 
 
 def _held(session: str):
-    """A piece that also holds a tree, with the gate's key, of a session the ledger doesn't."""
+    """A piece whose check held its passes to a session the ledger doesn't hold, with a tree of it and the gate's
+    key."""
     def change(root: Path, first: str) -> list[str]:
-        argv = signed_piece(root, first)
+        argv = signed_piece(root, first, session=session)
         shutil.copytree(root / "session" / SERVED, root / "session" / session)
         return argv
     return change
+
+
+def _unreadable(root: Path, first: str) -> list[str]:
+    argv = signed_piece(root, first)
+    (root / "development.json").write_text("{")
+    return argv
 
 
 def _no_ledger(root: Path, first: str) -> list[str]:
@@ -706,41 +758,38 @@ def _no_ledger(root: Path, first: str) -> list[str]:
     return argv
 
 
-@pytest.mark.parametrize("make, sessions, reason", [
-    (lambda root, first: signed_piece(root, first, private=LANE_KEY), (SERVED,), "not the auditor's pinned"),
-    (_lanes(), (SERVED,), "the gate's ledger is refused under the pinned challenger key: the auditor's ledger entry 0 "
-                          "is signed under challenger key"),
-    (_lanes(key_sha512=GATE_SHA), (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
-    (_edited, (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
-    (_no_ledger, (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
-    (signed_piece, (EARLY,), f"the serve's session {EARLY} joined no period, so no open signed a policy before it"),
-    (signed_piece, (NOWHERE,), "no challenger key at"),
-    (_held(NOWHERE), (NOWHERE,), f"the gate's ledger holds no reserve of the serve's session {NOWHERE}"),
-    (signed_piece, (SERVED, OLD), "Pearl+'s case's passes name 2 salt sessions, not one"),
-    (signed_piece, (), "Pearl+'s case's passes name 0 salt sessions, not one"),
-    (signed_piece, None, "there are no parts of that case"),
-    (lambda root, first: signed_piece(root, "77" * 64), (SERVED,), "the case's log starts at"),
-    (lambda root, first: signed_piece(root, first, registration=None), (SERVED,),
+@pytest.mark.parametrize("make, reason", [
+    (lambda root, first: signed_piece(root, first, private=LANE_KEY), "not the auditor's pinned"),
+    (_lanes(), "the gate's ledger is refused under the pinned challenger key: the auditor's ledger entry 0 is signed "
+               "under challenger key"),
+    (_lanes(key_sha512=GATE_SHA), "the gate's ledger is refused under the pinned challenger key"),
+    (_edited, "the gate's ledger is refused under the pinned challenger key"),
+    (_no_ledger, "the gate's ledger is refused under the pinned challenger key"),
+    (lambda root, first: signed_piece(root, first, session=EARLY),
+     f"the serve's session {EARLY} joined no period, so no open signed a policy before it"),
+    (lambda root, first: signed_piece(root, first, session=NOWHERE), "no challenger key at"),
+    (_held(NOWHERE), f"the gate's ledger holds no reserve of the serve's session {NOWHERE}"),
+    (_unreadable, "development.json: JSONDecodeError"),
+    (lambda root, first: signed_piece(root, "77" * 64), "the case's log starts at"),
+    (lambda root, first: signed_piece(root, first, registration=None),
      "period p-0's open signs policy, alpha, gamma and no registration: an inference-only policy is signed whole"),
-    (lambda root, first: signed_piece(root, first, policy="verity/inference-only/v1"), (SERVED,),
-     "another protocol's form"),
-    (lambda root, first: signed_piece(root, first, alpha=[6, 0]), (SERVED,),
-     "α is a pair of naturals [N, D] with D at least 1"),
-    (lambda root, first: signed_piece(root, first, alpha="3/2"), (SERVED,), "signs no α [N, D] and natural Γ"),
-    (lambda root, first: signed_piece(root, first, gamma=True), (SERVED,), "signs no α [N, D] and natural Γ"),
-    (lambda root, first: signed_piece(root, first)[:2], (SERVED,), "--key-sha512 is not given"),
+    (lambda root, first: signed_piece(root, first, policy="verity/inference-only/v1"), "another protocol's form"),
+    (lambda root, first: signed_piece(root, first, alpha=[6, 0]), "α is a pair of naturals [N, D] with D at least 1"),
+    (lambda root, first: signed_piece(root, first, alpha="3/2"), "signs no α [N, D] and natural Γ"),
+    (lambda root, first: signed_piece(root, first, gamma=True), "signs no α [N, D] and natural Γ"),
+    (lambda root, first: signed_piece(root, first)[:2], "--key-sha512 is not given"),
 ])
-def test_a_policy_the_gate_did_not_sign_for_this_serve_before_it_is_refused(tmp_path, capsys, make, sessions, reason):
+def test_a_policy_the_gate_did_not_sign_for_this_serve_before_it_is_refused(tmp_path, capsys, make, reason):
     """No inference-only case is written, whatever --alpha and --gamma the run gives, with the others still written,
-    when the policy isn't the pinned gate's, signed for this deployment before this serve: a key the lane made; a
-    ledger the lane signed under its own key, naming it or the gate's; a ledger edited after it was signed, or none; a
-    session reserved outside every period, one the piece holds no tree of, or one the ledger doesn't reserve; passes
-    naming two sessions, none, or no parts to name one; an open naming another registration than the case's log starts
-    at; an open that signs the policy in part, another protocol's form, or an α or Γ of no form; and no key pin."""
-    rc, cases, refused, out = signed_run(capsys, tmp_path, make(tmp_path / "pouw", FIRST), sessions,
+    when the piece names a live session and the policy isn't the pinned gate's, signed for this deployment before this
+    serve: a key the lane made; a ledger the lane signed under its own key, naming it or the gate's; a ledger edited
+    after it was signed, or none; a session reserved outside every period, one the piece holds no tree of, or one the
+    ledger doesn't reserve; a document that can't be read; an open naming another registration than the case's log
+    starts at; an open that signs the policy in part, another protocol's form, or an α or Γ of no form; and no key
+    pin."""
+    rc, cases, refused, out = signed_run(capsys, tmp_path, make(tmp_path / "pouw", FIRST),
                                          "--alpha", "1/2", "--gamma", 7)
-    others = [V1, SAMPLED, *([] if sessions is None else [SC.PEARL_PLUS])]
-    assert rc == 1 and [c["protocol"] for c in cases] == others, out
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
     assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
     assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
@@ -929,12 +978,11 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     assert not (serve / "private" / "pouw-period").exists()
 
 
-def pearlplus_parts(serve: Path, w: dict | None = None, sessions: tuple[str, ...] = ()) -> tuple[Path, dict]:
+def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
     dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
-    the Lean verdict of record's verdict, tiles drawn and work, in the grid form with the exact work beside it. Each
-    of ``sessions`` adds a pass with a call, its manifest naming that session as the one its salt is from."""
+    the Lean verdict of record's verdict, tiles drawn and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
@@ -943,9 +991,7 @@ def pearlplus_parts(serve: Path, w: dict | None = None, sessions: tuple[str, ...
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
                         "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
                                    "draw": {"from": "challenger"}}},
-             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"},
-                           *({"hm96_salt_key": "5a" * 32, "run": "r", "matmuls": [{"call": 0}],
-                              "session": {"session": sid, "seq": 3}} for sid in sessions)],
+             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
              "window": {"dropped": [0], "rounds": [1],
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},

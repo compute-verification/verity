@@ -5220,9 +5220,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
     under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
     or Γ while ALPHA and GAMMA are unset, the run's ALPHA and GAMMA where both are set, and beside them PoUW's piece
-    POLICY_PIECE with the key pin H1_KEY_SHA512 where that piece holds the gate's ledger and the serve dir Pearl+'s
-    case's parts, so served_cases.py reads the policy the gate signed and names no session; each product gets the
-    cases of its own subprotocols;
+    POLICY_PIECE with the key pin H1_KEY_SHA512 where that piece is there, so served_cases.py reads the policy the
+    gate signed and names no session; each product gets the cases of its own subprotocols;
     OUT/verdicts.txt gets each CASE line's protocol and verdict (and whose policy the inference-only case's α and Γ
     are), each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
@@ -5367,16 +5366,10 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
-    piece, parts = tmp_path / "pieces" / "pouw", d / "private" / "pearlplus" / "case" / "parts.json"
+    piece = tmp_path / "pieces" / "pouw"
     env |= {"POLICY_PIECE": str(piece)}
     signed = ["--alpha", "1/2", "--gamma", "9", "--policy-piece", str(piece), "--key-sha512", "ab" * 64]
-    for holds, given in (((), signed[:4]), ((piece / "ledger.jsonl",), signed[:4]), ((parts,), signed[:4]),
-                         ((piece / "ledger.jsonl", parts), signed)):
-        for f in (piece / "ledger.jsonl", parts):
-            f.unlink(missing_ok=True)
-        for f in holds:
-            f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text("")
+    for given in (signed[:4], signed):
         assert run().returncode == 0
         assert json.loads((tmp_path / "served_cases.policy").read_text()) == given
         assert (("COMPOSITE CASE verity/inference-only/v0 accept (policy given by the lane, signed by the gate before "
@@ -5384,6 +5377,7 @@ sys.exit(1)
         (out / "verdicts.txt").unlink()
         for x in (out / "composite", p, v2):
             shutil.rmtree(x)
+        piece.mkdir(parents=True, exist_ok=True)
     del env["H1_KEY_SHA512"], env["ALPHA"]
     assert run().returncode == 0
     assert json.loads((tmp_path / "served_cases.policy").read_text()) == ["--policy-piece", str(piece)]
