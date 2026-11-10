@@ -330,8 +330,8 @@ def test_a_moved_package_reuses_its_pass(tmp_path, monkeypatch):
 
 
 def test_one_changed_byte_in_any_input_misses(tmp_path, monkeypatch):
-    """Every file of the package, of a package it requires by path, and of the auditor moves the key; so does pointing the
-    dependent at another directory (a package of other content there)."""
+    """Every file of the package, every file its audit reads of a package it requires by path, and every file of the auditor
+    moves the key; so does pointing the dependent at another directory (a package of other content there)."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/a/Sub").mkdir()
     (root / "pkg/a/Sub/C.lean").write_text("def c := 1\n")
@@ -387,6 +387,62 @@ def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_p
         assert LA.key("other/a", LA.COMMON.tracked_files(), LA.FLAGS) != k
         _move(root, monkeypatch, "other/a", "pkg/a")
         (root / "pkg/a" / f).write_text(was)
+
+
+REQUIRED = {"pkg/a/README.md": "a\n", "pkg/a/tests/test_a.py": "def test_a():\n    pass\n", "pkg/a/notes.txt": "",
+            "pkg/a/data.json": "{}", "pkg/a/models.json": "[]", "pkg/a/Sub/D.lean": 'def d := include_str "../data.json"\n',
+            "pkg/c/lakefile.toml": "", "pkg/c/lean-toolchain": "v1\n", "pkg/c/C.lean": "",
+            "pkg/c/lean-audit.json": json.dumps({"proved_in": ["../b"]}),
+            "pkg/c/lake-manifest.json": json.dumps({"packages": [{"name": "a", "type": "path", "dir": "../a"}]})}
+
+
+def _required_tree(tmp_path, monkeypatch) -> Path:
+    root = _tree(tmp_path, monkeypatch, REQUIRED)
+    (root / "pkg/a/lakefile.toml").write_text('name = "a"\n\n[[input_file]]\nname = "models"\npath = "models.json"\n')
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    _requires_a_at(root, "pkg/b", "../a")
+    return root
+
+
+def test_a_required_package_enters_a_key_only_by_what_lake_and_the_audit_read(tmp_path, monkeypatch):
+    """A package required by path enters the key of each package that requires it, directly or through a prover, only by its
+    modules, lakefile, manifest, toolchain and lock, and the files its lakefile's `[[input_file]]` and its modules'
+    `include_str` name: a README, a Python test or a note changed in it leaves every dependent's key, and moves its own."""
+    root = _required_tree(tmp_path, monkeypatch)
+    files = LA.COMMON.tracked_files()
+    def keys():
+        return {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b", "pkg/c")}
+    was = keys()
+    for f, leaves in (("README.md", True), ("tests/test_a.py", True), ("notes.txt", True), ("A.lean", False),
+                      ("Sub/D.lean", False), ("lakefile.toml", False), ("lake-manifest.json", False),
+                      ("lean-toolchain", False), ("lean-audit.json", False), ("models.json", False), ("data.json", False)):
+        before = (root / "pkg/a" / f).read_bytes()
+        (root / "pkg/a" / f).write_bytes(before + b" ")
+        now = keys()
+        assert now["pkg/a"] != was["pkg/a"], f
+        assert (now["pkg/b"] == was["pkg/b"]) == leaves and (now["pkg/c"] == was["pkg/c"]) == leaves, f
+        (root / "pkg/a" / f).write_bytes(before)
+    assert keys() == was
+    assert "pkg/a/README.md" not in LA.inputs("pkg/b", files) and "pkg/a/README.md" in LA.inputs("pkg/a", files)
+    (root / "pkg/a/Sub/D.lean").write_text('def d := 1\n\n#eval (IO.FS.readFile "notes.txt")\n')
+    was = keys()
+    (root / "pkg/a/notes.txt").write_text("read while it compiles\n")
+    assert keys()["pkg/b"] != was["pkg/b"]                           # code run while it compiles: every file of it counts
+
+
+def test_a_read_of_a_required_package_beyond_its_key_fails(tmp_path, monkeypatch):
+    """The scratch tree holds of a required package only what enters its dependents' keys, so a dependent's audit that reads
+    another of its files fails there instead of passing on a file no key covers."""
+    root = _required_tree(tmp_path, monkeypatch)
+    rc, _ran, doc = _run(tmp_path, 1)
+    assert rc == 0 and doc["passed"]
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["pkg/a/README.md"]}))
+    rc, ran, doc = _run(tmp_path, 2)                   # b misses, and c, which b proves; a's pass answers, so its README is not there
+    assert rc == 1 and sorted(r.split()[0] for r in ran) == ["pkg/b", "pkg/c"] and doc["failed"] == ["pkg/b"]
+    assert next(r for r in doc["packages"] if r["package"] == "pkg/b")["failures"] == ["reads pkg/a/README.md"]
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["pkg/a/models.json", "pkg/a/data.json", "pkg/a/A.lean"]}))
+    rc, ran, doc = _run(tmp_path, 3)                   # what Lake reads of a is there
+    assert rc == 0 and sorted(r.split()[0] for r in ran) == ["pkg/b", "pkg/c"] and doc["passed"]
 
 
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):

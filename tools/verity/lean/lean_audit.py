@@ -19,7 +19,11 @@ each file under its path relative to its package (a module's is its name), never
   `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them;
 - each package its `proved_in` names (`provers`), whose build the audit reads its guarantees from, by its content (which
   names the packages it requires by theirs), under its path;
-- the same for each package it requires by path (`audit.path_deps`), under the name its manifest gives it. Where the
+- each package it requires by path (`audit.path_deps`), under the name its manifest gives it, by what Lake and the audit
+  read of it (`read_files`): its modules, its `lakefile.toml`, `lake-manifest.json`, `lean-toolchain` and `lean-audit.json`,
+  the files its lakefile names as `[[input_file]]` or `[[input_dir]]`, and each file a module names by a literal
+  `include_str`. Its README, Python tests and other files are no input of a dependent, unless a module of it runs code while
+  it compiles (`EVALUATES`) or names an `include_str` by anything but a literal: then all its files are. Where the
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
@@ -33,7 +37,8 @@ scratch tree can't guard is a package reading beyond its directory by a relative
 moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain or policy, or an `include_str` in a module,
 puts the package's path back into its key.
 
-When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
+When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs (`inputs`: of a package
+they require by path and don't audit, only its `read_files`), from that tree's own copy of
 `tools/verity/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`). So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
@@ -361,10 +366,47 @@ def tool_files(files: list[str]) -> list[str]:
 
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
-    """Every tracked file an audit of ``pkg`` can read."""
-    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
-    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
-    return sorted({*own, *tool_files(files)})
+    """Every tracked file an audit of ``pkg`` can read: the files of ``pkg`` and of its provers, and of each package they
+    require by path only what Lake and the audit read of it (`read_files`). The scratch tree holds no more, so a read of
+    another file of a required package fails the audit."""
+    whole = [pkg, *provers(pkg)]
+    required = [d for q in whole for d in path_deps(q) if d not in whole]
+    return sorted({*(f for p in dict.fromkeys(whole) for f in own_files(p, files)),
+                   *(f for d in dict.fromkeys(required) for f in read_files(d, files)), *tool_files(files)})
+
+
+#: a module that runs code while it compiles, which may read any file: an executable's reads at run time are no build's
+EVALUATES = re.compile(rb"(?:^|[\s(])(?:#eval!?|run_cmd|run_elab|run_meta|(?:builtin_)?initialize|elab|elab_rules|d?simproc)\b"
+                       rb"|@\[\s*(?:command_elab|term_elab|tactic|simproc|init|builtin_\w+)\b", re.M)
+INCLUDE_STR = re.compile(rb'include_str\s+"((?:[^"\\]|\\.)*)"')
+
+
+def read_files(pkg: str, files: list[str]) -> list[str]:
+    """What Lake and the audit read of ``pkg`` when another package requires it by path: its modules, the files `CONFIG`
+    lists, the files and directories its lakefile names under `[[input_file]]` and `[[input_dir]]`, and each file a module
+    names by a literal `include_str`. All its files where a module runs code while it compiles (`EVALUATES`) or names an
+    `include_str` by anything but a literal."""
+    own = own_files(pkg, files)
+    named: set[str] = set()
+    lf = ROOT / pkg / "lakefile.toml"
+    try:
+        lake = tomllib.loads(lf.read_text()) if lf.is_file() else {}
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return own
+    for kind in ("input_file", "input_dir"):
+        for t in lake.get(kind, []):
+            if isinstance(t, dict) and isinstance(t.get("path"), str):
+                named.add(os.path.relpath(os.path.normpath(ROOT / pkg / t["path"]), ROOT))
+    for f in own:
+        if not f.endswith(".lean") or not (ROOT / f).is_file():
+            continue
+        text = (ROOT / f).read_bytes()
+        literal = INCLUDE_STR.findall(text)
+        if EVALUATES.search(text) or text.count(b"include_str") != len(literal):
+            return own
+        named |= {os.path.relpath(os.path.normpath((ROOT / f).parent / s.decode()), ROOT) for s in literal}
+    return [f for f in own if f.endswith(".lean") or f[len(pkg) + 1:] in CONFIG
+            or any(f == n or f.startswith(n + "/") for n in named)]
 
 
 def _required(pkg: str, files: list[str]) -> dict[str, str]:
@@ -411,16 +453,17 @@ WHERE = "(where the package is)"
 CONFIG = ("lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain", "lean-audit.json")
 
 
-def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, str]:
-    """{path relative to the package: sha256} of its own files, so that the package moved to another directory with the same
-    content has the same map. Its lakefile and manifest name each package it requires by path by that package's own content
-    (`content_key`), not by where it is: moving the required package and rewriting the paths to it keeps the map too. A package
+def content(pkg: str, files: list[str], _memo: dict | None = None, required: bool = False) -> dict[str, str]:
+    """{path relative to the package: sha256} of its own files (``required``: only those another package's audit reads of it,
+    `read_files`), so that the package moved to another directory with the same content has the same map. Its lakefile and
+    manifest name each package it requires by path by that package's content as a required package (`content_key`), not by
+    where it is: moving the required package and rewriting the paths to it keeps the map too. A package
     that may read beyond its directory by a relative path keeps its path in the map (`WHERE`): a `..` left in a file Lake or
     the audit read paths from, or a module's `include_str`."""
     memo = {} if _memo is None else _memo
     spelled = _required(pkg, files)
     out, escapes = {}, False
-    for f in own_files(pkg, files):
+    for f in (read_files if required else own_files)(pkg, files):
         rel, p = f[len(pkg) + 1:], ROOT / f
         if not p.is_file():
             out[rel] = "-"
@@ -440,7 +483,7 @@ def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, 
 def content_key(pkg: str, files: list[str], _memo: dict | None = None) -> str:
     memo = {} if _memo is None else _memo
     if pkg not in memo:
-        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo).items())).encode()).hexdigest()
+        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo, required=True).items())).encode()).hexdigest()
     return memo[pkg]
 
 
@@ -455,12 +498,12 @@ def _lake_name(pkg: str, dep: str) -> str:
 
 def components(pkg: str, files: list[str], flags: list[str]) -> dict:
     """What a package's key hashes, none of it a path of the package: the schema, the audit's flags, the package's `content`,
-    that of each package it requires by path (under the name its manifest gives it), that of each package its `proved_in`
-    names (under its path, which the policy already holds), and each of the auditor's files at its
-    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
+    that of each package it requires by path as a required package (`read_files`, under the name its manifest gives it), that
+    of each package its `proved_in` names (under its path, which the policy already holds), and each of the auditor's files at
+    its path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
     memo: dict = {}
     return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo),
-            "requires": {_lake_name(pkg, d): content(d, files, memo) for d in path_deps(pkg)},
+            "requires": {_lake_name(pkg, d): content(d, files, memo, required=True) for d in path_deps(pkg)},
             "proved_in": {q: content(q, files, memo) for q in provers(pkg)},
             "tool": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in tool_files(files)}}
 
