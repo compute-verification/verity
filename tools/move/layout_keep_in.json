@@ -1,0 +1,521 @@
+{
+ "archive": {
+  "benchmarks/torch_gpu/units/build.sh": [
+   "examples/h200/replay.py"
+  ]
+ },
+ "certifier": {
+  "benchmarks/live_challenger/tests/test_auditor_certifier.py": [
+   "benchmarks/network_traces/certifier_serve.py"
+  ],
+  "benchmarks/live_challenger/tests/test_auditor_load.py": [
+   "benchmarks/network_traces/load_relay.py"
+  ],
+  "benchmarks/live_challenger/tests/test_auditor_warden.py": [
+   "benchmarks/network_traces/warden_serve.py"
+  ],
+  "verity/protocols/certifier/device/network_traces/certifier_piece.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/device/network_traces/certifier_serve.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/device/network_traces/load_relay.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/device/network_traces/tests/test_certifier_piece.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/device/network_traces/tests/test_certifier_serve.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/device/network_traces/tests/test_client_certificates.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/device/network_traces/tests/test_load_relay.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/device/network_traces/tests/test_warden_serve.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/device/network_traces/warden_serve.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/verifier/PROTOCOL.md": [
+   "verity/core/protocols/certifier/lean/NetworkCertifier/DifftestMain.lean",
+   "verity/core/protocols/certifier/lean/lean-audit.json",
+   "verity/core/protocols/certifier/lean/scripts/difftest_vectors.py"
+  ],
+  "verity/protocols/certifier/verifier/README.md": [
+   "verity/core/protocols/certifier/lean/lean-audit.json",
+   "verity/core/protocols/certifier/lean/scripts/charge_vectors.py",
+   "verity/core/protocols/certifier/lean/scripts/difftest_vectors.py",
+   "verity/core/protocols/certifier/lean/scripts/window_vectors.py"
+  ],
+  "verity/protocols/certifier/verifier/lean/NetworkCheck.lean": [
+   "verity/core/protocols/network/tests/test_network_check_protocol.py",
+   "verity/core/protocols/network/tests/test_network_period_protocol.py",
+   "verity/core/protocols/network/tests/test_network_records_protocol.py"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/chain_record.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/scan_period.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_block_certifier.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_chain_record.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_leak_bounds.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_warden_chain.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_wipe_egress.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/tests/test_wipe_gate.py": [
+   "benchmarks/network_traces/tests"
+  ],
+  "verity/protocols/certifier/verifier/network_traces/warden_chain.py": [
+   "benchmarks/network_traces"
+  ],
+  "verity/protocols/certifier/verifier/protocol/charge-chain.md": [
+   "verity/core/protocols/certifier/lean/scripts/window_vectors.py"
+  ],
+  "verity/protocols/certifier/verifier/protocol/clock-certificate.md": [
+   "verity/core/protocols/certifier/tests/test_network_certifier_signed_clocks.py"
+  ],
+  "verity/protocols/certifier/verifier/tests/test_network_certifier_charge_lean_difftest.py": [
+   "verity/core/protocols/certifier/lean/NetworkCertifier/ChargeDifftestMain.lean",
+   "verity/core/protocols/certifier/lean/lean-audit.json",
+   "verity/core/protocols/certifier/lean/scripts/charge_vectors.py"
+  ],
+  "verity/protocols/certifier/verifier/tests/test_network_certifier_lean_difftest.py": [
+   "verity/core/protocols/certifier/lean/NetworkCertifier/DifftestMain.lean",
+   "verity/core/protocols/certifier/lean/lean-audit.json",
+   "verity/core/protocols/certifier/lean/scripts/difftest_vectors.py"
+  ],
+  "verity/protocols/certifier/verifier/tests/test_network_certifier_replay_chain.py": [
+   "verity/core/protocols/certifier/protocol/served-shape.md"
+  ],
+  "verity/protocols/certifier/verifier/tests/test_network_certifier_window_charge_slots.py": [
+   "verity/core/protocols/certifier/protocol/charge-chain.md"
+  ],
+  "verity/protocols/certifier/verifier/tests/test_network_certifier_window_lean_difftest.py": [
+   "verity/core/protocols/certifier/lean/NetworkCertifier/WindowDifftestMain.lean",
+   "verity/core/protocols/certifier/lean/lean-audit.json",
+   "verity/core/protocols/certifier/lean/scripts/window_vectors.py"
+  ]
+ },
+ "circuits": {
+  "verity/definitions/ops/tests/test_evidence_ids.py": [
+   "verity/ml"
+  ]
+ },
+ "composite": {
+  "verity/composite/datacenter/tests/test_datacenter.py": [
+   "benchmarks/datacenter/tests"
+  ],
+  "verity/composite/verifier/composition/tests/reference.py": [
+   "verity/core/protocols/composition/tests"
+  ],
+  "verity/composite/verifier/composition/tests/test_composition_difftest.py": [
+   "verity/core/protocols/composition/tests"
+  ],
+  "verity/composite/verifier/composition/tests/test_inference_only_not_composed.py": [
+   "verity/core/protocols/composition/tests"
+  ]
+ },
+ "configuration": {
+  "benchmarks/pouw/served_h1/commit_legs.sh": [
+   "tools/config"
+  ],
+  "benchmarks/pouw/served_h1/serve.py": [
+   "tools/config"
+  ],
+  "integrations/vllm/tests/protocols/pous_gpu.py": [
+   "tools/config"
+  ]
+ },
+ "definitions": {
+  "benchmarks/pouw/contents/kernels/commit_gpu-commit_gpu.toml": [
+   "verity/ml/kernels/row_commit.cuh"
+  ],
+  "integrations/vllm/tests/properties/glm53_bf16_gemm_capture_gpu.py": [
+   "verity/ml/definitions/registry"
+  ],
+  "verity/definitions/circuits/targets/README.md": [
+   "verity/ml/circuits/tests/test_targets_frozen_families.py"
+  ],
+  "verity/definitions/circuits/tests/test_targets_frozen_families.py": [
+   "verity/ml/circuits/targets/target.py"
+  ],
+  "verity/definitions/evaluate/tests/test_difftest.py": [
+   "verity/core/primitives/evaluate/tests"
+  ],
+  "verity/definitions/numerics/rms_triton_model.py": [
+   "verity/ml/definitions/numerics/cuda/mufu_probe.cu",
+   "verity/ml/definitions/numerics/cuda/rms_probe.cu"
+  ],
+  "verity/definitions/ops/tests/test_boundaries.py": [
+   "verity/ml/circuits/ops/tests"
+  ]
+ },
+ "flock": {
+  "verity/flock/prover/live/Cargo.toml": [
+   "verity/ml/flock/pod/60-circuit.sh"
+  ],
+  "verity/flock/prover/live/PROTOCOL.md": [
+   "verity/ml/flock/verifier/firewall_controls.sh",
+   "verity/ml/flock/verifier/firewall_finish_agree.py"
+  ],
+  "verity/flock/prover/live/src/bin/flock-circuit.rs": [
+   "verity/ml/flock/tests/lean/TmplUnit.lean"
+  ],
+  "verity/flock/prover/python/verity_flock/rec_compose.py": [
+   "verity/ml/flock/tests/test_lean_rec_coins.py",
+   "verity/ml/flock/tests/test_lean_rec_compose.py"
+  ],
+  "verity/flock/prover/python/verity_flock/rec_vstage.py": [
+   "verity/ml/flock/tests/lean/InnerFold.lean"
+  ],
+  "verity/flock/prover/tests/test_rec_algebra.py": [
+   "verity/ml/flock/tests/lean/InnerClaims.lean"
+  ],
+  "verity/flock/prover/tests/test_rec_session.py": [
+   "verity/ml/flock/pod/88-rec-c3-inner.sh"
+  ],
+  "verity/flock/prover/tests/test_rec_vstage.py": [
+   "verity/ml/flock/pod/85-rec-reprice.sh"
+  ],
+  "verity/flock/prover/tests/test_rec_vstar.py": [
+   "verity/ml/flock/pod/85-rec-reprice.sh"
+  ],
+  "verity/flock/prover/tests/test_record_text.py": [
+   "verity/ml/flock/verifier/record_text.py"
+  ],
+  "verity/flock/prover/tests/tmpl_statement.py": [
+   "verity/ml/flock/pod/90-tmpl-unit.sh",
+   "verity/ml/flock/tests/lean/TmplUnit.lean"
+  ],
+  "verity/flock/tests/test_challenger_audit.py": [
+   "verity/ml/flock/tests/fixtures/plain-tree"
+  ],
+  "verity/flock/tests/test_honest_session.py": [
+   "verity/ml/flock/tests/fixtures/honest-session"
+  ],
+  "verity/flock/tests/test_lean_forged_proofs.py": [
+   "verity/ml/flock/tests/fixtures/forged-proofs"
+  ],
+  "verity/flock/tests/test_lean_hello.py": [
+   "verity/ml/flock/tests/fixtures/zk-sessions"
+  ],
+  "verity/flock/tests/test_lean_hidden_outputs.py": [
+   "verity/ml/flock/tests/fixtures/hidden-outputs"
+  ],
+  "verity/flock/tests/test_lean_identifier.py": [
+   "verity/ml/flock/tests/fixtures/public-inputs"
+  ],
+  "verity/flock/tests/test_lean_plain_tree.py": [
+   "verity/ml/flock/tests/fixtures/plain-tree"
+  ],
+  "verity/flock/tests/test_lean_public_inputs.py": [
+   "verity/ml/flock/tests/fixtures/public-inputs",
+   "verity/ml/flock/tests/fixtures/public-inputs-blocks"
+  ],
+  "verity/flock/tests/test_lean_shared_reads.py": [
+   "verity/ml/flock/tests/fixtures/public-inputs"
+  ]
+ },
+ "flock_prover": {
+  "benchmarks/one_stage/a11.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/a11_kinds.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/a11_twins.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/a6.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/a7.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/forged_proofs.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/form_refusals.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/m1_families.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/one_stage/m1_unit.py": [
+   "verity/ml/flock/python"
+  ],
+  "benchmarks/two_stage/audit.py": [
+   "verity/ml/flock/python"
+  ],
+  "verity/flock/prover/README.md": [
+   "verity/ml/flock/pod/74-gemm-hill.sh",
+   "verity/ml/flock/tests/test_lean_verifier.py"
+  ],
+  "verity/flock/prover/check_build.sh": [
+   "verity/ml/flock/pod/20-gpu-link.sh"
+  ],
+  "verity/flock/prover/live/Cargo.toml": [
+   "verity/ml/flock/pod/60-circuit.sh"
+  ],
+  "verity/flock/prover/live/PROTOCOL.md": [
+   "verity/ml/flock/verifier/firewall_controls.sh",
+   "verity/ml/flock/verifier/firewall_finish_agree.py"
+  ],
+  "verity/flock/prover/live/src/bin/flock-circuit.rs": [
+   "verity/ml/flock/tests/lean/TmplUnit.lean"
+  ],
+  "verity/flock/prover/live/src/sha512_native.rs": [
+   "verity/ml/flock/python"
+  ],
+  "verity/flock/prover/pyproject.toml": [
+   "verity/ml/flock/tests/test_backend_bench.py",
+   "verity/ml/flock/tests/test_challenger_audit.py",
+   "verity/ml/flock/tests/test_ir_lowering_bench.py",
+   "verity/ml/flock/tests/test_lean_coin_tree.py",
+   "verity/ml/flock/tests/test_lean_draw_laws.py",
+   "verity/ml/flock/tests/test_lean_forged_proofs.py",
+   "verity/ml/flock/tests/test_lean_hello.py",
+   "verity/ml/flock/tests/test_lean_hidden_outputs.py",
+   "verity/ml/flock/tests/test_lean_ks_form.py",
+   "verity/ml/flock/tests/test_lean_out_group_slot.py",
+   "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
+   "verity/ml/flock/tests/test_lean_public_inputs.py",
+   "verity/ml/flock/tests/test_lean_rec_cap_guards.py",
+   "verity/ml/flock/tests/test_lean_rec_coins.py",
+   "verity/ml/flock/tests/test_lean_record_checks.py",
+   "verity/ml/flock/tests/test_lean_region_words.py",
+   "verity/ml/flock/tests/test_lean_registered_bit_rows.py",
+   "verity/ml/flock/tests/test_lean_registered_reads.py",
+   "verity/ml/flock/tests/test_lean_served_registered.py",
+   "verity/ml/flock/tests/test_lean_session_tables.py",
+   "verity/ml/flock/tests/test_lean_shared_reads.py",
+   "verity/ml/flock/tests/test_lean_typed_reads.py",
+   "verity/ml/flock/tests/test_lean_typed_statement.py",
+   "verity/ml/flock/tests/test_lean_typed_template.py",
+   "verity/ml/flock/tests/test_lean_verifier.py",
+   "verity/ml/flock/tests/test_lean_width_refusals.py",
+   "verity/ml/flock/tests/test_lean_witness.py",
+   "verity/ml/flock/tests/test_pod_lean_verdicts.py",
+   "verity/ml/flock/tests/test_randomness_spec.py",
+   "verity/ml/flock/tests/test_security_inputs.py"
+  ],
+  "verity/flock/prover/python/verity_flock/rec_compose.py": [
+   "verity/ml/flock/tests/test_lean_rec_coins.py",
+   "verity/ml/flock/tests/test_lean_rec_compose.py"
+  ],
+  "verity/flock/prover/python/verity_flock/rec_vstage.py": [
+   "verity/ml/flock/tests/lean/InnerFold.lean"
+  ],
+  "verity/flock/prover/tests/test_class_statement.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/flock/prover/tests/test_firewall_contract.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/flock/prover/tests/test_lean_zk.py": [
+   "verity/ml/flock/tests",
+   "verity/ml/flock/tests/fixtures/zk-sessions"
+  ],
+  "verity/flock/prover/tests/test_read_tmpl.py": [
+   "verity/ml/flock/tests/fixtures/served_reads.json"
+  ],
+  "verity/flock/prover/tests/test_rec_algebra.py": [
+   "verity/ml/flock/tests/lean/InnerClaims.lean"
+  ],
+  "verity/flock/prover/tests/test_rec_inner_release.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/flock/prover/tests/test_rec_inner_stage.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/flock/prover/tests/test_rec_session.py": [
+   "verity/ml/flock/pod/88-rec-c3-inner.sh"
+  ],
+  "verity/flock/prover/tests/test_rec_vstage.py": [
+   "verity/ml/flock/pod/85-rec-reprice.sh"
+  ],
+  "verity/flock/prover/tests/test_rec_vstar.py": [
+   "verity/ml/flock/pod/85-rec-reprice.sh"
+  ],
+  "verity/flock/prover/tests/test_record_text.py": [
+   "verity/ml/flock/verifier/record_text.py"
+  ],
+  "verity/flock/prover/tests/tmpl_statement.py": [
+   "verity/ml/flock/pod/90-tmpl-unit.sh",
+   "verity/ml/flock/tests/lean/TmplUnit.lean"
+  ],
+  "verity/flock/verifier/lean-audit.json": [
+   "verity/ml/flock/tests/test_firewall_frame.py"
+  ],
+  "verity/ml/flock/tests/test_lean_ks_form.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_out_group_slot.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_plain_leaves.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_rec_coins.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_rec_inner_streams.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_rec_links_verify.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_rec_record.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_record_checks.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_lean_witness.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/tests/test_security_inputs.py": [
+   "verity/ml/flock/tests"
+  ],
+  "verity/ml/flock/verifier/ci-bundle.sh": [
+   "verity/ml/flock/flock-sha512-b684b12.patch",
+   "verity/ml/flock/live"
+  ]
+ },
+ "flock_verifier": {
+  "verity/core/service/vstar/tests/test_vstar_recursive.py": [
+   "verity/core/service/vstar/tests"
+  ],
+  "verity/ml/flock/live/PROTOCOL.md": [
+   "verity/core/service/flock/Flock/Firewall.lean"
+  ]
+ },
+ "pous": {
+  "verity/protocols/pous/lean/README.md": [
+   "verity/core/protocols/pous/lean/submissions"
+  ],
+  "verity/protocols/pous/verifier/PROTOCOL.md": [
+   "verity/core/protocols/pous/lean/README.md"
+  ],
+  "verity/protocols/pous/verifier/pyproject.toml": [
+   "verity/core/protocols/pous/lean/TRUSTED.sha256"
+  ],
+  "verity/protocols/pous/verifier/schemes/__init__.py": [
+   "verity/core/protocols/pous/tests/fixtures/schemes"
+  ],
+  "verity/protocols/pous/verifier/schemes/p2.py": [
+   "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/PousBandCheck.lean": [
+   "verity/core/protocols/pous/tests/fixtures/lean_band_vectors.json",
+   "verity/core/protocols/pous/tests/lean/generate_band.sh"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/PousDenseCheck.lean": [
+   "verity/core/protocols/pous/tests/fixtures/lean_dense_vectors.json",
+   "verity/core/protocols/pous/tests/lean/generate_dense.sh",
+   "verity/core/protocols/pous/tests/test_pous_dense.py"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/PousRefCheck.lean": [
+   "verity/core/protocols/pous/tests/fixtures/lean_vectors.json",
+   "verity/core/protocols/pous/tests/lean/generate.sh",
+   "verity/core/protocols/pous/tests/test_pous_lean.py"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/generate.sh": [
+   "verity/core/protocols/pous/tests/fixtures/lean_vectors.json",
+   "verity/core/protocols/pous/tests/lean/PousRefCheck.lean",
+   "verity/core/protocols/pous/tests/lean/generate.sh"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/generate_band.sh": [
+   "verity/core/protocols/pous/lean/submissions",
+   "verity/core/protocols/pous/tests/fixtures/lean_band_vectors.json",
+   "verity/core/protocols/pous/tests/lean/PousBandCheck.lean",
+   "verity/core/protocols/pous/tests/lean/generate_band.sh"
+  ],
+  "verity/protocols/pous/verifier/tests/lean/generate_dense.sh": [
+   "verity/core/protocols/pous/tests/fixtures/lean_dense_vectors.json",
+   "verity/core/protocols/pous/tests/lean/PousDenseCheck.lean",
+   "verity/core/protocols/pous/tests/lean/generate_dense.sh"
+  ],
+  "verity/protocols/pous/verifier/tests/pous_scheme_vectors.py": [
+   "verity/core/protocols/pous/tests/pous_scheme_vectors.py"
+  ],
+  "verity/protocols/pous/verifier/tests/pous_vectors.py": [
+   "verity/core/protocols/pous/tests",
+   "verity/core/protocols/pous/tests/pous_vectors.py"
+  ],
+  "verity/protocols/pous/verifier/tests/test_pous_p2_ring.py": [
+   "verity/core/protocols/pous/schemes/p2.py"
+  ],
+  "verity/protocols/pous/verifier/tests/test_pous_period.py": [
+   "verity/core/protocols/pous/check/tests/test_run_protocol.py"
+  ],
+  "verity/protocols/pous/verifier/tests/test_pous_protocol.py": [
+   "verity/core/protocols/pous/tests/pous_scheme_vectors.py"
+  ],
+  "verity/protocols/pous/verifier/tests/test_pous_scheme.py": [
+   "verity/core/protocols/pous/tests/pous_vectors.py"
+  ],
+  "verity/protocols/pous/verifier/tests/test_pous_trusted.py": [
+   "verity/core/protocols/pous/lean/TRUSTED.sha256"
+  ]
+ },
+ "pouw": {
+  "verity/protocols/pouw/eps_budget.py": [
+   "benchmarks/pouw/theory/checked_strip.py"
+  ],
+  "verity/protocols/pouw/grind_price.py": [
+   "benchmarks/pouw"
+  ],
+  "verity/protocols/pouw/proved_ticks.py": [
+   "benchmarks/pouw"
+  ],
+  "verity/protocols/pouw/verifier/lean/commit/lean-audit.json": [
+   "benchmarks/pouw/clear"
+  ],
+  "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py": [
+   "benchmarks"
+  ]
+ },
+ "spot": {
+  "verity/spot/verifier/one_stage/verifier.py": [
+   "verity/core/protocols/spot/one_stage"
+  ],
+  "verity/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean": [
+   "verity/core/protocols/spot/tests/fixtures/exfiltration_two_lean.json",
+   "verity/core/protocols/spot/tests/lean/ExfiltrationTwoVectors.lean",
+   "verity/core/protocols/spot/tests/lean/generate.sh"
+  ],
+  "verity/spot/verifier/tests/lean/ExfiltrationVectors.lean": [
+   "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json",
+   "verity/core/protocols/spot/tests/lean/ExfiltrationVectors.lean",
+   "verity/core/protocols/spot/tests/lean/generate.sh"
+  ],
+  "verity/spot/verifier/tests/lean/generate.sh": [
+   "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json",
+   "verity/core/protocols/spot/tests/lean/ExfiltrationTwoVectors.lean",
+   "verity/core/protocols/spot/tests/lean/ExfiltrationVectors.lean",
+   "verity/core/protocols/spot/tests/lean/generate.sh"
+  ]
+ },
+ "vllm": {
+  "integrations/vllm/network_traces/tests/test_window_chain.py": [
+   "benchmarks/network_traces/tests"
+  ]
+ }
+}
