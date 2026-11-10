@@ -1,6 +1,6 @@
 # dither_full_util: the H200 at full utilization on useful s8 GEMMs
 
-It shows the remote protocol's PoUW half (`examples/README.md`) as PoUW's work unit, not a remote run: Dither's work unit
+It shows the remote protocol's PoUW alone (`examples/README.md`) as PoUW's work unit, not a remote run: Dither's work unit
 at full utilization, with no runner yet.
 
 The demo has the GPU run at full honest utilization on useful matmuls, not filler, and certifies as much of that time as it

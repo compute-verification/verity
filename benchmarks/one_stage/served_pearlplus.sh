@@ -84,8 +84,10 @@
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and under the gate it
-# draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line reads)
+# registration R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
+# the commit is what holds the window to its class's fixed load, so without it there is no draw, no verdict and no
+# Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
+# passes to W, and under the gate it draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line reads)
 # closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
@@ -311,8 +313,11 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
       > "$Q/tie.log" 2>&1
     rc=$?
     say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
+    [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
+      "nothing holds the passes to the window's class and no draw or Pearl+ line follows it"; GO=; }
   else
-    say "W: retain wrote no window record, so nothing ties the passes to the window"
+    say "W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ line follows"
+    GO=
   fi
 fi
 
@@ -330,7 +335,7 @@ if [ -n "$GO" ]; then
   period close
   t=$(date +%s)
   TA=()
-  [ -n "$TIE" ] && [ -s "$W" ] && TA=(--tie "$W")
+  [ -z "$TIE" ] || TA=(--tie "$W")
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
     ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} > "$Q/verify.log" 2>&1 &

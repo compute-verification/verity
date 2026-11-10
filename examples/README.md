@@ -33,7 +33,7 @@ hypotheses, so no example's `proof` is past `none`. `lifecycle/` is the only exa
 remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
 (`verity example vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
 and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs remote's
-sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
+sampled proofs alone. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
 `verity/core/protocols/remote/README.md`, "Which remote", lists them.
 
@@ -89,7 +89,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   its placement is `placement.toml`, which `run.sh` reads, and its scripts reach the integration by `PYTHONPATH`; it is
   not a package. The auditor's devices (the verifier, the network certifier and the memory challenger) are not placed:
   the Lean verifier runs on the GPU node with the endpoint and the prover, and the other two may run there too.
-- `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
+- `h200/` (`run` `runs`, `proof` `none`): remote's sampled proofs alone at a frozen shape on one H200. The
   frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity example h200
   --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
   replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
@@ -103,7 +103,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   parties, channels and each component's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
-- `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
+- `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW alone, as PoUW's work unit. The H200 at
   full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt, which is no longer PoUW's plan
   (the lead, `verity/pouw/v2`, is). It has no runner and no run of record, so `verity example dither_full_util` runs
   nothing yet, and it is not a remote run.
