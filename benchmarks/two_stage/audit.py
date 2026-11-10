@@ -44,8 +44,9 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``) and ``summary.json`` (both stages' registrations, laws
-and draws, and the outcome, among it).
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+and draws, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
+copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
@@ -66,6 +67,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 import a5_coins as AC  # noqa: E402
+import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
 
@@ -229,7 +231,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
               record: dict, proofs: dict) -> dict:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
     replay block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, and
-    `second_stage.replay_wires`, as the stream derives them), the reads the audit record's verdicts of record report,
+    `second_stage.replay_wires`, as the stream derives them) and their rows (`second_stage.replay_rows`), the reads the
+    audit record's verdicts of record report,
     what they name of each session they accepted (`second_stage.verified_of`), and each template's reference header and
     registered reads the params ``proofs`` give."""
     from verity.core.protocols.spot import second_stage as SS
@@ -243,7 +246,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
-                 wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)))
+                 wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)),
+                 rows=SS.replay_rows(replay, descriptor_id(T.REPLAY)))
     return SS.check(True, own, stmts).to_json()
 
 
@@ -398,6 +402,8 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                                "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
                               default=str))
+    if stmts is not None:
+        G.export(out / "guard", out, stream, reg.order, a.n, a.q, a.k)
     return 0 if summary["as_expected"] else 1
 
 
