@@ -340,3 +340,23 @@ subgoal for today is marked done on them. By the lead's sum of benchmarks' share
 
 The lead marked #8679 at 0737dd8d30 after reading r20261110-175605-3308's four verdict lines and checking the patch
 id against `0a85da0af964`. It lands on its mark. A change to the script from now on is a new pull request.
+
+## Tue 10 Nov 18:49Z: label rows 3 and 5 (proofs' pins equal yours); then keep going down the list, because the 90% is of the NEW total
+
+- **Label rows 3 and 5 now.** proofs posted its pins and form verdicts at 18:44Z (HASH-98): `7e8a66f6cf13209d` and
+  `1fd651999b36433d`, both accepted, the pins yours. The lead read both arts: 121 of 121, nine checks true. Also from
+  proofs: row 13's pin is `8372f70f9df7f6d0` and row 30's (`EmbeddingRead_v1{V=256,H=96}`) `9ceb3c55c89d0702`, both
+  from `d7ab9059c3`, both needing `READ_TMPL=1`.
+- **Why it is not over.** benchmarks' shares were computed at its table's prices. Your steady prices are 3 to 40
+  times lower, and an unmeasured type keeps its model's price, so on the new total the unmeasured types weigh about
+  four times more. The lead's estimate [benchmarks' share times your ms a block over the table's, row by row; not
+  the command]: the 27 measured types are about 20 units, the unmeasured 5, so **steady is near 80% of the new
+  total, not 95%.** Asked benchmarks to run the command and post the true share (HASH-98, 18:47Z).
+- **So measure on, one prover each, largest unmeasured share first:** row 13 (1.35%), row 15 (0.75%), row 28
+  (`RmsNormMnnvl_v1{N=6144,…}`, 0.15%; k_log 27, mind its memory), row 29 (0.14%), row 30 (0.13%), row 32
+  (`Fp8GroupQuantUe8m0_v1{K=2048,G=128}`, 0.09%), row 34, row 36, then rows 37 to 40. By the same estimate those
+  take steady past 90%. Label `gq` (row 25) too if its row passes every check you now run: it is 0.51%.
+- **These go ahead of the 2- and 4-prover links** not yet timing: the 90% is priced at one prover. Say on HASH-98
+  which types refuse to stage, with the stager's line: each such type is a question for proofs or circuits.
+- When benchmarks answers whether a steady row may price its family's other statics (the 59 `SparseMlaHeadBlock`
+  types, 1.48%), the lead writes here what it changes.
