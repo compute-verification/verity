@@ -114,6 +114,27 @@ def test_a_renamed_guarantee_shows_the_premises_it_gains_or_drops_under_its_new_
             f"{said} rests now also on `P.Kept`; no longer on `P.Held`", listed, gone]
 
 
+def test_a_premise_renamed_with_a_changed_digest_is_one_gained_and_one_dropped_under_each_guarantee_resting_on_it():
+    """A premise under another name is that premise only when its digest came with it. One whose digest changed with its
+    name states something else, and so may one whose entry holds no digest on either side: no rename pairs the two, each
+    guarantee that rests on it shows one premise gained and one dropped, and a guarantee that doesn't shows nothing."""
+    def rec(h: str, *open_: str) -> dict:
+        return _g("t : A", h) | {"premises": {"assumptions": ["P.Hyp"], "open": list(open_), "reads": []}}
+
+    def doc(premise: str, digest: str | None) -> dict:
+        entry = {"issue": "PROOFS-1", "due": "2026-11-30"} | ({"digest": digest} if digest else {})
+        return _doc({"P.t": rec(H1, premise), "P.u": rec(H2, premise), "P.v": rec(H3)}) | {"open": {premise: entry}}
+    listed = "• open premise `P.Kept` listed (PROOFS-1, due 2026-11-30)"
+    gone = "• open premise `P.Held` discharged: no longer listed (PROOFS-1, due 2026-11-30)"
+    each = [f"• guarantee `{g}` rests now also on `P.Kept`; no longer on `P.Held`" for g in ("P.t", "P.u")]
+    assert spec.changes(doc("P.Held", H1), doc("P.Kept", H1)) == [listed, gone]        # its digest came with it: a rename
+    for was, now in ((H1, H2), (None, H1), (H1, None), (None, None)):
+        assert spec.changes(doc("P.Held", was), doc("P.Kept", now)) == [*each, listed, gone]
+    other = doc("P.Kept", H1)
+    other["open"]["P.Other"] = {"issue": "PROOFS-2", "due": "2026-11-30", "digest": H1}
+    assert spec.changes(doc("P.Held", H1), other)[:2] == each                         # two came with its digest: no pair
+
+
 def test_a_changed_definition_names_its_module():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2})
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2})
