@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pouw.PearlPlus
+public import Properties.Pouw.PearlPlus.Witnesses
 public import Proofs.Properties.Core.Evaluate
 public import Proofs.Properties.Pouw.Commit
 
@@ -857,5 +858,15 @@ theorem workIsTheCredit : WorkIsTheCredit := by
   · cases hp : plan i with
     | error r => exact (congrArg RunAnswer.work (refusedBeforeTheCoin i opener r hp)).trans rfl
     | ok pl => exact (check_work opener hp).2 hrej
+
+/-- A verdict that accepts every run (`acceptAllCheck`) publishes no work, so not the credit of the plan that a `plan`
+accepting every run returns (`acceptAllPlan`). `Witnesses`' `workIsTheCredit_nontrivial` says so of every credit; this
+one names its plan, since `WorkIsTheCredit` is a conjunction and the lock reads no `∃` before one. -/
+theorem workIsTheCredit_acceptAll :
+    ¬ (acceptAllCheck emptyRun noOpening).work = some (testCredit emptyRun.testInstance
+      (creditAtAssumption acceptAllPlan.passes emptyRun.draws
+        (overCapDraws acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
+  intro h
+  cases h
 
 end Properties.Pouw.PearlPlus
