@@ -1,8 +1,8 @@
 # The card files (`verity.hardware.cards`)
 
-One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A card is a GPU's (`kind = "gpu"`) or a
-host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries, so the same GPU in another host needs
-no second card). Each number is an entry `{ value, unit, mark, source }`:
+One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A
+card is a GPU's (`kind = "gpu"`) or a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
+so the same GPU in another host needs no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
   (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
