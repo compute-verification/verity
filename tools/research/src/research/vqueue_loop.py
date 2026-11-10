@@ -11,9 +11,11 @@ The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`re
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
-rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then
-mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
-Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
+rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
+its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
+is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
+whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the
+files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -89,10 +91,10 @@ on because graph2's verdict and the loop's reading disagree on it, there or at i
 both readings, and a listing the loop read that isn't graph2's with both, once each (`Loop._disputes`).  Red tells
 `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it is red on
 them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its file's
-owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's message
-is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one whose tick
-stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its result
-is one JSON line in the log, whose directory also holds the loop's caches.
+owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, conflict's, ring's, red's or
+flake's message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one
+whose tick stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its
+result is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
 drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
@@ -130,8 +132,9 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
-                    lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
+from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files, flags_at,
+                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
+                    unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -331,6 +334,14 @@ class Past:
             return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
 
         return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
+
+    def conflicted(self) -> set[str]:
+        """The heads whose owners were told they don't merge onto `main` (`Loop._conflicts`)."""
+        def heads(r: dict) -> set[str]:
+            return set(r.get("heads") or ())
+
+        return {h for r in self.of("conflict") if r.get("done") or r.get("shadow") for h in heads(r)} | self._posting(
+            "conflict", heads)
 
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
@@ -606,9 +617,10 @@ class World:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def ready(self, main: str) -> list[Ready]:
-        """The open PRs drive would land from `next` now, as `vqueue.Ready`."""
+        """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
+        only with a land verdict, never under the low-risk rule."""
         q, labels = self.q, self.labels
-        prs = [p for p in self.open().values() if p.base == "main" and not p.move]
+        prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
@@ -630,7 +642,7 @@ class World:
                 p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
                 landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
                 held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not held and lowrisk(files[n], excludes):
+                if landing or not p.move and not held and lowrisk(files[n], excludes):
                     took.append(n)
             specs, clears = self._frozen()
             if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
@@ -1624,7 +1636,7 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
-            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t))
+            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) + self._conflicts(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -2070,6 +2082,33 @@ class Loop:
             self.out(f"research queue vqueue: tick {t.n}: {c.sha[:12]} graph2 in shadow: {why}")
             recs.append(self.record(t, "compare", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why,
                                     graph2=theirs, check=mine, done=True))
+        return recs
+
+    def _conflicts(self, t: Tick) -> list[dict]:
+        """Tell the owner of each ready PR whose head doesn't merge onto `main` (`Ready.conflict`, which no build takes, a
+        move's or any other's) the files it conflicts in, and to rebase it onto `main` and mark the new head: once a head
+        (`Past.conflicted`).  Its mark stays, since the new head needs its own.  A post that fails is told again by the next
+        tick; with --shadow it is only logged."""
+        recs, told = [], t.past.conflicted()
+        for r in t.snap.ready:
+            if not r.conflict or r.head in told:
+                continue
+            files = conflicting_files(self.world.repo, t.main, r.head)
+            text = (f"#{r.number} at {r.head[:12]} doesn't merge onto `main` at {t.main[:12]}"
+                    + (f": it conflicts in {', '.join(files)}" if files else "")
+                    + ". The verified queue leaves it out of every build until it does: rebase it onto `main` (where a move "
+                      "that landed is the cause, carry it across with `tools/move/restack.py`) and mark the new head ready "
+                      f"(`research queue ready {r.number}`)")
+            to = self.owner(r.number)
+            line = dict(members=[r.number], heads=[r.head], number=r.number, files=files, text=text, to=list(to))
+            if self.shadow:
+                recs.append(self.record(t, "conflict", **line, done=False))
+            elif not self._say(t, "conflict", text, to, heads=[r.head], number=r.number):
+                recs.append(self.record(t, "conflict", **line, done=False, posted=False,
+                                        error=f"telling #{r.number}'s owner it doesn't merge onto `main` failed: the next "
+                                              "tick tells again"))
+            else:
+                recs.append(self.record(t, "conflict", **line, done=True, posted=True))
         return recs
 
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:

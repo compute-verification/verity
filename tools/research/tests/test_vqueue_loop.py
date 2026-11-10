@@ -313,6 +313,69 @@ def test_a_member_that_doesnt_merge_onto_the_build_is_left_out_logged_and_its_ow
     assert len(env.posts) == 1
 
 
+def _move(env: Env, n: int, files: dict[str, str | None], base: str = "origin/main") -> str:
+    """Move PR ``n`` (its body names a word map: `PR.move`), its head writing ``files`` on ``base``; returns the head."""
+    env.o.gh.put(n, head := env.o.change(files, base=base), body=f"Lane `lane-{n}`.\nMove: tools/move/x_map.toml\n")
+    return head
+
+
+def _main_to(env: Env, files: dict[str, str]) -> str:
+    """`main` moved to a commit writing ``files``, its check listed with no task as `Env` lists the first `main`'s."""
+    _git(env.o.origin, "update-ref", "refs/heads/main", main := env.o.change(files))
+    env.listed(main, {})
+    return main
+
+
+def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_as_any_pr(env):
+    """A move PR's head is merged onto `main` as it is, no move regenerated: the loop builds it as it builds any PR."""
+    main = env.main()
+    head = _move(env, 1, {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert (built["action"], built["members"], built["heads"]) == ("build", [1], [head]), built
+    assert _git(env.o.origin, "rev-parse", f"{sha}^1", f"{sha}^2").split() == [main, head]
+    keys = env.listed(sha, {"pytest:c": ["moved/c.txt"]})
+    env.result(keys["pytest:c"], "pytest:c", "pass")
+    assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
+
+
+@pytest.mark.parametrize("lowrisk", [False, True])
+def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_rule_builds_another_on_its_mark(env, lowrisk):
+    if lowrisk:
+        _main_to(env, {Q.DRIVE_FLAGS: 'lowrisk_excludes = ["*.lean"]\n'})
+    env.put(1, {"a.txt": "1\n"})
+    _move(env, 2, {"c.txt": None, "moved/c.txt": "c\n"})
+    env.labels.reviews = lambda n, head: []                     # both marked ready, neither reviewed
+    recs = env.loop(policy).tick()
+    assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if lowrisk else []), recs
+
+
+@pytest.mark.parametrize("shadow", [False, True])
+def test_a_ready_pr_that_doesnt_merge_onto_main_is_told_its_files_once_a_head_keeping_its_mark_and_with_shadow_only_logged(
+        env, shadow):
+    """A ready PR whose head doesn't merge onto `main` (`Ready.conflict`), a move's as any other's, is in no build: its owner is
+    told the files and to rebase it, once a head and again at a new head that doesn't merge either."""
+    base = env.main()
+    _main_to(env, {"a.txt": "main\n"})
+    one = env.o.change({"a.txt": "one\n"}, base=base)
+    env.o.gh.put(1, one)
+    env.put(2, {"b.txt": "2\n"})
+    three = _move(env, 3, {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, base=base)
+    loop = env.loop(policy, shadow=shadow)
+    *told, built = loop.tick()
+    assert [(r["action"], r["number"], r["heads"], r["files"], r["done"], r["shadow"]) for r in told] == [
+        ("conflict", 1, [one], ["a.txt"], not shadow, shadow), ("conflict", 3, [three], ["a.txt"], not shadow, shadow)], told
+    assert (built["action"], built["members"]) == ("build", [2]), built
+    assert all(x in told[0]["text"] for x in ("conflicts in a.txt", "rebase it onto `main`", "tools/move/restack.py")), told[0]
+    assert env.posts == ([] if shadow else [f"{' '.join(r['to'])} vqueue: {r['text']}" for r in told])
+    assert loop.tick() == [] and env.withdrawn == []
+    env.o.gh.put(1, again := env.o.change({"a.txt": "again\n"}, base=base))
+    (told2,) = loop.tick()
+    assert (told2["action"], told2["number"], told2["heads"], told2["done"]) == ("conflict", 1, [again], not shadow), told2
+    assert len(env.posts) == (0 if shadow else 3) and env.withdrawn == []
+
+
 def test_a_loop_started_again_on_the_same_log_and_origin_repeats_no_build_and_no_advance(env):
     env.put(1, {"a.txt": "1\n"})
     first = env.loop(policy, clone="a")
