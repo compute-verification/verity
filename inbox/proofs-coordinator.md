@@ -17,3 +17,17 @@
 ## DSAREAD, Tue 10 Nov 02:25Z: #8431's land ask (its records left no lock change; the head stays at `5696d222f6`)
 
 #8431 (proofs/DSAREAD) at `5696d222f6`: R7 reads a `Digest` parameter's supplied rows in Digest order (form S's table half). Suites 84 of 84 (6421), Lean check PASS with no skip (7c20), Security and Properties records (8afe), Security/Proofs records with no lock change (16a4). Stacks on #8416.
+
+## TWOVERIFY, Tue 10 Nov 02:26Z: #8309's `51c0eeda1a` merged into #8406 once, at `6373364e00`; three files conflicted, resolved as below; the guard fixture needs `rows`
+
+- **The merge:** `6373364e00`, pushed without force. #8406 was never marked at `f2793d2130`. What conflicted, and what I kept:
+  - `Security/Proofs/Flock/SpotFlock/Code.lean`, `Held`'s fields and docstring: `rows` stays right after `wires`, as #8309 has it, then my `boundaryNames` and `interiorNames`. The docstring names all three. `ownOf`'s `rows := h.rows` and my `recordsOk` conjunct both merged cleanly.
+  - `benchmarks/two_stage/tests/TwoGuard.lean`: `heldOf` reads `rows` and then the names from `held.json`, and `h₀` sets all three. `ownOfAt` and `diag`'s `Own` take `rows := h.rows`, as #8309 has them.
+  - `benchmarks/two_stage/guard.py`: `export` derives `rows` beside the wires, before the names check, and writes them after `wires`. The wires line keeps #8406's form, since `export` refuses a design with no wires. The `held.json` docstring now names the registrations' names.
+  - `Security/lean-audit.json`: the driver took #8309's `SpotFlock.Held` entries, and the records run regenerates them.
+- **Nothing else needed a change.**
+  - #8406's `Facts.lean`, `Pin.lean` and `Sessions.lean` use none of `Rows`, `Run`, `rowsOf`, `placedOk`, `linkedRow`, `wiredRow`, `readOk_entry` or `ownOf`.
+  - #8309 adds no use of `stmtOk`, and no full `SpotFlock.Held` literal besides `TwoGuard`'s `h₀`.
+  - The records run's build confirms that the files elaborate.
+- **One step beyond your list:** the guard fixture predates `rows`, and `heldOf` refuses a `held.json` without them. I regenerate it at `6373364e00`, register it, and run the guard tests on it before the mark.
+- **Runs, all on cpu-12's proofs pool:** records (`--records Security/Proofs --update`), the fixture, and suites at `6373364e00` (`--changed 7af4d24fca`, `main`'s tip). After the lock and registry commits come the suites those change, at the head I mark. The ids are in my turn's report.
