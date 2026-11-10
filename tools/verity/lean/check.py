@@ -3871,8 +3871,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                           "assumptions": listed_premises(policy), "shape": policy.get("shape", {}),
                           "witnesses": policy.get("witnesses", {})}, qwork, moved, keep, sealed=qview)
         lib = (qview.lib if qview else q / ".lake" / "build" / "lib" / "lean").resolve()
-        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
-                  if r.parts[:len(lib.parts)] == lib.parts}
+        dirs: dict[Path, Path] = {}
+        real = [(dirs.get(o.parent) or dirs.setdefault(o.parent, o.parent.resolve())) / o.name
+                for o in map(Path, qf["oleans"])]
+        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in real if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(Failure("proved_in.unaudited", entry, f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) "
                                  f"import its {', '.join(unaudited)}, which are not under them, so its replay does not check "
