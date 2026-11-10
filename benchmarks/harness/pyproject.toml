@@ -109,6 +109,10 @@ inputs = [
     "benchmarks/census/hardware.json",
     "benchmarks/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
+    # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
+    # door's runner, which a test runs
+    "benchmarks/rho/data/reference.toml",
+    "benchmarks/prove/run.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -119,7 +123,7 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/core/protocols/pouw/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_served_table.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py"]
 paths = ["fixtures/artifacts.json"]
 
 [[tool.verity.tests.reads]]

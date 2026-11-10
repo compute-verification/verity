@@ -634,6 +634,7 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/overhead/",
+        "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/specs/",
