@@ -30,6 +30,7 @@ from pathlib import Path
 from . import VERSION
 from .annotate import LOOKUPS_FROM, with_lookups, with_structures
 from .formalism import of_record
+from .rotations import labelled
 from .score import checkpoints
 
 SCHEMA = "te-core/submission/v1"
@@ -285,7 +286,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
     table (`annotate.with_lookups`); `structures` (structure id -> traced structure) gives its steps their U and cut
     from the traced step circuit (`annotate.with_structures`). Each checkpoint's `output` carries its E facts
     (`output_facts`: the harness's rebuild_macs, and the decoder gates the submission's notes give, from `meta` or else
-    `submission_meta`), which te_core.formalism's decoder reads."""
+    `submission_meta`), which te_core.formalism's decoder reads. A run whose update code rotates has its rotations'
+    products named `tf32` in its `macs_log` and priced so in its `formalism` (te_core.rotations)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
     meta = checked_meta(meta, record) if meta is not None else submission_meta(Path(run_dir), record)
     known = {k: v for k, v in facts(record, tensors, meta).items() if k != "checkpoints"}
@@ -293,6 +295,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
         record = with_lookups(record, lookup_tables())
     if structures:
         record = with_structures(record, structures)
+    # after the read-outs' facts, which parse each log row's shapes
+    record = labelled(record)
     ev = record.get("evaluation", {})
     last = record["steps"][-1]["step"] if record["steps"] else -1
     out = []
