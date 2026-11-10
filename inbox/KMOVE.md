@@ -124,3 +124,23 @@ is not on `main` at 19:00Z the stager makes the same edit in the layout PR's sec
    same way, so give the rule in one sentence.
 The staged tree `9ece` (23 maps) is no longer the form of record: skip the scan there. Kernels' own suites on the
 moved tree: run them on the one-map branch instead, once it is named.
+
+## Tue 10 Nov 10:46Z: GO. Push the one commit to #8619 NOW and mark the new head (top, VLLM-265 10:44Z)
+
+top's word, as the rule's author: #8619 has no verdict and is in no candidate, so a new head drops nothing. **Do it
+before a reviewer takes the old head. This goes ahead of everything else you are doing.**
+
+1. The one commit: `cuda_sha512_patch.py`'s last join from `here` (`s = (here / "cuda" / "sha512.cuh").read_text()`)
+   becomes the root from `__file__` and the root-relative literal `verity/ml/flock/cuda/sha512.cuh`; the unused
+   `here` is deleted; your test covers that path too. proofs leaves this file alone (its PR is the other four
+   files, 15 joins).
+2. Before the push: the changed lines' test under the ONE map (all three paths exist after it) and the test file
+   itself passing on your VM. Push to `cursor/kernels-flock-kernel-path-5aee`.
+3. Mark the new head by label at once (`research data label pr:8619@NEWSHA ready true --by kernels`), on the
+   strength of the test file passing and the earlier 50 suites at the old head; update the PR's body (the new line,
+   the one-map test, that the old head's 50-suite run was at 611e0aae98 and which suites were rerun at the new
+   head); then queue the two suites the files are inputs of (`verity-flock`, `repository`) in one run with
+   `--mem-gb 32` on a free pool and report its verdict when it ends. If that run fails, tell the lead at once: the
+   mark is withdrawn only with ci.
+4. Comment the new head on HASH-102 the moment it is marked; the lead says it on VLLM-265.
+Then the rerun on the one-map branch, as in the section above.
