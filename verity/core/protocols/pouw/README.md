@@ -37,34 +37,16 @@ every product, is a reference, not an answer.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
-<<<<<<< 99c8914848
 one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
 `lean/pearlplus`), and the inference-only policy's check (`Core.Remote.V1.components` in
 `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). H1's development executable
-(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's period check, `PouwCheck.Period.protocol`
-(`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every window of the period naming the record as its
+(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
+(`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
 Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
-(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
-||||||| merged common ancestors
-one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
-inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
-`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
-subprotocols' commitments, the policy and the one-stage audit committed to one record, and every window of the period
-names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
-(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
-=======
-one-stage audit, PoUW's credit period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
-inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
-`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
-subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
-names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
->>>>>>> 7af4d24fca3e
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
@@ -117,28 +99,6 @@ each check of a served execution phase through the Lean and its Python reference
 A scheme turns one registered matrix product's committed operand rows into each tile's checked values, its leaf and its
 useful output; everything else (commitments, salt, sample, openings) is the protocol's and the same for every scheme.
 
-<<<<<<< 99c8914848
-- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms, `schemes/pearl_c.py`):
-  Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl publishes (`pearl-fp8-v4`,
-  `schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy clean-up pinned bit for bit so that the useful output
-  is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
-  throughout; the others keep Pearl's BLAKE3 hashing.
-- **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
-  block-scaled FP4, NVFP4 only.
-- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
-- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
-  on SAK and is no longer the bar or the plan (below).
-||||||| merged common ancestors
-- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms, `schemes/pearl_c.py`):
-  Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl publishes (`pearl-fp8-v4`,
-  `schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy clean-up pinned bit for bit so that the useful output
-  is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
-  throughout; the others keep Pearl's BLAKE3 hashing.
-- **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
-  block-scaled FP4, NVFP4 only.
-- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
-=======
 - **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms,
   `verity/ml/protocols/pouw/schemes/pearl_c.py`): Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl
   publishes (`pearl-fp8-v4`, `verity/ml/protocols/pouw/schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy
@@ -150,8 +110,8 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   replaced by sm_120's FP4 with scale groups, NVFP4 only.
 - **NCP** (`ncp-v1`, `verity/ml/protocols/pouw/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
->>>>>>> 7af4d24fca3e
+- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
+  on SAK and is no longer the bar or the plan (below).
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
 
