@@ -310,6 +310,7 @@ def test_at_most_mapped_jobs_threads_map_at_once_and_a_head_wanted_meanwhile_wai
     finish(olds[1], olds[2])
     assert q.work_out_mapped() == 2 and q.work_out_mapped() == 0 and not q._mapped_running
     assert [q.mapped_change(old, new) for old in olds] == [f"patch-{olds[0][:8]}", f"patch-{olds[1][:8]}", None]
+    assert json.loads(q._mapped_at.read_text()) == {Q.mapped_key(o, moves): f"patch-{o[:8]}" for o in olds[:2]}
     assert sorted(started) == sorted(olds)                                   # each once
     assert world.logs[-1] == (f"research queue: {olds[2][:8]}'s own change isn't mapped across the moves `main` landed since: "
                               "RuntimeError: boom")
