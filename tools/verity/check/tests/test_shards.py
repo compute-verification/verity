@@ -28,7 +28,9 @@ D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 #: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
-SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
+SECURITY = tuple(f"lean-audit:{p}" for p in ("Security", "Security/Proofs", "Security/Properties"))
+#: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
+NAMED = SECURITY[1:]
 #: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
@@ -50,13 +52,13 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     c1, c2, c3 = COMPOSITION
     assert D.plans() == {
-        3: ((*SECURITY, "pytest", c3),
+        3: ((*NAMED, "pytest", c3),
             ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2)),
-        4: ((*SECURITY, "circuit-check:1/4", c3),
+        4: ((*NAMED, "circuit-check:1/4", c3),
             ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", c2)),
-        5: ((*SECURITY, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
+        5: ((*NAMED, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2))}
 
 
@@ -519,7 +521,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
 def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     real, parts = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -688,7 +690,7 @@ def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refuse
 
 def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory(monkeypatch):
     """`--record --cc-records`: recorded without the check tool (no gate reads it), in a train slot's memory as circuit-check
-    takes, with no upstream build, Lean dependencies or gathered verdicts."""
+    takes, with no upstream build, Lean dependencies or verdict packs' URLs."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -700,7 +702,7 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: (_ for _ in ()).throw(AssertionError("verdicts gathered")))
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: (_ for _ in ()).throw(AssertionError("verdict packs' URLs sent")))
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
     assert CHECK.record(["--base", "HEAD", "--agreement", "--on", "vy-x", "--priority", "--keep-going", "--cc-records"]) == 0
     [cmd] = launched
