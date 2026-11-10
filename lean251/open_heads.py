@@ -12,7 +12,7 @@ its own checkout would, with the cut's base and with MAIN.  `restack.py` is MAIN
 moves, their bases and `based-after` are its own.  `--attrs head` (the default) reads `.gitattributes` from the head, as
 a merge in the head's checkout does; `worktree` reads the directory this runs in.  A merge driver named there runs only
 where the repository has it registered; the two that run a script by a relative path run the copy in this directory.
-A head MAIN already holds is listed as landed and left out of every count.  `--report` prints a saved result again, and
+A head MAIN or the base already holds is listed as such and left out of every count.  `--report` prints a saved result again, and
 with `--against`, beside it, the result of the same count made where no driver is registered.
 """
 from __future__ import annotations
@@ -190,6 +190,7 @@ def main(argv: list[str]) -> int:
         if rs.contains(head, main_, None):
             rows.append({**row, "landed": True})
             continue
+        row["in_base"] = rs.contains(head, base, None)
         own = git("rev-list", head, "--not", main_).stdout.split()
         row["commits_main_lacks"] = len(own)
         row["contains"] = sorted(heads[c] for c in own if c in heads and c != head)
@@ -232,9 +233,11 @@ def report(summary: dict, rows: list[dict], bare: list[dict] | None = None) -> N
         print(f"staging's pin {p.rsplit('/', 1)[-1]}: {s['records']} recorded, {len(s['other_digest'])} of another digest, "
               f"{len(s['not_in_git'])} not in git")
     landed = [r for r in rows if r.get("landed")]
-    rows = [r for r in rows if not r.get("landed")]
+    held = [r for r in rows if r.get("in_base")]
+    rows = [r for r in rows if not r.get("landed") and not r.get("in_base")]
     got = [r for r in rows if "error" not in r and r["base"].get("tree") and r["main"].get("tree")]
-    print(f"\nlisted open: {len(rows) + len(landed)}; main holds the head of {len(landed)}: {[r['n'] for r in landed]}")
+    print(f"\nlisted open: {len(rows) + len(landed) + len(held)}; main holds the head of {len(landed)}: "
+          f"{[r['n'] for r in landed]}; the base holds the head of {len(held)} more: {[r['n'] for r in held]}")
     print(f"open heads: {len(rows)}; measured: {len(got)}; not measured: "
           f"{[(r['n'], r['owner'], 'onto ' + r['onto'], r.get('error') or 'a merge took too long') for r in rows if r not in got]}")
     print(f"placed by the body's Lane line: {sum(r['placed_by'] == 'body' for r in rows)}, by the branch name: "
@@ -254,7 +257,8 @@ def report(summary: dict, rows: list[dict], bare: list[dict] | None = None) -> N
     print(f"gain a pins commit: {[(r['n'], r['owner'], sorted(p.rsplit('/', 1)[-1] for p in r['pins'])) for r in got if r['pins']]}; "
           f"with a Lean build: {[r['n'] for r in got if r['pins_lean_build']]}")
     print(f"contain another open head: {[(r['n'], r['contains']) for r in rows if r.get('contains')]}")
-    b = {r["n"]: r for r in bare or [] if not r.get("landed") and "error" not in r and r["base"].get("tree")}
+    b = {r["n"]: r for r in bare or [] if not r.get("landed") and "error" not in r and r["base"].get("tree")
+         and r["main"].get("tree")}
     if bare is not None:
         both = [r for r in got if r["n"] in b]
         print(f"\nwith no driver registered, of the {len(both)} heads measured both ways: "
