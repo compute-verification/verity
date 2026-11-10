@@ -25,7 +25,7 @@ rollout) reads an enormous amount, say 1 TB of new parameters, so training that 
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/slowdown`](../../slowdown/README.md), whose
+the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/slowdown`](../slowdown/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
@@ -72,15 +72,15 @@ nothing else but Lean core and the core interface (`core_protocol`).
   `InferenceOnlyCheck.Properties.DescCountsCK` (`security/Properties/InferenceOnly/Count.lean`) states that a published `complies` means
   `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/inference_only_reference.py`), run by
-  `../../../certifier/verifier/network/tests/test_inference_only_count_difftest.py`.
+  `../../certifier/verifier/network/tests/test_inference_only_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `InferenceOnlyCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `InferenceOnlyCheck.Theta.check` as the core protocol `verity/inference-only/v0`
   (`InferenceOnlyCheck.Protocol`), the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../../certifier/verifier/network/tests/`;
-  `../../../certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
+  each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../certifier/verifier/network/tests/`;
+  `../../certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
 The check's agreement with `InferenceOnly.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a

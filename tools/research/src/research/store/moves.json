@@ -2250,6 +2250,11 @@
         "verity/protocols/inference_only/rho/": "verity/protocols/inference_only/slowdown/",
         "verity/protocols/inference_only/rho/rho/": "verity/protocols/inference_only/slowdown/slowdown/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/verifier/inference_only/": "verity/protocols/inference_only/verifier/"
+      }
     }
   ]
 }

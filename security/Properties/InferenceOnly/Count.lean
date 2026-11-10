@@ -7,7 +7,7 @@ public import Properties.InferenceOnly
 /-!
 # The count of `(c, k)`-inference blocks: what an accepted count means
 
-`InferenceOnlyCheck.Count.evaluate` (`verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Count.lean`, package `inference_only_check`) counts the
+`InferenceOnlyCheck.Count.evaluate` (`verity/protocols/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`, package `inference_only_check`) counts the
 blocks of a declaration's word-level Program: each activation of a block Definition that no other block holds, with its
 Boolean gates from the gate table and its fresh bits from `InferenceOnlyCheck.Desc`'s summaries. What the count publishes is
 `InferenceOnlyCheck.Count.check`, the judgment against `n` alone, `{complies}` (or a refusal); the counts stay in the private

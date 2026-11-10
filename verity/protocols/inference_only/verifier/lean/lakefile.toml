@@ -17,11 +17,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../../../../flock/verifier"
+path = "../../../../flock/verifier"
 
 [[require]]
 name = "core_protocol"
-path = "../../../../../flock/verifier/interface"
+path = "../../../../flock/verifier/interface"
 
 [[lean_lib]]
 name = "InferenceOnlyCheck"

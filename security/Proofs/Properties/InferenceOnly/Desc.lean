@@ -6,7 +6,7 @@ public import Mathlib.Tactic
 /-!
 # The description-sized inference-only check against the unrolled one
 
-`InferenceOnlyCheck.Desc.evaluate` (`verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
+`InferenceOnlyCheck.Desc.evaluate` (`verity/protocols/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
 its fresh input bits from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 

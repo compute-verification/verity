@@ -6,7 +6,7 @@ public import InferenceOnlyCheck.Check
 /-!
 # The inference-only check's properties, stated against the Lean function
 
-`InferenceOnlyCheck.evaluate` (`verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
+`InferenceOnlyCheck.evaluate` (`verity/protocols/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
 the verifier's check of a declared division against the inference-only policy at its rate,
 `InferenceOnly.CompliesRate c α` (`Definitions/InferenceOnly.lean`), at the gate budget `c = gamma` and the rate
 `α = num / den`, and `InferenceOnlyCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
