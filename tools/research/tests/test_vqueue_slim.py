@@ -154,20 +154,38 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.got = ([], "train.sh: no machine answered")
     assert start(h.d, sha, base) is None
     assert any(x.endswith("registered no run: train.sh: no machine answered") for x in world.logs), world.logs
-    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset(),
-                                                          launch=True),))
+    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset()),))
     h.got = launch = {"dir": str(tmp_path / "launch"), "pid": 1}
     h.d.launched = lambda got: ([], "train.sh: refused")
     rec = start(h.d, sha, base)
     want = Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: train.sh: refused (log {launch['dir']}/log)",
-                                      f"{sha}:no run", frozenset(), launch=True),))
+                                      f"{sha}:no run", frozenset()),))
     assert judge(h.d, rec) == want and "launch" not in rec and judge(h.d, rec) == want
     h.d.launched = lambda got: (None, "")
     rec = start(h.d, sha, base)
     h.clock += LAUNCH_LOST_S
     assert judge(h.d, rec) == Verdict(PENDING)
     h.clock += 1
-    assert judge(h.d, rec).infra[0].task.startswith("the run beside its check registered no run: no run ids 60 min after its launch")
+    lost = judge(h.d, rec).infra[0]
+    assert lost.task.startswith("the run beside its check registered no run: no run ids 60 min after its launch") and lost.launch
+    assert judge(h.d, rec).infra == (lost,), "the record keeps it, launch and all"
+
+
+@pytest.mark.parametrize("tail, launch", [
+    ("train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log", True),
+    ("train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)", True),
+    ('Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
+     "train: no run launched; see /l/log", False),
+    ("train.sh: refused", False)])
+def test_only_a_launch_that_outran_its_wait_or_that_the_pod_lost_is_launch_only_infra(world, monkeypatch, tmp_path, tail,
+                                                                                         launch):
+    """train.sh runs the candidate's own check.py, so a launcher that exited without a run may be the tree's doing: only a
+    launcher stopped in its wait, or one the pod lost, is `Failed.launch`, which the loop retries before blaming anyone."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.got = {"dir": str(tmp_path / "launch"), "pid": 1}
+    h.d.launched = lambda got: ([], tail)
+    got = judge(h.d, start(h.d, sha, base))
+    assert got.state == INFRA and got.infra[0].launch is launch, got
 
 
 @pytest.mark.parametrize("how", ["dry_run", "shadow"])
@@ -391,7 +409,7 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
         assert "shards" not in rec and "verdict" not in rec
     else:
         assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
-        assert got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
+        assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
 
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),

@@ -18,8 +18,10 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              every member, and eject a lone member.  Without it, the default, infra that persists until infra is rung is
              bisected the same way, ejecting nobody: a lone member whose check keeps erring is rung to its owner and set
              aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried.
-             Infra before any run registered (`Failed.launch`) ran nothing of the tree: however often it recurs, the check
-             is enqueued again and infra rung from `rings` on, and no member is bisected out or set aside for it
+             A launch that outran its wait or that the pod lost before any run registered (`Failed.launch`) points at the
+             machines, not the members: the check is enqueued again and infra rung from `rings` on, and no member is
+             bisected out or set aside for it, until `launch_tries` readings; then it is handled as any other infra.  A
+             launcher that exited without a run ran the candidate's own check.py, so that is any other infra at once
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -65,7 +67,8 @@ class Failed:
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
-    launch: bool = False           # infra: its check registered no run, so nothing of the tree ran
+    launch: bool = False           # infra: its check registered no run because its launch outran its wait or the pod lost
+                                   # it, not because the launcher, which runs the candidate's own check.py, exited
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,8 @@ class Snapshot:
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
                                    # error that ran out of attempts on two or more nodes, as an outage's do
+    launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on one candidate before it is handled
+                                   # as any other infra: a tree that keeps its own launch from registering is found then
 
 
 @dataclass(frozen=True)
@@ -222,7 +227,8 @@ def decide(s: Snapshot) -> list[Action]:
             ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
-        elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2) or _unlaunched(c1.verdict)):
+        elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)
+                                   or (_unlaunched(c1.verdict) and c1.tries < s.launch_tries)):
             acts.append(Retry(c1.sha))
             if c1.tries >= min(s.rings, 2):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
@@ -397,7 +403,7 @@ def _tree(v: Verdict) -> tuple[Failed, ...]:
 
 
 def _unlaunched(v: Verdict) -> bool:
-    """Whether ``v`` erred only before any run registered (`Failed.launch`), which blames no member."""
+    """Whether ``v`` erred only in launches that outran their wait or that the pod lost (`Failed.launch`)."""
     return bool(v.infra) and all(f.launch for f in v.infra)
 
 
