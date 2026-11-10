@@ -78,7 +78,7 @@ A spec-level reference for network accounting's timing channel:
   permutation, each request on its ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier
   computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
   hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
-  root). The cells are the network certifier's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before
+  root). The cells are the network certifier's: a connection's r slots a bucket, a `PAD` on its stream before
   its first cell and after its `END`, one id event a `DATA` cell. The network certifier commits each bucket's cells as
   one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
   row and the port's rows read as registered rows, the network certifier's and the Commit's (`port_reads`), then
@@ -348,7 +348,7 @@ The Boolean Definitions above that core doesn't import (`advice_check`, `cache_s
 `compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
-`lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
+`../device/program/lean` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `../device/program/lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `../device/program/lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
