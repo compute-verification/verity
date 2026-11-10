@@ -136,7 +136,7 @@ def apply_moves(commit: str, moves: list[tuple[str, str, tuple[str, ...]]], keep
             rec.update(status="script-failed" if isinstance(e, RS.ScriptFailed) else "refused", error=str(e) or repr(e),
                        minutes=minutes(t0))
             steps.append(rec)
-            say(f"  {' '.join(args)} on {tip[:12]}: {rec['status']} ({rec['minutes']} min)")
+            say(f"  {' '.join(args)} on {tip[:12]}: {rec['status']} ({rec['minutes']} min): {rec['error'][-900:]}")
             if keep_going:
                 failed.append(move)
                 continue
