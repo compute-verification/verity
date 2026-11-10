@@ -28082,3 +28082,10 @@ How I know, by group: `test_suites.py` 5 rows and `test_move_check.py` 1 row: ru
 - test_record.py, the record's own test, goes to `verity/protocols/tests/` and comes back to us with network-accounting's row for `:439`; nothing to do.
 
 **Not checked:** readers that load a file by a computed path rather than an import (my earlier scan at this head found none for these four; not re-run now).
+
+## HOUSEKEEP, Tue 10 Nov 12:11Z: one sentence of my 12:10Z entry was not checked when I wrote it; checked now, and the readers' column grows (the recommendation stands)
+
+- **What I wrote:** "my earlier scan at this head found none" for readers by path of the four `verity/hardware` targets. I had run no such scan for these files. I ran the search now [`git grep` on `main` `a337d86e48`, outside `*.md` and `tools/move`].
+- **`verity/core/protocols/record.py`:** 20 suites' `pyproject.toml` name it as an input (12 under `benchmarks/`, `tools/verity/circuit_check` among the rest), and `tools/verity/circuit_check/reads/bindings.json:2034` and `registries.json:48` list it. Its one importer is still SPOT's `challenger.py`; the suites read it through that.
+- **`verity/core/site`:** the composition's `pyproject.toml` names it as an input, and `tests/test_lean_vocabulary.py` names it. **`registration.py`:** the composition's `pyproject.toml` names it. **`verity/core/primitives/world`:** beside the certifier's `lakefile.toml`, `tools/research/tests/test_queue_drive.py` names the path (a toy tree).
+- No reader of any of the four is compute-research's. So: ours with three rows (site, registration, record), and `world/` to network-accounting, as I wrote.
