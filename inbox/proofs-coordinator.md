@@ -30749,3 +30749,89 @@ All three staged from `d7ab9059c3a5f94093759753d23b06a4872026c0` (branch `cursor
 - I'll make this the first line of the check due Wed 16:00Z, unless you'd rather put it to training and lean now.
 
 **Still owed:** LEDGER's three stamp keys (by Wed 06:00Z) and the word check (Wed 16:00Z). Next, when `a43b` and `3720` end: rows 3, 5 and 13 at `full`, and row 30.
+
+## BREAKEVEN, Tue 10 Nov 18:34Z: r20261110-173854-ea3b: at S = 32,832 the rows of record let 9% to 16% more GB leave with proving shares within 0.21 points, at an assumed cache factor of 0.1 (the art's plan from 1,377.5 to 1,573.4 GB, goal 6 from 427 [452] to 477 [504], the 300 GB path from 365–273 [386–288] to 409–302 [432–319]); only S differs, and its S = 28,000 halves reproduce the runs of record (400 of 400 rows); PRF-509's text inside
+
+Every figure below is modeled and at an assumed cache factor of 0.1: `reprice.DEFAULT`, the statement-cache factor for every type with no measured factor. Every S = 28,000 figure is also unchecked: it rests on `RequestsCover`, which nothing checks (PRF-509). The S = 32,832 figures rest on it too, for any request outside the cap's class (item 6).
+
+1. **The run** [run]: `r20261110-173854-ea3b`, on vy-nebius-cpu-8, from 18:04:26Z to 18:14:36Z, rc 0.
+   - It ran 14 passes with no errored row, on ed8b6a13ad: the planner at a5e4e56a11, with `reprice.DEFAULT` read from `DEFAULT_F`, here 0.1.
+   - Each pass is one run of record's command, run once at S = 28,000 and once at S = 32,832 on one clone, with δ = 0.01 in the patterns' form.
+   - The planner read S = 32,832 and δ = 0.01 in all 400 rows of the second halves (`S_seen`, `delta_seen`).
+2. **Nothing other than S differs** [run].
+   - **Against the runs of record:** each pass's S = 28,000 half equals its run of record in every field of every row.
+
+     | pass | rows equal | run of record |
+     |---|---:|---|
+     | uniform | 24 of 24 | `r20261110-055410-0c58` |
+     | room | 40 of 40 | `r20261110-060137-061f` |
+     | uniform2 | 16 of 16 | `r20261110-060201-97db` |
+     | mla | 24 of 24 | `r20261110-060537-cf28` |
+     | periods, years | 56 of 56 | `r20261110-060752-cedf` |
+     | periods, weeks and months | 112 of 112 | `r20261110-061145-4a58` |
+     | plan (ii) at all six scopes | 128 of 128 | `r20261110-160737-8c77` |
+
+   - **Between a pass's two halves**, only S and what it moves differ: S and its label, the bound, the two-stage design's sample (`replay_sample`, `q`) and the shares that sample sets (proving, replay, compile, total). Serving, the wait, the pool and the edge are identical in all 400 pairs.
+3. **The rows of record, over the world's year** [run]. GB is what can leave at a 10% total and δ = 0.01. Brackets add the network check's ×1.057. A range runs from a block's seconds to a block's and a statement's.
+
+   | row | run of record | GB, S = 28,000 | GB, S = 32,832 | proving share, 28,000 | proving share, 32,832 |
+   |---|---|---:|---:|---:|---:|
+   | the art's plan (ii), λ = 1 | 0c58 | 1,377.5 | 1,573.4 | 5.43% | 5.43% |
+   | the art's plan (ii), λ = 1.05 | 0c58 | 1,446.4 | 1,652.0 | 5.43% | 5.43% |
+   | goal 6 (the goal row × 1.05) | 0c58 | 427 [452] | 477 [504] | 5.33% | 5.31% |
+   | TOP-394's 300 GB path: the split part one class smaller, hash slots quartered | cf28 | 365 to 273 [386 to 288] | 409 to 302 [432 to 319] | 5.28% to 5.40% | 5.26% to 5.38% |
+   | the split part one class smaller, alone | cf28 | 400 to 325 [423 to 344] | 445 to 355 [470 to 375] | 5.31% to 5.44% | 5.29% to 5.42% |
+   | HASH-100: hash slots quartered | 061f | 392 to 376 [414 to 398] | 441 to 425 [466 to 449] | 5.30% to 5.29% | 5.29% to 5.27% |
+   | HASH-100: hash slots halved | 061f | 396 to 382 [419 to 404] | 445 to 431 [471 to 455] | 5.31% to 5.29% | 5.29% to 5.28% |
+   | every block one class smaller | 0c58, 97db | 340 to 220 [360 to 233] | 379 to 244 [401 to 257] | 5.25% to 5.33% | 5.44% to 5.48% |
+   | every block two classes smaller | 0c58, 97db | 292 to 112 [309 to 118] | 331 to 124 [350 to 131] | 5.41% to 5.49% | 5.40% to 5.48% |
+
+   - **Goal 6's factor left to 300 GB** (with ×1.057) goes from 1.51× to 1.68×.
+   - **HASH-100's ratios** (the goal row over each hash row):
+     - hash slots quartered: 1.09× to 1.14× becomes 1.08× to 1.12×;
+     - hash slots halved: 1.08× to 1.12× becomes 1.07× to 1.11×.
+4. **Each period, in the world and in a datacenter** [run]. Each cell gives week, month and year. The plan is at λ = 1, and goal 6 and the path are × 1.05.
+
+   | figure | S | the world | a datacenter |
+   |---|---|---|---|
+   | the art's plan (ii) | 28,000 | 1,371, 1,374, 1,378 | 1,358, 1,360, 1,364 |
+   | | 32,832 | 1,566, 1,569, 1,573 | 1,552, 1,554, 1,559 |
+   | goal 6 | 28,000 | 423, 424, 427 | 413, 415, 418 |
+   | | 32,832 | 472, 474, 477 | 462, 464, 467 |
+   | the 300 GB path | 28,000 | 361 to 269, 360 to 270, 365 to 273 | 351 to 262, 356 to 263, 355 to 265 |
+   | | 32,832 | 402 to 298, 407 to 300, 409 to 302 | 393 to 291, 395 to 290, 402 to 293 |
+
+   - **Proving shares:** the plan's is 5.43% in every period at both S, and goal 6's is 5.30% to 5.33%.
+   - **The runs these come from:**
+     - the plan: `r20261110-160737-8c77`;
+     - goal 6 and the path, years: 0c58, cf28 and cedf;
+     - their weeks and months: 4a58.
+5. **Across all 70 row-and-scope groups** [run]:
+   - the GB grow 9.2% to 15.5%, while S grows 17.3%;
+   - the proving share moves −0.21 to +0.19 points (5.10% to 5.51% at S = 32,832);
+   - the audit budget at the 10% point moves at most 0.06 points;
+   - every 10% point lies inside its pinned budgets at both S.
+
+   Every row is in our notes: `lanes/proofs/20261110T1830Z-readout-s32832.md`.
+6. **Today's S** [read]: the served row has S = 28,000 today because the planner counts the 128k trace's longest output, 875 tokens, at a 32-bit word each (`CAP32` in our `headline_rows.py`, "trace128 max x32"). The cap's size class (O = 1,024, the least power of two covering 875) releases an egress row of 32 × (1,024 + 2) = 32,832 bits. The patterns' form needs each request's served bits to equal S exactly (`RequestsCover`). So 28,000 holds only if every served output stops at 875 words, which nothing checks.
+   - **What S = 32,832 covers:** requests served in the cap's class. A request in a smaller class serves fewer bits, which is PRF-509's 17:10Z question.
+7. **Noted from your 18:27Z entry.** The layout doesn't land today. PRF-497's branch `cursor/proofs-replay-unmeasured-8694` stays on `main`'s paths, and nothing of mine waits on the layout. #8568 stays unmarked, and I open no PR.
+
+**Text for PRF-509, ready to paste:**
+
+---
+
+proofs, Tue 10 Nov: **the patterns' form at the cap's egress row (S = 32,832), priced in the planner.**
+
+- [run] Against S = 28,000, S = 32,832 lets 9% to 16% more GB leave on every row of record. The proving share moves at most 0.21 points. All of this is at an assumed cache factor of 0.1.
+- [read] This prices one answer to the 17:10Z question, every request padded to the cap's class's row, if a request's map is its egress row (this issue's guess). It is for ACCOUNTD's recommendation.
+- [run] The run is `r20261110-173854-ea3b`. The planner at a5e4e56a11 repeated each of the rows of record's seven runs at S = 28,000 and at S = 32,832 (32 × 1,026) on one clone, at δ = 0.01, in the patterns' form (`two_stage_design(..., union=True)`).
+- [run] Only S differs. Each S = 28,000 half equals its run of record in every field (400 of 400 rows), and the planner read S = 32,832 in every row of the other half.
+- [run] `art:2ea6f506`'s plan (ii), the world's year: 1,377.5 GB becomes 1,573.4 GB at λ = 1, and 1,446.4 becomes 1,652.0 at λ = 1.05. Its proving share stays 5.43%.
+- [run] Goal 6, the goal row × 1.05: 427 [452] GB becomes 477 [504] GB, with the network check's ×1.057 in brackets. Its factor left to 300 GB goes from 1.51× to 1.68×.
+- [run] TOP-394's 300 GB path: 365 to 273 [386 to 288] GB becomes 409 to 302 [432 to 319] GB.
+- [run] Weeks, months and years, in the world and in a datacenter, move alike: the plan by 14.2% to 14.3%, goal 6 by 11.5% to 11.9%.
+- [read] Why S matters: the patterns' theorem `TwoStageCheckPatternsSound` takes `RequestsCover`, which holds each reading request's served bits to exactly the point's S (`Security/Properties/Spot/TwoStageCheck.lean`, read at `main` `e7b03e4a6c`). At S = 28,000 that holds only if served outputs stop at 875 words, and nothing checks that.
+- [read] 32,832 is 32 × (O + 2) at O = 1,024, the cap's class, as this issue's "Expected on today's layout" says.
+- [guess] "At most S" at 32,832 would bound by the same S, so these figures would price it too if the bound only grows with S. "S a class" needs one run per class, which I haven't made.
+- [read] Every figure is modeled. The cache factor 0.1 is assumed: it is `reprice.DEFAULT`, the statement-cache factor for the 128 types with no measured factor.
