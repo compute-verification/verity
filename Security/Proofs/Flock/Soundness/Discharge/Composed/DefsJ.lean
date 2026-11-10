@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
 public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
 public import Proofs.Flock.Soundness.Discharge.Tables
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 
 /-!
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
