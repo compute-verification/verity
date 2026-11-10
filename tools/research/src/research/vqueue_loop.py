@@ -910,11 +910,11 @@ class World:
         """The failed tasks of ``ids`` of candidate ``sha`` an allowance of its base ``base``'s policy (``sha``'s, with no
         base) covers, each red record they name at ``sha``, as drive's `executor = "on"` path reads them (`Driver._task_units`,
         `Driver._task_allowed`): drive takes each as passed."""
-        out, at = set(), base or sha
+        out = set()
         for i in ids:
             if states[i][0] == FAIL:
                 d, res = self.driver(), states[i][1] or {}
-                if all(d._task_allowed(sha, tasks[i], res, row, at=at).covered
+                if all(d._task_allowed(sha, tasks[i], res, row, at=base).covered
                        for row in d._task_units(sha, tasks[i], res).values()):
                     out.add(i)
         return out
@@ -953,15 +953,15 @@ class World:
             return BaseWait(UNLISTED)
         states, keys, seen = self._settled(got[1], since, _said(theirs))
         erred = frozenset(i for i, k in keys.items() if k and _infra(seen.got.get(k) or (), k))
-        closure = _Closure(tasks := {t["id"]: t for t in got[1]["tasks"]}, got[1].get("envs") or {})
+        closure = _Closure({t["id"]: t for t in got[1]["tasks"]}, got[1].get("envs") or {})
         open_ = [i for i in ids if i in keys and states[i][0] == PENDING and not closure.meets(i, erred)]
         if waiting := sorted(i for i in open_ if not keys[i]):
             return f"{', '.join(waiting)} there still wait on what they read"
         if running := sorted(open_):
             return f"{', '.join(running)} there haven't ended"
         named = _named(theirs)
-        return {i: (keys[i] or None, (_tests(states[i][1], keys[i], tasks[i]["kind"]) | named.get((i, keys[i]), frozenset())
-                                      or None) if states[i][0] == FAIL else None) for i in ids if i in keys}
+        return {i: (keys[i] or None, (_tests(states[i][1]) | named.get((i, keys[i]), frozenset()) or None)
+                    if states[i][0] == FAIL else None) for i in ids if i in keys}
 
     def _crossed(self, base: str, fail: tuple[Failed, ...]
                  ) -> tuple[tuple[Failed, ...], tuple[Dispute, ...], BaseWait | None]:
@@ -1205,8 +1205,8 @@ def _tests(doc: object, key: str = "", kind: str = "") -> frozenset[str]:
         return named
     if kind == "test-file" and isinstance(exit_ := d.get("exit"), int) and exit_ != 1:
         return named | {f"fault:its run failed beyond the tests it names (exit {exit_}), at {key}"}
-    if kind == SUITES_KIND and isinstance(rows := d.get("failed"), list):
-        return named | {f"fault:suite {r.get('name')} failed beyond the tests it names, at {key}" for r in rows
+    if kind == SUITES_KIND:
+        return named | {f"fault:suite {r.get('name')} failed beyond the tests it names, at {key}" for r in d.get("failed") or ()
                         if isinstance(r, dict) and (not r.get("failed_tests") or r.get("beyond_tests") is not False
                                                     or r.get("timed_out"))}
     return named

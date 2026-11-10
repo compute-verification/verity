@@ -1269,12 +1269,14 @@ BEYOND = "fault:suite {} failed beyond the tests it names, at sha512:t1"
     ("lean-suites", {"failed": [{k: v for k, v in ROW.items() if k != "beyond_tests"}]}, BEYOND.format("verity-flock")),
     ("lean-suites", {"failed": [{**ROW, "timed_out": True}]}, BEYOND.format("verity-flock")),
     ("lean-suites", {"failed": [ROW, {**ROW, "name": "verity", "failed_tests": []}]}, BEYOND.format("verity")),
+    ("lean-suites", {"failed": [ROW, 7]}, None),
+    ("lean-suites", {"failed": None}, None),
 ])
 def test_a_fail_for_more_than_the_tests_it_names_is_never_inherited_by_them(env, kind, detail, fault):
     """A crash beside the tests its base fails too would pass for the base's failure: a test file pytest ended with exit 2
     (collecting failed, or a `pytest.exit`), and a lean-suites suite that names no test, failed for more than them (its list
     cut) or timed out, fails a test of its own key too, which no base fails, so its PR is suspected.  Failed on its tests
-    alone, it is inherited."""
+    alone, it is inherited, and so is one whose detail has no row to read."""
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide)
