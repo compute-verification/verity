@@ -2544,6 +2544,15 @@
         "benchmarks/network_traces/tests/test_demo_endpoint.py": "archive/benchmarks/network_traces/tests/test_demo_endpoint.py",
         "examples/h200/": "archive/examples/h200/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/__init__.py": "archive/verity/core/__init__.py",
+        "verity/core/devices/__init__.py": "archive/verity/core/devices/__init__.py",
+        "verity/core/protocols/__init__.py": "archive/verity/core/protocols/__init__.py",
+        "verity/ml/__init__.py": "archive/verity/ml/__init__.py",
+        "verity/ml/protocols/__init__.py": "archive/verity/ml/protocols/__init__.py"
+      }
     }
   ]
 }

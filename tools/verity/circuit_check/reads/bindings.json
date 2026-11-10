@@ -2551,7 +2551,7 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/__init__.py"
+    "archive/verity/ml/protocols/__init__.py"
    ]
   },
   {
@@ -2579,8 +2579,8 @@
   },
   {
    "probes": [
-    "verity/core/__init__.py",
-    "verity/core/protocols/__init__.py"
+    "archive/verity/core/__init__.py",
+    "archive/verity/core/protocols/__init__.py"
    ]
   },
   {

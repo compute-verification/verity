@@ -21,7 +21,7 @@ from verity_graph.runners import circuit_binding as CB
 from verity_graph.runners import circuit_catalog, circuit_coverage
 
 NEVER_RUN = 'raise RuntimeError("a binding file is read, never run")\n'
-SIDECAR = NEVER_RUN + '''from verity.ml.common import _shared_roots
+SIDECAR = NEVER_RUN + '''from archive.verity.ml.common import _shared_roots
 import verity.ml.y as _y_alias
 def _b_roots():
     return []
@@ -42,7 +42,7 @@ TEMPLATE_PARAMS = {"rope-head": {}}
 TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "uv.lock"]\n',
        f"{F.CHECKER}/README.md": "prose\n", f"{F.CHECKER}/tests/test_x.py": "", f"{F.SOURCE}/__init__.py": "",
        F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity_flock.sub")\n', F.TARGETS: TARGETS,
-       "verity/__init__.py": "", "verity/ml/__init__.py": "", "verity/ml/x.py": "", "verity/ml/x.circuit-check.py": SIDECAR,
+       "verity/__init__.py": "", "archive/verity/ml/__init__.py": "", "verity/ml/x.py": "", "verity/ml/x.circuit-check.py": SIDECAR,
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
        "verity/ns/y.circuit-check.py": NEVER_RUN + "def _y_roots(): ...\n",

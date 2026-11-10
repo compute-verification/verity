@@ -20,11 +20,11 @@ untraced = [
 inputs = ["verity/protocols/certifier/device/network_traces/load_relay.py", "verity/core/protocols/certifier", "verity/core/protocols/pous",
           "verity/hardware/record.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
-          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/__init__.py", "verity/errors.py", "archive/verity/core/__init__.py", "archive/verity/core/protocols/__init__.py",
           "verity/spot/verifier/profile.py", "verity/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/spot/device/challenger.py", "verity/spot/device/coins.py",
           "verity/spot/device/remote.py",
-          "verity/spot/verifier/one_stage", "verity/ml/__init__.py", "verity/circuits",
+          "verity/spot/verifier/one_stage", "archive/verity/ml/__init__.py", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/pouw/verifier",
           "verity/ml/protocols", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py"]
