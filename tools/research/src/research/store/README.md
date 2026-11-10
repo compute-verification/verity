@@ -395,11 +395,9 @@ An artifact that holds values which must never be shared leaves by `research dat
 (`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
 tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
 also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
-`--apply`; it runs where the store's write keys are, the control pod. With `--path PREFIX` only the files under it go, and the
-label's value is `<reason> (only <prefixes>)`. `preserved` reads the labels (pulled first): a missing blob they cover is
-`withdrawn`, not absent, and a target whose only missing blobs are withdrawn is WITHDRAWN (exit 4): delete those files' local
-copies, never keep, push or put them again. `push` refuses a withdrawn artifact, and `put --tree` with a `run_id` in its meta
-refuses a tree holding a file withdrawn from that run's artifacts.
+`--apply`; it runs where the store's write keys are, the control pod. `--path P` withdraws only the files under P. `preserved`
+reports a missing blob a `withdrawn` label covers as withdrawn, not absent (WITHDRAWN, exit 4: delete its local copies, never put
+them again), and `put --tree` refuses a run's withdrawn files.
 
 ## 8. Labels
 
@@ -490,7 +488,7 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                               the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
-                                              exit 0 PRESERVED, 1 NOT PRESERVED, 4 WITHDRAWN (only withdrawn files missing, §7.4)
+                                              exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
