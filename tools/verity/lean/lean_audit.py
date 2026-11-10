@@ -1188,18 +1188,29 @@ class LakeArtifacts:
                     if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
         return dest, self.bundle(dest)
 
-    def take(self, urls: dict[str, str], log=print) -> int:
+    def take(self, urls: dict[str, str], log=print, budget: int | None = None) -> int:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
         sha256, and unpacked member by member (`_unpack`). The number of entries added. A bundle that fails is skipped,
         and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
-        never change. The URL is never logged: it grants a read until it expires."""
-        want = {k[len(SHARED):]: u for k, u in sorted(urls.items()) if k.startswith(SHARED)}
-        taken = self.store / "taken"
+        never change. The URL is never logged: it grants a read until it expires.
+
+        The bundles are taken one at a time in the order ``urls`` names them, which is the launcher's, newest first
+        (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
+        bundle holds up to `BUNDLE_CAP` and the launcher lists dozens, more than the cache's cap together; a quarter is
+        what the prune that follows can make room for (it stops at three quarters, least recently used first) and still
+        leave half the cap to what the node itself used last. The bundle the budget stops in, and those after it, are not
+        marked: a later run takes what is left of them, when the launcher still lists them.
+
+        A bundle is marked taken under this schema alone (`module_keys.SCHEMA`): one made under another adds nothing
+        here, and a build of a tree with that schema on this node takes it for itself."""
+        want = {k[len(SHARED):]: u for k, u in urls.items() if k.startswith(SHARED)}
+        taken = self.store / f"taken-{MK.SCHEMA.rsplit('/', 1)[-1]}"
         want = {h: u for h, u in want.items() if re.fullmatch(r"[0-9a-f]{64}", h) and not (taken / h).exists()}
         if not want:
             return 0
         taken.mkdir(parents=True, exist_ok=True)
-        t0, n = time.monotonic(), 0
+        budget = self.cap // 4 if budget is None else budget
+        t0, n, size, got, stopped = time.monotonic(), 0, 0, 0, False
 
         def get(h: str, url: str) -> Path | None:
             part = self.store / f".{h}.{os.getpid()}.part"
@@ -1218,15 +1229,18 @@ class LakeArtifacts:
             part.unlink(missing_ok=True)
             return None
 
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            parts = dict(zip(want, ex.map(lambda h: get(h, want[h]), want)))
-        with self._lock():
-            for h, part in parts.items():
-                if part is None:
-                    continue
+        for h, url in want.items():
+            if stopped := stopped or size >= budget:
+                break
+            if (part := get(h, url)) is None:
+                continue
+            got += 1
+            with self._lock():
                 try:
-                    n += self._unpack(part)
-                    (taken / h).touch()
+                    more, wrote, whole = self._unpack(part, budget - size)
+                    n, size, stopped = n + more, size + wrote, not whole
+                    if whole:
+                        (taken / h).touch()
                 except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as e:
                     log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
                     (taken / h).touch()
@@ -1234,18 +1248,22 @@ class LakeArtifacts:
                     log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
                 finally:
                     part.unlink(missing_ok=True)
+        with self._lock():
             self.prune()
-        log(f"lean-audit: {n} module version(s) taken from {sum(p is not None for p in parts.values())} of {len(want)} "
-            f"artifact bundle(s) in {time.monotonic() - t0:.0f} s")
+        log(f"lean-audit: {n} module version(s), {size / 2**20:.0f} MiB, taken from {got} of {len(want)} artifact bundle(s) in "
+            f"{time.monotonic() - t0:.0f} s" + (f"; the rest is left to a later run: one run takes {budget / 2**20:.0f} MiB "
+                                                 f"at most" if stopped else ""))
         return n
 
-    def _unpack(self, part: Path) -> int:
+    def _unpack(self, part: Path, budget: int) -> tuple[int, int, bool]:
         """Take in the entries of the bundle at ``part`` (`MEMBER`, of the shape `module_keys.valid` reads, so of this
         schema: a bundle made under another adds nothing) under keys this cache lacks, and the artifacts they name that it
         lacks, each only with a digest an entry names for it; an entry once every artifact it names is here. A file here
-        is never replaced. The number of entries added."""
+        is never replaced. It stops before the artifact that would take what it wrote past ``budget`` bytes. (The number
+        of entries added, the bytes written, whether it read the bundle to its end.)"""
         entries: dict[str, dict] = {}
         want: dict[str, set[str]] = {}
+        wrote, whole = 0, True
         with tarfile.open(part, "r:gz") as t:
             for m in t:
                 if not m.isfile() or not MEMBER.fullmatch(m.name):
@@ -1263,6 +1281,10 @@ class LakeArtifacts:
                     continue
                 if dst.exists() or m.name.split("/", 1)[1] not in want:
                     continue
+                if wrote + m.size > budget:
+                    whole = False
+                    break
+                wrote += m.size
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
                 with t.extractfile(m) as src, open(tmp, "wb") as f:
@@ -1282,7 +1304,7 @@ class LakeArtifacts:
             tmp.write_text(json.dumps(e, sort_keys=True))
             os.replace(tmp, dst)
             n += 1
-        return n
+        return n, wrote, whole
 
     def prune(self) -> int:
         """Remove the least recently used artifacts while those only the cache holds exceed the cap, and the entries used no

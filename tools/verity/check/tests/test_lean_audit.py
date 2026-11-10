@@ -768,6 +768,9 @@ def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
         "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
 
 
+TAKEN = "taken-v4"
+
+
 def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})
@@ -793,7 +796,7 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert b.take({LA.SHARED + h: dest.as_uri(), LA.SHARED + "0" * 64: dest.as_uri(), "k": "https://deps"}, logged.append) == 3
     assert any("is not the one named" in ln for ln in logged)
     got = tmp_path / "node-b"
-    assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != "taken"
+    assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != TAKEN
                   and f.name != "lock") == sorted([*(n for n in names if n.startswith("artifacts/")), *entries.values()])
     assert (got / "artifacts" / ("a" * 16 + ".olean")).read_text() == "node b's own"
     assert not os.stat(got / "artifacts" / ("d" * 16 + ".olean")).st_mode & 0o222
@@ -811,6 +814,49 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
     assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
     assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+
+
+def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
+    """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
+    than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
+    of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it."""
+    def bundle(i: int) -> tuple[str, str]:
+        f = tmp_path / f"b{i}.tar.gz"
+        with tarfile.open(f, "w:gz") as t:
+            arts = {f"{i}{j}".ljust(16, "0") + ext: bytes([i, j]) * 50 for j, ext in enumerate([".olean", ".ilean", ".c"])}
+            e = json.dumps({"schema": LA.MK.SCHEMA, "module": f"P.M{i}", "scope": "p", "hash": str(i) * 16,
+                            "outputs": {"o": sorted(arts)}, "digests": {a: LA.MK.C.digest(b) for a, b in arts.items()}}).encode()
+            for name, data in [("keys/" + str(i) * 128 + ".json", e), *((f"artifacts/{a}", b) for a, b in sorted(arts.items()))]:
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        return LA.SHARED + hashlib.sha256(f.read_bytes()).hexdigest(), f.as_uri()
+
+    urls = dict(bundle(i) for i in (3, 1, 2))                           # the launcher's order, not the hashes'
+    store, said = tmp_path / "node", []
+    arts = LA.LakeArtifacts(store, cap=2000)                            # so a run takes 500 bytes: one bundle and two thirds
+    assert arts.take(urls, said.append) == 1 and len(said) == 1
+    assert "1 module version(s), 0 MiB, taken from 2 of 3 artifact bundle(s)" in said[0] and "left to a later run" in said[0]
+    assert sorted(f.name for f in (store / "keys").iterdir()) == ["3" * 128 + ".json"], "the first the launcher named, whole"
+    assert sorted(f.name[:2] for f in (store / "artifacts").iterdir()) == ["10", "11", "30", "31", "32"], \
+        "the second as far as the budget went: its entry waits for its last artifact"
+    assert [f.name for f in (store / TAKEN).iterdir()] == [next(iter(urls))[len(LA.SHARED):]], "only the first is marked"
+    assert arts.take(urls, said.append) == 2 and "left to a later run" not in said[1]
+    assert len(list((store / "keys").iterdir())) == 3 and len(list((store / "artifacts").iterdir())) == 9
+    assert len(list((store / TAKEN).iterdir())) == 3 and arts.take(urls, said.append) == 0 and len(said) == 2
+
+
+def test_a_bundle_made_under_another_schema_is_left_for_a_build_of_that_schema_to_take(tmp_path, monkeypatch):
+    """While trees of two schemas build on one node, each takes the bundles of its own: a bundle whose entries are of
+    another schema adds nothing, and its mark is this schema's, so a build of the other still takes it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    store = tmp_path / "node"
+    monkeypatch.setattr(LA.MK, "SCHEMA", "lean-module/v5")
+    assert LA.LakeArtifacts(store).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == 0
+    assert not (store / "keys").exists() and not (store / "artifacts").exists() and (store / "taken-v5" / h).is_file()
+    monkeypatch.undo()
+    assert LA.LakeArtifacts(store).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == 3
 
 
 def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_artifacts_is_left_out(tmp_path):
@@ -842,7 +888,7 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
     store = tmp_path / "node"
     assert LA.LakeArtifacts(store).take({LA.SHARED + h: bad.as_uri()}, lambda s: None) == 1
     assert sorted(f.relative_to(store).as_posix() for f in store.rglob("*") if f.is_file() and f.name != "lock"
-                  and f.parent.name != "taken") == ["artifacts/" + "e" * 16 + ".olean", "keys/" + "1" * 128 + ".json"]
+                  and f.parent.name != TAKEN) == ["artifacts/" + "e" * 16 + ".olean", "keys/" + "1" * 128 + ".json"]
     assert not (tmp_path / "escape").exists() and not (tmp_path / "x.olean").exists()
 
 
