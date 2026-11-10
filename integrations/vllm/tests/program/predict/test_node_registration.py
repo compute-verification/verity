@@ -91,7 +91,7 @@ def commit(tmp_path, monkeypatch):
             if name not in CKPT:
                 extra[name] = i
                 raw.tofile(bdir / "weights" / "extra" / f"{i}.bin")
-        tree = step_rows.weights_tree(GEO, names, step_rows.names_digest(names), troots, WK) | {"extra": extra}
+        tree = step_rows.weights_tree(GEO, names, troots, WK) | {"extra": extra}
         roots[r] = tree["root"]
         (bdir / "weights" / "tree.json").write_text(json.dumps(tree))
         (bdir / "context.json").write_text(json.dumps({"pair": 0, "tp": {"world": WORLD, "rank": r}, "replay": cfg}))
