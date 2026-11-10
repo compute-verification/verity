@@ -34399,3 +34399,99 @@ The first two are the commands `pins.py` holds for `randomness_lean.json` and `i
 **Still open**
 - `r20261110-232449-2161`, vy-nebius-cpu-3, at `f2090e464bd9`: waiting since 23:24:58Z, one check ahead of it at 23:40Z. It runs `tests/test_flock_json.py` on the node, the spot suite's `test_a_piece_agrees[public_units]` through `suites.py`, and builds the two benchmark files that `import Spot`. Its limit is 150 minutes from its slot. I expect its end about 00:30Z, Wed 11 Nov.
 - I end my turn on that run. Resume me when it ends: I read `out/verdicts.txt` and report here. Its verdict is not on LEAN-249, which holds one comment by your order.
+
+## PRF-456 and PRF-517 TWOPROVE, Tue 10 Nov 23:40Z: the three answers owed by Wed 17:00Z
+
+In short:
+
+- **Sessions.** The served code runs one session a template, but every Lean statement of it is at \(n_{sess} = n_{PU}\). One a template can be a new instance with no locked statement changed; the sample's size can't.
+- **Budget.** \(T\) caps every run of one audit. C5 charges each rerun \(T\), not a run's expected calls. Their period form follows from C5 only at per-audit caps fixed in advance.
+- **Route 3b.** It needs no change in `Rewinding.lean`, only a new count of the gates a run opens. With S1 and one session a template it brings point A to \(2^{-63.0}\)–\(2^{-67.0}\).
+
+**1. Which session count is the served second stage's** [read]
+
+- **The served code runs one Flock session a template.**
+  - `SpotFlock.session` reads a unit only through `templateOf h.ms u` (`Security/Proofs/Flock/SpotFlock/Code.lean:571`–`581`), and so do its `rounds` (607–608).
+  - `base` counts `sessions := fun _ => h.ms.length` (612).
+  - `codeTwoAt` changes only `stage2`, `rounds` and `checked` (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:98`–`103`, 122–125, 141), so `SpotFlock.code` keeps that session.
+- **That count reaches no soundness statement.** `Code.sessions` is read only by the completeness error, `δc H x := c.sessions x * Reference.sessErrAt …` (`Security/Proofs/Flock/Claims/Sampling/Deployed.lean:217`), and by `Reference/Deployed.lean` (101, 147, 160).
+- **The cost bound reads `L.nSess`** (`bconfCost`, `Security/Definitions/Claims/SamplingGeneric.lean:646`–`647` on my branch).
+  - The instance is `compiledTwo`, where `keys` is proved (`TwoDeployed.lean:137`–`140`) and `ksTwo_spot` is stated (`SpotFlock/KS.lean:71`–`78`, frozen in the lock as `Flock.SecurityProofs.SpotKSTwo`).
+  - There `nSess` is the default, the partition's proof blocks (`SamplingGeneric.lean:250`–`253`; `ofDeployAt_nSess`, `Deployed.lean:124`, `rfl`), and each slot is its own key (249).
+  - So the plan of record's instance takes \(n_{sess} = n_{PU}\): \(2^{35.1}\) at point A and \(2^{24.2}\) at point B.
+- **One a template: yes, as a new instance, with no locked statement changed** [read; the instance is a guess].
+  - Beside `compiledTwoOne` (`TwoDeployed.lean:157`–`159`), set `skey x l p := templateOf h.ms (l.getD p 0)` and `nSess := h.ms.length + 1`. The `+ 1` is `templateOf`'s value past the last template (`Code.lean:568`–`569`).
+  - Its contract is `compiledTwo`'s with two fields reproved, as `sessionsTwo_one` does (163–175):
+    - `shared` (`Security/Definitions/Claims/SamplingTwo.lean:287`–`290`): slots of one template show one session, since `session` reads only the template.
+    - `keys` (318): the keys lie in `range (h.ms.length + 1)`.
+  - Its KS is `compilerKSTwo` at that contract, as `ksTwo_one` is (201–210).
+  - `SpotKSTwo` and `ksTwo_spot` stay as they are, and the instance's statements are new. \(n_{sess}\) is then 30 at both points, or 31 with the `+ 1`.
+  - Their numbers "at one a template" need this instance.
+- **The sample's size: not without changing a locked statement** [read].
+  - `keys` holds at every coin (`∀ x r`, `SamplingTwo.lean:318`). With one key a slot, it needs the sample's length to be at most \(n_{sess}\) at every coin.
+  - Where the second stage is refused, `RegTwo.checked` checks every proof block: `| .error _ => List.range N` (`Claims/Sampling/Reg.lean:94`). `ofDeployAt` takes \(n_{PU}\) of them (`Deployed.lean:90`).
+  - Either change is to a locked record:
+    - the `.error` branch is in the code `SpotKSTwo`'s statement reads through `SpotFlock.code`, which is frozen with its text recorded;
+    - stating `keys` at accepted runs only changes `CompiledTwo.Sessions` (`SamplingTwo.lean:276` on), which `CompilerKSTwo` reads (356–358), the statement of the locked `compilerKSTwo`.
+  - With one key a template, the sample's size doesn't matter.
+
+**2. The cheater's budget** [read, except as marked]
+
+- **\(T\) caps every run of one audit, both parties' calls.**
+  - `BconfAt H L T Ω P x` (`Security/Definitions/Claims/SamplingGeneric.lean:612`–`633` on my branch) is at one statement `x` and one prover `P`. "It caps both parties' calls in every run the finder makes, `pLog.length + vLog.length ≤ T`" (615–617).
+  - It is not a period's budget.
+- **An audit's finder is charged its own audit's calls only: yes.** Its cost is `T + T` for its two runs, plus its own extractions' openings (`ownLog … .length`), plus `T` times the reruns those extractions make (628–633), all at `x` and `P`.
+- **The reruns cost \(e_s\) times the run's expected calls: no.**
+  - C5 (`Compiled.BconfAt_cost_le`, `Security/Proofs/Flock/SamplingGeneric/RegAt.lean:78`–`97`) charges each rerun the cap: \(c_T = 2T(1 + n_{sess}e_s) + 2n_{PU}\cdot\)`openCalls` (646–647).
+  - The expected-calls form needs a Wald identity for \(E^{rep}\)'s reruns. `Efficient.lean` counts the reruns (`slot_exp_le`, 759; `runExt_runs_exp`, 782) and the own calls (`runExt_own_le`, 589), not the reruns' calls.
+  - The pattern exists for Flock's link finder, in the `Game` framework: `expect_finderCost_le`, "at most twice a trial's" expected cost (`Security/Proofs/Flock/Soundness/LinkFinder.lean:283`–`285`).
+  - Ported to \(E^{rep}\)'s waits, it would give \(\mathbb{E}[\text{reruns' calls}] \le n_{sess}e_s\cdot\mathbb{E}[\text{a run's calls}]\) [guess: a derivation, with forks i.i.d. at a fixed view and the waits as stopping times].
+- **Their period form, from C5** [derivation]:
+  - Take caps \(T_i\) fixed before audit \(i\)'s coins, with \(\sum_i T_i \le T_P\). C8 bounds audit \(i\)'s binding term by \(N_i\sqrt{c_{T_i}/2^{256}}\).
+  - Cauchy–Schwarz then gives \(\sqrt{\sum_i N_i^2}\cdot\sqrt{(2T_Pc + 2\sum_i n_{PU,i}\,\mathtt{openCalls}_i)/2^{256}}\), with \(c = \max_i(1 + n_{sess,i}e_{s,i})\).
+  - So C5 gives their form, plus the openings' term, at a period budget split into per-audit caps in advance.
+  - It doesn't cover a cheater who moves budget between audits on an audit's own coins, since \(T_i\) must cap every run of audit \(i\). That case needs the expected-calls form above; then \(\sum_i \mathbb{E}[\text{calls}_i] \le T_P\) suffices.
+  - No Lean states a period sum of the committed form. `KSAt`'s docstring claims one only for its linear terms (`Security/Definitions/Claims/Sampling.lean:612`–`614`) [read].
+
+**3. Route 3b, scoped** [read, except as marked]
+
+- **The lemma.** Nothing in `Security/Proofs/Core/Game/Rewinding.lean` changes.
+  - Its `prBad_le` already states \(\Pr[\text{bad}] \le \sqrt{N\cdot Q\cdot\Pr[\text{conflict}]}\) at any \(Q\) with `hQ : ∀ ω, #(univ.filter fun p => (op ω p).isSome) ≤ Q` (173–184).
+  - Its one caller, `pr_offReg_le` (`Security/Proofs/Flock/SamplingGeneric/Reg.lean:383`–`441`), passes \(Q\) = `L.nG x` (411–412). That turns the root into \(N\sqrt{\Pr}\).
+  - Route 3b passes \(Q\) = `nOpen x`, from a new code fact `OpenedLe` (R3b.1).
+- **What \(Q\) is.** It is the most gates of the program one run's extractions open, over every coin.
+  - `opTable` is `opensAt` (Reg.lean:361–363), which runs the extraction whether or not the run accepts (`SamplingGeneric.lean:564`–`568`).
+  - So \(Q\) is the sum, over a run's checked slots, of the values each slot's reveal opens, maximized over coins.
+  - At the deployed code a refused second stage checks every proof block (Reg.lean:94). So \(Q \ge n_{PU}\cdot b\), where \(b\) is the fewest values a proof block's reveal opens.
+  - \(N/n_{PU} = 2^{23.7}\) at both points, so route 3b's gain at ecr is at most \(\sqrt{2^{23.7}/b}\).
+- **Who can count it** [guess].
+  - \(b\) is a proof block's committed inputs and outputs, in bits, from the partition. Network-accounting's worker, who counted \(N\) and \(n_{PU}\) from the workload, could count it, or circuits.
+  - In Lean, `OpenedLe` at SPOT[Flock] would come from the code's reveal count (`reveals`, `Code.lean:611`), as `revealsLe` bounds `openCalls`.
+- **Locked statements.**
+  - As new statements, nothing locked changes: a `KSRegQ` beside `KSReg`, or \(Q\) inside C8's `εregAt`, which isn't on `main` yet.
+  - Inside `KSReg`, it changes `εreg`'s \(N\sqrt{\Pr[B_{conf}]}\) (`SamplingGeneric.lean:638`–`641`). That changes `compilerKSReg`'s record and #8512's \(\varepsilon_{reg,2}\), which reads it.
+  - To bring \(Q\) down to the sample's size times \(b\), one of two locked records changes:
+    - a committed trace over accepted runs only, which changes `regVal` and `Freg` (571–590), read by `KSReg`;
+    - or a `.error` branch that checks nothing, in Reg.lean:94, under the frozen `SpotKSTwo`.
+- **Numbers** at \(Q = n_{PU}\cdot b\): \(\log_2\) of the two terms, at \(T = 2^{80}\) and \(k = 1507\), each cell "ecr / capped / S1" with \(K_0\) re-optimized [run: arithmetic; the same script reproduces all fifteen of your 22:52Z numbers at \(Q = N\)]:
+
+| Point, \(b\) | \(n_{PU}\) sessions | 30 sessions | 1 session |
+|---|---|---|---|
+| A, \(2^4\) | −10.9 / −34.6 / −46.9 | −26.0 / −49.7 / −67.0 | −28.4 / −52.1 / −70.3 |
+| A, \(2^{10}\) | −7.9 / −33.1 / −44.9 | −23.0 / −48.2 / −65.0 | −25.4 / −50.6 / −68.3 |
+| A, \(2^{16}\) | −4.9 / −31.6 / −42.9 | −20.0 / −46.7 / −63.0 | −22.4 / −49.1 / −66.3 |
+| B, \(2^4\) | −27.2 / −45.5 / −61.4 | −36.9 / −55.1 / −74.3 | −39.3 / −57.6 / −77.5 |
+| B, \(2^{10}\) | −24.2 / −44.0 / −59.4 | −33.9 / −53.6 / −72.3 | −36.3 / −56.1 / −75.5 |
+| B, \(2^{16}\) | −21.2 / −42.5 / −57.4 | −30.9 / −52.1 / −70.3 | −33.3 / −54.6 / −73.5 |
+
+- **How route 3b scales** [arithmetic]: it multiplies the two terms by \((Q/N)^{1/2}\) at ecr, \((Q/N)^{1/4}\) at capped (StrictBirthday at the capped finder) and \((Q/N)^{1/3}\) under S1.
+- **What meets \(2^{-61.0}\)** [arithmetic]:
+  - At point A, S1 with one session a template and route 3b at \(b \le 2^{16}\); or S1 at one session without route 3b (\(-63.7\)).
+  - At point B, S1 at 30 sessions, without route 3b (\(-67.7\)).
+  - Under ecr alone, or StrictBirthday alone, nothing does.
+
+**Runs** [run]:
+
+- PRF-517's try is `r20261110-232734-0713` on vy-nebius-cpu-8, running since about 23:40Z; my ETA is 00:10Z [guess].
+- Its quick tier is `r20261110-232545-7385` on vy-nebius-cpu-6, waiting for a slot. Its records run follows the try.
+- #8730's `c92e` and `514b` are still running on vy-nebius-cpu-7. `c92e` has finished `verity/core/service/spot` and is on the next package; its slot's 7200 s cap ends about 00:35Z.
