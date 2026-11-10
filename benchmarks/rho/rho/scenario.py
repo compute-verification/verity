@@ -1,6 +1,6 @@
 """A scenario: one choice from every layer, and what overhead it gives.
 
-A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a monitoring period (its
+A scenario names a fleet (with its location and unregistered share), a regime, the NCI policy, a monitoring period (its
 `horizon`), a run (the target and its model), the algorithm families the adversary may use, and the bounds and attacks
 to apply (all of them unless it lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep
 can vary a choice like any number.
@@ -14,12 +14,12 @@ it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
 at least 1: Lean's `hardwareMultiple`, and for a remote regime `Nci.Guarantees.DampenerRemote`'s `ρ`
-(`theorem.Overhead`). The padded size ratio `|A| / T_0`, each serving block padded to its capacity, is the intermediate
+(`theorem.Overhead`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
 the bound gives (`Overhead.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
 A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
-cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or dark
+cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
 gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
@@ -63,7 +63,7 @@ class Scenario:
     families: tuple[Family, ...]
     bounds: tuple[Argument, ...]
     attacks: tuple[Argument, ...]
-    #: the elementary uncertified cap a bound counts uncertified and dark gates at
+    #: the elementary uncertified cap a bound counts uncertified and unregistered gates at
     structure: Structure
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
@@ -75,14 +75,14 @@ class Scenario:
 
     @property
     def mfu(self) -> float:
-        """The inventory's share of capacity a construction trains with, the monitored fleet's and the dark leaves':
+        """The inventory's share of capacity a construction trains with, the monitored fleet's and the unregistered leaves':
         `MFU₀`, the reference training algorithm's, which the overhead is a multiple against."""
         f = self.context.fleet
-        return f.eps_unreg * f.dark_mfu + (1 - f.eps_unreg) * f.mfu_train
+        return f.eps_unreg * f.unreg_mfu + (1 - f.eps_unreg) * f.mfu_train
 
     @property
     def total_phi(self) -> float:
-        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the dark leaves' (`ε_dark` of it)."""
+        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the unregistered leaves' (`ε_unreg` of it)."""
         f = self.context.fleet
         return f.count * self.context.location.phi / (1 - f.eps_unreg)
 
@@ -196,14 +196,14 @@ def _cuts(partition: Partition) -> dict:
 
 
 def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
-    """The citations of the cut that set each serving block's share (none where its capacity did)."""
+    """The citations of the cut that set each server block's share (none where its capacity did)."""
     cuts = _cuts(partition)
     return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
 def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
-    """The novel bits of each block in the cuts that set the serving blocks' shares, least first: where premises must
+    """The novel bits of each block in the cuts that set the server blocks' shares, least first: where premises must
     hold."""
     cuts = _cuts(partition)
     return tuple(sorted({b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
@@ -211,13 +211,13 @@ def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
 
 
 def _binding_k(partition: Partition, s: Overhead) -> float:
-    """The most novel bits of any block in the cuts that set the serving blocks' shares."""
+    """The most novel bits of any block in the cuts that set the server blocks' shares."""
     return max(_binding_ks(partition, s), default=0.0)
 
 
 def _uncertified(s: Overhead) -> bool:
-    """Whether the bound counts any gate at `q_U`: the dark leaves, or a cut's uncertified routes."""
-    return s.dark > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
+    """Whether the bound counts any gate at `q_U`: the unregistered leaves, or a cut's uncertified routes."""
+    return s.unregistered > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
 
 
 def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: Partition, declared: float,
