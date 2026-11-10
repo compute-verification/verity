@@ -25,7 +25,7 @@
 # 5.3 GB resident and 17.9 GB mapped.
 set -uo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
-proofs=$(cd "$(dirname "$0")/../../../../../Security/Proofs" && pwd)
+proofs=$(cd "$root/../../../../../Security/Proofs" && pwd)
 cd "$root"
 export PATH="$HOME/.elan/bin:$PATH"
 file=${1:?usage: grade.sh SUBMISSION.lean Pous.Guarantees.NAME}
