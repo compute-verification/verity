@@ -8,6 +8,7 @@ public import Proofs.WeightSecurity.Theft
 public import Proofs.WeightSecurity.Two
 public import Proofs.WeightSecurity.TwoReg
 public import Proofs.WeightSecurity.TwoRegPeriod
+public import Proofs.WeightSecurity.TwoRegWitnesses
 
 /-!
 # Model weight security's proofs
@@ -20,4 +21,6 @@ pressure `TheftServedDeployed` takes. `Two`: `TheftServed` at a two-stage audit 
 `T·(K − 1) + 1` from the cap `WindowCap`. `TwoReg`: a period of two-stage windows at the committed traces, the
 statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodTwoReg` from each window's committed
 form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
+`TwoRegWitnesses`: its premises hold together at `twoLTwo` (`periodTwoReg_honest`), and `PeriodTwoReg` fails at
+`sksLTwo` (`periodTwoReg_nontrivial`).
 -/
