@@ -427,7 +427,8 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     that no longer lists the modules the guarantees read or their definitions' digest, or a named assumption whose record
     no longer matches the definition the guarantees read. A spec's
     guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`)
-    with the roots of their locks (`guarantee_roots`).
+    with the roots of their locks (`guarantee_roots`). `judge` is handed what the audit hands it: with the facts, the modules
+    of the package and of those it requires by path (`audit.module_files`), one of which an `assumptions_module` may name.
     Raises RuntimeError when `Facts.lean` cannot read a build."""
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
@@ -450,6 +451,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
             cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work, keep=False)
     finally:
         AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = plain, tool, programs, scratch
+    facts["source_modules"] = sorted(AUDIT.module_files(tree / pkg))
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
     return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
