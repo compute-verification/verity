@@ -1192,7 +1192,7 @@ class LakeArtifacts:
         f = MK.unstored_path(self.store, key)
         f.parent.mkdir(exist_ok=True)
         tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
-        tmp.write_text(json.dumps({"module": mod, "scope": scope, "why": why}, sort_keys=True))
+        tmp.write_text(json.dumps({"module": mod, "scope": scope, "why": why, "by": MK.rules()}, sort_keys=True))
         os.replace(tmp, f)
 
     def _last(self, mod: str, key: str, scope: str) -> None:

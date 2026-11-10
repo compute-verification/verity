@@ -707,7 +707,8 @@ def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_hold
 def test_a_module_the_cache_could_not_index_is_left_to_lake_with_every_module_above_it(tmp_path):
     """`put` records each module a build compiled and it could not index, under the key it compiled under. Taking such a
     module's trace would compile it, and every module above it, in every build, for nothing: it is left to Lake, as a
-    module without a key is."""
+    module without a key is. The record stands under the code that refused the module (`rules`): one written by other
+    code, which may index the module now, lets it be compiled once more."""
     root = _workspace(tmp_path / "ws", {"r/R/C.lean": "import R.B\n"})
     store = tmp_path / "store"
     keyed = MK.keys(root, ["R.C"])
@@ -717,11 +718,12 @@ def test_a_module_the_cache_could_not_index_is_left_to_lake_with_every_module_ab
     named = {(m, n.split(".", 1)[1]): C.digest(b) for m, files in (("D.X", X), ("R.A", A), ("R", R)) for n, b in files.items()}
     marker = MK.unstored_path(store, MK.key("R.B", keyed, named))
     marker.parent.mkdir()
-    marker.write_text(json.dumps({"module": "R.B", "scope": "r", "why": "setup.json names another"}))
+    record = {"module": "R.B", "scope": "r", "why": "setup.json names another", "by": MK.rules()}
+    marker.write_text(json.dumps(record))
     why: dict = {}
     MK.stage(store, root, ["R.C"], tmp_path / "cache-1", report=why, settled=True)
     assert (why["took"], why["left"]) == ({}, 2) and all(t.exists() for t in traces.values()), "R.B, and R.C, which loads it"
-    marker.unlink()
+    marker.write_text(json.dumps(record | {"by": C.digest(b"the code before a change to what is refused")}))
     MK.stage(store, root, ["R.C"], tmp_path / "cache-2", report=why, settled=True)
     assert (why["took"], why["left"]) == ({MK.ABSENT: 2}, 0) and not traces["R.B"].exists() and not traces["R.C"].exists()
 

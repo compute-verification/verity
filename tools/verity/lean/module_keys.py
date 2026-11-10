@@ -58,6 +58,7 @@ input of a module it didn't restore differs from that entry's (`differs`). Stdli
 from __future__ import annotations
 
 import fcntl
+import functools
 import importlib.util
 import json
 import os
@@ -704,6 +705,23 @@ def unstored_path(store: Path, key: str) -> Path:
     return store / UNSTORED / f"{key.removeprefix('sha512:')}.json"
 
 
+@functools.cache
+def rules() -> str:
+    """The digest of the code that decides whether a compiled module is indexed: this file, `headers.py`, and
+    `lean_audit.py` and `check.py`, whose `put` and scans refuse one. A record that a module could not be indexed names
+    it (`by`) and stands only under that code, so a change to what is refused compiles each such module once more."""
+    return C.digest(" ".join(digest(HERE / f) for f in ("check.py", "headers.py", "lean_audit.py", "module_keys.py")).encode())
+
+
+def unstored(store: Path, key: str) -> Path | None:
+    """``store``'s record that the module compiled under ``key`` could not be indexed, when it stands (`rules`)."""
+    try:
+        doc = json.loads((f := unstored_path(store, key)).read_text())
+    except (OSError, ValueError):
+        return None
+    return f if isinstance(doc, dict) and doc.get("by") == rules() else None
+
+
 def _names(trace: Path) -> set[str] | None:
     """The artifacts a module's ``trace`` names, none when it is of another shape than Lake writes now; None when there
     is no trace. One that isn't JSON, which a stopped write left and Lake takes for none, is removed."""
@@ -733,7 +751,8 @@ def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict,
       artifacts the trace names (should a module below it change, Lake compiles it anyway), and when its key is indexed
       but can't be handed to Lake (`stage`). Otherwise it loses its trace (`ABSENT`) and is compiled;
     - a module `put` could not index under that key (`UNSTORED`), and every module that loads one, is left to Lake, as a
-      module without a key is: taking its trace would compile it, and everything above it, in every build.
+      module without a key is: taking its trace would compile it, and everything above it, in every build. The record
+      stands under the code that refused the module (`rules`); under other code the module is compiled once more.
 
     A module without a trace has nothing to take. Returns ({reason: traces taken}, the modules left to Lake). The caller
     holds the builds (`check.writing`)."""
@@ -756,7 +775,7 @@ def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict,
             if e is not None and names == set(e["digests"]):
                 os.utime(entry_path(store, h))
                 why = None
-            elif any(g in left for g in loaded) or (h is not None and e is None and unstored_path(store, h).is_file()):
+            elif any(g in left for g in loaded) or (h is not None and e is None and unstored(store, h) is not None):
                 left.add(m)
                 why = None
             else:
@@ -765,7 +784,7 @@ def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict,
             trace.unlink(missing_ok=True)
             took[why] = took.get(why, 0) + 1
     for m in left:
-        if (h := key(m, keyed, digests)) is not None and (f := unstored_path(store, h)).is_file():
+        if (h := key(m, keyed, digests)) is not None and (f := unstored(store, h)) is not None:
             os.utime(f)
     return took, len(left)
 
