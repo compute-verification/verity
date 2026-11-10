@@ -33277,3 +33277,119 @@ I wrote its heading before I read the clock; the clock read 21:17:14Z when I pus
 > The binding terms' finders run one run's session extractions, not the extractor's waits, so their expected cost is \(2T(1 + n_{sess}e_s)\), with \(e_s\) between \(2^{18.27}\) and \(2^{31.27}\). At ecr and \(T = 2^{80}\), with one session a run and \(N = 2^{43.7}\), the two terms are \(2^{-33.6}\), over \(2^{-53.4}\). The "about 900 proof blocks" threshold is withdrawn: it read the waits' counts into this cost. On the one-stage form \(n_{out} = n_{in} = n_{PU}\) still holds, but neither count enters the binding terms.
 
 **Runs:** none. Next: PRF-516 and PRF-517, each with its lemmas, files, blockers and a date, by Wed 11 Nov 12:00Z.
+
+## PRF-516 and PRF-517 TWOPROVE, Tue 10 Nov 21:30Z: a date for each. PRF-516: the filed lemma is false at a toy; a committed trace read at the statement replaces it, by Fri 13 Nov at one stage and Mon 16 Nov at two, with no locked statement changed. PRF-517: the tail route is false as filed, and I withdraw my 21:21Z \(2^{-74.7}\). A capped extractor gives \(2^{-54.8}\) by Fri 13 Nov, which meets \(2^{-53.4}\) but not \(2^{-61.0}\); nothing reaches \(2^{-61.0}\) this month without Daniel's word
+
+### PRF-516: the committed trace when audits overlap
+
+**The filed lemma is false** [guess: a toy, not built in Lean]
+
+- **Filed:** two tapes that agree up to the registration give one `regVal`, except with a binding finder's probability.
+- **The toy:** a prover whose tape holds a bit \(b\) that another audit releases after this audit's registration.
+  - At gate \(g\), its runs open \(g\) as \(b\), validly, with probability \(\delta\) a run, and leave \(g\) unopened otherwise.
+  - It can do that because it holds a collision for \(g\)'s leaf. Binding makes any two valid openings of one position a collision (`CommitmentScheme.Binds`).
+- **What follows:**
+  - At each tape, `regVal` at \(g\) is \(b\). Two runs at one tape never disagree there, so `Bconf`, two runs at one tape, never finds this collision.
+  - Two tapes that differ only in \(b\) have different `regVal` at \(g\), every time.
+  - Two runs at independent tapes conflict at \(g\) with probability about \(\delta^2/2\), which ecr bounds. At \(T = 2^{80}\), ecr rules this prover out only above \(\delta \approx 2^{-78}\), and the flip happens with probability \(1/2\) at every \(\delta\).
+- **So** a per-tape `regVal` can't be fixed by the registration. What is small is the probability that a run opens a gate off a trace fixed at the statement.
+
+**What the committed form needs in its place** [guess: an approach; nothing built]
+
+- **The trace:** the committed boundary trace read at the statement, `regValX H L P x`: the plurality over the tape as well as over the run's coins and the extractor's.
+  - It reads the prover's strategy and the statement only. The statement holds the roots (`s.roots`, which `Sessions.opens` reads).
+  - So its incorrect set, `FregX`, is fixed by whatever fixes the strategy and the statement: the history before the registration, whatever coins the prover reads later.
+- **Its finder:** `BconfX`, two runs at two independent tapes, each with its `runExt`.
+  - Two runs at one statement open under one root, so a conflict between them is a collision (`bconf_of_disagree`, `Security/Proofs/Flock/SamplingGeneric/Reg.lean:281`–`307`, read at two tapes).
+  - Its cost is `Bconf`'s, so the PRF-517 numbers carry over unchanged.
+
+**The lemmas and files**
+
+- **Definitions**, in `Security/Definitions/Claims/SamplingGeneric.lean` or a file beside it:
+  - `regValX` and `FregX`;
+  - `BconfX`;
+  - `εregX`, which is `εreg` with `BconfX` in the off-trace term;
+  - `KSRegX`, `KSReg`'s two conjuncts at `FregX`.
+- **Proofs at one stage**, beside `Reg.lean`:
+  - `pr_offRegX_le`: the rewinding lemma (`FlockSoundness.Rewinding.prBad_le`, `Security/Proofs/Core/Game/Rewinding.lean:175`, generic in its space) on a table over tape × coins × extractor coins. It is `pr_offReg_le`'s proof (387–441) with the tape moved into the table.
+  - `bconfX_of_disagree` and `pr_conflictX_le`: `bconf_of_disagree` and `pr_conflict_le` (281–357) at two tapes.
+  - `reg_split`, `pr_unfound_le` and `pr_inConf_le`: unchanged, since each reads one run.
+  - `ksRegX_of_sessionKS`: `ksReg_of_sessionKS` (488–561) without its Jensen step over the tape (`hC`).
+- **Two stages, on #8512's head:**
+  - `FregTwoX` is `wrongInAt` at `regValX` and `iregVal`. The interior trace stays per tape and per first-stage coins, which is fine inside one window.
+  - `TwoReg.lean`'s `pr_offIreg_le`, `pr_iconflict_le` and `ex_offIreg_le` are reused as they are.
+  - `Compiled.ex_offReg_le` becomes `pr_offRegX_le`, and `eventTwo_split` keeps its shape.
+  - `TwoRegMiss.lean`'s miss is read at `wrongAtBoundaryAt` of `regValX`. The tape doesn't reach that set, so the per-tape step goes.
+  - `TwoRegPeriod.lean` already plays each window with a tapeless strategy: `regCount_cases` (41) reads `L.regVal H P x ()` at `Prover Unit` [read]. Its count is therefore `regValX`'s, and the period would then admit a strategy whose play reads later coins.
+
+**The rest of the scoping**
+
+- **What stands in the way:** nothing I know to be unprovable for the boundary [guess].
+  - The interior's `iregVal` does read the tape. But #8512's period pools only `wrongAtBoundaryAt` [read: `regCount_cases`], so the period doesn't need the interior fixed at registration.
+- **Locked statements:**
+  - `KSRegX` is a new guarantee with `compilerKSReg`'s premises and no new one: `CommitmentScheme.Binds` as domain, `Arg.KS`, `Compiled.Scope` and `Compiled.Sessions` open, no assumption [read: `main`'s `Security/lean-audit.json`].
+  - `compilerKSReg` itself is unchanged; the lock records it by its generic signature [read].
+  - The period statements that read `KSReg` would switch to it: #8527's `PeriodReg`, #8512's `PeriodTwoReg`, and network-accounting's pooled statement. I haven't checked whether any of them is locked on `main` [guess].
+  - Replacing `regVal` itself, instead of adding the second form beside it, changes `compilerKSReg`'s statement, and that goes to Daniel.
+- **Date, if it were mine alone** [guess]:
+  - one stage, stated and proved on a branch from `main`, by Fri 13 Nov 18:00Z;
+  - two stages, on #8512's head, by Mon 16 Nov 18:00Z, inside the issue's 17 Nov.
+- **For NET-297, yours to send.** The fact to offer, under `compilerKSReg`'s premises once `KSRegX` is proved: an audit's incorrect set at the statement's committed trace is fixed by the strategy and the statement, so by the history before its registration, for overlapping audits too.
+  - Overlap also breaks `PeriodAdaptive`'s other clause, that window \(i\)'s acceptance reads only the earlier windows' coins and its own (`Security/Definitions/NetworkCertifier/Checked.lean:164`) [read]. That clause is theirs, not ours.
+
+### PRF-517: the binding terms' number, route by route
+
+**What changes in the issue's text** [read: my 21:21Z entry]
+
+- The terms read \(1 + n_{sess}e_s\), not `Efficient`'s R.
+- The finder's strict cap is \(E^{rep}\)'s \(2^{256}\) reruns a wait (`Numbers.lean:31`), not \(2^{128}k\).
+- At ecr and \(T = 2^{80}\), the terms are \(2^{-34.6}\) for one and \(2^{-33.6}\) for two, not \(2^{-43.8}\) and \(2^{-32.2}\).
+- The R that "Done when" asks for at the plan's point needs only the instance (\(n_{sess}\)) and the units' \(k\), no audit point. The number still needs \(N\) at network-accounting's points, since my \(2^{43.73}\) is one GLM-5.3 window.
+
+**Route 1, a tail bound on the waits: false as filed. There is no date, because it can't be proved** [guess: the argument in my 21:21Z entry]
+
+- **I withdraw my 21:21Z per-level sketch and its \(2^{-74.7}\)** [guess]. Two runs at one tape sit at different acceptance levels, and the run at the lower level sets the finder's budget. So the strict bound at one level doesn't bound the two runs' conflict.
+- Charging the low levels separately turns the sketch into route 3.
+
+**Route 3, new: cap the analysis extractor** [guess: the numbers are mine]
+
+- **How it works:**
+  - \(E^{rep}\)'s cap belongs to the extractor only, `Numbers.cap` \(= 2^{256}\); the verifier never reads it.
+  - At a cap \(K_0\), `runExt_runs_le` puts `Bconf`'s cost at most at \(2T(1 + n_{sess}(1 + 210K_0))\) plus the own calls, on every coin. So `Claims.StrictBirthday` applies at that budget, and each term is at most \(N\cdot q/2^{256.5}\).
+  - The cap costs \(2k/K_0\) in \(\kappa_s\): it is \(\kappa_F\)'s truncation term, \(2^{-231}\) at \(2^{256}\) (`κ_le_sum`, `Numbers.lean:127`).
+- **The best \(K_0\) and the number**, at \(T = 2^{80}\), \(N = 2^{43.73}\) and \(n_{sess} = 1\), with the dominant cost term only:
+
+| \(k\) | one term | two terms |
+|---|---|---|
+| 1507 | \(2^{-55.3}\) at \(K_0 = 2^{67.8}\) | \(2^{-54.8}\) at \(K_0 = 2^{67.3}\) |
+| 12,343,986 | \(2^{-48.8}\) | \(2^{-48.3}\) |
+
+  - It meets \(2^{-53.4}\) at \(k = 1507\) and misses \(2^{-61.0}\) by about 6 bits. At \(k\)'s top it misses both.
+- **Lemmas:**
+  - `Bconf_cost_le` and `BconfTwo_cost_le`, on every coin, from `runExt_runs_le`, `runExt_own_le` and a run's calls being at most \(T\);
+  - the number, read through `StrictBirthday` at that finder;
+  - \(\kappa_F\) at \(K_0\): `κ_le_sum`'s terms with its cap hypothesis `hK` generalized.
+- **Locked statements:** none change [read]. `compilerKSReg` is generic in the argument and the compiled verifier, and no string in `main`'s lock names the cap. The route reads it at another instance of the extractor.
+- **Date:** Fri 13 Nov 18:00Z.
+
+**Route 3b: a sharper count in the rewinding lemma** [read, then guess]
+
+- **The slack:** `prBad_le` bounds by \(\sqrt{|P|\cdot Q\cdot\Pr[\text{conflict}]}\), with \(Q\) the most positions one run opens (`Rewinding.lean:175`–`178`). `pr_offReg_le` passes the trivial \(Q\) = `nG` (`Reg.lean:411`–`412`).
+  - With \(Q\) the gates one run's extractions can open, the sample's revealed openings, the coefficient is \(\sqrt{N\cdot Q}\), not \(N\).
+- **With route 3**, at \(k = 1507\) [arithmetic]:
+  - at \(Q = 2^{20}\), \(2^{-61.2}\) for one term and \(2^{-60.7}\) for two;
+  - at \(Q = 2^{24}\), \(2^{-60.2}\) and \(2^{-59.7}\);
+  - two terms reach \(2^{-61.0}\) only while \(Q \le 2^{18.7}\).
+  - I don't have \(Q\) at the plan's point.
+- **Locked statements:** it changes \(\varepsilon_{reg}\)'s formula, so `KSReg`'s statement changes. That goes to Daniel before it is written.
+- **Lemma:** a count of the gates one run opens, from `reveal`'s lengths, the way `OpenCallsLe` counts calls.
+- **Date:** Wed 18 Nov 18:00Z after Daniel's word [guess].
+
+**Route 2, a form with no \(N\sqrt{\cdot}\) term: not this month** [guess]
+
+- The square root is the rewinding lemma's. The committed trace is a plurality, read through collisions between two runs.
+- Binding alone gives no way to read the committed values off a root without rewinding. That would take a straight-line extractor, which needs a model of SHA-512 the trust base doesn't have.
+
+**What reaches \(2^{-61.0}\):** at \(k = 1507\) and \(T = 2^{80}\), nothing without Daniel's word. Route 3 is about 6 bits short, and route 3b closes the gap only if \(Q \le 2^{18.7}\) [arithmetic].
+
+**Runs:** none. Still mine when the inputs come: #8458's merge once BASE is written, and the stager's step (3) once the law is named.
