@@ -1,0 +1,25 @@
+# mempool: vLLM's page pool as a reference machine
+
+`CacheStep_v3`, the network certifier's cache step, replays vLLM's page pool in a circuit. This directory holds the
+reference that step is held to, and what the step costs:
+
+- `pool_ram.py`: the page pool as a machine over word-addressed memories, every read and write one access under offline
+  memory checking.
+- `difftest.py`: that machine against vLLM's own pool, as the scheduler replay models it, over the encodings' traces
+  and synthetic ones.
+- `stream.py`: `CacheStep_v3`'s specification (`cache_step_v3.Stream`) held to the machine after every pool call;
+  `--vectors` writes the windows the cache step's test replays.
+- `vectors.py`: the machine's log as `MemCheck_v1`'s pool vectors.
+- `cost.py`: the cache step's cost in AND gates, over the busiest window of synthetic loads.
+
+Each is a command, and its docstring has its arguments.
+
+## Interface
+
+- **Provides:** the five commands above, and the two fixtures they write for tests elsewhere:
+  `verity/core/protocols/certifier/tests/fixtures/cache_step_v3_vectors.json` (`stream.py --vectors`) and
+  `verity/ml/circuits/tests/fixtures/memcheck_pool.json` (`vectors.py`).
+- **Loaded by:** nothing. The tests that read the two fixtures load no code from here.
+- **Loads:** the certifier's cache step and compile slices (`verity.ml.protocols.certifier`),
+  `verity.core.protocols.certifier.head_check`, `verity.ml.circuits.defs`, `verity.ml.commitments.gates`, and the
+  scheduler replay with its traces under `benchmarks/network_e2e/encodings`.
