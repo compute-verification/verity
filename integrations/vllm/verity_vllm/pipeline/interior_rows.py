@@ -64,9 +64,9 @@ from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex,
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
-from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Link, Operand, Supply, history,
-                                                 kept_table, link_schemas, link_values, link_words, sources,
-                                                 span_values, supplied, table_reads)
+from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Link, Members, Operand, Supply,
+                                                 history, kept_table, link_schemas, link_values, link_words, links,
+                                                 sources, span_values, supplied, table_reads)
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.logits_capture import LogitsCapture
 
@@ -426,18 +426,6 @@ def interior_run(boundary: str, sample: Sequence[int]) -> str:
     return hashlib.sha512(RUN_TAG + body.encode()).hexdigest()
 
 
-Members = CS.Member | Sequence[CS.Member]
-Cells = int | Sequence[int]
-
-
-def _cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[int, ...]]:
-    ms = (members,) if isinstance(members, CS.Member) else tuple(members)
-    cells = (int(n_rho),) if isinstance(n_rho, int) else tuple(int(n) for n in n_rho)
-    if not ms or len(cells) != len(ms):
-        raise ValueError(f"{len(ms)} templates and cells {list(cells)}: a replay block holds n_t units of each template")
-    return ms, cells
-
-
 def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q: int,
           wires: Sequence[Any], rows: Sequence[Any] = ()) -> list[dict[str, Any]]:
     """Each member's wired ports, ``{port: (out, writer member, writers)}`` (`rows.Member.wired`): at wire w's port, unit u
@@ -474,7 +462,7 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     that span that round 2 reads there, which ``rows`` say (the replay block's, `second_stage.replay_rows`; needed where
     a writer has more than one unit a block). ``values``: the values its program takes ahead of the templates'
     parameters (a window stream's, `link_values`)."""
-    ms, cells = _cells(members, n_rho)
+    ms, cells = IL.cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
     offs = [int(o) for o in np.cumsum([0, *sizes[:-1]])]
@@ -595,7 +583,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     readers = [(k, vh) for k, m in enumerate(members) if (vh := IL.reader(m)) is not None]
     q = len(sample)
     window = interior_window(members, n_rho, boundary, sample, wires, link_values(links, q), rows)
-    ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
+    ports, cells = CS.expected_ports(window), IL.cells(window.members, n_rho)[1]
     placed = IL.placed(window.members, cells, q, links)
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
         raise ValueError(f"{len(tables)} tables for a replay sample of {len(sample)} and {len(readers)} templates of table "
@@ -688,5 +676,5 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 __all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Replay", "Span",
            "Supply", "captured", "committed", "gather", "history", "interior", "interior_ports", "interior_run",
-           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "named", "pieces", "port_map",
-           "register", "sources", "span", "span_values", "supplied", "table_reads"]
+           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "named", "pieces",
+           "port_map", "register", "sources", "span", "span_values", "supplied", "table_reads"]

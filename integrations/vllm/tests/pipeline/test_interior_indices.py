@@ -15,7 +15,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot import second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -25,7 +25,8 @@ from verity.ml.circuits.refs import coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.windows import rows as CS
-from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
+                                  serving_rows as SRW)
 
 #: two templates of one shape, (x0, best, idx: one I32) -> I32: `A` stands for the unit reading ``c``, `B` for ``i``'s
 A, B = bind(DF.TokenSelectCombineV2, V=64, C=64), bind(DF.TokenSelectCombineV2, V=32, C=32)
@@ -226,6 +227,24 @@ def test_an_operand_row_is_the_one_row_every_unit_at_it_replayed():
     assert x0.positions == (0, 1, 2, 4, 5, 6) and [x0.value.rows[r] for r in (3, 7)] == [(0,), (0,)]
 
 
+def test_the_links_are_the_ones_round_2_derives_from_the_replay_block(staged):
+    """`interior_rows.links` reads the block's links off its Definition as round 2 does: every parameter a unit reads,
+    named ``<block>/<parameter>`` where round 1's record names its ports by template, with its rows a block and each
+    unit's row; the two the verifier supplies by their indices, the rest the replay's. They are this module's by hand,
+    in the body's order."""
+    _stream, reg, _first_ = staged
+    got = IR.links(P.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS, CELLS,
+                   {x.value.rsplit("/", 1)[1]: x.index for x in SUPPLIES})
+    assert len(got) == len(LINKS) and set(got) == set(LINKS)
+    assert [x.value.rsplit("/", 1)[1] for x in got] == ["x0", "best", "c", "yx0", "ybest", "i"]
+    bare = {"roots": [{"port": "ingress"}]}
+    assert [x.value for x in IR.links(P.population_program(BLOCK, SPANS), KEY, bare, MEMBERS, CELLS)][:3] == ["x0", "best", "c"]
+    with pytest.raises(ValueError, match="makes no links"):
+        IR.links(P.population_program(BLOCK, SPANS), "Elsewhere_v1", reg.record, MEMBERS, CELLS)
+    with pytest.raises(ValueError, match="a template the window has none of"):
+        IR.links(P.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS[:1], CELLS[:1])
+
+
 def test_an_interior_without_a_test_key_salts_its_own_ports_and_leaves_a_linked_ports_to_its_value(staged):
     """Serving gives no test key: every salt is fresh from the OS but a linked port's, whose rows keep their value's.
     So the interior commits, a supplied value's entry is the keyed interior's (its salts are public), an operand's
@@ -253,6 +272,38 @@ def test_an_interior_without_a_test_key_salts_its_own_ports_and_leaves_a_linked_
     it = _interior(reg, first, [_spans(s) for s in first.units], links=OPERANDS, salt_key=None)
     assert IR.register(stream, first, it, registered=IR.link_words(OPERANDS),
                        schemas=IR.link_schemas(MEMBERS, OPERANDS)).digest
+
+
+def test_round_2_reads_an_index_port_at_the_name_the_served_records_ports_give_its_link(staged):
+    """Round 2's read check (`second_stage._read_ok`) on the ports that read ``c`` and ``i``, under a round-1 record
+    whose ports are named as the serve names them (`boundary_rows.PORTS`, bare, then a table a span). Round 2 names a
+    link ``<block>/<parameter>`` where any port of that record has a ``/``, which a served table's name has and the two
+    values' names have not. With a table it holds each read of the value this module's links register to its unit's row
+    and refuses a read moved one row; without one the link is the bare parameter, and the same read is refused. The
+    links `interior_rows.links` derives from the record carry the name round 2 will hold."""
+    _stream, reg, first = staged
+    program, q = P.population_program(BLOCK, SPANS), len(first.units)
+    it = _interior(reg, first, [_spans(s) for s in first.units])
+    c, w = it.committed, it.committed.window
+    parts = (SS.Part(P.template_id(A), 0, NC), SS.Part(P.template_id(B), q * NC, G * W))
+    entries = {e["value"]: e for e in it.record["registered"]}
+    table = BT.name("b0" * 64, 4, 2, 0, 0)
+    assert "/" in table and not any("/" in p for p in BR.PORTS)
+    for ports, named in (((*BR.PORTS, table), True), (BR.PORTS, False)):
+        served = {**reg.record, "roots": [{"port": port} for port in ports]}
+        own = SS.Own(tuple(first.units), parts, it.record, served, (), links=SS.replay_links(program, KEY, served),
+                     rows=SS.replay_rows(program, KEY))
+        assert SS._by_template(served) is named
+        for x in SUPPLIES:
+            k = [m.template for m in w.members].index(x.template)
+            at = list(c.given[w.members[k].port(x.port)].positions)
+            e = {"value": x.value, **{f: entries[x.value][f] for f in ("root", "domain", "leaves")}, "reads": at,
+                 "reads_from": parts[k].lo}
+            assert SS._read_ok(own, named, parts[k], x.port, e) is named
+            assert not SS._read_ok(own, named, parts[k], x.port, {**e, "reads": [at[0] + 1, *at[1:]]})
+        derived = IR.links(program, KEY, served, MEMBERS, CELLS, {x.value.rsplit("/", 1)[1]: x.index for x in SUPPLIES})
+        assert {x.value for x in derived} == ({x.value for x in LINKS} if named
+                                              else {x.value.rsplit("/", 1)[1] for x in LINKS})
 
 
 def test_one_value_is_read_by_ports_of_several_templates():
