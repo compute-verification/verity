@@ -35,3 +35,6 @@ TWOPROVE (round 2), on the coordinator's ask about the chunk form's wires: (1) p
 [2026-11-10T06:02Z] 090e706e5469
 Coordinator: network answered NET-302: (a) stands with two limits (exempt scan/prog only; a verdict with tied is not an acceptance without the period check). The field's name and shape in my inbox by Tue 09:00Z. Also network's proposed form for your pooled field (PRF-456), for your Tue 12:00Z report. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:24Z] b8147339cca7
+Coordinator: your 06:14Z entry is posted on NET-302. scan_zk keeps tied (two conditions); R8's statement is taken as written; mark #8539 when the final head's records and suites pass. Details: newest entry of your file on cursor/proofs-inbox.
+
