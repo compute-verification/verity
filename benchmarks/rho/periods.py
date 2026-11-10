@@ -22,7 +22,8 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
   each server's capacity, neither a per-window bound;
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
-  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
+  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
+  block's output bits are ranked over the public size classes as the size class's limit (`LIMITS`), not as a premise.
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
 structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP model first (`circuits.compare`).
@@ -57,6 +58,9 @@ PERIODS = tuple(params.PERIODS)
 KINDS = {"proved": "proved in Lean", "assumption": "assumption", "draft": "paper", "absent": "stated, in no lock"}
 #: parameter statuses that are a choice or a measurement rather than an open premise
 FIXED = ("datasheet", "measured", "declared", "ruled")
+#: the parameters whose range is a limit `verity` sets, not a premise, by the kind their row shows: a proof block's
+#: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
+LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
@@ -121,10 +125,11 @@ def scaled(r: Result) -> dict:
 
 def ranking(reg: Registry, name: str, swings: list[analysis.Swing]) -> list[dict]:
     """Every ranged parameter over its range, every assumption refuted, `draft:no-straddle` dropped, by how many
-    decades each alone moves the lower bound."""
+    decades each alone moves the lower bound. A limit of `LIMITS` is ranked over its range as the limit it is, never
+    open: its range shows what the limit costs."""
     base = analysis.at(reg, name)
-    out = [{"what": s.key, "kind": f"parameter ({reg.param(s.key).status})",
-            "open": reg.param(s.key).status not in FIXED, "range": [s.low, s.high],
+    out = [{"what": s.key, "kind": LIMITS.get(s.key, f"parameter ({reg.param(s.key).status})"),
+            "open": s.key not in LIMITS and reg.param(s.key).status not in FIXED, "range": [s.low, s.high],
             "at": [s.at_low, s.at_high], "decades": s.size} for s in swings]
     for p in reg.names("premise"):
         cited = reg[f"premise.{p}.lean"]
@@ -268,7 +273,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
              "over its plausible range, each assumption of `data/premises.toml` refuted (a bound citing it then "
              "bounds no block), and `draft:no-straddle` dropped (`s_×` = 1). **Open** is an assumption or a "
              "parameter that is assumed, conjectured or derived; ruled, measured, declared and datasheet inputs "
-             "are ranked beside them for scale."), ""]
+             "are ranked beside them for scale. A proof block's output bits (`step_bits`) are neither: their range "
+             "is the size class's limit, from the widest public size class (the limit, provisional) down to the "
+             "smallest (the 16-bit limit), and shows what the limit costs."), ""]
     for name in dict.fromkeys(x["scenario"] for x in rows):
         own = [x for x in rows if x["scenario"] == name]
         x = next((y for y in own if y["fleet"] == fleets[-1][0] and y["period"] == "year"), own[-1])

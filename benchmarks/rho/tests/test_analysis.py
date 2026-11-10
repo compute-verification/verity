@@ -3,7 +3,7 @@ import math
 import sys
 
 import pytest
-from rho import analysis, figures
+from rho import analysis, figures, params
 from rho.analysis import LO, crossing
 from rho.params import Param, Registry
 from rho.scenario import build
@@ -292,3 +292,24 @@ def test_periods_sets_proofs_sampled_beside_every_unit_proved(monkeypatch):
             assert s.lo == pytest.approx(lo, abs=5e-3) and s.lo <= p.lo == pytest.approx(3.0, abs=0.06), (fleet, period)
     labels = {periods.proofs(analysis.result(REG, n)) for n in REG.names("scenario")}
     assert labels == {"every unit proved", f"proofs sampled at {100 * share:.3g}% of compute", "no proofs"}
+
+
+def test_periods_ranks_a_blocks_output_bits_as_the_size_classes_limit(monkeypatch):
+    """A proof block's output bits are `verity`'s widest public size class, derived, so no premise is open in them:
+    their row keeps its range, the size classes, which shows what the limit costs, labelled as the size class's limit
+    and printed plain, while a derived parameter that is a premise stays open and bold."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import periods
+
+    name = "reference-remote-h200-sampled"
+    rows = periods.evaluate(REG, (name,), periods.FLEETS[-1:], periods.PERIODS[-1:])
+    (row,) = (r for r in rows[0]["ranking"] if r["what"] in params.BLOCK_OUTPUT_BITS)
+    p = REG.param(row["what"])
+    assert p.status == "derived" not in periods.FIXED and set(periods.LIMITS) == set(params.BLOCK_OUTPUT_BITS)
+    assert (row["kind"], row["open"]) == ("the size class's limit (provisional)", False)
+    assert row["range"] == [p.low, p.high] and p.low < p.high == p.value and row["decades"] > 0
+    derived = [r for r in rows[0]["ranking"] if r["kind"] == "parameter (derived)"]
+    assert derived and all(r["open"] for r in derived)
+    text = periods.markdown(REG, rows, periods.FLEETS[-1:])
+    assert f"| `{row['what']}` | the size class's limit (provisional) | " in text
+    assert f"**`{derived[0]['what']}`** | parameter (derived) | " in text
