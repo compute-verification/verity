@@ -16,6 +16,10 @@ the test gives, the guard on a clock the test moves, and the network certifier o
 - `--launch`'s schedule is one interval's cycle from the release time, open and then shut for the certifier's
   priority alone, and a case whose bytes went around it is named; the guard's cases and a control are rows of
   their own and no part of the number.
+- The kernel's stamps are a second column of every row: a read's ancillary data is parsed, this host's kernel
+  stamps a stream's reads, a bit the observer's own wake-up blurs is read by them and is then the number, the guard
+  holds on both columns, and an interval with no stamp, a wall clock that moved and merged stamps are named or
+  counted.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import json
 import math
 import random
 import socket
+import struct
 import sys
 from pathlib import Path
 
@@ -181,13 +186,15 @@ CFG = bench.SCHEDULE | {"interval_ms": 100, "paced_ms": 0.0, "intervals": 400, "
 
 
 def _case(tmp_path: Path, cfg: dict, arrival, *, first: int = 12, shift: int = 0, failed: str | None = None,
-          clock=None, admitted: int | None = None, relabel=lambda t: t) -> Path:
+          clock=None, admitted: int | None = None, relabel=lambda t: t, stamp=None, moved: int = 0) -> Path:
     """A recorded case: the server's bits from interval `first`, and the observer's arrivals from its connection's
     first interval (`shift` intervals later than that, for a segment that doesn't fit), `arrival(t, writes)` seconds
     after the origin for interval t whose bit's writes are `writes`. Interval t's chunk ends in the byte
     `relabel(t)` mod 256, and the certifier admitted the connection in interval `admitted` (the one the server
     took). With `clock`, the observer is another host's: its arrival x seconds after the origin is at `clock(x)`
-    seconds on its own clock."""
+    seconds on its own clock. With `stamp`, the kernel stamped interval t's bytes `stamp(t, x)` seconds after the
+    origin, x the observer's own arrival (None: its read carried no stamp), and the observer's wall clock moved
+    `moved` ns against its monotonic clock over the case."""
     plan = parties.plan_of(cfg)
     rows, when = [], {}
     for t, bit, writes in parties.schedule(plan, SEED, first, cfg["intervals"], cfg["unit"]):
@@ -196,10 +203,14 @@ def _case(tmp_path: Path, cfg: dict, arrival, *, first: int = 12, shift: int = 0
     ahead = cfg["delay"] if cfg["certifier"] == "warden" else 0
     span = range(first - ahead + shift, first + cfg["intervals"])
     read = clock or (lambda x: cfg["origin"] + x)
-    segment = [round(read(when.get(t, plan.release(t) + 1e-4)) * 1e9) for t in span]
+    arrived = {t: when.get(t, plan.release(t) + 1e-4) for t in span}
+    segment = [round(read(arrived[t]) * 1e9) for t in span]
+    stamps = {} if stamp is None else {
+        "kernel": [[0 if (x := stamp(t, arrived[t])) is None else round(read(x) * 1e9) for t in span]],
+        "wall_less_monotonic_ns": [1_700_000_000_000_000_000, 1_700_000_000_000_000_000 + moved]}
     docs = {"config": cfg, "observer": {"observer": cfg["observer"], "chunk": 256, "remote": clock is not None,
                                         "segments": [segment], "cpus": [3],
-                                        "labels": [[relabel(t) & 0xFF if t >= first else 0 for t in span]]},
+                                        "labels": [[relabel(t) & 0xFF if t >= first else 0 for t in span]]} | stamps,
             "server": {"seed": SEED.hex(), "connections": [{"arrived": first - ahead + 1, "first": first}],
                        "rows": rows, "cpus": [2]},
             "certifier": {"certifier": cfg["certifier"], "cpus": [0], "pacer_cpus": [1], "slack_ms": 25.0,
@@ -236,6 +247,8 @@ def test_the_guard_on_a_clock_the_test_moves(tmp_path):
     assert ignored["client"]["bits"] <= bench.IGNORED_MAX
     assert planted["problems"] == ignored["problems"] == [] and planted["sender"] is None
     assert not planted["remote"] and planted["observer"] == "plain"
+    # an observer that recorded no stamps of the kernel's has no second column
+    assert planted["kernel"] is None and bench.verdict([planted, ignored])["kernel"] is None
 
 
 def test_the_guard_from_another_hosts_clock(tmp_path):
@@ -321,7 +334,8 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     assert doc["value"] == write["bits"] > burst["bits"] and doc["n"] == 400 and doc["unit"] == "bits/interval"
     assert (doc["lower"], doc["upper"]) == (write["lower"], write["upper"])
     assert doc["ceiling"] == max(write["upper"], burst["upper"]) and doc["problems"] == []
-    assert doc["best"] == {"attack": "write", "observer": "plain"}
+    assert doc["best"] == {"attack": "write", "observer": "plain", "stamp": "process"}
+    assert write["kernel"] == {"runs": 0, "n": 0, "bits": None, "lower": None, "upper": None, "merged": 0}
     assert bench.summarize([])["value"] is None and bench.summarize([])["ceiling"] is None
     assert bench.verdict(cases) is None
     # the guard's cases and a control are rows of their own, after the attacks, and no part of the number
@@ -335,7 +349,7 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     whole = bench.result(more + cases)
     assert [r["role"] for r in whole["rows"]] == ["attack", "attack", "planted", "ignored", "control"]
     assert {k: whole[k] for k in ("value", "ceiling", "best", "n")} == {k: doc[k] for k in ("value", "ceiling", "best", "n")}
-    assert whole["guard"] == {"ok": True, "planted": 1.0, "ignored": more[1]["client"]["bits"],
+    assert whole["guard"] == {"ok": True, "planted": 1.0, "ignored": more[1]["client"]["bits"], "kernel": None,
                               "bounds": {"planted_min": bench.PLANTED_MIN, "ignored_max": bench.IGNORED_MAX}}
     assert whole["target"]["seconds_a_bit"] == [240.0, 600.0] and whole["target"]["met"] == [False, False]
     # a guard without its control, or whose planted channel doesn't show, is not ok
@@ -343,6 +357,138 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     assert not bench.verdict([more[1], more[1] | {"ignore": False}])["ok"]
     table = bench._table([whole]).splitlines()
     assert len(table) == 2 + 5 and table[2].split(" | ")[10:13] == ["attack", "write", "plain"]
+    assert table[2].split(" | ")[-3:] == ["-", "-", "- |"]
+
+
+def test_a_reads_ancillary_data_holds_the_kernels_stamp():
+    stamp = (socket.SOL_SOCKET, parties.SO_TIMESTAMPNS, struct.pack("@ll", 1_700_000_000, 123_456_789))
+    assert parties.kernel_stamp([stamp]) == 1_700_000_000_123_456_789
+    assert parties.kernel_stamp([(socket.SOL_SOCKET, parties.SO_TIMESTAMPNS + 1, stamp[2]), stamp]) == \
+        1_700_000_000_123_456_789
+    assert parties.kernel_stamp([]) == 0
+    assert parties.kernel_stamp([(socket.IPPROTO_TCP, parties.SO_TIMESTAMPNS, stamp[2])]) == 0
+    assert parties.kernel_stamp([(socket.SOL_SOCKET, parties.SO_TIMESTAMPNS, b"short")]) == 0
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="SO_TIMESTAMPNS is Linux's")
+def test_this_hosts_kernel_stamps_a_streams_reads_a_chunk_at_a_time():
+    """On this host's kernel: once a socket has asked (`stamping`), a later one's reads each carry a stamp, a read
+    of one chunk's room takes no byte of the next, and the stamps never go back. Two chunks written before either
+    is read may reach the reader merged, and then both reads carry the second's stamp."""
+    keeper = parties.stamping()
+    assert keeper is not None, "this kernel gave a loopback read no SO_TIMESTAMPNS stamp"
+    with keeper, socket.create_server((parties.LOOPBACK, 0)) as listener, \
+            socket.create_connection(listener.getsockname()) as writer:
+        reader, _ = listener.accept()
+        with reader:
+            reader.setsockopt(socket.SOL_SOCKET, parties.SO_TIMESTAMPNS, 1)
+            writer.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            writer.sendall(bytes([1]) * 256)
+            writer.sendall(bytes([2]) * 256)
+            total, stamps, seen = 0, [], b""
+            while total < 512:
+                data, ancillary, _, _ = reader.recvmsg(256 - total % 256, parties.ANCILLARY)
+                assert data and total // 256 == (total + len(data) - 1) // 256
+                stamps.append(parties.kernel_stamp(ancillary))
+                total += len(data)
+                seen += data
+    assert seen == bytes([1]) * 256 + bytes([2]) * 256
+    assert all(stamps) and stamps == sorted(stamps)
+
+
+def _blurred(rng: random.Random):
+    """An observer's own stamp of bytes the kernel stamped at x: its wake-up later, 60 µs ± 40 µs."""
+    return lambda x: x + max(1e-5, rng.gauss(6e-5, 4e-5))
+
+
+def test_the_kernels_stamp_reads_a_bit_the_observers_wake_up_blurs(tmp_path):
+    """A release 20 µs earlier with bit 1 over a path of 5 µs' spread: the kernel stamps the bytes as they come,
+    and the observer's own clock reads them a wake-up of 60 µs ± 40 µs later. The kernel's column reads the bit
+    and the observer's own does not, on one host and from another's clock, and the number is the kernel's column's."""
+    rng = random.Random(8)
+    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    plan = parties.plan_of(cfg)
+    coins = {t: bit for t, bit, _ in parties.schedule(plan, SEED, 12, cfg["intervals"], cfg["unit"])}
+    wake = _blurred(rng)
+
+    def came(t):
+        return plan.release(t) + 3e-4 - 2e-5 * coins.get(t, 0) + rng.gauss(0, 5e-6)
+
+    cases = []
+    for name, clock in (("here", None), ("there", lambda x: 86400.0 + x * (1 + 50e-6))):
+        times: dict[int, float] = {}
+        scored = bench.score(_case(tmp_path / name, cfg, lambda t, writes: wake(times.setdefault(t, came(t))),
+                                   clock=clock, stamp=lambda t, x: times.get(t, x - 6e-5)))
+        assert scored["kernel"]["bits"] > 0.5 and scored["kernel"]["n"] == scored["client"]["n"] == 200
+        assert scored["client"]["bits"] < 0.1 and scored["problems"] == [] and scored["kernel"]["merged"] == 0
+        cases.append(scored)
+    assert cases[0]["kernel"]["shift_us"] == pytest.approx(-20, abs=3)
+    doc = bench.summarize(cases[:1])
+    (row,) = doc["rows"]
+    assert doc["value"] == row["kernel"]["bits"] > row["bits"] and doc["n"] == row["kernel"]["n"] == 200
+    assert doc["best"] == {"attack": "write", "observer": "plain", "stamp": "kernel"}
+    assert (doc["lower"], doc["upper"]) == (row["kernel"]["lower"], row["kernel"]["upper"])
+    assert doc["ceiling"] == max(row["upper"], row["kernel"]["upper"])
+    cells = bench._table([bench.result(cases[:1])]).splitlines()[2].split(" | ")
+    assert cells[-3:] == [f"{row['kernel']['bits']:.4f}",
+                          f"[{row['kernel']['lower']:.4f}, {row['kernel']['upper']:.4f}]", "0 |"]
+
+
+def test_the_guard_holds_on_both_stamps(tmp_path):
+    """The relay's two cases with the kernel's stamps beside the observer's own: the planted delay is one bit an
+    interval and the ignored bit none on both, and a guard whose planted channel the kernel's stamps don't show is
+    not ok, whatever the observer's own clock read."""
+    rng = random.Random(9)
+    relay = CFG | {"certifier": "relay", "attack": "delay", "ignore": False}
+    wake = _blurred(rng)
+
+    def passed_on(t, writes):
+        return wake(writes[-1][0] + _path(rng))
+
+    def before(t, x):
+        return x - 6e-5
+
+    planted = bench.score(_case(tmp_path / "planted", relay, passed_on, stamp=before))
+    ignored = bench.score(_case(tmp_path / "ignored", relay | {"ignore": True}, passed_on, stamp=before))
+    guard = bench.verdict([planted, ignored])
+    assert guard["ok"] and guard["planted"] == 1.0 and guard["kernel"]["planted"] == 1.0
+    assert guard["kernel"]["ignored"] == ignored["kernel"]["bits"] <= bench.IGNORED_MAX
+    plan = parties.plan_of(relay)
+    blind = bench.score(_case(tmp_path / "blind", relay, passed_on, stamp=lambda t, x: plan.release(t) + 1e-4))
+    assert blind["client"]["bits"] == 1.0 and blind["kernel"]["bits"] <= bench.IGNORED_MAX
+    unseen = bench.verdict([blind, ignored])
+    assert not unseen["ok"] and unseen["planted"] == 1.0 and unseen["kernel"]["planted"] == blind["kernel"]["bits"]
+    # a guard one of whose cases has no stamps is not ok on them
+    assert not bench.verdict([planted, ignored | {"kernel": None}])["ok"]
+
+
+def test_an_interval_without_a_stamp_a_moved_wall_clock_and_merged_stamps_are_told(tmp_path):
+    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    plan = parties.plan_of(cfg)
+
+    def on_time(t, writes):
+        return plan.release(t) + 3e-4
+
+    def before(t, x):
+        return x - 6e-5
+
+    whole = bench.score(_case(tmp_path / "whole", cfg, on_time, stamp=before))
+    assert whole["problems"] == [] and whole["kernel"]["n"] == 200 and whole["kernel"]["merged"] == 0
+    bare = bench.score(_case(tmp_path / "bare", cfg, on_time, stamp=lambda t, x: None if 100 <= t < 110 else x - 6e-5))
+    assert bare["problems"] == ["the kernel stamped none of the bytes of 10 of the observer's scored intervals"]
+    assert bare["kernel"]["samples"] == 390 and bare["client"]["samples"] == 400
+    none = bench.score(_case(tmp_path / "none", cfg, on_time, stamp=lambda t, x: None, clock=lambda x: 5.0 + x))
+    assert none["problems"] == ["the kernel stamped none of the bytes of 400 of the observer's scored intervals"]
+    assert none["kernel"]["bits"] is None and none["client"]["bits"] is not None
+    moved = bench.score(_case(tmp_path / "moved", cfg, on_time, stamp=before, moved=-250_000))
+    assert moved["problems"] == ["the observer's wall clock moved 250 µs against its monotonic clock over the case, "
+                                 "and the kernel's stamps are the wall clock's"]
+    assert bench.score(_case(tmp_path / "still", cfg, on_time, stamp=before, moved=900))["problems"] == []
+    # intervals 200 to 202 waited unread until 203's bytes came: the four reads carry 203's stamp
+    late = bench.score(_case(tmp_path / "late", cfg, on_time,
+                             stamp=lambda t, x: plan.release(203) + 2.4e-4 if 200 <= t < 203 else x - 6e-5))
+    assert late["problems"] == [] and late["kernel"]["merged"] == 3 and late["kernel"]["n"] == 200
+    assert bench.summarize([late, whole])["rows"][0]["kernel"]["merged"] == 3
 
 
 def test_an_observer_on_another_host_leaves_its_file_by_the_cases_name(tmp_path):

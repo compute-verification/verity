@@ -13,8 +13,9 @@ A run has three parties, each a process (`parties.py`):
   writes its own bytes for this interval and the next. The bytes are the same whatever the bit.
 - **The certifier** is the device under test: `verity.core.protocols.certifier.warden.Warden` of this checkout or of
   another (`--tree`), writing each interval on its loop (`--paced-ms 0`) or through its pacer.
-- **The observer** is the client side. It timestamps the first byte of each interval as it arrives, waiting in the
-  kernel for it (`plain`) or polling without waiting (`spin`), and never has the server's bits.
+- **The observer** is the client side. It timestamps the first byte of each interval twice: on its own clock once
+  its read returns, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and with the stamp
+  the kernel gave the bytes as it took them off the network. It never has the server's bits.
 
 The attacks (`parties.Plan`), over interval t's release time R_t:
 
@@ -30,18 +31,37 @@ The network certifier fails a delayed interval closed, so `delay` runs only agai
 `step` (the offset less its neighbours' trimmed mean, which drops a drift), and scores it on the odd ones. A decoder
 wrong at rate e on uniform bits shows at least 1 − H(e) bits an interval: `bits`, with `lower` and `upper` from e's
 95% Wilson interval. `upper` is 1 − H at the interval's end farther from one half, so a decoder that came out wrong
-more often than not never makes it small. `run` prints one JSON line and writes it to `--out`/result.json:
+more often than not never makes it small.
+
+**Two stamps, two columns.** Every case is scored on each of the observer's stamps, with a decoder of its own:
+
+| Stamp | What it is | What moves it besides the certifier |
+| --- | --- | --- |
+| `process` | the observer's monotonic clock once the read that holds the interval's first byte returned | the network, the observer's kernel, and the observer's own scheduling and wake-up |
+| `kernel` | the kernel's receive stamp on that read (`SO_TIMESTAMPNS`, read from `recvmsg`'s ancillary data) | the network and the observer's kernel up to where it takes a segment in |
+
+On a TCP stream the kernel returns, with each read, the stamp of the last segment the read took bytes from: its wall
+clock as its network stack took the segment in, before any socket or process saw it. Over loopback or a veth pair
+that is as the sender's write reached the device. The observer reads one interval's bytes at most a read, so a read's
+stamp is of that interval's bytes, and it moves the stamp to its monotonic clock by the two clocks' difference as it
+started. Two things are told rather than hidden: a scored interval whose read carried no stamp, or a wall clock that
+was set during the case, makes the case no measurement; and segments the kernel merged while they waited to be read
+carry the last one's stamp, so an interval read that late has a later interval's, and the row counts them
+(`merged`). A client can stamp as the kernel does, so the number is over both columns.
+
+`run` prints one JSON line and writes it to `--out`/result.json:
 
 | Key | What it is |
 | --- | --- |
-| `value`, `unit` | the most bits an interval any attack showed, over that attack's pooled runs |
+| `value`, `unit` | the most bits an interval any attack showed on either stamp, over that attack's pooled runs |
 | `lower`, `upper`, `n` | its 95% bounds and scored intervals |
-| `ceiling` | the largest upper bound of any attack: what the run shows every attack built here under |
+| `best` | the attack, observer and stamp `value` is of |
+| `ceiling` | the largest upper bound of any attack on either stamp: what the run shows every attack built here under |
 | `commit`, `run` | the commit measured from and the run's id |
 | `certifier`, `host` | the certifier's commit and settings; the host, its cores and its clock |
 | `guard`, `target` | the guard's two readings; the budget's bits an interval, and whether `ceiling` is under each end |
-| `rows` | each attack with each observer, pooled, most bits first; then the guard's cases and any control, which are no part of the number (`role`) |
-| `cases` | each run: its settings, hosts and problems, and the certifier's own release times scored the same way (`sender`) |
+| `rows` | each attack with each observer, pooled, most bits first: the `process` stamp's reading and, under `kernel`, the kernel stamp's; then the guard's cases and any control, which are no part of the number (`role`) |
+| `cases` | each run: its settings, hosts and problems, both stamps' readings (`client`, `kernel`), and the certifier's own release times scored the same way (`sender`) |
 
 ## Run it
 
@@ -66,8 +86,8 @@ certifier failed a connection, a tick ran past its slack, or the parties disagre
 
 Every `run` first measures a channel it planted and one it didn't, against `relay`, a stand-in that paces nothing
 and passes bytes on as they come. A server that delays an interval by half an interval on bit 1 must show at least
-0.9 bits an interval, and the same server ignoring its bits at most 0.05 (`PLANTED_MIN`, `IGNORED_MAX`). A run whose
-guard fails reports no number.
+0.9 bits an interval, and the same server ignoring its bits at most 0.05 (`PLANTED_MIN`, `IGNORED_MAX`), on each of
+the observer's two stamps. A run whose guard fails reports no number.
 
 ## The target
 
@@ -131,7 +151,8 @@ verity bench certifier_timing score OUT/write-spin --observer SEEN
 
 `serve` takes one connection, the case's observer, and `observe` tries the certifier until it answers. Nothing joins
 the two clocks. Which interval a chunk is comes from its bytes (interval t's are all the byte t mod 256) and from the
-certifier's record of the connection, and `step` reads through the clocks' drift. `serve --certifier relay --attack
+certifier's record of the connection, and `step` reads through the clocks' drift. Both of the observer's stamps are
+its own host's, each counted from its first arrival. `serve --certifier relay --attack
 delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an attack's control.
 
 `pair.sh serve|observe ADDR PORT START OUT [serve's flags]` runs one side of every case: the guard's two, each

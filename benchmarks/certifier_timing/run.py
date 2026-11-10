@@ -19,7 +19,10 @@ loopback and monotonic clock), `--repeat` times each with each observer, and pri
 to `--out`/result.json (`$OUT` under `research run`): `value`, the most bits an interval any attack showed
 (`channel.measure`'s `bits`, of that attack's pooled runs), with its `unit`, its 95% `lower` and `upper`, the scored
 intervals `n`, the `commit`, the `run`, the host, the target and every case; `ceiling` is the largest of the attacks'
-upper bounds, what the run shows every attack built here under. `--paced-ms 0` is the certifier writing each interval
+upper bounds, what the run shows every attack built here under. Every case is scored on each of the observer's two
+stamps (`STAMPS`): its own clock's once a read returned, and the kernel's on the bytes as they came off the network.
+A row holds the first and, under `kernel`, the second; `value` and `ceiling` are over both, and the guard holds on
+both. `--paced-ms 0` is the certifier writing each interval
 on its loop, and `--tree` another checkout's certifier (its `verity` first on the certifier's import path), measured by
 this checkout's server and observer. It exits 1 when the guard fails, 2 when a case's parties disagree on the schedule
 or the certifier failed a connection: the number is then of nothing.
@@ -97,6 +100,12 @@ PLANTED_MIN, IGNORED_MAX = 0.9, 0.05
 LATE_US = 250.0
 #: the certifier's schedule besides τ and the pacer's offset: one cell an interval, released D intervals after admission
 SCHEDULE = {"cell_bytes": 256, "slots": 1, "delay": 3, "window": 600, "admit_lag": 1}
+#: the observer's two stamps of an interval's first byte, and the key a case's score and a row hold each under: its
+#: own clock's once its read returned, and the kernel's on the bytes as it took them in (`parties.kernel_stamp`)
+STAMPS = {"process": "client", "kernel": "kernel"}
+#: the wall clock may move this far against the monotonic one over a case, in ns, before the kernel's stamps, which
+#: are the wall clock's, are no measurement
+WALL_MOVED_NS = 10_000
 #: what a case's score keeps of its configuration
 KEEP = ("attack", "ignore", "certifier", "paced_ms", "observer", "interval_ms", "intervals", "pin", "gate_ms",
         "waker_ms", "awake", "launch", "commit", "certifier_commit", "run", "host")
@@ -244,48 +253,78 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
         raise RuntimeError(f"a party failed in {out}: {json.dumps(tails)}")
 
 
-def samples(cfg: dict, server: dict, observer: dict) -> tuple[list[tuple[float, int]], list[str]]:
+def samples(cfg: dict, server: dict, observer: dict, kernel: bool = False) -> tuple[list[tuple[float, int]], list[str]]:
     """The run's samples in interval order, (the offset of the interval's first byte at the observer after its
     release time, in seconds; the server's bit for it), and what doesn't fit: a scored chunk whose bytes name
     another interval, and on one host an observer's segment whose first arrival isn't in the interval the server
     took its connection to start in. An observer on another host has its own clock: its offsets are after the
-    release times counted from its first arrival, the one before a connection's first interval."""
+    release times counted from its first arrival, the one before a connection's first interval.
+
+    With `kernel` the offsets are of the kernel's stamps (`observer["kernel"]`) in place of the observer's own
+    clock's, and what doesn't fit is the stamps' alone: which interval a chunk is stays what the observer's own
+    arrivals and the chunk's bytes say, a scored interval whose read carried no stamp is left out and counted, and
+    another host's offsets are counted from its first stamp."""
     plan, tau = plan_of(cfg), cfg["interval_ms"] / 1000
     coins = {t: bit for t, bit, _ in server["rows"]}
     firsts = [c["first"] for c in server["connections"] if "first" in c]
     ahead = cfg["delay"] if cfg["certifier"] == "warden" else 0
     remote, labels = observer.get("remote", False), observer.get("labels")
     origin = None if remote else round(cfg["origin"] * 1e9)
-    rows, problems = {}, []
+    rows, fits, stamps, bare = {}, [], [], 0
     for k, segment in enumerate(observer["segments"]):
         if remote:
             if k >= len(firsts):
-                problems.append(f"connection {k}: the observer's, and none of the server's")
+                fits.append(f"connection {k}: the observer's, and none of the server's")
                 break
             t0 = firsts[k] - ahead
-            origin = segment[0] - round(plan.release(t0) * 1e9) if origin is None else origin
         else:
             t0 = math.floor(((segment[0] - origin) / 1e9 - plan.paced_s) / tau)
             if k < len(firsts) and firsts[k] != t0 + ahead:
-                problems.append(f"connection {k}: the server took interval {firsts[k]} for its first bytes, and the "
-                                f"observer's first arrival puts it at {t0 + ahead} (admit_lag)")
+                fits.append(f"connection {k}: the server took interval {firsts[k]} for its first bytes, and the "
+                            f"observer's first arrival puts it at {t0 + ahead} (admit_lag)")
+        times = observer["kernel"][k] if kernel else segment
+        if origin is None and (i0 := next((i for i, at in enumerate(times) if at), None)) is not None:
+            origin = times[i0] - round(plan.release(t0 + i0) * 1e9)
         other = 0
-        for i, at in enumerate(segment):
+        for i, at in enumerate(times):
             if t0 + i in coins:
-                rows[t0 + i] = ((at - origin) / 1e9 - plan.release(t0 + i), coins[t0 + i])
+                if at:
+                    rows[t0 + i] = ((at - origin) / 1e9 - plan.release(t0 + i), coins[t0 + i])
+                bare += not at
                 other += labels is not None and labels[k][i] != (t0 + i) & 0xFF
         if other:
-            problems.append(f"connection {k}: {other} of the observer's scored intervals hold another interval's bytes")
-    return [rows[t] for t in sorted(rows)], problems
+            fits.append(f"connection {k}: {other} of the observer's scored intervals hold another interval's bytes")
+    if bare:
+        stamps.append(f"the kernel stamped none of the bytes of {bare} of the observer's scored intervals")
+    return [rows[t] for t in sorted(rows)], stamps if kernel else fits
+
+
+def stamped(cfg: dict, server: dict, observer: dict) -> tuple[dict | None, list[str]]:
+    """A case by the kernel's stamps: `channel.measure` of them with `merged`, the observer's intervals whose stamp
+    is the next one's too, and what makes them no measurement. The kernel merges segments that wait to be read and
+    gives them the last one's stamp, so a merged interval's is of a later interval's bytes: it stays in, as late as
+    the observer's own stamp of it is. None for an observer that recorded none."""
+    if observer.get("kernel") is None:
+        return None, []
+    pairs, problems = samples(cfg, server, observer, kernel=True)
+    moved = abs(observer["wall_less_monotonic_ns"][1] - observer["wall_less_monotonic_ns"][0])
+    if moved > WALL_MOVED_NS:
+        problems.append(f"the observer's wall clock moved {moved / 1000:.0f} µs against its monotonic clock over the "
+                        f"case, and the kernel's stamps are the wall clock's")
+    merged = sum(a == b != 0 for segment in observer["kernel"] for a, b in zip(segment, segment[1:]))
+    return channel.measure(pairs) | {"merged": merged}, problems
 
 
 def score(case: Path, observed: Path | None = None) -> dict:
     """One recorded case (a directory `live` left; `observed`: its observer.json, where another host wrote it): its
-    configuration, `channel.measure` of the observer's arrivals (`client`) and of the certifier's own times (`sender`:
-    a paced one's write ends, else its ticks' lateness), and what makes it no measurement (`problems`)."""
+    configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
+    (`kernel`, `stamped`) and of the certifier's own times (`sender`: a paced one's write ends, else its ticks'
+    lateness), and what makes it no measurement (`problems`)."""
     cfg, server, certifier = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
     observer = json.loads((observed or case / "observer.json").read_text())
     pairs, problems = samples(cfg, server, observer)
+    kernel, unfit = stamped(cfg, server, observer)
+    problems += unfit
     coins = {t: bit for t, bit, _ in server["rows"]}
     sender = late_releases = gated = None
     if cfg["certifier"] == "warden":
@@ -317,7 +356,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
     return {k: cfg.get(k) for k in KEEP} | {
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
         "observer_host": observer.get("host", cfg.get("host")), "observer_run": observer.get("run", cfg.get("run")),
-        "client": channel.measure(pairs), "sender": sender,
+        "client": channel.measure(pairs), "kernel": kernel, "sender": sender,
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
         "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],
@@ -346,16 +385,25 @@ def guard(args: argparse.Namespace, out: Path) -> list[dict]:
 def verdict(cases: list[dict]) -> dict | None:
     """The guard among `cases`, if they hold one: `ok` when there is a planted case and an ignored one, every planted
     one shows at least `PLANTED_MIN` bits an interval, every ignored one at most `IGNORED_MAX`, and none has a
-    problem; `planted` the least a planted one showed and `ignored` the most an ignored one did."""
+    problem; `planted` the least a planted one showed and `ignored` the most an ignored one did, on the observer's
+    own clock. `kernel` holds the same two by the kernel's stamps, which the guard holds on as well wherever a case
+    of it has them; None where none has."""
     of = {name: [c for c in cases if role(c) == name] for name in ("planted", "ignored")}
     if not of["planted"] and not of["ignored"]:
         return None
-    bits = {name: [c["client"]["bits"] for c in group] for name, group in of.items()}
-    measured = all(group and None not in group for group in bits.values())
-    planted, ignored = (min(bits["planted"]), max(bits["ignored"])) if measured else (None, None)
-    return {"ok": measured and planted >= PLANTED_MIN and ignored <= IGNORED_MAX
+    read = {}
+    for stamp, key in STAMPS.items():
+        bits = {name: [(c.get(key) or {}).get("bits") for c in group] for name, group in of.items()}
+        measured = all(group and None not in group for group in bits.values())
+        planted, ignored = (min(bits["planted"]), max(bits["ignored"])) if measured else (None, None)
+        read[stamp] = {"planted": planted, "ignored": ignored,
+                       "ok": measured and planted >= PLANTED_MIN and ignored <= IGNORED_MAX}
+    stamps = any(c.get("kernel") for group in of.values() for c in group)
+    return {"ok": read["process"]["ok"] and (read["kernel"]["ok"] or not stamps)
             and not any(c["problems"] for group in of.values() for c in group),
-            "planted": planted, "ignored": ignored, "bounds": {"planted_min": PLANTED_MIN, "ignored_max": IGNORED_MAX}}
+            "planted": read["process"]["planted"], "ignored": read["process"]["ignored"],
+            "kernel": {k: read["kernel"][k] for k in ("planted", "ignored")} if stamps else None,
+            "bounds": {"planted_min": PLANTED_MIN, "ignored_max": IGNORED_MAX}}
 
 
 def host() -> dict:
@@ -366,26 +414,34 @@ def host() -> dict:
     return {"name": platform.node(), "kernel": platform.release(), "cpu": model,
             "cpus": sorted(os.sched_getaffinity(0)), "cpuidle": idle.read_text().strip() if idle.exists() else None,
             "parties": "the server, the certifier and the observer are processes on this one host, over loopback",
-            "clock": "CLOCK_MONOTONIC of this host (time.monotonic), read by all three"}
+            "clock": "CLOCK_MONOTONIC of this host (time.monotonic), read by all three; the kernel's stamps are its "
+                     "wall clock's, moved to it by the two clocks' difference as the observer started"}
 
 
 def summarize(cases: list[dict]) -> dict:
     """The cases as one number: `rows`, the cases by (role, attack, observer), each pooled over its runs
-    (`channel.pool`), the attacks first, most bits first; `value`, `lower`, `upper` and `n`, the first attack's;
-    `ceiling`, the largest upper bound of any attack; and every case's problems."""
+    (`channel.pool`) on the observer's own clock and, under `kernel`, by the kernel's stamps (with `merged`, the
+    runs' sum), the attacks first, most bits on either stamp first; `value`, `lower`, `upper` and `n`, of the attack
+    and stamp that showed most (`best`); `ceiling`, the largest upper bound of any attack on either stamp; and every
+    case's problems."""
     groups: dict[tuple[str, str, str], list[dict]] = {}
     for c in cases:
         groups.setdefault((role(c), c["attack"], c["observer"]), []).append(c)
-    rows = [{"role": r, "attack": a, "observer": o} | channel.pool([c["client"] for c in group])
-            | {"sender": channel.pool([c["sender"] for c in group if c["sender"]])}
-            for (r, a, o), group in groups.items()]
-    rows.sort(key=lambda r: (r["role"] != "attack", -(r["bits"] or 0.0)))
-    attacks = [r for r in rows if r["role"] == "attack" and r["bits"] is not None]
-    best = attacks[0] if attacks else None
+    rows = []
+    for (r, a, o), group in groups.items():
+        stamps = [c["kernel"] for c in group if c.get("kernel")]
+        rows.append({"role": r, "attack": a, "observer": o} | channel.pool([c["client"] for c in group]) | {
+            "kernel": channel.pool(stamps) | {"merged": sum(m["merged"] for m in stamps)},
+            "sender": channel.pool([c["sender"] for c in group if c["sender"]])})
+    reads = {id(r): [(stamp, m) for stamp, m in (("process", r), ("kernel", r["kernel"])) if m["bits"] is not None]
+             for r in rows}
+    rows.sort(key=lambda r: (r["role"] != "attack", -max((m["bits"] for _, m in reads[id(r)]), default=0.0)))
+    attacks = [(r, stamp, m) for r in rows if r["role"] == "attack" for stamp, m in reads[id(r)]]
+    row, stamp, best = max(attacks, key=lambda x: x[2]["bits"], default=(None, None, None))
     return {"value": best and best["bits"], "unit": "bits/interval", "lower": best and best["lower"],
             "upper": best and best["upper"], "n": best and best["n"],
-            "ceiling": max((r["upper"] for r in attacks), default=None),
-            "best": best and {"attack": best["attack"], "observer": best["observer"]},
+            "ceiling": max((m["upper"] for _, _, m in attacks), default=None),
+            "best": best and {"attack": row["attack"], "observer": row["observer"], "stamp": stamp},
             "problems": sorted({p for c in cases for p in c["problems"]}), "rows": rows}
 
 
@@ -404,7 +460,8 @@ def result(cases: list[dict], **more) -> dict:
 def _table(docs: list[dict]) -> str:
     """Results' rows as a Markdown table, each with what its cases ran with."""
     head = ["run", "host", "observer's host", "certifier", "paced ms", "pin", "gate ms", "waker ms", "awake",
-            "launch", "role", "attack", "observer", "bits/interval", "95%", "scored", "sender"]
+            "launch", "role", "attack", "observer", "bits/interval", "95%", "scored", "sender",
+            "by the kernel's stamp", "95%", "merged"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for d in docs:
         for r in d["rows"]:
@@ -412,14 +469,16 @@ def _table(docs: list[dict]) -> str:
                 continue
             c = next(c for c in d["cases"] if (role(c), c["attack"], c["observer"]) == (r["role"], r["attack"],
                                                                                          r["observer"]))
-            launch, sender = c.get("launch"), r["sender"].get("bits")
+            launch, sender, stamps = c.get("launch"), r["sender"].get("bits"), r["kernel"]
             runs = dict.fromkeys(filter(None, (c.get("run") or d.get("run"), c.get("observer_run"))))
             cells = [" and ".join(runs) or "-", c.get("host") or "-", c.get("observer_host") or "-",
                      (c.get("certifier_commit") or "-")[:10], f"{c['paced_ms']:g}", "yes" if c["pin"] else "no",
                      c["gate_ms"] or "-", c.get("waker_ms") or "-", "yes" if c.get("awake") else "no",
                      f"{launch['mode']} {launch['after_ms']:g}+{launch['open_ms']:g}" if launch else "-",
                      r["role"], r["attack"], r["observer"], f"{r['bits']:.4f}",
-                     f"[{r['lower']:.4f}, {r['upper']:.4f}]", r["n"], "-" if sender is None else f"{sender:.4f}"]
+                     f"[{r['lower']:.4f}, {r['upper']:.4f}]", r["n"], "-" if sender is None else f"{sender:.4f}",
+                     *(["-"] * 3 if stamps["bits"] is None else
+                       [f"{stamps['bits']:.4f}", f"[{stamps['lower']:.4f}, {stamps['upper']:.4f}]", stamps["merged"]])]
             lines.append("| " + " | ".join(map(str, cells)) + " |")
     return "\n".join(lines)
 

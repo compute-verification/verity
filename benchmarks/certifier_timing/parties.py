@@ -10,10 +10,12 @@ clock; the observer is on that host too, over loopback, or on another, where it 
 - **The certifier** is the device under test: the network certifier (`warden.Warden`, of whatever tree is first on
   the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces nothing and passes
   each side's bytes on as they come, which is where a planted channel is put.
-- **The observer** is the client side. It reads the certifier's bytes and timestamps the first byte of each
-  interval's `chunk`, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and keeps each
-  chunk's last byte, which names its interval. It never has the seed: `run.py` joins its timestamps with the
-  server's bits once both have ended.
+- **The observer** is the client side. It reads the certifier's bytes a `chunk` at most a read and timestamps the
+  first byte of each interval's `chunk` twice: on its own clock once the read returns, waiting in the kernel for it
+  (`plain`) or polling without waiting (`spin`), and with the stamp the kernel gave the bytes as they came off the
+  network (`kernel_stamp`), which no scheduling of the observer's process moves. It keeps each chunk's last byte,
+  which names its interval. It never has the seed: `run.py` joins its timestamps with the server's bits once both
+  have ended.
 - **The waker** (`waker_ms`) and **the awake cores** (`awake`) are candidate fixes beside the certifier, not parties
   to the channel. The waker is a reader asleep on a loopback connection and a writer that wakes it every `waker_ms`,
   so the host's network path is as recently used at every release whatever the server does. `awake` is a process
@@ -49,6 +51,7 @@ import os
 import select
 import signal
 import socket
+import struct
 import sys
 import time
 from dataclasses import dataclass
@@ -67,6 +70,12 @@ HELLO = b"go\n"
 #: the socket priority of a certifier's client connections under a launch gate (`run.py --launch`): one no type of
 #: service maps to, so the gate's class holds the certifier's packets and no other of the host's
 LAUNCH_PRIORITY = 5
+#: Linux's SO_TIMESTAMPNS and the ancillary message it adds to a read, SCM_TIMESTAMPNS (one number on x86-64 and
+#: arm64, which Python's `socket` doesn't name), and the room a read leaves for it
+SO_TIMESTAMPNS = 35
+ANCILLARY = 64
+#: how many loopback reads `stamping` waits for the kernel's first stamp
+STAMP_TRIES = 20000
 
 
 @dataclass(frozen=True)
@@ -227,19 +236,70 @@ def last_bytes(stream: bytes, chunk: int) -> list[int]:
     return [stream[min(len(stream), end) - 1] for end in range(chunk, len(stream) + chunk, chunk)]
 
 
+def kernel_stamp(ancillary: list[tuple[int, int, bytes]]) -> int:
+    """The kernel's receive stamp among a read's ancillary data, in ns on the host's wall clock; 0 where it holds
+    none. Under SO_TIMESTAMPNS a read of a TCP stream carries the stamp of the last segment it took bytes from: the
+    wall clock's time when the kernel's network stack took the segment in, before any socket or process saw it (over
+    loopback or a veth pair, as the sender's write reached the device). Segments the kernel merged while they waited
+    to be read carry the last one's stamp."""
+    for level, kind, data in ancillary:
+        if level == socket.SOL_SOCKET and kind == SO_TIMESTAMPNS and len(data) >= 16:
+            seconds, nanoseconds = struct.unpack("@ll", data[:16])
+            return seconds * 1_000_000_000 + nanoseconds
+    return 0
+
+
+def stamping(tries: int = STAMP_TRIES) -> socket.socket | None:
+    """A socket that keeps the kernel stamping what this host receives: the reading end of a loopback connection,
+    returned once one of its reads carried a stamp. The kernel starts stamping a moment after the first socket asks
+    and stops with the last, so an observer asks here before it connects and holds this socket to its end. None
+    where no stamp came: a kernel without SO_TIMESTAMPNS, or no loopback."""
+    try:
+        with socket.create_server((LOOPBACK, 0)) as listener:
+            writer = socket.create_connection(listener.getsockname())
+            reader, _ = listener.accept()
+        with writer:
+            reader.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
+            for _ in range(tries):
+                writer.sendall(b"x")
+                if kernel_stamp(reader.recvmsg(1, ANCILLARY)[1]):
+                    return reader
+    except OSError:
+        pass
+    return None
+
+
+def wall_less_monotonic(reads: int = 5) -> int:
+    """The host's wall clock less its monotonic one, in ns: of `reads` readings of the wall clock, each between two
+    of the monotonic, the one whose two were closest. The two clocks run at one rate, so it changes only when the
+    wall clock is set."""
+    best = None
+    for _ in range(reads):
+        before, wall, after = time.monotonic_ns(), time.time_ns(), time.monotonic_ns()
+        if best is None or after - before < best[0]:
+            best = (after - before, wall - (before + after) // 2)
+    return best[1]
+
+
 def observer(cfg: dict) -> dict:
     """The client side: one connection after another until it has seen `intervals` intervals or its stop, each a
-    segment: the monotonic time in ns at which the first byte of each `chunk` arrived, and each chunk's last byte
-    (`labels`); a connection that ended in an error leaves it in `errors`. On the certifier's host it starts at the
-    run's origin and ends at its stop. On another host (`connect`, and no `origin`) it has its own clock alone: it
-    tries the certifier for `wait_s`, past any connection that gave it nothing, and ends once a connection's
-    intervals have had their time."""
+    segment: the monotonic time in ns at which the read holding the first byte of each `chunk` returned, and each
+    chunk's last byte (`labels`); a connection that ended in an error leaves it in `errors`. A read takes one
+    chunk's bytes at most, so the kernel's stamp on it (`kernel_stamp`) is of that chunk's bytes: `kernel` holds it
+    for each chunk, moved from the wall clock to the monotonic one by their difference as the observer started
+    (`wall_less_monotonic_ns`: then, and at its end), 0 for a read that carried none; None where the kernel stamps
+    nothing (`stamping`). On the certifier's host the observer starts at the run's origin and ends at its stop. On
+    another host (`connect`, and no `origin`) it has its own clocks alone: it tries the certifier for `wait_s`, past
+    any connection that gave it nothing, and ends once a connection's intervals have had their time."""
     cpus = _pin(cfg, 3)
     spin, chunk, tau = cfg["observer"] == "spin", int(cfg["chunk"]), cfg["interval_ms"] / 1000
     address, remote = (cfg.get("connect", LOOPBACK), int(cfg["port"])), cfg.get("origin") is None
     segments: list[list[int]] = []
+    kernel: list[list[int]] = []
     labels: list[list[int]] = []
     errors: list[str] = []
+    keeper = stamping()
+    wall = [wall_less_monotonic()]
     gc.disable()
     if remote:
         retry = time.monotonic() + cfg["wait_s"]
@@ -256,15 +316,18 @@ def observer(cfg: dict) -> dict:
             time.sleep(1.0)
             continue
         arrivals: list[int] = []
+        stamps: list[int] = []
         blobs: list[bytes] = []
         with sock:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if keeper is not None:
+                sock.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
             sock.sendall(bytes.fromhex(cfg["hello"]))
             sock.settimeout(0.0 if spin else 0.05)
             total = polls = 0
             while True:
                 try:
-                    data = sock.recv(1 << 16)
+                    data, ancillary, _, _ = sock.recvmsg(chunk - total % chunk, ANCILLARY)
                 except (BlockingIOError, TimeoutError):
                     polls += 1
                     if (not spin or not polls & 0xFFF) and time.monotonic() > stop:
@@ -276,7 +339,9 @@ def observer(cfg: dict) -> dict:
                 now = time.monotonic_ns()
                 if not data:
                     break
-                arrivals += [now] * starts(total, len(data), chunk)
+                if starts(total, len(data), chunk):
+                    arrivals.append(now)
+                    stamps.append(stamp - wall[0] if (stamp := kernel_stamp(ancillary)) else 0)
                 total += len(data)
                 blobs.append(data)
         if len(arrivals) < 2:
@@ -285,8 +350,11 @@ def observer(cfg: dict) -> dict:
                 continue
             break
         segments.append(arrivals)
+        kernel.append(stamps)
         labels.append(last_bytes(b"".join(blobs), chunk))
-    return {"observer": cfg["observer"], "chunk": chunk, "remote": remote, "segments": segments, "labels": labels,
+    wall.append(wall_less_monotonic())
+    return {"observer": cfg["observer"], "chunk": chunk, "remote": remote, "segments": segments,
+            "kernel": kernel if keeper is not None else None, "wall_less_monotonic_ns": wall, "labels": labels,
             "errors": errors, "cpus": cpus}
 
 
