@@ -451,6 +451,13 @@ def test_a_regenerated_lock_that_changes_what_the_build_reads_keeps_no_pass(tmp_
     rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
     assert rc == 0 and _lines(out2 / "ran.txt") == ["pkg/a", "pkg/b"] and sorted(doc2["cached"]) == ["pkg/c", "pkg/p", "pkg/s"]
 
+    # a lock `build_inputs` can't read (it names no roots) agrees with no lock, itself included
+    root = _lock_tree(tmp_path / "unread", monkeypatch)
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"guarantees": {"A.t": "stale"}}))
+    rc, out, doc, logged = _lock_run(tmp_path / "unread", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {} and not (out / LA.LOCK_COMMIT).exists()
+    assert len([s for s in logged if "no pass kept" in s and "the regenerated lock of pkg/a" in s]) == 2, logged
+
 
 def test_only_a_whole_run_keeps_a_pass_and_only_of_a_package_it_audited_with_a_stored_document(tmp_path, monkeypatch):
     """What keeps no pass for the lock commit, each leaving that commit's audit to run in full as before: a package the
