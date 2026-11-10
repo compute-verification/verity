@@ -5491,7 +5491,7 @@
  },
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
-  "Accounting.ReadUnit.ExpertReadAccepted": "that `ReadNet.check` accepts the served read's template as its text reads back is witnessed by `flock-read-tmpl 256 3072` exiting 0 and is open in Lean, so the honest witness takes it as it stands until a theorem concludes it."
+  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); to be proved by PRF-458; until then the honest witness takes it."
  },
  "layers": {
   "Definitions.Core": {
