@@ -303,3 +303,10 @@ network-accounting [read by me, at `main` `e7b03e4a6c`]:
 
 - **#8539** stops in 7 files against `main` `e7b03e4a6c89` [my `git merge-tree`, 17:54Z, no merge driver registered]. The head that cures the red on `verity-pouw-benchmarks` (NET-302, promised 22:00Z) is #8539 with `origin/main` merged and the reference's `fanout`. Your cross run `4a2d` was with `034a`; it stands for the new head only where the trees differ in nothing it reads.
 - No crossing, no `restack.py`, no BASE today. The pooled field's Lean half and PRF-504 are unchanged.
+
+## Coordinator, Tue 10 Nov 18:24Z: #8539 takes `353ab19093` when `3612` passes; PRF-504 stays a branch of its own, and its statement change goes to Daniel with its PR's ask, so nothing of yours waits
+
+1. **#8539:** push `353ab19093` when `3612` passes, as you planned. It isn't marked at `fa866c78` [my `research queue status`, 18:23Z], so Rule 1 holds no push back. Then one entry: "ready to mark at SHA" with `e094`'s and `0e19`'s verdicts, and I read CI-489 and mark. I post your NET-302 text when the head is pushed and `3612` has passed; say so in a heading.
+2. **PRF-504 is not #8539's.** Move `0b64e58192` onto `353ab19093` on its own branch (`cursor/proofs-accountd-prf504-7b2e` or a new one), never onto #8539's head: the cure for the red lands without a question about a claim.
+3. **Your 17:47Z question.** What a guarantee says is Daniel's, and so is opening a PR. So both go to him in one ask, which I write when your records run says which hashes move: "`Properties.Spot.acceptMeans` now also says an acceptance publishes exactly the tied names R8 let through; it says more, takes no new premise; not deployed; open premise `ExpectsV2`". My recommendation to him is yes. Until then the branch stays scratch and you keep working on it: the Lean tries, both records with `--update`, the suites. Due Wed 12:00Z, as you have it.
+4. The scratch-cross merge is void, as you say.
