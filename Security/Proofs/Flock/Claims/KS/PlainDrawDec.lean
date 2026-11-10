@@ -4,18 +4,18 @@ public import Proofs.Flock.Claims.KS.PlainDrawAcc
 public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
-# The deployed plain decoders at the statement's draw
+# The deployed plain decoders at the statement's sample
 
 `plain_hdec` and `plain_hdecH` are right for `plainVerdict`, whose acceptance sets the session up at the record's
-draw. Here the same decoders are right for `plainVerdictAt`, which sets it up at the statement's draw `d` and reads no
-draw in the record: `PlainDrawDecK`'s decoders at `keep := id` and the writer `wrPD`, which records its outcome there
+sample. Here the same decoders are right for `plainVerdictAt`, which sets it up at the statement's sample `d` and reads no
+sample in the record: `PlainDrawDecK`'s decoders at `keep := id` and the writer `wrPD`, which records its outcome there
 (`recordsLiveAtDK_id_of`), with `AcceptsAtD` and `TxNoOffAt` for `AcceptsAtDK id` and `TxNoOffAtK id`
 (`acceptsAtD_iff_acceptsAtDK_id`, `txNoOffAt_iff_txNoOffAtK_id`):
 
 * `recordsLive_wrPD1`: `wrPD` at a one-table outcome records it as one table's (`recordsLive_wrP1` at the setup at
   `d`), its rounds the outcome's.
 * `decodesTable_wrPD_sc`, `decodesTable_wrPD_scH`: `decodesTable_wrK_sc_of` and `decodesTable_wrK_scH_of` at `wrPD`,
-  `decodesTable_wrP_sc` and `decodesTable_wrP_scH` with the verdict at the draw `dj S`.
+  `decodesTable_wrP_sc` and `decodesTable_wrP_scH` with the verdict at the sample `dj S`.
 * `plain_hdecAt`, `plain_hdecHAt`: `plain_hdecAtK_of` and `plain_hdecHAtK_of` at `wrPD`, `plain_hdec` and
   `plain_hdecH` with `plainVerdictAt`.
 -/
@@ -53,7 +53,7 @@ theorem recordsLive_wrPD1 (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.
 
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at `wrPD` for accepting with no opening off `C` without a self-clash**, at
-one table: `decodesTable_wrP_sc` on the outcomes whose transcript flock-verify accepts at the setup at the draw `dj S`,
+one table: `decodesTable_wrP_sc` on the outcomes whose transcript flock-verify accepts at the setup at the sample `dj S`,
 whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there (`TxNoOffAt`). -/
 theorem decodesTable_wrPD_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -79,7 +79,7 @@ theorem decodesTable_wrPD_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **The deployed plain decoders are right at `wrPD` at hidden outputs**: `decodesTable_wrPD_sc` at the hidden tables
-and their openings `opnAtH` (`decodesTable_wrP_scH` at the draw `dj S`). -/
+and their openings `opnAtH` (`decodesTable_wrP_scH` at the sample `dj S`). -/
 theorem decodesTable_wrPD_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -112,8 +112,8 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw**: `plain_hdec` with
-`plainVerdictAt` for `plainVerdict`, from `decodesTable_wrPD_sc` at `d` and no drawn unit. -/
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdec` with
+`plainVerdictAt` for `plainVerdict`, from `decodesTable_wrPD_sc` at `d` and no sampled proof block. -/
 theorem plain_hdecAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -142,7 +142,7 @@ theorem plain_hdecAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
     ⟨(acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc, hr₀, (txNoOffAt_iff_txNoOffAtK_id _ _ _ _).1 hno⟩
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves**: `plain_hdecH` with `plainVerdictAt` for `plainVerdict`, from `decodesTable_wrPD_scH`. -/
 theorem plain_hdecHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

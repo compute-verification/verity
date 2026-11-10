@@ -9,8 +9,8 @@ public import Std.Tactic.Do
 
 The facts the reads of the release log rest on, for `Verity.Sampled.readLines` (`coinsRead`'s line reading: a coin
 tree's line its own release, `treeRelease`, and the other lines in pairs, a root's line, `rootOf`, and its coin's
-release) and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the draw's family
-after the registration's digest, `chunks` cuts the draw's coins, and a coin tree's line answers no family's frame
+release) and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the sample's family
+after the registration's digest, `chunks` cuts the sample's coins, and a coin tree's line answers no family's frame
 (`treeRelease_frame`).
 
 `BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a `Json` comparison v2 makes, or see that a
@@ -92,7 +92,7 @@ theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True�
   opt_spec _
 theorem getElem?_spec {α : Type} (l : List α) (i : Nat) : ⦃⌜True⌝⦄ l[i]? ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 
-/-! ## Counting the draw's coins -/
+/-! ## Counting the sample's coins -/
 
 /-- The pairs of `ls` whose root's line shows family `label` after `after` (`rootOf`). -/
 def countFresh (label : String) (after : ByteArray) : List String → Nat
@@ -155,7 +155,7 @@ def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
     pure (⟨.opening i s n, b, coins⟩, ts)
 
 /-- **The releases the lines after the release log's head show**, read as `readLines` reads them but each coin tree's
-line by `treeStep`, after the trees `ts` read so far: for the draw of family `label` after `after`, with the draw's
+line by `treeStep`, after the trees `ts` read so far: for the sample of family `label` after `after`, with the sample's
 coins `ξ` still to place and the root's line `pending` still to pair. -/
 def readTail (label : String) (after : ByteArray) (records : List Json) :
     List String → List (String × Json) → Option String → ByteArray → Option (List Verity.Release)

@@ -7,8 +7,8 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 
 `SampledCodeRuns`, a named assumption: the sampled verifier the service runs (`verity/core/protocols/sampled_proofs`) is
 the deployed sampling record at some `SamplingDeploy.Code` whose run meets the facts `Claims.Sampling.KS` takes of a
-record's run: its draw precedes the sessions (`DrawFixed`), each checked unit's session is a Flock run (`SessionRuns`)
-in Flock's masked scope (`SamplingDeploy.SessionsIn`), its slots are the draw law's (`DrawSlots`), each session opens
+record's run: its sample precedes the sessions (`DrawFixed`), each checked unit's session is a Flock run (`SessionRuns`)
+in Flock's masked scope (`SamplingDeploy.SessionsIn`), its slots are the sampling design's (`DrawSlots`), each session opens
 under interior roots the run fixes (`SessionOpens`, `InteriorFixed`), and its scope checks are the program's and the
 checks' (`ProgramScope`, `ChecksScope`); and some statement is in its scope. The code is Python, of which the tree has
 no Lean port, so these are facts about it no proof here can reach. The record's commitment (`SamplingDeploy.commit`:

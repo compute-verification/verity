@@ -60,15 +60,15 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
-  commitment, the draws and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
+  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
   manifests and R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, draws and coin record, which the check of this
+  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples and coin record, which the check of this
   case runs on the blobs instead of the files) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
-  (`a5.case_v2`: v1's case with the verdicts replaced by the drawn members' proofs' files, and ``blobs``; a window of
+  (`a5.case_v2`: v1's case with the verdicts replaced by the sampled members' proofs' files, and ``blobs``; a window of
   several members' in the per-member form, which v2 refuses, `OneStageZk.MULTI_REFUSED`), refused here when it commits
   to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
   ``case-v2-error.txt`` says why: v2 verifies `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the

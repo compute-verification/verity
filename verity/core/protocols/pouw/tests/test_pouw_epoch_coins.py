@@ -1,6 +1,6 @@
-"""PoUW's epoch coins (`coins`, `audit.Epoch.start`): the vectors are pinned and each pinned opening opens against its
+"""PoUW's execution-phase coins (`coins`, `audit.Epoch.start`): the vectors are pinned and each pinned opening opens against its
 root; the salt is the challenger's salt coin, opened after the weights' root; a foreign, tampered, mislabelled,
-early or other-epoch coin is refused, for the salt and for the sample; and a challenger opens each coin once."""
+early or other-execution phase coin is refused, for the salt and for the sample; and a challenger opens each coin once."""
 
 from __future__ import annotations
 
@@ -56,8 +56,8 @@ def setup():
 
 
 def test_the_lifecycle_takes_the_salt_and_the_draw_from_the_challenger():
-    """The challenger commits before the epoch, opens the salt coin after the weights' root and the sampling coin after the
-    transcript's root; the epoch's salt is `salt_of` that coin, and the audit draws from the sampling coin."""
+    """The challenger commits before the execution phase, opens the salt coin after the weights' root and the sampling coin after the
+    transcript's root; the execution phase's salt is `salt_of` that coin, and the audit samples from the sampling coin."""
     s, work, acts, prover, roots = setup()
     ch = E.challenger()
     opening = ch.open("salt", weights_root(roots))
@@ -118,7 +118,7 @@ def test_a_challenger_opens_each_coin_once_and_only_its_own_labels():
 
 
 def test_a_challenger_has_no_entropy_of_its_own():
-    """A challenger samples only from the entropy it is handed (a served one's is the Lean verifier of record's,
+    """A challenger samples only from the entropy it is handed (a served one's is the Lean verifier's,
     `verifier.coins`; `lean/check/tests/test_difftest.py` holds it to the Lean): there is no default, so none reads
     Python's generator, and an entropy that answers short is refused."""
     with pytest.raises(TypeError, match="entropy"):
@@ -132,7 +132,7 @@ def test_a_challenger_has_no_entropy_of_its_own():
 
 
 def test_a_served_challengers_coins_are_named_by_a_claim_instance():
-    """The Lean verifier of record's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
+    """The Lean verifier's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
     and a challenger keeps the claim instance its entropy carries; one without a claim instance, `os.urandom` among
     them, is refused as a served challenger's source (`challenger.served_claim`)."""
     assert Ch.served_claim(verifier.coins) == verifier.CLAIM == "uniform/io-getrandombytes"
@@ -145,7 +145,7 @@ def test_a_served_challengers_coins_are_named_by_a_claim_instance():
 
 
 def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
-    """The epoch's salt and flip coins, a live window's salt and round coins and its sampling session's flip coin, and
+    """The execution phase's salt and flip coins, a live execution phase's salt and round coins and its sampling session's flip coin, and
     every hm96 salt beside them, come from the challenger's named entropy alone: with the operating system's generators
     refusing, they are sampled,
     opened and checked against their commitments."""
@@ -179,7 +179,7 @@ OS_RANDOMNESS = {
 
 def test_the_served_path_takes_no_os_randomness_for_its_coins():
     """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
-    `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier of record's `coins` on
+    `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
     import ast
     root = Path(EC.__file__).resolve().parents[1]

@@ -2,7 +2,7 @@
 committed one token a row (`row_table.commit` over ``hm96-sha512/row-seg/v1`` rows, as `one_stage.registered` registers a
 row-seg value) with ok = 1, and `Embedding_v1`'s 0x7FFF fill with ok = 1 for a token outside [0, V); it refuses (ok = 0)
 another token's position, a changed row, salt, root, domain id or sibling; its parts cost the gates pinned here, and
-C-Flock lowers its selection by the builder its trace was taken from."""
+Flock lowers its selection by the builder its trace was taken from."""
 from __future__ import annotations
 
 import random
@@ -129,7 +129,7 @@ def test_the_selection_is_embedding_v1s_on_every_token_edge() -> None:
 
 
 def test_the_selection_lowers_by_the_builder_its_trace_was_taken_from() -> None:
-    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
+    """Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
     without one gate by gate; called so, the selection's builder traces to its own gates."""
     d = E.EmbeddingReadSelect
     S = SimpleNamespace(V=2, H=1)

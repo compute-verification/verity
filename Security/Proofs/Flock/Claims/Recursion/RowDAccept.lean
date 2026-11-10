@@ -172,7 +172,7 @@ variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Pr
 
 /-- **`TargetDMerkle` from the parts' `rec-open` pieces**: wherever `P` holds row D's pieces at `side` and `posAt`
 (`hP`), and at a decision the side agrees with each rep's decided side on what `QueryOpens` reads (`hside`) and the
-positions are those its verifier rows draw (`hpos`). Each rep's proof passes `MerkleOk` at its recorded rounds from Ligerito's first round: row C's decode gives
+positions are those its verifier rows sample (`hpos`). Each rep's proof passes `MerkleOk` at its recorded rounds from Ligerito's first round: row C's decode gives
 the caps' and openings' shapes, and the pieces open every query at the rows' positions (`DecAt.rowDPieces_cover`). -/
 theorem targetDMerkle_of_accept (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)

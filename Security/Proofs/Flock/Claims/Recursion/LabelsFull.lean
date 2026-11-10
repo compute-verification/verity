@@ -23,14 +23,14 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 `accRow_table` takes a staged part's table 0 to label its instances in order (`hidx`). At every accepted decision that
 holds, from the decision's own checks (`labels_full`):
 
-* the record's draw is the statement's: `checks` compares them up to key order (`drawEq`), and both are rebuilt
+* the record's sample is the statement's: `checks` compares them up to key order (`drawEq`), and both are rebuilt
   (`Flock.norm`: `recordDraw_norm`, `insO_draw_norm`), so they are equal (`eq_of_rel_norm`);
-* the verdict's last refusals (`fullDrawO`) decode that draw to every unit of its population, with no closure
+* the verdict's last refusals (`fullDrawO`) decode that sample to every unit of its population, with no closure
   (`fullDraw_some`, `Witness.fullDraw_ok`), so the units it proves are `range pop`;
-* the setup's `oneFull` leaves one table (`count ≤ 1`), set up at the statement's draw, whose instances are the units the
-  draw proves (`setupOne_stmt`, `drawn_spec`);
+* the setup's `oneFull` leaves one table (`count ≤ 1`), set up at the statement's sample, whose instances are the units the
+  sample proves (`setupOne_stmt`, `drawn_spec`);
 * under the inner shape the setup ran `checkLabels` (`RecIns.setup_labels`), which at one table checks table 0's labels
-  against the draw itself (`tableDraw d 1 0 = d`).
+  against the sample itself (`tableDraw d 1 0 = d`).
 
 `labels_run` and `labels_stagedAll` state it at each part an accepted run stages (`stagedPart_run`, `stagedAll_run`).
 -/
@@ -44,7 +44,7 @@ open Claims (Msg Out Prover run coinSeq replay)
 open FlockDeploy (Coin)
 open Lean (Json)
 
-/-- The checks after the verdict compare the record's draw with the statement's (`drawEq`). -/
+/-- The checks after the verdict compare the record's sample with the statement's (`drawEq`). -/
 theorem checks_drawEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
     (h : FlockDeploy.checks zk s spec x link c₁ mids f = .ok ()) :
@@ -57,7 +57,7 @@ theorem checks_drawEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x 
   · assumption
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- A record's draw is rebuilt (`Flock.norm`). -/
+/-- A record's sample is rebuilt (`Flock.norm`). -/
 theorem recordDraw_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Exec.recordDraw r = some d) :
     Flock.norm d = d := by
   unfold FlockSoundness.Discharge.Exec.recordDraw at h
@@ -66,7 +66,7 @@ theorem recordDraw_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Ex
     | (cases h; done)
     | (obtain rfl := Option.some.inj h; exact FlockDeploy.norm_norm _)
 
-/-- A recursive statement's draw is rebuilt (`Flock.norm`, `Raw.ins_draw`). -/
+/-- A recursive statement's sample is rebuilt (`Flock.norm`, `Raw.ins_draw`). -/
 theorem insO_draw_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (hd : i.base.read.draw = some d) :
     Flock.norm d = d := by
   unfold insO at h
@@ -84,7 +84,7 @@ theorem insO_draw_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (
     obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
     exact FlockDeploy.norm_norm d₀
 
-/-- Under an inner shape the recursive setup ran `RecVStar.checkLabels` at the statement's draw. -/
+/-- Under an inner shape the recursive setup ran `RecVStar.checkLabels` at the statement's sample. -/
 theorem RecIns.setup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts))
     {n : RecVStar.Inner} (hn : s.inner = some n) :
     RecVStar.checkLabels s.base.read.draw s.base.read.I.count sts = .ok () := by
@@ -98,8 +98,8 @@ theorem RecIns.setup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
        assumption)
     | simp_all
 
-/-- Under the verifier's inner shape, `RecSetup.fullDraw` at a draw passes only where the draw decodes and the
-witness's draw check passes at its population. -/
+/-- Under the verifier's inner shape, `RecSetup.fullDraw` at a sample passes only where the sample decodes and the
+witness's sample check passes at its population. -/
 theorem fullDraw_some {n : RecVStar.Inner} {rec : Bool} {d : Json} {record : String}
     (h : (RecSetup.fullDraw (some n) rec (some d) record).isOk = true) :
     ∃ U, Draw.UnitDraw.ofJson d = .ok U ∧ Flock.Witness.fullDraw U.population record = .ok () := by

@@ -65,9 +65,9 @@ theorem rsAtG_computes : (rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).Compute
     (Layout.scopeGenH_spec hU hgen).2
 
 /-- **The headline at the executable over hidden-output sessions, at the general form.** Against any live prover `τ`,
-flock-verify accepts with at least `K` wrong units of the template instance's program `instProg c n`, at the simulated
+flock-verify accepts with at least `K` incorrect proof blocks of the template instance's program `instProg c n`, at the simulated
 prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`. Its circuit condition is `scopeGenH`;
-`hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its draws, at the model's leaf of the tags'
+`hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its samples, at the model's leaf of the tags'
 leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves). -/
 theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
@@ -143,7 +143,7 @@ theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 /-- **One hidden-output `--zk` sampled session is sound, at the general form.** `ZkHidden.zk_session_soundH` at the
 template instance's program `instProg c n`: for any live prover `τ`,
 `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`. Its circuit condition is
-`scopeGenH`; `RunsZC` at the law's draws is `runsZC_liveHI`'s. -/
+`scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
@@ -153,12 +153,12 @@ theorem zk_session_soundH_gen
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hgen : Layout.scopeGenH c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's draw at each of the law's draws
+    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOkH I) (hRec : RecordsLiveZK I dj wr)
@@ -199,7 +199,7 @@ theorem zk_session_soundH_gen
   exact zk_headline_exec_on execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ _ _ hc'
 
 /-- **One hidden-output `--zk` sampled session is sound under `live-verifier`, at the general form.**
-`zk_session_soundH_gen` at the link points of the law's own draws, `mPtsOf c.g (∑ s, ks s)`, with the record's custody
+`zk_session_soundH_gen` at the link points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody
 (`RecordCustodyZK`) in place of `hRec` and `hDraw`, as `ZkHidden.zk_session_soundH_custody` is
 `zk_session_soundH`'s. -/
 theorem zk_session_soundH_custody_gen
@@ -208,17 +208,17 @@ theorem zk_session_soundH_custody_gen
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hgen : Layout.scopeGenH c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the law's draws
+    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its draw file are the live session's
+    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

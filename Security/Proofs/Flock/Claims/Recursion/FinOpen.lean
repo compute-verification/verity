@@ -138,7 +138,7 @@ theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × Lis
 `FinPieces` from `finPieces_finOpen`. The last round's pieces are every earlier round's openings at the parts that
 commit them, then the element-level last message's at the parts `rest` names. What stays open at the dense form is
 `PartChecksBV` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
-coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
+challenger's live-coin part's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
 theorem ksLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)

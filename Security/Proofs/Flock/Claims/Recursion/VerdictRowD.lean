@@ -16,7 +16,7 @@ query at a time (`OpenedPlain.QueryOpens`), and the openings' and caps' shapes.
 * `capsAt_of_decode`: a decoded proof's caps have the schedule's shape at a 64-byte digest (`decodeProof_sizes`).
 * `DecAt.rowD_of_levels`: `RowD` where the table's scheme is `plain` (row G's `merkle`), its schedule is `fast100`'s
   (row G's `fast`), the caps have the schedule's shape, each level's openings have the level's `q` queries' shape
-  (`LevelShaped`), and at the verifier rows each query of each level opens at the position the rows draw for it.
+  (`LevelShaped`), and at the verifier rows each query of each level opens at the position the rows sample for it.
 * `DecAt.rowD_of_queries`: the same from row G's `merkle` and `fast` and row C's `decode`, which give the caps' and
   openings' shapes (`OpenedDecode`): only each query's opening is left.
 -/
@@ -91,7 +91,7 @@ variable {rd : Claims.Msg → Option FlockDeploy.FinalP} {x : Claims.Msg} {ms : 
 
 /-- **Row D from each query's opening**: at table `i`'s plain scheme and `fast100` schedule, where rep `r`'s caps have
 the schedule's shape, each level's openings have the shape of the level's `q` queries, and, at the verifier rows, each
-query `j` of each level `ℓ` opens at the position the rows draw for it (`QueryOpens`), every level's queries pass. The
+query `j` of each level `ℓ` opens at the position the rows sample for it (`QueryOpens`), every level's queries pass. The
 consistency sums are P's (`consOf_at`). -/
 theorem rowD_of_levels
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
@@ -126,7 +126,7 @@ theorem rowD_of_levels
 
 /-- **Row D from row G, row C's decode, and each query's opening**: the caps' and openings' shapes are the decoded
 proof's at the plain scheme (`capsAt_of_decode`, `levelShaped_of_decode`), so what is left is that each query of each
-level opens at the position the verifier rows draw for it. -/
+level opens at the position the verifier rows sample for it. -/
 theorem rowD_of_queries
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hfast : Flock.fast100 (D.files cls i).st.m = some (D.files cls i).sch)

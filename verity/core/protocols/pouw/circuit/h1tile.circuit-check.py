@@ -16,7 +16,7 @@ def _pouw_roots() -> list[Any]:
     grow linearly in lanes and in KS. None where `circuit.segment` is not on the tree, which is where `PouwH1Tile`
     is registered. `PouwU129`, the one-stream recombinations, the wrap pieces, the peel pieces, `PouwOrBit` and `PouwMask32`
     are catalog roots (primitives and static-free composites). Then `TemplateInstances_v1` of `PouwH1Tile_v1` at N = 2
-    (`population`, made as every root here is, unbuilt: its Program's port rules are `test_h1tile_population`'s), a window's
+    (`population`, made as every root here is, unbuilt: its Program's port rules are `test_h1tile_population`'s), an execution phase's
     program over the pinned tile: each instance's salt a coin, its position a position and its receipt a sink."""
     from verity.core.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.defs import bind

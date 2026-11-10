@@ -1,5 +1,5 @@
 """Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
-(``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit draws, and the unit's public
+(``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
@@ -34,7 +34,7 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the law is read off builds at every V in
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the sampling design is read off builds at every V in
   :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
 - ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
@@ -88,7 +88,7 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
-#: token-select's V − 1 ArgmaxStep scan: the law (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
+#: token-select's V − 1 ArgmaxStep scan: the sampling design (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
 #: checked against an exact build at SCAN_CHECK
 SCAN_POINTS = tuple(range(2, 140))
 SCAN_CHECK = 1030

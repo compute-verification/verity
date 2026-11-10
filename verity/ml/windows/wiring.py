@@ -130,7 +130,7 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
 
 def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any) -> dict[str, str]:
     """`check` on the sampled proof blocks alone (``units``, global unit indices): each sampled proof block's wired rows' ``b || c`` are its
-    writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every drawn wire holds."""
+    writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every sampled wire holds."""
     drawn = np.unique(np.asarray(list(units), dtype=np.int64))
     bad: dict[str, str] = {}
     at = bases(members)

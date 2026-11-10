@@ -208,7 +208,7 @@ theorem iu_reads_packed {k : ℕ} (D : RegisteredCircuit) (c : PackedChain D.D k
   exact_mod_cast (Nat.add_le_add_right this _).trans hcard
 
 open Classical in
-/-- **The partial-sum law over the pieces, with a budget for the dark gates**, on a packed chain:
+/-- **The partial-sum rule over the pieces, with a budget for the dark gates**, on a packed chain:
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`, with `G_S` counting products, whatever `k`. -/
 theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : PackedChain c.D k}
     {dd emax : ℕ} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K)

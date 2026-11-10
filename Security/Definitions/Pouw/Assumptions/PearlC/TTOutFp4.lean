@@ -44,7 +44,7 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`.
 - **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitDebit`), whose executable reference is
   `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
-  split's expected saving per row window under the exact noise law, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
+  split's expected saving per row window under the exact noise distribution, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
   firings whose lone skip leaves the word unchanged (`Fp4Skip.fp4PureFlags`), the positions whose A′ and B̃ codes are
   both salt-dead, the forming elements that are salt-dead or needed by no word, the sub-grid blocks
   (`Fp4Dev.subgridFlags4`), F2 (the masked int8 route on flat scale bytes, at the tile's, the rows' and the block
@@ -63,7 +63,7 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
 - **Exactness is per run.** Nothing here assumes the chain is exact. A claim that equates `C̃` with the exact product
   carries a per-word exact-run condition (option (b); `PeelFp4Proofs.ExactRuns4`).
 - **The salt-dead predicate judges the E2M1 code.** `Fp4Dev.saltDead4` asks whether the element's code value after the
-  noisy block scale and the cast is the same at every draw, not whether the noise atom's word is. A forming skip needs
+  noisy block scale and the cast is the same at every sample, not whether the noise atom's word is. A forming skip needs
   the code, and a dominant element's code can be constant while its word is not.
 - **ρ_D is proved from `PinnedScales`, which is argued, not proved.** `Fp4Dev.RhoDFp4` holds under
   `CodeProofs.PinnedScales` (`CodeProofs.rhoDFp4At_ninety`, with `CodeProofs.rhoDFp4At_ninety_eq : RhoDFp4At 90 =
@@ -71,7 +71,7 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   on the FP32 error bound of `s5_stats`' `ρ²`, about `(k/256 + 13)·u ≈ 270u ≈ 2^-15.9` at `k = 2^16`, against the
   `2⁻¹⁰` allowance, and on the numerical table of `s5_stats`' error. There is no Lean
   lemma about `s5_stats` until `s5_stats` is pinned.
-- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are drawn from
+- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are sampled from
   `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), so `B̃` is a function of the salt
   and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. A variant that fixes
   `B̃` before A's salt is outside D₄ and needs the per-salt split debit.

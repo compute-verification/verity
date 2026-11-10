@@ -9,7 +9,7 @@ The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
   i = blocks_per_segment · s + v being block v of segment s;
 - block i's payload is W bytes [2054 i, 2054 i + 2054), bytes 2 .. 2055 of its decoded row, whose bytes 0 and 1 are zero;
 - each tensor (s8 [N, K] row-major) starts on a block, `first_block`, takes ⌈N K / 2054⌉ blocks, and its last block's
-  payload is zero past the tensor; in its layer's staging buffer it starts at `staging_offset`;
+  payload is zero past the tensor; in its layer's load buffer it starts at `staging_offset`;
 - K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix` of the protocol's 24-byte salt (`registered_prefix`).
 
 A layer's matrices (`MATRICES`) are its four tensors: QKV (the query heads, then K, then V: 16,512 x 16,384 at the frozen

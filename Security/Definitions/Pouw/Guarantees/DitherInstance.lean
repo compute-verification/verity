@@ -72,7 +72,7 @@ use: with `WorkSound`'s hypotheses, and
   a time, so they fit in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted, only
   its exchanged bits and its oracle calls, under the cap (`Prover`). So a served period of about 1e8–1e9 sampling
   blocks a week is covered. `q (Δ + τ_ans) ≤ T` over the `q` selected blocks is the honest replica's schedule (its
-  answers through the firewall one at a time), not a premise of this bound,
+  answers through the ZK server one at a time), not a premise of this bound,
 
 for every prover `A`, the probability over the oracle and the verifier's coins that the verdict accepts its period and
 other work `z` fits on the devices beside its sampling blocks' timed work with

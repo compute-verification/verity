@@ -32,7 +32,7 @@ HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (
 
 def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str = step_rows.NAME) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
-    ``seed`` draws its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
+    ``seed`` samples its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
     of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members': rows-sha512, or vllm-v1 by name standing in for an old record."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members

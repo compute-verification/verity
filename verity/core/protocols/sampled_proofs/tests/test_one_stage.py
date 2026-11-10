@@ -551,7 +551,7 @@ def test_stratified_draw_checks():
     law = D.derive(prog, q, rule)
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
-    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid draw
+    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid sample
     assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, law).codes == ("strata-count",)
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
     assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
@@ -772,7 +772,7 @@ def _work_program():
 
 def test_derive_expands_the_work_rule_over_the_verifiers_table():
     """PAIR does the PoUW work; XOR3 stands for proof blocks credited nothing (dequantization, or filler: proof blocks of padded rows only,
-    or declared uncredited), which draw their floor for integrity and add nothing to W."""
+    or declared uncredited), which sample their floor for integrity and add nothing to W."""
     prog, q = _work_program()
     table = {PAIR.id: 10, XOR3.id: 0}
     law = D.derive(prog, q, D.parse_law("work:4"), table)
@@ -843,7 +843,7 @@ def test_work_draw_checks_and_closures():
 
 def test_audit_record_under_the_work_law():
     """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
-    work sizes; the zero-work stratum is bounded by its floor draw."""
+    work sizes; the zero-work stratum is bounded by its floor sample."""
     from verity.core.protocols.profile import Stratified, Stratum
     prog, q, rule, table, rec = _work_registration()
     law = D.derive(prog, q, rule, table)

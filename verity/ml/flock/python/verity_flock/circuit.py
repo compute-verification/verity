@@ -573,7 +573,7 @@ def unit_witness(definition) -> dict:
 
 
 def past_range(w: dict) -> str | None:
-    """Why a unit needing `unit_witness`'s ``w`` is past C-Flock's proved range of 2^`K_MAX` witness bits, or None."""
+    """Why a unit needing `unit_witness`'s ``w`` is past Flock's proved range of 2^`K_MAX` witness bits, or None."""
     if w["k"] <= K_MAX:
         return None
     return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
@@ -583,7 +583,7 @@ def past_range(w: dict) -> str | None:
 
 def refuse_past_range(definition, name: str) -> dict:
     """`unit_witness`, or ValueError (`past_range`), before any lowering, for a unit whose Definition alone needs more than
-    C-Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
+    Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
     32 × 32 H1 tile at K = 2048 ran out of 600 GiB on the way). `compose` refuses every unit this refuses unless its
     lowering lays out fewer than half the witness bits its Definition counts (its slot alone would be 2^`K_MAX`)."""
     w = unit_witness(definition)
@@ -621,7 +621,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
-    descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
+    descriptor id of the Definition the unit lowers, which a template query may list (a size class's own template id is
     ``unit-class/...``). ``extra_meta``: keys a statement adds to META for its verifier (`rec_residuals.HOLO_KEY`), none of
     them one META already has.
 
@@ -636,7 +636,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
     META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
     ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
-    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form.
+    the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
     (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
@@ -990,7 +990,7 @@ def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | Non
     """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's): fresh from the
     OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's verifier pod can stage its own public
     file. A key makes the salts known to whoever holds it; the verifier's checking process never reads them either way (its file
-    has none). A serving committer draws its own."""
+    has none). A serving committer samples its own."""
     rows = {p.name: range(tables[p.name]) if tables else range(lo, hi) for p in ports}
     if key is None:
         return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}

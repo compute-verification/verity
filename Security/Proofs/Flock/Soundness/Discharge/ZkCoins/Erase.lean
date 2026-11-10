@@ -3,11 +3,11 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
 
 /-!
-# The session on committed coins, drawn live, is the live session
+# The session on committed coins, flipped live, is the live session
 
 `Er g G`: the committed-coin interaction `g` is `G` with some of `G`'s coins read off committed rounds' blocks through
-balanced decoders. Then `g` drawn live (`erase`) has `G`'s value for every event (`value_erase`), and `Er` is preserved
-by `bind`, `interleave`, `batch`, `tagRep` and `coinAt`. So `sessionZKC`, drawn live, has `sessionZK`'s value
+balanced decoders. Then `g` sampled live (`erase`) has `G`'s value for every event (`value_erase`), and `Er` is preserved
+by `bind`, `interleave`, `batch`, `tagRep` and `coinAt`. So `sessionZKC`, sampled live, has `sessionZK`'s value
 (`er_sessionZKC`).
 -/
 
@@ -48,7 +48,7 @@ theorem balanced_sum [Nonempty Blk] {C : Type} [Fintype C] {d : Blk → C} (hd :
         rw [h]
         exact ENNReal.mul_inv_cancel (Nat.cast_ne_zero.2 Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- **Drawn live, `g` has `G`'s value.** -/
+/-- **Sampled live, `g` has `G`'s value.** -/
 theorem value_erase [Nonempty Blk] {g : TGame I Blk α} {G : Game α} (h : Er g G) (p : α → Prop) :
     value p g.erase = value p G := by
   induction h with
@@ -170,7 +170,7 @@ theorem er_afterC (dc : Decoders Blk) (R : ℕ) {J : ℕ} (j : Fin J) (A : Arith
   exact ((er_tagRep dc _ 0 _).interleave (er_tagRep dc _ 0 _)).map _
 
 omit [Fintype K] in
-/-- **The session on committed coins is the live session with its coins read off C-Flock ZK's rounds.** -/
+/-- **The session on committed coins is the live session with its coins read off Flock ZK's rounds.** -/
 theorem er_sessionZKC (dc : Decoders Blk) (R : ℕ) (A : Arith F K) (ts : List (TabZK F mPts)) :
     Er (sessionZKC dc R A ts) (sessionZK A ts) :=
   .send _ fun Cs => er_coinAt dc none fun pts =>

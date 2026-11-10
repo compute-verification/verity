@@ -8,10 +8,10 @@ The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
 auditor host's challenger at ``--challenger``, in the session the gate opened for the window (``--session``, the
 gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
-is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
-record's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
+is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean
+verifier's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
 verifier credits. Once the engine closes, the circuit replay (`check.replay.pouw_circuit.replay`) runs twice, the run's
-calls as one window under the work law at a budget of K = ``--draws``:
+calls as one window under the work sampling design at a budget of K = ``--draws``:
 
 - **honest**: the calls as committed;
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,

@@ -7,7 +7,7 @@ Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nby
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
 `ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
-in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies C-Flock proves included); the served window is the
+in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the served window is the
 class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -25,7 +25,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
-  (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
+  (a sampled member's port tree is derived at the audit), so no input row is re-leafed.
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).

@@ -4,10 +4,10 @@ public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
-# The sampling claims' faulty units are wrong on the registration
+# The sampling claims' incorrect proof blocks are wrong on the registration
 
 The sampling claims (`Claims.Sampling`) count a slot faulty (`Claims.Sampling.Faulty`) when no interior makes its proof
-units correct on the witness's openings; the game form (`Flock.Guarantees.EndToEnd`) counts a unit wrong on the
+blocks correct on the witness's openings; the game form (`Flock.Guarantees.EndToEnd`) counts a unit wrong on the
 registration (`wrongRegZ`) at a transcript, `XplurZC` there. This file relates the two, in the direction a bound on the
 game's event gives a bound on the claims': at a one-stage statement whose program, partition and openings are the
 game's circuit, partition and transcript, every faulty slot is a unit wrong on every registration.
@@ -15,7 +15,7 @@ game's circuit, partition and transcript, every faulty slot is a unit wrong on e
 * `ofOp`: a game gate as a gate of the Boolean profile; a row (the AND of two XORs) has none, so `GatesAgree` holds only
   of a circuit without rows;
 * `GatesAgree C p`: the program `p` is the circuit `C` gate by gate, and returns only `C`'s outputs;
-* `UnitsAgree P Q`: the partition `Q` has one slot per unit of `P`, slot `u` one proof unit, the gates of unit `u`;
+* `UnitsAgree P Q`: the partition `Q` has one slot per unit of `P`, slot `u` one proof block, the gates of unit `u`;
 * `OpensOn P val Xt`: the openings `val` carry the transcript `Xt` on every committed wire of `P`;
 * `runIn_localEval`: a unit's gates computed by the claims' `runIn` are the game's `localEval`;
 * `not_faulty_of_correct`: a unit correct in `Xt` is not faulty;
@@ -172,7 +172,7 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
     refine ⟨Xt ⟨g, hgN⟩, by rw [hrefg]; exact hO _ hgc, ?_⟩
     rw [runIn_localEval hG hO hl href g ⟨g, hgN⟩ rfl hgu, hc _ hgc hgu]
 
-/-- **A faulty slot is a wrong unit** of the transcript. -/
+/-- **A faulty slot is an incorrect proof block** of the transcript. -/
 theorem wrong_of_faulty {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.CommitmentScheme Bool}
     {s : _root_.Claims.Sampling.AuditStatement} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
     {Xt : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xt)

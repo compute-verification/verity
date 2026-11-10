@@ -34,7 +34,7 @@ Parts = tuple[tuple["Shape", int], ...]
 class Shape:
     """A Definition at its statics, `id` naming it: one instance has `ands` ANDs, credits `work` and forfeits `influence`
     downstream when wrong, returns `out_bits` over `out_gates` gates, opens `rows` (bytes each) when proved, and has serving
-    commit `commit_bits` in `commit_rows` rows when it is a proof block; a statement holds at most `cap` of it (0: past C-Flock's
+    commit `commit_bits` in `commit_rows` rows when it is a proof block; a statement holds at most `cap` of it (0: past Flock's
     block, never a proof block).  It descends into
     `parts` (its body's children, each with its count per instance) or any of `ways`, labelled."""
 

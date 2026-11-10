@@ -200,7 +200,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     rw [hN]
     unfold FlockComplete.piopRoundsZk
     rw [e1]
-  -- the rep's own table, `tabOfLevel0` at a drawn level 0, and its bounds
+  -- the rep's own table, `tabOfLevel0` at a sampled level 0, and its bounds
   obtain ⟨g, d, l, hl, htr⟩ := hR k tr hr hreal
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have htsch : tr.sch = y.sch := by

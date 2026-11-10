@@ -10,10 +10,10 @@ import all Init.Data.Array.Basic
 # The registered check at an accepted hidden-output `--zk --registered` outcome
 
 `checked_of_acceptsH`: `checked_of_accepts` at hidden outputs. The one table's statement is setupHidden's at the
-record's draw `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`Hidden.setupHidden_spec'`), which is
+record's sample `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`Hidden.setupHidden_spec'`), which is
 `HmRow.drawn` at the circuit without its output words. `checkRegistered` is the same `Registered.check`
 (`checkRegistered_ok`), so the rest is `checked_of_accepts`' proof:
-the drawn instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
+the sampled instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
 `Hidden.loadPublic_nil`), whose leaf is the hidden layout's registered leaf at `(u, q)`.
 -/
 
@@ -28,7 +28,7 @@ variable {mPts n : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted hidden-output outcome.** At an outcome
 `verify --zk --registered F` accepts over hidden outputs (`own` F's ports), each registered read of the hidden shadow
-layout that is the verifier's own at the outcome's draw (`OwnReadsH`) has its registered leaf open the root `own` holds
+layout that is the verifier's own at the outcome's sample (`OwnReadsH`) has its registered leaf open the root `own` holds
 at the position `own` gives, through `regPathsH`. -/
 theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))

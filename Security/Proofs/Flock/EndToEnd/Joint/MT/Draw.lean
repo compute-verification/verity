@@ -3,16 +3,16 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 
 /-!
-# The coin server's stratified draw at `J` tables
+# The challenger's live-coin part's stratified sample at `J` tables
 
-`drawOkZKHJ_of_accepts_stratified`: at a draw of the live stratified law (`Law.execOS` at `stratified Kd St`) that
+`drawOkZKHJ_of_accepts_stratified`: at a sample of the live stratified sampling design (`Law.execOS` at `stratified Kd St`) that
 flock-verify `--zk` accepts, at any number of tables, `DrawOkZKHJ` holds at `mPtsOf c.g ((∑ s, ks s) / nTab I)` link
-points, from the record's custody alone (`RecordsLiveZKJ`, and `DrawFileZK` at the stratified law). The draw file
-decodes only to the verifier's draw of the drawn units, `∑ s, ks s` of them (`execOS_draw_card_or`; a run that reads
-past its bytes draws every unit, and then `sum_ks_of_univ`), and an accepted record's units split into the tables evenly
+points, from the record's custody alone (`RecordsLiveZKJ`, and `DrawFileZK` at the stratified sampling design). The sample file
+decodes only to the verifier's sample of the sampled proof blocks, `∑ s, ks s` of them (`execOS_draw_card_or`; a run that reads
+past its bytes samples every unit, and then `sum_ks_of_univ`), and an accepted record's units split into the tables evenly
 (`setupTables_units`), so `drawOkZKHJ_of_size` applies. It is `drawOkZKHJ_of_accepts`'s statement, and
 `drawOkZKHJ_of_custodyJS` gives the same from `RecordCustodyZKJS` (`ZkReg/Guarded.lean`), where `verify --zk` takes a
-stratified draw at several tables.
+stratified sample at several tables.
 -/
 
 @[expose] public section
@@ -25,7 +25,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`DrawOkZKHJ` at an accepted outcome of the live stratified law, at any count.** -/
+/-- **`DrawOkZKHJ` at an accepted outcome of the live stratified sampling design, at any count.** -/
 theorem drawOkZKHJ_of_accepts_stratified (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

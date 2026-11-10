@@ -13,7 +13,7 @@ The replay re-derives each of the rep's coins from the rounds the rep recorded, 
 zerocheck and lincheck absorbed what the replay absorbs. The cut's zerocheck and lincheck at masked values `mk` are the
 masked prover's at the pads `mk` and the empty trace, whose plain values are all `0`: so their proofs and transcripts
 are `ZcZ`'s and `LcZ`'s, and `replayWith_ok` runs the replay to its end wherever the circuit fold at the coins returns
-a vector of width `64`. That fold reads only coins, so it is the firewall's.
+a vector of width `64`. That fold reads only coins, so it is the ZK server's.
 
 * **The empty trace** (`tr0`): every plain zerocheck and lincheck value is `0` (`zc_msg_nil`, `lc_msg_nil`, …).
 * **Closed forms** (`zerocheckCut_closed`, `lincheckCut_closed`): answered by `asksCut` at replies with its coins, the

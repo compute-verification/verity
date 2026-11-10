@@ -1,4 +1,4 @@
-"""`answers`: the verifier of record's answers on a window's statements, each run once as credit asks for it and shared
+"""`answers`: the verifier's answers on a window's statements, each run once as credit asks for it and shared
 by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
 core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that accepts
 a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
@@ -97,7 +97,7 @@ def statements(windows: list[dict]) -> list[str]:
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("memo", ["scratch directory", "one process"])
 def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(seed, memo, record, exe, tmp_path):
-    """Credit's window check and the period's over one memo: the first runs the verifier once on each statement, drawn
+    """Credit's window check and the period's over one memo: the first runs the verifier once on each statement, sampled
     and live; the second runs it on none, taking each answer by key; both judge as they do with no memo. The memo's
     directory is the verifier's alone (0700, each answer 0600)."""
     d, windows = kit()._period(seed, tmp_path / "proofs")
@@ -214,7 +214,7 @@ FAILURES = {
 
 @pytest.mark.parametrize("failure", FAILURES)
 def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, exe, tmp_path):
-    """Window 0's last drawn statement rejected, refused or not verifiable: its window check and the period's both
+    """Window 0's last sampled statement rejected, refused or not verifiable: its window check and the period's both
     refuse, with the refusals they give with no memo; the period's takes the window check's answer by key without
     running the verifier, except for a session that is missing, which has no key and which each step's verifier meets."""
     d, windows = kit()._period(0, tmp_path / "proofs")

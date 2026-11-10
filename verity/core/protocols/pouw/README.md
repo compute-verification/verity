@@ -17,8 +17,8 @@ one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.pro
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). H1's development executable
-(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's period check, `PouwCheck.Period.protocol`
-(`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every window of the period naming the record as its
+(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
+(`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
 Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
@@ -37,7 +37,7 @@ The verifier is Lean, the source of truth for what PoUW checks: three Lake packa
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
   fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
-- `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, epoch coins and samples, all SHA-512.
+- `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, execution-phase coins and samples, all SHA-512.
 
 The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
@@ -46,7 +46,7 @@ the challenger's entropy, which the Lean reads from the operating system. `RECOR
 setting it to `"python"` is the one line that undoes it.
 
 An **execution phase** is the served steps one commitment covers (PoUW's older name, "commit period"). The code and the
-Lean call it a window (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
+Lean call it an execution phase (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
 execution phase:
 
 1. The weights' root binds every weight's committed rows, and a credit period's open signs it.
@@ -59,7 +59,7 @@ execution phase:
 5. Each sampled proof block is proved in zero knowledge over the circuit its tile template pins (`PouwCheck.Tile`), and
    opened against the committed entries (`PouwCheck.Opening`).
 6. `PouwCheck.check` gives the verdict. A served execution phase is credited only if every step accepts. A credit period
-   (the code's period, `credit.period_credit`) is the execution phases between an open, which signs the weights' root and
+   (the code's credit period, `credit.period_credit`) is the execution phases between an open, which signs the weights' root and
    commits the circuit files, and a close; it counts only closed and complete.
 
 How it is run: the difftests run the Lean against the Python on generated cases
@@ -117,7 +117,7 @@ sparse noise with row tags and three certifier-streamed coin lanes, every k32 wo
 - the fold is exact on |A·Bᵀ| ≤ 2^22;
 - stock's decode price is reported both ways.
 
-v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window.
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served execution phase.
 
 ## Security assumptions and guarantees
 
@@ -179,5 +179,5 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+- `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/vectors`.
   `benchmarks/pouw/` is the measuring side; nothing here imports it.

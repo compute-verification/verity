@@ -20,7 +20,7 @@ block statement on the inner messages and the inner coins.
   the values of the side-`A` entries at `(i mod 2^slotLog, c mod 2^slotLog)`; `B₀` likewise; with the class's pin and the
   public regions. `Canonical`: the value-1 entries strictly increasing in (side, column, row), then the padding
   `(A, 0, 0, 0)`.
-* `InnerAccepts`: C-Flock's compiled table under a leaf scheme `Lf` (`Model.tableCL`), after its level-0 cap and the
+* `InnerAccepts`: Flock's compiled table under a leaf scheme `Lf` (`Model.tableCL`), after its level-0 cap and the
   link points, played on that statement with the inner messages and coins (`Game.Plays`), ends accepted.
 * `hidden_sound_iop`, `hidden_sound_fast100`: the interactive table (oracles sent whole, live coins) on every hidden
   statement of the class: when no witness satisfies it, every prover makes it accept with probability at most
@@ -31,7 +31,7 @@ block statement on the inner messages and the inner coins.
   (`Inner`) on a fixed schedule with live coins (`schedInner`), its statements the hidden templates of the class, and its
   `InnerSound`: at most `tableError`, at most `2^-205` for `22 ≤ m ≤ 33`.
 * `flockInnerCL`, `flockInnerCL_accepts`: the compiled table (`Model.tableCL` under `Lf`) as the recursion's inner
-  protocol on the same schedule and statements. Its round messages are what the firewall commits and V* registers: the
+  protocol on the same schedule and statements. Its round messages are what the ZK server commits and V* registers: the
   level-0 cap, each round's proof messages and Merkle tops, then the openings with their salts. It accepts a transcript
   exactly when the transcript's steps are a cap, the link points, and a run of `tableAfterL` (what `InnerAccepts` plays)
   to an accepted outcome.
@@ -123,7 +123,7 @@ section Target
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl W : Type}
   [Inhabited W]
 
-/-- **V*'s target relation.** C-Flock's compiled table under the leaf scheme `Lf`, on the hidden statement
+/-- **V*'s target relation.** Flock's compiled table under the leaf scheme `Lf`, on the hidden statement
 `M.toStatement regs` at the schedule `sch`, after its level-0 cap `cap₀` and the link points `pts` (`tableCL_eq`), played
 with the inner messages `ms` and the inner coins `cs` (read through `ι`), ends accepted. This is the run flock-verify
 refines each table it accepts to (`accepts_tables_hm96_of_leaf`). -/
@@ -196,7 +196,7 @@ theorem hidden_sound (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited S
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **C-Flock's inner protocol on the class**: the statement is a hidden template of the class, the verifier the
+/-- **Flock's inner protocol on the class**: the statement is a hidden template of the class, the verifier the
 interactive table (`Model.table`: the oracles sent whole) on its block statement, played on the schedule `(T, CT)` with
 live coins (`schedInner`), and the statement holds when a witness satisfies it. -/
 def flockInner (A : Arith F K) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) :
@@ -204,7 +204,7 @@ def flockInner (A : Arith F K) (cls : HClass) (regs : List (Region cls.kLog (cls
   schedInner T CT (Hidden cls) (fun M => table A (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
     (fun _ out => out.1 = true) (fun M => ∃ z, (M.toStatement regs).Satisfies z)
 
-/-- **C-Flock's `InnerSound` at live coins, over the class**: on every hidden template of the class whose statement no
+/-- **Flock's `InnerSound` at live coins, over the class**: on every hidden template of the class whose statement no
 witness satisfies, every prover on the schedule makes the inner verifier accept with probability at most the table's
 error, which is the same for the whole class. Statistical: no assumption. -/
 theorem flock_inner_sound (A : Arith F K) (hA : A.Correct) (cls : HClass)
@@ -224,10 +224,10 @@ theorem flock_inner_sound_fast100 (A : Arith F K) (hA : A.Correct) (cls : HClass
   (flock_inner_sound T CT A hA cls regs sch hsch hlay M hno s).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
-/-- **C-Flock's compiled inner protocol on the class**: `flockInner` with the compiled table (`Model.tableCL` under the
+/-- **Flock's compiled inner protocol on the class**: `flockInner` with the compiled table (`Model.tableCL` under the
 leaf scheme `Lf`) as the verifier. Its round messages are the level-0 cap, each round's proof messages and Merkle tops
 (each of rep 0's steps after the prover's choice `true`, as `interleave` reads it), and, in the round after the last
-coin, the openings with their salts, which is what the firewall commits and V* registers; the oracles are never sent
+coin, the openings with their salts, which is what the ZK server commits and V* registers; the oracles are never sent
 whole. Its statements and their truth are `flockInner`'s. -/
 noncomputable def flockInnerCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))

@@ -46,7 +46,7 @@ theorem checkFactsH : CheckFacts c := by
   exact check_facts P.typed hls
 
 include hpub in
-/-- **The site fact at a drawn table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
+/-- **The site fact at a sampled table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
 the check (`Layout.vu_lt_pow2_of`) in place of the unit returning the outputs. -/
 theorem tableH_bcSiteI {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc hrf) pub (x.table.o u h) (x.table.vu u h) u.val := by
@@ -81,7 +81,7 @@ theorem sitesAtH_bcSiteI :
 
 include ht hc x₀ in
 /-- **`InstKeysRow` at the session's circuit**, from the parse once `wiresAcyclic` passed (`Inst.instKeysRow_of_parse`,
-at the layout of the statement the draw `x₀` sets up). -/
+at the layout of the statement the sample `x₀` sets up). -/
 theorem instKeysRowH (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     InstKeysRow c (portRowW c) := by
   have hcx : x₀.st.c = c := setupHidden_c_of_parse hc x₀.h
@@ -119,7 +119,7 @@ theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : 
 /-- **The headline at the executable over hidden-output sessions, at the template instance's program.**
 `flock_headline_exec_hidden` with the production program `instProg c n`, the program of the whole template instance (the
 unit's copies, the stage nets and the lookup slots, wired), and its outputs the output words' bits (`outsOfI`): against
-any live prover `τ`, flock-verify accepts with at least `K` wrong units of `instProg c n`, at the simulated prover's
+any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
 at most `miss(K) + ε_ks + δ_link`.
 

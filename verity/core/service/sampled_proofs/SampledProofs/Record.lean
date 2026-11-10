@@ -4,17 +4,17 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `matchesPublic`: `registration.matches_public`, the verifier's own public file (its scheme, roots, their domains and its
   instance count) against the record, with Python's codes in its order (`scheme`, `roots`, `domains`, `population`) and
   details;
-* `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
+* `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers that accepted report opening
   the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
   two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
   roots' ports and registered values);
-* `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
-  the served draw's, the sessions' roots' and the registered roots' when they fail;
+* `checks`: `audit_record`'s checks, each with Python's detail: the sample's and the proved units' always, and the receipt's,
+  the served sample's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
   the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. `checks` and `ownRegistered` run linear in the
   registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
   `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
-  the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
+  the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every sampling design
   (`Bound.boundOf`).
 -/
 module
@@ -102,7 +102,7 @@ private def sortedInts (xs : Array Int) : Array Int := xs.qsort (· < ·)
 private def failed (code : String) (detail : Json) : Check := { codes := #[code], detail := entries detail }
 
 /-- `audit_record`'s checks, in its order: `draw` and `proved` always, then `receipt`, `served`, `roots` and `registered`
-only when they fail. `digest` is the registration's, `units` the draw's. -/
+only when they fail. `digest` is the registration's, `units` the sample's. -/
 def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
     (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
@@ -229,7 +229,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
   simp only [checks, checksFast, find?_byPort]
 
-/-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
+/-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
 def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
@@ -287,9 +287,9 @@ private def INPUT_KEYS : Array String := sortStrings #["registration", "receipt"
   "statement", "verdicts", "delta", "sessions", "served", "session_roots"]
 
 /-- `audit_record`'s arguments, on the inputs it reads without raising and the drivers give it: a registration whose
-canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest`'s) and that has every field the record reads (its roots and registered entries objects with a string port or value), a draw object whose
+canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest`'s) and that has every field the record reads (its roots and registered entries objects with a string port or value), a sample object whose
 units (and closure) are integers, its population an integer and a subset's `k` present, integer proved units and
-instances, verdicts objects (a verifier of record that accepted reporting its registered reads as objects with a string
+instances, verdicts objects (the verifier that accepted reporting its registered reads as objects with a string
 `value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1). -/
 def inputOf (j : Json) : V Input := do
   need (keys? j == some INPUT_KEYS) s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"

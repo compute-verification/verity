@@ -20,7 +20,7 @@ indices the plain prover's messages at `zcCoins` from the rep's first round, plu
 * `Masked.srcE_masked_pad`: the source's masked value at a sent index `k < h_ab` is the clear value the cut's view masks
   (`Composed.honestAt`) plus the session's pad `k` (`padsOf`), the tape's cell read back (`cellAt`, `fAt`).
 * `Masked.trsE_bits`: the model's tables (`aT`, `bT`, `cT`) are the session's trace's bits (`trace_bits`, `zOf_ofLayout`),
-  so the draw's honest zerocheck is `Zerocheck.honest` on them at the opened coins (`zcH_exe`: `rF_czExe`, the outer coins
+  so the sample's honest zerocheck is `Zerocheck.honest` on them at the opened coins (`zcH_exe`: `rF_czExe`, the outer coins
   of the round after the rep's first, and `rhoF_czExe`).
 * `Masked.src_r1ab`, `src_r1c`, `src_ml0`, `src_ml1`, `src_fa`, `src_fb`, `src_fc`: `PiopSrc`'s zerocheck fields at the
   deployed source.
@@ -158,7 +158,7 @@ theorem srcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : C
   rw [srcE_masked x c w τ j r (k := k) (by omega),
     FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega)]
 
-/-- **The draw's zerocheck vector is the opened coins'**: the pinned coordinates, then the outer coins of the round
+/-- **The sample's zerocheck vector is the opened coins'**: the pinned coordinates, then the outer coins of the round
 after the rep's first (`outerAt_eq`). -/
 theorem rF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
@@ -173,7 +173,7 @@ theorem rF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
   · simp only [Array.getElem_ofFn, Array.getElem_map, Array.getElem_range]
     exact outerAt_eq c hsx j.val r.val i
 
-/-- **The draw's residual coins are the opened coins'**, coin `0` of the rep's rounds `3 …`. -/
+/-- **The sample's residual coins are the opened coins'**, coin `0` of the rep's rounds `3 …`. -/
 theorem rhoF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     ∀ k < (zkTab x j).table.S.m - 6,
       (Composed.rhoF (zkTab x j).table (stAt x j) (czExe PE x c j) r)[k]! = (zcE c j r).ρ k := fun k hk => by
@@ -238,7 +238,7 @@ theorem trsE_bits {x : Msg} {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
   · unfold Composed.cT
     exact dite_eq_right hi
 
-/-- **The draw's honest zerocheck is the executable's**: `Zerocheck.honest` on the session's trace's bits, at the opened
+/-- **The sample's honest zerocheck is the executable's**: `Zerocheck.honest` on the session's trace's bits, at the opened
 coins' zerocheck vector (`trsE_bits`, `rF_czExe`). -/
 theorem zcH_exe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
     {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :

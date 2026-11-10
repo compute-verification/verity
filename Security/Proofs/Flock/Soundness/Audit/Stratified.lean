@@ -3,10 +3,10 @@ module
 public import Proofs.Flock.Soundness.Audit.Extraction
 
 /-!
-# The stratified draw law
+# The stratified sampling design
 
 The strata are the units a map `σ : Fin n → Fin m` assigns to each `s`, for example one stratum per template. The
-stratified law draws an independent uniform `k s`-subset inside each stratum (`Law.stratified`,
+stratified sampling design samples an independent uniform `k s`-subset inside each stratum (`Law.stratified`,
 `docs/sampling-strategies.md` §1, §4).
 
 * `stratified_escape`: a set `B` with `m_s` units in stratum `s` escapes with the product of hypergeometrics
@@ -14,9 +14,9 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
   it. The uniform `k`-subset is the case of one stratum.
 * `stratified_escape_floor`: **a floor catches its whole stratum**. With `1 ≤ k s`, a set containing stratum `s` never
   escapes.
-* `stratified_draw_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
+* `stratified_draw_full`, `stratified_full_miss`: **the full sample**. With every `k s` its stratum's size, the sample is every
   unit and `miss K = 0` for `K ≥ 1` (`Law.miss_eq_zero_of_draw_univ`).
-* The one-stage profile theorems hold for every law, so they instantiate here. `audit_whole_stratum` (oracle layer) and
+* The one-stage profile theorems hold for every sampling design, so they instantiate here. `audit_whole_stratum` (oracle layer) and
   `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
   probability at most the per-unit terms.
 -/
@@ -106,7 +106,7 @@ theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
   rw [hc, Nat.sub_self, Nat.choose_eq_zero_of_lt (by omega)]
   simp
 
-/-- **The full stratified draw is every unit**: where each `k s` is its stratum's size, stratum `s`'s one `k s`-subset is
+/-- **The full stratified sample is every unit**: where each `k s` is its stratum's size, stratum `s`'s one `k s`-subset is
 the stratum itself, and the strata cover the units. -/
 theorem stratified_draw_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hfull : ∀ s, k s = (stratum σ s).card) (ω : (stratified σ k hk).Ω) : (stratified σ k hk).draw ω = univ := by
@@ -116,8 +116,8 @@ theorem stratified_draw_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
   refine Finset.eq_univ_of_forall fun u => ?_
   exact Finset.mem_biUnion.2 ⟨σ u, mem_univ _, by rw [hs]; exact mem_stratum.2 rfl⟩
 
-/-- **The full stratified draw has no sampling term**: `miss K = 0` for `K ≥ 1`, so the count curve
-`δ(K) = miss K + ε` of a headline at this law is its `ε` alone. -/
+/-- **The full stratified sample has no sampling term**: `miss K = 0` for `K ≥ 1`, so the count curve
+`δ(K) = miss K + ε` of a headline at this sampling design is its `ε` alone. -/
 theorem stratified_full_miss (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hfull : ∀ s, k s = (stratum σ s).card) {K : ℕ} (hK : 1 ≤ K) : (stratified σ k hk).miss K = 0 :=
   miss_eq_zero_of_draw_univ _ (stratified_draw_full σ k hk hfull) hK

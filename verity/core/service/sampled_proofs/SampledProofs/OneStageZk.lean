@@ -12,7 +12,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"units", "vus_per_block", "circuit", "registered"}`, or with `interface`: its units as `[lo, hi)` ranges, no unit
   in two members' ranges, its circuit's units a proof block (META `vus_per_block`, positive), and its statement's
   circuit digest, registered file and registered circuit record, as the one-statement form's. The members go to v1's
-  registration check, which refuses a member whose fewest and most drawn units over the draws that end give different
+  registration check, which refuses a member whose fewest and most sampled proof blocks over the samples that end give different
   link points (`Registration.linkRefused`). The partition must not be null: the sessions are verified against the verifier's own partition object; and
   v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 ||||||| base
@@ -32,7 +32,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **evidence**: v1's without `verdicts`, plus `proofs`: in the one-statement form exactly `{"public", "sessions"}`, the
   public file's SHA-512 and, per session, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`); in the
-  per-member form exactly `{"statements"}`, a list of `{"member", "public", "sessions"}`, a statement a drawn member.
+  per-member form exactly `{"statements"}`, a list of `{"member", "public", "sessions"}`, a statement a sampled member.
   Either way the sessions, statement by statement, are v1's `sessions` in order;
 ||||||| base
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
@@ -42,14 +42,14 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **evidence**: v1's without `verdicts`, its `coins` within the challenger evidence's limits (`Challenger.withinAt`
   at `Challenger.LIMITS`), plus `proofs`, exactly `{"sessions"}`: for each of v1's `sessions` in order,
   `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and `{file: SHA-512}` naming at least each rep
-  file the statement's session reads (`<stream with / as .>.bin`). The drawn units are proved in one session, whose
+  file the statement's session reads (`<stream with / as .>.bin`). The sampled proof blocks are proved in one session, whose
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
 >>>>>>> theirs
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
-  `checkAt` refuses a draw other than the one they give before v1's `check`;
+  `checkAt` refuses a sample other than the one they give before v1's `check`;
 <<<<<<< ours
 * **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
   challenger sampled and opened (`Challenger.trustedTreesOf`). The log must release the sample, then the link, then the
@@ -81,7 +81,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 >>>>>>> theirs
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
-  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
+  (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
   `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`), and a session's verdict holds only where the registration's population
   is the circuit file's units in order (`FilePart.check`: its strata over the verifier's program and query, read stratum
@@ -90,8 +90,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is;
-* **per member** (`runMembers`): a draw that runs out of the challenger's coins fails the window before anything else
-  is checked (`RAN_OUT`, `OneStage.ranOut`), with no retry and no redraw. Before any session runs, the statements are
+* **per member** (`runMembers`): a sample that runs out of the challenger's coins fails the window before anything else
+  is checked (`RAN_OUT`, `OneStage.ranOut`), with no retry and no resample. Before any session runs, the statements are
   held as public structure
   (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
   the members' order (by first unit, the registration's: one order, one statement), or a statement of other than
@@ -102,8 +102,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   block must be the ones the parameters name, which the link points were checked at. Its proofs in the other form than
   the parameters', a public file of other units, or a circuit of other units a proof block, rejects; the evidence's
   `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
-  drawn count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
-  (`inputsOf`'s `count`), so no stratum's draw is split over a statement's tables. Every acceptance in this form is
+  sampled count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
+  (`inputsOf`'s `count`), so no stratum's sample is split over a statement's tables. Every acceptance in this form is
   then refused (`MULTI_REFUSED`) until the guarantee for a sample over several members' statements is in the lock.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
@@ -135,20 +135,20 @@ open Lean (Json)
 open Flock (V)
 
 def PROTOCOL : String := "verity/sampled-proofs/one-stage/v2"
-/-- The statement every drawn unit's session proves (`one_stage.proofs.STATEMENT`). -/
+/-- The statement every sampled proof block's session proves (`one_stage.proofs.STATEMENT`). -/
 def STATEMENT : String := "verity/flock-circuit"
-/-- The refusal of parameters naming no challenger: the draw's coins are never the prover's to choose. -/
+/-- The refusal of parameters naming no challenger: the sample's coins are never the prover's to choose. -/
 def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
     "with window_root), never the prover's record"
 <<<<<<< ours
 /-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers a sample over several members'
-statements under one draw. -/
+statements under one sample. -/
 def MULTI_REFUSED : String :=
   "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements " ++
     "under one draw is in the lock: verify one statement (proofs {circuit, registered})"
-/-- The per-member form's refusal of a window whose draw ran out of the challenger's coins (`OneStage.ranOut`): the
-window fails, visibly; nothing redraws it and no fallback draws every unit. -/
+/-- The per-member form's refusal of a window whose sample ran out of the challenger's coins (`OneStage.ranOut`): the
+window fails, visibly; nothing resamples it and no fallback samples every unit. -/
 def RAN_OUT : String :=
   "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
 ||||||| base
@@ -191,7 +191,7 @@ structure Member where
   own : Own
 
 /-- The parameters' `proofs` (module docstring, **params**): one statement on the verifier's own inputs, or a statement
-a drawn member, each on its member's. -/
+a sampled member, each on its member's. -/
 inductive Form where
   | one (own : Own)
   | members (ms : Array Member)
@@ -493,7 +493,7 @@ private def headerOf (pubB : ByteArray) : V Json := do
   Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
-one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
+one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
 `instances` against the record's scheme, roots, domains and population. A refusal names the codes that fail. -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
   let h ← headerOf pubB
@@ -594,7 +594,7 @@ def sessionAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) : V (
   pure r
 
 /-- `sessionAt`'s session as `verify` reads it: the tables' verifier-side setups, the partition finding and the
-registered openings, once the draw's law holds. -/
+registered openings, once the sample's law holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
@@ -621,7 +621,7 @@ def filesOf (bs : Core.Blobs) (s : RunFiles) (st : SetUp) : V (Array ByteArray) 
     let some (_, d) := s.reps.find? (·.1 == n) | throw s!"session files: the session names no rep file {n}"
     (bs.get d s!"session files: {n}")
 
-/-- The record's coin-tree key, when the session's setup draws its coins from a coin tree. -/
+/-- The record's coin-tree key, when the session's setup flips its coins from a coin tree. -/
 def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
@@ -681,7 +681,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
       pure { coinKeys, all := r.all, proved := r.proved ++ units,
              out := r.out.push (verdictJson rd programSha s st true "" units) }
 
-/-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
+/-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
 no blob or not UTF-8, or it accepted naming another program than the partition object's. -/
@@ -697,14 +697,14 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
 
 /-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
 sorted, they must be it. `want` is strictly ascending (`Draw.checkDrawFull`), so a unit two sessions prove (or one
-session twice) refuses, and so does a drawn unit no session proves. -/
+session twice) refuses, and so does a sampled proof block no session proves. -/
 def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
   else pure ()
 
 <<<<<<< ours
 /-- One `flock-verify verify --zk` over a statement's sessions on the blobs, as `one_stage.proofs.verify` runs it, after
-the sessions `r` holds, each session set up at its own record's draw: every session's verdict, the units the accepted
+the sessions `r` holds, each session set up at its own record's sample: every session's verdict, the units the accepted
 ones proved and whether all accepted. A refusal for what `proofs.verify` refuses: registered values read without the
 verifier's registered file, a file no blob holds, or an accepted session naming another program than the partition
 object's; and, given a member's units and units a proof block `member?`, a public file whose `units.indices` are not
@@ -714,7 +714,7 @@ def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blob
     (member? : Option (Array (Nat × Nat) × Nat)) (r : Run) : V Run := do
 ||||||| base
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
-session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
+session set up at its own record's sample: every session's verdict, the units the accepted ones proved and whether all
 accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
 the evidence's. -/
@@ -722,7 +722,7 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
     V Run := do
 =======
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
-session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
+session set up at its own record's sample: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order
 (`FilePart.check`, last). A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
@@ -805,7 +805,7 @@ def Member.first (m : Member) : Nat := m.units.foldl (fun a (lo, _) => min a lo)
 /-- The per-member form's statements as public structure (module docstring, **per member**), before any session runs:
 each names a member of the parameters that no earlier statement named, in the canonical order (each member's first unit,
 `Member.first`, after the previous one's: one order, so one statement), with exactly one session (one pass on live
-coins, never retried; a statement of none would prove nothing, and an undrawn member has no statement). Their members,
+coins, never retried; a statement of none would prove nothing, and an unsampled member has no statement). Their members,
 statement by statement. -/
 def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Member) := do
   let mut held : Array Member := #[]
@@ -849,7 +849,7 @@ def verdicts (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array
     V (Array (String × Json)) :=
   (·.out) <$> run p sessions provedUnits? bs
 
-/-- The coins the draw read (module docstring, **coins**): v1's, which only the parameters' challenger gives; a refusal
+/-- The coins the sample read (module docstring, **coins**): v1's, which only the parameters' challenger gives; a refusal
 when none read. -/
 def coinsOf (p : Params) (c : OneStage.Commitment) (e : Evidence) : V ByteArray := do
   match ← OneStage.coinsOf p.base c e.base with
@@ -876,7 +876,7 @@ def rootBLen (st : Flock.Setup) : V Nat := do
   pure (2 ^ (sch.levels.getD 0 default).cap * st.merkle.digestLen)
 
 /-- The session's tables (`sessionTables`), each with its `root_B`'s byte length (`rootBLen`) at the session `record`
-sets up: `setupAt` at the record's draw on the verifier's own files `p`, as `run` sets it up. None where it sets up no
+sets up: `setupAt` at the record's sample on the verifier's own files `p`, as `run` sets it up. None where it sets up no
 table, and then `run` sets up none either, so the session's own verdict rejects. -/
 def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
   let tabs : Option (Array Flock.Setup) := (do
@@ -916,7 +916,7 @@ def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := 
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
 logged in the order it must release them (`treesOf`, `orderHeld`, `treesHeld`), then the sessions' verdicts on the blobs
 (`runAll`), then v1's `checkAt` at `ξ` on them. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's
-own `all` says it again, so an acceptance reads the run rather than the verdicts' JSON. In the per-member form a draw
+own `all` says it again, so an acceptance reads the run rather than the verdicts' JSON. In the per-member form a sample
 that runs out of `ξ` fails the window first (`RAN_OUT`), and what would accept is refused (`MULTI_REFUSED`). -/
 ||||||| base
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
@@ -994,7 +994,7 @@ def protocol : Core.BlobProtocol where
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
 
-/-- The audit on the blobs `bs` reads its draw's coins (`coinsOf`) and decides at them (`checkBlobsAt`). -/
+/-- The audit on the blobs `bs` reads its sample's coins (`coinsOf`) and decides at them (`checkBlobsAt`). -/
 def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
   Coins := ByteArray
   coins := coinsOf

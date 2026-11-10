@@ -21,7 +21,7 @@ escapes' term (`mean_epsSZ_le`). What is left are the hypotheses on the deployed
 * its mean `Adv`s (levels, pads roots, `τ`) and self-clash are at most the escapes' events (the escapes);
 * a table that does not extract is not committed to `T`, at every table `Ok` allows (`zk_not_committed`, at `T`'s
   statement, schedule, padding and `c₀`);
-* `T` is C-Flock ZK's table at the statement: its schedule, padding, extra lanes, shape, pads domain, queries and
+* `T` is Flock ZK's table at the statement: its schedule, padding, extra lanes, shape, pads domain, queries and
   radius (`mean_epsSZ_le`'s), and a pads domain within the deployed one (`oldEscZ_fitsFork_zk`'s).
 
 With the mixture the simulated strategies after `Commit` (`simAtZ`) of live strategies whose roots agree, the first is
@@ -50,7 +50,7 @@ def AccOneZ {D Sl : Type} [Inhabited D] [Inhabited Sl] (outs : List (OutZC 𝔽 
 
 open Classical in
 /-- **The masked table bound at a statement, from masked sessions after `Commit`**: where the setup has the one table
-`st` and `T` is C-Flock ZK's padded table there, when every prover has escapes at fork rounds `j`, no two one, such
+`st` and `T` is Flock ZK's padded table there, when every prover has escapes at fork rounds `j`, no two one, such
 that, at each tape and each table `C` `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`
 bounds the deployed runs accepting on `C` by its acceptance with no opening off `C`, and the escapes' events bound its
 `Adv`s and self-clash; and no table `Ok` allows that does not extract is committed to `T`. -/

@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Recursion.CostExp
 public import Proofs.Flock.Soundness.Game.LockLin
 
 /-!
-# A cap position's off mass at the abort law, linearly, as `FC`'s hits
+# A cap position's off mass at the abort distribution, linearly, as `FC`'s hits
 
 `TableBoundAbortLin` charges a cap position `q` to `FC`'s run and loop at `q`. Here is the charge, for any opening `op`
 of `q` that a run makes exactly where it accepts and queries `q` (`opensAt`), and whose two values at runs sharing the
@@ -31,7 +31,7 @@ section CapLink
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The value `f` opens most often over uniform draws. -/
+/-- The value `f` opens most often over uniform samples. -/
 noncomputable def plurOf {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f : Dr → Option Val) : Val :=
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = some v) Finset.univ_nonempty).choose
 
@@ -78,7 +78,7 @@ theorem Ex_capFork (V : Verifier Coin) (Cp : Caps Coin) {A : Type} [Fintype A] [
     _ = Ex fun r => Ex fun a : A => Ψ (r, a) := Ex_fork hoff fun r => Ex fun a : A => Ψ (r, a)
     _ = Ex Ψ := (Claims.Bridge.Ex_prod Ψ).symm
 
-/-- **One base run's forks, linearly**: draws open off their plurality at most as often as the link finder over them
+/-- **One base run's forks, linearly**: samples open off their plurality at most as often as the link finder over them
 succeeds, plus `1/(eM)`. -/
 theorem off_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [DecidableEq Val] [Nonempty Val]
     (f : Dr → Option Val) (M : ℕ) (hM : 1 ≤ M) :

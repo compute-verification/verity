@@ -213,7 +213,7 @@ def test_a_registration_under_the_compiler_listing_no_transfer_gates_or_one_fewe
 
 def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monkeypatch):
     """`window1` hands the registered compiler's transfer gates to the window (`serving_rows.population`), which proves them
-    whole under the work law."""
+    whole under the work sampling design."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     got = {}
@@ -391,7 +391,7 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
+    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, sampled outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
     plain, zk = (argparse.Namespace(plain=p, coins="challenger") for p in (True, False))
@@ -424,7 +424,7 @@ def _accepted(law: dict, delta: float = 0.5) -> dict:
 def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds():
     """An accepted audit's charge terms (README, "What an accepted audit means"): λ_δ is `consumers.location_bits` of the
     audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
-    the law's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
+    the sampling design's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
     stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
     for law, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
         rec = _accepted(law)
@@ -1051,7 +1051,7 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
 def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
     φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
-    file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
+    file sampled there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights

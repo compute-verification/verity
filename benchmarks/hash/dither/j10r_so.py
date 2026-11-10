@@ -1,9 +1,9 @@
 """dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; the verifier's form: each unit's call is its call's
-first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the window's
+first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the execution phase's
 layout, when M is "slot" on a slot T with every row tile computed, `forms.j10r_part`): the gate's references for it,
 swapped into dither_a's check as j10served.py swaps banded noise's.
 
-    every capture, the window's end   each receipt against h1r.cu's version 1 under J10-R (`RefH1R`: h1r_launch_j10r, its
+    every capture and the end         each receipt against h1r.cu's version 1 under J10-R (`RefH1R`: h1r_launch_j10r, its
                                       own seeds kernel and SHA-512, the call's stream at Layout(M, N, K))
     the gate step                     `j10r_units.call_receipts` (held to J10R's Definition, `h1tile.j10r_reference`, by
                                       its anchor) on every unit of `checked_calls` against the captured receipts, word for

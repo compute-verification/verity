@@ -53,7 +53,7 @@ variable {lay : Layout P plan tab decode} (rs : HmRowsX lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96X (rs.enc p) (rs.ext p) (rs.ext_spec p) else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows**, each under its own encoding: at each wire of a drawn unit held by a
+/-- **`HmRowComputes` at the sampled proof blocks' rows**, each under its own encoding: at each wire of a sampled proof block held by a
 row, in a satisfying witness of the unit's table, the `b ‖ c` the row's `hm96` slot outputs is the commit string of the
 row's bytes there and the salt the witness holds. -/
 def Computes : Prop :=

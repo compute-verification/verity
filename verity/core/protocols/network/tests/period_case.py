@@ -17,9 +17,9 @@ and `eps`, the union of those deltas as an exact ratio string.
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
 `first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
-drawn network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
+sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
-each link-window's ingress and egress rows committed and registered under a small drawn schedule
+each link-window's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
@@ -28,14 +28,14 @@ smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest 
 `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.BoundaryGates.Fits` asks
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
 <<<<<<< HEAD
-draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is tied to,
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to,
 or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part (`tied-partial`, a
 stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`, `subset:k`, the demo's
 sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`, `tied-slots-sampled`), and a
@@ -45,15 +45,15 @@ at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a s
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
 ||||||| merged common ancestors
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
+(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
 `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
 or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
 decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
 composition's difftest takes a real component's cases.
 =======
-draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
+(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
 `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
 or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
 decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
@@ -434,7 +434,7 @@ FUEL = 2 ** 62
 
 
 def _walkable(j: dict) -> bool:
-    """`NciCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
+    """`NciCheck.Desc.walkable` as Flock's decoder gives a Program (its layout, callees first and the root without
     parameters): `(A + 1) · (H + 2)` at most half of `FUEL`, for the root's activations `A` (its own and each composite
     node member's, multiplied through batches and scans) and the depth `H` they nest to, and no scan of no iterations
     with output leaves. `rootLaidOut` and `inputsAtRoot` the decoder gives too."""
@@ -492,7 +492,7 @@ def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused; its slot entries' templates
     (`ENTRY_IDS`) with their closure digests. It reads the descriptor's root nodes, signatures and the slot entries'
-    Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
+    Definitions; Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
     _exactly(a, ["free", "program", "steps"], ctx)
     free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -516,7 +516,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
     own input node of its slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
+    the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
@@ -948,7 +948,7 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
 
 
 def _facts(what: str, prof: dict, pub) -> Facts:
-    """`factsOf`: one level drawn `subset:k` or stratified, and the public's bound."""
+    """`factsOf`: one level sampled `subset:k` or stratified, and the public's bound."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
@@ -1012,7 +1012,7 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
     where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
+    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit sampled in part (`charged`) is in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1160,7 +1160,7 @@ def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
 
 def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int,
               strata: list[dict] | None = None) -> dict:
-    """One-stage's answer accepting `k` of `size` units drawn `subset:k`, or drawn stratified over `strata` (each
+    """One-stage's answer accepting `k` of `size` units sampled `subset:k`, or sampled stratified over `strata` (each
     `{k, name, size}`, k and size their sums), as `OneStage.check`'s public and profile have it."""
     units = list(range(k))
     draw = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
@@ -1513,8 +1513,8 @@ def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, 
 
 
 def _by_template(r: random.Random, desc: dict, m: str) -> tuple[dict, list[dict]]:
-    """A tied audit's stratified law and its profile's strata, a stratum a template of its Program (`templates_of`):
-    its slot entries' and scan slots' templates drawn whole and its first other template in part (`tied-partial`), or
+    """A tied audit's stratified sampling design and its profile's strata, a stratum a template of its Program (`templates_of`):
+    its slot entries' and scan slots' templates sampled whole and its first other template in part (`tied-partial`), or
     with its slot entries' (`tied-entries-sampled`) or its scan slots' (`tied-slots-sampled`) template in part too."""
     ts = templates_of(desc)
     whole, broken = (*ENTRY_IDS, SCAN_SLOTS), {"tied-entries-sampled": ENTRY_IDS, "tied-slots-sampled": (SCAN_SLOTS,)}
@@ -1531,7 +1531,7 @@ def _by_template(r: random.Random, desc: dict, m: str) -> tuple[dict, list[dict]
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
+    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice sampled from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -1549,7 +1549,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a rows link-window's own audit, and at times one no link-window ties, which may leave units undrawn
+    # a rows link-window's own audit, and at times one no link-window ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
@@ -1583,7 +1583,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             c["root"] = rp.choice([None, 7, False])
     # the lane whose wiring the aimed link-window's `unwire` breaks
     hit = rp.randrange(lanes) if lanes else 0
-    # the changes that draw the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
+    # the changes that sample the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
     if m == "tied-sampled" or by_template:
@@ -2160,7 +2160,7 @@ def verdict_of(kind: str) -> str:
 
 def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
     """A small period of the form (`build(..., small=True)`: the toy key, as few link-windows and audits as its change
-    needs) aimed at `kind`, its change and every choice drawn from `seed`."""
+    needs) aimed at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[form][kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 

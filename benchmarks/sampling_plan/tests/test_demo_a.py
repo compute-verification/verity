@@ -2,7 +2,7 @@
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
 `certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
 exchange rate no worse than either half's best alone, within the budget, the least execution phase the first whose share of its
-GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
+GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform sample and the
 tile strata's epsilon as core and PoUW state them."""
 
 from __future__ import annotations

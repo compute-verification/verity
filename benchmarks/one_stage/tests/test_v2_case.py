@@ -75,8 +75,8 @@ def _window(w: Path, RP, members: list[dict], drawn: list[int], pins: dict | Non
 
 def test_a_window_of_several_members_is_the_per_member_case(tmp_path, RP):
     """A window whose summary lists several members gets a5's per-member case (`a5.v2_proof`): every member, the
-    undrawn too, with its units, its template's pin, its template's units a proof block (the summary's, else its
-    circuit file's META) and its kept registered file; a statement a drawn member on its template's circuit file, kept
+    unsampled too, with its units, its template's pin, its template's units a proof block (the summary's, else its
+    circuit file's META) and its kept registered file; a statement a sampled member on its template's circuit file, kept
     in the template's first member's directory, under the evidence's sessions in order."""
     w = tmp_path / "window"
     members = [{"k": 0, "template": "t", "n": 2, "base": 0}, {"k": 1, "template": "t", "n": 3, "base": 2},

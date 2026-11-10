@@ -17,7 +17,7 @@ them as they stand.
 namespace Properties.NetworkScan
 
 /-- **The deployment's statements are their descriptors flattened**: every statement `D` parses has a descriptor
-C-Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
+Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
 are that Program's (`Flattens`). The deployed parser is the sampled verifier's (`SamplingDeploy.Code.parse`), so it is
 that code's premise. -/
 def StmtFlattens {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=

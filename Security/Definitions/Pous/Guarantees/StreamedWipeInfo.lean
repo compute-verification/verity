@@ -30,7 +30,7 @@ open scoped ENNReal
 
 /-- **An accepted streamed-label wipe tells little about the prior content.** Take any prover of the sequential wipe
 of `N` labels of `b` bits under `k` challenges, with `M` bits inside the boundary when the fill ends, `E` bits of
-egress and `q` bits of uniform prior content `z`. Draw `z`, the challenges `c` and the key `K` uniformly, with labels
+egress and `q` bits of uniform prior content `z`. Sample `z`, the challenges `c` and the key `K` uniformly, with labels
 `L = prf K`. Let `σ'` be the fill's `(σ, ξ)` when the challenger accepts and ⊥ when it rejects (`StreamedWipe.held`).
 Then for every `g`:
 

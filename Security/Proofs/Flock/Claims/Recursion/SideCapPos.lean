@@ -14,7 +14,7 @@ public import Proofs.Flock.Recursive.HoloRepCoins
 `sideCapR_deployed` gives `SideCapR` at the deployed layout from `ReadsAt` and two ranges: a level-`ℓ`
 piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold at every decision, from its own checks:
 
-* `posAt` is the position the verifier rows draw (`verifierRows`) at the statement's own shape, its table's `fast100`
+* `posAt` is the position the verifier rows sample (`verifierRows`) at the statement's own shape, its table's `fast100`
   schedule. Those rows run at no empty round (`canonRounds_noEmpty`: each round reads its schedule's coin count, and
   `repRounds` counts none empty), at `m ≥ 22` and a schedule of the seams, so level `ℓ`'s positions are Flock's
   `positions` at that level (`FlockVBridge.Family.rows_pos`), each below `2^d` (`Lg.positions_lt_d`). Where the rows
@@ -100,7 +100,7 @@ theorem positions_getElem!_lt {lv : _root_.Flock.Level} (hl : FlockSoundness.Ref
     exact Nat.two_pow_pos _
 
 /-- **The position a piece reads is below `2^d`** of its level at its table's schedule: where the statement sets up
-and the table's `m` has a `fast100` schedule, the verifier rows draw level `ℓ`'s positions as Flock's `positions`
+and the table's `m` has a `fast100` schedule, the verifier rows sample level `ℓ`'s positions as Flock's `positions`
 (`rows_pos`, at no empty round, `m ≥ 22` and the seams), each below `2^d`; elsewhere `posAt` is 0. -/
 theorem posAt_lt {x : Msg} {cs : List Coin} {q : OpenPiece} {v}
     (hset : FlockDeploy.setupOf false x = some v) {sch : _root_.Flock.Schedule}

@@ -314,14 +314,14 @@ abbrev bdR (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opti
 abbrev layR (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : LayoutB :=
   layoutBTops (finOpen fin)
 
-/-- The compiled record at the coin server's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
+/-- The compiled record at the challenger's live-coin part's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
 abbrev recR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :=
   recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layR fin) (bdR rd wE final w).IVStar
 
-/-- What each part's circuit accepts, at the deployed outer `--zk` record and the coin server's record's reader. -/
+/-- What each part's circuit accepts, at the deployed outer `--zk` record and the challenger's live-coin part's record's reader. -/
 abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -330,7 +330,7 @@ abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ →
     (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
 
 /-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` with `IVStar`'s last
-step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the coin server's record, V\*'s bound
+step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the challenger's live-coin part's record, V\*'s bound
 layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
 `IVStar` accepts or two of the parts' recorded calls collide. -/
 def RecKSDecompR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)

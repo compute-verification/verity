@@ -6,13 +6,13 @@ public import Proofs.Flock.Claims.ZK.FinishFwTarget
 /-!
 # `FinRepTarget`: the ring switch's `T` is the opening's
 
-At a `Finish` `FinishIs` reads, the firewall's rep stream `2j + r` (`Loop.RepRun`) runs its ring switch on the session's
+At a `Finish` `FinishIs` reads, the ZK server's rep stream `2j + r` (`Loop.RepRun`) runs its ring switch on the session's
 table and packed table (`Loop.finRepTab`, `Loop.Level0Src.realOf`), with the request's extra claims at the region points
 of the view's link points (`Loop.linkPoints_wordsAt`). There `Masked.fwTarget_at` reads `T` as `Composed.openT` at the
 view's `ν + maskHom`.
 
 **`Loop.finRepTarget`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source
-draws from the tape, `FinRepTarget` holds. It reads the firewall's run, its coins and the witness, never the workers'
+samples from the tape, `FinRepTarget` holds. It reads the ZK server's run, its coins and the witness, never the workers'
 clear values or the rows: `openT`'s `ν` reads the witness alone.
 -/
 

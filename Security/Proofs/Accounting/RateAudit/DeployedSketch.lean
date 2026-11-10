@@ -350,7 +350,7 @@ theorem pr_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : 
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's pooled draws as a causal family over the monitoring period, on any store `store ω` drawn before the
+/-- A session's pooled samples as a causal family over the monitoring period, on any store `store ω` sampled before the
 session's coins. -/
 theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d)
@@ -400,7 +400,7 @@ theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     fun ω w => Finset.card_map _
   exact hB X Gs hG e.symm E hmem hcard
 
-/-- A session's pooled draws as a causal family over the monitoring period. -/
+/-- A session's pooled samples as a causal family over the monitoring period. -/
 theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
@@ -416,7 +416,7 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) => Ev x.1 x.2) ≤ B :=
   pr_draws_map_of_causal id A Ev B hB
 
-/-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
+/-- The pooled sample over the whole monitoring period, on any store sampled before the session's coins. -/
 theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -445,7 +445,7 @@ theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-/-- The pooled draw over the whole monitoring period. -/
+/-- The pooled sample over the whole monitoring period. -/
 theorem pr_draws_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -453,7 +453,7 @@ theorem pr_draws_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_draws_pooled_le_map id A K
 
-/-- The pooled draw in every window, on any store drawn before the session's coins. -/
+/-- The pooled sample in every window, on any store sampled before the session's coins. -/
 theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -470,7 +470,7 @@ theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- The pooled draw in every window. -/
+/-- The pooled sample in every window. -/
 theorem pr_draws_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -478,7 +478,7 @@ theorem pr_draws_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_draws_window_le_map id A Kw
 
-/-- Both pooled-draw readings, on any store drawn before the session's coins. -/
+/-- Both pooled-draw readings, on any store sampled before the session's coins. -/
 theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -520,8 +520,8 @@ theorem pr_unpaid_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slac
     _ = (n : ℝ≥0∞) * ε := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- Session conservation in counts, from the pooled draws and an unpaid bound `ε_u` on some window's unpaid words, on
-any store `store ω` drawn before the session's coins. -/
+/-- Session conservation in counts, from the pooled samples and an unpaid bound `ε_u` on some window's unpaid words, on
+any store `store ω` sampled before the session's coins. -/
 theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slack K Kw : ℕ) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -558,7 +558,7 @@ theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
-/-- Session conservation in counts, from the pooled draws and one per-window unpaid bound. -/
+/-- Session conservation in counts, from the pooled samples and one per-window unpaid bound. -/
 theorem pr_paid_of_window (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slack K Kw : ℕ)
     (ε : ℝ≥0∞)
     (hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>

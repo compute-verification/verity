@@ -224,7 +224,7 @@ def session(name: str, make: Callable[[int, sw.WipeMemoryChallenger], Any], *, n
             log, judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
             coin_secret: bytes | None = None) -> dict[str, Any]:
     """One whole session against the prover `make(n, challenger)` builds; its record (module docstring). The coins
-    are the OS's, drawn when the fill completes, unless `coin_secret` fixes them."""
+    are the OS's, sampled when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
     c = sw.WipeMemoryChallenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
                                 coin_secret=coin_secret)

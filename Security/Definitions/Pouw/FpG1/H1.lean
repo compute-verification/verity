@@ -7,14 +7,14 @@ public import Definitions.Pouw.FpG1.Encoding
 
 What a g1 window on H1 (co32c-u16-cohalf, decision 82) commits, for `Definitions.Accounting.Guarantees.FpG1`'s statements.
 H1 commits activations `V` with `|V| ≤ 126`, served `X = V + b` in `[−126, 127]`, and weights `W` with `|W| ≤ 110`,
-served `W′ = W + c + U` with H1's noise `U ∈ [−16, 16]` in `[−126, 127]`; the coins `b` and `c` are drawn after the
+served `W′ = W + c + U` with H1's noise `U ∈ [−16, 16]` in `[−126, 127]`; the coins `b` and `c` are sampled after the
 round's leaves are committed.
 
 * `Grids.h1`: g1's grids on H1: E4M3's integers to 120 for activations and to 104 for weights (`e4m3i104`), and
   W4A8-g1's block scales to 9 (`nvi9`), so that a weight moved by its coin and H1's noise stays in s8
   (`104 + 1 + 16 = 121`, `9·12 + 1 + 16 = 125`).
 * `Level`: an operand's committed level, `Entry` without its coin, since a round's leaves hold the levels and the coin
-  comes after them; `Level.withCoin` is the entry the int8 MMA reads once the coin is drawn.
+  comes after them; `Level.withCoin` is the entry the int8 MMA reads once the coin is flipped.
 * `Leaves`: a round's operand leaves, the committed levels of its activations `A(i, l)` and weights `W(l, j)`.
 * `Leaves.Fp8 g`, `Leaves.W4a8 g`: every leaf an FP8-g1 level on `g`'s E4M3 grids, or the record's int8 activations
   beside W4A8-g1's weights on `g` (`Grids.On` at any coin: `Proofs.Pouw.FpG1.H1`'s `Leaves.fp8_on_act` and its
@@ -40,7 +40,7 @@ def h1 : Grids := ⟨120, 104, 9⟩
 end Grids
 
 /-- **An operand's committed level**: `Entry` without its coin. A round's leaves are committed before its coin is
-drawn, so they hold the level. -/
+flipped, so they hold the level. -/
 inductive Level
   | fp8 (level : ℤ)
   | fp4 (scale : ℕ) (level : ℤ)
@@ -48,7 +48,7 @@ inductive Level
 
 namespace Level
 
-/-- The level with its coin: the entry the int8 MMA reads once the coin is drawn. -/
+/-- The level with its coin: the entry the int8 MMA reads once the coin is flipped. -/
 def withCoin : Level → Coin → Entry
   | fp8 R, b => .fp8 R b
   | fp4 m q, b => .fp4 m q b

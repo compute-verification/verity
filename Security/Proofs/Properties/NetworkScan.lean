@@ -68,7 +68,7 @@ theorem canon_null : Flock.canon .null = .ok "null" := by
   rfl
 
 /-- **`ScanFits`' and `ScanScopeAcc`'s honest witness** (the two-lemma rule's `_honest`): of what the two take,
-C-Flock's canonical form accepts a scan (`Flock.canon` at `null`), and a Program has a flattening (`Flattens`, at the
+Flock's canonical form accepts a scan (`Flock.canon` at `null`), and a Program has a flattening (`Flattens`, at the
 Program with no definitions). The deployment's premises are named assumptions (`Properties.NetworkScan.Assumptions`).
 `scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: both read `Lean.Json.parse`, a `partial def`
 the kernel can't unfold. -/
@@ -94,7 +94,7 @@ def nullStmt : Claims.Sampling.AuditStatement :=
 def acceptAllDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
   { Claims.Sampling.ScopeWitness.toyD with parse := fun _ => some nullStmt }
 
-/-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
+/-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan Flock
 canonicalizes as `null` and a deployment whose scope check takes everything and whose statements have that text as
 their descriptor and the empty circuit, a statement is not in `ScopeAcc` at a schedule (`oneSlot`): its circuit returns
 nothing (`not_fits_of_no_outs`). -/

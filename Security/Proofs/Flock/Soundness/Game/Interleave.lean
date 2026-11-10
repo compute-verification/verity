@@ -5,9 +5,9 @@ public import Definitions.Flock.Game.Interleave
 public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
-# C-Flock's game library is Core's: `Interleave`
+# Flock's game library is Core's: `Interleave`
 
-Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Interleave`, so C-Flock's soundness
+Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Interleave`, so Flock's soundness
 proofs and every other protocol's read one game library.
 -/
 

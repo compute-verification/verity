@@ -25,7 +25,7 @@ namespace RecDeploy
 
 open Claims (Msg Out)
 
-/-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the brings `b` and the coin server's record (`aux`, `nOf`,
+/-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the brings `b` and the challenger's live-coin part's record (`aux`, `nOf`,
 `hd`, `recRest`): `BitsLin2KOn` where `Flock.Guarantees.RecursiveKSAt` states `KSLin2On`, at the dense statements. -/
 def RecursiveBitsKAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
@@ -37,10 +37,10 @@ def RecursiveBitsKAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.
       FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR)
     (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at the deployed reader**, at the brings `b` and the coin server's
+/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at the deployed reader**, at the brings `b` and the challenger's live-coin part's
 record: `BitsKAt` at `RecursiveBitsKAt`'s records, at every dense statement at the deployment's sizes and call bounds
 `n ≤ 2^32` and `v ≤ 2^32`. `SizesAt` reads the stage at the session's brings `{ b with tr := recTr … }`, the parts the
-verifier stages from the coin server's transcript, since `Brings.st` is `Stage.ofMsg` of the brings' `tr`. -/
+verifier stages from the challenger's live-coin part's transcript, since `Brings.st` is `Stage.ofMsg` of the brings' `tr`. -/
 def RecursiveBitsKBoundAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
   Claims.Recursion.BitsKAt FlockDeploy.sha512

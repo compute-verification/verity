@@ -64,7 +64,7 @@ def Correct (X : Fin C.N → Bool) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The wrong units of a transcript. -/
+/-- The incorrect proof blocks of a transcript. -/
 noncomputable def wrong (X : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u
 

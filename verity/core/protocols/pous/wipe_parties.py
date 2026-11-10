@@ -8,7 +8,7 @@ prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 
 
 The challenger drives the same `streamed_wipe.WipeMemoryChallenger` as `wipe_party.serve`, in the same order: the
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
-send and receipt on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends
+send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it ends
 with the egress its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its
 machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its
 session log), its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
@@ -115,7 +115,7 @@ class MemoryChallengerParty:
             self.phase.expect("Coins")
             return [Send("coins", Message("CoinsDraw", {"n": 32}))]
         if m.type == "Coins":
-            # The coin secret `serve` draws from the OS on revealing the first batch, sampled from this party's coins.
+            # The coin secret `serve` samples from the OS on revealing the first batch, sampled from this party's coins.
             self.c._coin_secret = m.body
             self.phase.expect()
             return self._after_reading(self._challenge)

@@ -429,7 +429,7 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
-    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's drawn statement
+    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's sampled statement
     (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
     verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
@@ -457,7 +457,7 @@ def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(st
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
     `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no sample). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
+    has no sample). The full sample passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
     verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
     checks that `verify` calls it."""
     c = G.Registered.commit(P.program_digest(staged.program), value,
@@ -536,7 +536,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the challenger recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
+    the inner transcript recording them the full sample passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about

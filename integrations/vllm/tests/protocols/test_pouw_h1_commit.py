@@ -551,7 +551,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
     (`registration._earlier`). The named record R is chained right after W and registers each round's A table and
     input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
-    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
+    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the sampling coin opens, and core's
     ROOTS1 steps pass on it."""
     previous, named = "12" * 64, _named("12" * 64)
     record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
@@ -594,7 +594,7 @@ def _fails(run):
 def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
                                                                                                 named, why):
     """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
-    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its draw coin stays
+    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its sampling coin stays
     unopened, its transcript says why, and its release raises ValueError, the window's visible refusal."""
     with pytest.raises(ValueError, match="the window names no Commit record"):
         _window(tmp_path, monkeypatch, commit_record=named)
@@ -938,8 +938,8 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn; a reserve of no `steps` is a window's draw's challenge phase, whose host, over
-    the draw's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
+    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
     window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
     serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
     is in the ledger."""
@@ -981,7 +981,7 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase and its draw's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its sample's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
 
     def settings(eng, kw):
@@ -998,7 +998,7 @@ def _in_process(eng, kw):
 
 def _summary_row(gate, sessions, name, record, run):
     """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
-    draw's ended."""
+    sample's ended."""
     from tests.protocols import pouw_h1_gpu as G
     ends = {}
     if name in getattr(sessions, "held", {}):

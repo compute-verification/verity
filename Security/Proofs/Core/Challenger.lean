@@ -10,7 +10,7 @@ public import Proofs.Core.Game.Prob
 `SampleAfterRecorded`. The verifier's coin `i` is the challenger's flip `i` (`coin_of_log`), and the set of blocks fixed
 before it reads only the flips before `i` (`FlipsAfterRecorded`), so resampling flip `i` leaves the set where it is
 while the average over the challenger's flips stays the same (`Game.avg_update`). For each fixed set of at least `K`
-blocks, a uniform coin's draw misses it with probability the law's `escape`, at most `miss K`.
+blocks, a uniform coin's sample misses it with probability the sampling design's `escape`, at most `miss K`.
 
 Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
 premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
@@ -128,7 +128,7 @@ theorem SampleAfterRecorded : Guarantees.SampleAfterRecorded := by
 /-- **`SampleAfterRecorded`'s honest lemma.** A challenger flipping two fair bits that releases coin 0, records a
 commitment the prover made after seeing it, then releases coin 1 meets all three premises, with the verifier reading both
 coins from its log; and for the block set the log fixes before coin 1 (the complement of coin 0, one block) the
-sample of coin 1, one fair bit, misses it at most as often as that law's `miss 1`. -/
+sample of coin 1, one fair bit, misses it at most as often as that sampling design's `miss 1`. -/
 theorem SampleAfterRecorded_honest :
     ChallengerLogsCoins (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
       FlipsAfterRecorded
@@ -177,7 +177,7 @@ open Classical in
 /-- **`SampleAfterRecorded`'s nontrivial lemma: without `FlipsAfterRecorded` its bound fails.** At the challenger of
 `SampleAfterRecorded_nontrivial_log`, which meets the other two premises, the block set its recorded commitment names
 (the bit it recorded, fixed by the log before the coin but chosen after it) escapes the sample of the one fair bit
-always, while that law's `miss 1` is at most one half. -/
+always, while that sampling design's `miss 1` is at most one half. -/
 theorem SampleAfterRecorded_nontrivial :
     ¬ prCoin (fun ω : Fin 1 → Bool => ∃ c, [ω 0][0]? = some c ∧
         1 ≤ (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}

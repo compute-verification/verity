@@ -6,7 +6,7 @@ public import Proofs.Pouw.RelativeSecurity
 /-!
 # Binding from the fork form
 
-`Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork`, C-Flock's rewinding step
+`Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork`, Flock's rewinding step
 (`Proofs/Flock/Recursive/Fork.lean`) over the TS model's uniform coins. Fix the coins `x` before round `w`; its
 continuations are `splice w x z` over every `z`. With `n` of them proved and `n_v` opening round `w`'s leaves to `v`,
 the reference opening has the most, `n_*`, so `x`'s moved continuations are `n − n_*`, and its forked pairs are

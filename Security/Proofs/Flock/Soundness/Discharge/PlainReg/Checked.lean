@@ -10,10 +10,10 @@ import all Init.Data.Array.Basic
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`
 
 `opens_of_acceptsR`: at an outcome `AcceptsR` accepts over hidden outputs at one table, each registered read that is the
-verifier's own at the record's draw (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
+verifier's own at the record's sample (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
 `ZkReg.regPathsH`, at the leaf of the population's row. It is `ZkReg.checked_of_acceptsH`'s proof at `setupOf I` in
-place of `setupOf (zkInputs I)`: the one table's statement is setupHidden's at the record's draw
-(`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the drawn
+place of `setupOf (zkInputs I)`: the one table's statement is setupHidden's at the record's sample
+(`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the sampled
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`).
 
 The leaf of the population's row at `(u, q)` is the registered leaf of both hidden layouts, the unit's (`layAtH`) and
@@ -43,7 +43,7 @@ theorem regLeaf_bytes (x : ByteArray) :
 
 /-- **Each registered read the verifier holds opens at an accepted outcome.** At an outcome `verify --registered F`
 accepts without `--zk` (`own` F's ports) over a hidden-output statement of one table, whose circuit parses to `c` and
-whose population's public file loads to `pub`, each registered read that is the verifier's own at the outcome's draw
+whose population's public file loads to `pub`, each registered read that is the verifier's own at the outcome's sample
 (`OwnReadsH`) is at a row `(u, q)`, and the leaf of `pub`'s row there opens the root `own` holds at the position `own`
 gives, through `regPathsH`. -/
 theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.Circuit}
@@ -114,7 +114,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
 
 /-- **The registered reads are checked at every accepted hidden-output outcome, at the unit's layout.** At an outcome
 `verify --registered F` accepts without `--zk` (`own` F's ports), each registered read of the hidden layout `layAtH`
-that is the verifier's own at the outcome's draw (`OwnReadsH`) has its registered leaf open the root `own` holds at the
+that is the verifier's own at the outcome's sample (`OwnReadsH`) has its registered leaf open the root `own` holds at the
 position `own` gives, through `regPathsH`. -/
 theorem checked_of_acceptsRH (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))

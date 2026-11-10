@@ -8,13 +8,13 @@ public import Proofs.Flock.Recursive.KSLinked
 # The links bind at the deployment
 
 `LinksBindDeployed` asks, on an accepted run whose extracted witness is in `R` and fails the link clause (`LinksHold`
-at the rows `tableRows` reads off `E_O`'s witnesses at the judged draw), for two colliding inputs of the link finder.
+at the rows `tableRows` reads off `E_O`'s witnesses at the judged sample), for two colliding inputs of the link finder.
 This file names those inputs and proves the binding, with the link part's reference step `LinkRefStaged`
 (`linkRef_staged`):
 
 * `linkMsgs`: at the link part's circuit and witness, at each instance `n < N`, the reference step's strings
   (`refMsgs`) and the inner half's (`innerMsgs`) at the instance's port words; `linkIns` reads them off the judged
-  draw's witnesses, the first view `drawsOf` serves.
+  sample's witnesses, the first view `drawsOf` serves.
 * `linksHold_or_coll`: where every part is staged and its witness checks against its V\* statement, a witness of the
   inner relation satisfies the link clause at `tableRows`, or two of `linkMsgs` collide. Row `n` opens the table
   (`rowOpens_staged`); the setup's `rin` and `rout` are check 5's rows of the roots of the inner statement's rows
@@ -67,7 +67,7 @@ def linkMsgs (x : Msg) (ws : List Claims.Flock.Wit) (w : Claims.Flock.Wit) : Lis
       (List.range N).flatMap (instMsgs p w UB PB st' c (ws.getD s ⟨[]⟩) R W)
     | _, _, _, _ => []
 
-/-- **The link finder's inputs**: `linkMsgs` at the outer witnesses of the first view, the judged draw's (`drawsOf`). -/
+/-- **The link finder's inputs**: `linkMsgs` at the outer witnesses of the first view, the judged sample's (`drawsOf`). -/
 def linkIns (_H : Msg → Msg) (x : Msg)
     (views : List ((ℕ → FlockDeploy.Coin) × List (Msg × Claims.Out) × List Claims.Flock.Wit)) (w : Claims.Flock.Wit)
     (_rs : List (List UInt8)) : List Msg :=
@@ -223,7 +223,7 @@ theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
 
 /-- **The links bind at every compiled record `deployRec`** whose inner relation is the deployed one's: on an accepted
 run where the linked extractor recovers a witness in `R` whose link clause fails, `E_O` gave witnesses at the judged
-draw (`EO_judged_of_E`), each checking against the V\* statement staged there (`eoGives_outerHolds`,
+sample (`EO_judged_of_E`), each checking against the V\* statement staged there (`eoGives_outerHolds`,
 `runVstar_staged`, `stagedAll_run`), so two of the link finder's inputs collide (`linksHold_or_coll`). -/
 theorem linkBinds_rec {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.Wit}
     (hIR : ∀ y w, I.R y w → Claims.Flock.R (FlockDeploy.parse false Readable.relation) y w) (ivScope : Msg → Bool)

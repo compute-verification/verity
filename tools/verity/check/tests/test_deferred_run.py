@@ -1,4 +1,4 @@
-"""`check.py --deferred STEP,...`, the post-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
+"""`check.py --deferred STEP,...`, the after-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
 those ci.toml jobs and what they need, inside a recorded run that is no check, so no gate reads it."""
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_th
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
-    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
+    """An after-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
     its base's commit, above which ratchet-gate judges every merge."""
     real, launched, sent = subprocess.run, [], {}
 

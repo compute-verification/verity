@@ -14,8 +14,8 @@ verifier establishes with no hardware of its own at the prover's site. It compos
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
-  proof block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, drawn by work
+  proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
+- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
   weight on a live coin, are recomputed, and the run's commitment names the one record the policy and sampled proofs
   committed to (`Core.Remote.V1.run`). H1's development executable, `verity/remote/v0` (`Core.Remote.protocol`),
   which no configuration names, has PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited

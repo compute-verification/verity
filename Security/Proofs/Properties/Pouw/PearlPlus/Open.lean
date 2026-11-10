@@ -14,7 +14,7 @@ leaf frames, the hm96 leaf's inputs (`Commit.leafValue_binding`'s steps), and in
 message, whose first block fixes the row's length, then a segment where two different rows differ.
 
 It is on Lean core, as the properties are, so the row-seg steps are stated here on byte arrays rather than read from
-C-Flock's binding proof (`FlockSoundness.Binding.RowSeg`), which is on Mathlib.
+Flock's binding proof (`FlockSoundness.Binding.RowSeg`), which is on Mathlib.
 -/
 
 @[expose] public section

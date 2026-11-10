@@ -60,7 +60,7 @@ theorem avg_sum_comm {C E : Type} [Fintype C] [Fintype E] (f : C → E → ℝ�
   exact Finset.sum_comm
 
 open Classical in
-/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's law and the law of
+/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's law and the sampling design of
 `w c d` at a uniform `c` and a uniform coin `d`. -/
 noncomputable def shortfall {P C : Type} [Fintype P] [Fintype C] (w : P → C → C) : ℝ≥0∞ :=
   ∑ e : C, ((Fintype.card C : ℝ≥0∞)⁻¹ - avg fun c : P => avg fun d : C => if w c d = e then 1 else 0)

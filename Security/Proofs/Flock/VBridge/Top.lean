@@ -11,7 +11,7 @@ public import Proofs.Flock.VBridge.Algebra.BitsOk
 `vbridge_of_vstar` is VBridge G at the compiled inner verifier, with every closed piece applied: the algebra from V*'s
 part residuals (`algebraDecodes_of_decode`, its `BitsOk` from `structureOf_bitsOk`), the running sums from V*'s opening
 units (`accChains_of_decode`), the inner verifier's acceptance from one table's files and both reps' runs
-(`stagesAccept_of_runs`), and `VFullR`, which V*'s full draw gives (`vFullR_of_read`). Its hypotheses are the pieces
+(`stagesAccept_of_runs`), and `VFullR`, which V*'s full sample gives (`vFullR_of_read`). Its hypotheses are the pieces
 still open, each a fact about V*'s statements, registrations or files.
 -/
 

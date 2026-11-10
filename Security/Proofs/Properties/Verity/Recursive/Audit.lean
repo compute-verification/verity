@@ -15,10 +15,10 @@ compiled check (`verity/sampled-proofs/recursive/v1`, the recursive form of onsi
 component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`).
 
 * `SampledProofsRecursive Acc` is `sampledProofsRecursive`'s bound at every deployment `RecursiveKS` is stated at
-  (`Dep.deployed`: the deployed weights, and any brings, coin-server record and decoders meeting the list-decoding spec)
+  (`Dep.deployed`: the deployed weights, and any brings, live-coin record and decoders meeting the list-decoding spec)
   and every composite `k`, at the verdict `Acc`, with the call bounds `nI₀`, `vS₀` and the level `λ = 135.7` fixed. The
   guarantee takes it at the recursive configuration's verdict, `RecVerdict`.
-* Its knowledge-soundness term is `Dep.ksAt`: `t'·2^{-135.7}`, and at a draw whose statement is at the deployment's
+* Its knowledge-soundness term is `Dep.ksAt`: `t'·2^{-135.7}`, and at a sample whose statement is at the deployment's
   tables (`Dep.OneTable`: one plain inner table, and each V\* part one `--zk` table) the least of it and
   `2^{-167.7} + t'·2^{-174.95}` (`RecDeploy.kappa_eps_oneTable_cap`), where the inner setup's calls and `nI₀` are at
   most `2^32` and `vS₀ = nS·138543104` (`RecDeploy.setupCalls_deployedB_le_cap`) is at most `16·138543104 ≤ 2^32`,
@@ -43,7 +43,7 @@ open RecDeploy
 open Accounting (Device)
 
 /-- **The deployment `RecursiveKS` is stated at**: the deployed weights `DeployedR.wER` and `DeployedR.wR`, with the
-brings `b`, the coin server's record (`aux`, `nOf`, `hd`, `recRest`) and the decoders `decI` and `decO`. -/
+brings `b`, the challenger's live-coin part's record (`aux`, `nOf`, `hd`, `recRest`) and the decoders `decI` and `decO`. -/
 noncomputable def Dep.deployed (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
@@ -105,10 +105,10 @@ the list-decoding spec, at every composite `k` (as `Verity.SoundnessOf` quantifi
 committed files `F`, the commitment `c`, a strategy `σ` and its recursive session `S` at `k` (`SessionIn`), the
 probability that `Acc` at `k` holds of the play's outcome while sampled proofs' claim at `k` fails on the extracted
 transcript is at most `Dep.errAt` at `S`, the call bounds `nI₀`, `vS₀` and `λ = 135.7`. Its
-hypotheses are `sampledProofsRecursive`'s: `K₀` covers the claim's `ε` share and the draw misses any `K₀` units with
+hypotheses are `sampledProofsRecursive`'s: `K₀` covers the claim's `ε` share and the sample misses any `K₀` units with
 probability at most `δs`; the vocabulary's extractor is the recursive configuration's (`Dep.extract`); the reading
-`readX` of a witness in the recursive relation is correct at, and opened on, every drawn unit, and `collOf` turns two
-readings that differ at a wire drawn in both into a SHA-512 collision; and the records hold the run's live coins
+`readX` of a witness in the recursive relation is correct at, and opened on, every sampled proof block, and `collOf` turns two
+readings that differ at a wire sampled in both into a SHA-512 collision; and the records hold the run's live coins
 (`LiveCoins`, `live-verifier`). -/
 def SampledProofsRecursiveAt
     (Acc : ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α], Vocab d α → Verity.Registration.Composite →
@@ -173,7 +173,7 @@ that the play is accepted while sampled proofs' claim fails on the extracted tra
 meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 
 Its knowledge-soundness term `ksAt` (`Verity.Recursive.Dep.ksAt`) is `t'·2^{-λ}` with `λ = λ₂ = 135.7`, route 2C's
-level (`Claims.Recursion.lamLin2`), and at a draw whose statement is at the deployment's tables (`Dep.OneTable`) the
+level (`Claims.Recursion.lamLin2`), and at a sample whose statement is at the deployment's tables (`Dep.OneTable`) the
 least of it and route 2C's split bound `κ + t'·ε` with `κ = 2^{-167.7}` and `ε = 2^{-174.95}`
 (`RecDeploy.kappa_eps_oneTable_cap`, at the inner setup and the call bounds the run shows there). The finders are
 charged the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and V\*'s setup calls `vS₀ = nS·138543104`, read off the

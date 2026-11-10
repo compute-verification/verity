@@ -250,7 +250,7 @@ theorem toArray_of_get! {γ : Type} [Inhabited γ] {a : Array γ} {k : ℕ} {f :
   simp
 
 open ZkTables.Level0 in
-/-- **The lane loop's invariant** after `j` lane coins, from `L` sends: the coins drawn are the replies; `j + 2` sends
+/-- **The lane loop's invariant** after `j` lane coins, from `L` sends: the coins flipped are the replies; `j + 2` sends
 since `L` (and the pair's two once `j = k_0`); the out-of-domain value `y`; messages `0` to `j`, the first `k_0` of
 them `roundPoly` of the folds masked; before `k_0` the table and weights folded at the first `j` coins; at `k_0` the
 pair's coins, sums and blinded claim. -/

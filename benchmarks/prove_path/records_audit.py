@@ -19,7 +19,7 @@ opens the registered root under the registered compiler, and that compiler, run 
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
-the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
+the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
 proved whole beside the sample only on a closure map, which the stream refuses, so a5 refuses such a window before the
@@ -30,7 +30,7 @@ its window's ingress the window figure beside it, with the premise it rests on n
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
-``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each drawn
+``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
@@ -671,7 +671,7 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
-    """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
+    """What the audit refuses before any sample about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
     compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
     compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
@@ -835,9 +835,9 @@ def _code(fn: Any) -> str | None:
 
 
 def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> dict:
-    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first drawn session's proof (a prover that sent the edited
+    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first sampled session's proof (a prover that sent the edited
     proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
-    member's circuit and public file: what the verifier of record refuses, not the prover. Then that public file with one
+    member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))

@@ -729,9 +729,9 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
 
 
 def index_salt(key: bytes, index: int) -> bytes:
-    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
+    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): sampled under the
     committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
-    takes, so the committer draws it again from its key alone."""
+    takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
     return H1R.salts(key, INDEX_NONCE + index, 1)

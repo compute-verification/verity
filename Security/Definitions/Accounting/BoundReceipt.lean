@@ -53,7 +53,7 @@ abbrev Mix (N a b h : ℕ) : Type := Fin N × Bits b × Bits a → Bits h
 abbrev Pub (N a b h : ℕ) : Type := Store N a × Mix N a b h
 
 /-- A window's coins: the live coins (`Verity.Coins`) with the tile outputs and the mix as their public part, and the
-`s` sampled blocks as their draw. -/
+`s` sampled blocks as their sample. -/
 abbrev Coins (N a b h s : ℕ) : Type := Verity.Coins (Pub N a b h) s N
 
 instance instFintypeCoins (N a b h s : ℕ) : Fintype (Coins N a b h s) :=
@@ -157,7 +157,7 @@ end Node
 /-! ## Answers between the locations that depend on the mix (`e > 0`) -/
 
 /-- A node whose locations answer each other as functions of the mix too (`e > 0`): `node`'s programs, state and
-memory, fixed before the mix is drawn, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest
+memory, fixed before the mix is sampled, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest
 (`restSide`) any functions of the mix, the store and the tile outputs. -/
 structure InteractiveNode (N a b h S L q Lz qz : ℕ) where
   node : Node N a b h S L q Lz qz

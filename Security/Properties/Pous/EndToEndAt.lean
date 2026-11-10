@@ -149,7 +149,7 @@ def coinViewAt (N : ℕ) (session : ByteArray) (c : HmCoins) (I : Fin 105 → Fi
     (Array.ofFn fun j => bytesOf (c.2 j))).toOption.map fun t => (t.root, t.key)
 
 /-- **A server in the ring model for a scheme `sch`**: `Server`'s fields over any scheme in the ring model. `pre` is all
-that survives setup, `S` bits, fixed before the memory challenger's coins are drawn; `step W pp j σ i` answers round
+that survives setup, `S` bits, fixed before the memory challenger's coins are flipped; `step W pp j σ i` answers round
 `j`'s index `i` from the state `σ` and what is public, within `(D, Q, L)`. It is stated over the scheme, not at `N`,
 because Lean's structure command unfolds `N * 16432` with `N` free. -/
 structure RingServer {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
@@ -174,7 +174,7 @@ abbrev ServerAt (N : ℕ) [NeZero N] (S D Q L : ℕ) : Type := RingServer (schAt
 /-- **The server passes the session at `N` blocks**: `Passes` with `N` in place of `2^19`. The code's sampler reads
 index `I j` from stream `j` at `N` blocks (`uniformOn N`), the code builds the coin tree over those indices
 (`coinViewAt N`, released after the session), and the server returns block `I j` of `C` in every one of the 105
-rounds, sequentially. A stream from which the sampler draws no index fails the session. -/
+rounds, sequentially. A stream from which the sampler samples no index fails the session. -/
 def PassesAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray) (W : Bits (schAt N).n)
     (A : ServerAt N S D Q L) (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) : Prop :=
   ∃ (I : Fin 105 → Fin N) (v : ByteArray × ByteArray),
@@ -185,7 +185,7 @@ def PassesAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray) (W : Bit
           (A.pre W ((schAt N).enc W x.1 ()).1 ((schAt N).enc W x.1 ()).2 x.1) =
         List.ofFn fun j => ((schAt N).enc W x.1 ()).2 (I j)
 
-/-- **The draw favors no index at any block count (`ε_rs = 0` in the upper bound)**: for every positive block count
+/-- **The sample favors no index at any block count (`ε_rs = 0` in the upper bound)**: for every positive block count
 `N + 1` and every event `P` on indices, `uniformOn (N + 1)` on `DRAW_BYTES` uniform bytes returns an index in `P` with
 probability at most `P`'s under the uniform index. At `2^19` it is equality (`DrawExact`); elsewhere a rejected word
 only takes probability away from every index. -/

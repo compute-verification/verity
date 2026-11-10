@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.ZK.FrameRank
 
 At the opening's label the deployed frame's rank check reads a rep's claim points off the algebraic phase's coins as the
 stream answered them, one flat array (`Frame.claimPoints`, `Masker.coins`); the session reads them off the rep's rounds
-(`MaskRank.claimPoints`, `coin j e` element `e` of round `j`). In the phase's draw order the array holds round `0`'s
+(`MaskRank.claimPoints`, `coin j e` element `e` of round `j`). In the phase's sample order the array holds round `0`'s
 `K_SKIP` coins, round `1`'s `m − 13` outer ones, `z`, the `m − 6` rounds of `ρ`, `α`, `β`, the `k_log − 6` rounds of the
 lincheck and `r'`, so:
 

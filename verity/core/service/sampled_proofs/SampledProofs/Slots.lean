@@ -1,20 +1,20 @@
 /-
 The claims' slots over the verifier's partition (`Claims.Sampling.Partition` and `Deploy.checked`): the partition the
-verifier evaluates, as the claims read it, and the slots of the proof blocks a draw checks.
+verifier evaluates, as the claims read it, and the slots of the proof blocks a sample checks.
 
 * **Classes.** Two, the population and then the inputs. The population's strata are the query's (`Partition.strata`:
   one per template or Definition, in the order of its first unit), each stratum's proof blocks its units in ascending
   order, each unit's gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the span of the gates a
   `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none when the root has
   no input) of every gate of the root's input nodes, in gate order, each a proof block of its own; the claims' design
-  reads it `all`, as `partition_object`'s input unit is never drawn. No run opens an input row on its own: `Run.run`
-  proves the drawn units (`Draw.proved`), whose session (`HmRow.drawn`) opens only the rows its units read, and
-  registration opens none. So an input row is opened only through a drawn unit that reads it.
+  reads it `all`, as `partition_object`'s input unit is never sampled. No run opens an input row on its own: `Run.run`
+  proves the sampled proof blocks (`Draw.proved`), whose session (`HmRow.drawn`) opens only the rows its units read, and
+  registration opens none. So an input row is opened only through a sampled proof block that reads it.
 * **Slots.** A proof block's slot is its index in class, stratum and block order (`Partition.blocks`). Where no two
   strata's units interleave, unit `i`'s slot is `i`.
-* **Checked.** `checked` lists the slot of every proof block the draw proves (`Select.select`'s proved units: its units
-  and a work draw's closure) and of every input slot, in slot order. It is the claims' reading of a draw; `Run.run`
-  doesn't call it, and the session proves no input slot of a unit outside the draw.
+* **Checked.** `checked` lists the slot of every proof block the sample proves (`Select.select`'s proved units: its units
+  and a work sample's closure) and of every input slot, in slot order. It is the claims' reading of a sample; `Run.run`
+  doesn't call it, and the session proves no input slot of a unit outside the sample.
 * **JSON.** The layout's JSON keeps a block's keys `unit` and `pus` (its gates as a list of one `[lo, hi]`), and
   `checked` its `[slot, 0]` pairs, until a format version: the difftest's Python side reads them.
 -/
@@ -100,13 +100,13 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   | .error _ => false
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
-/-- **The checked slots** (`Deploy.checked`) of a draw that proves the units `proved`: every proof block among them and
-every input slot, in slot order. An input slot listed here is opened only where a drawn unit reads its row. -/
+/-- **The checked slots** (`Deploy.checked`) of a sample that proves the units `proved`: every proof block among them and
+every input slot, in slot order. An input slot listed here is opened only where a sampled proof block reads its row. -/
 def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.all proved.contains).map (·.2)
 
-/-- **The challenger's draw in the claims' slots**: the layout of `p` under `query`, and the slots of the units
-`Select.select`'s draw on the coins `src` proves. An error where either is. -/
+/-- **The challenger's sample in the claims' slots**: the layout of `p` under `query`, and the slots of the units
+`Select.select`'s sample on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (SlotOrder × Array Nat) := do
   let l ← layout p query

@@ -397,7 +397,7 @@ theorem rowOfPos_posOf {C : FlockSoundness.Audit.Circuit} (rows : Fin C.N → Op
     rowOfPos C rows (posOf C g) = rows g := by
   simp only [rowOfPos, wireOf_posOf, Option.bind_some]
 
-/-! ## The game's openings at a C-Flock session -/
+/-! ## The game's openings at a Flock session -/
 
 section Game
 
@@ -411,7 +411,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
 
-/-- **The game's value binding at a C-Flock session** (`SampledKSLive`'s `vb`). -/
+/-- **The game's value binding at a Flock session** (`SampledKSLive`'s `vb`). -/
 noncomputable abbrev vbOf := (rsZHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub hpt).bindingZ
   (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)
 
@@ -501,7 +501,7 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
     rw [vbOf_com_fst] at h1
     cases h1
 
-/-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
+/-- **The deployed layout's rows** at a Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
 circuit file. -/
 noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     Fin ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).N → Option RowAt := fun g =>
@@ -509,7 +509,7 @@ noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
 /-- **A shaped registered opening opens the deployed commitment** (`TransportsLive` at the shaped openings). In
-`SampledKSLive`'s setting, at a circuit file whose ports are rows the verifier of record reads (`RowsOk`), that names
+`SampledKSLive`'s setting, at a circuit file whose ports are rows the verifier reads (`RowsOk`), that names
 each port once (`Registered.dupName`), and roots that separate differently named ports (`PortRoots.RootFixesDomain`),
 at a wire `g` held by a registered row `r`: an opening `(p, v, y)` of `g`'s registered commit string at registration
 `R`, whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
@@ -549,7 +549,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **`TransportsLiveC` under roots that separate differently named ports.** `TransportsLiveC`'s setting (circuit files
-whose ports are rows the verifier of record reads, `RowsOk`, each named once), commitment, roots and hash, when the
+whose ports are rows the verifier reads, `RowsOk`, each named once), commitment, roots and hash, when the
 registration's roots separate
 differently named ports (`PortRoots.RootFixesDomain`): at every unit `u` and committed wire `g` of `u`, every opening
 `o` of `g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row,

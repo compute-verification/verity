@@ -23,9 +23,9 @@ of the registration given, `LineRegistered`) and the W's cover of the session's 
 The window (`verifyWindow`):
 
 * `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a draw, and
-  each drawn opening passes `checkOpening` under the receipter of its pass's seed;
+  each sampled opening passes `checkOpening` under the receipter of its pass's seed;
 * `AcceptOpensDraws`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
-  drawn receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
+  sampled receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
   payload under the payload tree or its append's tree and coin, and the receipt recomputed from the block is the leaf's.
 * `ChunkedIsWhole`: the verifier's process, which checks a window's openings in chunks on threads of their own
   (`checkWindowChunked`), gives `checkWindow`'s verdict on the whole window, the one `Session.run` sets.
@@ -79,7 +79,7 @@ def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
   receipter reg.receipt (w.seedOf i) reg.rows
 
 /-- An accepted window drew `drawn` from its openings coin over its passes' plans, has exactly one opening a draw, and
-each drawn receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
+each sampled receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
 def AcceptChecksOpenings : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
@@ -100,7 +100,7 @@ def ChunkedIsWhole : Prop :=
 /-- Draw `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
 plan:
 
-1. it is the drawn receipt's (`o.pass = i`, `o.position = p`); its block is 4,096 bytes, it carries no tile, its salts
+1. it is the sampled receipt's (`o.pass = i`, `o.position = p`); its block is 4,096 bytes, it carries no tile, its salts
    are 192 bytes, its paths' siblings 64 bytes, and it has a payload digest exactly when `j` is an appended block;
 2. its leaf holds a receipt `y` at `p` (the leaf's size is its positions'), and the leaf, under its salt and path, is
    leaf `p / 16` of pass `i`'s receipt tree under the pass's root, in the domain of the pass's seed and plan;
@@ -128,7 +128,7 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
             j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
-/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a draw, and each drawn receipt's
+/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a draw, and each sampled receipt's
 opening passes checks 1–5 (`OpeningPasses`). -/
 def AcceptOpensDraws : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
@@ -144,7 +144,7 @@ def AcceptOpensDraws : Prop :=
 then `p`. -/
 def receiptIndex (lengths : Array Nat) (i p : Nat) : Nat := (lengths.toList.take i).sum + p
 
-/-- The key a window's openings are drawn on: `derive(c, OPENINGS_DOMAIN, {registration, window: t})`. -/
+/-- The key a window's openings are sampled on: `derive(c, OPENINGS_DOMAIN, {registration, window: t})`. -/
 def openingsKey (registration : ByteArray) (t : Nat) (coin : ByteArray) : ByteArray :=
   FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
 
@@ -224,7 +224,7 @@ def ReceiptsBelowLimit : Prop :=
       ∀ t (ht : t < s.windows.size), s.windows[t].receipts < Session.RECEIPT_LIMIT
 
 /-- The appends are the store's next indices in order (append `k` starts where the one before it ends, the first at
-`N`, and the store ends at the last), and append `k` answered with the `k`-th append coin, each drawn once. -/
+`N`, and the store ends at the last), and append `k` answered with the `k`-th append coin, each sampled once. -/
 def AppendsInOrder : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),

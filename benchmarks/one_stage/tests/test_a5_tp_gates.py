@@ -57,7 +57,7 @@ def header(win: dict, m) -> dict:
 
 def test_the_unit_is_the_registered_allreduce2_with_a_port_a_rank() -> None:
     """The transfer-gate template is the registered `AllReduce2_v1{N}`, its ports ``part0`` and ``part1`` its input's rows
-    ``parts[0]`` and ``parts[1]``; it is `sums` of ``[part0, part1]`` on every word pair drawn, the special words among them
+    ``parts[0]`` and ``parts[1]``; it is `sums` of ``[part0, part1]`` on every word pair sampled, the special words among them
     (zeros of both signs, infinities, NaNs, subnormals, the largest finite), and on the activations' rows `sums` is
     ``bf16_rn(f32(a) + f32(b))``."""
     unit = AT.templates(H)[0]

@@ -7,10 +7,10 @@ public import Proofs.Flock.Soundness.Audit.FlockBatched
 # The Flock audit at the compiled layer, several tables per session
 
 The protocol's session (`Flock.Record`, `SessionBatch.lean`): the verifier plans the tables from the
-draw and the registration (`plan`), `Commit` sends every table's level-0 cap, one link-point draw
+sample and the registration (`plan`), `Commit` sends every table's level-0 cap, one link-point sample
 serves all of them, and then they run concurrently; the session accepts when every table accepts
-(`batchedSessionL`). Each drawn unit is read from one table of the plan (`tab S R u`), with its own
-decoder (`DecoderB`): two drawn units that share a wire hold it in their own columns.
+(`batchedSessionL`). Each sampled proof block is read from one table of the plan (`tab S R u`), with its own
+decoder (`DecoderB`): two sampled proof blocks that share a wire hold it in their own columns.
 
 **The analysis** (`analysisBL`) reads the extractor of the unit's table, over `Kr` reruns of
 everything after `Commit`:
@@ -23,12 +23,12 @@ everything after `Commit`:
   other than the committed transcript's.
 
 `cover` is `one_le_fail_add_BL'`: by **the lowering** (`LoweringSoundB`, named, per table), a
-committed table gives the link event for a wrong unit. `loweringSoundB_of_place` discharges it from
-each drawn unit's place in its table (`UnitPlace`), with `C` the rows the verifier parses.
+committed table gives the link event for an incorrect proof block. `loweringSoundB_of_place` discharges it from
+each sampled proof block's place in its table (`UnitPlace`), with `C` the rows the verifier parses.
 
-**The discharge** (`flock_batched_knowledgeSoundL`): per draw, the unit's table's
+**The discharge** (`flock_batched_knowledgeSoundL`): per sample, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_BL'`, from `session_knowledge_soundL`),
-bounded by the largest over the plan's tables, and averaged over the draw (`ksAvgBL`), with no
+bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgBL`), with no
 named assumption; `δ_link` stays named (`LinkSound`).
 
 `flock_batched_countL`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
@@ -68,7 +68,7 @@ theorem prob_batchedSessionL (S : Finset (Fin n)) (R : Reg)
 variable {L : Law n}
 
 /-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
-`decode` reads each drawn unit from its table's witness, `Kr` is the extractor's rerun count. -/
+`decode` reads each sampled proof block from its table's witness, `Kr` is the extractor's rerun count. -/
 noncomputable def analysisBL (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) (Kr : ℕ)
     (hlow : P.LoweringSoundB plan tab decode) : ExtractionAnalysis L Reg (batchedSessionL H E Lf plan) where
@@ -91,8 +91,8 @@ noncomputable def analysisBL (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     exact le_mul_of_one_le_right zero_le
       (one_le_fail_add_BL' execArith H E Lf (plan S R) (tab S R u) Kr (batchStratL H E Lf plan τ) _ hG)
 
-/-- **The batched audit's knowledge term**, per prover: after each draw, the largest over the
-plan's tables of the table's bound in the session, averaged over the draw. -/
+/-- **The batched audit's knowledge term**, per prover: after each sample, the largest over the
+plan's tables of the table's bound in the session, averaged over the sample. -/
 noncomputable def ksAvgBL (Kr : ℕ) (R : Reg) (τ : Cont L Reg (batchedSessionL H E Lf plan) R) : ℝ≥0∞ :=
   avg fun ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksBoundBL execArith H E Lf (plan (L.draw ω) R) j Kr (batchStratL H E Lf plan (τ ω)))
@@ -124,7 +124,7 @@ theorem flock_batched_countL
   extraction_audit_count (analysisBL P H E Lf plan tab decode Xc Kr hlow)
     (flock_batched_knowledgeSoundL P H E Lf plan tab decode Xc hK hlow) hlink K σ
 
-/-- **Drawn units of the batched Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
+/-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
 theorem flock_batched_drawnL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}

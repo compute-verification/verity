@@ -40,7 +40,7 @@ structure TimedRun (Q R S : Type) where
 def TimedRun.spentIn (run : TimedRun Q R S) (H : Q → R) (s : S) (a b : ℝ) : ℝ := run.spent H s b - run.spent H s a
 
 /-- **The verifier's rule at the deadline `td`**: it received the transcript by `td`, and the audit with the samples `c`
-accepts (every sampled unit is in `K`). -/
+accepts (every sampled proof block is in `K`). -/
 def AcceptsBy (run : TimedRun Q R S) (td : ℝ) (H : Q → R) (s : S) {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ)
     (c : Fin t → Ticket w N) : Prop :=
   run.tr H s ≤ td ∧ AuditAccepts K c

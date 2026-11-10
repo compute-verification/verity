@@ -397,7 +397,7 @@ theorem oodFixed_size (levels : Array (Array F256)) (h : ∀ l ∈ levels.toList
 
 /-! ## The Merkle openings -/
 
-/-- Where level `j`'s query coins are drawn, counted from Ligerito's first round: level 0's after `k0 + 6` rounds, an
+/-- Where level `j`'s query coins are flipped, counted from Ligerito's first round: level 0's after `k0 + 6` rounds, an
 inner level's eleven later per level, and the last level's four rounds sooner than an inner level's would be. -/
 def qOff (sch : Schedule) (j : ℕ) : ℕ :=
   if j < sch.levels.size - 1 then sch.k0 + 6 + 11 * j else sch.k0 + 2 + 11 * j
@@ -421,7 +421,7 @@ def MerkleOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cap : Array B
       (opening p cap (sch.levels.size - 1) j).2.1 (opening p cap (sch.levels.size - 1) j).2.2.1
       (opening p cap (sch.levels.size - 1) j).2.2.2 (2 ^ (sch.levels.getD j default).lanes) = .ok ()
 
-/-- Level `j`'s Merkle check, at a query drawn at round `k + qOff sch j`. -/
+/-- Level `j`'s Merkle check, at a query sampled at round `k + qOff sch j`. -/
 theorem MerkleOk.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : Array ByteArray}
     {p : LigeritoProof} {cf : ℕ → ℕ → F128} {k : ℕ} (h : MerkleOk hs ms sch cap p cf k) {j : ℕ}
     (hj : j < sch.levels.size) {k' : ℕ} (hk : k' = k + qOff sch j) {c : Array ByteArray}

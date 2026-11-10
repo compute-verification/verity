@@ -16,7 +16,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
                      their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
-                     roots of step s - D + 1 (each table's domain names its own step; zeros before the window's first
+                     roots of step s - D + 1 (each table's domain names its own step; zeros before the execution phase's first
                      D - 1 steps); round s's root sent (`coins.RoundPipe`), after which alone the challenger opens coin s.
     units of step s  at the end of step s + D - 2's between-steps (D = 2: step s's own, just after its root is sent), once
                      coin s is back (the host waits for it there: coin_wait_ms): on the units stream, after the ring slot
@@ -42,7 +42,7 @@ itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
 (`UNITS_ENV`; the verifier's form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
-`forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
+`forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the execution phase's end on j10r_so's
 references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
 -ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
@@ -58,23 +58,23 @@ round s as built from the ring once forward s + 1 had started (a captured step's
 give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
 serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
-A window's open and end (served_h1's window close, since dither-a has none).  Every window opens with the salt
-coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
-in process the epoch root), then the epoch round (round 0) over the B tables' roots.  Without -we a window has no end: its
+An execution phase's open and end (served_h1's execution-phase close, since dither-a has none).  Every execution phase opens with the salt
+coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the challenge phase;
+in process the execution-phase root), then the execution-phase round (round 0) over the B tables' roots.  Without -we an execution phase has no end: its
 last D - 1 steps' receipts lie under no round, and its last D - 2 steps' units never run.  With -we
-(`-so<D>[-ov|-ov1|-ovp]-we`) each window ends (`SoWindow.end`) after its last step S - 1: the remaining coins awaited and
+(`-so<D>[-ov|-ov1|-ovp]-we`) each execution phase ends (`SoWindow.end`) after its last step S - 1: the remaining coins awaited and
 the tail's units run (steps S - D + 2 to S - 1; under -ov the dispatcher's, drained), the receipt-tail roots of steps
 S - D + 1 to S - 1 (each the tree over a step's receipt-table roots, its domain naming that step) under one final round
 sent after the last step's coin, whose coin comes back; then the manifest root, the tree over every round root of the
-window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
+execution phase in order (execution-phase round, steps, final; its domain naming the execution phase, its root and its steps), which binds each step's
 round leaves and every call's A, admit, z, y and receipt roots under them; then the sampling coin opened after the manifest
-root, and the session closed.  Until the sample the prover keeps what it must open a sampled proof block from: each step's live A
+root, and the challenge phase closed.  Until the sample the prover keeps what it must open a sampled proof block from: each step's live A
 rows and scales and its z/y records' live row tiles (-wea: A and the scales alone, z/y recomputed from them), copied
 to pinned host memory on a stream of their own from the ring slot that holds them, a slot rewritten only once its copy is
-out (`Spill`).  In process the window ends after each of sbench's generates (and a new one opens at the
-next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
-session's window ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
-every family releases all its coins.  `check_end` holds an ended window to: the salt coin after the window's root, every
+out (`Spill`).  In process the execution phase ends after each of sbench's generates (and a new one opens at the
+next step on a challenger made beforehand, `prepare`, as the gate makes an off-node challenge phase's); off the node the
+run's execution phase ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
+every family releases all its coins.  `check_end` holds an ended execution phase to: the salt coin after the execution phase's root, every
 round's coin after its root, the sampling coin after the manifest root recomputed from the rounds the challenger received;
 each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
 tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
@@ -82,9 +82,9 @@ or the final round) sent after that and before the sampling coin, no round after
 ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
 (`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The sampling coin's time is read under the
 round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the sample.  Two end faults, each
-in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
+in an execution phase of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
-round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node window's
+round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node execution phase's
 manifest (`dither_manifest`: every round's root and leaves, the final round, the manifest root, the coins) goes to
 $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's own run.
 
@@ -132,7 +132,7 @@ END_ORDER = ("-we: at the window's end the tail's units after their coins, their
              "sent after the last coin, the manifest root over every round root, then the draw coin after it")
 NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens; rows pending"
 END_FAULTS = ("fault_tail", "fault_late_receipt")
-MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
+MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node execution phase's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 # "1": under the serving priority, vLLM's graphs captured on a stream at that priority too (`capture_at`): vLLM's
@@ -160,7 +160,7 @@ RDEAD_ENV = "DITHER_SO_RDEAD"
 # version 0 place every call's seed_c at its first position and each unit's sigma_R at its own (h1u.cu's
 # kh_seeds_j10r_h1r, on the same call table), then each call's row tiles hashed once and its units on them
 # (kh_units_multi_j10r, under $DITHER_SO_UNITS_SMQ kh_units_multi_j10r_sm); needs $DITHER_SO_FUSED=1.  The gate holds it
-# to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
+# to j10r_so's references (h1r's J10-R version 1 on every capture and the execution phase's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
 # R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
@@ -197,16 +197,16 @@ ZSIDE_ENV = "DITHER_SO_ZSIDE"
 # "": the build's H1C_LVF, as every other set.  The roots are the same at every L
 A_LVF_ENV = "DITHER_A_LVF"
 A_LVF_TOP = 8
-ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
+ROUNDS_ENV = "DITHER_ROUNDS"            # the execution phase's layout (its round coins), the challenge phase's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
-# -we's spill (`Spill`): what each step keeps past the ring until its window's sample, so the prover can open a sampled proof block
+# -we's spill (`Spill`): what each step keeps past the ring until its execution phase's sample, so the prover can open a sampled proof block
 SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest are zero)",
           "a": "A rows and scales (live rows); z/y recomputed from them at an opening (z = A B^T, y = dequant(z))"}
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
-SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
+SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which an execution phase's spill refuses (default SPILL_MAX_GB)
 SPILL_MAX_GB = 128
 # "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
-# (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
+# (a live row, a captured step's poison, a control's unwritten records, a new execution phase): the same bytes in every record,
 # without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written); and
 # `after` clears the A slots' and scales' rows past m only below that row (the quantizer writes rows below m alone)
 DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
@@ -217,7 +217,7 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # a pinned host word (cuStreamWaitValue32) that `SoSide.dispatch` sets once round s is sent, the coin is back and the
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Their salt (their coin, back steps ago, and its round's root) is taken and staged with them (`_salt_early`), so the
-# flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor a window's
+# flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor an execution phase's
 # last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
@@ -245,7 +245,7 @@ def keep(x: torch.Tensor) -> torch.Tensor:
 
 
 def end_steps(depth: int) -> int:
-    """An end fault's window: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
+    """An end fault's execution phase: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
     return 2 * depth + 2
 
 
@@ -265,20 +265,20 @@ NA = DA.NA_MULTI
 
 
 class SoWindow(DO.DitherState):
-    """dither_one's window with the rounds in the statement's order (the module docstring): its round coins through a
+    """dither_one's execution phase with the rounds in the statement's order (the module docstring): its round coins through a
     `coins.RoundPipe`, its slots grouped a K so the ring copies them in a launch a K, the units of step s dispatched at
     the end of step s + D - 2's `after`."""
     group_slots = True
     depth = 2
     a_once = False
     overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
-    window_end = False  # -we: each window ends (`end`)
+    window_end = False  # -we: each execution phase ends (`end`)
     spill_mode: str | None = None   # -we: what each step keeps until the sample (SPILLS), held by `SoSide.spill`
 
     def __init__(self, *args, **kwargs):
         if self.depth < 2:
             raise ValueError(f"dither-a-so's ring depth is at least 2, not {self.depth}")
-        # the window's own state (`_start` sets it at each open, the first from `_epoch` at the build)
+        # the execution phase's own state (`_start` sets it at each open, the first from `_epoch` at the build)
         self.k, self.open, self.s0, self.prepared = -1, False, 0, None
         self.next_end: tuple | None = None
         self.end_name = self.end_fault = self.end_at = None
@@ -394,9 +394,9 @@ class SoWindow(DO.DitherState):
         self._start()
 
     def _start(self) -> None:
-        """A window opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
-        opened after the window's root, the epoch round (round 0) over the B tables' roots, and the round pipe; under -we
-        its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` window's."""
+        """An execution phase opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
+        opened after the execution phase's root, the execution-phase round (round 0) over the B tables' roots, and the round pipe; under -we
+        its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` execution phase's."""
         from verity.core.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
@@ -442,20 +442,20 @@ class SoWindow(DO.DitherState):
         self.starts_ms.append(1e3 * (time.perf_counter() - t0))
 
     def prepare(self) -> None:
-        """In process, the next window's challenger made now, outside a timed generate (its commitment over 16384 rounds
-        takes 1.7 s), as the challenger's gate makes an off-node session's before its window."""
+        """In process, the next execution phase's challenger made now, outside a timed generate (its commitment over 16384 rounds
+        takes 1.7 s), as the challenger's gate makes an off-node challenge phase's before its execution phase."""
         if not self.open and self.prepared is None and CO.session() is None:
             self.prepared = CO.open_coins(None, 1, rounds_of())
 
     def arm_end(self, name: str, fault: str | None = None, steps: int | None = None) -> None:
-        """The next window opened is `name`'s: its end kept for `check_end`, under `fault` (one of END_FAULTS), and with
+        """The next execution phase opened is `name`'s: its end kept for `check_end`, under `fault` (one of END_FAULTS), and with
         `steps` it ends at its steps-th step."""
         if fault is not None and fault not in END_FAULTS:
             raise ValueError(f"dither-a-so: an end fault is one of {END_FAULTS}, not {fault!r}")
         self.next_end = (name, fault, steps)
 
     def ix(self, s: int) -> int:
-        """Step s's round: its index in its window's round coins (round 0 the epoch round)."""
+        """Step s's round: its index in its execution phase's round coins (round 0 the execution-phase round)."""
         return s - self.s0 + 1
 
     def steps_left(self) -> int:
@@ -479,7 +479,7 @@ class SoWindow(DO.DitherState):
 
     def dispatch_units(self, j: int) -> float:
         """Step j's units once its coin is back (`SoSide.dispatch`, under its coin's salt; fault_rearly's under the coin
-        before), unless fault_tail drops the window's last step's; when the coin came back (perf_counter)."""
+        before), unless fault_tail drops the execution phase's last step's; when the coin came back (perf_counter)."""
         i = self.ix(j)
         t0 = time.perf_counter()
         opening = self.pipe.opening(i)
@@ -582,8 +582,8 @@ class SoWindow(DO.DitherState):
         self.round_log.append({"s": lag["s"], "m": lag["m"], "root": root.hex()[:32]})
 
     def end(self) -> dict | None:
-        """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
-        final round, its coin back, the manifest root, the sampling coin after it, the session closed."""
+        """The execution phase's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
+        final round, its coin back, the manifest root, the sampling coin after it, the challenge phase closed."""
         self._lag_finish()
         if not self.open:
             return None
@@ -677,7 +677,7 @@ class SoWindow(DO.DitherState):
         return e
 
     def close(self) -> dict | None:
-        """At the arm's stop: an open window with steps ended under -we, else its rounds drained and its coins closed."""
+        """At the arm's stop: an open execution phase with steps ended under -we, else its rounds drained and its coins closed."""
         self._lag_finish()
         if not self.open:
             return None
@@ -691,7 +691,7 @@ class SoWindow(DO.DitherState):
         return None
 
     def _harvest(self, now: bool = True) -> None:
-        """The round trips of each coin come back since the last harvest of this window's pipe, and each one's order
+        """The round trips of each coin come back since the last harvest of this execution phase's pipe, and each one's order
         (`live_reason`) now, or at the next `stats` (`order_due`: a timed end leaves this check of its own coins out)."""
         pipe = self.pipe
         n = len(pipe.openings)
@@ -735,7 +735,7 @@ class SoWindow(DO.DitherState):
 
     def dead_from(self, m: int) -> int:
         """Under DEAD_ONCE_ENV the row from which every row already holds a row past m's z/y records (T after a capture,
-        a control's no-write step or a window's start), and from the next step on m, or T after a step that writes
+        a control's no-write step or an execution phase's start), and from the next step on m, or T after a step that writes
         none; else 0, every row past m written."""
         if not self.dead_once:
             return 0
@@ -1129,7 +1129,7 @@ class SoWindow(DO.DitherState):
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
-                     # the challenger's log holds these round roots in this order (its published session's record)
+                     # the challenger's log holds these round roots in this order (its published challenge phase's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(),
                      "dead_once": self.dead_once, "put_async": self.put_async,
@@ -1143,7 +1143,7 @@ class SoWindow(DO.DitherState):
         return doc
 
     def end_stats(self) -> dict:
-        """The windows ended since the last call: each end's time (in the generate that served its last step), split,
+        """The execution phases ended since the last call: each end's time (in the generate that served its last step), split,
         and over its steps."""
         if not self.window_end:
             return {"on": False, "status": NO_END}
@@ -1165,7 +1165,7 @@ def _q(xs: list, f: float):
 
 
 def rounds_of() -> int:
-    """A window's round coins: the session's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
+    """An execution phase's round coins: the challenge phase's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
     DF.ROUNDS."""
     r = settings.get(ROUNDS_ENV)
     return DF.ROUNDS if r is None else r
@@ -1173,7 +1173,7 @@ def rounds_of() -> int:
 
 class SoSide(DA.Side):
     """dither-a's serving-stream GEMM state with the forward in the statement's order (no seeds, no units) and the
-    units of a step dispatched after its coin (`dispatch`) on a ring of the window's depth (`stash`)."""
+    units of a step dispatched after its coin (`dispatch`) on a ring of the execution phase's depth (`stash`)."""
 
     in_order = True
 
@@ -1940,11 +1940,11 @@ class Ov:
 class Spill:
     """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row tiles, the values the prover
     opens a sampled proof block from after the sample, copied on a stream of their own into pinned host memory from the ring slot
-    that holds them, and held until the window's end (`take_window`).  The serving stream rewrites a slot only once its
+    that holds them, and held until the execution phase's end (`take_window`).  The serving stream rewrites a slot only once its
     copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
     slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
-    pool's chunks are never freed: a window's go back to it at its end, a named or off-node window's after `check_end`
-    (`release`).  An off-node window's pool is pinned whole when the spill is made, at its open (`reserve`); an
+    pool's chunks are never freed: an execution phase's go back to it at its end, a named or off-node execution phase's after `check_end`
+    (`release`).  An off-node execution phase's pool is pinned whole when the spill is made, at its open (`reserve`); an
     in-process arm's grows in sbench's warm-up."""
 
     def __init__(self, win: SoWindow, sd: SoSide, mode: str):
@@ -1988,9 +1988,9 @@ class Spill:
         return out
 
     def reserve(self, steps: int) -> None:
-        """An off-node window's pool, pinned when the window opens, before any step it times: the chunks `take` fills
+        """An off-node execution phase's pool, pinned when the execution phase opens, before any step it times: the chunks `take` fills
         with `steps` steps at m = T, the most a step copies.  Refused there when that passes the bound, rather than
-        partway through the window."""
+        partway through the execution phase."""
         at, n = SPILL_CHUNK, 0
         for b in self.step_bytes(self.win.t) * steps:
             if at + b > SPILL_CHUNK:
@@ -2012,7 +2012,7 @@ class Spill:
         return -(-m // ur) * per
 
     def take(self, n: int) -> torch.Tensor:
-        """n bytes of the window's pinned chunks, 512-aligned, a chunk from the pool (or a new one) when the last is full."""
+        """n bytes of the execution phase's pinned chunks, 512-aligned, a chunk from the pool (or a new one) when the last is full."""
         if not self.chunks or self.at + n > SPILL_CHUNK:
             if n > SPILL_CHUNK:
                 raise RuntimeError(f"dither-a-so -we: a spill copy of {n} bytes outgrows a chunk ({SPILL_CHUNK})")
@@ -2085,7 +2085,7 @@ class Spill:
         self.log.append((na, nz, e0, e1, 1e3 * (time.perf_counter() - t0)))
 
     def take_window(self) -> dict:
-        """The ended window's held steps and their chunks; the next window's from none."""
+        """The ended execution phase's held steps and their chunks; the next execution phase's from none."""
         w = {"mode": self.mode, "steps": self.held, "chunks": self.chunks}
         self.held, self.chunks, self.at = {}, [], 0
         return w
@@ -2129,11 +2129,11 @@ def side() -> SoSide:
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
           ov: int = 0, serve_prio: bool = False, window_end: bool = False, spill: str | None = "azy") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
-    window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
+    execution phase this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
     calls this module's Side (before the engine is built).  `serve_prio` (or $DITHER_SO_PRIO=1): the engine serves on a
     stream at the A tables' priority, above the trees' and the units' (so the next forward's blocks take the SMs first as
     theirs retire); without -ov the admit tables too, since the serving stream waits on them between steps.
-    `window_end`: -we, each window ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
+    `window_end`: -we, each execution phase ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
     -we "azy", -wea "a")."""
     global CAPTURES
     if window_end and spill not in SPILLS:
@@ -2293,10 +2293,10 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     return v
 
 
-# -- the window's end ----------------------------------------------------------------------------------------------------------
+# -- the execution phase's end -------------------------------------------------------------------------------------------------
 
 def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
-    """Ended window `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
+    """Ended execution phase `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
     recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
     under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
     after that and before the sampling coin, no round after it; the final round from the tail's receipt roots; and the last
@@ -2428,7 +2428,7 @@ def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
 
 
 def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
-    """After the sample, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
+    """After the sample, the prover's openings from an ended execution phase's spill (`Spill`): three uncaptured steps (its first,
     its last, and one its sampling coin picks), each at a call the sampling coin picks.  The call's A table rehashed from the
     held rows and scales (zero past m) against its manifest row's A root; its z/y records recomputed from them (z = A B^T
     by int_mm, y = dequant(z) at the slot's s_a, so past m z 0 and y dq(0, +0, s_w)) against the row's z root; and under
@@ -2490,8 +2490,8 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
 
 
 def end_verdict(docs: dict) -> dict:
-    """The window end's verdict: the gate's ended window passes and each end fault's window is refused where its fault
-    is; a live window's alone when it is the arm's one window."""
+    """The execution-phase end's verdict: the gate's ended execution phase passes and each end fault's execution phase is refused where its fault
+    is; a live execution phase's alone when it is the arm's one execution phase."""
     v: dict = {"order": END_ORDER}
     if "end_gate" in docs:
         v["gate_ok"] = bool(docs["end_gate"].get("ok"))
@@ -2506,7 +2506,7 @@ def end_verdict(docs: dict) -> dict:
 
 
 def end_gate(win: SoWindow, generate) -> None:
-    """The end faults, each in a window of its own `end_steps` steps that ends on its own inside `generate(n)`."""
+    """The end faults, each in an execution phase of its own `end_steps` steps that ends on its own inside `generate(n)`."""
     n = end_steps(win.depth)
     for f in END_FAULTS:
         win.arm_end(f, f, n)
@@ -2514,7 +2514,7 @@ def end_gate(win: SoWindow, generate) -> None:
 
 
 def end_checks(win: SoWindow, lib_h1o: str) -> dict:
-    """Every named ended window's `check_end` and their verdict (`end_verdict`); their records released."""
+    """Every named ended execution phase's `check_end` and their verdict (`end_verdict`); their records released."""
     names = [x for x in ("end_gate", *END_FAULTS, "live") if x in win.end_recs]
     with torch.inference_mode():
         docs = {x: check_end(win, x, lib_h1o) for x in names}
@@ -2528,7 +2528,7 @@ def end_checks(win: SoWindow, lib_h1o: str) -> dict:
 
 
 def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
-    """An off-node window's manifest (`dither_manifest`): its window, coins in `coins.check`'s form, every round root,
+    """An off-node execution phase's manifest (`dither_manifest`): its execution phase, coins in `coins.check`'s form, every round root,
     each step's round leaves and unit salt (a fault_rearly capture's apart, under its name), the final round, the
     manifest root; its per-call roots to the temporary directory."""
     import tempfile

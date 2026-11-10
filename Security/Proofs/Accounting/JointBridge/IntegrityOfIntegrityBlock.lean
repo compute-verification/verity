@@ -5,10 +5,10 @@ public import Proofs.Flock.EndToEnd.Carry
 public import Proofs.Pouw.Prob
 
 /-!
-# Proof of the integrity audit of a server-time block from C-Flock's integrity audit of that block
+# Proof of the integrity audit of a server-time block from Flock's integrity audit of that block
 
-At each value of the other coins, a draw of the period's sampled coins on which its audit accepts while more than `ε` of
-its units are wrong is one on which every sampling block of the server-time block is accepted and their wrong units
+At each value of the other coins, a sample of the period's sampled coins on which its audit accepts while more than `ε` of
+its units are wrong is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
 total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's records, that is the block escaping
 (`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
 carries the bound from the monitoring period's game to the uniform coins.

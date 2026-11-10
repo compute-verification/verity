@@ -20,7 +20,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
 (step 10) below. What the window's proofs' layer meets is proved: its static half is defined from the IR
 (`Declared.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `Declared.atIR`),
 `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
-`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
+`units ≤ N_p`) are lemmas below, not premises, as are the sample cut of `Declared.atDraw`'s layer and `serviceGame`,
 `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
 1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
@@ -59,8 +59,8 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
    input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
    first reader's coin. Then
-   `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
-   probability at most `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of`
+   `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its sample the layer's, `drawOf`) gives one event of
+   probability at most `δ_bind + δ_ks` off which every accepted sampled tile is right at its committed slots, so `Of`
    gives the share game's pass; `ServiceBudget` on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass)
    and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole
    shares at `shareCone`. Off both,
@@ -93,7 +93,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and `L_0 ≤ κ₀·U_0 + Π_0` (`gainSum_le`,
    `premiumOf` at `seedTheta` and at `wholeTheta`) off `ε_id + 2·rounds·(δ_g + δ_b)`, with no stage order: each
    round's moment fixes every other answer of the window, so a mode that reads a later round's answers is in it.
-   Given the rounds' coins, the service's live draw of a uniform `K_d`-subset misses the tiles whose checked values
+   Given the rounds' coins, the service's live sample of a uniform `K_d`-subset misses the tiles whose checked values
    aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with
    `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `DrawnRightOff` on
    `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
@@ -184,7 +184,7 @@ theorem layer_stageCuts : StageCuts Cd (Cd.layer hr hK pr) := fun ℓ _ hc => by
 /-- The circuit cut at the IR commits by the IR's cuts. -/
 theorem layerCommitted_atIR : LayerCommitted Cd.atIR := fun _ _ => Or.inl (Nat.zero_le _)
 
-/-- The layer of the circuit committed at the draw cuts every position at the draw. -/
+/-- The layer of the circuit committed at the sample cuts every position at the sample. -/
 theorem layer_atDraw_cut (ℓ : ℕ) : (((Cd.atDraw.layer hr hK pr).cut ℓ).2 : ℕ) = Cd.rounds :=
   Nat.min_eq_right (Nat.le_max_right _ _)
 

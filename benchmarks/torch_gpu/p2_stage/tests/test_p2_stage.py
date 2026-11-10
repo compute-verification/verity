@@ -1,6 +1,6 @@
-"""The staging decode's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
-the store's W, the scatter of decoded rows into a staging buffer, P2's reference decode of one block (pinned to the
-spec's deployment vector), the fixture's toy store through the staging path under P2's reference, and the GEMM's twin
+"""The store's load's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
+the store's W, the scatter of decoded rows into a load buffer, P2's reference decode of one block (pinned to the
+spec's deployment vector), the fixture's toy store through the load path under P2's reference, and the GEMM's twin
 against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def model(width: int, layers: int, heads: int, ff: int, vocab: int = 256) -> lis
 
 def layout_doc(tensors: list[tuple[str, int, int, int]], per_segment: int = 1 << 16) -> dict:
     """A layout in the fixture's format by its rules: each tensor from a block boundary, back to back by blocks; each
-    layer's staging buffer from 0, every tensor at a multiple of 256."""
+    layer's load buffer from 0, every tensor at a multiple of 256."""
     rows, block, layer, staging = [], 0, None, 0
     for name, i, n, k in tensors:
         if i != layer:
@@ -88,7 +88,7 @@ def test_blocks_of():
 
 def test_store_layout_at_the_frozen_shape():
     """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
-    262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
+    262,401 and 785,158 of it and load offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
     lay = L.store_layout(layout_doc(model(16384, 52, 256, 65536)), PREFIX)
     assert (lay.params.segments, lay.params.blocks) == (1038, 68_026_368)
@@ -264,7 +264,7 @@ def test_bf16_rn_is_round_to_nearest_even():
 
 class RefKernels:
     """P2's reference (`reference.decode` under `reference.keys_after`) behind `p2_v1.gpu.Kernels`'s interface, on the
-    CPU. A row at or above p decodes to zeros, so refusing it is left to the staging decode's own screen."""
+    CPU. A row at or above p decodes to zeros, so refusing it is left to the store's load's own screen."""
 
     def __init__(self, lib_dir, build_dir, params, prefix):
         self.params, self.prefix, self.device = params, bytes(prefix), torch.device("cpu")
@@ -285,7 +285,7 @@ class RefKernels:
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
-    """The toy's C* through `decode_layer` under P2's reference: each layer's staging buffer by its digest, each negative
+    """The toy's C* through `decode_layer` under P2's reference: each layer's load buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
     import layer
 
@@ -301,7 +301,7 @@ def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
 class XorKernels:
     """A stand-in for `p2_v1.gpu.Kernels` on the CPU, its own inverse: block j's payload XOR a keystream of (prefix, j),
     its two lead bytes XOR a hash of (prefix, j, the row's payload before and after), so a corrupt row or other keys
-    decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, staging, GEMM check) runs
+    decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, load, GEMM check) runs
     without the GPU library. Not P2."""
 
     def __init__(self, lib_dir, build_dir, params, prefix):
@@ -416,7 +416,7 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypatch):
-    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files stages each layer to
+    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files loads each layer to
     toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
     is a segment unfinished or not the SHA-512 its JSON records."""
     import layer
@@ -461,7 +461,7 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypa
 
 def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path, monkeypatch):
     """An encoded store's segment files (rows by the stand-in codec under the prefix of `draw_salt(coin, commitment)`)
-    through the driver with no stream file: each staged tensor held to the weights manifest's SHA-256, the scales and the
+    through the driver with no stream file: each loaded tensor held to the weights manifest's SHA-256, the scales and the
     padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
     weights, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
@@ -582,7 +582,7 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypatch):
     """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
-    staged and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
+    loaded and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
     channels against the twin and the Definition; `check.py --sample` on each tensor's blocks against P2's reference,
     which finds one changed byte of W. Refused or failed: a tensor whose digest differs, a manifest with no digests or a
     stream tensor of another shape, a segment not its SHA-512 or not done."""

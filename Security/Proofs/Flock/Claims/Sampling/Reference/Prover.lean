@@ -22,7 +22,7 @@ passes its own check under the roots (`revealOC`), with its own `H` calls. Its f
 * `reads`: the positions a session opens, by its statement;
 * `wit`: the Flock witness that encodes what a session reveals, by its statement.
 
-A session is named by its statement, so one session may prove several drawn units, its statement theirs.
+A session is named by its statement, so one session may prove several sampled proof blocks, its statement theirs.
 
 What it reveals opens and is the committed value `Wit.val` reads (`found_opens`, `found_val`), and covers every read
 position with a committed value (`found_covers`).

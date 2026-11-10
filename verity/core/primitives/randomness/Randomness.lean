@@ -20,7 +20,7 @@ FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors:
 * `shard`: the first 32 bytes of `SHA-512("verity/randomness/shard/v2\0" || key || frames(ι))`.
 * `uniformOn n s`: `Key._uniform`'s reduction, which is `Flock.Draw.uniform` from the start of `s`: `none` when `s` runs
   out, which the Python's unbounded stream never does.
-* `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` drawing `uniformOn (n − i)` on
+* `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` sampling `uniformOn (n − i)` on
   its own stream, index `("s", *index, i)`, and the values sorted.
 * `uniform`, `subset` and `bernoulli` read each stream to a fixed length `L`; `uniformExact` and `subsetExact` are
   `Key.uniform` and `Key.subset` exactly, the read doubling until it lands, as the Python's unbounded stream does.
@@ -77,7 +77,7 @@ def shard (key : ByteArray) (index : List Part) : ByteArray := (Flock.Sha512.has
 /-- `Key._uniform`'s reduction on the stream `s`, from its start. -/
 def uniformOn (n : Nat) (s : ByteArray) : Option Nat := (Flock.Draw.uniform n s (s.size + 1) 0).map (·.1)
 
-/-- `Key.subset`'s loop, swap `i` drawing from `streams i`. -/
+/-- `Key.subset`'s loop, swap `i` sampling from `streams i`. -/
 def subsetOn (k n : Nat) (streams : Nat → ByteArray) : Option (Array Nat) := Id.run do
   let mut sw : Std.HashMap Nat Nat := {}
   for i in [0:k] do
@@ -100,7 +100,7 @@ def subset (key : ByteArray) (k n : Nat) (index : List Part) (L : Nat) : Option 
 def uniform (key : ByteArray) (n : Nat) (index : List Part) (L : Nat) : Option Nat :=
   uniformOn n (stream key (.str "u" :: index) L)
 
-/-- `Key.bernoulli(num/den, index)`, its stream read to `L` bytes: `p = 0` and `p = 1` draw nothing. -/
+/-- `Key.bernoulli(num/den, index)`, its stream read to `L` bytes: `p = 0` and `p = 1` sample nothing. -/
 def bernoulli (key : ByteArray) (num den : Nat) (index : List Part) (L : Nat) : Option Bool :=
   if num = 0 then some false else if num = den then some true else
     (uniformOn den (stream key (.str "b" :: index) L)).map (· < num)
@@ -118,7 +118,7 @@ where
       | some x => some x
       | none => go fuel (2 * blocks)
 
-/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a draw fails to land in 64 bytes with
+/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a sample fails to land in 64 bytes with
 probability below 2^-256, and the read doubles until it does). -/
 def subsetExact (key : ByteArray) (k n : Nat) (index : List Part) : Option (Array Nat) :=
   Id.run do

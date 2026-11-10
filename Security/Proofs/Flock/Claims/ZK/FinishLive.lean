@@ -3,9 +3,9 @@ module
 public import Proofs.Flock.Claims.ZK.FinishBridge
 
 /-!
-# The live inner rep runs the firewall's rep
+# The live inner rep runs the ZK server's rep
 
-`flock-firewall finish`'s live inner rep (`innerLive`) runs the firewall's rep (`repFw`) but for its stop: its PIOP and
+`flock-firewall finish`'s live inner rep (`innerLive`) runs the ZK server's rep (`repFw`) but for its stop: its PIOP and
 opening (`repCons`) on the request's recorded coins, answered by `liveAsks … false` in `LiveM`, then the constraints
 sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itself, for the proof file, runs in
 `StateT Nat V` on every round's coins (`asksOf`). Here one is held to the other:
@@ -15,7 +15,7 @@ sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itsel
   IO, at a record of `C`'s first `k'`.
 * **The sends** (`liveAsks_rel`): `asksOf C'` and `liveAsks ch C live` answer each round below `C.size` alike, wherever
   `C'` is `C` there.
-* **The firewall's phases under any simulation** (`repPiop_rel`, `repOpening_rel`, `repCons_rel`), walked once from
+* **The ZK server's phases under any simulation** (`repPiop_rel`, `repOpening_rel`, `repCons_rel`), walked once from
   `FinishBridge`'s.
 * **`repCons_live`**, **`bind_repCons_live`**: where the port's `repCons` returns after `C.size` rounds, the live one
   returns the same proof, level-0 messages, constraints and transcript, with `C` recorded and no IO, so whatever runs
@@ -105,7 +105,7 @@ theorem liveAsks_rel (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i <
           · rename_i hik
             exact hp i (by omega)
 
-/-! ## The firewall's phases under any simulation -/
+/-! ## The ZK server's phases under any simulation -/
 
 section Generic
 
@@ -155,7 +155,7 @@ theorem repOpening_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io.toC i
   rw [hm]
   sim_walk [ringSwitchP_rel S hio, ligeritoFw_rel S hio]
 
-/-- **The firewall's PIOP and opening under a simulation** that relates its sends. -/
+/-- **The ZK server's PIOP and opening under a simulation** that relates its sends. -/
 theorem repCons_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io.toC io'.toC) (st : Setup)
     (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)
@@ -209,7 +209,7 @@ theorem bind_repCons_live (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : �
   subst hg
   rw [StateT.run_bind, StateT.run_bind, e, pure_bind]
 
-/-! ## The firewall's rep in parts -/
+/-! ## The ZK server's rep in parts -/
 
 theorem sv_bind_ok {α β : Type} {x : StateT ℕ V α} {f : α → StateT ℕ V β} {k : ℕ} {b : β} {k' : ℕ}
     (h : (x >>= f).run k = .ok (b, k')) : ∃ a k₁, x.run k = .ok (a, k₁) ∧ (f a).run k₁ = .ok (b, k') := by
@@ -226,7 +226,7 @@ theorem tmw_bind_ok {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (
   obtain ⟨⟨a, tr₁⟩, k₁, h1, h2⟩ := sv_bind_ok h
   exact ⟨a, tr₁, k₁, h1, h2⟩
 
-/-- **A firewall rep that returns, in parts**: its `repCons` returns, no constraint fails on the pads, and its inner
+/-- **A ZK server rep that returns, in parts**: its `repCons` returns, no constraint fails on the pads, and its inner
 proof is `innerP` on `repCons`'s proof, constraints and transcript, from `repCons`'s last round. -/
 theorem repFw_parts (C' : Array (Array F128)) (hs : Hashes (StateT ℕ V)) (st : Setup) (sch : Flock.Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)

@@ -2,7 +2,7 @@
 
 <<<<<<< HEAD
 PoUW's served linear in compiled vLLM, on int8-exact Llama-3.1-8B. Each arm replaces the int8 linear with kernels that
-compute the served y and, from the same operands, the window's tables, seeds and receipts (H1 + fx1's, or J10-R's
+compute the served y and, from the same operands, the execution phase's tables, seeds and receipts (H1 + fx1's, or J10-R's
 per-call noise). An arm is gated in its own run before it is timed: its roots, receipts and z against its CPU twin and the
 Definition (`h1tile.reference` and `h1tile.j10r_reference`, `verity/core/protocols/pouw/circuit/h1tile.py`), a no-write
 control refused and its faults caught. It is then timed against stock vLLM int8, rep by rep. Nothing a verifier runs reads
@@ -18,7 +18,7 @@ RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/sbench.sh --a
 ~~~
 
 Each arm is a resident vLLM engine in its own worker process on that GPU, and the parent alternates reps between them.
-`--gate` first holds each arm's greedy tokens to `stock`'s and runs its window's checks; then each rep times decode at
+`--gate` first holds each arm's greedy tokens to `stock`'s and runs its execution phase's checks; then each rep times decode at
 batch 32 (`tpot_b32_ms`) and, with `--ops sat`, tokens a second at saturation. The run writes `summary.json` and
 `stop.json` under `$RESEARCH_RUN_DIR/out`, the layout `benchmarks/harness`'s `served_table` reads. `sbench.py`'s
 docstring lists every arm and flag, and `settings.py` every variable they read (`DITHER_`, `SBENCH_`, `HB_`).
@@ -32,11 +32,11 @@ What the rest of the tree reads from here:
 - `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one function (`form_of`), which each arm's stats, checks and gate verdicts carry.
-- The arms' window modules, below, and `h1c.*` and `h1r.*`, which the `benchmarks/pouw` suite imports on the CPU.
+- The arms' execution phase modules, below, and `h1c.*` and `h1r.*`, which the `benchmarks/pouw` suite imports on the CPU.
 
 ## The arms
 
-Each arm's module patches vLLM before the engine is built (`patch`), and its window hooks the engine's steps after
+Each arm's module patches vLLM before the engine is built (`patch`), and its execution phase hooks the engine's steps after
 (`dither_fused.hook`, or `dither_one.hook` for the one-stream and dither-a arms), so its launches are captured in vLLM's
 CUDA graphs:
 
@@ -55,7 +55,7 @@ DO.hook(llm)                                      # the window's tables, trees a
   side stream.
 - `dither_so.py` (`dither-a-*-so<D>`): dither-a in the statement's order. A step's tables go under its round's root before
   its coin, and its proof blocks run after it. `j10r_so.py` is its J10-R form's references.
-- `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): the same windows
+- `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): the same execution phases
   with `h1u.cu`'s proof blocks in place of `h1r.cu`'s or `h1o.cu`'s.
 - `hb_sbench.py` and `hb_served.sh`: `sbench.py` with the hb arms on an H200 or a B200, building on a CPU node first.
 - `j10served.py` and `j10rtx.py`: the one-stream arms against their twins on J10 banded noise, served and at kernel level.
@@ -63,7 +63,7 @@ DO.hook(llm)                                      # the window's tables, trees a
 
 ## Kernels
 
-- `h1c.cu` (`h1c.py`): the window's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves in
+- `h1c.cu` (`h1c.py`): the execution phase's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves in
   one frame-v3-sha512 tree a table.
 - `h1r.cu` (`h1r.py`): a step's H1 + fx1 proof blocks in two launches, each receipt bit for bit `h1tile.reference`'s.
 - `h1o.cu`, `h1f.cu`: the one-stream and fused served linears.
@@ -108,8 +108,8 @@ The CPU code a gate holds a kernel to, beside the Definition:
 - `picks.py`: each Inductor kernel's autotune choice in an engine's process, or a fixed one (`first`, `last`), so two
   processes compiling the same kernel run the same config.
 - `dbw.py`, `dbw_side.py`: the remote bandwidth audit beside sbench's arms on the GPU they share (`--bw-passes`).
-- `dither_manifest.py`, `live_audit.py`: a dither-a-so window's manifest, its check against the challenger's own run, and
-  a live window's audit.
+- `dither_manifest.py`, `live_audit.py`: a dither-a-so execution phase's manifest, its check against the challenger's own run, and
+  a live execution phase's audit.
 - `settings.py`: the registry of every variable this directory reads.
 
 ## Tests
@@ -121,7 +121,7 @@ gates run in each bench's own run, before it times anything.
 =======
 PoUW's served H1 + fx1 and J10-R receipts in compiled vLLM, on int8-exact Llama-3.1-8B, and the benches that time them
 against stock vLLM int8. Each arm replaces the int8-exact linear with kernels that serve y and, from the same operands,
-compute the window's tables, seeds and receipts. An arm is gated in its own run before it is timed: its roots, receipts
+compute the execution phase's tables, seeds and receipts. An arm is gated in its own run before it is timed: its roots, receipts
 and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j10r_reference`,
 `verity/core/protocols/pouw/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
@@ -145,7 +145,7 @@ RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/sbench.sh \
 ~~~
 
 Each arm is a resident vLLM engine in its own worker process on that GPU, and the parent alternates reps between them.
-`--gate` first holds each arm's greedy tokens to its reference arm's and runs its window's checks; then each rep times
+`--gate` first holds each arm's greedy tokens to its reference arm's and runs its execution phase's checks; then each rep times
 decode at batch 32 (`tpot_b32_ms`) and, with `--ops sat`, tokens a second at saturation. The run writes `summary.json`
 and `stop.json` under `$RESEARCH_RUN_DIR/out`, the layout `benchmarks/harness`'s `served_table` reads. `sbench.py`'s
 docstring lists every arm and flag, and `settings.py` every variable they read (`DITHER_`, `SBENCH_`, `HB_`).
@@ -157,7 +157,7 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 - `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
-- `sbench.sh`'s receipts-only build of `h1u.cu`, which `benchmarks/pouw/served_h1`'s producer loads; and the window
+- `sbench.sh`'s receipts-only build of `h1u.cu`, which `benchmarks/pouw/served_h1`'s producer loads; and the execution phase
   modules (`dither_a.py`, `dither_fused.py`, `dither_one.py`, `hb_side.py`), `h1c.py`, `h1r.py` and `settings.py`, which
   the `benchmarks/pouw` suite imports on the CPU.
 
@@ -169,13 +169,13 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   a side stream.
 - `dither_so.py` (`dither-a-*-so<D>`): dither-a in the statement's order, the arm of record. A step's tables go under its
   round's root before its coin, and its proof blocks run after it. `j10r_so.py` holds its J10-R form's references;
-  `dither_manifest.py` an ended window's manifest and its check against the challenger's own run; `live_audit.py` a live
-  window's audit.
+  `dither_manifest.py` an ended execution phase's manifest and its check against the challenger's own run; `live_audit.py` a live
+  execution phase's audit.
 - `dither_one.py` (`dither-1s*`): y = dequant(z) from `h1o.cu`'s one stream, whose noised MMAs are the ones the call's
   receipts fold.
 - `dither_fused.py` (`dither`, `dither-side`): y from `h1f.cu`'s one GEMM, which also computes the previous step's
   receipts.
-- `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): those windows with
+- `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): those execution phases with
   `h1u.cu`'s proof blocks in place of `h1r.cu`'s or `h1o.cu`'s. `hb_sbench.py` and `hb_served.sh` run `sbench.py` with
   them on an H200 or a B200, building on a CPU node first.
 - `j10served.py`, `j10rtx.py` and `j10hb.py`: the one-stream arms against their twins on J10's banded noise, served on
@@ -184,7 +184,7 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
 
 ## Kernels
 
-- `h1c.cu` (`h1c.py`): the window's tables on the device, bit for bit `benchmarks/pouw/served_h1/commit.py`'s.
+- `h1c.cu` (`h1c.py`): the execution phase's tables on the device, bit for bit `benchmarks/pouw/served_h1/commit.py`'s.
 - `h1r.cu` (`h1r.py`): a step's H1 + fx1 proof blocks in two launches.
 - `h1o.cu`, `h1f.cu`: the one-stream and fused served linears.
 - `h1noise.cu`: H1's per-proof-block noise alone, the floor any H1 + fx1 kernel pays; `h1sha.cuh`: the SHA-512 of the

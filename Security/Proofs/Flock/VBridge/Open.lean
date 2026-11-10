@@ -12,7 +12,7 @@ statement's `flock-leaf/sha512-unsalted`), it climbs `H` levels through the sibl
 at the directions `d` (`climbFrom`), and `out` is the node reached and 512 zero bits.
 
 `sound_climbRow`: whenever the rows hold, if the row's forms carry its bytes, `aux`'s sibling forms carry 64-byte siblings
-and the directions are the position's low bits, `out` carries the verifier of record's climb of the row's leaf,
+and the directions are the position's low bits, `out` carries the verifier's climb of the row's leaf,
 `Flock.climb ms (SHA-512(row))`, then 64 zero bytes: `rec_open.expected` of that node.
 
 `out` is half of `_steps`; the other half, `acc_out` (the opening's share of the consistency sums, `cons_structure`), is

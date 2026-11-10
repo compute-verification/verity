@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
+# PoUW's piece of a served H1 window with its sampled proof blocks proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
-# drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
-# combine; each staged statement is proved by one C-Flock --zk session drawing all its instances (hidden_zk/job.sh's
+# sampled call's J10-R units on the window's own registered values, and each sampled proof block of a lanes-form K as its lanes and
+# combine; each staged statement is proved by one Flock --zk session sampling all its instances (hidden_zk/job.sh's
 # `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server
 # (FC_FIREWALL=1, FC_HOST_WITNESS=1: the Lean session loop flock-firewall, live PROTOCOL.md §10.4, whose Hello is set up
 # on the statement's own program.json and partition.json, the Program and partition credit verifies it under, so what
@@ -14,7 +14,7 @@
 #   bash benchmarks/pouw/h1_prove/drawn.sh SERVE_DIR WINDOW PIECE_DIR
 # The window must be served with its receipts (serve-openai --h1-receipts, served_verdicts.sh's H1_RECEIPTS=1): a J10-R
 # call statement's o0 is opened at its call's receipt table receipt@<c>, and staging refuses a window without it.
-# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
+# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the sampled K's k<K> file, --strata K, or its lane<K> and combine<K>
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
@@ -22,7 +22,7 @@
 #      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
 #      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 125)
 #      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 145)  H1_FIREWALL (1; 0 the
-#      unfirewalled --zk path, for a cost comparison only: no ZK server serves it)
+#      unserved --zk path, for a cost comparison only: no ZK server serves it)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
@@ -34,7 +34,7 @@
 # H1_DRAWN_MEM_GB less H1_ZK_LEAN_GB. The ZK server's Lean processes are the prover's children, and under an
 # address-space cap their runtime can't create its threads, so they start through a wrapper that lifts the soft cap
 # they inherit: they are bounded by the H1_ZK_LEAN_GB the prover's cap leaves them and the job's cgroup, not by a
-# limit of their own. An unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223
+# limit of their own. An unserved K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223
 # ANDs) peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the prover, 238 s to prove at 8 threads
 # (r20261102-160857-5d19); under the ZK server, 64.2 GiB in the prover and 77.8 GiB summed over the ZK server's two Lean
 # processes (r20261104-012048-4559). A J10-R tile call of one unit (k_log 27, m 30) peaked at 92.2 GiB in the verifier on

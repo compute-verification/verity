@@ -122,7 +122,7 @@ def entropy(seed: int):
 @functools.cache
 def challenger_key(seed: int, H: int = 5) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
     """Key `seed`: 2^H leaves (thirty-two by default, five a reserved session: the ledger's reserve and open, the record,
-    the close and the ledger's end; a served H1 window takes two sessions, its own and its draw session's)."""
+    the close and the ledger's end; a served H1 window takes two sessions, its own and its sample session's)."""
     k = lms.keygen(lms.Params(64, 4, H), bytes([seed]) * 64)
     return k, LC.ChallengerKey(k.params.W, k.params.H, lms.public_key(k))
 
@@ -205,7 +205,7 @@ class Gate:
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof system's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
+        proof system's committed sample K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
         ``length`` (``--length``, `credit.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
@@ -394,7 +394,7 @@ class Ledger:
                                      "refused_hellos": len((directory / R.HELLOS).read_text().splitlines())})
 
 
-#: the port the gate's answer names for a window's draw session (`Host.open_draw`)
+#: the port the gate's answer names for a window's sample session (`Host.open_draw`)
 DRAW_PORT = 7812
 
 
@@ -406,8 +406,8 @@ class Host:
     the gate's open of the reserved session, for the window ``{root}`` the serving side names (an H1 window's open root,
     `pouw_h1_window.Window`), at the leaf held before the record's, since the ledger's check wants a record's leaf between
     its session's open's and end's. With `withhold` the session is withheld (`remote.open_session`), and the ledger's
-    open says so (``withheld: true``). `open_draw` opens the window's draw session, a `Host` of its own under the same
-    key, leaves and ledger, withheld on the window's draw root (`draw`)."""
+    open says so (``withheld: true``). `open_draw` opens the window's sample session, a `Host` of its own under the same
+    key, leaves and ledger, withheld on the window's sample root (`draw`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = session_id(1),
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
@@ -449,8 +449,8 @@ class Host:
                    {"commitment": self.challenger.commitment.root.hex()})}
 
     def open_draw(self, session: str, root: str, withhold: bool = True) -> dict:
-        """The gate's open of the window's draw session `session` on its draw root `root`, withheld unless not
-        `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a draw session's coins
+        """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
+        `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
         (`window.draw_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
         self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
                          Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves, self.ledger,
@@ -458,7 +458,7 @@ class Host:
         return {**self.draw.open(session, root), "port": DRAW_PORT}
 
     def ended(self) -> str | None:
-        """Join the session once its client has ended it, and the ledger ends it, then its draw session's (`draw`), if
+        """Join the session once its client has ended it, and the ledger ends it, then its sample session's (`draw`), if
         it opened one: None when each client closed its session, else why the first didn't."""
         self._thread.join()
         if not self._ended:

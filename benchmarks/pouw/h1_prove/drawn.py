@@ -1,4 +1,4 @@
-"""drawn.py: the CLI of a served H1 window's drawn units staged as C-Flock statements and checked as credit does
+"""drawn.py: the CLI of a served H1 window's sampled proof blocks staged as Flock statements and checked as credit does
 (`verity_vllm.protocols.pouw.h1.drawn`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
 with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`), each Lean run answered as credit asks for it
@@ -55,7 +55,7 @@ def checkpoint_weights(checkpoint: Path, linears: Sequence[tuple[str, int, int]]
 
 def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path
              ) -> tuple[list | None, tuple | None]:
-    """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
+    """Credit's verification of a window's sampled statements (`credit._verified` under the window's sample, then
     `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`, each run `_verified` asks for answered by
     `answers.Answers` and judged in its order."""
     PF.executable = lambda: lean

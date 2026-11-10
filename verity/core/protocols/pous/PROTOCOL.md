@@ -222,7 +222,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
    | Step | From, to | What |
    |---|---|---|
-   | draw | challenger | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
+   | sample | challenger | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
    | warm-up | challenger, server | `WARMUPS` frames on the public `WARMUP_INDEX`, untimed and unrecorded |
    | round `j` | challenger, server | index `j` alone (`u64be`); the send time is read |
    | answer `j` | server, challenger | the whole block; the receipt time is read before it is hashed; the first late answer ends the session |
@@ -243,11 +243,11 @@ audit makes public its verdict and nothing about a single round:
 - the salted roots of `W` and of the encoding `C`;
 - the salt;
 <<<<<<< HEAD
-- the setup draw and its profile;
+- the setup sample and its profile;
 - the memory challenger's session commitment (its coin tree's root and key) and the openings of its coin tree, both
   released once the session is signed.
 ||||||| merged common ancestors
-- the setup draw and its profile;
+- the setup sample and its profile;
 - the openings of the memory challenger's coin tree, once the session has closed.
 =======
 - the setup's sample and its profile;
@@ -512,7 +512,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
-protocol's outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's draws). The
+protocol's outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's samples). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
 prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
@@ -982,7 +982,7 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown each index as
   its round opens and nothing else of the memory challenger's coins (the coin tree's root and key leave the device only
-  after the last answer), with the coins drawn online by the code's own sampler and committed in the code's coin tree,
+  after the last answer), with the coins flipped online by the code's own sampler and committed in the code's coin tree,
   passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from one
   named assumption, `P2RingAuditSecure D Q L` (open); it takes no hiding premise on the coin tree. The budget is
   `2^-129 + 2^-130 + ε_rs ≤ 2^-128`, with `ε_rs = 0`

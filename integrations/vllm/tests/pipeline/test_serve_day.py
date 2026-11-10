@@ -182,7 +182,7 @@ def test_a_tied_window_names_the_days_declaration_which_the_window_log_registers
 
 
 def test_an_r_whose_program_isnt_the_days_is_refused_at_its_close_and_opens_no_coin(tmp_path, monkeypatch):
-    """The day declared another program than R's: the window binds no Commit record and opens no draw coin, its error
+    """The day declared another program than R's: the window binds no Commit record and opens no sampling coin, its error
     names R2's refusal, and only the declaration and W are in the log."""
     serve = tmp_path / "serve"
     _day_, srv, arm, runs, closer = _tied_day(tmp_path, monkeypatch, OTHER)

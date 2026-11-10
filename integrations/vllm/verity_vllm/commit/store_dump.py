@@ -20,7 +20,7 @@ their openings carried.  Under rows-sha512 it writes the salts of the leaves tho
 `steps[i].salted` back to back) and never a key, so no other leaf's salt can be derived from it.  A read outside them fails by name, as a
 byte the committer no longer retains does.
 
-A window its draw-gated release left (`device_pool.release`: every step's block holds only its drawn leaves) dumps slim to them
+A window its draw-gated release left (`device_pool.release`: every step's block holds only its sampled leaves) dumps slim to them
 (`drawn`) with no recorded reads: no other leaf can be opened, so the rest of its tree would be written for nothing.
 """
 from __future__ import annotations
@@ -142,8 +142,8 @@ def touched(com: Any) -> Iterator[Touched]:
 
 
 def drawn(com: Any) -> Touched | None:
-    """What a window's draw-gated release kept of `com`, as a slim dump's `Touched`: each step's drawn byte ranges, and on every tree
-    level the nodes from one before a drawn leaf run's first to one past its last, which hold every sibling an opening of leaves inside
+    """What a window's draw-gated release kept of `com`, as a slim dump's `Touched`: each step's sampled byte ranges, and on every tree
+    level the nodes from one before a sampled leaf run's first to one past its last, which hold every sibling an opening of leaves inside
     the run reads (`native_ranges.open_range_levels`).  None unless every step's block is a released one (``dropped``)."""
     if not com._gpu_blocks or not all(getattr(b, "dropped", False) for b, _u in com._gpu_blocks.values()):
         return None
@@ -327,7 +327,7 @@ def write_doc(d: str | os.PathLike, doc: dict[str, Any], layouts: dict[int, Any]
 def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
                touched: Touched | None = None) -> dict[str, Any]:
     """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it).
-    With no ``touched``, a released window dumps slim to its drawn leaves (`drawn`)."""
+    With no ``touched``, a released window dumps slim to its sampled leaves (`drawn`)."""
     why = _refusal(com)
     if not why and touched is None:
         touched = drawn(com)
@@ -371,7 +371,7 @@ class _Seg:
 
 class _Block:
     """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers.
-    ``dropped``: a step its window's draw-gated release kept only the drawn leaves of (`device_pool.DrawnRanges`)."""
+    ``dropped``: a step its window's draw-gated release kept only the sampled leaves of (`device_pool.DrawnRanges`)."""
 
     is_cuda = False
     dropped = False

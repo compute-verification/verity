@@ -375,8 +375,8 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
       2 * (((0 : ℕ) / (2 : ℕ) : ℝ) * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
 /-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
-over the outcomes `Bool` drawn uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
-of it certified (`W = 2`), no faulty proof block, so that every detection holds at `q = 1` and the residual is `0`, and
+over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
+of it certified (`W = 2`), no incorrect proof block, so that every detection holds at `q = 1` and the residual is `0`, and
 one counted multiplication, the declared one. -/
 def DampenerRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧

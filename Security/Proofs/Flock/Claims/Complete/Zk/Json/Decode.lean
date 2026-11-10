@@ -9,7 +9,7 @@ import all Init.Data.Range.Basic
 import all Lean.Data.Json.Basic
 
 /-!
-# The honest masked record decodes, reads live and carries the draw
+# The honest masked record decodes, reads live and carries the sample
 
 C's `decode_recordObj`, `live_recordObj` and `recordDraw_recordObj` read the printed record only through `parse` and its
 fields, so they hold of any printable object with `recordList`'s fields (`decodeZk_ofFields`, `liveZk_ofFields`,
@@ -323,7 +323,7 @@ theorem liveZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpec}
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **A printable object with the honest record's fields carries the statement's draw**, up to key order, as
+/-- **A printable object with the honest record's fields carries the statement's sample**, up to key order, as
 `recordDraw_recordObj`. -/
 theorem recordDrawZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
@@ -418,7 +418,7 @@ theorem live_recordObjZk {h : ByteArray → ByteArray} {spec : SessionSpec}
   liveZk_ofFields (h := h) (spec := specZ spec hz) ht hss proofs
     (good_recordObjZk ht h hz ct rb points streams proofs hd) fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **The honest masked record's draw is the statement's**, up to key order (`JsonEquiv`). -/
+/-- **The honest masked record's sample is the statement's**, up to key order (`JsonEquiv`). -/
 theorem recordDraw_recordObjZk {h : ByteArray → ByteArray}
     {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (hz : String) (ct : CoinTree.Spec) (rb : ByteArray)

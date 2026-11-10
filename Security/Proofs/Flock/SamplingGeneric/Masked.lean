@@ -4,10 +4,10 @@ public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Masked
 
 /-!
-# The sampled compiler over C-Flock's masked record, at SHA-512
+# The sampled compiler over Flock's masked record, at SHA-512
 
 `flockKS` and `flockKSReg` hold at every Flock record and hash, taking Flock's KS there, its decoder's list bound and
-the commitment's binding as hypotheses. At C-Flock's deployed masked record (`FlockDeploy.deployZk` at the deployed
+the commitment's binding as hypotheses. At Flock's deployed masked record (`FlockDeploy.deployZk` at the deployed
 relation), its own decoder and SHA-512, the three are proved: Flock's KS is `Flock.SecurityProofs.MaskedKS`, the
 decoder's list bound `listWithin_deployZk`, and hm96 leaves of rows that place the value, under the registered path
 check, bind at every hash (`pathCommit_binds`). So a compiled verifier over that record with such a commitment is
@@ -27,7 +27,7 @@ variable (L : Compiled FlockDeploy.Coin (Arg.ofFlock (FlockDeploy.deployZk _root
   {own : Array _root_.Flock.Registered.Port} {at_ : List Msg → ℕ → Option (Msg × ℕ)}
   {row salt π : Opening Bool → Msg} {layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg}
 
-/-- **The compiler over C-Flock's masked record is knowledge sound at SHA-512**: a compiled verifier over it at its
+/-- **The compiler over Flock's masked record is knowledge sound at SHA-512**: a compiled verifier over it at its
 deployed decoder, committing by hm96 leaves of rows that place the value under the registered path check, that meets the
 contract (`flockKS`: Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `pathCommit_binds`). -/
@@ -56,7 +56,7 @@ theorem commit_binds (H : Claims.Msg → Claims.Msg) : (commit c).Binds H :=
   Claims.Sampling.pathCommit_binds (Claims.Sampling.hm96Leaf_binds H (row_places c.place c.bits) c.salt)
     (Claims.Sampling.regPath_binds H c.own)
 
-/-- **The deployed sampled verifier over C-Flock's masked record is knowledge sound at SHA-512**: `ks_compiled` at
+/-- **The deployed sampled verifier over Flock's masked record is knowledge sound at SHA-512**: `ks_compiled` at
 `deployZk`, at its deployed decoder, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `commit_binds` and the inner numbers by `innerNumbers_deploy`. It takes the sampled verifier's four code facts and its
 sessions' runs, scope (`SessionsIn`) and openings. -/

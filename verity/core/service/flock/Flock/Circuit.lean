@@ -135,7 +135,7 @@ structure Circuit where
   leafCuts : Array (Nat × Nat × Nat) := #[]
   /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/
   typed : Option TypedBlock := none
-  /-- a typed statement's unit class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
+  /-- a typed statement's size class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
   cls : Option Typed.Class := none
   /-- a templated unit: its template, layouts and committed net (`Tmpl.unitNet`, its rows built only when read),
   which `Stmt.partialRangesT` folds from the template at the net's range -/

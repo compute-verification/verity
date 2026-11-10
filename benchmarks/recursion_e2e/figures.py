@@ -6,7 +6,7 @@ adversary resource model, ``adversary.json``'s reference). Every figure says its
 
 What is scaled is the same for every pooled figure: every machine of the fleet is audited as this run's session audited
 its window, one recursive session a machine a window, each as this one; the world's compute counts as machines of the
-datacenter's size (`gpus_per_machine`). The session covers its statement, the window's drawn blocks: its AND gates are the
+datacenter's size (`gpus_per_machine`). The session covers its statement, the window's sampled blocks: its AND gates are the
 inner statement's (its instances, each of ``units_per_vu`` units, times one unit's ANDs, from the circuit), the compute it
 proves, not the window's.
 

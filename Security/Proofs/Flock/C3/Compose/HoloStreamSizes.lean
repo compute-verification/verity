@@ -10,20 +10,20 @@ import all Init.Data.Range.Basic
 # The sparse phases' and R's streams at the model's coins
 
 The inner shape's sparse phases' and R's streams (`holoStreams`, at the verifier's RecSparse shape and R's
-`StackedShape`) draw the coins the model's stages draw (`holoForms`' tail), round for round in size (`holoSizes`):
+`StackedShape`) sample the coins the model's stages sample (`holoForms`' tail), round for round in size (`holoSizes`):
 
 * `degrees_length`: H3's rounds are the entries' and the slots' (`nu + sLog`); `stacked_iff`: the verifier's ρ_t round
   (`stacked`) is where the model has its message (`tLog ≠ 0`); `pLog_sparseOf`, `mReg_sparseOf`: the planes' bits and
   R's table are the model's at `sparseOf`; `shape_holoAt`: `sparseOf` of the inner shape's `sparse` entry is the
   shape of candidate 3's class (`holoAt`) where `ℓ` is in its range.
-* `holoSizes_sparse`: a sparse phase's stream draws `sparseForms`' scalars.
-* `holoSizes_stacked`: R's stream draws R's opening's two claims' coins and compiled Ligerito's at `fast100`'s schedule
+* `holoSizes_sparse`: a sparse phase's stream samples `sparseForms`' scalars.
+* `holoSizes_stacked`: R's stream samples R's opening's two claims' coins and compiled Ligerito's at `fast100`'s schedule
   (`opForms 2 ++ ligForms (schedAt m)`), by evaluating `stackedRounds` at each `m` below 36.
 * `holoSizes_holoStreams`: together, after the reps', where the inner shape names R at its table, as
   `candidate3Statements` checks.
 * `holoStreams_eq`, `holoStreams_sparse_eq`: the streams start with both reps' at `holoRounds`, then, where the inner
   shape names a RecSparse shape, both sparse phases', then R's.
-* `holoSizes_reps`: both reps' streams draw `repForms`' coins at `fast100`'s schedule (`repRounds_sizes`): the rounds
+* `holoSizes_reps`: both reps' streams sample `repForms`' coins at `fast100`'s schedule (`repRounds_sizes`): the rounds
   `kLog` and `claims` reach are the head (`repHead`, `repRounds_tail`), and past it, evaluating `repRounds` at each `m`
   below 36 at one `kLog` and `claims` gives the rest.
 -/
@@ -80,7 +80,7 @@ theorem holoSizes_append (L L' : List (HoloStream × Array SchedRound)) :
     holoSizes (L ++ L') = holoSizes L ++ holoSizes L' :=
   List.flatMap_append
 
-/-- **A sparse phase's stream draws the model's coins**: one scalar per coin of `sparseKinds` at the model's shape. -/
+/-- **A sparse phase's stream flips the model's coins**: one scalar per coin of `sparseKinds` at the model's shape. -/
 theorem holoSizes_sparse (x : Fin 2) (sp : RecSparse.Shape) :
     holoSizes [(.sparse x, sparseRounds sp)] = (sparseForms (sparseOf sp)).map formSize := by
   have hs : holoSizes [(.sparse x, sparseRounds sp)] =
@@ -100,7 +100,7 @@ theorem holoSizes_sparse (x : Fin 2) (sp : RecSparse.Shape) :
 
 /-! ## R's stream -/
 
-/-- **R's stream draws the model's coins**: R's opening's two (`opShape 2`) and compiled Ligerito's at `fast100`'s
+/-- **R's stream flips the model's coins**: R's opening's two (`opShape 2`) and compiled Ligerito's at `fast100`'s
 schedule, by evaluating `stackedRounds` at each `m` below 36; past 35 `fast100` has none, nor has `stackedRounds`. -/
 theorem holoSizes_stacked {m : ℕ} {rs : Array SchedRound} (h : stackedRounds ⟨m, STACKED_CLAIMS⟩ = some rs) :
     holoSizes [(.stacked, rs)] = (opForms 2 ++ ligForms (schedAt m)).map formSize := by
@@ -126,7 +126,7 @@ theorem holoSizes_stacked {m : ℕ} {rs : Array SchedRound} (h : stackedRounds �
 
 /-! ## The sparse phases' and R's streams together -/
 
-/-- **The sparse phases' and R's streams draw the model's coins** where the inner shape names a RecSparse shape and R
+/-- **The sparse phases' and R's streams flip the model's coins** where the inner shape names a RecSparse shape and R
 at its table (`candidate3Statements` checks R's `m` is `tableM` and its claims `STACKED_CLAIMS`): after the reps', the
 history's coin sizes are those of `holoForms`' tail at the model's shape (`sparseOf`) and R's schedule at its table. -/
 theorem holoSizes_holoStreams {m kLog claims : ℕ} {sp : RecSparse.Shape} {L : List (HoloStream × Array SchedRound)}
@@ -283,7 +283,7 @@ theorem repHead_sizes {m : ℕ} (hm : 6 ≤ m) (kLog claims : ℕ) :
   simp only [repHead, zcForms, show m + 6 - 5 = m + 1 by omega, show m + 6 - 6 = m by omega]
   simp [lcForms, opForms, formSize, List.map_replicate, List.replicate_succ']
 
-/-- **`repRounds`' rounds draw `repForms`' coins**: the head's at every `kLog` and `claims` (`repHead_sizes`), and the
+/-- **`repRounds`' rounds sample `repForms`' coins**: the head's at every `kLog` and `claims` (`repHead_sizes`), and the
 tail's, which neither reaches (`repRounds_tail`), by evaluating `repRounds` at each `m` below 36 at `kLog = 6` and one
 claim. -/
 theorem repRounds_sizes {m kLog claims : ℕ} {out : Array SchedRound} (h : repRounds m kLog claims = some out) :
@@ -302,7 +302,7 @@ theorem repRounds_sizes {m kLog claims : ℕ} {out : Array SchedRound} (h : repR
   rw [Array.toList_append, List.map_append, repHead_sizes (by omega), hT, repForms, ← List.map_append]
   simp only [List.append_assoc]
 
-/-- The coin sizes of a stream's rounds other than a sparse phase's: one per round that draws coins. -/
+/-- The coin sizes of a stream's rounds other than a sparse phase's: one per round that flips coins. -/
 def nzSizes (l : List SchedRound) : List ℕ := l.flatMap fun q => if q.1 = 0 then [] else [q.1]
 
 theorem nzSizes_append (l l' : List SchedRound) : nzSizes (l ++ l') = nzSizes l ++ nzSizes l' := List.flatMap_append
@@ -317,7 +317,7 @@ theorem nzSizes_pos : ∀ l : List SchedRound, (∀ x ∈ l, 0 < x.1) → nzSize
 theorem holoSizes_rep_nz (x : Fin 2) (rs : Array SchedRound) : holoSizes [(.rep x, rs)] = nzSizes rs.toList := by
   simp [holoSizes, nzSizes]
 
-/-- **z_partial's round draws nothing**: `holoRounds`' coin sizes are `repRounds`'. -/
+/-- **z_partial's round samples nothing**: `holoRounds`' coin sizes are `repRounds`'. -/
 theorem nzSizes_holoRounds {m kLog claims : ℕ} {rs : Array SchedRound} (h : holoRounds m kLog claims = some rs) :
     ∃ out, repRounds m kLog claims = some out ∧ nzSizes rs.toList = nzSizes out.toList := by
   unfold holoRounds at h
@@ -344,7 +344,7 @@ theorem nzSizes_holoRounds {m kLog claims : ℕ} {rs : Array SchedRound} (h : ho
     simp only [Array.toList_append, Array.toList_extract, List.extract, nzSizes_append]
     simp [nzSizes, List.take_of_length_le]
 
-/-- **A rep's stream draws the model's coins**: `repForms`' at a claim. -/
+/-- **A rep's stream flips the model's coins**: `repForms`' at a claim. -/
 theorem holoSizes_rep (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     holoSizes [(.rep x, rs)] = (repForms m kLog claims).map formSize := by
@@ -352,7 +352,7 @@ theorem holoSizes_rep (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} 
   rw [holoSizes_rep_nz, e, nzSizes_pos _ fun y hy => repRounds_coins hc hout y (Array.mem_def.2 hy),
     repRounds_sizes hout]
 
-/-- **Both reps' streams draw the model's coins**: `repForms`' twice, at a claim. -/
+/-- **Both reps' streams flip the model's coins**: `repForms`' twice, at a claim. -/
 theorem holoSizes_reps {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     holoSizes [(.rep 0, rs), (.rep 1, rs)] = (repForms m kLog claims ++ repForms m kLog claims).map formSize := by

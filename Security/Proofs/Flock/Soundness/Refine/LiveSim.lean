@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Model.Compiled
 A live prover for one table's session (`liveTable`) is simulated in the model's table (`modelTable`, which `tableC` is,
 `tableC_eq_modelTable`). The simulated prover sends the cap `root_B` decodes to, shares the link points, and follows the
 rounds: for a round on rep `r`'s stream, the model's rep `r` takes the messages decoded from the round's bytes, then
-draws its coins with the live round's. At the end it takes the reps' final messages and the openings, decoded from the
+flips its coins with the live round's. At the end it takes the reps' final messages and the openings, decoded from the
 proof files. Wherever the model's game doesn't fit what was decoded, no accepted live run goes on, and the model plays
 any strategy.
 
@@ -384,7 +384,7 @@ variable (dg : ByteArray → ByteArray) (dec : ℕ → ByteArray → List Msg) (
   (fin : Fin 2 → Array ByteArray → List Msg) (capOf : ByteArray → Cp)
 
 open Classical in
-/-- The first rep's coin, drawn with the live round's: matched when the model's coin has the type the round decodes to;
+/-- The first rep's coin, flipped with the live round's: matched when the model's coin has the type the round decodes to;
 past any other node no accepted run goes on. -/
 noncomputable def coinAt₀ (rootB : ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (n : ℕ) (acc : List Round × List Round)
     (b : ByteArray) (k : ℕ) (g₁ : Game P) (h₁ : AllInh g₁)

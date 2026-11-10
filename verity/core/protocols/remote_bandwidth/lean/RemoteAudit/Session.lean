@@ -7,7 +7,7 @@ public import RemoteAudit.Window
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
 clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
-its openings coin at W + t, and the append coins in the order drawn). Each event gives what the Python call returns:
+its openings coin at W + t, and the append coins in the order sampled). Each event gives what the Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
 * `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's

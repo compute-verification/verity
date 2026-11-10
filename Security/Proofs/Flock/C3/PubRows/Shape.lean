@@ -302,8 +302,8 @@ def StmtsChecked (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Opt
     sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
       (some f) rows) = .ok ()
 
-/-- **A checked session's statement of its circuit**: where the session accepts and its record draws, the statement
-setting up a drawn unit's part has the session's circuit and passes `checkStmt`. -/
+/-- **A checked session's statement of its circuit**: where the session accepts and its record samples, the statement
+setting up a sampled proof block's part has the session's circuit and passes `checkStmt`. -/
 theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings}
@@ -538,7 +538,7 @@ local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel 
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
 rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
-checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is drawn
+checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is sampled
 (`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
 twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
 theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)

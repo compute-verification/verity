@@ -1,4 +1,4 @@
-"""A unit class of any partition (`verity.ml.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
+"""A size class of any partition (`verity.ml.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
     python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
@@ -621,7 +621,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     itself.
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
-    template as the unit class's ``definition`` (the class names itself in ``program_digests``), and every read of another
+    template as the size class's ``definition`` (the class names itself in ``program_digests``), and every read of another
     unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's output row's words (one word per output,
     as ``out`` holds them, never packed), one table row per reading instance, committed under the writer's ``out`` salt (and,
     ``strict``, checked here to be the writer's row).
@@ -1067,7 +1067,7 @@ class UnitStager:
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
     `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
     proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
-    whose Definition alone needs more witness bits than C-Flock's proved range is refused before it is lowered
+    whose Definition alone needs more witness bits than Flock's proved range is refused before it is lowered
     (`circuit.refuse_past_range`)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
@@ -1342,8 +1342,8 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     FC_VERIFY_SERVERS (default 1, at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port``
     and the rest on ports the system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills
     them), for ``points`` provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits.
-    FLOCK_DRAW_LAW (a law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by
-    that law at its Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover
+    FLOCK_DRAW_LAW (a sampling design object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by
+    that sampling design at its Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover
     alike). FLOCK_CHALLENGER=1: each process takes its sessions' coin trees from its own challenger (`_challenger`, `serve
     --tree-from`), so each is bounded; none otherwise."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))

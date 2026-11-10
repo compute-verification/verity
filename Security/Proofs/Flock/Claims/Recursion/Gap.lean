@@ -14,7 +14,7 @@ the errors its proof gives (`KSA`) and at the draft's (`KS`), so `InnerKS` fails
 The inner verifier accepts whatever it is sent, in one round; the inner `E^rep` makes one wait of one rerun and needs it
 accepted. The compiled verifier's one outer session is a round that rejects at its own coin half the time. `E*` reruns
 the inner stage at fresh outer coins, so its one inner rerun is seen rejected half the time, whatever the inner
-verifier decides, and `E*` fails on a quarter of the draws while `κ = 2·κ_O < 1/4` and `B`, `Be` find nothing. No
+verifier decides, and `E*` fails on a quarter of the samples while `κ = 2·κ_O < 1/4` and `B`, `Be` find nothing. No
 inner prover makes the inner verifier reject on a coin it never reads, so `Inner.KS` cannot bound that failure:
 `Inner.KS` bounds `E^rep` against runs whose acceptance is the inner verifier's alone. A prover that aborts at a
 fresh coin of its own does make `gI`'s one rerun rejected half the time, so `gI` fails `Inner.KSAbort`
@@ -353,7 +353,7 @@ theorem EO_ext_none {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
     (((EO D I DO decO).ext x d.1 d.2).eval H (run H P D.V x ω)).1 = none := by
   simp [EO, RP.eval, Trace.seen, h]
 
-/-- A draw where the outer stage gives up is served as a rejected run. -/
+/-- A sample where the outer stage gives up is served as a rejected run. -/
 theorem servedRun_out_none {Coin W₂ : Type} {V : Verifier Coin} (H : Msg → Msg) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Trace)
     (d : (Fin (V.k x) → Coin) × E₂.C x) (h : ((E₂.ext x d.1 d.2).eval H run).1 = none) :
@@ -361,10 +361,10 @@ theorem servedRun_out_none {Coin W₂ : Type} {V : Verifier Coin} (H : Msg → M
   simp only [servedRun, outerStage]
   rw [RP.eval_bind_ret, h]
 
-/-- The one draw of one wait of one rerun. -/
+/-- The one sample of one wait of one rerun. -/
 def at00 {X : Type} (ρ : Fin 1 → Fin 1 → X) : X := ρ 0 0
 
-/-- `E*`'s one inner rerun's draw: the compiled verifier's coins and `E_O`'s. -/
+/-- `E*`'s one inner rerun's sample: the compiled verifier's coins and `E_O`'s. -/
 def gDraw (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E H (gD H) gI gDO decO).C x) :
     (Fin ((gD H).V.k x) → Bool) × (EO (gD H) gI gDO decO).C x :=
   at00 c.2
@@ -395,7 +395,7 @@ theorem gPr_quarter : Pr (fun b : Bool × Bool => b.1 = false ∧ b.2 = true) = 
   rw [this]
   norm_num
 
-/-- **`E*` fails on a quarter of the draws**: the judged run accepts at its coin `false`, and the inner rerun's outer
+/-- **`E*` fails on a quarter of the samples**: the judged run accepts at its coin `false`, and the inner rerun's outer
 coin `true` rejects it. -/
 theorem gPrBad_ge (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) :
     1 / 4 ≤ PrBad H (gD H).V (R (gD H) gI) (E H (gD H) gI gDO decO) [] (gP H) := by
@@ -500,7 +500,7 @@ theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
 def gKeep : Unit → (Fin (gI.V.k []) → Bool) → Bool → Bool := fun _ _ a => !a
 
 /-- **`gI` fails `Inner.KSAbort`**: at the prover that keeps each run at its own fresh coin `false`, the judged run is
-kept and accepted, and `E^rep`'s one rerun aborted, on a quarter of the draws, while `κ_I = γ_I = 0`. -/
+kept and accepted, and `E^rep`'s one rerun aborted, on a quarter of the samples, while `κ_I = γ_I = 0`. -/
 theorem gI_not_KSAbort (H : Msg → Msg) : ¬ gI.KSAbort H := by
   intro h
   have hx := h [] Unit (gP H) Bool gKeep

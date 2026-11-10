@@ -25,7 +25,7 @@ open Flock Transcript Replay Replay.Lg
 
 variable {α β : Type}
 
-/-- The coin pair a reply carries, as `sampleKP` draws it. -/
+/-- The coin pair a reply carries, as `sampleKP` samples it. -/
 def coinKOf (m : Claims.Msg) : F256 := ⟨coinOf m 0, coinOf m 1⟩
 
 /-- A prover step that sends nothing. -/

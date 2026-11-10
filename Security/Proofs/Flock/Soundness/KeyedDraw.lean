@@ -8,35 +8,35 @@ public import Proofs.Flock.Soundness.Audit.RegDraw
 import all Init.Data.String.Defs
 
 /-!
-# The PoUW circuit's keyed draw escapes no more often than the model's
+# The PoUW circuit's keyed sample escapes no more often than the model's
 
-`Key.subset` (`Randomness.subset`) draws each swap `i` of a `k`-subset from its own stream, index `("s", *index, i)`,
+`Key.subset` (`Randomness.subset`) samples each swap `i` of a `k`-subset from its own stream, index `("s", *index, i)`,
 where `Flock.Draw.subset` reads one stream. So its escape needs its own proof, on the same pieces as
 `Flock.Draw.subset`'s: the swap map read as a permutation (`getD_swapAt`), the rejection sampler (`uniformL_le`) and
 the pool (`card_pool_mem`).
 
 * `subsetOn_eq`, `subsetOn_misses`: the per-swap loop as a list recursion, and its `HashMap` read through a permutation.
-* `loopK_le`: swap `i` on its own uniform stream draws uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
+* `loopK_le`: swap `i` on its own uniform stream samples uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
   at most `C(n − i − |B|, c)/C(n − i, c)`.
 * `Law.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
   uniform `k`-subset's escape.
 
 The window (`PlanDraw.window`, `plan.draw` for each call under one key, admission refusing a repeated call index):
 
-* `drawAll_eq`, `drawK_eq_drawOn`: the calls' draws are one draw over the window's flat strata (`flat`), and on the key
+* `drawAll_eq`, `drawK_eq_drawOn`: the calls' samples are one sample over the window's flat strata (`flat`), and on the key
   it is `drawOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
-* `Law.drawOn_escape_le`: **C per-call draws form one stratified law**. Over independent uniform streams, one per stratum
-  and swap, the window draw misses `B` with at most `(Law.stratified σ k hk).escape B`, for strata that describe `σ`'s
+* `Law.drawOn_escape_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
+  and swap, the window sample misses `B` with at most `(Law.stratified σ k hk).escape B`, for strata that describe `σ`'s
   (`PlanStrata`).
-* `Law.keyedWindow`, `Law.keyedWindow_escape_le`: **tier 3**. The live window draw, on the key derived from a verifier
+* `Law.keyedWindow`, `Law.keyedWindow_escape_le`: **tier 3**. The live window sample, on the key derived from a verifier
   secret of `S` bytes, escapes `B` with at most `(Law.stratified σ k hk).escape B + η`, under A4
   (`Assumptions.KeyedStreamsUniform`) for the test `windowTest` and swap indices with distinct framings. As for
   `Flock.Draw.subset`, it holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
 * `Randomness.frames_inj'`, `Law.windowIdx_inj`, `Law.keyedWindow_escape_le_of_names`: a frame parses uniquely, so the
   swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
-  holds from the draw's own checks, with every swap index framed in under `2^64` bytes.
+  holds from the sample's own checks, with every swap index framed in under `2^64` bytes.
 * `Law.keyedWindow_audit_of_record`, `Law.keyedWindow_extraction_audit_of_record`: **step 4**, the window pins on the live
-  keyed draw at the sizing of record: `2^-40 + η + ε_ks + δ_link`, on a fresh uniform window secret (A5).
+  keyed sample at the sizing of record: `2^-40 + η + ε_ks + δ_link`, on a fresh uniform window secret (A5).
 * `Law.keyedWindowReg_extraction_audit_of_record` (the claim of record), `Law.keyedWindowReg_audit_of_record`: the same on the
   real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
 -/
@@ -48,7 +48,7 @@ namespace FlockSoundness.Audit.KeyedDraw
 open Game Finset DrawExec
 open scoped ENNReal
 
-/-- `Key.subset`'s loop as a list recursion, swap `i` drawing from `S i`. -/
+/-- `Key.subset`'s loop as a list recursion, swap `i` sampling from `S i`. -/
 def loopSwK (n : ℕ) (S : ℕ → ByteArray) : List ℕ → Std.HashMap ℕ ℕ → Option (Std.HashMap ℕ ℕ)
   | [], sw => some sw
   | i :: is, sw => match Randomness.uniformOn (n - i) (S i) with
@@ -352,7 +352,7 @@ open Game Finset
 open scoped ENNReal
 
 /-- **`Key.subset` escapes no more often than the uniform `k`-subset**: over independent uniform streams, one per swap,
-the spec's per-swap sampler returns a draw missing `B` with probability at most `C(n − |B|, k)/C(n, k)`. -/
+the spec's per-swap sampler returns a sample missing `B` with probability at most `C(n − |B|, k)/C(n, k)`. -/
 theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun G : Fin k → Fin L → Fin 256 =>
         ∃ D, Randomness.subsetOn k n (KeyedDraw.streamsOf G) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
@@ -383,11 +383,11 @@ namespace FlockSoundness.Audit.KeyedDraw
 open Game Finset DrawExec Randomness
 open scoped ENNReal
 
-/-- The window's strata, in draw order: each call's layout strata, with the call's index. -/
+/-- The window's strata, in sample order: each call's layout strata, with the call's index. -/
 def flat (calls : List PlanDraw.Call) : List (List Part × PlanDraw.Stratum) :=
   calls.flatMap fun c => c.strata.map fun s => (c.index, s)
 
-/-- The window draw on the key, over the flat strata. -/
+/-- The window sample on the key, over the flat strata. -/
 def drawK (key : ByteArray) (L : ℕ) : List (List Part × PlanDraw.Stratum) → Option (List ℕ)
   | [] => some []
   | (call, s) :: rest => do
@@ -417,7 +417,7 @@ theorem drawn_eq (key : ByteArray) (L : ℕ) (call : List Part) : ∀ (ss : List
         | none => rfl
         | some r => simp [List.append_assoc]
 
-/-- **The calls' draws are one draw over the window's strata.** -/
+/-- **The calls' samples are one sample over the window's strata.** -/
 theorem drawAll_eq (key : ByteArray) (L : ℕ) : ∀ calls : List PlanDraw.Call,
     PlanDraw.drawAll key calls L = drawK key L (flat calls) := by
   intro calls
@@ -429,7 +429,7 @@ theorem drawAll_eq (key : ByteArray) (L : ℕ) : ∀ calls : List PlanDraw.Call,
     rw [ih]
     rfl
 
-/-- The window draw on given streams, stratum at position `p` drawing swap `i` from `T p i`. -/
+/-- The window sample on given streams, stratum at position `p` sampling swap `i` from `T p i`. -/
 def drawOn (T : ℕ → ℕ → ByteArray) : List (List Part × PlanDraw.Stratum) → ℕ → Option (List ℕ)
   | [], _ => some []
   | (_, s) :: rest, p => do
@@ -473,8 +473,8 @@ theorem drawK_eq_drawOn (key : ByteArray) (L : ℕ) (T : ℕ → ℕ → ByteArr
       rw [show p + (j + 1) = p + 1 + j by omega] at this
       simpa using this]
 
-/-- **What a successful window draw holds**: every stratum's `Key.subset` succeeded, and each of its local indices'
-units is in the draw. -/
+/-- **What a successful window sample holds**: every stratum's `Key.subset` succeeded, and each of its local indices'
+units is in the sample. -/
 theorem drawOn_units (T : ℕ → ℕ → ByteArray) : ∀ (WS : List (List Part × PlanDraw.Stratum)) (p : ℕ) (D : List ℕ),
     drawOn T WS p = some D → ∀ j (h : j < WS.length), ∃ loc, subsetOn WS[j].2.k WS[j].2.units.length (T (p + j)) = some loc ∧
       ∀ i ∈ loc, WS[j].2.units.getD i 0 ∈ D := by
@@ -513,19 +513,19 @@ open scoped ENNReal
 
 variable {n M : ℕ}
 
-/-- The window's layout strata describe `σ`'s: stratum `p` draws `k p` of its units, has `σ`'s stratum's size, and its
+/-- The window's layout strata describe `σ`'s: stratum `p` samples `k p` of its units, has `σ`'s stratum's size, and its
 units, in order, run over `σ`'s stratum `p`. -/
 def PlanStrata (σ : Fin n → Fin M) (k : Fin M → ℕ) (WS : List (List Part × PlanDraw.Stratum)) : Prop :=
   WS.length = M ∧ ∀ (p : Fin M) (h : p.val < WS.length), WS[p.val].2.k = k p ∧
     WS[p.val].2.units.length = (stratum σ p).card ∧
     (range WS[p.val].2.units.length).image (fun j => WS[p.val].2.units.getD j 0) = (stratum σ p).map Fin.valEmbedding
 
-/-- Per-stratum, per-swap streams `F p i`, as the window draw reads them. -/
+/-- Per-stratum, per-swap streams `F p i`, as the window sample reads them. -/
 def windowStreams {k : Fin M → ℕ} {L : ℕ} (F : (p : Fin M) → Fin (k p) → Fin L → Fin 256) : ℕ → ℕ → ByteArray :=
   fun p => if h : p < M then KeyedDraw.streamsOf (F ⟨p, h⟩) else fun _ => ByteArray.empty
 
-/-- **The window draw escapes no more often than `Law.stratified`**: over independent uniform streams, one per stratum
-and swap, it returns a draw missing `B` with at most the stratified law's escape. -/
+/-- **The window sample escapes no more often than `Law.stratified`**: over independent uniform streams, one per stratum
+and swap, it returns a sample missing `B` with at most the stratified sampling design's escape. -/
 theorem drawOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (WS : List (List Part × PlanDraw.Stratum)) (hWS : PlanStrata σ k WS) (L : ℕ) (B : Finset (Fin n)) :
     prCoin (fun F : (p : Fin M) → Fin (k p) → Fin L → Fin 256 =>
@@ -608,18 +608,18 @@ def windowIdx (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (j
   let x := (finSigmaFinEquiv (n := k)).symm j
   swapIndex (PlanDraw.context (WS.getD x.1.val noStratum).1 (WS.getD x.1.val noStratum).2.name) x.2.val
 
-/-- The window draw on given streams, numbered as `windowIdx` numbers them. -/
+/-- The window sample on given streams, numbered as `windowIdx` numbers them. -/
 def windowOf (k : Fin M → ℕ) (streams : Fin (∑ p, k p) → ByteArray) : ℕ → ℕ → ByteArray := fun p i =>
   if h : p < M then (if hi : i < k ⟨p, h⟩ then streams (finSigmaFinEquiv ⟨⟨p, h⟩, ⟨i, hi⟩⟩) else ByteArray.empty)
   else ByteArray.empty
 
-/-- **The test A4 is taken for**: the window draw computed from the streams misses `B`. -/
+/-- **The test A4 is taken for**: the window sample computed from the streams misses `B`. -/
 def windowTest (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (B : Finset (Fin n))
     (streams : Fin (∑ p, k p) → ByteArray) : Prop :=
   ∃ D, KeyedDraw.drawOn (windowOf k streams) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D
 
-/-- **The live PoUW window draw as a law**: `PlanDraw.window` on the key derived from the window's secret `sec ω` of
-`S` bytes, each swap's stream read to `L` bytes; a refused or short draw draws every unit. -/
+/-- **The live PoUW window sample as a sampling design**: `PlanDraw.window` on the key derived from the window's secret `sec ω` of
+`S` bytes, each swap's stream read to `L` bytes; a refused or short sample samples every unit. -/
 def keyedWindow {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (domain : String)
     (context : List (String × Part)) (calls : List PlanDraw.Call) (L : ℕ) : Law n where
   Ω := Ω
@@ -630,8 +630,8 @@ def keyedWindow {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → F
 /-- A5 is satisfiable: the identity source, `S` uniform bytes themselves. -/
 theorem uniformSecret_id (S : ℕ) : Assumptions.UniformSecret (fun ω : Fin S → Fin 256 => ω) := fun _ => rfl
 
-/-- **Tier 3 for the PoUW window draw**: on a uniform window secret (A5), under A4 for the draw's escape test, the live
-window draw escapes `B` with at most `Law.stratified`'s escape plus `η`, for every number of bytes `L` read per swap. -/
+/-- **Tier 3 for the PoUW window sample**: on a uniform window secret (A5), under A4 for the sample's escape test, the live
+window sample escapes `B` with at most `Law.stratified`'s escape plus `η`, for every number of bytes `L` read per swap. -/
 theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedDraw.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
@@ -675,7 +675,7 @@ theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : �
             simp only [List.getD_eq_getElem _ _ hj]
         · exact absurd hD (by simp)
       · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
-    -- the uniform side is the window draw on per-stratum, per-swap streams
+    -- the uniform side is the window sample on per-stratum, per-swap streams
     let e' : ((p : Fin M) → Fin (k p) → Fin L → Fin 256) ≃ (Fin (∑ p, k p) → Fin L → Fin 256) :=
       (Equiv.piCurry fun p (_ : Fin (k p)) => Fin L → Fin 256).symm.trans
         ((finSigmaFinEquiv (n := k)).arrowCongr (Equiv.refl _))
@@ -960,9 +960,9 @@ theorem windowIdx_inj (calls : List PlanDraw.Call) (k : Fin M → ℕ) (hlen : (
     exact (Fin.heq_ext_iff (congrArg k hfst)).2 hi
   exact (finSigmaFinEquiv (n := k)).symm.injective hxx
 
-/-- **Tier 3 for the PoUW window draw, from the draw's own checks**: `keyedWindow_escape_le` with its distinct framings
+/-- **Tier 3 for the PoUW window sample, from the sample's own checks**: `keyedWindow_escape_le` with its distinct framings
 from admission, distinct stratum names within each call, and swap indices framed in under `2^64` bytes. A window that
-admission refuses draws every unit. -/
+admission refuses samples every unit. -/
 theorem keyedWindow_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedDraw.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
@@ -999,13 +999,13 @@ section Audits
 
 variable {n M : ℕ} {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **The PoUW window audit on the live keyed draw, at the sizing of record** (step 4): the audit accepts while the unsound
+/-- **The PoUW window audit on the live keyed sample, at the sizing of record** (step 4): the audit accepts while the unsound
 tiles do at least 0.1% of the work, or the unsound y cells are at least 0.1% of them, with probability at most
 `2^-40 + η + ε_ks + δ_link`. It is `audit_window_split_of_record_of_le_slack` at `L := keyedWindow sec domain context calls L`,
-whose escape `keyedWindow_escape_le_of_names` bounds by the product law's plus `η`: one `η` for every `B`, A4's for the
-draw's escape tests (`windowTest`), which cost the same for every `B`.
+whose escape `keyedWindow_escape_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
+sample's escape tests (`windowTest`), which cost the same for every `B`.
 
-The key's context is the receipt digest, so the draw depends on the registration: it holds per strategy, for the context
+The key's context is the receipt digest, so the sample depends on the registration: it holds per strategy, for the context
 `context` that the strategy's registration fixes (the key is derived from the complete receipt, and a call the
 receipt doesn't list is refused), and for every context, A4 and the `Analysis` taken uniformly over them. The window's
 secret is fresh and uniform (A5, C2). -/
@@ -1031,7 +1031,7 @@ theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin
     (fun B => keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
-/-- **The claim of record: the PoUW window audit on the live keyed draw at the compiled layer** (randomized extractor):
+/-- **The claim of record: the PoUW window audit on the live keyed sample at the compiled layer** (randomized extractor):
 `keyedWindow_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`, through `extraction_audit_window_split_of_record_of_le_slack`. -/
 theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
@@ -1057,7 +1057,7 @@ theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
-registration's receipt, so the draw is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
+registration's receipt, so the sample is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
 `keyedWindow_extraction_audit_of_record` at `ctx (reg σ)`, with A4 and the analysis taken for every registration and one `η`
 for all of them. -/
 theorem keyedWindowReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C)

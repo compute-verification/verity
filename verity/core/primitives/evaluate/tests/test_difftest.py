@@ -15,12 +15,12 @@ Hypothesis strategy with their inputs and, for a quarter of them, a mutation bot
 the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
 programs and inputs of `REFUSE`. E1's primitives each run on their one-call Program: every scalar primitive on the grid of its
-operands' edge words (also checked against the Python primitive's own evaluator), on words a strategy draws, and on words out of
+operands' edge words (also checked against the Python primitive's own evaluator), on words a strategy samples, and on words out of
 range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses. E2's FP32
 and BF16 primitives each run batched, many calls in one Program: on the grid of their operands' FP edge words (held to the
-Python primitive's evaluator too), on drawn words, on words out of range, and on the GPU's captured words where the fixtures
+Python primitive's evaluator too), on sampled words, on words out of range, and on the GPU's captured words where the fixtures
 hold them. E3's tensor-core dot steps run the same way, on structured families of edge codes and accumulators (a full grid
-of 33 to 137 operand words is out of reach), on drawn words, on words out of range, on every capture of them in the
+of 33 to 137 operand words is out of reach), on sampled words, on words out of range, on every capture of them in the
 repository's fixtures (single steps, and chains of steps on one accumulator), and against their traced Boolean Definitions.
 E4's primitives (PoUW's and NCP's words, the sampler, MUFU, the reference kinds' transcendentals, the activations and RoPE)
 run batched the same way, on their captures where the fixtures hold them; the tables they read are held to their pins; the
@@ -88,7 +88,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 PKG = Path(__file__).resolve().parents[1]
 ADDER = Path(__file__).resolve().parents[4] / "ml/circuits/tests/boolean_vectors.json"
 BIT = BL.BIT
-#: seeds of the random composites the strategy draws from (each Program is built once), and the examples a run draws
+#: seeds of the random composites the strategy samples from (each Program is built once), and the examples a run samples
 RANDOM_SEEDS = 256
 RANDOM_EXAMPLES = 1024
 
@@ -223,7 +223,7 @@ def desc_of(program: Program) -> dict:
 
 def _random_program(seed: int) -> tuple[Program, CompositeDefinition, list[int]]:
     """A random Boolean composite `x: Array<nx, bit>, y: bit -> Array<r, bit>` over helper composites, and its parameter
-    leaf counts. Each body draws from a generator of its own, seeded by name, so it is the same circuit each time it is built
+    leaf counts. Each body samples from a generator of its own, seeded by name, so it is the same circuit each time it is built
     (a Program inlines its function's body, and `reference.evaluate` builds it again)."""
     rng = random.Random(seed)
     tag = f"DtRand{seed}"
@@ -380,7 +380,7 @@ def _mutated(desc: dict, inputs: list, k: int) -> tuple[dict, list] | None:
 @st.composite
 def composite_requests(draw) -> dict:
     """A random composite on random input bits; one sample in four is mutated by an entry of `REFUSE` (an input word of 2 where
-    the drawn one does not apply)."""
+    the sampled one does not apply)."""
     text, leaves = _random_desc(draw(st.integers(0, RANDOM_SEEDS - 1)))
     desc = json.loads(text)
     x = [draw(st.lists(st.integers(0, 1), min_size=n, max_size=n)) for n in leaves]
@@ -570,8 +570,8 @@ def _layout_desc(seed: int, one_call: bool) -> tuple[str, int]:
 
 @st.composite
 def gate_requests(draw) -> dict:
-    """A random composite's Program and one of its gates, or a gate past its last (about one draw in three: Hypothesis
-    draws an integer range's lower bound more often than its share)."""
+    """A random composite's Program and one of its gates, or a gate past its last (about one sample in three: Hypothesis
+    samples an integer range's lower bound more often than its share)."""
     text, size = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.booleans()))
     g = draw(st.integers(size, size + 3)) if draw(st.integers(0, 7)) == 0 else draw(st.integers(0, size - 1))
     return {"program": json.loads(text), "gate": g}
@@ -579,7 +579,7 @@ def gate_requests(draw) -> dict:
 
 @st.composite
 def partition_requests(draw) -> dict:
-    """A random composite's one-call Program, whose one Call `Q_word` cuts, or one draw in four its inlined Program, whose
+    """A random composite's one-call Program, whose one Call `Q_word` cuts, or one sample in four its inlined Program, whose
     root batches and scans `Q_word` refuses; at an X from 1 to 64."""
     text, _ = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.integers(0, 3)) > 0)
     return {"program": json.loads(text), "X": draw(st.sampled_from((1, 2, 3, 4, 8, 16, 64)))}
@@ -1015,7 +1015,7 @@ def _tc_row(fn: PrimitiveDefinition, acc: int, a: tuple, b: tuple, sa: tuple | N
 def _tc_backgrounds(fn: PrimitiveDefinition) -> list[tuple]:
     """Operand vectors the accumulator sweep runs over: zeros, one times one (the sum k), the largest code times itself (an
     overflow from a large accumulator), times its negation in every other lane (exact cancellation), one times minus one,
-    two fixed draws of finite codes, and for the block-scaled steps the largest products at large scales (UE8M0: past
+    two fixed samples of finite codes, and for the block-scaled steps the largest products at large scales (UE8M0: past
     binary32)."""
     f = TC_FMT[fn]
     rng = random.Random(f"bg{fn.id}")
@@ -1333,7 +1333,7 @@ def _bits_of(words: list[int], w: int) -> list[int]:
 def test_the_traced_steps_are_the_lean_primitives(server):
     """Each dot step's traced Boolean Definition, evaluated gate by gate by the Lean (its And, Xor and Not gates), gives the
     words the Lean primitive gives and the Python primitive's evaluator, on 64 rows: specials at each grid position under
-    edge accumulators, and draws. The Lean's gate walk is checked against the Python oracle on Boolean Programs by the random
+    edge accumulators, and samples. The Lean's gate walk is checked against the Python oracle on Boolean Programs by the random
     composites and `test_traced_definitions` (the Ampere step among them); the oracle on these Programs would take about
     45 s a step (448 rows, 11 million gates: 320 s), the Lean takes under a second a step."""
     for fn in TCS:
@@ -1417,7 +1417,7 @@ def test_word_primitives_on_their_edge_grids(server):
 
 def _sixteen(rng: random.Random, edges: tuple[int, ...]) -> list[tuple]:
     """16-entry operands: zeros, each end and its alternation with zero, every edge at position 0 and 15 over zeros, and
-    four draws."""
+    four samples."""
     out = [(0,) * 16] + [(e,) * 16 for e in edges] + [tuple(e if i % 2 else 0 for i in range(16)) for e in edges]
     out += [tuple(e if i in (0, 15) else 0 for i in range(16)) for e in edges]
     return out + [tuple(rng.randrange(1 << 8) & (0x7F if max(edges) < 0x80 else 0xFF) for _ in range(16)) for _ in range(4)]
@@ -1453,7 +1453,7 @@ def _word_family(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 @pytest.mark.slow
 def test_word_primitives_on_their_families(server):
-    """The 16-entry accumulators under every edge accumulator over structured and drawn entries, the windows over
+    """The 16-entry accumulators under every edge accumulator over structured and sampled entries, the windows over
     backgrounds and specials at the atom boundaries, the salt-dead bits on every noise byte under each edge accumulator and
     on every one-operand accumulator word under each E4M3 edge, `PouwSqGe` at each threshold's boundary, and every mask's
     word of `PouwWindowWord`; each answer also the Python primitive's own evaluator's."""
@@ -1547,7 +1547,7 @@ def test_word_words_out_of_range_are_refused(server):
 #: (where `__nv_logf`'s reduction changes binade and its result crosses zero), and the smallest normal and subnormal ones
 LOG_SWEEP = tuple(sorted({*F32_SWEEP, *(s | (c + d) & 0x7FFFFFFF for c in (0x3F800000, 0x40000000, 0x3F000000, 0x00800000)
                                      for d in range(-4096, 4096) for s in (0, 1 << 31))}))
-#: the Gumbel lane's keys: zero, one, the extremes, a key the sampler tests use, and draws; and its vocabulary indices: the
+#: the Gumbel lane's keys: zero, one, the extremes, a key the sampler tests use, and samples; and its vocabulary indices: the
 #: first 2048, the vocabulary sizes' ends and the i32 extremes
 GUMBEL_KEYS = (0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 942961759, *random.Random("gumbel").sample(range(1 << 32), 3))
 GUMBEL_V = (*range(2048), 32000, 128255, 128256, 151935, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFE, 0xFFFFFFFF)
@@ -1583,7 +1583,7 @@ def test_sampler_primitives_on_their_grids(server):
 
 @pytest.mark.slow
 def test_the_logs_on_drawn_words(server):
-    """`NvLogf_v1` and `_v2` on 2^18 seeded draws of the whole 32-bit range, in requests of 2^16."""
+    """`NvLogf_v1` and `_v2` on 2^18 seeded samples of the whole 32-bit range, in requests of 2^16."""
     rng = random.Random("logs")
     words = [rng.getrandbits(32) for _ in range(1 << 18)]
     for fn in (TW.NvLogf, TW.NvLogfV2):
@@ -1630,7 +1630,7 @@ def _logf_block(b: int) -> tuple[dict[str, int], list[tuple]]:
                            "Python 0.9 s per 2^16 words and log), half an hour on a 192-vCPU machine")
 def test_the_logs_on_every_word():
     """`NvLogf_v1` and `_v2` on every 32-bit word, in requests of 2^16 over a process per CPU, each with its own server; each
-    answer the Python primitive's own word. The sweeps and draws reach a few hundred thousand words of a reduction whose
+    answer the Python primitive's own word. The sweeps and samples reach a few hundred thousand words of a reduction whose
     polynomial, binade change and NaN handling act on each word separately: only every word shows they agree everywhere."""
     exe = str(DT.build(PKG, "verity-evaluate"))
     jobs = len(os.sched_getaffinity(0))

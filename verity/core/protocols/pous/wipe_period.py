@@ -533,8 +533,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
     party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
-    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
-    record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
+    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the
+    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile

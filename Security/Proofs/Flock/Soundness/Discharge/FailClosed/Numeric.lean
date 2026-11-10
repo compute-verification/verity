@@ -16,16 +16,16 @@ acceptance gives it.
 * `tableError_le_205_wide`: `tableError` of a `fast100` schedule is at most `2^-205` at every shape in
   `Stmt.InRangeWide`, `Stmt.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
 * `ksAvgStrict_le_205`: with every plan table's shape in that range, `ksAvgStrict` is at most `ksAvgStrict205`.
-* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A draw flock-verify
+* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample flock-verify
   sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
-  `setupH_inRange`, `Hidden.Spec.inRange`). A refused draw's table is a reference setup's statement with `contra`'s two
+  `setupH_inRange`, `Hidden.Spec.inRange`). A refused sample's table is a reference setup's statement with `contra`'s two
   regions added (`DrawSetup.refused`), which is why the range is two regions wider.
 * `SoundExec205`, `SoundExecH205`, `SoundExecHR205`: `SoundExec`, `SoundExecH` and `SoundExecHR` at `ksAvgStrict205`,
   which they give by monotonicity (`SoundExec.to205`, `SoundExecH.to205`, `SoundExecHR.to205`). `SoundExecH205` and
   `SoundExecHR205` are split as `SoundExecH` is, by whether the circuit's wires feed its unit or outputs
   (`SoundExecHU205`, `SoundExecHG205`, `SoundExecHRU205`, `SoundExecHRG205`).
 
-Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at C-Flock ZK's parameters (`TabZK.M1`,
+Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at Flock ZK's parameters (`TabZK.M1`,
 `ksAvgStrictZ_le_m1`). Acceptance does not give `M1` here, so the `--zk` claims stay as `flock_verify_sound` states them.
 -/
 
@@ -33,7 +33,7 @@ Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at C-F
 
 namespace FlockSoundness.Accounting
 
-/-- **The shapes of every plan table**: `Stmt.InRange` with two regions more, the two `contra` regions a refused draw's
+/-- **The shapes of every plan table**: `Stmt.InRange` with two regions more, the two `contra` regions a refused sample's
 table adds to a reference setup's statement. -/
 def Stmt.InRangeWide (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1026 ∧ st.mPts ≤ 64
 
@@ -178,7 +178,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
 
-/-- **A table at a draw setup's statement is in the wide range** when its regions number at most two more than the
+/-- **A table at a sample setup's statement is in the wide range** when its regions number at most two more than the
 statement's: `Stmt.setupH` checks the statement's range (`setupH_inRange`). -/
 theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetup I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
@@ -190,8 +190,8 @@ theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : D
   show x.st.c.kLog ≤ 27 ∧ regs.length ≤ 1026 ∧ mPts ≤ 64
   exact ⟨hk, by omega, by omega⟩
 
-/-- **Every table of the one-table plan is in the wide range**: the draw's table has its statement's regions, and a
-refused draw's table the reference setup's and `contra`'s two. -/
+/-- **Every table of the one-table plan is in the wide range**: the sample's table has its statement's regions, and a
+refused sample's table the reference setup's and `contra`'s two. -/
 theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
     {Reg : Type} (S : Finset (Fin n)) (R : Reg) (j : Fin (planAt (Reg := Reg) ht dj x₀ S R).length) :
     (((planAt (Reg := Reg) ht dj x₀ S R).get j).S.shape mPts).InRangeWide := by
@@ -215,7 +215,7 @@ open FlockSoundness.Discharge.Integrate (DrawSetup)
 
 variable {n mPts : ℕ} {I : Inputs}
 
-/-- **A table at a hidden-output draw setup's statement is in the wide range** when its regions number at most two more
+/-- **A table at a hidden-output sample setup's statement is in the wide range** when its regions number at most two more
 than the statement's: `Stmt.setupHidden` checks the statement's range (`Hidden.Spec.inRange`). -/
 theorem DrawSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupH I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
@@ -315,7 +315,7 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
-/-- **`SoundExec205` at A3 per test**: `SoundExec205` with the verifier's bytes passing the stratified draw's escape test
+/-- **`SoundExec205` at A3 per test**: `SoundExec205` with the verifier's bytes passing the stratified sample's escape test
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
@@ -1001,7 +1001,7 @@ def FlockVerifySound205PerTest : Prop :=
 
 /-- **Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`.** At every statement `I`:
 the live session's probability that `flock-verify verify` accepts without `--zk` (`FlockVerifyAccepts false I`) while
-at least `K` of the statement's proof units are wrong is at most `flock_verify_sound`'s bound with each table's term
+at least `K` of the statement's proof blocks are wrong is at most `flock_verify_sound`'s bound with each table's term
 `2^-205`: `SoundExec205` at public outputs, `SoundExecH205` at hidden, and with `--registered F` at hidden outputs
 `SoundExecHR205` (the registered reads checked). No hypothesis on the statement's range: the
 verifier checks it (`checkInRange`, in `Stmt.setupH` and `Stmt.setupHidden`), so every plan table is in range

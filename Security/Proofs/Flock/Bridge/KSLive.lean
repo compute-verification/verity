@@ -20,7 +20,7 @@ verifiers' acceptance (`sampledKSLiveV3_of`).
 
 @[expose] public section
 
-/-- **The sampled audit's knowledge soundness, live, at the circuit files the verifier of record reads** (`Flock.Guarantees.SampledKSLiveV2`). -/
+/-- **The sampled audit's knowledge soundness, live, at the circuit files the verifier reads** (`Flock.Guarantees.SampledKSLiveV2`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2 :=
   Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partBlocks
     Flock.Bridge.count (Flock.Bridge.endToEndHiddenC_of Flock.Bridge.openingsCanon)

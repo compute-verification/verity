@@ -11,7 +11,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table
 
-`Refines.lean`'s one-table refinement and headline at `Discharge/ZkLink`'s compiled `--zk` table. At each draw `S` and
+`Refines.lean`'s one-table refinement and headline at `Discharge/ZkLink`'s compiled `--zk` table. At each sample `S` and
 registration `R` the table is `T S R : TabZK 𝔽 mPts`, its reps `ZkLink.repZCAt A Hs (T S R)` (`repZ`), the level-0 cap
 first (`Fin 1 → Cap D`), the openings `ZkLink.OpensZ 𝔽 D Sl` last, and the verdict `ZkLink.acceptedZC` (`outZ`, `accZ`).
 That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_repZ`, by
@@ -19,15 +19,15 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 `simAuditZK … τ` is a strategy of that audit (`simAuditZC`), where the compiled count curve `ZkLink.zk_flock_countC`
 applies:
 
-* `zk_headline_exec_zc`: against any live prover, at any law,
+* `zk_headline_exec_zc`: against any live prover, at any sampling design,
   `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
-* `zk_headline_exec_zc_execOS`: the same at the live draw (`Law.execOS`, `drawWith`'s stratified law) under A3
+* `zk_headline_exec_zc_execOS`: the same at the live sample (`Law.execOS`, `drawWith`'s stratified sampling design) under A3
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
-The wrong units are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
+The incorrect proof blocks are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
 named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, R11b at `--zk`), `hj : JointZC …`
 (`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
-prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit draws each round's coins
+prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit flips each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
 
@@ -43,10 +43,10 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
   (A : Arith 𝔽 K) (Hs : ZkLink.Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts)
 
-/-- The one-table plan: table `T S R` alone at each draw and registration. -/
+/-- The one-table plan: table `T S R` alone at each sample and registration. -/
 abbrev planOne : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S R => [T S R]
 
-/-- The compiled `--zk` table's reps at each draw and registration (`Refine.modelTable`'s `G`). -/
+/-- The compiled `--zk` table's reps at each sample and registration (`Refine.modelTable`'s `G`). -/
 noncomputable def repZ (S : Finset (Fin n)) (R : Reg) : (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (ZkLink.PendZ 𝔽 D Sl) :=
   ZkLink.repZCAt A Hs (T S R)
 
@@ -93,7 +93,7 @@ variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : 
 
 /-- **The `--zk` headline at flock-verify's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
 flock-verify `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
-wrong units with probability at most `miss(K) + ε_ks + δ_link` of the compiled count curve at that prover. -/
+incorrect proof blocks with probability at most `miss(K) + ε_ks + δ_link` of the compiled count curve at that prover. -/
 theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) {k Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (ZkLink.sessionZC A Hs (planOne T S R)) →
@@ -116,8 +116,8 @@ theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) 
   exact zk_headline_exec_one (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N L _ hdec τ _ _
     (hc.symm.trans_le hB)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the live draw under A3**: `zk_headline_exec_zc` with the
-units drawn by `Flock.Draw.drawWith`'s stratified law on a byte source A3 makes uniform (the challenger's coins),
+/-- **The `--zk` headline at flock-verify's acceptance, at the live sample under A3**: `zk_headline_exec_zc` with the
+units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a byte source A3 makes uniform (the challenger's coins),
 `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

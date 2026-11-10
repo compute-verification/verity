@@ -24,7 +24,7 @@ open scoped ENNReal
 namespace RowsSession
 
 /-- **The per-unit link, by a union bound over the units** (gap 3): `EndToEndRegisteredRows` at each unit's opening
-`rdU u` bounds its event by the session's `bound`; a drawn unit wrong or off at its own reads is in its own opening's
+`rdU u` bounds its event by the session's `bound`; a sampled proof block wrong or off at its own reads is in its own opening's
 event, so the per-unit event is at most `n · bound`. -/
 theorem prob_badU_le (hE : Flock.Guarantees.EndToEndRegisteredRows) (s : RowsSession) (hs : s.CR) :
     Game.prob s.BadU s.G s.τ ≤ (s.n : ℝ≥0∞) * s.bound := by
@@ -62,7 +62,7 @@ theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin 
 
 /-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where flock-verify
 accepts its session's outcome, its opening is the session's value layer read as a layer value, and its relation holds
-there when no drawn unit of the session is wrong or off at its own reads. -/
+there when no sampled proof block of the session is wrong or off at its own reads. -/
 noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :
     ProofLayer Ω S nπ V where
@@ -84,7 +84,7 @@ theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
   ⟨fun _ _ _ => Iff.rfl, fun _ _ _ h => h, openedPlur_zero _ sess rows fun _ _ _ _ => rfl, fun _ _ _ h => h⟩
 
 /-- **`SoundAtBridge` from `EndToEndRegisteredRows`**: an unsound proof whose opening is the value layer's reading
-fails its relation there, so by `RelOfRows` some drawn unit of its session is wrong or off at its own reads, and by
+fails its relation there, so by `RelOfRows` some sampled proof block of its session is wrong or off at its own reads, and by
 `AcceptedLive` flock-verify accepted: the per-unit event, at most `n · bound ≤ δ` in every session
 (`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `WindowLaw` carries
 the sessions' bound to the window's paths (`soundAt_of_sessions`). -/

@@ -14,7 +14,7 @@ public import Definitions.NetworkCertifier.Assumptions
 # The instances the network certifier's count and period witnesses are stated at
 
 Each built by hand, at a positive instance where the guarantee allows one: several steps, two execution blocks of one
-advice bit each, a non-empty faulty set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
+advice bit each, a non-empty incorrect set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
 witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `leakD`, which these extend.
 
 * `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
@@ -30,14 +30,14 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
 * `inI`: a certifier recording one frame a bucket in the first of two slots, every status complete, meeting W2, W4 at
   one frame a bucket and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
 * `sampProg`: two inputs and the negation of the first, the first the ingress (`notLay`), one proof block `{0, 1, 2}`
-  drawn Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible faulty sets
+  sampled Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible incorrect sets
   (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
   (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
 * `tapD`: `leakD` with every opening passing, where the network certifier's openings `tapOps` register `obs0`
   (`tapOps_opens`), so at every `δ` no witness is in `RLeakTap` (`tapD_noRLeakTap`), and at `δ = 1/8` the per-window
   leak bound of `PeriodLeakAccepted` fails at its silent prover (`tapD_bound_fails`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
-  whose faulty set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
+  whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
 -/
@@ -229,7 +229,7 @@ theorem statusComplete_inI (n : ℕ) : StatusComplete n (inI.obsRun () n) := by
   rw [inI.obsRun_getElem () ht]
   rfl
 
-/-! ## A sampled audit with a possible faulty unit -/
+/-! ## A sampled audit with a possible incorrect proof block -/
 
 /-- Two inputs and the negation of the first, the negation returned. -/
 def sampProg : Claims.Sampling.Prog := ⟨[.input, .not 0, .input], [1]⟩
@@ -237,7 +237,7 @@ def sampProg : Claims.Sampling.Prog := ⟨[.input, .not 0, .input], [1]⟩
 /-- One class of one stratum of one proof block, `{0, 1, 2}`. -/
 def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
 
-/-- The one class drawn Bernoulli at rate `1/2`. -/
+/-- The one class sampled Bernoulli at rate `1/2`. -/
 def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
 theorem sampLay_fits : notLay.Fits sampProg 1 := by
@@ -278,14 +278,14 @@ theorem sampFaulty_mem {F : Finset ℕ} (hsub : F ⊆ Finset.range 1) (hPa : (1 
 theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (Finset.empty_subset _) (by rw [sampPa]; norm_num [Claims.Sampling.window])
 
-/-- **The one proof block is a possible faulty set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
+/-- **The one proof block is a possible incorrect set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
 theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (by decide) (by
     rw [sampPa, show (Claims.Sampling.window 0 1 ({0} : Finset ℕ)).card = 1 by
       first | decide | rfl | simp [Claims.Sampling.window]]
     norm_num)
 
-/-- Each possible faulty set at `δ = 1/4` commits at most the proof block's three gates' bits. -/
+/-- Each possible incorrect set at `δ = 1/4` commits at most the proof block's three gates' bits. -/
 theorem sampBits : ∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
   intro F hF
   classical
@@ -311,7 +311,7 @@ theorem sampAs_encard : (AsReg sampProg notLay 1 ∅ fun _ => false).encard ≤ 
 /-- One step: an empty frame on the link, every status complete, what the negation of the ingress `false` holds. -/
 def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
 
-/-- **`obs1` is accepted with the empty faulty set**, its free input `false`, at one step at `δ = 1/4`. -/
+/-- **`obs1` is accepted with the empty incorrect set**, its free input `false`, at one step at `δ = 1/4`. -/
 theorem obs1_sampAcc :
     [obs1] ∈ AccSeqsSampled sampProg sampPart sampDesign notLay 1 (AsReg sampProg notLay 1 ∅ fun _ => false) (1 / 4)
       (fun _ _ => [false]) 1 := by
@@ -338,7 +338,7 @@ theorem obs0_covered : Covered 1 [obs0] := by
   obtain rfl : t = 0 := by omega
   rfl
 
-/-- At any `δ`, the only possible faulty set of `notStmt` is empty: its one unit is drawn `all`. -/
+/-- At any `δ`, the only possible incorrect set of `notStmt` is empty: its one unit is sampled `all`. -/
 theorem notFaulty_empty {δ : ℝ} {F : Finset ℕ} (hF : F ∈ faultySets notStmt.design notPart δ) : F = ∅ := by
   classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
@@ -348,8 +348,8 @@ theorem notFaulty_empty {δ : ℝ} {F : Finset ℕ} (hF : F ∈ faultySets notSt
   obtain rfl : v = 0 := by omega
   exact Finset.disjoint_left.1 hdis hv (by decide)
 
-/-- **`obs0` is accepted under no possible faulty set**, at every `δ` and whatever the inputs `As` admits: the only
-possible faulty set is empty, so no gate is held, and the circuit, the negation of the ingress `false`, holds a frame
+/-- **`obs0` is accepted under no possible incorrect set**, at every `δ` and whatever the inputs `As` admits: the only
+possible incorrect set is empty, so no gate is held, and the circuit, the negation of the ingress `false`, holds a frame
 where `obs0` has none. -/
 theorem obs0_notAcc (δ : ℝ) (As : Set (ℕ → Bool)) :
     [obs0] ∉ AccSeqsSampled notProg notPart notStmt.design notLay 1 As δ (fun _ _ => [false]) 1 := by
@@ -404,7 +404,7 @@ theorem tapOps_opens (H : Msg → Msg) :
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeakTap`** at `tapD`, at one step at every `δ`, whatever the inputs `As` admits: the network
-certifier registers `obs0` (`tapOps_opens`), which no possible faulty set accepts (`obs0_notAcc`). -/
+certifier registers `obs0` (`tapOps_opens`), which no possible incorrect set accepts (`obs0_notAcc`). -/
 theorem tapD_noRLeakTap (H : Msg → Msg) (δ : ℝ) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ RLeakTap H (tapD Coin).commit (tapD Coin).parse (tapD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) δ
@@ -477,7 +477,7 @@ theorem tapD_bound_fails (H : Msg → Msg) :
 /-! ## The monitoring period, pooled -/
 
 /-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2` and `e = e' = 0`: one window
-of one step whose faulty set holds its one unit, which `Fmax = 1` allows none of, so the good event fails on every
+of one step whose incorrect set holds its one unit, which `Fmax = 1` allows none of, so the good event fails on every
 coin. -/
 theorem pooled_bound_fails :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧

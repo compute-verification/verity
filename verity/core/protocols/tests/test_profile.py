@@ -1,7 +1,7 @@
 """IntegrityProfile: what verification established, and the worst case a consumer's utility reads off it.
 
 The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
-with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units drawn with p, then k of the n_v
+with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units sampled with p, then k of the n_v
 inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
 oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
 `_exact_rhos` and `_exact_lp` are the high-precision reference (60-digit `Decimal`): `worst_case` is never below it."""
@@ -158,7 +158,7 @@ def test_the_two_level_case_reproduces_the_four_number_law_exactly(n_r, n_v, p, 
 
 
 def test_undrawn_levels_only_group():
-    """Levels above the Bernoulli level or between it and the checked level change counts, not the law."""
+    """Levels above the Bernoulli level or between it and the checked level change counts, not the sampling design."""
     above = IntegrityProfile(("request", "replay", "check"), (32, 16, 4),
                              {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     between = IntegrityProfile(("replay", "tile", "check"), (512, 2, 2),
@@ -200,7 +200,7 @@ def test_levels_keep_their_query_ids():
 @pytest.mark.parametrize("levels, sizes, draws", [
     (("a", "b"), (4, 2), {"a": Bernoulli(Fraction(1, 2)), "b": Bernoulli(Fraction(1, 2))}),  # two Bernoulli levels
     (("a", "b", "c"), (4, 2, 2), {"b": Subset(1), "c": Subset(1)}),                         # Subset above the checked level
-    (("a", "b"), (4, 2), {"a": Bernoulli(Fraction(1, 2))}),                                  # checked level undrawn
+    (("a", "b"), (4, 2), {"a": Bernoulli(Fraction(1, 2))}),                                  # checked level unsampled
     (("a", "b"), (4, 2), {"b": Subset(1), "z": Bernoulli(1)}),                               # unknown level
     (("a", "a"), (4, 2), {"a": Subset(1)}),                                                  # duplicate names
     (("a", "b"), (4,), {"b": Subset(1)}),                                                    # a size missing
@@ -243,7 +243,7 @@ def one_level(n, k, delta) -> IntegrityProfile:
     return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
 
 
-#: The one-stage audits' wrong-unit bounds: (n units, k drawn, delta, the exact optimum to 12 digits,
+#: The one-stage audits' incorrect-block bounds: (n units, k sampled, delta, the exact optimum to 12 digits,
 #: at most).  `worst_case` is within its margin above the exact optimum.
 E2E = {"A0": (1024, 16, 0.01, 254.226320800, 254),
        "A1": (1024, 256, 2.0 ** -20, 46.9243795425, 46),
@@ -275,7 +275,7 @@ def _largest_admitted(n, k, delta) -> int:
 
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_the_count_bound_is_the_lean_curve(run):
-    """For one level drawn Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
+    """For one level sampled Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
     (`Law.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
     n, k, delta, _, at_most = E2E[run]
     a = one_level(n, k, delta)
@@ -298,7 +298,7 @@ def test_rho_is_exact_where_accept_underflows():
 
 
 def _exact_threshold(n, k, delta) -> Decimal:
-    """For one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
+    """For one level sampled Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
     last admitted count and the next (the one-stage audit's direct bound), here in 60-digit Decimal."""
     with localcontext() as ctx:
         ctx.prec = 60
@@ -412,7 +412,7 @@ def test_the_float_pairwise_version_crashed_where_the_profile_now_serves():
     assert int(bound) == _largest_admitted(4000, 256, 2.0 ** -20)
 
 
-# ---- Stratified: independent uniform draws inside strata (docs: sampling-strategies) -------------------------------
+# ---- Stratified: independent uniform samples inside strata (docs: sampling-strategies) -------------------------------
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -424,7 +424,7 @@ def a4_law(ks: dict) -> Stratified:
 
 
 def _enumerate(law: Stratified):
-    """Every unit as (stratum index, unit index), and every equally likely draw of the law."""
+    """Every unit as (stratum index, unit index), and every equally likely sample of the sampling design."""
     units = [(i, j) for i, s in enumerate(law.strata) for j in range(s.size)]
     per = [[{(i, j) for j in c} for c in combinations(range(s.size), s.k)] for i, s in enumerate(law.strata)]
     draws = [set().union(*parts) for parts in product(*per)]
@@ -432,7 +432,7 @@ def _enumerate(law: Stratified):
 
 
 def _escapes(law: Stratified):
-    """(wrong set, exact escape) for every subset of the units, by counting draws."""
+    """(wrong set, exact escape) for every subset of the units, by counting samples."""
     units, draws = _enumerate(law)
     for r in range(len(units) + 1):
         for b in combinations(units, r):
@@ -451,7 +451,7 @@ SMALL = [Stratified((Stratum("a", 4, 2), Stratum("b", 3, 1), Stratum("c", 3, 0))
 
 @pytest.mark.parametrize("law", SMALL)
 def test_stratified_escape_miss_and_count_bound_by_enumeration(law):
-    """Escape depends only on the counts per stratum and is exact; miss(K) is the largest escape of K wrong units; the
+    """Escape depends only on the counts per stratum and is exact; miss(K) is the largest escape of K incorrect proof blocks; the
     count bound is the largest K with miss(K) >= delta."""
     best = {}
     for b, e in _escapes(law):
@@ -488,7 +488,7 @@ def test_stratified_harm_bound_brackets_the_integer_optimum(law):
 
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_one_stratum_is_the_uniform_subset(run):
-    """One stratum drawn k of n is the one-stage audits' law: the same count bound as the profile and the Lean curve."""
+    """One stratum sampled k of n is the one-stage audits' law: the same count bound as the profile and the Lean curve."""
     n, k, delta, _, at_most = E2E[run]
     law = Stratified.uniform(n, k)
     assert law.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
@@ -496,7 +496,7 @@ def test_one_stratum_is_the_uniform_subset(run):
 
 
 def test_a4_uniform_leaves_the_norms_undrawn():
-    """A4 P6's law: at most 91,051 wrong units at 2^-20 (the audit's own bound), but a template of 287 units that is
+    """A4 P6's law: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
     wrong in every unit escapes with probability 0.958."""
     law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     assert law.count_bound(2.0 ** -20) == 91_051
@@ -554,8 +554,8 @@ def test_stratified_queries_name_known_strata():
 
 
 def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
-    """A Stratified sample of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
-    stratum's own, and its weighted bound the law's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
+    """A Stratified sample of the checked level: the profile's bound is the sampling design's exact count bound, its stratum bounds each
+    stratum's own, and its weighted bound the sampling design's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:
         a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
         assert a.strata() is law and a.bound() == law.count_bound(0.1)
@@ -577,7 +577,7 @@ def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
 
 
 def test_a_lone_bernoulli_draw_of_the_checked_level_bounds_exactly():
-    """One Bernoulli(p) draw of the checked level: M wrong members escape with probability exactly (1 - p)^M, so the
+    """One Bernoulli(p) sample of the checked level: M wrong members escape with probability exactly (1 - p)^M, so the
     profile's bound is the largest M <= members with (1 - p)^M >= delta (`Bernoulli.count_bound`, by search), each of the
     search's shortcuts the scan's answer, and never above the linear relaxation it replaces."""
     def scan(n: int, p: Fraction, delta: float) -> int:
@@ -597,7 +597,7 @@ def test_a_lone_bernoulli_draw_of_the_checked_level_bounds_exactly():
 
 
 @pytest.mark.parametrize("levels, sizes, draws", [
-    (("group", "unit"), (2, 5), {"group": Bernoulli(Fraction(1, 2)), "unit": SMALL[1]}),   # not the only draw
+    (("group", "unit"), (2, 5), {"group": Bernoulli(Fraction(1, 2)), "unit": SMALL[1]}),   # not the only sample
     (("unit", "sub"), (10, 1), {"unit": SMALL[1], "sub": Subset(1)}),                     # not the checked level
     (("unit",), (9,), {"unit": SMALL[1]}),                                                # strata of 10 units, level of 9
 ])
@@ -617,7 +617,7 @@ WORK = Work(3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
 
 
 def test_a_work_design_is_the_stratified_one_at_its_k():
-    """A `Work` draw of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
+    """A `Work` sample of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
     `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
     a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
     law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))

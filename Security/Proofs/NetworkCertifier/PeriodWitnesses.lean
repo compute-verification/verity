@@ -23,7 +23,7 @@ public import Proofs.NetworkCertifier.Assumptions.SampledCode
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
 * `PooledLeakAccepted_nontrivial`: its bound fails at an audit that always accepts, at `δ = 1/2` with one window of
-  one step whose faulty set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
+  one step whose incorrect set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
   only at `q = 0`, which its `hF` refuses at `δ < 1`.
 -/
 
@@ -83,7 +83,7 @@ theorem PooledLeakAccepted_honest :
   · rw [Set.mem_singleton_iff.1 hs]
     fin_cases c <;> decide
 
-/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step whose faulty
+/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step whose incorrect
 set holds its one unit, `Fmax = 1`, `δ = 1/2` and `e = e' = 0` (`pooled_bound_fails`). -/
 theorem PooledLeakAccepted_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧

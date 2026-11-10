@@ -1,9 +1,9 @@
 /-
-The unit draw. After serving registers its roots and before the session's statements are fixed, the challenger's coins
+The unit sample. After serving registers its roots and before the session's statements are fixed, the challenger's coins
 sample the units with exact samplers, and the sample is sent in the clear; the verifier has no randomness of its own.
-The drawn units' statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it.
-Offline, the verifier checks that the two agree, that the draw is well formed, and that the statement's instances are
-the drawn units.
+The sampled proof blocks' statement carries the sample (the public header's `unit_draw`, under Σ) and the session record keeps it.
+Offline, the verifier checks that the two agree, that the sample is well formed, and that the statement's instances are
+the sampled proof blocks.
 -/
 module
 
@@ -66,7 +66,7 @@ def bernoulli (num den n : Nat) (src : ByteArray) : Option (Array Nat) := Id.run
       pos := p
   return some out
 
-/-- A stratum of the stratified law: a template's units, as ascending, disjoint half-open ranges `[lo, hi)`, and its draw `k`. -/
+/-- A stratum of the stratified sampling design: a template's units, as ascending, disjoint half-open ranges `[lo, hi)`, and its sample `k`. -/
 structure Stratum where
   template : String
   units : Array (Nat × Nat)
@@ -83,7 +83,7 @@ def Stratum.unit (s : Stratum) (j : Nat) : Nat := Id.run do
     j := j - (hi - lo)
   return 0
 
-/-- A stratum's draw under the stratified rule (`draw.stratum_k`): `max(1, round(k · size / population))`, half up. -/
+/-- A stratum's sample under the stratified rule (`draw.stratum_k`): `max(1, round(k · size / population))`, half up. -/
 def stratumK (k size population : Nat) : Nat := max 1 ((2 * k * size + population) / (2 * population))
 
 /-- The strata of a template query's per-node ranges `(template, first unit, count)` in canonical order (`partition.strata`):
@@ -101,20 +101,20 @@ def strataOf (ranges : Array (String × Nat × Nat)) : Array (String × Array (N
       out := out.set! i (t, rs)
   return out
 
-/-- A stratum of the work law: a stratified law's stratum, the PoUW work of each of its units, an integer in any fixed unit
-(`0` for units that do none: dequantization, the quantizer, attention), and its floor, the fewest units it draws (at least
+/-- A stratum of the work sampling design: a stratified sampling design's stratum, the PoUW work of each of its units, an integer in any fixed unit
+(`0` for units that do none: dequantization, the quantizer, attention), and its floor, the fewest units it samples (at least
 one), both from the verifier's work table. -/
 structure WorkStratum extends Stratum where
   work : Nat
   floor : Nat
   deriving BEq, Inhabited
 
-/-- A stratum's draw under the work law: `⌈K · work · n_s / W⌉`, with `W` the population's work `Σ_s work_s · n_s`, never
+/-- A stratum's sample under the work sampling design: `⌈K · work · n_s / W⌉`, with `W` the population's work `Σ_s work_s · n_s`, never
 below the stratum's floor and never above `n_s`. Rounding up keeps each unit's inclusion probability at least `K · work / W`,
 which the work bound (`FlockSoundness.Audit.Law.work_escape_le`, through `workRule_eq_draw`) reads. -/
 def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * work * size + total - 1) / total))
 
-/-- A work law's population work, `Σ_s work_s · n_s`. -/
+/-- A work sampling design's population work, `Σ_s work_s · n_s`. -/
 def totalWork (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
 
 inductive Law where
@@ -122,7 +122,7 @@ inductive Law where
   | bernoulli (num den : Nat)
   /-- one uniform `k_s`-subset per stratum, independently (the default law; `k` is the agreement's) -/
   | stratified (k : Nat) (strata : Array Stratum)
-  /-- the work law, the stratified law's second version: its sampler, each stratum's `k_s` sized by work (`workK`) above
+  /-- the work sampling design, the stratified sampling design's second version: its sampler, each stratum's `k_s` sized by work (`workK`) above
   its floor -/
   | work (k : Nat) (strata : Array WorkStratum)
   deriving BEq, Inhabited
@@ -165,10 +165,10 @@ def workTableOfJson (j : Json) : Except String (Array (String × Nat × Nat)) :=
         | .error _ => throw bad
     | _, _ => throw s!"work table: template '{t}': the work is not a natural number"
 
-/-- The bytes a stratum's stream starts with: `2 k_s · width(n_s) + 64`, as a `subset` draw's. -/
+/-- The bytes a stratum's stream starts with: `2 k_s · width(n_s) + 64`, as a `subset` sample's. -/
 def Stratum.need (s : Stratum) : Nat := 2 * s.k * width s.size + 64
 
-/-- The stratified draw, one stream per stratum: `subset k_s n_s` on stratum `s`'s stream, local index `j` mapped to the
+/-- The stratified sample, one stream per stratum: `subset k_s n_s` on stratum `s`'s stream, local index `j` mapped to the
 stratum's `j`-th unit, the union ascending. `none` when a stream runs out. -/
 def stratified (strata : Array Stratum) (streams : Array ByteArray) : Option (Array Nat) := do
   let mut out := #[]
@@ -178,8 +178,8 @@ def stratified (strata : Array Stratum) (streams : Array ByteArray) : Option (Ar
     out := out ++ local_.map s.unit
   return out.qsort (· < ·)
 
-/-- A draw: its law, the population `[0, population)`, the drawn units, ascending, and for a closure draw the units
-proved with them, their closure beyond the drawn units, ascending. -/
+/-- A sample: its sampling design, the population `[0, population)`, the sampled proof blocks, ascending, and for a closure sample the units
+proved with them, their closure beyond the sampled proof blocks, ascending. -/
 structure UnitDraw where
   law : Law
   population : Nat
@@ -187,7 +187,7 @@ structure UnitDraw where
   closure : Array Nat := #[]
   deriving Inhabited
 
-/-- The units a draw proves: the drawn units and their closure, ascending. -/
+/-- The units a sample proves: the sampled proof blocks and their closure, ascending. -/
 def UnitDraw.proved (d : UnitDraw) : Array Nat :=
   if d.closure.isEmpty then d.units else (d.units ++ d.closure).qsort (· < ·)
 
@@ -203,7 +203,7 @@ def closureMapOfJson (j : Json) : Except String (Std.HashMap Nat (Array Nat)) :=
       | .error _ => throw s!"closure map: unit {u}: not a list of units"
     return m.insert u cs
 
-/-- A draw's closure under the closure map `cm`: every unit in a drawn unit's closure that is not itself drawn,
+/-- A sample's closure under the closure map `cm`: every unit in a sampled proof block's closure that is not itself sampled,
 ascending. -/
 def closureOf (cm : Std.HashMap Nat (Array Nat)) (units : Array Nat) : Array Nat := Id.run do
   let drawn : Std.HashMap Nat Unit := units.foldl (fun m u => m.insert u ()) {}
@@ -225,7 +225,7 @@ def WorkStratum.toJson (s : WorkStratum) : Json :=
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
     ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
 
-/-- The law object (the registration's `law`): `{law, k, strata}` for `stratified` and `work`. -/
+/-- The sampling design object (the registration's `law`): `{law, k, strata}` for `stratified` and `work`. -/
 def Law.toJson : Law → Json
   | .subset k => Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
   | .bernoulli a b => Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]
@@ -265,7 +265,7 @@ private def stratumOfJson (j : Json) : V Stratum := do
     throw s!"U2: stratum '{t}': ranges ascending, disjoint and not adjacent"
   return { template := t, units, k }
 
-/-- A stratified law over `population` units (`draw.strata_problem`): `1 ≤ k ≤ population`, distinct templates, each
+/-- A stratified sampling design over `population` units (`draw.strata_problem`): `1 ≤ k ≤ population`, distinct templates, each
 stratum's `k` the rule's, and the strata's ranges tiling `[0, population)` exactly. -/
 def strataProblem (k : Nat) (strata : Array Stratum) (population : Nat) : Option String := Id.run do
   if strata.isEmpty || k < 1 || k > population then return some "U2: strata and 1 <= k <= population"
@@ -292,7 +292,7 @@ private def workStratumOfJson (j : Json) : V WorkStratum := do
   let s ← stratumOfJson (Json.mkObj [("template", get "template"), ("units", get "units"), ("k", get "k")])
   return { toStratum := s, work, floor }
 
-/-- A work law over `population` units (`workProblem`): `1 ≤ k ≤ population`, distinct templates, a floor of at least one
+/-- A work sampling design over `population` units (`workProblem`): `1 ≤ k ≤ population`, distinct templates, a floor of at least one
 in every stratum, a population that does some work, each stratum's `k` the rule's (`workK` above its floor), and the
 strata's ranges tiling `[0, population)` exactly. -/
 def workProblem (k : Nat) (strata : Array WorkStratum) (population : Nat) : Option String := Id.run do
@@ -318,8 +318,8 @@ private def ratio (s : String) : V (Nat × Nat) :=
     | _, _ => throw "U2: unit_draw.p is not num/den"
   | _ => throw "U2: unit_draw.p is not num/den"
 
-/-- U2: a well-formed draw. Its keys are exactly the law's, and a work draw's closure (when it has one) is non-empty,
-ascending, distinct units of the population, none of them drawn; `subset` draws exactly `k ≤ population` units; `bernoulli`
+/-- U2: a well-formed sample. Its keys are exactly the sampling design's, and a work sample's closure (when it has one) is non-empty,
+ascending, distinct units of the population, none of them sampled; `subset` samples exactly `k ≤ population` units; `bernoulli`
 has `0 ≤ p ≤ 1`, no unit when `p = 0` and every unit when `p = 1`; `stratified`'s strata are well formed and tile the
 population (`strataProblem`), and exactly `k_s` of its units fall in each, and likewise `work`'s (`workProblem`); units
 are ascending, distinct and in the population. -/
@@ -388,7 +388,7 @@ def check (record statement : Option Json) (instances : Nat) : V Unit := do
     if d.proved.size != instances then throw "U3: the statement's instances are not the drawn units and their closure"
 
 /-- A sampler run on a byte source, `get need` returning `need` fresh bytes: a stream of `need` bytes, extended by `need`
-more and the same sampler rerun on it whenever it runs out, so the draw stays exact. `none` only if the loop ends, which
+more and the same sampler rerun on it whenever it runs out, so the sample stays exact. `none` only if the loop ends, which
 it doesn't. -/
 def onWith {m : Type → Type} [Monad m] (get : Nat → m ByteArray) (need : Nat) (run : ByteArray → Option (Array Nat)) :
     m (Option (Array Nat)) := do
@@ -398,7 +398,7 @@ def onWith {m : Type → Type} [Monad m] (get : Nat → m ByteArray) (need : Nat
     src := src ++ (← get need)
   return none
 
-/-- The stratified draw on a byte source, stratum `i`'s stream from `get i`: `stratified`, each stratum's `subset` run by
+/-- The stratified sample on a byte source, stratum `i`'s stream from `get i`: `stratified`, each stratum's `subset` run by
 `onWith`. -/
 def stratifiedWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (strata : Array Stratum) :
     m (Option (Array Nat)) := do
@@ -409,8 +409,8 @@ def stratifiedWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteAr
     out := out ++ local_.map s.unit
   return some (out.qsort (· < ·))
 
-/-- The draw on a byte source, stream `i`'s bytes from `get i`: one stream per stratum for a stratified or work draw, stream
-`0` for a subset or Bernoulli draw. -/
+/-- The sample on a byte source, stream `i`'s bytes from `get i`: one stream per stratum for a stratified or work sample, stream
+`0` for a subset or Bernoulli sample. -/
 def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (law : Law) (population : Nat) :
     m (Option UnitDraw) := do
   let units ← match law with
@@ -445,21 +445,21 @@ def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw :=
       stratified strata segs
   return { law, population, units }
 
-/-- The units every draw under a law has, when that count is fixed: `k` for a subset law and `Σ_s k_s` for a stratified
-one (`UnitDraw.ofJson` holds every decoded draw to them); none for a Bernoulli law, whose count is random, and a work law,
-whose closure varies from draw to draw. -/
+/-- The units every sample under a sampling design has, when that count is fixed: `k` for a subset sampling design and `Σ_s k_s` for a stratified
+one (`UnitDraw.ofJson` holds every decoded sample to them); none for a Bernoulli law, whose count is random, and a work sampling design,
+whose closure varies from sample to sample. -/
 def Law.fixedCount : Law → Option Nat
   | .subset k => some k
   | .stratified _ strata => some (strata.foldl (fun acc s => acc + s.k) 0)
   | _ => none
 
-/-- The refusal of a draw that several tables cannot split (`Stmt.setupTables`, `tablesWhy`). -/
+/-- The refusal of a sample that several tables cannot split (`Stmt.setupTables`, `tablesWhy`). -/
 def TABLES_LAW : String :=
   "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)"
 
-/-- Why one draw under `law` cannot be split into `count` equal tables, as `Stmt.setupTables` splits a session's draw, else
-none: one table takes any law; several take a law of fixed count (`Law.fixedCount`) that is positive and a multiple of
-`count`. A law's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. -/
+/-- Why one sample under `law` cannot be split into `count` equal tables, as `Stmt.setupTables` splits a session's sample, else
+none: one table takes any sampling design; several take a sampling design of fixed count (`Law.fixedCount`) that is positive and a multiple of
+`count`. A sampling design's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. -/
 def tablesWhy (law : Law) (count : Nat) : Option String :=
   if count ≤ 1 then none
   else match law.fixedCount with

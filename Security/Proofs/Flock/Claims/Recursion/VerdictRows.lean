@@ -111,7 +111,7 @@ def w (k : ℕ) (acc : Array F128) : Array F128 :=
 end DecAt
 
 /-- **Each level's consistency sums**: at level `level`, lane `l`, the sum the level's opened rows give at the `α` the
-verifier rows draw for it, the value `Opened` compares the messages' with; `0` where the rows don't run. -/
+verifier rows sample for it, the value `Opened` compares the messages' with; `0` where the rows don't run. -/
 def consOf (sh : Shape) (sch : Flock.Schedule) (p : Proof) (rounds : Array (Array F128)) (extras : Array Claim)
     (comb : Array F128) (level l : ℕ) : F128 :=
   match verifierRows sh rounds extras comb with

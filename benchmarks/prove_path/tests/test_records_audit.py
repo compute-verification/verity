@@ -13,7 +13,7 @@
   (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
   prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
-  (`pinned`), and refused before any draw without them, a record that lists its members (a served window's) as one that
+  (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier registration that registered them first
   (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
@@ -569,7 +569,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
     stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
     pinned the parameter at the root the window's registration records. Without a pin the audit refuses the window before
-    any draw; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
+    any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
     or a registration that records none."""
     law = D.parse_law(LAW)
     stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)
@@ -659,7 +659,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
     scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
-    opens drawn rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
     entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
     pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",

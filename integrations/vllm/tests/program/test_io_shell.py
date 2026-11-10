@@ -259,7 +259,7 @@ def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
 @pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
 def test_a_select_collected_and_the_last_ones_entry_are_the_combine_then_the_collector_and_the_entry(first):
     """`SelectCollect_v1` is `TokenSelectCombine_v2`'s select and `OutCollect_v1` over it, and `SelectEntry_v1` those and
-    `SlotEntry_v1` over the state, on groups' bests drawn from a few bf16 values (ties and -inf among them), their indices,
+    `SlotEntry_v1` over the state, on groups' bests sampled from a few bf16 values (ties and -inf among them), their indices,
     heads or states whose w is in and out of the collector's KO, and both occupancy words."""
     V, C, KO, NP, STOP = 200, 64, 3, 3, (107,)
     combine = bind(TokenSelectCombineV2, V=V, C=C)

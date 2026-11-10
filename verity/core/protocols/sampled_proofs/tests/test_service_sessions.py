@@ -1,5 +1,5 @@
 """One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R registrations open, a
-session opens once after its last covered draw, the first covered round's proof deadline spans it, every covered draw's
+session opens once after its last covered sample, the first covered round's proof deadline spans it, every covered sample's
 outcome binds the same delivered session, and each round's audit record reads only its own proof blocks and roots."""
 
 from __future__ import annotations

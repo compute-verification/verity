@@ -9,7 +9,7 @@ is the outline and the entry points.
 A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the prover
 doesn't control (`verifier_party.py`), or every party in one process (`period.py`), against the prover's passes over
 its registered store. A period's case replays through the Lean (`RemoteAudit.Protocol`), and the session harness runs
-the Lean verifier of record beside the books (below). Not all of it is zero knowledge yet:
+the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
   and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
@@ -38,7 +38,7 @@ the Lean verifier of record beside the books (below). Not all of it is zero know
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier of record; the Python mirrors it.
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier; the Python mirrors it.
 `audit.py` and what it calls here (`receipts.py`, `codec.py`, `coins.py`) are held to it by `lean/tests/`' difftest:
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec

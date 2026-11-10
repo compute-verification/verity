@@ -4,7 +4,7 @@ that names the oracle, the salt and the workload the proof is for.
 ``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's registered name>, "salt": <the epoch's salt, lowercase
 hex>, "workload": <lowercase hex SHA-512 of the registered workload's canonical bytes>}``.  The scheme names the oracle H, so
 there is no seed digest.  The proof binds the object through ``pub.sha``, which seeds its Fiat-Shamir transcript.  The
-verifier recomputes the bytes from the epoch it audits (`identifier_bytes`), and Flock's verifier compares the proof's
+verifier recomputes the bytes from the execution phase it audits (`identifier_bytes`), and Flock's verifier compares the proof's
 object with them byte for byte (``--identifier F``).
 
 Canonical bytes are RFC 8785 (`verity.ml.circuits.codec.canonical_json`), on the domain where that function is RFC 8785: ASCII
@@ -26,7 +26,7 @@ from .schemes import SCHEMES
 
 FORMAT = domains.POUW_IDENTIFIER
 SALT_BYTES = 32
-#: a certified epoch's salt (`audit.Epoch.certified`)
+#: a certified execution phase's salt (`audit.Epoch.certified`)
 CERTIFIED_SALT_BYTES = DIGEST_BYTES["sha512"]
 
 

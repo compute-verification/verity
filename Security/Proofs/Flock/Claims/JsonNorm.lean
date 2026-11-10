@@ -7,18 +7,18 @@ public import Proofs.Flock.Claims.Complete.Json.Value
 public import Proofs.Flock.Claims.JsonEq
 
 /-!
-# The rebuilt draw: one value per equivalence class
+# The rebuilt sample: one value per equivalence class
 
-`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two draws that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
-(`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a draw, the record's (`Exec.recordDraw`) and the statement's
+`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two samples that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
+(`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a sample, the record's (`Exec.recordDraw`) and the statement's
 (`Raw.ins`), it keeps `Flock.norm` of what it parsed: every object rebuilt by inserting its fields into an empty map,
 and that map's fields into another. So:
 
 * `norm_congr`: `norm` is the same on equivalent values;
-* `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the draw check
+* `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the sample check
   passes on are equal, with no premise on the parser;
 * `wf_norm`: a rebuilt value is well formed (`Claims.Json.Wf`) by construction;
-* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's draw,
+* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's sample,
   parsed, is the statement's up to `JsonEquiv`).
 -/
 
@@ -213,7 +213,7 @@ theorem eq_of_jsonEquiv_norm {a b : Json} (ha : Flock.norm a = a) (hb : Flock.no
   rw [← ha, ← hb]
   exact norm_congr _ _ h
 
-/-- **Two rebuilt optional values the draw check passes on are equal.** -/
+/-- **Two rebuilt optional values the sample check passes on are equal.** -/
 theorem eq_of_rel_norm {a b : Option Json} (h : Option.Rel JsonEquiv a b) (ha : ∀ d, a = some d → Flock.norm d = d)
     (hb : ∀ d, b = some d → Flock.norm d = d) : a = b := by
   cases h with

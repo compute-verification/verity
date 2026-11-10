@@ -14,9 +14,9 @@ can do outside it:
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
   (`wrongCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
-* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected faulty proof block until the halt `Δ` later,
+* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected incorrect proof block until the halt `Δ` later,
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
-* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't drawn is accepted, so the faulty blocks
+* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
   an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
   probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
   (`noDetectionBefore`) being detected with probability at least `q`.
@@ -43,7 +43,7 @@ noncomputable def wrongCapacity {N : ℕ} (c : Fin N → ℝ) (wrong : Fin N →
 `H`. -/
 noncomputable def lagShare (J Δ H : ℝ) : ℝ := J * Δ / H
 
-/-- **The faulty proof blocks accepted before their identity's first detection**: of the faulty proof blocks `bad`,
+/-- **The incorrect proof blocks accepted before their identity's first detection**: of the incorrect proof blocks `bad`,
 block `b` run by identity `ident b` at time `τ b`, those with no detected faulty block (`detected`) of the same
 identity at or before `τ b`. When every faulty block is detected (every proof block proved, tiers T1–T4), none is. -/
 noncomputable def escaped {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) : Finset β :=

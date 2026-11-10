@@ -308,7 +308,7 @@ def remote : Entry := .site "genesis"
 def next (locs : List Loc) (links : List Link := []) (sheets : List Sheet := []) (previous := "genesis+") : Entry :=
   .site previous ⟨sheets, locs, links⟩
 
-/-- A later entry for each check, with the refusal it draws on the onsite site. -/
+/-- A later entry for each check, with the refusal it samples on the onsite site. -/
 def later : List (Entry × Option Refusal) :=
   [(next [device "gpu2" "node0" sheetB, memory "hbm2" "gpu2" .hbm (128 * 2 ^ 30),
       memory "nvme1" "node0" .disk (2 ^ 40)], none),

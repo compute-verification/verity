@@ -41,7 +41,7 @@ theorem dec_out_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (i
   | none => rfl
   | some ws => exact (innerView_C H Bd ivScope b hCF x r ws).1
 
-/-- A draw's inner view accepts at `deployRecC` where it does at the deployed record: `E_O` reads no inner view, and
+/-- A sample's inner view accepts at `deployRecC` where it does at the deployed record: `E_O` reads no inner view, and
 `dec` decides alike (`dec_out_C`). -/
 theorem accAtI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
@@ -130,7 +130,7 @@ theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero 
       try exact Iff.rfl
   exact hE.trans_le h
 
-/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each draw's coins (`Deploy.callsAt`), which are
+/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each sample's coins (`Deploy.callsAt`), which are
 the same at both records, and the inner view only through `accAtI` (`PrFCI_C`, `PrF0I_C`). -/
 theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)

@@ -5,7 +5,7 @@ public import Definitions.Flock.Statement
 /-!
 # Pinned outputs (META `pinned_outputs`): the rows a pinned bit has, and what they force
 
-A pinned output port has no row. The C-Flock prover's Δ copies a unit slot's forced-zero row onto each of its bits,
+A pinned output port has no row. The Flock prover's Δ copies a unit slot's forced-zero row onto each of its bits,
 `(i, i)` and `(i, zero)` in `A` and in `B`, at a bit `i` whose net row is linear (`B` the constant alone, which its
 `check` requires of a pinned bit). So the block rows at `i` are `A = a + eᵢ + e_zero` and `B = e_pin + eᵢ + e_zero`
 (`PinnedRow`), and a satisfying witness has `zᵢ = (a·z + zᵢ)(1 + zᵢ)`: `zᵢ = 0` and `a·z = 0` (`PinnedRow.block_eq`).

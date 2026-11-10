@@ -1,6 +1,6 @@
 """Pearl-C's records: what the prover declares for each matmul before the samples, and the root that binds them (statement
-review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work law
-that credits, draws and checks by them, with its clear audit, is a reference tool, not a verifier:
+review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work sampling design
+that credits, samples and checks by them, with its clear audit, is a reference tool, not a verifier:
 ``benchmarks/pouw/clear/clear_work.py``.
 
 * **`Split`**: a weight's channel split.
@@ -18,7 +18,7 @@ that credits, draws and checks by them, with its clear audit, is a reference too
     and the credit all read it.
   `records_root` binds the records and the splits.
 * **`pad_weight`**: a weight whose n is not whole column tiles (GLM-5.3's lm_head, 19360 rows a TP8 rank) is served with
-  zero rows up to the next whole tile, and the last tile's rows are voluntary, so their block is neither credited nor drawn.
+  zero rows up to the next whole tile, and the last tile's rows are voluntary, so their block is neither credited nor sampled.
 """
 
 from __future__ import annotations

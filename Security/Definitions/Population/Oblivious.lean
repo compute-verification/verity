@@ -14,14 +14,14 @@ trace is a population with public wiring, and the construction that makes it one
 * `AddressedBy P`: the read sets depend only on the values of the slots `P`, where the addresses live. With `P` the
   verifier-bound public inputs, this is obliviousness relative to the public inputs: a circuit family indexed by them.
 * `HonestlyOblivious`: the classical notion. Every run in which every unit is correct reads the same slots, whatever
-  the inputs. It says nothing about runs with an incorrect unit.
+  the inputs. It says nothing about runs with an incorrect proof block.
 * `AddressClosed`: a unit's read set is determined by the values of the slots it reads, so an address it uses is a
   slot it reads. A machine step that loads through a pointer reads the pointer.
 * `padOver C`, **the padding over the assignments `C`**: the static population in which unit `u` reads every slot it
   reads in some assignment of `C`, with `padFns C` its functions. `padOver Set.univ` is the static superset of a padded
   static circuit (every candidate wired, the choice a value inside the unit); `padOver {h}` freezes the read sets at
   `h`.
-* `downAt σ B`: the units downstream of `B` in the dataflow of the assignment `σ`, the cone the run `σ` itself draws.
+* `downAt σ B`: the units downstream of `B` in the dataflow of the assignment `σ`, the cone the run `σ` itself samples.
 * `SkipsLucky`: work accounting's per-unit premise for a trace.
 * `downOver C B`, `coneEgressOver C O B`: the cone of `B` in the dataflow of some assignment of `C`, and the egress
   written in it. Over the honest runs, the cones the damage theorems need.

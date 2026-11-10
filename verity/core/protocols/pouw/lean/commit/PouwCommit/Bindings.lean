@@ -12,7 +12,7 @@ What each of the protocol's trees is bound to, and the one root over the weights
     activation_binding(salt, i)  = tagged("verity/pouw/activation-rows/v1", salt, i)
     fold_roots(tag, roots)       = tagged(tag, w₀, root₀, w₁, root₁, …)                       in increasing w
     weights_root(roots)          = fold_roots("verity/pouw/weights/v1", roots)
-    transcript_binding(epoch)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+    transcript_binding(execution phase)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
 -/
 
 @[expose] public section

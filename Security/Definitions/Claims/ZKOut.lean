@@ -12,7 +12,7 @@ given the outcome, of the event, plus an error of the statement, the witness, th
 * `SimOut`: a simulator given the outcome, fixed before the witness and the verifier.
 * `ZKOut`: zero knowledge per outcome (`ZKmalRx`'s one-sided form at each outcome).
 * `ZKOutLeak`: the leak form over finitely many outcomes, its corollary: the number of outcomes times the simulator
-  that draws the outcome uniformly, plus the sum of the outcomes' errors.
+  that samples the outcome uniformly, plus the sum of the outcomes' errors.
 -/
 
 @[expose] public section
@@ -50,7 +50,7 @@ def ZKOut {W St : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Non
       Pr (fun c : S.C x => Ev ((S.given o).out H Vs θ x c)) + ε x w Θ Vs θ o
 
 /-- **The leak form, from the per-outcome form**: over finitely many outcomes, on every event the honest transcript's
-probability is at most the number of outcomes times the simulator's that draws the outcome uniformly, plus the sum of
+probability is at most the number of outcomes times the simulator's that samples the outcome uniformly, plus the sum of
 the outcomes' errors. -/
 def ZKOutLeak : Prop :=
   ∀ {W St : Type} [Fintype St] [Nonempty St] (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]

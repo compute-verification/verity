@@ -8,13 +8,13 @@ import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Array.Basic
 
 /-!
-# The honest record's live session and draw
+# The honest record's live session and sample
 
 With no premise on the JSON library, at one table:
 
 * `live_recordObj`: `liveOf` reads the printed honest record back as its `root_B`, no public words, its points and each
   rep stream's rounds with no digest (`liveRound`).
-* `recordDraw_recordObj`: the record's draw is the statement's, up to key order (`none` when the statement has none).
+* `recordDraw_recordObj`: the record's sample is the statement's, up to key order (`none` when the statement has none).
 -/
 
 @[expose] public section
@@ -142,7 +142,7 @@ theorem live_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **The record's draw is the statement's**, up to key order (`JsonEquiv`). -/
+/-- **The record's sample is the statement's**, up to key order (`JsonEquiv`). -/
 theorem recordDraw_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :

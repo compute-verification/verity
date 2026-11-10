@@ -13,7 +13,7 @@ shared rows, columns and noise lines, as a counting statement over the rows' raw
 
 * **The model** (the instantiation is in `AlignedExactDefs.lean`). Fix the F lines, the weights, the columns' raw oracle
   outputs `c` (E_B's, which the prover may know), and the activations, for any in-domain choice made before E_A is
-  drawn. Each A′ row is then a function of its own raw output `R i : ρ`, and these are independent and uniform. Whether
+  sampled. Each A′ row is then a function of its own raw output `R i : ρ`, and these are independent and uniform. Whether
   word `(i, j)` is exact over the window is `f i j (R i) (c j)`.
 * **The hypothesis** (`RowCompat f b θ`): for every row, every `b` columns and every choice of their seeds, at most a `θ`
   share of row seeds make the row exact with all of them. Within-row dependence (a row's codes share its 32 noise
@@ -21,8 +21,8 @@ shared rows, columns and noise lines, as a counting statement over the rows' raw
 * **The theorems.** `region_count_given_le`: for every assignment of column seeds, at most a `C(m, a)·C(n, b)·θ^a` share
   of row-seed assignments have an all-exact `a × b` block. That is the form a citation uses, since the prover may know
   the columns. `region_count_le` is the same bound averaged over column seeds.
-* **What a citation adds.** `f` is one window, one unit and one draw of E_A, so a citation unions over the windows (at
-  most k/32 starts for each window width the region family uses), the job's units and the prover's grinding draws. The
+* **What a citation adds.** `f` is one window, one unit and one sample of E_A, so a citation unions over the windows (at
+  most k/32 starts for each window width the region family uses), the job's units and the prover's grinding samples. The
   bound bites only for small `θ`: at 1,024 × 512 in an 8,192² unit it is ≤ 2^−128 only if θ < 2^−7.16 ≈ 0.70%. For a
   short, wide region the rows are the shorter side, so `θ` is needed at the wide side's column count: at 432 × 1,728,
   θ < 2^−20 at 1,728 columns.

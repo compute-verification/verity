@@ -7,7 +7,7 @@ public import Proofs.Flock.VBridge.Family.Openings
 # VBridge G at V*'s family: what a session's acceptance says of its registered reads
 
 A session's acceptance (`Accepted`: `LiveAcceptsZKR` and a `Good` layer) constrains its registered reads `zo.rd` in one
-direction only: every registered read is a row of a port `own` names, at a drawn unit (`ZkOuter.hown`, `OwnReads`), and
+direction only: every registered read is a row of a port `own` names, at a sampled proof block (`ZkOuter.hown`, `OwnReads`), and
 the layer agrees with the registrant there (`RegAgree`). It never says that a row is read, and `rd` is a field of the
 session the family builds, so which rows are registered reads, and what the registrant's value there is, are the
 family's choice.

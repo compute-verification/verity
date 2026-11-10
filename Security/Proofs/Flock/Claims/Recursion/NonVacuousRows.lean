@@ -91,7 +91,7 @@ def TargetDDep : Prop :=
               (info.lg.conss[ℓ]!).pos = .ok ()
 
 /-- **Row D's level checks from the Merkle checks**: each rep's decoded proof passes `MerkleOk` at the standard hashes
-at query coins `cf` from round `k`, and any run of its verifier rows draws its positions from those coins. -/
+at query coins `cf` from round `k`, and any run of its verifier rows samples its positions from those coins. -/
 def TargetDMerkle : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size → ∀ r : Fin 2, ∃ (cf : ℕ → ℕ → F128) (k : ℕ),

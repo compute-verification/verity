@@ -7,7 +7,7 @@ public import Proofs.Properties.NetworkScan.Accept
 /-!
 # The scan's layout fits its Program: where its egress and ingress gates resolve
 
-What `NetworkCheck.Period.scanOf`'s description checks give `Properties.NetworkScan.ScanFits`, on a Program C-Flock's
+What `NetworkCheck.Period.scanOf`'s description checks give `Properties.NetworkScan.ScanFits`, on a Program Flock's
 decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `NciCheck.Desc.walkable`
 checks.
 

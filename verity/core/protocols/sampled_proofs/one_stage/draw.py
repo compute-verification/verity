@@ -12,7 +12,7 @@ its own. Nothing here samples, and no sample is derived from a commitment. `chec
 registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
 the sample.
 
-**The stratified sampling design**: one stratum per template, a uniform k_s-subset drawn
+**The stratified sampling design**: one stratum per template, a uniform k_s-subset sampled
 without replacement inside each, independently.
 * **Strata** are derived by each verifier from its own program and query (`partition.strata`): one per template descriptor
   id, its proof blocks as ascending, disjoint half-open ranges `[lo, hi)`, the strata in the order of their first proof block. Defined for
@@ -25,12 +25,12 @@ without replacement inside each, independently.
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
 `FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
-and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s draws
+and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s samples
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",
-"k"}`. A work draw may carry a `closure`: proof blocks proved with the drawn ones, none of them drawn.
+"k"}`. A work sample may carry a `closure`: proof blocks proved with the sampled ones, none of them sampled.
 * **What the table credits.** A proof block's work is what it is credited for, counted on the rows the Program declares, never on
   rows a kernel pads it with (the Pearl-C statement review, item 5). Filler is credited nothing: a proof block of filler only, or
-  one the prover declares uncredited before the sample, does work 0 (its floor still draws it for integrity, and missing it
+  one the prover declares uncredited before the sample, does work 0 (its floor still samples it for integrity, and missing it
   costs no work), and a proof block mixing real and filler rows is credited its real cells only. The sampling design weights by template, so
   every proof block of a template must be credited the same work: a template whose proof blocks are padded differently is split before
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
@@ -69,7 +69,7 @@ def digits(s: str) -> bool:
 def parse_law(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
     expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
-    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws
+    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
     nothing, so its `P_a` is no acceptance probability."""
     kind, _, arg = text.partition(":")
     if kind == "subset" and digits(arg) and int(arg) >= 1:

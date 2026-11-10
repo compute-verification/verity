@@ -109,7 +109,7 @@ WIDTH_KEY = "word_bits"
 PARAM_KEY = "param"
 #: the domain binding's key a per-window value adds: the window's open root
 WINDOW_KEY = "window"
-#: the domain binding's key a produced value adds: the digest of the registration whose draw it follows (`produced`)
+#: the domain binding's key a produced value adds: the digest of the registration whose sample it follows (`produced`)
 PRODUCED_KEY = "produced"
 #: the domain binding's key a value committed inside its window's open root adds in the window's place: the session the
 #: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)

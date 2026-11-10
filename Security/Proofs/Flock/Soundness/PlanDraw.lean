@@ -3,16 +3,16 @@ module
 public import Randomness
 
 /-!
-# The PoUW window draw, as a Lean spec
+# The PoUW window sample, as a Lean spec
 
 `protocols/pouw/verity_pouw/circuit/plan.py`'s `draw` (#364), which `Traced.draw` calls for each call of a window under
 the window's one key, and the window around it:
 
 * `context call name`: `plan.draw`'s context for a stratum, `("call", *call, "stratum", name)`, or `("stratum", name)`
   without a call index.
-* `drawn key call strata L`: the units `plan.draw` draws for one call, before sorting: each stratum's
+* `drawn key call strata L`: the units `plan.draw` samples for one call, before sorting: each stratum's
   `Key.subset(k, len(units), context)`, mapped through its units, each swap's stream read to `L` bytes.
-* `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
+* `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the sample), then each
   call's `drawn` under the one key, its units in the window's numbering.
 -/
 
@@ -22,7 +22,7 @@ namespace FlockSoundness.PlanDraw
 
 open Randomness
 
-/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its law gives it. -/
+/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its sampling design gives it. -/
 structure Stratum where
   name : String
   units : List Nat
@@ -32,7 +32,7 @@ structure Stratum where
 def context (call : List Part) (name : String) : List Part :=
   (if call.isEmpty then [] else .str "call" :: call) ++ [.str "stratum", .str name]
 
-/-- The units `plan.draw` draws for one call, before sorting. -/
+/-- The units `plan.draw` samples for one call, before sorting. -/
 def drawn (key : ByteArray) (call : List Part) : List Stratum → Nat → Option (List Nat)
   | [], _ => some []
   | s :: rest, L => do
@@ -45,7 +45,7 @@ structure Call where
   index : List Part
   strata : List Stratum
 
-/-- The calls' draws under the one key, in order. -/
+/-- The calls' samples under the one key, in order. -/
 def drawAll (key : ByteArray) : List Call → Nat → Option (List Nat)
   | [], _ => some []
   | c :: cs, L => do
@@ -53,7 +53,7 @@ def drawAll (key : ByteArray) : List Call → Nat → Option (List Nat)
     let r ← drawAll key cs L
     pure (d ++ r)
 
-/-- **The window draw**: refused if a call index repeats, else every call's draw under the one key. -/
+/-- **The window sample**: refused if a call index repeats, else every call's sample under the one key. -/
 def window (key : ByteArray) (calls : List Call) (L : Nat) : Option (List Nat) :=
   if (calls.map fun c => frames c.index).Nodup then drawAll key calls L else none
 

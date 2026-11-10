@@ -263,8 +263,8 @@ theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Tra
   · rw [ite_eq_right hv, ite_eq_right fun h' => hv ((h d₀).1.2 h')]
     rfl
 
-/-- **An event at some draw `E^rep` reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's identity at
-the event's indicator as the weight), over a tape, the judged draw and the waits' draws. -/
+/-- **An event at some sample `E^rep` reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's identity at
+the event's indicator as the weight), over a tape, the judged sample and the waits' samples. -/
 theorem Pr_exists_rerun_draws {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
     (run : Ω → D → Trace) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (Q : Ω → D → Prop) :
@@ -745,7 +745,7 @@ theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : �
 /-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
 `N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
 `IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
-`N_I` times one draw's (`Pr_exists_rerun_draws`). -/
+`N_I` times one sample's (`Pr_exists_rerun_draws`). -/
 theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤

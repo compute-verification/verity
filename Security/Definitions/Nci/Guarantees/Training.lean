@@ -49,7 +49,7 @@ def IncompressibleThreadedThrottledOn : Prop :=
     T.Threaded c k dd e → Assumptions.TrainingIncompressible r ch T c k b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (k / c : ℝ) * T.bound k b_w dd e * d.D.size d.D.computed
 
-/-- **Training is slowed by the partial-sum law, under training's incompressibility** (`ContainedTraining` with
+/-- **Training is slowed by the partial-sum rule, under training's incompressibility** (`ContainedTraining` with
 `TrainingIncompressible`): when the products of a chain `ch` that `r` runs, at 2 flops each, are a fraction `κ` of `r`'s
 size, every declaration that contains `r` and complies at `(c, k)`, with its registered information free of the
 reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of at least `κ F`. `dd` is the
@@ -62,7 +62,7 @@ def IncompressibleContainedTraining : Prop :=
     Assumptions.Coverage κ r (2 * ch.G) →
       κ * F (k / c) k b_w b_a dd * r.D.size r.D.computed ≤ d.D.size d.D.computed
 
-/-- **The partial-sum law with dark gates, under training's incompressibility** (`ContainedMatMulOn` with
+/-- **The partial-sum rule with dark gates, under training's incompressibility** (`ContainedMatMulOn` with
 `TrainingIncompressible`): a declaration `d` that complies at `(c, k)` and contains `r` partly (`PartialContainment`,
 computing the gates `S` of `r` and leaving the rest dark) computes the chain's products in `S`, `G_S` of them, with
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ (k / c) size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each `μ ∈ [0, 1]`,
@@ -83,7 +83,7 @@ def IncompressibleContainedMatMulOn : Prop :=
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
       (k / c : ℝ) * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ)
 
-/-- **Training is slowed, by the partial-sum law, with dark gates, under training's incompressibility**
+/-- **Training is slowed, by the partial-sum rule, with dark gates, under training's incompressibility**
 (`ContainedTrainingOn` with `TrainingIncompressible`): when the chain's products, at 2 flops each, are a fraction `κ` of
 the reference circuit's size, each product off the books is a dark gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 ((k / c) size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/

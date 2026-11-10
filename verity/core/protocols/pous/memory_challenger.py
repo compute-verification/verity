@@ -5,9 +5,9 @@ own VM or box, under the auditor's account), never a process on the developer's 
 
 A session has four steps:
 
-1. **Draw.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
+1. **Sample.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
-   session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
+   session's first challenge.  Before the session the memory challenger samples its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree, which it keeps: nothing that commits to
    a coin not yet revealed leaves the device before the session's last answer is in.
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
@@ -169,7 +169,7 @@ class CoinOpening:
 
 
 class CoinTree:
-    """The session's `k` coins over `blocks` blocks, drawn and committed on the device before the session and released
+    """The session's `k` coins over `blocks` blocks, sampled and committed on the device before the session and released
     after it (module docstring).  `draw` takes the challenger's own secret, never a public beacon or the server's; the
     hm96 key and the salts are fresh from the OS unless given (the tests)."""
 
@@ -436,11 +436,11 @@ _SALT_ENTRY = re.compile(rb"([0-9a-f]{128}) ([0-9a-f]{128}) ([0-9a-f]{%d})" % (2
 
 
 class SaltLog:
-    """The setup salts a memory challenger has drawn, one an audit, in a file of its own beside its `SessionLog` that
+    """The setup salts a memory challenger has sampled, one an audit, in a file of its own beside its `SessionLog` that
     fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
-    64-byte commitment to `W` the salt was drawn after, and the salt, each in lowercase hex. `record` takes the file's
+    64-byte commitment to `W` the salt was sampled after, and the salt, each in lowercase hex. `record` takes the file's
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
-    has one salt and a retry never redraws one. On the deployed party an audit's session id is derived from its binding,
+    has one salt and a retry never resamples one. On the deployed party an audit's session id is derived from its binding,
     commitment and salt (`challenger_party.session_id`), so the `SessionLog` refuses its second session. It rests on
     `trusted-host` as the session log does: its host never restores an earlier copy of it."""
 
@@ -450,7 +450,7 @@ class SaltLog:
 
     @staticmethod
     def create(path: str | os.PathLike) -> None:
-        """A new log, with no salt drawn; refused when the file exists."""
+        """A new log, with no salt sampled; refused when the file exists."""
         _create_log(Path(path), SALT_LOG, "a salt log")
 
     def _read(self) -> dict[bytes, tuple[bytes, bytes]]:
@@ -468,7 +468,7 @@ class SaltLog:
         return self._read().get(audit)
 
     def record(self, audit: bytes, commitment: bytes, salt: bytes) -> None:
-        """Log `salt`, drawn after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
+        """Log `salt`, sampled after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
         if (len(audit), len(commitment), len(salt)) != (64, 64, SALT_BYTES):
             raise ValueError(f"an audit's binding and a commitment to W are 64 bytes, a salt {SALT_BYTES}")
 

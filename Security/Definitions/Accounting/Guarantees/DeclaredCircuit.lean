@@ -34,7 +34,7 @@ open scoped ENNReal
 
 *The audit.* `StackedSessionConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
 16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window (the 1 s window's count; a longer window's
-audit instantiates `G` by verifying a uniform 2,773 of its draws, and a paced session's when each group draws at least
+audit instantiates `G` by verifying a uniform 2,773 of its samples, and a paced session's when each group samples at least
 2,773), and a store per pass made by the append-coin rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M`
 positions, each append's choices `choose c ω a κ_<a` fixed before its own coin keys its blocks). `P` is fixed before
 the session's coins, and the code holds a window to it only in a paced session, whose windows are its groups of
@@ -59,7 +59,7 @@ the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the qu
 (`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
-which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
+which appends a block again, samples a fresh one. Each append's blocks are read within `L` windows of the window
 `joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
 of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`),
 with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
@@ -121,7 +121,7 @@ short of its passes' credit by more than `(0.01 + γ)` of its `P·N·32768`, is 
 
   `δ_G = 2·2^-40 + n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_r·τ/2^96)^(k+1) + δ)`.
 
-**The steering.** The layout reads no window coin, so the draws' term and the signs' rank term (`n·ε`) don't see it,
+**The steering.** The layout reads no window coin, so the samples' term and the signs' rank term (`n·ε`) don't see it,
 and the tag-guess term holds at every store. The query term is a correct digest of a tile with a sector the device
 never obtained, which needs the pass's blocks uniform: key binding gives that per pass at `2^a` times the uniform
 probability, `δ` once. A pass short by `k` more tiles than the slack needs `k + 1` distinct unobtained positions, tile
@@ -158,7 +158,7 @@ At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B
 492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
 `⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
 residency, as the vLLM serving store does (the earlier
-60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
+60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each sample at least
 2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
 its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
 at a prefill. The decode witness (`Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a

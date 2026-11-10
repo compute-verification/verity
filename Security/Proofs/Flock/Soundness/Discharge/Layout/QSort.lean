@@ -9,11 +9,11 @@ import all Init.Data.Array.QSort.Basic
 set_option Elab.async false
 
 /-!
-# The drawn units are in the population, with a closure
+# The sampled proof blocks are in the population, with a closure
 
-`Draw.UnitDraw.proved` sorts the drawn units with their closure (`Array.qsort`) when the closure isn't empty. Every swap
+`Draw.UnitDraw.proved` sorts the sampled proof blocks with their closure (`Array.qsort`) when the closure isn't empty. Every swap
 of `qsort` keeps a property every element has (`all_qsort`), so every proved unit is below the population
-(`proved_lt_population`), as each drawn unit and each closure unit is (`ofJson_lt`).
+(`proved_lt_population`), as each sampled proof block and each closure unit is (`ofJson_lt`).
 -/
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
@@ -97,7 +97,7 @@ theorem all_qsort (as : Array α) (lt : α → α → Bool) (h : ∀ x ∈ as, P
     refine all_sort lt _ as.toVector _ _ _ _ _ rfl (fun k hk => ?_) k (by simpa using hk)
     exact h _ (by simp)
 
-/-- **Every proved unit of a draw is below the population**, with or without a closure. -/
+/-- **Every proved unit of a sample is below the population**, with or without a closure. -/
 theorem proved_lt_population {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
     ∀ u ∈ D.proved, u < D.population := by
   obtain ⟨hu, hc⟩ := ofJson_lt h

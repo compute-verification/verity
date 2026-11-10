@@ -13,7 +13,7 @@ are functions of the `fast100` schedule `s` (`Flock.Schedule`) and of the statem
 (`Flock.Statement`), with one term per verifier coin of `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito` (the coin's step id is in each
 docstring). The soundness theorem proves that these are bounds; `Accounting.Fast100` evaluates them.
 
-**Where each term comes from.** A coin drawn after the prover has fixed a nonzero polynomial of
+**Where each term comes from.** A coin flipped after the prover has fixed a nonzero polynomial of
 total degree `D` hits a zero with probability at most `D / |field|` (Schwartz–Zippel). In the
 list-decoding regime the level-0 commitment is close to up to `L₀` codewords, and a claim must
 fail for every one of them, so every term before Ligerito's binding carries a factor `L₀` (paper
@@ -151,7 +151,7 @@ the committed table satisfies the statement. -/
 noncomputable def repError (s : Schedule) (st : Stmt) : ℝ :=
   piopError s.m st.kLog st.nClaims s.listBound₀ + ligeritoError s.levels
 
-/-- The link points (`Flock.Statement`, drawn once per session, before both reps): a region whose committed
+/-- The link points (`Flock.Statement`, sampled once per session, before both reps): a region whose committed
 bits differ from the public bits has a nonzero multilinear difference in at most `m_pts`
 variables, which vanishes at both independent points with probability at most `(m_pts/2^128)^2`;
 over every region and every list element. -/

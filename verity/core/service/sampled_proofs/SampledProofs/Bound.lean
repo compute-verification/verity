@@ -1,11 +1,11 @@
 /-
-The profile's bounds on wrong units at δ, exact (`profile.Stratified.count_bound` and `stratum_bound`): independent uniform
-draws of `k_s` of the `n_s` units of each stratum miss a set of `m_s` wrong units in each with probability
+The profile's bounds on incorrect proof blocks at δ, exact (`profile.Stratified.count_bound` and `stratum_bound`): independent uniform
+samples of `k_s` of the `n_s` units of each stratum miss a set of `m_s` incorrect proof blocks in each with probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, the escape `Security/Proofs/Flock/Soundness/Audit/OneStage.lean`'s `audit_count`
-bounds by. `miss K` is the largest escape of a set of `K` wrong units: the product of the `K` largest factors
+bounds by. `miss K` is the largest escape of a set of `K` incorrect proof blocks: the product of the `K` largest factors
 `(n_s − j − k_s) / (n_s − j)` over every stratum `s` and `j < finite_s`, taken greedily because each stratum's factors fall
 as `j` grows. `countBound δ` is the largest `K` with `miss K ≥ δ`: except with probability δ (plus the soundness terms), an
-accepted transcript has at most that many wrong units. `densityBound` is the harm such a set holds at δ in closed form
+accepted transcript has at most that many incorrect proof blocks. `densityBound` is the harm such a set holds at δ in closed form
 (`optimize.density_bound`, which `certify` reports), in rationals, and `maxHarmCheck` brackets the exact supremum of that
 harm, `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate (`optimize.max_harm`).
 -/
@@ -22,7 +22,7 @@ namespace SampledProofs.Bound
 
 open Core (Ratio Stratum)
 
-/-- The most wrong units the stratum holds at a positive escape. -/
+/-- The most incorrect proof blocks the stratum holds at a positive escape. -/
 def Stratum.finite (s : Stratum) : Nat := if s.k == 0 then s.size else s.size - s.k
 
 /-- A non-negative rational `num / den`, reduced. -/
@@ -33,7 +33,7 @@ private def reduce (num den : Nat) : Nat × Nat :=
 /-- `num / den ≥ δ`. -/
 private def atLeast (num den : Nat) (δ : Ratio) : Bool := δ.num * den ≤ num * δ.den
 
-/-- The next wrong unit the likeliest escape takes, given each stratum's wrong units so far: the stratum, with room left,
+/-- The next incorrect proof block the likeliest escape takes, given each stratum's incorrect proof blocks so far: the stratum, with room left,
 whose next factor `(n − m − k) / (n − m)` is largest, that is whose `k / (n − m)` is smallest (the first such). -/
 private def next (st : Array (Stratum × Nat)) : Option (Nat × Stratum × Nat) :=
   st.zipIdx.foldl (init := none) fun best ((s, m), i) =>
@@ -57,7 +57,7 @@ def countBound (strata : Array Stratum) (δ : Ratio) : Nat := Id.run do
     st := st.modify i fun (s, m) => (s, m + 1)
   return population
 
-/-- `Stratified.stratum_bound`: the largest `m ≤ size` with `C(size − m, k) / C(size, k) ≥ δ`, every wrong unit in the
+/-- `Stratified.stratum_bound`: the largest `m ≤ size` with `C(size − m, k) / C(size, k) ≥ δ`, every incorrect proof block in the
 stratum. -/
 def stratumBound (s : Stratum) (δ : Ratio) : Nat := Id.run do
   let mut num := 1
@@ -73,8 +73,8 @@ def stratumBound (s : Stratum) (δ : Ratio) : Nat := Id.run do
 /-- `(1 − p)^m ≥ δ`, exactly. -/
 private def escapes (p δ : Ratio) (m : Nat) : Bool := δ.num * p.den ^ m ≤ (p.den - p.num) ^ m * δ.den
 
-/-- `Bernoulli.count_bound`: the largest `M ≤ population` with `(1 − p)^M ≥ δ`. Every unit is drawn independently with
-probability `p`, so a set of `M` wrong units escapes with probability exactly `(1 − p)^M`, which falls as `M` grows: all
+/-- `Bernoulli.count_bound`: the largest `M ≤ population` with `(1 − p)^M ≥ δ`. Every unit is sampled independently with
+probability `p`, so a set of `M` incorrect proof blocks escapes with probability exactly `(1 − p)^M`, which falls as `M` grows: all
 `population` when `1 − population · p ≥ δ` (Bernoulli's inequality), else the search doubles `M` while it escapes, then
 halves. -/
 def bernoulliBound (population : Nat) (p δ : Ratio) : Nat := Id.run do
@@ -92,16 +92,16 @@ def bernoulliBound (population : Nat) (p δ : Ratio) : Nat := Id.run do
     if escapes p δ mid then lo := mid else hi := mid
   return lo
 
-/-- The strata a profile's draw reads as (`IntegrityProfile.strata`): its own, a work design's at their `k_s`, or one
-stratum for a uniform k-subset; `none` for a Bernoulli draw. -/
+/-- The strata a profile's sample reads as (`IntegrityProfile.strata`): its own, a work design's at their `k_s`, or one
+stratum for a uniform k-subset; `none` for a Bernoulli sample. -/
 def strataOf (population : Nat) : Core.SamplingDesign → Option (Array Stratum)
   | .subset k => some #[{ name := "unit", size := population, k }]
   | .stratified strata => some strata
   | .work _ strata => some (strata.map (·.toStratum))
   | .bernoulli _ => none
 
-/-- `IntegrityProfile.bound`: the most wrong units an accepted transcript has at δ, over the strata the draw reads as
-(`countBound`), or for a Bernoulli draw `bernoulliBound`. -/
+/-- `IntegrityProfile.bound`: the most incorrect proof blocks an accepted transcript has at δ, over the strata the sample reads as
+(`countBound`), or for a Bernoulli sample `bernoulliBound`. -/
 def boundOf (population : Nat) (d : Core.SamplingDesign) (δ : Ratio) : Nat :=
   match d with
   | .bernoulli p => bernoulliBound population p δ
@@ -111,7 +111,7 @@ def boundOf (population : Nat) (d : Core.SamplingDesign) (δ : Ratio) : Nat :=
 
 /-! ## The harm bound in closed form
 
-`optimize.density_bound`, exactly. A set with `c_s` wrong units in stratum `s` escapes with probability at most
+`optimize.density_bound`, exactly. A set with `c_s` incorrect proof blocks in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)` and holds none past `n_s − k_s`, so at δ its harm, `h_s` per unit, is at most the fractional
 knapsack's value over `∑ s k_s c_s / n_s ≤ ln(1/δ)`: `Security/Proofs/Flock/Soundness/Audit/HarmBound.lean`'s
 `stratified_isHarmBound_fill` at the greedy fill, and `stratified_isHarmBound_dual` at any budget above `ln(1/δ)`, which
@@ -145,8 +145,8 @@ def lnUpper (δ : Rat) : Rat :=
   let v := (j : Rat) * twoAtanhUpper (1 / 3) + twoAtanhUpper ((z - 1) / (z + 1))
   ((v * ((2 ^ lnBits : Nat) : Rat)).ceil : Rat) / ((2 ^ lnBits : Nat) : Rat)
 
-/-- `optimize.fill`: the greedy fill of rows `(n, k, h)` at a risk budget. A stratum with none drawn counts whole and one
-drawn whole not at all; the rest go in decreasing harm per unit of risk `h n / k`, each whole (`n − k` units at risk
+/-- `optimize.fill`: the greedy fill of rows `(n, k, h)` at a risk budget. A stratum with none sampled counts whole and one
+sampled whole not at all; the rest go in decreasing harm per unit of risk `h n / k`, each whole (`n − k` units at risk
 `k / n` each) until the budget runs out, the last one fractionally. Strata of equal `h n / k` add the same value per unit
 of risk, so their order doesn't change it. -/
 def fill (rows : Array (Nat × Nat × Rat)) (budget : Rat) : Rat := Id.run do
@@ -172,8 +172,8 @@ def densityBound (rows : Array (Nat × Nat × Rat)) (δ : Rat) : Rat := fill row
 
 /-! ## The exact supremum, bracketed
 
-`Flock.Guarantees.JointStratified` bounds an accepted sampling block's wrong units' ANDs and output bits each by
-`StratifiedBlock.maxHarm`: the most harm `∑ s h_s x_s` of a set holding `x_s` wrong units of subcircuit `s` whose exact
+`Flock.Guarantees.JointStratified` bounds an accepted sampling block's incorrect proof blocks' ANDs and output bits each by
+`StratifiedBlock.maxHarm`: the most harm `∑ s h_s x_s` of a set holding `x_s` incorrect proof blocks of subcircuit `s` whose exact
 escape `e(x) = ∏ s C(n_s − x_s, k_s)/C(n_s, k_s)` is at least δ. `maxHarmCheck` checks a certificate for it and returns
 `(lower, upper)` with `lower ≤ maxHarm ≤ upper`:
 
@@ -225,7 +225,7 @@ def escapeParts (n k x : Nat) : Nat × Nat := Id.run do
     b := b * (n - i)
   return (a, b)
 
-/-- A subcircuit's row of a `maxHarmCheck` certificate: its `size` units, `k` drawn, `harm` per unit, and the
+/-- A subcircuit's row of a `maxHarmCheck` certificate: its `size` units, `k` sampled, `harm` per unit, and the
 certificate's `take`, `lo` and `hi`. -/
 structure HarmRow where
   size : Nat

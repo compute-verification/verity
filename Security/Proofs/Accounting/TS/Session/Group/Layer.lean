@@ -4,16 +4,16 @@ public import Proofs.Accounting.TS.Session.Lanes.Layer
 public import PouwWindow.KnownRows
 
 /-!
-# A leaf's proof layer through a group of linked C-Flock sessions, any shape
+# A leaf's proof layer through a group of linked Flock sessions, any shape
 
-A drawn leaf too big for one C-Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
+A sampled leaf too big for one Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
 along `K`, and one combine, `G = L n + 1` sessions (`Ix L n`: `some (l, c)` lane `l`'s chunk `c`, `none` the combine).
 The 32 × 32 leaf's option-A group (`Accounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
 
 * `SessionChecks`: what the leaf verifier asks of each of the group's sessions, `leafLayer`'s acceptance at one
   statement: flock-verify `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
   complete check (`Registered.checkComplete`) and its known-read check (`KnownRead.check`, at the known content and the
-  ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its draw
+  ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its sample
   (`PouwWindow.Lanes.checkFull`, every unit of a non-empty population) and of its reads (`checkOneRead`).
 * `okKnown`: statement `k`'s known content, the other known ports' rows the verifier builds (`known`) and then its `o0`
   row 1 under its salt, as `PouwWindow.Lanes.knownRows` ends every statement's.
@@ -44,7 +44,7 @@ theorem card_ix (L n : ℕ) : Fintype.card (Ix L n) = L * n + 1 := by
 
 /-- **What the leaf verifier asks of one of a group's sessions**: flock-verify `--zk --registered` accepts its outcome
 `o`, its known-content check at `known`, its complete check and its known-read check at `known` and the ports `full`
-it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its draw (every
+it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its sample (every
 unit of a non-empty population) and of its reads (one read at each port) pass. -/
 def SessionChecks (s : RowsSession) (o : s.Out) (known : Known) (full : Array String)
     (want : List _root_.Flock.Registered.Port) : Prop :=

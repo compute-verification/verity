@@ -1,10 +1,10 @@
 """`p2.py`, PoUB over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
-drawn inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
+sampled inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
-from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of drawn blocks under PoUS's leaf
+from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of sampled blocks under PoUS's leaf
 and vk tree, honest or with one field changed; a whole session of record (`RemoteAudit.P2Session`, which `p2_party.py`
 runs) against `p2_party.Books` on the bytes the verifier reads, the registration file, the request and each root and
-openings line, under the auditor's session parameters, recorded from a prover over a drawn store, honest or with one
+openings line, under the auditor's session parameters, recorded from a prover over a sampled store, honest or with one
 deviation; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's prover bytes): its registration's
 digest, an honest opening of each of its units, an honest session over it, one of `SESSION`'s (the Lean's pinned
 `P2Session.SESSION`), and a request off `SESSION` in each of its values refused in `p2_party.params_of`'s words."""
@@ -51,7 +51,7 @@ def fault(draw, n: int) -> int:
 
 
 def p2_blocks() -> st.SearchStrategy:
-    """A 2,056-byte block: drawn bytes, or one of every byte's extremes as int8."""
+    """A 2,056-byte block: sampled bytes, or one of every byte's extremes as int8."""
     return st.one_of(st.binary(max_size=8).map(lambda s: expand(s, p2.BLOCK_BYTES)),
                      st.sampled_from([b"\x80", b"\x7f", b"\xff", b"\0", b"\x80\x7f"]).map(
                          lambda b: (b * p2.BLOCK_BYTES)[:p2.BLOCK_BYTES]))
@@ -240,7 +240,7 @@ def flip(h: str, k: int = 0) -> str:
 
 @st.composite
 def opening_inputs(draw) -> dict:
-    """An opening of a drawn pass over a drawn store, honest, from a prover that committed a wrong receipt, or with one
+    """An opening of a sampled pass over a sampled store, honest, from a prover that committed a wrong receipt, or with one
     field of the opening, the pass or the registration changed."""
     k, rows = draw(st.integers(0, len(GEOMETRIES) - 1)), draw(st.sampled_from([16, 16, 64]))
     store = drawn_store(k, rows)
@@ -499,11 +499,11 @@ def p2_held(reg: p2.Registration, data: bytes, line: bytes, auditor: dict):
 
 @st.composite
 def p2_session_inputs(draw) -> dict:
-    """A session over a drawn store under every unit or a drawn plan, held to drawn session parameters, recorded from
+    """A session over a sampled store under every unit or a sampled plan, held to sampled session parameters, recorded from
     the prover (`p2_events`), honest or with one deviation: the registration or the request refused or near its form
     (1, 2), one of `p2_events`'s (3 … 7), or its events changed after: a fail inserted, the events cut short, one
     repeated, dropped or swapped with the next, one's clock changed, a field missing or out of form, or a start too
-    early first (8 … 15); or the request off the auditor's session, in a drawn set of its values (16), or the drawn
+    early first (8 … 15); or the request off the auditor's session, in a sampled set of its values (16), or the sampled
     session's request under `SESSION` (17)."""
     k, rows = draw(st.integers(0, len(GEOMETRIES) - 1)), draw(st.sampled_from([16, 64]))
     store = drawn_store(k, rows)
@@ -675,7 +675,7 @@ def committed_session(server, committed, session: dict | None, asked: dict) -> D
 def test_an_honest_session_of_the_auditors_session_over_the_committed_store_is_accepted_in_lean(server,
                                                                                                 committed) -> None:
     """`SESSION` itself (a null session, the Lean's pinned `P2Session.SESSION`): six windows of four passes, 1,024
-    samples drawing each of a window's eight receipts; the Lean's answer is the books', an acceptance."""
+    samples sampling each of a window's eight receipts; the Lean's answer is the books', an acceptance."""
     reg = committed.registration
     answer = json.loads(committed_session(server, committed, None, p2_party.SESSION)[1])["answer"]
     assert answer["verdict"] == "accept", answer

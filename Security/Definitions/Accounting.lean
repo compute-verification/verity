@@ -69,7 +69,7 @@ bandwidth audit whose rebuilds are charged as compute,
 with side sources that answer what the chip sent, over memory tiers and chained passes, the causal rounds its samples
 close, with partial completion, and its sketch-then-hash variant for a device that reads sectors verbatim, with such
 side sources too and for a prover whose memory holds any function of the store, the deployed game that composes them
-(partial completion, interactive side sources, tiers, ground chained passes and a session of pooled draws), the remote
+(partial completion, interactive side sources, tiers, ground chained passes and a session of pooled samples), the remote
 bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the device's
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
 the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the headline instances as

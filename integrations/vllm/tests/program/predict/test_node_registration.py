@@ -46,7 +46,7 @@ DTYPE = {16: ("bfloat16", np.uint16), 32: ("float32", np.uint32)}
 
 def _served(rank: int) -> dict[str, np.ndarray]:
     """Rank `rank`'s registered tensors, by name: the checkpoint's two (the down projection's columns sliced here by hand), and
-    every other field the bundle carries, drawn per rank."""
+    every other field the bundle carries, sampled per rank."""
     out = {}
     for name, t in PARAMS.leaves[rank]:
         w = next(iter(t.width_set()))

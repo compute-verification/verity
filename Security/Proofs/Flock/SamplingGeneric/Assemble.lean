@@ -18,7 +18,7 @@ With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
   the slot's coins, are kept (`unitExt_mem`, `mem_runExt`, `mem_found`).
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds or the extractor's own
   calls collide. Two kept openings under one roots at one position that disagree are a collision of the calls that
-  checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its faulty
+  checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its incorrect
   set is refused at `δ`, and a block of it found at a kept inner run would be correct at the kept openings
   (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
 * `ksOf`: **`KSOf`**, `KS_of_sessionKS` at `split`.
@@ -203,7 +203,7 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
 /-! ## The split -/
 
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's faulty set, refused
+collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's incorrect set, refused
 at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
 block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is found would make it correct
 (`Sessions.opens`, its revealed openings kept by `mem_found`, the interior roots `r`'s by `Sessions.interior`), so `r`

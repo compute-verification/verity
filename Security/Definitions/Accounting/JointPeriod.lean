@@ -16,7 +16,7 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
 * the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
 
-The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit draws
+The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit samples
 its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed transcript are
 functions of all of them, and so is each verdict.
 
@@ -76,7 +76,7 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   units : ℕ
   /-- the partition of the circuit's computed gates into units -/
   parts : Verity.Partition C units
-  /-- the coordinate of the coins an audit draws -/
+  /-- the coordinate of the coins an audit samples -/
   own : Audit → I
   /-- the account a resource is charged to -/
   acct : Resource → α

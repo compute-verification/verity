@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
 with the registered reads' term removed, at outcomes whose registration is on the registrant's leaves
 (`¬ rd.Off o.1`), and with only the input rows in the event. The rest is proved here:
 
-* **output rows**: a drawn unit not wrong on the registration (`wrongRegZ`) is correct in the value layer, so on each of
+* **output rows**: a sampled proof block not wrong on the registration (`wrongRegZ`) is correct in the value layer, so on each of
   its committed wires the value layer is the circuit's evaluation on its inputs (`Partition.correct_eval`, with
   `Layout.keyProg_readsOwn`);
 * **the registered reads' term**: at an accepted outcome whose reads the verifier owns, the registered check holds at
@@ -21,7 +21,7 @@ with the registered reads' term removed, at outcomes whose registration is on th
 
 `RowsLinkLe` is `EndToEndRegisteredDrawn`'s first conjunct with the input rows added to "wrong" and `δ_rows` to the
 bound, and `rowsLinkLe` proves it: `zk_session_soundHJR_custody_drawn_reg`'s proof, at an analysis whose wrong set
-and link term carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
+and binding error carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
 -/
 
 @[expose] public section
@@ -35,7 +35,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The rows' extraction bound** (`rowsLinkLe`): in `EndToEndRegisteredRows`' setting, accepting while some drawn unit is
+/-- **The rows' extraction bound** (`rowsLinkLe`): in `EndToEndRegisteredRows`' setting, accepting while some sampled proof block is
 wrong on the registration, or, with the registration on the registrant's leaves at every owned read, carries at an
 owned registered read a bit other than the registrant's row's, has probability at most `ε_ks + δ_link + δ_rows`. -/
 def RowsLinkLe : Prop :=

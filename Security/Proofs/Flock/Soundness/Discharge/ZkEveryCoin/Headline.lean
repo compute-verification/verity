@@ -21,9 +21,9 @@ with the verifier's coins uniform:
 No coin vector is left: the outer coin `1`, where the view would not be simulated, is a refusal.
 
 * `zkViewAll_of_ok`: `ZkViewAll` at a `CoinedSetup` from `CoinedOK` and `hash-derived-key`.
-* `outer_one_le`: at a draw's tables, the prover refuses for an outer coin `1` with probability at most
+* `outer_one_le`: at a sample's tables, the prover refuses for an outer coin `1` with probability at most
   `2·(m − 13)·2^-128` (completeness).
-* `zk_session_view_all`: at every draw `verify --zk` sets up, `ZkViewAll` at `2^-193`.
+* `zk_session_view_all`: at every sample `verify --zk` sets up, `ZkViewAll` at `2^-193`.
 -/
 
 @[expose] public section
@@ -167,7 +167,7 @@ theorem prCoin_coord_le {Ω Val : Type} [Fintype Ω] [Fintype Val] [DecidableEq 
 theorem card_f128 : Fintype.card F128 = 2 ^ 128 := by
   rw [Fintype.card_congr f128Equiv, Fintype.card_prod, Fintype.card_fin, ← pow_add]
 
-/-- Rep `r`'s `j`-th zerocheck outer coin of a draw's coins, overwritten with `x`. -/
+/-- Rep `r`'s `j`-th zerocheck outer coin of a sample's coins, overwritten with `x`. -/
 noncomputable def setOuter (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (r : Fin 2) (j : Fin (st.m - 13))
     (c : CoinsZK (coinedOf P Tz st).Rest) (x : F128) : CoinsZK (coinedOf P Tz st).Rest :=
   { c with rest := { c.rest with rOuter := Function.update c.rest.rOuter r (Function.update (c.rest.rOuter r) j x) } }
@@ -185,7 +185,7 @@ theorem prCoin_outer_one (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st
   · rw [card_f128, ENNReal.zpow_neg, Nat.cast_pow, Nat.cast_ofNat]
     norm_cast
 
-/-- **The prover refuses for an outer coin `1` rarely** (completeness), at a draw's tables: each of the `m − 13` outer
+/-- **The prover refuses for an outer coin `1` rarely** (completeness), at a sample's tables: each of the `m − 13` outer
 coins of each of the two reps is uniform over F128. -/
 theorem outer_one_le (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     prCoin (fun c : CoinsZK (coinedOf P Tz st).Rest => ¬ ∀ r, ∀ x ∈ (coinedOf P Tz st).rOuter c r, x ≠ 1)
@@ -211,7 +211,7 @@ theorem outer_one_le (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : S
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- **One `--zk` sampled session is zero knowledge at every coin vector.** At every draw `verify --zk` sets up, with the
+/-- **One `--zk` sampled session is zero knowledge at every coin vector.** At every sample `verify --zk` sets up, with the
 verifier's coins uniform: for every event on the coins and what the honest prover sends (its view, or the prefix of it
 before it stops at a refused coin), at any valid witness whose registered values are the public ones, its probability
 and its probability under the simulator (`S_shvzk`, or the honest prefix on the dummy witness where the prover refuses,

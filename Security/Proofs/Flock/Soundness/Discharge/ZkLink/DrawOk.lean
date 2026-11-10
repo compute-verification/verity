@@ -4,20 +4,20 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 
 /-!
-# The challenger's draw at every draw of the live law, at `--zk`
+# The challenger's sample at every sample of the live law, at `--zk`
 
-`zk_session_sound` takes `DrawOkZK I dj mPts` at each of `Law.execOS`'s draws: the draw file `dj S` proves `S`'s units,
+`zk_session_sound` takes `DrawOkZK I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupH, under the `--zk` tags, sets up at `mPts` link points. The first half is what the record carries, so it is
 custody; the second is flock-verify's own arithmetic. This file splits them.
 
-* `drawOf law pop S`: the verifier's own draw of `S`, as `UnitDraw.ofJson` decodes it: its law and population, `S`'s
+* `drawOf law pop S`: the verifier's own sample of `S`, as `UnitDraw.ofJson` decodes it: its sampling design and population, `S`'s
   units ascending, no closure.
-* `DrawFileZK dj law pop`: every draw file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`. It is a
-  property of the file the challenger records, not of flock-verify (DrawWords' `hdj`, with the law).
-* `drawOkZK_of_exec`: from `DrawFileZK` at the live law's own stratified law, `DrawOkZK` at every draw of `Law.execOS`,
-  at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the draw has `∑ s, ks s` units (`execOS_draw_card`); at a run that
-  reads past the source's bytes the draw is every unit (`execOS_draw_card_or`), and a draw file of every unit that
-  setupH accepts passes `UnitDraw.ofJson`'s per-stratum count, so every stratum draws all its units and
+* `DrawFileZK dj law pop`: every sample file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`. It is a
+  property of the file the challenger records, not of flock-verify (DrawWords' `hdj`, with the sampling design).
+* `drawOkZK_of_exec`: from `DrawFileZK` at the live law's own stratified sampling design, `DrawOkZK` at every sample of `Law.execOS`,
+  at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the sample has `∑ s, ks s` units (`execOS_draw_card`); at a run that
+  reads past the source's bytes the sample is every unit (`execOS_draw_card_or`), and a sample file of every unit that
+  setupH accepts passes `UnitDraw.ofJson`'s per-stratum count, so every stratum samples all its units and
   `∑ s, ks s = n`.
 -/
 
@@ -92,7 +92,7 @@ theorem foldl_count_filter (p : ℕ → Bool) : ∀ (l : List ℕ) (a : ℕ),
 
 
 set_option maxHeartbeats 2000000 in
-/-- **`UnitDraw.ofJson`'s per-stratum count**: a draw it decodes under a stratified law holds exactly `k_s` of its units in
+/-- **`UnitDraw.ofJson`'s per-stratum count**: a sample it decodes under a stratified sampling design holds exactly `k_s` of its units in
 each stratum `s`'s ranges. -/
 theorem ofJson_count {j : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) (s : Draw.Stratum) (hs : s ∈ strata) :
@@ -119,13 +119,13 @@ theorem ofJson_count {j : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJs
 
 variable {n : ℕ}
 
-/-- **The verifier's own draw of `S`** under `law` over `[0, pop)`, as `UnitDraw.ofJson` decodes it: `S`'s units,
+/-- **The verifier's own sample of `S`** under `law` over `[0, pop)`, as `UnitDraw.ofJson` decodes it: `S`'s units,
 ascending, and no closure. -/
 def drawOf (law : Draw.Law) (pop : ℕ) (S : Finset (Fin n)) : Draw.UnitDraw :=
   { law, population := pop, units := ((S.image Fin.val).sort (· ≤ ·)).toArray }
 
-/-- **The record's draw file is the verifier's draw** (custody of the record's `unit_draw`): at every draw `S`, a draw
-file `dj S` that `UnitDraw.ofJson` decodes decodes to the verifier's own draw of `S` under `law` over `[0, pop)`. -/
+/-- **The record's sample file is the verifier's sample** (custody of the record's `unit_draw`): at every sample `S`, a sample
+file `dj S` that `UnitDraw.ofJson` decodes decodes to the verifier's own sample of `S` under `law` over `[0, pop)`. -/
 def DrawFileZK (dj : Finset (Fin n) → Lean.Json) (law : Draw.Law) (pop : ℕ) : Prop :=
   ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D = drawOf law pop S
 
@@ -141,7 +141,7 @@ theorem drawOf_size (law : Draw.Law) (pop : ℕ) (S : Finset (Fin n)) : (drawOf 
   simp [drawOf, card_image_of_injective _ Fin.val_injective]
 
 open Audit.Law in
-/-- At a draw file of every unit that `UnitDraw.ofJson` decodes under the strata `St`, every stratum draws all its units. -/
+/-- At a sample file of every unit that `UnitDraw.ofJson` decodes under the strata `St`, every stratum samples all its units. -/
 theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (stratum σs s).card)
     (St : Fin m → Draw.Stratum) (hS : ExecStrata σs ks St) (Kd pop : ℕ) {j : Lean.Json}
     (hj : Draw.UnitDraw.ofJson j = .ok (drawOf (.stratified Kd (Array.ofFn St)) pop (univ : Finset (Fin n)))) :
@@ -165,10 +165,10 @@ theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (h
   rw [← card_eq_sum_card_fiberwise (fun _ _ => mem_univ _), card_univ, Fintype.card_fin]
 
 
-/-- **The challenger's draw is `DrawOkZK` at every draw of the live law.** On untyped `--statement` tags whose circuit
-file parses under the `--zk` tags to `c`, with the executable strata `St` describing `σs`'s, each drawing `ks s` of its
-units: when the record's draw file is the verifier's draw under the live law's own stratified law (`DrawFileZK`),
-`DrawOkZK` holds at `mPtsOf c.g (∑ s, ks s)` link points at every draw of `Law.execOS`, the run that reads past the
+/-- **The challenger's sample is `DrawOkZK` at every sample of the live law.** On untyped `--statement` tags whose circuit
+file parses under the `--zk` tags to `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
+units: when the record's sample file is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`),
+`DrawOkZK` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the
 source's bytes (every unit) included. -/
 theorem drawOkZK_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)

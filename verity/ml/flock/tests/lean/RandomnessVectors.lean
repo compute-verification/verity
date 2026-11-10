@@ -1,13 +1,13 @@
 import Proofs.Flock.Soundness.PlanDraw
 
 /-!
-Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness package's Lean spec
+Vectors for `verity.randomness` v2 and the PoUW window sample, from the soundness package's Lean spec
 (`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanDraw.lean`), for `tests/fixtures/randomness_lean.json`.
 
 * `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.window` on small windows: the draw of each, and a repeated call index refused.
+* `window`: `PlanDraw.window` on small windows: the sample of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/

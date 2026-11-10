@@ -3,9 +3,9 @@ module
 public import Definitions.Core.Rewinding
 
 /-!
-# C-Flock's game vocabulary is Core's: `Rewinding`
+# Flock's game vocabulary is Core's: `Rewinding`
 
-Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Rewinding`, so C-Flock's spec and every
+Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Rewinding`, so Flock's spec and every
 other protocol's read one game library.
 -/
 

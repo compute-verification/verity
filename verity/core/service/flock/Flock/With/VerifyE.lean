@@ -52,7 +52,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
-  -- U1–U3 (`Flock.Draw`): a null draw is no draw
+  -- U1–U3 (`Flock.Draw`): a null sample is no sample
   let recDraw := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d

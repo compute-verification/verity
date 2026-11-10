@@ -13,7 +13,7 @@ statement read from registered rows. It is a conjunction:
 * (i) soundness in fork form, at an inner statement `st` that Lean's verifier sets up from its own partition object
   `obj` and program `prog` (`AcceptsPublic`), its class, regions and schedule `execClassAt st` as in `RecursiveAudit`:
   the event is empty, or the sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork
-  or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier of record every session
+  or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier every session
   while `st` fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
 * (ii) zero knowledge: `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
   registration rows, the simulator reading the public circuit and the owed outputs.
@@ -28,9 +28,9 @@ What it takes, against `RecursiveAudit`:
 * `AcceptsPublic obj prog st` in place of `AcceptsStmt st`: the partition object and program are the verifier's own,
   not some the prover picks (`AcceptsPublic.acceptsStmt`: it implies `AcceptsStmt`, so `ExecClass`'s lemmas apply);
 * premises: record custody (`Flock.Premises.RecordCustody`), A3 (`Flock.Premises.UniformRandomBytes`) and VBridge at
-  the committed rounds (`Flock.Premises.VBridgeC`, which `VBridge` gives: V*'s circuits compute C-Flock's inner
+  the committed rounds (`Flock.Premises.VBridgeC`, which `VBridge` gives: V*'s circuits compute Flock's inner
   verifier at the rounds before the last, here at the public statement), as in
-  `RecursiveAudit`. The coin server's randomness is the game's own coin draw (`uniform/flock-coin-server`, no `Prop`),
+  `RecursiveAudit`. The challenger's live-coin part's randomness is the game's own coin sample (`uniform/flock-coin-server`, no `Prop`),
   and SHA-512 enters only as the fork disjuncts;
 * obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
   (each session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
@@ -78,11 +78,11 @@ def publicHidden (st : Flock.Stmt) : Hidden (execClassAt st).cls :=
 /-- **The recursive audit at public units.**
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st`, with its
-class, regions and schedule `execClassAt st`, and every prover `σ` of the recursive audit with C-Flock's compiled table
-there as its inner protocol (`innerAt`), at the law of the registration's draws (`drawLaw`: a finite space with an
-element, so the law's `nonempty` is no hypothesis): V*'s statements `Vs` (`outerStatementsAt st` of them, each drawing
+class, regions and schedule `execClassAt st`, and every prover `σ` of the recursive audit with Flock's compiled table
+there as its inner protocol (`innerAt`), at the sampling design of the registration's samples (`drawLaw`: a finite space with an
+element, so the sampling design's `nonempty` is no hypothesis): V*'s statements `Vs` (`outerStatementsAt st` of them, each sampling
 all its units), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their records' custody
-`_hCust`, the verifier of record's own inputs to them (the inner shape `ish`, V*'s bindings `bind` and the shared rows
+`_hCust`, the verifier's own inputs to them (the inner shape `ish`, V*'s bindings `bind` and the shared rows
 `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files parse to `Vs` (`VStarParses`, an
 obligation until gap 4), every session's inputs carrying the tags their name names (`TagsFound`, `_hF`, an obligation
 on our code), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in
@@ -95,7 +95,7 @@ is a registrant fork (one run of the transported prover reaching two sessions wh
 transcripts play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{every session verifies as V*'s statement
   of its index} \wedge \neg\,st \text{ holds}]$$
-is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
+is at most V*'s sessions' expected statistical errors under the full sample's model, `r` times their expected stage
 slack, and the compiled table's error.
 
 (ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
@@ -116,7 +116,7 @@ at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.
 `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    -- the registration's draws, a finite space with an element, and the units each draws
+    -- the registration's samples, a finite space with an element, and the units each samples
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, and the inner statement
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
@@ -126,7 +126,7 @@ def PublicAudit : Prop :=
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
-    -- the verifier of record's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
+    -- the verifier's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
     -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
     (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port))
@@ -181,12 +181,12 @@ def PublicAudit : Prop :=
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
   RecursiveFirewallPrivate
 
-/-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s laws are the full draw
-(`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+/-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s laws are the full sample
+(`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def PublicAuditNoA3 : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    -- the registration's draws, a finite space with an element, and the units each draws
+    -- the registration's samples, a finite space with an element, and the units each samples
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, and the inner statement
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
@@ -196,7 +196,7 @@ def PublicAuditNoA3 : Prop :=
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
-    -- the verifier of record's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
+    -- the verifier's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
     -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
     (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port))

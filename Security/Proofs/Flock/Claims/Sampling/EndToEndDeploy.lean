@@ -19,9 +19,9 @@ At a `SubsetDesign` over one class of `n` proof blocks (`EndToEndDraw`'s hypothe
 
 The deployed sampled verifier's statements are not of that shape. At `deployOf F (SamplingDeploy.code c reg …)` under
 `RegMatches` (`deployOf_shape`), the design is `slotDesign`'s two rules, the population's first stage and the input
-class drawn `all`, and the partition is `Slots.layout`'s two classes, the population and the input class (empty, or one
+class sampled `all`, and the partition is `Slots.layout`'s two classes, the population and the input class (empty, or one
 stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_subsetDesign`,
-`deployOf_not_oneClass`). At a population drawn `subset kd` (`SubsetInputsDesign`), with `N` population slots:
+`deployOf_not_oneClass`). At a population sampled `subset kd` (`SubsetInputsDesign`), with `N` population slots:
 
 * `Pa_subsetInputs`: `P_a(B)` is `C(N − |B ∩ [0, N)|, kd)/C(N, kd)` when `B` misses the input class, else `0`.
 * `miss_subsetInputs`, `missAt_subsetInputs`: `miss(t) = missAt D t x = C(N − t, kd)/C(N, kd)` for `t ≤ N`.
@@ -70,7 +70,7 @@ theorem ratio_le_iff {n kd K₀ a : ℕ} (hkd : 1 ≤ kd) (hkn : kd ≤ n) :
   rw [div_le_div_iff_of_pos_right (by exact_mod_cast Nat.choose_pos hkn), Nat.cast_le]
   exact choose_le_iff hkd hkn
 
-/-! ## One class drawn `subset kd` -/
+/-! ## One class sampled `subset kd` -/
 
 section OneClass
 
@@ -97,7 +97,7 @@ theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.bloc
   refine le_antisymm (ciSup_le hle) (le_ciSup_of_le ⟨_, Set.forall_mem_range.2 hle⟩ ⟨_, hB₀, by simp⟩ ?_)
   rw [Pa_subset_of_range hd hP hn (hn ▸ hB₀), Finset.card_range]
 
-/-- **`missAt` is the hypergeometric tail** at a statement of one class drawn `subset kd`. -/
+/-- **`missAt` is the hypergeometric tail** at a statement of one class sampled `subset kd`. -/
 theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement) (hs : D.parse x = some s)
     (hd : SubsetDesign s.design kd) (hP : (D.part s).classes = [c]) (hn : (D.part s).blocks.length = n) {t : ℕ}
     (ht : t ≤ n) : missAt D t x = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -142,8 +142,8 @@ end OneClass
 
 /-! ## The deployed shape -/
 
-/-- `slotDesign`'s design: the population's first stage (`all` under the `All` rule, else the law of record's), then
-the input class drawn `all`. -/
+/-- `slotDesign`'s design: the population's first stage (`all` under the `All` rule, else the sampling design of record's), then
+the input class sampled `all`. -/
 theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.SampledProofs.Program}
     {q : Lean.Json} {t : Option Lean.Json} {d : Design}
     (h : _root_.Properties.SampledProofs.slotDesign rule p q t = .ok d) :
@@ -195,7 +195,7 @@ variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.
   (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Claims.Seen → Option (Msg × Claims.Seen))
 
 /-- **The deployed statement's shape**: at the deployed code under `RegMatches`, a statement that parses and
-partitions has two rules, the population's first stage and the input class drawn `all`, over two classes, the
+partitions has two rules, the population's first stage and the input class sampled `all`, over two classes, the
 population and the input class (empty, or one stratum). -/
 theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
@@ -227,9 +227,9 @@ theorem deployOf_not_oneClass (hreg : SamplingDeploy.RegMatches c reg) {x : Msg}
 
 end Deployed
 
-/-! ## The population drawn `subset kd`, then the input class -/
+/-! ## The population sampled `subset kd`, then the input class -/
 
-/-- The deployed design at a population drawn `subset kd`: that, then the input class drawn `all`. -/
+/-- The deployed design at a population sampled `subset kd`: that, then the input class sampled `all`. -/
 def SubsetInputsDesign (d : Design) (kd : ℕ) : Prop := d.rules = [.subset kd, .all]
 
 theorem all_Pa_of_empty {ns : List ℕ} {W : Finset ℕ} (h : W = ∅) : OneStage.Pa ns .all W = 1 := by

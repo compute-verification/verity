@@ -13,7 +13,7 @@ import all Init.Data.Range.Basic
 
 `L0PinChain`'s `l0_chain` at the loop's release (`ofLoop`): on a live history of `refK x` openings whose last coins the
 frame takes, at a rep's binding round `J` (past its algebraic phase and ring switch), the sent rounds from `J` through
-level 0's are the binding and level 0's bodies at the rep's own table and draws (**`LeanRelease.ofLoop_l0`**).
+level 0's are the binding and level 0's bodies at the rep's own table and samples (**`LeanRelease.ofLoop_l0`**).
 
 * The loop's counts there: `z`'s `n` (under `64` at every `--zk` schedule, `Count.sched_n`), then level 0's `1, 1, 2, …`
   (`Count.openList_l0`, `Count.repPlan_l0`).
@@ -325,7 +325,7 @@ set_option maxHeartbeats 2000000 in
 /-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
 whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),
 table `j`'s rep `r`'s binding round `J` (past its algebraic phase and ring switch) sends the binding at its table's cap
-and `z`'s squeeze of `n`, and its level-0 rounds `J + i` send level 0's bodies at its table, its draws' pads and the
+and `z`'s squeeze of `n`, and its level-0 rounds `J + i` send level 0's bodies at its table, its samples' pads and the
 opened coins from the binding's on, each tagged `0`. -/
 theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit

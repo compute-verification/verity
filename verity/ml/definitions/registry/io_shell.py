@@ -53,7 +53,7 @@ NP ids (after a Program's NP + KO − 1 positions the state's w is lp − NP −
 (``max_tokens`` past KO and no stop id among them). The scan refuses a Program's n over KO at its anchor
 (`ingress_scan`), and the egress renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
-A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes C-Flock's composer needs in some row
+A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes Flock's composer needs in some row
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
 `dead_free.TokenSelectCombine_v2{V, C}`'s select, then `OutCollect_v1{KO, FIRST}` over it, (the select, the state), and
 `SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v1` over

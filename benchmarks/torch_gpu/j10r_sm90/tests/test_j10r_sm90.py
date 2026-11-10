@@ -1,5 +1,5 @@
 """The fixtures' inputs and their writer and reader, on the CPU: the restated served weights equal the seeded generator
-(values read from its module), the step's unit positions and sampled units, and `fixtures.expected` at a shrunken linear
+(values read from its module), the step's unit positions and sampled proof blocks, and `fixtures.expected` at a shrunken linear
 against `h1tile.j10r_reference` called directly, with a tampered array refused by `fixtures.load`."""
 from __future__ import annotations
 

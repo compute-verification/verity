@@ -2,13 +2,13 @@
 # serve-openai --retain device --seal --release-after pouw on one H200, against --retain host of the same load: Llama-3.2-1B
 # int8 (the B4 row's manifest and taps served_verdicts.sh defaults to), ROUNDS rounds of SLOTS fixed requests of
 # PROMPT tokens and WINDOW_STEPS steps at T (--max-num-batched-tokens, default 8192), each round one Commit window.
-#  1. host: --retain host --seal; every window sealed; then `retain_device_gpu.py reads` picks each window's draw by hand from
+#  1. host: --retain host --seal; every window sealed; then `retain_device_gpu.py reads` picks each window's sample by hand from
 #     its sealed store and sizes the device pool at POOL_X (default 1.6) of the largest window, so a window's steps can't all fit
 #     while the window before still holds the pool.
 #  2. device: --retain device --retain-device-gb that --seal --release-after pouw --draws-dir; the drawer (`draw`) writes each
-#     window's draw DELAY_S after its windows.jsonl line, so the next round's steps wait on the pool for that window's release.
-#  3. `retain_device_gpu.py compare`: each device-sealed window holds exactly its draw's leaves, byte-equal to the host bundle's,
-#     its drawn reads verify against its own run root, its undrawn read is refused by name; the pool's peak and waits.
+#     window's sample DELAY_S after its windows.jsonl line, so the next round's steps wait on the pool for that window's release.
+#  3. `retain_device_gpu.py compare`: each device-sealed window holds exactly its sample's leaves, byte-equal to the host bundle's,
+#     its sampled reads verify against its own run root, its unsampled read is refused by name; the pool's peak and waits.
 #   research run --on NODE --gpus 1 --project verity --source TREE --cwd source --timeout 90m -- \
 #     bash integrations/vllm/tools/retain_device_gpu.sh
 # The serve dirs (sealed bundles: private values) stay on the node under `research keep`; $OUT keeps the records and logs, and

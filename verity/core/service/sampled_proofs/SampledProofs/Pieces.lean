@@ -11,17 +11,17 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
-* `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers of record
+* `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
   opened them against, and the rows they opened against its openings and the verifier's own ports' (`Produced.check`,
   `Produced.opened`, `Produced.shared`);
 * `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
-* `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
-* `draw`: the draw from given bytes of the challenger's coins; `ran_out`: whether that draw runs out of them;
-* `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
+* `check_draw`, `check_proved`: the sample's checks, each `{"ok", "codes", "detail"}`;
+* `draw`: the sample from given bytes of the challenger's coins; `ran_out`: whether that sample runs out of them;
+* `select`: the challenger's sample from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
 * `select_second`: a two-stage rule's second stage, `k` proof blocks of each sampled replay block, from given bytes of
   the challenger's coins, with the number of bytes it read (`Select.selectSecond`);
-* `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
+* `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 <<<<<<< ours
 * `pop_order`: the run's `population-order` check as it runs (`Slots.popOk`, from the ranges: `Slots.popOkRanges`) and
@@ -31,15 +31,15 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
 >>>>>>> theirs
-* `bound`: the exact bounds on wrong units at δ;
+* `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
   (`Bound.maxHarmCheck`), which `certify` is held to;
-* `hidden_offsets`, `hidden_locate`, `hidden_witness`: the draw over hidden positions (`HiddenDraw`): the honest table's
+* `hidden_offsets`, `hidden_locate`, `hidden_witness`: the sample over hidden positions (`HiddenDraw`): the honest table's
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
-* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
+* `session_registered`: the registered roots the verifiers report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
@@ -60,43 +60,43 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 <<<<<<< ours
-* `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
-  `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
+* `challenger_read`, `challenger_draw_coins`: a sample's coins from one challenger family (`ChallengerCoins`):
+  `read_reason`, the bytes a sample read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
 * `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins
   (`ChallengerTrees`): the coin trees a release log shows the challenger sampled and opened (`coin_trees_of`), an
   audit's session records held to them, one tree a session (`sessions_tree_reason`), and the log's order, the sample,
   then the link, then the other rounds (`sample_link_first`).
 ||||||| base
-* `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
-  `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
+* `challenger_read`, `challenger_draw_coins`: a sample's coins from one challenger family (`ChallengerCoins`):
+  `read_reason`, the bytes a sample read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
   release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
   one tree a session (`sessions_tree_reason`).
 =======
-* `challenger_read`, `challenger_draw_coins`, `challenger_within`: a draw's coins from one challenger family
-  (`ChallengerCoins`): `read_reason`, the bytes a draw read against its segment, `coins_reason`, against the segment
+* `challenger_read`, `challenger_draw_coins`, `challenger_within`: a sample's coins from one challenger family
+  (`ChallengerCoins`): `read_reason`, the bytes a sample read against its segment, `coins_reason`, against the segment
   and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
   sizes the evidence holds against v2's limits.
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
   release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records, each on its
   tables with their `root_B` lengths, held to them, one tree a session (`sessions_tree_reason`).
-* `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s coin server
+* `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 >>>>>>> theirs
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
-  the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
-* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
-  wired row's public string its writer's) and on the reference's entries whose unit is drawn.
+  the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
+* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
+  wired row's public string its writer's) and on the reference's entries whose unit is sampled.
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
-* `link_points`: each member's fewest and most drawn units under a law over the draws that end, and the members whose
+* `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
   link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
   refuses.
 
-`sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
+`sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
+`select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
 two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
@@ -231,7 +231,7 @@ def knownOpenings (j : Json) : V (Array (String × Array (Nat × String))) := do
 
 /-- `{"record", "registration", "draw", "mine", "opened", "known", "verdicts"}` to `{"codes": produced.check's, "opened":
 produced.opened's codes, "shared": produced.shared's over produced.wanted's, both null unless the record holds}`: the
-registration and draw strings, `mine` the verifier's own entries (`{value: {"leaves", "words", "word_bits", "domain"}}`,
+registration and sample strings, `mine` the verifier's own entries (`{value: {"leaves", "words", "word_bits", "domain"}}`,
 three natural numbers and a string each), `opened` null or `{value: root}`, `known` null or the verifier's own ports'
 openings (`knownOpenings`) and `verdicts` null or an object; refused otherwise. -/
 def produced (j : Json) : V Json := do
@@ -267,20 +267,20 @@ def knownPort (j : Json) : V Json := do
   let (root, bc) ← Produced.known program value row (← Flock.unhex salt) registration wb
   return Json.mkObj [("root", Json.str (Flock.hexOf root)), ("bc", Json.str (Flock.hexOf bc))]
 
-/-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
+/-- `{"draw", "population", "law"}`, the population an integer and the sampling design an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
   if (int? (getD j "population")).isNone then throw "population is not an integer"
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   return (Draw.checkDrawFull (getD j "draw") (getD j "population") (getD j "law")).toJson
 
-/-- `{"law", "population", "source"}`, the law an object, the population a natural number and the source hex, to the draw
+/-- `{"law", "population", "source"}`, the sampling design an object, the population a natural number and the source hex, to the sample
 `coins.draw_first` samples from the source's bytes; refused where it raises. -/
 def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
-/-- `draw`'s input to `{"ran_out"}`: whether that draw runs out of the source's bytes (`Draw.ranOutOf`,
+/-- `draw`'s input to `{"ran_out"}`: whether that sample runs out of the source's bytes (`Draw.ranOutOf`,
 `coins.ran_out`); refused, as `draw`, where it refuses otherwise. -/
 def ranOut (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
@@ -288,7 +288,7 @@ def ranOut (j : Json) : V Json := do
   let b ← Draw.ranOutOf (Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
   return Json.mkObj [("ran_out", Json.bool b)]
 
-/-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
+/-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's sample
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
 law's `subset:k`), from the source's bytes,
 and how many of them it read. The program and the query are objects, the work table and the closure map
@@ -309,8 +309,8 @@ def select (j : Json) : V Json := do
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 <<<<<<< ours
-/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of C-Flock's law of the challenger's
-draw, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
+/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of Flock's law of the challenger's
+sample, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
   let some design := Core.SamplingDesign.ofFlock d.law | throw "the draw's law has no sampling design"
@@ -330,7 +330,7 @@ def selectSecond (j : Json) : V Json := do
 
 >>>>>>> theirs
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
-and the slots of the challenger's draw on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
+and the slots of the challenger's sample on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
 `select` is. -/
 def slots (j : Json) : V Json := do
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -362,7 +362,7 @@ def popOrder (j : Json) : V Json := do
     | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
   return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
 
-/-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
+/-- `{"draw", "proved_units", "instances"}`, a sample whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
   let draw := getD j "draw"
   if !(draw matches .obj _) then throw "draw is not an object"
@@ -614,10 +614,10 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
 hex source, `check_public`'s values and declared items, the challenger's name and the log's length at the receipt
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
-with the proved units and instances null for the draw's own, and the coins' evidence (`coins_reason`'s, which a draw
+with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 "record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots"}` in the same forms,
-`replay` one replay block's program object, and null otherwise. The verifier draws no coins of its own: an input whose
+`replay` one replay block's program object, and null otherwise. The verifier flips no coins of its own: an input whose
 `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
@@ -717,7 +717,7 @@ def table : List (String × (Json → V Json)) :=
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece)]
 
-/-- The verifier of record's pieces: `table`'s, by name. -/
+/-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
     "record", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1

@@ -6,15 +6,15 @@ public import Definitions.NetworkCertifier.SampledAudit
 # The incorrect proof blocks over a monitoring period of sampled audits
 
 A monitoring period is `m` windows, each audited on its own live coins: the period's coins are a product `Fin m → Ω`,
-window `i` drawing `k i` of its `n i` proof blocks at `ω i`, a uniform `k i`-subset. The blocks incorrect at window
-`i`'s registration (`W i ω`) are fixed before its draw: they read only the earlier windows' coins. Every incorrect block
-risks detection in its window, and the windows' draws are independent, so the escapes multiply: with `q ≤ k i / n i` in
+window `i` sampling `k i` of its `n i` proof blocks at `ω i`, a uniform `k i`-subset. The blocks incorrect at window
+`i`'s registration (`W i ω`) are fixed before its sample: they read only the earlier windows' coins. Every incorrect block
+risks detection in its window, and the windows' samples are independent, so the escapes multiply: with `q ≤ k i / n i` in
 every window, every window's audit accepts while the monitoring period holds at least `F` incorrect blocks in total with
 probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whatever the number of windows. At
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
-The statement is a fact of probability over every draw, acceptance event and error: the draw's law and each window's
-soundness are its hypotheses. A deployment's instances of them (A3 for the draw, `Claims.Sampling.KS` for each
+The statement is a fact of probability over every sample, acceptance event and error: the sample's law and each window's
+soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.Sampling.KS` for each
 window) come in where it is applied to the sampled verifier.
 -/
 
@@ -28,9 +28,9 @@ open Claims
 set_option linter.unusedVariables false
 
 /-- **The incorrect proof blocks over a monitoring period of accepted sampled audits.** Over `m` windows on independent
-live coins, window `i` drawing a uniform `k i`-subset of its `n i` proof blocks (every coin draws `k i` blocks, and each
-`k i`-subset is drawn by the share `1 / C(n i, k i)` of the coins), with the blocks incorrect at each registration fixed
-before that window's draw, and each window's audit accepting while its draw meets an incorrect block with probability at
+live coins, window `i` sampling a uniform `k i`-subset of its `n i` proof blocks (every coin samples `k i` blocks, and each
+`k i`-subset is sampled by the share `1 / C(n i, k i)` of the coins), with the blocks incorrect at each registration fixed
+before that window's sample, and each window's audit accepting while its sample meets an incorrect block with probability at
 most `ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
 
 * every window's audit accepts and the monitoring period holds at least `F` incorrect blocks with probability at most

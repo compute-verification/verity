@@ -11,7 +11,7 @@
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the sample. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
-  clock, and only then draws.
+  clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
@@ -56,7 +56,7 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
-  the window's day and the declarations it holds when it draws (its view's `declarations`: `{"day", "program",
+  the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
   window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
@@ -194,7 +194,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     to the day's one declaration (`_declared`).  R3 reads `ports` by name, so its codes come in the ports' sorted
     order whatever order the mapping has, as the Lean port reads them.  `members`: the per-member form's members, each
     its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R7, `link-points` refuses the record when
-    a member's fewest and most drawn units give different link points (`link_points.refused`), no draw under the sampling
+    a member's fewest and most sampled proof blocks give different link points (`link_points.refused`), no sample under the sampling
     design ends (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the
     population."""
     c = _Collect()

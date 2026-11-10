@@ -281,7 +281,7 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
 
 /-! ## `KSLin2` and `BitsLin2` with the slots' commit strings -/
 
-/-- **`KSLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
+/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
 `ksLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense
 form is `PartChecksBV`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -308,7 +308,7 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
   exact ksLin2_deployed_rec b aux nOf hd rest fin wE join final w hP
     (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS)
 
-/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
+/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
 `bitsLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit`. It reads `StrictBirthday` and `ExpectedCR`, the named
 SHA-512 collision assumptions, and `ksLin2_deployed_slots`' open premises: a bound on a number under named premises, not
 a proved security level. -/

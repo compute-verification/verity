@@ -8,19 +8,19 @@ public import Proofs.Flock.Recursive.FirewallSteps
 import all Lean.Data.Json.Basic
 
 /-!
-# The honest worker's requests pass the firewall
+# The honest worker's requests pass the ZK server
 
-`run_honestReqs`: on the honest worker's requests (`Flock.Firewall.honestReqs`) the firewall (`Flock.Firewall.run`), at
+`run_honestReqs`: on the honest worker's requests (`Flock.Firewall.honestReqs`) the ZK server (`Flock.Firewall.run`), at
 any salts as many as the schedule's rows (`rowCount`), finishes, its Commit names the schedule's tables
 (`Schedule.tables`), and its commit strings are those of the worker's rows (`honestRows`: each table's level-0 top in
-Commit's order, then each round's fresh tops and message) in salt order. It holds at every schedule the firewall holds a
+Commit's order, then each round's fresh tops and message) in salt order. It holds at every schedule the ZK server holds a
 session to (`Canonical`) and every worker that follows it (`Fits`): its Commit's tables the schedule's roots in the
 schedule's order, each stream opened once before its first round, and each round's caps, copies, fresh tops and message
 the schedule's entry.
 
-The proof follows the firewall's loop (`FirewallSteps.Goes`) through the requests. What `Schedule.canonical` checks is
+The proof follows the ZK server's loop (`FirewallSteps.Goes`) through the requests. What `Schedule.canonical` checks is
 `Facts`. The Pings, Register, Hello, the first `Open`s, Commit and Link reach the loop's invariant (`At`): each salt of
-the worker's rows before the next round drawn and its commit string sent, each opened stream with its count of rounds
+the worker's rows before the next round sampled and its commit string sent, each opened stream with its count of rounds
 so far (`cnt`). Each round, after the `Open`s just before it, keeps it (`goes_opens`, `goes_round`), and at its end
 Finish's pin holds (`finish_pin`).
 
@@ -38,7 +38,7 @@ open Flock Flock.Firewall
 
 /-! ## The schedule and the worker's rows -/
 
-/-- The firewall holds a session to the schedule (`Schedule.canonical`, which `schedule` checks at load). -/
+/-- The ZK server holds a session to the schedule (`Schedule.canonical`, which `schedule` checks at load). -/
 def Canonical (s : Schedule) : Prop := s.canonical = true
 
 /-- The schedule's roots: each table's name and its level-0 top's node count, in key order. -/
@@ -53,7 +53,7 @@ def roundCount (s : Schedule) (i : Nat) : Nat :=
   | some (_, _, _, tops, _, commits) => tops.sum + commits
   | none => 0
 
-/-- **The schedule's rows**, as many as the firewall salts: its roots' nodes, then each round's. -/
+/-- **The schedule's rows**, as many as the ZK server salts: its roots' nodes, then each round's. -/
 def rowCount (s : Schedule) : Nat :=
   ((rootsOf s).map (·.2)).sum + ((List.range s.rounds.size).map (roundCount s)).sum
 
@@ -73,7 +73,7 @@ def freeOf (r : HonestRound) : List Nat := r.items.flatMap FirewallWire.itemFree
 def roundRows (s : Schedule) (h : Honest) (i : Nat) : List (Array Nat) :=
   ((capsOf (h.round i)).drop (copiesOf s i)).flatMap topRows ++ messageRows (freeOf (h.round i)).toArray
 
-/-- **The worker's rows**, in the order the firewall salts them: each table's level-0 top in Commit's order, then each
+/-- **The worker's rows**, in the order the ZK server salts them: each table's level-0 top in Commit's order, then each
 round's (`roundRows`). -/
 def honestRows (s : Schedule) (h : Honest) : List (Array Nat) :=
   h.roots.flatMap (fun e => topRows e.2) ++ (List.range s.rounds.size).flatMap (roundRows s h)
@@ -87,7 +87,7 @@ theorem rowDigest_eq (row : Array Nat) : rowDigest row = Sha512.hash (rowBytes r
 
 /-! ## The worker that follows the schedule -/
 
-/-- Round `i` as the firewall takes it at the schedule's entry `(stream, k, n, tops, level0, commits)`: `split` reads its
+/-- Round `i` as the ZK server takes it at the schedule's entry `(stream, k, n, tops, level0, commits)`: `split` reads its
 content (`RoundFits`, a binding where it is a rep's first), the binding's cap and the first `level0` caps are the
 committed top of the stream's table, the rest are fresh tops of the schedule's node counts, its message has the
 schedule's rows, and its stream is opened by then (at a place up to `i + 1`, the one just before it). -/
@@ -104,7 +104,7 @@ def RoundOK (s : Schedule) (h : Honest) (i : Nat) : Prop :=
 
 /-- **The worker follows the schedule**: each length in its word (`ReqFits`), Σ a plain string, Commit's tables the
 schedule's roots with their node counts in the schedule's order (`Schedule.tables`), each stream opened once at a place
-up to the last round's, and each round as the firewall takes it (`RoundOK`). -/
+up to the last round's, and each round as the ZK server takes it (`RoundOK`). -/
 structure Fits (s : Schedule) (h : Honest) : Prop where
   pings : ∀ b ∈ h.pings, b.size < 2 ^ 32
   sigma : plainStr h.sigma = true
@@ -120,7 +120,7 @@ structure Fits (s : Schedule) (h : Honest) : Prop where
   roundsFit : ∀ i, ∀ r ∈ honestRound s h i, FirewallWire.ReqFits r
   proofs : ∀ p ∈ h.proofs, p.1.toUTF8.size < 2 ^ 32 ∧ p.2.1 < 2 ^ 32 ∧ p.2.2.size < 2 ^ 32
 
-/-! ## What a schedule the firewall holds a session to holds -/
+/-! ## What a schedule the ZK server holds a session to holds -/
 
 /-- A stream's table has a root in the schedule. -/
 def Rooted (s : Schedule) (stream : String) : Prop := (s.roots.getObjVal? (tableOf stream)).toOption.isSome = true
@@ -419,13 +419,13 @@ theorem length_honestRows {s : Schedule} (hs : Canonical s) {h : Honest} (hf : F
 
 end
 
-/-! ## What the firewall does on the worker's requests -/
+/-! ## What the ZK server does on the worker's requests -/
 
-/-- An opened stream as the firewall holds it before round `j`: its parent and its rounds so far. -/
+/-- An opened stream as the ZK server holds it before round `j`: its parent and its rounds so far. -/
 def F (s : Schedule) (j : Nat) (n : String) : String × String × Nat := (n, parentOf s n, cnt s j n)
 
 /-- **The loop's invariant** before round `j`, the worker's places before `o` opened: after Hello, Commit and Link,
-Commit's tables the worker's, each salt of the worker's rows before round `j` drawn and its commit string sent. -/
+Commit's tables the worker's, each salt of the worker's rows before round `j` sampled and its commit string sent. -/
 structure At (s : Schedule) (h : Honest) (ys : List ByteArray) (j o : Nat) (st : State) : Prop where
   hello : st.hello = true
   committed : st.committed = true
@@ -662,7 +662,7 @@ theorem finish_pin (hF : Facts s) (hf : Fits s h) :
 
 end
 
-/-- **The firewall finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
+/-- **The ZK server finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
 finishes, its Commit names the schedule's tables, and its commit strings are those of the worker's rows under `ys`, in
 salt order. -/
 theorem run_honestReqs {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits s h)
@@ -761,7 +761,7 @@ theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Cano
   rw [rowDigest_eq, honestMsgs, List.getD_eq_getElem?_getD, e, List.getElem?_eq_getElem]
   rfl
 
-/-- **`FirewallAccepts`'s body at one salt `y`**: at every commit strings `l`, the firewall at `rowCount s` salts `y`
+/-- **`FirewallAccepts`'s body at one salt `y`**: at every commit strings `l`, the ZK server at `rowCount s` salts `y`
 finishes on the worker's requests, Commit names the schedule's tables, and its commit strings are those of `honestMsgs`
 under `y`, message `i` read at `l`'s strings before it. -/
 theorem honest_accepts {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) 

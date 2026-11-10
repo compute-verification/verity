@@ -1,6 +1,6 @@
 /-
 Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered value the verifier fills itself, from what it
-holds before the draw, so the prover never chooses it.
+holds before the sample, so the prover never chooses it.
 
 * `sources`: the verifier's `{value: [[source, ...], ...]}`, each source `{"port": P}` (the record's `roots` entry of port
   P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"bytes": hex}` (the verifier's own

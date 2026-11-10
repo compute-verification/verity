@@ -4,7 +4,7 @@ public import Proofs.Accounting.TS.Session.Tile.Guarantees
 public import Proofs.Accounting.TS.HeldSound
 
 /-!
-# A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the proof)
+# A tile unit's proof layer with its Definition's checks is sound through its Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.TileSessionSound`, as `Accounting.SecurityProofs.TS.HeldSessionSound` is proved. The tile
 layer accepts where the checked layer does and flock-verify's known-content and complete checks pass, and opens the
@@ -13,7 +13,7 @@ same rows, so `AcceptedLive` is its acceptance's first conjunct. Its unsound eve
 `TileRel` (`tile_of_checked`): each `ok` wire is at the `ok` row unless the `ok` tie collides
 (`Accounting.TS.Held.tie_ok`), the checked relation's assignment is the opened rows there, and
 `Accounting.Assumptions.TS.TileChecks`, which `TileComputes` gives at the tile's `K`
-(`Accounting.TS.Tile.tileChecks_of_computes`), gives each drawn unit's decoded cells.
+(`Accounting.TS.Tile.tileChecks_of_computes`), gives each sampled proof block's decoded cells.
 -/
 
 @[expose] public section

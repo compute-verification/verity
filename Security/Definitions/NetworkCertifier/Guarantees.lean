@@ -325,7 +325,7 @@ the ingress grid, and their content is exempt.
     anything X sends, and `c_coin` is the same for every message the bound counts.
   - Only the count is free. The frames on the coin link are a prefix of `c_coin`, in order, since a retry never
     resamples. How far the prefix has reached at each bucket is timing, and the grid charges it. Which coins the
-    firewall asks for, and when, is egress, which the egress grid charges.
+    ZK server asks for, and when, is egress, which the egress grid charges.
 - **What it doesn't cover.** The exemption is for coin openings only. Anything else the challenger sends on the link
   must be fixed by the public parameters, or it is charged as content.
 -/

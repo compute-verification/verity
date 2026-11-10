@@ -7,8 +7,8 @@ public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 # The tags of a statement `verify --zk --registered F` accepts
 
 `ZkReg.AcceptsZKR` runs `checkRegistered` on every table's statement, and `Registered.check` with the verifier's own
-reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a draw,
-each table's statement is drawn from the population the statement check loads (`pubZ I`), and drawing keeps its tables
+reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a sample,
+each table's statement is sampled from the population the statement check loads (`pubZ I`), and sampling keeps its tables
 (`Layout.drawn_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
 file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.tables`, `ProvedScope.sharedRowsOk`):
 
@@ -28,7 +28,7 @@ open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ)
 variable {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} {d : Lean.Json}
 
 /-- **An accepted `--zk --registered` statement's population is a shared-row file**: at a transcript whose record
-carries a draw and that `AcceptsZKR` accepts, under a statement check that passes (with or without `--registered`), the
+carries a sample and that `AcceptsZKR` accepts, under a statement check that passes (with or without `--registered`), the
 public file the check loads has tables. -/
 theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (hd : recordDraw t.record = some d)
     (h : AcceptsZKR I own t) : ∃ tb, (pubZ I).tables = some tb := by
