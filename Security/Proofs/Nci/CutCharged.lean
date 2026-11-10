@@ -12,8 +12,10 @@ A set of gates holds whole at most its own gates over the fewest gates of a MAC,
 `counts` with three changes: `V`, `F` and `E` count over the blocks of a set `G` alone; each block of `G` enters `Π` at
 what it reads itself, so `V² ≤ (∑_G Π(reads)) F`; and the split MACs, and the gates leaving a block of `G`, are
 counted against what all the blocks read between them, `T`, with the MACs a block outside `G` holds whole counted
-apart. No theorem here proves `CountsOn`. From it, (H) at the cap gives `Π(r) ≤ r² / (4 β_w β_x)` at each block's own
-`r` (`hardness_mono`, `onePremise`), so `∑_G Π ≤ S / (4 β_w β_x)`, and (E) gives `b E ≤ T` (`real_step_charged`).
+apart. No theorem here proves `CountsOn`. From it, (H) at what a block of `G` reads gives `Π(r) ≤ r² / (4 β_w β_x)` at
+that block's own `r` and its own `β_x` (`onePremise`), and (E) gives `b E ≤ T` (`real_step_charged`): the count with (H)
+at each block's own reads (`countsOn_rows`). `HECharged` is that count at one `β_x`, (H) at the cap holding at every
+smaller one (`hardness_mono`).
 
 `HECharged_honest` and `HECharged_nontrivial` are at the toy `Nci.Cut.Toy`. With a block for each MAC, the first under
 the cap `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
@@ -73,31 +75,40 @@ theorem real_step_charged {V S T O E q b : ℝ} (hS : 0 ≤ S) (hO : 0 ≤ O) (h
         add_le_add le_rfl (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hE' hs))
     _ = √(S * O / q) / 2 + √(S * T / (q * b)) / 2 := by rw [h2, h3]
 
-/-- **`HECharged` from the counts over a set of blocks.** (H) at the cap `k` holds at what each block of `G` reads, so
-`∑_G Π(reads) ≤ S / (4 β_w β_x)`; (E) at `b` gives `b E ≤ T`; and the MACs a block outside `G` holds whole take `γ` of
-its at most `c` gates each. -/
-theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
-  intro ι V _ _ _ d W val k m c γ T S P G βw βx b hw hx hb hval hshare hH hE hk hT hS
+/-- **The count over a set of blocks with (H) at each block's own reads.** Each block `u` of `G` takes (H) at what it
+reads itself, at its own `β_x u`, so `Π(reads u) ≤ reads u ² / (4 β_w β_x u)`, and with `Q` at least the sum over `G`
+of `reads u ² / (β_w β_x u)`: `N ≤ (the MACs the blocks outside G hold whole) + T + ½ √(Q O) + ½ √(Q T / b)`. No
+block's cap is another's: a block that reads more lowers the `β_x` it is asked at, and no other block's. -/
+theorem countsOn_rows (hC : CountsOn) {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V]
+    {d : RegisteredCircuit} (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {m T : ℕ} (P : Partition d.D m)
+    (G : Finset (Fin m)) {βw b Q : ℝ} (βx : Fin m → ℝ) (hw : 0 < βw) (hx : ∀ u ∈ G, 0 < βx u) (hb : 0 < b)
+    (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
+    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx u] (d.unregistered (P.gates u)).card)
+    (hE : Assumptions.Exports W b) (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T)
+    (hQ : ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (βw * βx u) ≤ Q) :
+    (W.N : ℝ) ≤ ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) +
+      ((T : ℝ) + √(Q * W.O) / 2 + √(Q * T / b) / 2) := by
   obtain ⟨Vc, F, E, hN, hV, hF, hbE, hb0⟩ := hC ι d W m T P G hT
-  have hq : 0 < βw * βx := mul_pos hw hx
-  have h4 : (0 : ℝ) < 4 * βw * βx := mul_pos (mul_pos four_pos hw) hx
-  have hpi : ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) ≤ S / (4 * (βw * βx)) :=
+  have hQ0 : 0 ≤ Q :=
+    (sum_nonneg fun u hu => div_nonneg (sq_nonneg _) (mul_pos hw (hx u hu)).le).trans hQ
+  have hpi : ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) ≤ Q / (4 * 1) :=
     calc ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ)
         = ∑ u ∈ G, (piMax d W (d.unregistered (P.gates u)).card : ℝ) := Nat.cast_sum _ _
-      _ ≤ ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (4 * βw * βx) :=
-          sum_le_sum fun u hu => (onePremise hw hx hval hshare (hardness_mono hH (hk u hu))).1
-      _ = (∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2) / (4 * βw * βx) := (sum_div _ _ _).symm
-      _ ≤ S / (4 * βw * βx) := div_le_div_of_nonneg_right (by exact_mod_cast hS) h4.le
-      _ = S / (4 * (βw * βx)) := by rw [mul_assoc]
+      _ ≤ ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (βw * βx u) / 4 :=
+          sum_le_sum fun u hu =>
+            ((onePremise hw (hx u hu) hval hshare (hH u hu)).1).trans_eq (by ring)
+      _ = (∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (βw * βx u)) / 4 := (sum_div _ _ _).symm
+      _ ≤ Q / 4 := div_le_div_of_nonneg_right hQ (by norm_num)
+      _ = Q / (4 * 1) := by ring
   have h0 : Vc ^ 2 ≤ (∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card) * (W.O + E) :=
     hV.trans (Nat.mul_le_mul le_rfl hF)
-  have hV' : (Vc : ℝ) ^ 2 ≤ S / (4 * (βw * βx)) * (W.O + E) :=
+  have hV' : (Vc : ℝ) ^ 2 ≤ Q / (4 * 1) * (W.O + E) :=
     calc (Vc : ℝ) ^ 2 = ((Vc ^ 2 : ℕ) : ℝ) := (Nat.cast_pow Vc 2).symm
       _ ≤ (((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card) * (W.O + E) : ℕ) : ℝ) := Nat.cast_le.2 h0
       _ = ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) * ((W.O + E : ℕ) : ℝ) :=
           Nat.cast_mul _ _
-      _ ≤ S / (4 * (βw * βx)) * ((W.O + E : ℕ) : ℝ) := mul_le_mul_of_nonneg_right hpi (Nat.cast_nonneg _)
-      _ = S / (4 * (βw * βx)) * (W.O + E) := by rw [Nat.cast_add]
+      _ ≤ Q / (4 * 1) * ((W.O + E : ℕ) : ℝ) := mul_le_mul_of_nonneg_right hpi (Nat.cast_nonneg _)
+      _ = Q / (4 * 1) * (W.O + E) := by rw [Nat.cast_add]
   have hbE' : b * (E : ℝ) ≤ T := by
     by_cases h : W.fed.Nonempty
     · exact (mul_le_mul_of_nonneg_right (le_bY W hE h) (Nat.cast_nonneg E)).trans hbE
@@ -107,12 +118,29 @@ theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
         exact Nat.cast_nonneg T
       · rw [hY] at h0
         exact absurd h0 (lt_irrefl _)
-  have hstep := real_step_charged (Nat.cast_nonneg S) (Nat.cast_nonneg W.O) (Nat.cast_nonneg E) hq hb hV' hbE'
+  have hstep := real_step_charged hQ0 (Nat.cast_nonneg W.O) (Nat.cast_nonneg E) one_pos hb hV' hbE'
+  rw [div_one, one_mul] at hstep
+  have hN' : (W.N : ℝ) ≤ T + Vc + ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) := by exact_mod_cast hN
+  linarith
+
+/-- **`HECharged` from the counts over a set of blocks.** (H) at the cap `k` holds at what each block of `G` reads
+(`hardness_mono`), so the count with (H) at each block's own reads applies at one `β_x` and `Q = S / (β_w β_x)`; and
+the MACs a block outside `G` holds whole take `γ` of its at most `c` gates each. -/
+theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
+  intro ι V _ _ _ d W val k m c γ T S P G βw βx b hw hx hb hval hshare hH hE hk hT hS
+  have hq : 0 < βw * βx := mul_pos hw hx
+  have hQ : ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (βw * βx) ≤ S / (βw * βx) := by
+    rw [← sum_div]
+    exact div_le_div_of_nonneg_right (by exact_mod_cast hS) hq.le
+  have hrows := countsOn_rows hC W val P G (fun _ => βx) hw (fun _ _ => hx) hb hval hshare
+    (fun u hu => hardness_mono hH (hk u hu)) hE hT hQ
+  have e1 : (S : ℝ) / (βw * βx) * W.O = S * W.O / (βw * βx) := by ring
+  have e2 : (S : ℝ) / (βw * βx) * T / b = S * T / (βw * βx * b) := by ring
+  rw [e1, e2] at hrows
   have hfirst : (W.N : ℝ) ≤
       ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) + workHEOn T S (βw * βx) b W.O := by
-    have hN' : (W.N : ℝ) ≤ T + Vc + ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) := by exact_mod_cast hN
     unfold workHEOn
-    linarith
+    exact hrows
   refine ⟨hfirst, fun hγ hc => ?_⟩
   have hheld : (γ : ℝ) * ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) ≤ (Gᶜ.card : ℝ) * c := by
     have h : γ * ∑ u ∈ Gᶜ, (W.inside (P.gates u)).card ≤ Gᶜ.card * c :=
