@@ -54,7 +54,7 @@ the labelled annotation's: a gate in two sets of one label is refused. `max_gate
 -/
 module
 
-public import Flock.Program
+public import Circuits.Program
 
 @[expose] public section
 set_option backward.privateInPublic true

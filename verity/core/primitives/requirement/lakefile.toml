@@ -12,10 +12,6 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../service/flock"
-
-[[require]]
 name = "verity_difftest"
 path = "../../difftest/lean"
 

@@ -10,8 +10,8 @@ inputs are one) without a table of inputs.
 -/
 module
 
-public import Flock.Program
-public import Flock.Qword
+public import Circuits.Program
+public import Circuits.Qword
 
 @[expose] public section
 

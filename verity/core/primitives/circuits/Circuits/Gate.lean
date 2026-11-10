@@ -4,7 +4,7 @@ A gate of the canonical layout (PROTOCOL.md §6), as `Flock.Program.Prog.gate` l
 -/
 module
 
-public import Flock.Program
+public import Circuits.Program
 
 @[expose] public section
 

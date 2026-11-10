@@ -7,6 +7,18 @@ defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness
 autoImplicit = false
 backward.proofsInPublic = true
 
+[[require]]
+name = "core_base"
+path = "../../primitives/base"
+
+[[require]]
+name = "core_circuits"
+path = "../../primitives/circuits"
+
+[[require]]
+name = "core_commitments"
+path = "../../primitives/commitments"
+
 [[lean_lib]]
 name = "Flock"
 

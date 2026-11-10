@@ -9,8 +9,8 @@ is the evaluator's input as extraction will produce it.
 -/
 module
 
-public import Flock.Partition
-public import Flock.Steps
+public import Circuits.Partition
+public import Circuits.Steps
 public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section

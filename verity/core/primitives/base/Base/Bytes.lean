@@ -3,7 +3,7 @@ Byte encodings and a total reader over `ByteArray` (`Flock.Verify`, `Flock.Proof
 -/
 module
 
-public import Flock.Field
+public import Base.Field
 
 @[expose] public section
 set_option backward.privateInPublic true

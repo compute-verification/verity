@@ -12,11 +12,11 @@ gets a smaller index than its callers.
 -/
 module
 
-public import Flock.Canon
-public import Flock.Hash
-public import Flock.JsonParse
-public import Flock.Sizes
-public import Flock.Steps
+public import Base.Canon
+public import Base.Hash
+public import Base.JsonParse
+public import Base.Sizes
+public import Circuits.Steps
 public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.HashMap
 

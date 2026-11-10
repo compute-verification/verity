@@ -4,7 +4,7 @@ A Program's `Q_word` evaluation, as `Flock.Extract.evaluate` returns it: `partit
 -/
 module
 
-public import Flock.Extract
+public import Circuits.Extract
 
 @[expose] public section
 

@@ -3,10 +3,10 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "flock_verifier",
+   "name": "core_base",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../../service/flock",
+   "dir": "../../base",
    "configFile": "lakefile.toml"}],
  "name": "lms",
  "lakeDir": ".lake",

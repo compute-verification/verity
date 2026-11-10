@@ -5,7 +5,7 @@ set is the boundary set. The verifier checks it itself, on its own copy of the c
 -/
 module
 
-public import Flock.Bytes
+public import Base.Bytes
 public import Lean.Data.Json.Printer
 public import Std.Data.HashSet
 

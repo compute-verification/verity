@@ -13,7 +13,7 @@ gate is one a primitive whose id is an input id computes (`Program.isInputId`), 
 -/
 module
 
-public import Flock.Annot
+public import Circuits.Annot
 
 @[expose] public section
 

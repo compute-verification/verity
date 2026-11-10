@@ -5,8 +5,8 @@
 # worker's requests' port (`firewall-honest-difftest`, C-Flock's `Flock.Firewall.honestReqs`). Code, not analysis: Lean
 # core and C-Flock's verifier.
 name = "verity_difftest"
-defaultTargets = ["Difftest", "AnnotDifftest", "FlockJsonDifftest", "FirewallHonestDifftest", "difftest-example",
-  "annot-difftest", "flock-json-difftest", "firewall-honest-difftest"]
+defaultTargets = ["Difftest", "AnnotDifftest", "FlockJsonDifftest", "difftest-example", "annot-difftest",
+  "flock-json-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -14,8 +14,12 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../service/flock"
+name = "core_base"
+path = "../../primitives/base"
+
+[[require]]
+name = "core_circuits"
+path = "../../primitives/circuits"
 
 [[lean_lib]]
 name = "Difftest"
@@ -25,9 +29,6 @@ name = "AnnotDifftest"
 
 [[lean_lib]]
 name = "FlockJsonDifftest"
-
-[[lean_lib]]
-name = "FirewallHonestDifftest"
 
 [[lean_exe]]
 name = "difftest-example"
@@ -40,7 +41,3 @@ root = "AnnotDifftestMain"
 [[lean_exe]]
 name = "flock-json-difftest"
 root = "FlockJsonDifftestMain"
-
-[[lean_exe]]
-name = "firewall-honest-difftest"
-root = "FirewallHonestDifftestMain"

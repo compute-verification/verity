@@ -9,10 +9,10 @@ module
 
 public import Lean.Data.Json
 public import Std.Data.HashMap
-public import Flock.Canon
+public import Base.Canon
 meta import Lean.Data.Json
 meta import Std.Data.HashMap
-meta import Flock.Canon
+meta import Base.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true

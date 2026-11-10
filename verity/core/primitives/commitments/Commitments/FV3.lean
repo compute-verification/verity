@@ -22,7 +22,10 @@ with `"pad"` leaves and hashes `"node"`s level by level up to its root.
 -/
 module
 
-public import Flock.Net
+public import Base.Canon
+public import Base.Hash
+public import Base.JsonParse
+public import Base.Pow2
 
 @[expose] public section
 

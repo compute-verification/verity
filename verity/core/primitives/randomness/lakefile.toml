@@ -10,8 +10,12 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../service/flock"
+name = "core_base"
+path = "../base"
+
+[[require]]
+name = "core_commitments"
+path = "../commitments"
 
 [[lean_lib]]
 name = "Randomness"
