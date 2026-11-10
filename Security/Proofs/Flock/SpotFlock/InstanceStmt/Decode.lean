@@ -44,6 +44,8 @@ import all Init.Data.Array.Basic
 import all Init.Data.Array.Attach
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Array.QSort.Basic
+import all Init.Data.Array.Subarray
+import all Init.Data.Stream
 import all Init.Data.List.Control
 import all Init.Data.Range.Basic
 import all Init.Data.Nat.Fold
