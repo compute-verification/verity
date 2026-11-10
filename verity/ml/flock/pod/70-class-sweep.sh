@@ -6,6 +6,8 @@
 # one, or either, outside the token-select Calls.
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
+#      RESOLVER=path/to/module.py:FUNC (GRAPH and DEFS name Definitions by id: FUNC(id) is the registered Definition an id names,
+#      class_statement --resolver; refused without one)
 #      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
 #      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier samples by this sampling design at Register: serve --draw-law)
 #      SELECT=table-free  MODULES= (a module-path prefix)
@@ -40,6 +42,8 @@ set -uxo pipefail
 export FC_COINS=${FC_COINS:-tree}
 if [ "$FC_COINS" = tree ] || [ "${FLOCK_ZK:-0}" = 1 ]; then export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1}; else export FLOCK_CHALLENGER=0; fi
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
+[ "${BUILD_ONLY:-0}" = 1 ] || [ -n "${PROGRAM:-}" ] || [ -n "${RESOLVER:-}" ] \
+  || { echo "REFUSED: GRAPH and DEFS name Definitions by id: RESOLVER=MODULE:FUNC binds them (FUNC(id), the registered Definition)"; exit 2; }
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a Python with numpy (a local dry run)
@@ -103,7 +107,7 @@ SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
 [ "${STAGE_ONLY:-0}" = 1 ] && [ "${STATEMENT_DIGEST:-0}" = 1 ] && SEL+=(--statement-digest)
 [ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY" --serve-points "${SERVE_POINTS:-1}")
-$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition "${PARTITION:-q-word}" --out $O/classes \
+$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} ${RESOLVER:+--resolver "$RESOLVER"} --partition "${PARTITION:-q-word}" --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
   ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} ${SELFTEST_CASE_MIB:+--selftest-case-mib $SELFTEST_CASE_MIB} $G_

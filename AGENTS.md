@@ -10,9 +10,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
-    PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
-    `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), PoUB over a node's registered store and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
+    policy (`network/nci/`) is Lean only. `claims` holds the security claims'
     ids, `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
@@ -195,20 +195,13 @@ unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
-soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
-and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
-team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
-a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
-forward, marking a fix within 30 min, or drive then reverts it on `checked`; a red naming several landings reverts none and
-rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
-gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
-ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
-next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
-tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
-whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
-bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
+only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
+its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
+culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
+it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
+reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
+revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
+rule for each case: the team skill's Landing.
 
 ## Lean
 

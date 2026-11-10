@@ -68,7 +68,7 @@
 #      LEAN_JOBS= LEAN_MEM_GB=48 (lean: verifications at once, default LEAN_MEM_GB / 5 up to the job's cores)
 #      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
-#      GPU_LEASE= (the lease command; default the queue's for this node)
+#      GPU_LEASE= (the lease command; a queued --gpu-host job's runner sets its node's; a prove refuses without one under GPU=1)
 #      GPU_ON= (the GPUs a lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
 #      SHIP=1 (build: the binaries also into out/ship, each named by its cache key, for a node that builds nothing)
 #      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
@@ -194,16 +194,8 @@ export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${
 # verifier's own tree
 INNER_COINS="FC_COINS=tree FC_COIN_STREAMS=sparse/rep0,sparse/rep1,stacked/rep0"
 export REC_CIRCUIT_CACHE=${REC_CIRCUIT_CACHE-$FW/rec-circuits}
-# the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
-# and pool file are, else gpu-lease's default)
-if [ $GPU = 0 ]; then LEASE=(); elif [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
-import os, sys
-sys.path.insert(0, "infra/cluster/src")
-from cluster.submit import GPU_LEASE, GPU_LEASE_N1, N1_LEASE_ENV
-pool = dict(e.split("=", 1) for e in N1_LEASE_ENV)["GPU_LEASE_ALLOWED_FILE"]
-print(*(["env", *N1_LEASE_ENV, GPU_LEASE_N1] if os.access(GPU_LEASE_N1, os.X_OK) and os.path.exists(pool) else [GPU_LEASE]), sep="\n")
-EOF
-); fi
+# the lease command: GPU_LEASE, which a queued --gpu-host job's runner sets to its node's
+read -ra LEASE <<< "${GPU_LEASE:-}"
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 # links_at DIR: the verifier's links file of a wired statement staged in DIR (REC_LINKS=1), which serve, replay and statement
@@ -223,6 +215,8 @@ on_gpu() {
   local d=$1 pre=${GPU_PREEMPTIBLE-1}; shift
   : > $d/prove.err
   if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
+  [ ${#LEASE[@]} -gt 0 ] || { echo "REFUSED: GPU=1 proves under a lease and GPU_LEASE names no lease command (a queued --gpu-host" \
+    "job's runner sets it): set GPU_LEASE, or GPU=0" | tee $d/prove.err >&2; return 2; }
   gpu_mib $d & local s=$!
   "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?

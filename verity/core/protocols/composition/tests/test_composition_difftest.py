@@ -52,7 +52,8 @@ from verity.core.deploy import config as K
 from verity.core.protocols.spot import parties as SPP
 from verity.ml.circuits.types import Array, Value
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
+ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/core/protocols/onsite", ROOT / "verity/core/protocols/remote"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
@@ -143,8 +144,8 @@ V2_BREAKS = {
 }
 
 
-#: One break of sampled proofs' form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form, another
-#: form, or the recursive form with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
+#: the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
@@ -311,12 +312,13 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
 #: names PoUB-P2's case by it, its params and its entry, under a commitment that binds it).
 GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every subprotocol's case standing,
-#: and so the way to a rejection that no subprotocol's own explains.
+#: and so the way to a rejection that no subprotocol's own explains. `generic-bandwidth` comes five times too, so that a
+#: fixed seed's thousand cases reach it whatever the subprotocols' generators draw before it.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
                            "garbage-params", "not-a-case", "no-blobs", "blobs-not-hex", "blobs-not-list",
-                           "blob-extra", "generic-bandwidth"] + ["binding", "binding-id"] * 5
+                           "blob-extra"] + ["binding", "binding-id", "generic-bandwidth"] * 5
 #: The breaks of the commitment alone, which leave every subprotocol's case standing.
 BINDING = ["binding", "binding-id", "commitment-size"]
 
@@ -431,12 +433,12 @@ class RejectingPort(D.ProtocolPort):
     accepted = R.REJECT
 
 
-def port(name: str, product: R.Product, seen: collections.Counter, serve: tuple[str, ...] = ("serve",),
-         package: str | None = None) -> D.ProtocolPort:
-    """`name serve` (or `name SERVE`) of the Lake package in `package` (default `name`), on the product's cases and,
-    one sample in ten, any JSON line."""
+def port(name: str, product: R.Product, seen: collections.Counter, package: Path,
+         serve: tuple[str, ...] = ("serve",)) -> D.ProtocolPort:
+    """`name serve` (or `name SERVE`) of the Lake package in `package`, on the product's cases and, one sample in ten,
+    any JSON line."""
     return RejectingPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                         package=PROTOCOLS / (package or name), serve=serve, need_rejects=False)
+                         package=package, serve=serve, need_rejects=False)
 
 
 def ids(product: R.Product) -> str:
@@ -444,10 +446,10 @@ def ids(product: R.Product) -> str:
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
-ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
-REMOTE = port("remote", R.REMOTE, SEEN["remote"])
+ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
+REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
-PRODUCT = {p.id: port("product", p, SEEN[n], serve=(ids(p), "serve"), package="onsite")
+PRODUCT = {p.id: port("product", p, SEEN[n], ONSITE_PACKAGE, serve=(ids(p), "serve"))
            for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
@@ -568,6 +570,46 @@ def test_spot_refuses_one_stage_v1(name, request):
     assert set(seen) == set(want), dict(seen)
 
 
+def _recursive(a: dict) -> dict:
+    """v2's audit `a` as the recursive audit's case: its params v1's under the form ``recursive``, naming the recursive
+    audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a draw, no
+    registration and no part), and its evidence under that form."""
+    own = {"circuit": _sha(CIRCUIT), "draw": _sha(b"draw"), "parts": [], "public": _sha(PUBLIC), "registration": None}
+    return OS._case({"params": {**_without(a["params"], "proofs"), "form": "recursive", "recursive": own},
+                     "record": a["record"], "evidence": {**a["evidence"], "form": "recursive"}})
+
+
+@pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
+def test_spot_refuses_the_recursive_form(name, request):
+    """SPOT's soundness covers its one-stage form only, so it refuses the recursive form by name at its params
+    (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before it reads their rest: v2's audit under the recursive form,
+    naming the recursive audit's own inputs (`_recursive`) or none of them (the form's break ``params-recursive``).
+    Remote and onsite, every other subprotocol aimed at acceptance on the audit's record, reject with that refusal as
+    SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
+    product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
+    if name == "onsite":
+        request.getfixturevalue("recorded")
+    server = request.getfixturevalue(f"{name}_server")
+    why = f"params: {R.RECURSIVE_REFUSED}"
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, sampled in {"named": _recursive(audit), "unnamed": form_case(audit, "params-recursive")}.items():
+            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            assert product.answer(case)["verdict"] == R.REJECT
+            out = server.exchange(case)
+            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            seen[br] += 1
+    check()
+    assert set(seen) == {"named", "unnamed"}, dict(seen)
+
+
 #: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
 REUSING_LAW = {"k": 1, "law": "subset"}
 
@@ -667,7 +709,7 @@ def test_product_names_only_the_two_composites():
     """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
     configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
     and refuses every other set of their subprotocols and the wipe (exit 64)."""
-    exe = D.build(PROTOCOLS / "onsite", "product")
+    exe = D.build(ONSITE_PACKAGE, "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
@@ -757,7 +799,7 @@ def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded)
     is undecided, under a commitment that binds their digests."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
-        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
+        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=ONSITE_PACKAGE), examples=1000,
               server=onsite_server)
     assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
     parts = R.ONSITE.verdicts(e.value.input)

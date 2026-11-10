@@ -130,15 +130,26 @@ a verifier with no pool. -/
 def WindowPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_reset") (match v.pool with | some p => .bool p.reset | none => .null)
 
-/-- Serving resets the pool at most once a week: not where an earlier window of the week reset
-(`Registration.Pool.spent`). -/
+/-- The record's window names its week on the verifier's clock (`Registration.Pool.week`), and none for a verifier with
+no pool. -/
+def WindowPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "pool_week") (match v.pool with | some p => Lean.toJson p.week | none => .null)
+
+/-- The record's window names whether its week's one reset is spent at it: that it resets, or that the previous record,
+of its week, named it spent (`Registration.Pool.spentBefore`); none for a verifier with no pool. -/
+def WindowPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "pool_spent")
+    (match v.pool with | some p => .bool (p.reset || p.spentBefore v.log) | none => .null)
+
+/-- Serving resets the pool at most once a week: not where the week's reset is spent before this window
+(`Registration.Pool.spentBefore`). -/
 def PoolResetOnce (v : Registration.Verifier) : Prop :=
-  (match v.pool with | some p => !(p.reset && p.spent) | none => true) = true
+  (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset
-(`WindowPoolReset`), at most one a week (`PoolResetOnce`). -/
+window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset, week and
+spent mark (`WindowPoolReset`, `WindowPoolWeek`, `WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -146,7 +157,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ PoolResetOnce v
+  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -217,7 +228,7 @@ them or not; its values are exactly the verifier's (`ValuesAre`); each of the ve
 naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
 else to the root it pinned before the record, else to the root the log first registered it under with the domain it
 takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
-recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.root`). -/
+recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
@@ -231,7 +242,7 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
     (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
       EntryIs e want (heldFor v.supplied held' want.value)) ∧
     SuppliedIs es mine' v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
 /-- R7's pool chain (`Registration.poolChained`): for a verifier with a pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the

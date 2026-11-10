@@ -2,20 +2,21 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record.Inner
 public import Proofs.Properties.Verity.Sampled.Record.Law
-public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Claims.KS.ZkExtend
 public import Proofs.Flock.Bridge.LeafMap
 
 /-!
 # Knowledge soundness at one-stage v2's sampling record (`ks_record`)
 
-`Claims.Sampling.KS_of` at the record, at SHA-512, each premise discharged at the deployed record:
+The compiled sampled verifier's KS at the record's compiled form (`SamplingDeploy.ks_compiled` at the record's code), at
+SHA-512, each premise discharged at the deployed record:
 
 * binding: the record's trace commitment is `A`'s at a circuit file of `sha512/row/v2` rows (`record_commit`), and that
   binds since no port of such a file is segmented (`segs_of_rowsV2`, `Flock.Bridge.commitDepL_binds`);
-* `SessionKS`: Flock's masked KS (`FlockDeploy.KS.zk_KS_untrim`), with the draw fixed before the session
-  (`drawFixed`), every checked unit's session the record's one (`sessionRuns`) and the inner numbers Flock's
-  (`innerNumbers`, where a reference draw file exists);
+* Flock's masked KS (`FlockDeploy.KS.zk_KS_untrim`) and its decoder within the radius (`listWithin_deployZk`), with the
+  draw fixed before the session (`drawFixed`), every checked unit's session the record's one (`sessionRuns`) and the
+  inner numbers Flock's (`innerNumbers`, where a reference draw file exists);
 * `SessionOpens` at a session v2 sets up (`sessionOpens`), the interior roots the statement's (`interiorFixed`), the
   draw law (`drawLaw`) and the scope refusal (`refuses_of_scopeOk`).
 
@@ -45,7 +46,7 @@ theorem record_binds (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A
 set_option synthInstance.maxSize 1024 in
 /-- **Knowledge soundness at the record**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's reads, as
 `sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeOk`) and a reference
-draw file (`RefOk`), the record's sampled verifier is knowledge sound (`Claims.Sampling.KS_of`). -/
+draw file (`RefOk`), the record's compiled sampled verifier is knowledge sound (`SamplingDeploy.ks_compiled`). -/
 theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
@@ -54,12 +55,13 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     (hpart : A.I.partition = some p.own.partition)
     (hidx : _root_.Spot.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
-    (href : ∃ d, RefOk A o d) : Claims.Sampling.KS sha512Msg (record A o e) :=
-  Claims.Sampling.KS_of (fun _ _ _ => A.roots) (record_binds A o e hv2)
-    (Claims.Sampling.SessionKS_of FlockDeploy.KS.zk_KS_untrim (drawFixed A o e) (sessionRuns A o e)
-      (innerNumbers e href) (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e)))
+    (href : ∃ d, RefOk A o d) :
+    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
+      (fun _ _ _ => A.roots)).KS sha512Msg :=
+  SamplingDeploy.ks_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
+    (fun _ _ _ => A.roots) sha512Msg FlockDeploy.KS.zk_KS_untrim (Claims.Sampling.listWithin_deployZk _)
+    (record_binds A o e hv2) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope) (interiorFixed A o e)
+    (drawFixed A o e) (sessionRuns A o e) (innerNumbers e href)
     (sessionOpens A o e hsu hn hpl hrd hpart hidx (record_commit A o e hv2) he _)
-    (interiorFixed A o e) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope)
-    (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e))
 
 end Verity.Sampled.Record

@@ -130,7 +130,7 @@ theorem repPiop_ot (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.Z
       | simp [FlockComplete.abcClaims_size]
   · simp
 
-theorem ot_get : OT I [] (fun _ => True) (get : TMW OpenM Transcript) := by
+theorem ot_get : OT I [] (fun _ => True) (get : TMW OpenM Flock.Transcript) := by
   intro t got rest hI
   exact ⟨trivial, hI, rfl⟩
 

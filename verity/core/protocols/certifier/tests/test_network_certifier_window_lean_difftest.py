@@ -1,11 +1,11 @@
 """The difftest of `window_charge.reference_window` against the certifier's Lean program: the Python half.
 
-`lean/scripts/window_vectors.py` writes 4,000 random instances, a book, a carry and windows of decision, hit and order
+`lean/scripts/window_vectors.py` writes 4,000 instances, a book, a carry and windows of decision, hit, order and length
 slots, and `reference_window`'s results on each: window by window from the carry, and chained from the book's first
 carry. `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
 `lean/NetworkCertifier/WindowDifftestMain.lean` evaluates every instance with the program's `WindowCharge.window` and
 `WindowCharge.charges` and fails on any difference, and `security_proofs` proves `charges` equal to
-`NetTiming.WindowCharge`'s (`CodeChargesWhole`). circuit-check holds `ChargeCount_v2{N, H, O}`'s circuit to
+`NetTiming.WindowCharge`'s (`CodeChargesWhole`). circuit-check holds `ChargeCount_v2{N, H, O, L}`'s circuit to
 `reference_window`, so this is what holds the circuit's charge to the Lean definition's. The audit checks that data
 against the record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says
 the data is still what this package computes: a change to `reference_window` changes the data, fails this test, and
@@ -39,10 +39,10 @@ def test_the_data_is_what_the_audit_pins(tmp_path):
     assert RUN["args"] == ["{window/instances.jsonl}", "{window/python.jsonl}", str(vectors.COUNT)]
 
 
-def _refusal(carry, slots) -> str:
-    """Why `reference_window` refuses a window: its carry, a hit, an order entry, or else the coder (a decision's KT
-    counts, a symbol the book's table can't code)."""
-    en, bit, hen, short, oen, p, r = slots
+def _refusal(inst, carry, slots) -> str:
+    """Why `reference_window` refuses a window: its carry, a hit, an order entry, the coder (a decision's KT counts, a
+    symbol the book's table can't code), a length term, or else the charge past `2^CW`."""
+    en, bit, hen, short, oen, p, r, qen, mt, olen = slots
     if carry.run >= arith_encode.RUNS or carry.rank > WC.INDEX_CAP + 1:
         return "the carry"
     if any(e and s > WC.HIT_CAP for e, s in zip(hen, short)):
@@ -60,7 +60,15 @@ def _refusal(carry, slots) -> str:
         if rr > WC.INDEX_CAP:
             return "a rank past INDEX_CAP"
         pos = pp + 1
-    return "the coder"
+    statics = inst["N"], inst["H"], inst["O"], inst["L"]
+    if not WC.reference_window(*statics, inst["book"], carry, *slots[:7], [0] * len(qen), mt, olen)[0]:
+        return "the coder"
+    for e, m, n in zip(qen, mt, olen):
+        if e and m > WC.MT_CAP:
+            return "a max_tokens past MT_CAP"
+        if e and n >> m.bit_length():
+            return "an output_len past bitlen(max_tokens) bits"
+    return "a charge past 2^CW"
 
 
 def test_the_generator_covers_what_it_says(monkeypatch):
@@ -96,23 +104,32 @@ def test_the_generator_covers_what_it_says(monkeypatch):
         seen["refused" if res["charges"] is None else "charged"] += 1
         seen["a session of 3 or more charged"] += res["charges"] is not None and len(res["charges"]) >= 3
         seen["no window"] += not inst["windows"]
-        seen["a window with no slot that holds a value"] += any(not any(w[0] + w[2] + w[4]) for w in inst["windows"])
+        seen["a window with no slot that holds a value"] += any(not any(w[0] + w[2] + w[4] + w[7])
+                                                                for w in inst["windows"])
         seen["hits and order entries"] += any(any(w[2]) and any(w[4]) for w in inst["windows"])
+        seen["length terms charged"] += any(any(w[7]) for w, s in zip(inst["windows"], res["steps"]) if s is not None)
+        seen["an output_len at the top of its width"] += any(
+            e and m <= WC.MT_CAP and m and n == (1 << m.bit_length()) - 1
+            for w in inst["windows"] for e, m, n in zip(*w[7:]))
         seen["a window charged 0"] += any(s is not None and s[0] == 0 for s in res["steps"])
         seen["counts at 2^KW - 1"] += any(sum(c) == (1 << vectors.KW) - 1 for c in inst["carry"].counts)
         if None in res["steps"]:
             carry = inst["carry"]
             for s in res["steps"][:-1]:
                 carry = WC.WindowCarry(tuple(map(tuple, s[1])), *s[2:])
-            seen[_refusal(carry, inst["windows"][len(res["steps"]) - 1])] += 1
+            seen[_refusal(inst, carry, inst["windows"][len(res["steps"]) - 1])] += 1
     for case in ("from the first carry", "from a carry", "a refused window", "every window accepted", "refused",
                  "charged"):
         assert seen[case] > 1000, (case, seen)
     for case in ("a session of 3 or more charged", "no window", "a window with no slot that holds a value",
                  "hits and order entries", "a window charged 0", "counts at 2^KW - 1", "the carry",
                  "a hit past HIT_CAP", "an entry at 2^32 - 1", "an entry before pos", "a gap past GAP_CAP",
-                 "a rank past INDEX_CAP", "the coder"):
+                 "a rank past INDEX_CAP", "the coder", "length terms charged", "an output_len at the top of its width",
+                 "a max_tokens past MT_CAP", "an output_len past bitlen(max_tokens) bits"):
         assert seen[case] > 20, (case, seen)
+    assert seen["a charge past 2^CW"] == 1, seen
+    edge = [vectors.python_results(vectors.instance(seed))["charges"] for seed in range(vectors.EDGES)]
+    assert edge == [[(1 << arith_encode.CW) - 1], None], edge
     for case in ((WC.HIT_CAP, WC.HIT_CAP), (WC.GAP_CAP, WC.GAP_CAP), (WC.ZIG_CAP, WC.ZIG_CAP), "bins at top",
                  "two uniform steps"):
         assert coded[case] > 20, (case, coded)

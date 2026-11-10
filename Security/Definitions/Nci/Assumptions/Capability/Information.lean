@@ -65,7 +65,7 @@ randomness: a weight whose trained value varies across runs by `s` quantization 
 fails when training is a deterministic function of registered information (public data in a registered order, registered
 seeds), however slow that function is; `DescriptionHard` covers that case. It concerns exact values; a method that
 learns with approximate ones is a different method, which coverage must account for. -/
-def MinEntropyHard (R : Committed) {ι : Type} (X : Items R.d.D ι) (μ : PMF R.d.D.Transcript) (Λ : ℝ) : Prop :=
+def MinEntropyHard (R : Committed) {ι : Type} (X : Items R.d.D ι) (μ : PMF R.d.D.Trace) (Λ : ℝ) : Prop :=
   ∀ (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)) (v : List Bool), Selects X U σ →
     μ.toOuterMeasure {a | selectionBits (R.d.D.eval a) U σ = v} ≤
       ENNReal.ofReal ((2 : ℝ) ^ (Λ - ∑ i ∈ U, X.price i))
@@ -75,7 +75,7 @@ canonical encoding) of length `ℓz`, with deficiency `δ`, within `τ` steps: i
 `LDL_{τ,r}(z) ≥ ℓz − δ`. The deficiency is paid in every block's bound, so a `δ` far above a block's budget leaves the
 recovery route empty; a compressed representation of a structured update does not by itself give a source with small
 deficiency. -/
-def SourceHard (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (z : R.d.D.Transcript → List Bool)
+def SourceHard (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (z : R.d.D.Trace → List Bool)
     (ℓz δ : ℝ) : Prop :=
   ∀ a, R.Honest a → ENNReal.ofReal (ℓz - δ) ≤ (LDL M τ r (z (R.d.D.eval a)) : ℝ≥0∞)
 
@@ -90,7 +90,7 @@ not shorten the complement one coordinate each (for an exact linear map the rank
 bound on the candidates is not a decoder within `τ`, and inputs the recovery needs must be among what `SourceHard`'s
 decoder is given. -/
 def Recovers (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e : List Bool)
-    (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.d.n → ℕ) : Prop :=
+    (z : R.d.D.Trace → List Bool) (ℓz βv amb : ℝ) (J : Fin R.d.n → ℕ) : Prop :=
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
 

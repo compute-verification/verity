@@ -31,7 +31,9 @@ at the row's class (`vllm_dsa.long_row_keys`: its keys rounded up to a multiple 
 and their history rows zero): DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings sets the concentrator for it, and
 both kinds of layer read the TOPK rows DsaButterflyRows routes at those settings, in ascending index order (the row
 `VERITY_DSA_TOPK=canonical` serves); below its class through DsaButterflyRowsPad, the history and its pad two arguments, so a
-row's history is the row before's plus one part in the descriptor.  A fact outside it raises
+row's history is the row before's plus one part in the descriptor.  In class G's batched form a call's rows past INDEX_TOPK go in
+blocks (`vllm_dsa.long_row_blocks`), each row read at its block's keys and selecting among its own (DsaTopKMaskCounted), each
+op over a block's rows in turn, and a token's latent row is one DsaLatentRow, as the rule writes them.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -287,9 +289,12 @@ class DensePlan(NamedTuple):
 class _Model:
     """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
     `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
-    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads."""
+    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads.  `batched`: class G's batched form
+    (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
+    (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them."""
 
     reads_launch = True
+    batched = False
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
         self.net, self.C, self.B, self.peers = net, net.C, B, peers
@@ -457,7 +462,7 @@ class _Model:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import (DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY, PAD_SCORE,
-                                                                 long_row_keys, pad_words)
+                                                                 long_row_blocks, long_row_keys, pad_words)
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -471,10 +476,16 @@ class _Model:
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp = self.cublas(x, w("wk_w")) if indexer else None
-        qn, kn, kr = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS), self.k("dsa_rmsnorm", N=KVL, EPS=self.EPS), self.k("dsa_kv_rope", D=R)
+        qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
-        kvc = [self.call(kn, q.slice(QL, QL + KVL), w("kv_a_ln").refs).refs for q in qkv]
-        kpe = [self.call(kr, q.slice(QL + KVL, QL + KVL + R), c).refs for q, c in zip(qkv, cs)]
+        if self.batched:
+            lr = self.k("dsa_latent_row", KVL=KVL, R=R, EPS=self.EPS)
+            lat = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c).refs for q, c in zip(qkv, cs)]
+            kvc, kpe = [r.slice(0, KVL) for r in lat], [r.slice(KVL, KVL + R) for r in lat]
+        else:
+            kn, kr = self.k("dsa_rmsnorm", N=KVL, EPS=self.EPS), self.k("dsa_kv_rope", D=R)
+            kvc = [self.call(kn, q.slice(QL, QL + KVL), w("kv_a_ln").refs).refs for q in qkv]
+            kpe = [self.call(kr, q.slice(QL + KVL, QL + KVL + R), c).refs for q, c in zip(qkv, cs)]
         if indexer:
             fn = self.k("dsa_indexer_k_row", D=ID, ROPE=R, EPS=float(C["INDEX_K_EPS"]))
             slots = [self.call(fn, k.slice(0, ID), w("k_norm_w").refs, w("k_norm_b").refs, c) for k, c in zip(wkp, cs)]
@@ -496,7 +507,10 @@ class _Model:
                 logs["iks"].append(s[1].refs)
             select = self.k("dsa_topk_short_row", TOPK=TOPK)
             self.topk = {}
+            blocks = long_row_blocks(keys, TOPK) if self.batched and mqa else []
             for i, n in enumerate(keys if mqa else ()):
+                if blocks and n > TOPK:
+                    break
                 logits = self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
                                    logs["iks"].cut(n))
                 if n <= TOPK:
@@ -508,15 +522,35 @@ class _Model:
                 scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
+            for Nb, rows in blocks:
+                if self.net.long_rows:
+                    _refuse(self.net.long_rows)
+                N, lg = long_row_keys(Nb, TOPK), self.k("dsa_mqa_logits", N=Nb, H=IH, D=ID)
+                ik, iks = logs["ik"].cut(Nb), logs["iks"].cut(Nb)
+                logits = [self.call(lg, iq[i][0].refs, iq[i][1].refs, ik, iks).refs for i in rows]
+                counts = [self.pad(32, keys[i], 1, 1) for i in rows]
+                tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
+                fm, fs = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK), self.k("dsa_butterfly_settings", N=N, TOPK=TOPK)
+                masks = [self.call(fm, concat([s, *tail]) if tail else s, c).refs for s, c in zip(logits, counts)]
+                for i, m in zip(rows, masks):
+                    self.topk[pos0 + i] = self.call(fs, m)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
+        rows_of: dict[int, Refs] = {}
+        for Nb, rows in (long_row_blocks(keys, TOPK) if self.batched else ()):
+            N, hist = long_row_keys(Nb, TOPK), logs["latent"].cut(Nb)
+            fr, rest = ((self.k("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R),
+                         (self.pad(16, 0, pad_words(TOPK, KVL + R), (N - Nb) * (KVL + R)),)) if N > Nb else
+                        (self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), ()))
+            for i in rows:
+                rows_of[i] = self.call(fr, self.topk[pos0 + i].refs, hist, *rest).refs
         att = []
         for i, n in enumerate(keys):
-            kv = logs["latent"].cut(n)
-            if n > TOPK:
+            kv = rows_of[i] if i in rows_of else logs["latent"].cut(n)
+            if n > TOPK and i not in rows_of:
                 N = long_row_keys(n, TOPK)
                 if N > n:
                     kv = self.call(self.k("dsa_butterfly_rows_pad", T=n, N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv,
