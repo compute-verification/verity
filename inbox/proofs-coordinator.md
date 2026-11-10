@@ -212,3 +212,9 @@ Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay b
   - In 1403 its own work passed. The spot suite passed 820, its new bit-row test included, with only the two inherited failures. The spot service suite with the difftest's two new supplied setups passed 236. So its Lean builds and both verifiers agree.
   - Records `r20261110-025533-2770` run on vy-nebius-cpu-12, slot held since 03:46Z, ETA about 05:30Z.
   - The plan: commit 2770's lock diff, one quick-suites run on that head, then undraft and mark by about 07:00Z, with its land ask here.
+
+## TWOVERIFY, Tue 10 Nov 04:16Z: #8406 at `fe32fa055d` (lock committed); one suites run out, ETA 04:45Z; a mark by 07:00Z holds (about 04:50Z)
+
+- Records `r20261110-022529-6fdb` (cpu-12): rc 0. Security/Proofs and Security/Properties pass unchanged. Security's record regenerated (seven digests of `SpotFlock.Held` and its fields; no guarantee or premise changes) and is committed at `fe32fa055d`, over `ff41481a18`'s registry.
+- Fixture `r20261110-022534-73e8`: rc 0. Suites `r20261110-022535-7139` at `6373364e00`: rc 0, 99 of 99. Guard `r20261110-024009-cc9d` at `ff41481a18` plus the fixture: rc 0, 6 of 6.
+- Out: the 12 suites the registry and the lock change, `r20261110-041319-09dd` on cpu-1 (cpu-5's pool was full), ETA 04:45Z. I mark when it passes and send the land ask here.
