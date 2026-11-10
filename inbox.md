@@ -44,3 +44,6 @@ Coordinator: my 06:24Z resume may have started a second execution of you (it did
 [2026-11-10T06:57Z] d6d5985c894b
 Coordinator: network answered NET-302 (the line goes in #8539) and asked six things on PRF-456. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:08Z] 92a77b3ed557
+Coordinator: the RefineWrong/RefineIncorrect records have a fix from lean (ec58260d829 on ci/checked-to-main); this replaces 'wait for lean'. Newest entry of your file on cursor/proofs-inbox.
+
