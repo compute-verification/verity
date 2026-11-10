@@ -357,13 +357,11 @@ AGREEMENT_URLS_ENV = "CHECK_AGREEMENT_URLS"
 AGREEMENT_URL_KEYS = {"art": str, "sha256": str, "bytes": int, "url": str}
 
 
-def agreement_sent(urls: Path | None) -> dict[str, dict]:
+def agreement_sent(urls: Path) -> dict[str, dict]:
     """The pinned upstream build and inputs that the file ``urls`` (`take_agreement_urls`) lists with their pinned sha256:
-    {"upstream": entry, "inputs": entry} for those it lists so, each entry `AGREEMENT_URL_KEYS`."""
-    try:
-        doc = json.loads(urls.read_text()) if urls is not None else {}
-    except (OSError, ValueError):
-        doc = {}
+    {"upstream": entry, "inputs": entry} for those it lists so, each entry `AGREEMENT_URL_KEYS`.  OSError or ValueError when
+    the file can't be read as JSON."""
+    doc = json.loads(urls.read_text())
     pin = json.loads(UPSTREAM_PIN.read_text())
     return {k: p for k in ("upstream", "inputs") if isinstance(doc, dict) and isinstance(p := doc.get(k), dict)
             and all(isinstance(p.get(f), t) for f, t in AGREEMENT_URL_KEYS.items()) and p["sha256"] == pin[k]["sha256"]}
@@ -908,8 +906,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run was sent its URLs
-    (``agreement_urls``, `take_agreement_urls`), which the step fetches; without them that step
-    is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
+    (``agreement_urls``, `take_agreement_urls`), which the step fetches; without them that step is skipped by name, and it
+    fails when the file sent can't be read or doesn't list both.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
     built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
@@ -923,12 +921,15 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
                                   "verity/core/service/flock/ requires this step: `check.py --record` sends its URLs)")
-    if UPSTREAM_PIN.exists():
-        got = agreement_sent(agreement_urls)
-        if len(got) == 2:
-            agreement = [sys.executable, str(Path(__file__).resolve()), "--lean-agreement-urls", str(out), str(agreement_urls)]
-        elif got:
-            agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
+    if UPSTREAM_PIN.exists() and agreement_urls is not None:
+        try:
+            got = agreement_sent(agreement_urls)
+        except (OSError, ValueError) as e:
+            agreement = f"the URLs sent for the pinned upstream build and inputs can't be read ({type(e).__name__})"
+        else:
+            agreement = ([sys.executable, str(Path(__file__).resolve()), "--lean-agreement-urls", str(out), str(agreement_urls)]
+                         if len(got) == 2 else
+                         f"the URLs sent list {' and '.join(got) or 'neither'} of the pinned upstream build and inputs")
     if outside := requires_outside(lean):
         agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
                      f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
@@ -1124,7 +1125,11 @@ def lean_agreement_urls(out: Path, urls: Path, sleep=time.sleep) -> int:
     inputs through their URLs into a scratch directory outside the run directory, each held to its listed size and pinned
     sha256 (`fetch_signed`) and fetched again after each of `AGREEMENT_FETCH_WAITS_S` while it fails, then `lean_agreement` on
     them.  A cached pass of the step runs none of it, so a check that reuses the agreement fetches nothing."""
-    got = agreement_sent(urls)
+    try:
+        got = agreement_sent(urls)
+    except (OSError, ValueError) as e:
+        print(f"check: lean-agreement: error: {urls} can't be read ({type(e).__name__})", file=sys.stderr)
+        return 1
     if len(got) != 2:
         print(f"check: lean-agreement: error: {urls} lists {' and '.join(got) or 'neither'} of the pinned upstream build and "
               f"inputs", file=sys.stderr)

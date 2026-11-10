@@ -143,8 +143,8 @@ def _signed(sent: Path, at: Path) -> Path:
 
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     """`lake build`, the unit-cut conformance and the audit of every Lean package are required; the agreement runs when the run
-    was sent URLs of the pinned upstream build and inputs, each listed with its pinned sha256, and is skipped by name
-    otherwise."""
+    was sent URLs of the pinned upstream build and inputs, each listed with its pinned sha256, is skipped by name when it was
+    sent none, and fails when the file it was sent can't be read or doesn't list both, rather than passing for not sent."""
     import json
 
     out, sent = _pinned(tmp_path, monkeypatch)
@@ -163,12 +163,13 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert argv[1].endswith("tools/verity/check/check.py") and argv[2:] == ["--lean-agreement-urls", str(out), str(urls)]
     doc = json.loads(urls.read_text())
     urls.write_text(json.dumps({**doc, "inputs": {**doc["inputs"], "sha256": "0" * 64}}))
-    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list upstream of the pinned upstream build and inputs"
     for unsigned in ({"upstream": {**doc["upstream"], "url": None}}, ["upstream"]):
         urls.write_text(json.dumps(unsigned))
-        assert CHECK.lean_steps(out, agreement_urls=urls)[3][1].startswith("skipped: the pinned upstream build was not sent")
+        assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list neither of the pinned upstream build and inputs"
     urls.write_text("{")
-    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1].startswith("skipped: the pinned upstream build was not sent")
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == ("the URLs sent for the pinned upstream build and inputs can't be "
+                                                                "read (JSONDecodeError)")
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
@@ -336,6 +337,9 @@ def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path
     urls.write_text(json.dumps({"upstream": doc["upstream"]}))
     assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
     assert f"error: {urls} lists upstream of the pinned upstream build and inputs" in capsys.readouterr().err
+    urls.write_text("{")
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
+    assert f"error: {urls} can't be read (JSONDecodeError)" in capsys.readouterr().err
 
 
 def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, monkeypatch, capsys):
