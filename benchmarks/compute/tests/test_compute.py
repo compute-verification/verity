@@ -5,17 +5,18 @@ give the model's MACs exits 2. The model's MACs are held to a count made one pos
 of logits at a time. PoUW's row in the run's composed record is printed whatever it says, and nothing the developer's
 node reports of what it served is read.
 
-Nothing here reaches the evidence store: `FakeStore` stands in for it over the small record under `fixtures/record`
-(a run's `out/`), which each test copies and edits."""
+Nothing here reaches the evidence store: `FakeStore` stands in for research's local store over the small record under
+`fixtures/record` (a run's `out/`), which each test copies and edits. A record withdrawn whole, or in a part that holds
+a file the command reads, is refused before anything is fetched, and a withdrawal of other files of it is printed."""
 from __future__ import annotations
 
-import fnmatch
 import json
 import shutil
 import sys
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,30 +64,53 @@ def to(*keys, value) -> Callable[[dict], None]:
     return edit
 
 
+class Refused(Exception):
+    """What the fake store raises, as research's store raises its own error."""
+
+
 class FakeStore:
-    """The evidence store as `run.EvidenceStore` offers it, over records laid out under a directory. `files` hands back
-    a directory of only the files the globs name, as a fetch does."""
+    """Research's local store as `run.EvidenceStore` reads it, over records laid out under a directory: attempts,
+    labels, a record's listing, and a fetch that hands back a directory of only the files asked for."""
 
     def __init__(self, root: Path) -> None:
-        self.root, self.attempts, self.records, self.asked = root, {}, {}, []
+        self.root, self.attempts, self.records, self.labelled, self.fetched, self.pulled = root, {}, {}, {}, [], []
 
     def add(self, run: str, record: Path | None, *, rc: int = 0, dirty: bool = False) -> None:
-        self.attempts[run] = {"source": {"commit": COMMIT, "dirty": dirty}, "status": {"rc": rc}}
-        self.records[run] = record
+        outputs = {} if record is None else {"run_record": f"art:{run}"}
+        self.attempts[run] = {"source": {"commit": COMMIT, "dirty": dirty}, "status": {"rc": rc}, "outputs": outputs}
+        self.records[f"art:{run}"] = record
 
-    def attempt(self, run: str) -> dict | None:
+    def withdraw(self, target: str, value: str, by: str = "infra") -> None:
+        self.labelled.setdefault(target, []).append(SimpleNamespace(key="withdrawn", value=value, by=by))
+
+    def pull(self, store: FakeStore, targets: list[str], warn: Callable[[str], None]) -> None:
+        assert store is self
+        self.pulled.append(targets)
+
+    def get_attempt(self, run: str) -> dict | None:
         return self.attempts.get(run)
 
-    def files(self, run: str, globs: list[str]) -> Path | None:
-        if run not in self.attempts:
-            raise C.Unreadable(f"{run} is not in the evidence store this machine reads")
-        self.asked.append(list(globs))
-        record, fetched = self.records[run], self.root / f"fetched-{len(self.asked)}"
-        held = [] if record is None else [p.relative_to(record) for p in record.rglob("*") if p.is_file()]
-        for rel in (p for p in held if any(fnmatch.fnmatchcase(p.as_posix(), g) for g in globs)):
-            (fetched / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(record / rel, fetched / rel)
-        return fetched if fetched.is_dir() else None
+    def labels(self, target: str, key: str | None = None) -> list[SimpleNamespace]:
+        assert any(target in targets for targets in self.pulled), f"{target}'s labels were read before they were pulled"
+        return [lab for lab in self.labelled.get(target, []) if key in (None, lab.key)]
+
+    def _held(self, art: str) -> list[str]:
+        record = self.records[art]
+        return sorted(p.relative_to(record).as_posix() for p in record.rglob("*") if p.is_file())
+
+    def listing(self, art: str, paths: list[str] | None = None) -> list[dict]:
+        return [{"path": n} for n in self._held(art) if paths is None or n in paths]
+
+    def fetch(self, art: str, *, paths: list[str]) -> Path:
+        self.fetched.append(list(paths))
+        wanted = [row["path"] for row in self.listing(art, paths)]
+        if not wanted:
+            raise Refused(f"{art}: no file matches {paths}")
+        to = self.root / f"fetched-{len(self.fetched)}"
+        for name in wanted:
+            (to / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.records[art] / name, to / name)
+        return to
 
 
 @pytest.fixture
@@ -97,7 +121,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
 
 
 def bench(store: FakeStore, *argv: str) -> int:
-    return C.main(list(argv), store_of=lambda: store)
+    return C.main(list(argv), store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
 
 
 def printed(capsys) -> tuple[list[str], dict | None, str]:
@@ -154,6 +178,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert (doc["credited_macs"], doc["model_macs"], doc["macs"], doc["passes_macs"]) == (CREDITED, TOTAL, MACS, 120_000_000_000)
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": "development run, credits nothing: the registration can't be read"}
+    assert doc["withdrawn"] == [] and store.pulled == [[RUN, f"art:{RUN}"]]
     assert doc["tokens"] == {"prompt": 128, "output": 16, "positions": 140} and doc["tokens_from"] == "class"
     assert doc["wall_s"] is None and doc["capacity_share"] is None
 
@@ -247,18 +272,87 @@ def test_a_record_with_no_lean_verdict_prints_the_answers_number_and_says_so(sto
     assert doc["lean"] is False and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
 
 
-@pytest.mark.parametrize("record", [None, {"ANSWER": None}])
-def test_a_run_that_left_no_answer_prints_no_number_and_exits_1(store, tmp_path, capsys, record):
-    store.add(RUN, None if record is None else a_record(tmp_path, **record), rc=3)
+@pytest.mark.parametrize("edits", [{"ANSWER": None}, dict.fromkeys(("ANSWER", "LEAN", "LEAN_CHECK", "POLICY", "VERDICTS"))])
+def test_a_run_that_left_no_answer_prints_no_number_and_exits_1(store, tmp_path, capsys, edits):
+    record = a_record(tmp_path, **edits)
+    (record / "out/result.json").write_text("{}")
+    store.add(RUN, record, rc=3)
     assert bench(store, "--from", RUN) == 1
     out, err = capsys.readouterr()
     assert out == "" and f"compute: no number: {RUN} left no Pearl+ answer (it ended rc 3)" in err
 
 
-def test_a_run_that_is_not_in_the_store_exits_2(store, capsys):
+def test_a_run_that_is_not_in_the_store_or_kept_no_record_exits_2(store, capsys):
     assert bench(store, "--from", RUN) == 2
     out, err = capsys.readouterr()
     assert out == "" and f"compute: {RUN} is not in the evidence store" in err
+    store.add(RUN, None)
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"compute: {RUN} kept no record" in err
+
+
+def test_a_store_that_cannot_be_read_exits_2(store, tmp_path, capsys, monkeypatch):
+    store.add(RUN, a_record(tmp_path))
+
+    def refuse(*args, **kwargs):
+        raise Refused("the remote doesn't answer")
+    monkeypatch.setattr(store, "fetch", refuse)
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"compute: {RUN}'s record can't be fetched: the remote doesn't answer" in err
+    monkeypatch.setattr(store, "get_attempt", refuse)
+    assert bench(store, "--from", RUN) == 2
+    assert "compute: the evidence store can't be read: the remote doesn't answer" in capsys.readouterr().err
+
+    def absent():
+        raise C.Unreadable("the evidence store's client isn't installed here (No module named 'research')")
+    assert C.main(["--from", RUN], store_of=absent) == 2
+    assert "compute: the evidence store's client isn't installed here" in capsys.readouterr().err
+
+
+OTHERS = "out/pieces/pouw/coin-put.json, out/pieces/pouw/development.json"
+
+
+@pytest.mark.parametrize("target", [f"art:{RUN}", RUN])
+@pytest.mark.parametrize("value", [
+    "private values were published",                                   # the whole record
+    f"private values were published (only {C.ANSWER})",                # a file read here
+    "private values were published (only out/pieces)",                 # a directory holding files read here
+    f"private values were published (only {OTHERS}, out/record/)",     # one of its prefixes holds a file read here
+    "private values were published (only the sealed bundle)",          # a reason that ends like a scope and names no file
+    "private values were published (only *)",
+    f"(only {OTHERS}) and the rest",
+])
+def test_a_record_withdrawn_whole_or_where_it_is_read_is_refused_before_anything_is_fetched(store, tmp_path, capsys,
+                                                                                         target, value):
+    record = a_record(tmp_path)
+    for name in OTHERS.split(", "):
+        (record / name).write_text("{}")
+    store.add(RUN, record)
+    store.withdraw(target, value)
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"compute: {RUN} was withdrawn ({value!r}, by infra): nothing of it is fetched" in err
+    assert store.fetched == []
+
+
+def test_a_withdrawal_of_other_files_of_the_record_is_printed_beside_the_number(store, tmp_path, capsys):
+    record = a_record(tmp_path)
+    for name in OTHERS.split(", "):
+        (record / name).write_text("{}")
+    store.add(RUN, record)
+    store.withdraw(f"art:{RUN}", f"the private value of a coin can be recovered (only {OTHERS})")
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    said = f"'the private value of a coin can be recovered (only {OTHERS})', by infra"
+    assert doc["withdrawn"] == [said] and doc["value"] == 0.75
+    assert text[3] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert store.fetched == [C.RECORDS] and store.pulled == [[RUN, f"art:{RUN}"]]
+    # a later withdrawal of the whole record refuses it
+    store.withdraw(f"art:{RUN}", "the rest holds private values too")
+    assert bench(store, "--from", RUN) == 2
+    assert "'the rest holds private values too', by infra" in capsys.readouterr().err
 
 
 def test_the_command_line_names_a_run(store, capsys):
@@ -312,7 +406,7 @@ def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tm
     store.add(RUN, record)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert store.asked == [C.RECORDS] and not any("development" in g or "*" in g for g in C.RECORDS)
+    assert store.fetched == [C.RECORDS] and not any("development" in g or "*" in g for g in C.RECORDS)
     assert doc["wall_s"] is None and doc["capacity_share"] is None and text[-1] == f"  capacity share: {C.ABSENT}"
     assert doc["credited_macs"] == CREDITED
 

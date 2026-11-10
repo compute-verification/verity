@@ -42,14 +42,16 @@ the verifier holds the passes to) is printed as absent: a Pearl+ answer states n
 read.
 
 It exits 0 with the number printed, 1 with none (the answer isn't an accept, the Lean verifier's verdict isn't the
-answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read. A withdrawn run
-is refused before any of it is fetched. Under `research run` the printed document is also `$OUT/compute.json`; there
-the evidence store is read with the run's `--store-read` key.
+answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read. A record
+withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
+other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
+there the evidence store is read with the run's `--store-read` key.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Callable
 from fractions import Fraction
@@ -71,6 +73,8 @@ VERDICTS = "out/record/verdicts.json"
 RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS]
 ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
           "developer's node")
+#: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
+SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
 
 class Shape(NamedTuple):
@@ -95,16 +99,17 @@ class Unreadable(Exception):
     """A run, its policy or its record can't be read."""
 
 
-class EvidenceStore:
-    """The evidence store as this command reads it: a run's attempt and some of its files."""
+def _under(path: str, prefix: str) -> bool:
+    return path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/")
 
-    def __init__(self) -> None:
-        try:
-            from research.store import labels_sync
-            from research.store.local import LocalStore, StoreError
-        except ImportError as e:
-            raise Unreadable(f"the evidence store's client isn't installed here ({e})") from e
-        self.store, self.sync, self.error = LocalStore(), labels_sync, StoreError
+
+class EvidenceStore:
+    """The evidence store as this command reads it: a run's attempt and some of its files. `store` is research's local
+    store, `pull` brings its labels of some targets up to the remote's, `error` is what the store raises, and
+    `withdrawn` is the key of the label a withdrawal leaves."""
+
+    def __init__(self, store, pull: Callable, error: type[Exception], withdrawn: str) -> None:
+        self.store, self.pull, self.error, self.withdrawn = store, pull, error, withdrawn
 
     def attempt(self, run: str) -> dict | None:
         try:
@@ -112,24 +117,44 @@ class EvidenceStore:
         except (self.error, ValueError) as e:
             raise Unreadable(f"the evidence store can't be read: {e}") from e
 
-    def files(self, run: str, globs: list[str]) -> Path | None:
-        """A directory holding the files of `run`'s record that match `globs`, at their paths in the run; None when
-        none does."""
+    def files(self, run: str, paths: list[str]) -> tuple[Path | None, list[str]]:
+        """A directory holding the files of `run`'s record at `paths`, each a file's whole path in the run (None when
+        the record holds none of them), and what was withdrawn of the rest of the record, each as its label says it.
+        A record withdrawn whole, or in a part that holds one of `paths`, is refused before any of it is fetched."""
         a = self.attempt(run)
         if a is None:
             raise Unreadable(f"{run} is not in the evidence store this machine reads")
         art = (a.get("outputs") or {}).get("run_record") or (a.get("outputs") or {}).get("run_files")
         if not art:
             raise Unreadable(f"{run} kept no record")
-        self.sync.read_through(self.store, [run, art], lambda m: print(f"compute: {m}", file=sys.stderr))
-        if why := self.store.withdrawn(art) or self.store.withdrawn(run):
-            raise Unreadable(f"{run} was withdrawn ({why}): nothing of it is fetched")
+        self.pull(self.store, [run, art], lambda m: print(f"compute: {m}", file=sys.stderr))
         try:
-            if not self.store.listing(art, globs):
-                return None
-            return Path(self.store.fetch(art, paths=globs))
+            names = [f["path"] for f in self.store.listing(art)]
+            gone = []
+            for label in (lab for target in (art, run) for lab in self.store.labels(target, key=self.withdrawn)):
+                said = f"{label.value!r}, by {label.by}"
+                scoped = SCOPED.search(str(label.value))
+                prefixes = scoped.group(1).split(", ") if scoped else []
+                # a reason can end like a list of prefixes without being one: each must hold a file of this record
+                partial = bool(prefixes) and all(any(_under(n, p) for n in names) for p in prefixes)
+                if not partial or any(_under(f, p) for f in paths for p in prefixes):
+                    raise Unreadable(f"{run} was withdrawn ({said}): nothing of it is fetched")
+                gone.append(said)
+            if not any(n in paths for n in names):
+                return None, gone
+            return Path(self.store.fetch(art, paths=paths)), gone
         except self.error as e:
             raise Unreadable(f"{run}'s record can't be fetched: {e}") from e
+
+
+def opened() -> EvidenceStore:
+    """The evidence store this machine reads, through research's client."""
+    try:
+        from research.store import labels_sync, vocab
+        from research.store.local import LocalStore, StoreError
+    except ImportError as e:
+        raise Unreadable(f"the evidence store's client isn't installed here ({e})") from e
+    return EvidenceStore(LocalStore(), labels_sync.read_through, StoreError, vocab.WITHDRAWN)
 
 
 def model_macs(shape: Shape, slots: int, prompt: int, outputs: int) -> dict[str, int]:
@@ -227,9 +252,9 @@ def row(tree: Path) -> dict:
         raise Unreadable(f"the run's composed record doesn't read as one ({type(e).__name__}: {e})") from e
 
 
-def document(tree: Path, commit: str | None, run: str | None) -> dict:
+def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[str]) -> dict:
     """The printed document of the record under `tree`: the number, its unit, the commit the run ran from and the run,
-    then what the number is made of."""
+    then what the number is made of. `withdrawn` is what was withdrawn of the rest of the record."""
     c, served, record = credit(tree), load(tree), row(tree)
     macs = served["macs"]
     most = max(c["credited"], c["passes"] or 0)
@@ -240,10 +265,9 @@ def document(tree: Path, commit: str | None, run: str | None) -> dict:
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
-            "epsilon": c["epsilon"], "delta": c["delta"], "lean": c["lean"], "record": record, "model": served["model"],
-            "class": served["class"],
-            "policy_agrees": served["policy_agrees"], "tokens": served["tokens"], "tokens_from": "class",
-            "wall_s": None, "capacity_share": None}
+            "epsilon": c["epsilon"], "delta": c["delta"], "lean": c["lean"], "record": record, "withdrawn": withdrawn,
+            "model": served["model"], "class": served["class"], "policy_agrees": served["policy_agrees"],
+            "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None}
 
 
 def commit_of(attempt: dict) -> str | None:
@@ -256,10 +280,10 @@ def from_run(store, run: str) -> dict:
     attempt = store.attempt(run)
     if attempt is None:
         raise Unreadable(f"{run} is not in the evidence store this machine reads")
-    tree = store.files(run, RECORDS)
+    tree, withdrawn = store.files(run, RECORDS)
     if tree is None or not (tree / ANSWER).is_file():
         raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(tree, commit_of(attempt), run)
+    return document(tree, commit_of(attempt), run, withdrawn)
 
 
 def text(doc: dict) -> str:
@@ -276,6 +300,8 @@ def text(doc: dict) -> str:
     lines.append("  PoUW's row in the run's composed record " + ("accepts too" if record["verdict"] == "accept" else
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
                  + ", so the credit is the Pearl+ piece's alone" + (f": {record['why']}" if record["why"] else "")))
+    if doc["withdrawn"]:
+        lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
     lines.append(f"  {doc['model']} at {cls['slots']} slots of {cls['prompt']} prompt and {cls['outputs']} output "
                  f"tokens: linears {macs['linears']:,}, attention {macs['attention']:,} and LM head {macs['lm_head']:,} "
                  f"MACs" + (", which is the policy's own count of its class" if doc["policy_agrees"] else ""))
@@ -288,7 +314,7 @@ def text(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = EvidenceStore) -> int:
+def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore] = opened) -> int:
     """The command: 0 with the number printed, 1 with none, 2 when the command line, the run or its policy can't be
     read. `store_of` opens the evidence store."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
