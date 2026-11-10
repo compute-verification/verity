@@ -38,7 +38,7 @@ OUT = os.environ.get("OUT") or os.path.join(os.environ.get("RESEARCH_RUN_DIR", R
 IDENT = {"GIT_AUTHOR_NAME": "lean restack rehearsal", "GIT_AUTHOR_EMAIL": "lean-restack@verity.invalid",
          "GIT_COMMITTER_NAME": "lean restack rehearsal", "GIT_COMMITTER_EMAIL": "lean-restack@verity.invalid",
          "GIT_AUTHOR_DATE": "2026-11-10T08:00:00+00:00", "GIT_COMMITTER_DATE": "2026-11-10T08:00:00+00:00"}
-RESTACK_TIMEOUT_S = 75 * 60
+RESTACK_TIMEOUT_S = 160 * 60
 
 
 def minutes(t0: float) -> float:
