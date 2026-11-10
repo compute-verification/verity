@@ -173,15 +173,16 @@ from . import carry, policy, vqueue_records
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .gates import git_env
-from .landing import (ACTIVE, AFTER_LANDING, CI, CIRCUIT_RED, INFRA, LAUNCHES, LEAN_AUDIT_RE, LEAN_STEP, LOST_AFTER_S, NOT_STARTED,
-                      PREFLIGHT, RATCHET_STEP, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SPANS, SUITES_KIND, SUITE_STEPS, Landing, _hhmm,
-                      _job_end, _step_log, _suite_log, authed, cancel_runs, detach, evidence, implicated, killed, merge_thread_post,
+from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, CI, CIRCUIT_RED, INFRA, LEAN_AUDIT_RE, LEAN_STEP, LOST_AFTER_S,
+                      NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SPANS, SUITES_KIND, SUITE_STEPS,
+                      Landing, _hhmm, _step_log, _suite_log, authed, cancel_runs, evidence, implicated, killed, merge_thread_post,
                       not_run, run_states, shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths,
                       suite_pyproject, suite_rows, train_launch)
 from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git,
                     _out, _who, built_on, changed, forces_cold, label_target, lean_change, move_of, on_first_parents, queue_commit,
                     unreviewed)
 from .queue_stats import ts
+from .reds import RATCHET_STEP, ratchet_failed, red_owners
 from .store import vocab
 from .vqueue_records import LOCK_SUBJECT, bookkeeping_told, lock_checked, lock_message, lock_path
 
@@ -201,9 +202,6 @@ UNLANDABLE_COMMENT = ("Closed by drive: {why}, so nothing would land it as it is
                       "drive leaves it open at this head, or mark it ready (`research queue ready {n} --mark`) and it queues again.")
 #: Lean's own inputs, for a Lean step that failed with no file named
 LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
-#: the ratchet gate's line for a change it fails (`ratchet_gate.render`): its name (`#N`, or a range of commits), its top
-#: commit's first 12 digits, and why
-RATCHET_FAILED_RE = re.compile(r"^  (\S+) \(([0-9a-f]{12})\): failed: (.*)$", re.M)
 #: what a review landing's verdict says
 REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that nothing reads (train landing's, the Lean checks of `next`'s), dropped from a state that has them
@@ -270,9 +268,6 @@ class Verdict:
 #: how long a sharded after-landing run waits for circuit-check's records step (`_records`, about 8 min cold) before its shards
 #: launch without it, each building the records itself, so a lost step never holds the run
 RECORDS_WAIT_S = 2400
-#: how long a sharded after-landing run of `after_landing_shards = "auto"` waits for its plan (`_plan`: gathering the newest
-#: checks' verdict packs to price it takes minutes on the control pod) before it is stopped and the run launches unsharded
-PLAN_WAIT_S = 2400
 
 
 def records_artifact(store, rid: str) -> str | None:
@@ -285,44 +280,6 @@ def records_artifact(store, rid: str) -> str | None:
         return None
     sha = ((store.get_manifest(res).meta or {}).get("records") or {}).get("sha256")
     return f"{art}@{sha}" if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha) else None
-
-
-#: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
-AUTO_PLAN = "check-shard-plan.json"
-#: a sharded after-landing run's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES
-#: as train.sh's are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's
-#: directory ($1), the worktree removed after; its venv kept between plans
-PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
-            'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
-            'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
-            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
-
-
-def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
-    """The auto plan of ``tip``'s after-landing ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
-    ``max_shards`` shards), made in the background (`detach`) into a directory of its own under `LAUNCHES`: the record
-    `planned` reads."""
-    root = Path(tempfile.gettempdir()) / LAUNCHES
-    root.mkdir(parents=True, exist_ok=True)
-    out = tempfile.mkdtemp(prefix="plan-", dir=root)
-    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else [])]
-    return {**detach(repo, ["sh", "-c", PLAN_JOB, "sh", out, tip, *args], {**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
-            "out": out}
-
-
-def planned(rec: dict) -> tuple[dict | None, str | None]:
-    """(the auto plan a `plan_shards` job wrote, None) once it exited 0; (None, why) once it failed or its process is gone with
-    no exit; (None, None) while it runs.  The plan's directory (``out``) stays: its shards send the file."""
-    if (end := _job_end(rec, AUTO_PLAN)) is None or isinstance(end, str):
-        return None, end
-    rc, tail, text = end
-    try:
-        doc = json.loads(text) if text is not None else None
-    except ValueError as e:
-        doc, tail = None, f"{type(e).__name__}: {e}"
-    if isinstance(doc, dict) and doc.get("kind") == "check-shard-plan/v1" and isinstance(doc.get("n"), int) and doc["n"] >= 1:
-        return doc, None
-    return None, f"`check.py --shard-plan` exited {rc}: {tail}"
 
 
 def shard_spec(run: dict, k: int) -> str:
@@ -431,11 +388,6 @@ def task_files(graph: dict, ids: Iterable[str]) -> set[str]:
 
 def under(f: str, paths: list[str]) -> bool:
     return any(f == p or f.startswith(p.rstrip("/") + "/") for p in paths)
-
-
-def ratchet_failures(run_dir: Path, st: dict) -> list[tuple[str, str, str]]:
-    """(name, top commit's first 12 digits, why) of each change a ratchet-gate step's log says the gate failed."""
-    return RATCHET_FAILED_RE.findall(_step_log(run_dir, st))
 
 
 #: pytest's failure line, and a tool's error line, in a log: what a ring quotes of it
@@ -619,8 +571,6 @@ class Driver(Landing):
         #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`);
         #: "auto" or "auto:MAX", as the shard planner's N, made once a tip (`_plan`, `plan_shards` and `planned`)
         self.after_landing_shards = after_landing_shards
-        self.plan_shards: Callable[..., dict] = plan_shards
-        self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: drive.toml's bottom ring (`_bottom`): who is rung while `next`'s lowest member waits for a land verdict, and the
@@ -1404,7 +1354,7 @@ class Driver(Landing):
             for key, rec in {**rows, **steps}.items():
                 if self._allowed(tip, key, d, rec).covered:
                     continue
-                if named_failure(d, rec) or (rec.get("step") == RATCHET_STEP and ratchet_failures(d, rec)):
+                if named_failure(d, rec) or (rec.get("step") == RATCHET_STEP and ratchet_failed(_step_log(d, rec))):
                     return []
                 keys.append(key)
         return sorted(set(keys))
@@ -1562,13 +1512,13 @@ class Driver(Landing):
 
     def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
         """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
-        (`ratchet_failures`, whose merges `_name` takes as culprits).  The tip becomes `postland["ratchet_judged"]` ({"tip",
+        (`reds.ratchet_failed`, whose merges `_name` takes as culprits).  The tip becomes `postland["ratchet_judged"]` ({"tip",
         "base": the commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base`
         reads it, so the next run's gate judges only the merges above it.  A failure that names no change, or one this clone
         doesn't hold, is no verdict."""
         failed: list[str] = []
         if st.get("status") == "failed":
-            named = [c for _, c, _ in ratchet_failures(d, st)]
+            named = [c for _, c, _ in ratchet_failed(_step_log(d, st))]
             failed = [_git(self.repo, "rev-parse", "--verify", "-q", f"{c}^{{commit}}", check=False).stdout.strip() for c in named]
             if not named or not all(failed):
                 return
@@ -1641,7 +1591,7 @@ class Driver(Landing):
         the one whose change touches a file it points at (its failing tests, the files its log names, what the read guard caught
         it reading and the test modules that read it, and of a Lean failure, `LEAN_NAMING`'s, the files declaring each
         declaration it names: `_lean_declared`), else the one touching the declared inputs of the suite or step it names
-        (`_input_rule`); for ratchet-gate, before either, the merge the gate's log says it fails (`ratchet_failures`): the
+        (`_input_rule`); for ratchet-gate, before either, the merge the gate's log says it fails (`reds.ratchet_failed`): the
         oldest, or each one, all culprits (`culprits`), while it is a warn step (`_warns`).  The culprit is rung with the owner
         of what failed (`_ring`), to be fixed forward within `FIX_FORWARD_S` of the red's `named_at` or reverted then
         (`_revert_reds`), a warn step's in its lane's next PR, never reverted; several a failure only touches are each rung,
@@ -1667,7 +1617,7 @@ class Driver(Landing):
         if expired:
             r["expired"], r["allowed_by"] = [a.text() for a in expired], sorted({a.owner for a in expired})
         red[key] = r
-        gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
+        gate = ratchet_failed(_step_log(d, rec)) if step == RATCHET_STEP else []
         if gate:
             r["first"] = "; ".join(f"`{n} ({c}): failed: {w[:200]}`" for n, c, w in (gate if warn else gate[:1]))
         # the gate judges every merge above its base (at or above the verified tip) and names the one it fails, wherever the step
@@ -1752,12 +1702,11 @@ class Driver(Landing):
         """Who red record ``r`` of ``key`` rings, first who acts: its culprit's lane (`_owner`), each culprit's of a warn step's
         (`culprits`), or each candidate's, then the owner of what failed, its suite's (the registry's, `r["owner"]`) else its
         step's (ci.toml's at its tip), then the owner of each allowance of it that expired (`r["allowed_by"]`), and `CI` and
-        `TOP` beside candidates; (None,) (`CI`) when none is known."""
+        `TOP` beside candidates (`reds.red_owners`); (None,) (`CI`) when none is known."""
         c, cands = r.get("culprit"), r.get("candidates") or ()
         what = r.get("owner") or self._step_owner(r.get("step") or key.split(" ", 1)[-1], r["tip"])
         lanes = [self._owner(Member(*x)) for x in (r.get("culprits") or [c] if c else cands)]
-        also = (CI[1:], TOP[1:]) if cands and not c else ()
-        return tuple(dict.fromkeys(h for h in (*lanes, what, *(r.get("allowed_by") or ()), *also) if h)) or (None,)
+        return red_owners(lanes, [what], r.get("allowed_by") or (), (CI[1:], TOP[1:]) if cands and not c else ())
 
     def _warns(self, key: str) -> bool:
         """Whether red ``key`` is a warn step's (drive.toml's `warn_steps`): drive names its culprits and rings their lanes,

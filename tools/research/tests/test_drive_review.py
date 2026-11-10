@@ -22,7 +22,7 @@ from research.drive import AFTER_LANDING, SIGTERM_RC
 from research.landing import AFTER_LANDING_OPTIONAL
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_landing import GATED_TREE, POLICY_TOML, _failed_run, _killed_run, _main, _move_main, _steps_run
+from test_landing import GATED_TREE, POLICY_TOML, _failed_run, _killed_run, _main, _move_main, _plan_doc, _steps_run
 from test_queue import World, _git
 from test_queue_drive import Harness, _tip
 
@@ -261,43 +261,6 @@ class Planner:
         out.mkdir()
         (out / AUTO_PLAN).write_text("{}\n")
         return {"dir": str(out / "job"), "pid": None, "out": str(out)}
-
-
-@pytest.mark.parametrize("rc", [0, 2])
-def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
-    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
-    its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
-    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
-    from research.drive import AUTO_PLAN, PLAN_JOB, planned
-    from research.landing import DETACH_JOB
-
-    repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
-    for d in (repo, out, job, bin_):
-        d.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "tip")
-    tip = _git(repo, "rev-parse", "HEAD")
-    doc = {"kind": "check-shard-plan/v1", "n": 3, "digest": "d" * 64}
-    (bin_ / "uv").write_text("#!/bin/sh\n"
-                             f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
-                             'while [ "$1" != --out ]; do shift; done\n'
-                             f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
-    (bin_ / "uv").chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
-    subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
-                    "--max-shards", "3"], cwd=repo, env=env, check=True)
-    cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
-    assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
-    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
-                    "--deferred", "pytest", "--max-shards", "3"]
-    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
-    got = planned({"dir": str(job), "pid": None, "out": str(out)})
-    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
-    assert not job.exists() and (out / AUTO_PLAN).is_file()
-
-
-def _plan_doc(n: int) -> dict:
-    return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
 
 
 @pytest.mark.parametrize("gone", [False, True])
@@ -1004,16 +967,26 @@ def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_i
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and _main(world) == tip, world.logs
 
 
-def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path):
-    """Only a failure that names nothing runs its shard again: one naming its failing test is red in the tick that reads it,
-    its culprit named, and `INFRA` hears nothing."""
+@pytest.mark.parametrize("names", ["its test", "its merge"])
+def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path, names):
+    """Only a failure that names nothing runs its shard again: one naming its failing test, or a ratchet gate's naming the
+    merge it fails, is red in the tick that reads it, its culprit named, and `INFRA` hears nothing."""
     h, tip, _, shard1 = _two_shards(world, monkeypatch, tmp_path)
     h.run_state["r-post-2"] = ("done", 1, None, None, "m2")
-    h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y")]
+    if names == "its test":
+        shard2, red = _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y"), "suite pkg"
+    else:
+        shard2, red = _steps_run(tmp_path, "r-post-2", {"lean-suites": "passed"}), "step ratchet-gate"
+        with open(shard2 / "steps.jsonl", "a") as f:
+            f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+        merge2 = _git(world.origin, "rev-parse", "main^1")
+        (shard2 / "ratchet-gate.log").write_text(f"  #2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries\n")
+    h.evidence = [shard1, shard2]
     h.tick()
     (ring,) = _rings(h)
-    assert "suite pkg is red on" in ring and "failed tests/test_x.py::test_y" in ring and "Culprit: #2" in ring, ring
-    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and not [p for p in h.posts if p.startswith("@infra")]
+    assert f"{red} is red on" in ring and "Culprit: #2" in ring, ring
+    assert names != "its test" or "failed tests/test_x.py::test_y" in ring, ring
+    assert h.postland()["red"][red]["culprit"][0] == 2 and not [p for p in h.posts if p.startswith("@infra")]
     assert [kw.get("shard") for c, _, kw in h.posted if c == tip] == [None, "1/2", "2/2"], h.posted
 
 

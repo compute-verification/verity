@@ -1106,6 +1106,10 @@ BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
 FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
+#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
+RATCHET_LINES = 40
+#: the check's jobs and their owners
+CI_TOML = "tools/verity/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
 # "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
@@ -1113,6 +1117,7 @@ FAILED_READER = r'''
 import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
+RATCHET = re.compile(A["ratchet"]["re"], re.M)
 SUITE = re.compile(r"^(passed|failed|reused|skipped)\s+(\S+)\s")
 
 
@@ -1135,6 +1140,14 @@ def first_failing(p):
             if rx.search(ln):
                 return ln.strip()[:300]
     return next((ln.strip()[:300] for ln in reversed(lines) if ln.strip()), None)
+
+
+def ratchet_failed(p):
+    try:
+        with open(p, errors="replace") as f:
+            return [m[0] for m in RATCHET.finditer(f.read(A["log_bytes"]))][:A["ratchet"]["max"]]
+    except OSError:
+        return []
 
 
 def failed_suite(p):
@@ -1189,7 +1202,8 @@ for n in names:
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
     # a stopped step found nothing: another step failed, or the run was cancelled (check.py's `stopped`)
-    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped", "stopped")), None)
+    ran = steps(os.path.join(d, "steps.jsonl"))
+    bad = next((s for s in ran if s.get("status") not in ("passed", "skipped", "stopped")), None)
     suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
     if suite:
         bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
@@ -1206,6 +1220,10 @@ for n in names:
     if bad is not None:
         row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
                    line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
+    # the ratchet gate's lines, though another step failed first: each change it fails is a lane to ring
+    gate = next((s for s in ran if s.get("step") == A["ratchet"]["step"] and s.get("status") == "failed"), None)
+    if gate is not None:
+        row["ratchet"] = ratchet_failed(os.path.join(d, gate["log"])) if gate.get("log") else []
     if sha and os.path.isdir(cwd):
         try:
             r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
@@ -1238,9 +1256,12 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 
 
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
+    from .reds import RATCHET_FAILED_RE, RATCHET_STEP
+
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
-            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S}
+            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S,
+            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES}}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
@@ -1273,13 +1294,18 @@ def train_prs(subjects: list[str]) -> list[int]:
     return out
 
 
+def _pr(ctx: Ctx, n: int) -> dict:
+    """PR ``n``'s state and head branch (`gh pr view`)."""
+    return json.loads(ctx.sh(["gh", "-R", REPO_SLUG, "pr", "view", str(n), "--json", "headRefName,state"], timeout=30))
+
+
 def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     """(number, branch) of each open PR the run checks: a train's, else the PR whose head it is."""
     gh = ["gh", "-R", REPO_SLUG, "pr"]
     if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
         out = []
         for n in nums:
-            pr = json.loads(ctx.sh([*gh, "view", str(n), "--json", "headRefName,state"], timeout=30))
+            pr = _pr(ctx, n)
             if pr.get("state") == "OPEN":
                 out.append((n, pr.get("headRefName") or ""))
         return out
@@ -1289,21 +1315,47 @@ def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     return [(p["number"], p.get("headRefName") or "") for p in got]
 
 
+def _jobs(ctx: Ctx, sha: str | None) -> list:
+    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    import tomllib
+
+    def at(ref: str) -> list:
+        return tomllib.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
+                                     f"repos/{REPO_SLUG}/contents/{CI_TOML}?ref={ref}"], timeout=30)).get("job") or []
+
+    try:
+        return at(sha or "main")
+    except RuntimeError:
+        return at("main")
+
+
 def _hm(utc: str | None) -> str:
     return f"{utc[11:16]}Z" if utc and len(utc) >= 16 else "?"
 
 
 def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
     """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
-    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result)."""
+    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result).  It
+    rings, first who acts (`reds.red_owners`), the lane of each open PR the run checks and, of a failed ratchet gate, of each
+    merge its log says the gate fails (`reds.ratchet_prs`, open or not), then the owner ci.toml at the run's commit gives the
+    failed step's job and the ratchet gate's (`reds.job_owner`), then the lander."""
+    from .reds import RATCHET_STEP, job_owner, ratchet_prs, red_owners
+
     if row.get("class") == "CANCELLED_MANUAL" and (row.get("step") is None or DRIVE_LANDED_CANCEL in (row.get("why") or "")):
         return None
     if not train_prs(row.get("subjects") or []) and not any(i in row.get("by", "") for i in agent_ids(reg, LANDER)):
         return None
     try:
         prs, unread = _open_prs(ctx, row), ""
+        gate = [(n, _pr(ctx, n).get("headRefName") or "") for n in ratchet_prs("\n".join(row.get("ratchet") or ()))]
     except Exception as e:  # noqa: BLE001  (the lander still hears of it)
-        prs, unread = [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
+        prs, gate, unread = [], [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
+    jobs = [j for j in (row.get("step"), RATCHET_STEP if "ratchet" in row else None) if j]
+    try:
+        table = _jobs(ctx, row.get("sha")) if jobs else []
+    except Exception as e:  # noqa: BLE001  (the lanes and the lander still hear of it)
+        table, unread = [], unread + f" Its jobs' owners are unread ({type(e).__name__}: {str(e)[:120]})."
+    owners = [job_owner(table, j) for j in jobs]
     run, clean = row["run"], lambda s: (s or "").replace("`", "'")
     if row.get("step"):
         going = " (the run goes on)" if row.get("state") == "running" else ""
@@ -1313,13 +1365,19 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
         how = "was killed" if row.get("state") == "cancelled" or (row.get("rc") or 0) > 128 else f"ended rc {row.get('rc')}"
         what = (f"*Check `{run}` {how} on {machine}* at {_hm(row.get('ended'))}, before any step failed "
                 f"({row.get('class') or 'unclassified'}): {clean(row.get('why')) or 'no reason recorded'}.")
-    lanes = [lane_of(reg, b) for _, b in prs]
+    lanes, named = [lane_of(reg, b) for _, b in prs], [lane_of(reg, b) for _, b in gate]
+
+    def listed(pairs: list[tuple[int, str]], hs: list[str | None]) -> str:
+        return ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(pairs, hs)) + "."
+
     if prs:
-        what += f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: " + \
-            ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(prs, lanes)) + "."
+        what += (f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: "
+                 + listed(prs, lanes))
+    if gate:
+        what += f" `{RATCHET_STEP}` fails " + listed(gate, named)
     infra = () if row.get("step") else ("infra",)
-    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*(h for h in lanes if h), LANDER, *infra])),
-                   thread=MERGE_THREAD)
+    rung = (h for h in red_owners([*lanes, *named], owners) if h)
+    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*rung, LANDER, *infra])), thread=MERGE_THREAD)
 
 
 def on_main(ctx: Ctx, sha: str | None) -> bool:
@@ -1355,7 +1413,8 @@ def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str
 def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
-    PR it checks (the handle its branch suffix names in the registry) and the lander. One still running whose step failed is
+    PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
+    the failed job and the lander (`failed_check`). One still running whose step failed is
     cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
