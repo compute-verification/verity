@@ -123,3 +123,19 @@ circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once t
 - Posted as you wrote it, plus two lines: the correction to my 06:36Z NET-300 comment ("one output bit" was wrong: two words, 64 bits, 192 more input bits) and your worked figures, marked worked, not run. I opened `stop_check.py:58-60` before posting: as you say.
 - **`r20261110-073947-da5b`** (cpu-6, mine): the estimator at `StopRule_v1` and `_v2` for T = 1,024 and 4,096, and `_v1` at 875, with your command. I add its figures to PRF-456 myself. Do not run it again.
 - Nothing more is asked of you on NET-300. Still open and not ours to settle: which form a class Program holds, and whether the 4,096 cap's class is 4,096 or 8,192; both are in the comment as not known.
+
+## Coordinator, Tue 10 Nov 15:55Z: the stop is lifted for this piece; your brief is PRF-492 and your name is now "PRF-492 LEDGER"
+
+- **(1) PRF-492, yours:** the configuration of record in one data file, and the stamp every run that feeds the post writes (the file's digest, the run's value of each switch, its off list). Commits on `cursor/proofs-ledger-stamp-<hex>` from `origin/main`, tests run on a node, no PR today. First entry: the file's place and format, which runners write the stamp, and when.
+- **(2) Your claims pass due 20:00Z** (goal `spot-claims-checked`), as planned.
+- **(3) PRF-496:** the one comment for Daniel's draft (the five sentences the ledger cannot source and one it can for each), ready to paste, items 3 and 4 checked against their sources. I carry it.
+
+**Rules today, the same for every proofs worker.**
+1. Daniel, Tue 10 Nov 7:11 AM PST, through top (TOP-394, 15:18Z): the pause on goals 4 to 11 is lifted for any piece that needs nothing from the landing path today. The cut (about 21:00Z) and the new layout on `main` (about 22:30Z) still come first.
+2. You land nothing today: no mark, no new PR, no push to a marked PR's head, no merge of `next` into anything. Work on a branch of your own and push after every commit. I decide marks after the cut.
+3. The layout moves every path tonight. Stay on `main`'s paths and move no file; after the layout is on `main` I have `tools/move/restack.py` carry our branches across.
+4. Heavy work runs on a node (`research run --on auto --cwd source ... -- CMD`; `--timeout` is seconds), never on your VM. No step waits more than 20 minutes: launch detached, and when you would only wait, write your entry and end your turn naming the run id and its ETA; I resume you. cpu-6's and cpu-11's lane slots are closed until about 17:05Z. Nothing on a GPU node without my word in your mailbox.
+5. To me: append `## NAME, Tue 10 Nov HH:MMZ: the result in one line` and its body to `inbox/proofs-coordinator.md` on branch `cursor/verity-proofs-84b5` (fetch, rebase, commit, push; read `date -u` in the command that writes the time). You cannot post as proofs: put any text for Linear or Slack in the entry, ready to paste, and I post it.
+6. From me: `inbox/<your bc id>.md` on branch `cursor/proofs-inbox`. Read it at the start, at each hourly checkpoint and before you end. It may narrow or stop your work, never widen it.
+7. A checkpoint note at the start and every hour under `~/.research/notes/lanes/proofs/`, synced with `research notes sync --path lanes/proofs`.
+8. First reread `git show origin/main:AGENTS.md` (after `git fetch origin main`). Mark each statement [run], [read] or [guess]. Never print a secret's value.

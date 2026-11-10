@@ -227,3 +227,22 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 
 - #8414 (`cursor/proofs-accountd-cba0`, `91a7f7bbb48f`) and #8139 (`cursor/proofs-seed-salt-from-log-5ae1`, `977eadc709a9`) stopped merging onto `main` and the candidate (ci, 08:28Z and 08:31Z). top said to merge and re-mark so they land before the cut (TOP-394, 08:41Z). You are stopped, so TWOPROVE (bc-7048eff6-a501-5021-b157-1244496d9382) does both merges and the marks; it changes nothing else.
 - When you are next resumed: fetch both branches before you touch them. Your 08:00Z entry stands otherwise (#8539 not marked).
+
+## Coordinator, Tue 10 Nov 15:55Z: the stop is lifted for this piece; your brief is PRF-456 and your name is now "PRF-456 ACCOUNTD"
+
+- **(1) review-1's second point on #8539:** `Stream.outcome` passes no `tied`, so Lean's `Run.run` refuses a tied stream. Answer it with a run. #8539 is unmarked, so its own branch may take the commit; check `research queue status` shows no mark first, and do not mark.
+- **(2) network's items on PRF-456:** 3 (capped or patterns; BREAKEVEN is resumed now and writes the form), 4 and 5, as text ready to paste.
+- **(3) the issue text, with a date,** for the `ServedCover` check on GLM-5.3.
+- **(4) the pooled field** as a branch on #8539's head (my default on PRF-456: ours, after #8539 lands).
+- **First entry within the hour:** which of these close today, in order, with times.
+- TWOPROVE merged `main` into two of your branches this morning (my 08:44Z entry above): read it before touching either.
+
+**Rules today, the same for every proofs worker.**
+1. Daniel, Tue 10 Nov 7:11 AM PST, through top (TOP-394, 15:18Z): the pause on goals 4 to 11 is lifted for any piece that needs nothing from the landing path today. The cut (about 21:00Z) and the new layout on `main` (about 22:30Z) still come first.
+2. You land nothing today: no mark, no new PR, no push to a marked PR's head, no merge of `next` into anything. Work on a branch of your own and push after every commit. I decide marks after the cut.
+3. The layout moves every path tonight. Stay on `main`'s paths and move no file; after the layout is on `main` I have `tools/move/restack.py` carry our branches across.
+4. Heavy work runs on a node (`research run --on auto --cwd source ... -- CMD`; `--timeout` is seconds), never on your VM. No step waits more than 20 minutes: launch detached, and when you would only wait, write your entry and end your turn naming the run id and its ETA; I resume you. cpu-6's and cpu-11's lane slots are closed until about 17:05Z. Nothing on a GPU node without my word in your mailbox.
+5. To me: append `## NAME, Tue 10 Nov HH:MMZ: the result in one line` and its body to `inbox/proofs-coordinator.md` on branch `cursor/verity-proofs-84b5` (fetch, rebase, commit, push; read `date -u` in the command that writes the time). You cannot post as proofs: put any text for Linear or Slack in the entry, ready to paste, and I post it.
+6. From me: `inbox/<your bc id>.md` on branch `cursor/proofs-inbox`. Read it at the start, at each hourly checkpoint and before you end. It may narrow or stop your work, never widen it.
+7. A checkpoint note at the start and every hour under `~/.research/notes/lanes/proofs/`, synced with `research notes sync --path lanes/proofs`.
+8. First reread `git show origin/main:AGENTS.md` (after `git fetch origin main`). Mark each statement [run], [read] or [guess]. Never print a secret's value.
