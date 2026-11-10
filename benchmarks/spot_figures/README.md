@@ -174,6 +174,20 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   modeled or assumed) and the surface case that prices it. A step no surface prices is shown as pending. A lever off
   the path (`off`) is plotted in grey with its owner. A term no step's total includes (`unpriced`) is shown as a named
   line or an arrow, and a `charged` one is stated in the caption as the condition every total holds under.
+- **The break-even planner** (`breakeven/`) writes those surfaces. A case is one of Figure 1's request-grain lines,
+  priced on `total_cost._point`'s path, with levers on:
+  - its priced strata (`levers.py`): table reads fused into their GEMMs, proving scaled, blocks cut into columns;
+  - its per-type prices (`reprice.py`): the statement cache, several provers on one GPU, the proof server's prices,
+    the Lean verifier's CPU in GPU-seconds, and the 128k workload, each table saying whether it is measured, modeled
+    or assumed;
+  - its budget's form (`zkstack.py`).
+
+  `sweep.py` gives each case's bound at β of 1%, 5% and 10%, its floor, and the β at which it reaches the FP8 and
+  the FP4 weights:
+
+  ~~~sh
+  uv run python benchmarks/spot_figures/breakeven/sweep.py --out DIR [--workers N] [--scopes all] [--only NAME...]
+  ~~~
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;
