@@ -6,9 +6,10 @@
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
 # row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
-# - `verity/core/devices/memory_challenger/lean/scripts/replay.py` to
-#   `verity/protocols/pous/device/memory_challenger/lean/scripts/replay.py`: an archived file inside the memory
-#   challenger's Lake package, which moves whole by one row.
+# - `verity/core/devices/memory_challenger/` to `verity/protocols/pous/device/`: the memory challenger's package, one
+#   directory row: the rule puts it in `device/memory_challenger/`, beside the module `memory_challenger.py`, two
+#   things under one import name. The row takes along one archived file inside the package's Lake package
+#   (`lean/scripts/replay.py`), which a row of its own would split.
 # The layout's maps run in the order of their names. This one runs after `layout_21_archive_map.toml`: it renames a
 # package that those maps take modules out of, and would rename their modules with it. The format is
 # `layout_map.toml`'s.
@@ -18,7 +19,7 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/core/devices/memory_challenger/" = "verity/protocols/pous/device/memory_challenger/"
+"verity/core/devices/memory_challenger/" = "verity/protocols/pous/device/"
 "verity/core/protocols/pous/DISCREPANCIES.md" = "verity/protocols/pous/verifier/DISCREPANCIES.md"
 "verity/core/protocols/pous/PROTOCOL.md" = "verity/protocols/pous/verifier/PROTOCOL.md"
 "verity/core/protocols/pous/README.md" = "verity/protocols/pous/verifier/README.md"
@@ -125,7 +126,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"verity.core.devices.memory_challenger" = "verity.protocols.pous.device.memory_challenger"
+"verity.core.devices.memory_challenger" = "verity.protocols.pous.device"
 "verity.core.protocols.pous" = "verity.protocols.pous.verifier"
 "verity.core.protocols.pous.adversary" = "verity.protocols.pous.verifier.adversary"
 "verity.core.protocols.pous.audit" = "verity.protocols.pous.verifier.audit"

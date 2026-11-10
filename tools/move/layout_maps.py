@@ -24,6 +24,11 @@ or `ml` segment. An archived file goes to `archive/` under its whole path today.
 A module's circuit-check sidecar and its pins (`X.circuit-check.py`, `X.circuit-check.json`) go where `X.py` goes,
 whichever component they are in: circuit-check finds a module's bindings beside it.
 
+The `__init__.py` of a package level the moves empty (every other file under it leaves, and none arrives) goes to
+`archive/` under its path today, in the map that runs last, `emptied`, whichever component it is in: no destination
+keeps the level, and a row that took it along would rename the package under the maps that run later. That map
+rewrites no dotted name (`keep_dotted`): what still mentions `verity.core` or `verity.ml` then is prose for its owner.
+
 EXCEPTIONS, each a row of `EXCEPT` or `KEEP` with its reason: where the rule gives two files one path, puts a file
 nobody trusts in a trusted directory, takes a module out of its import package, or gives a path nobody would look for.
 A row the rule itself now gives is reported as doing nothing.
@@ -54,11 +59,11 @@ that run before it. `[retired]` is empty in every map: a directory two maps shar
 each map passes alone, and this script's own check does that job.
 
 CHECKS (the script fails on any): every tracked file is one the data places or `NEW` names; every file the layout
-moves or archives, but for `LEFT`'s, has exactly one destination over all the maps, and each map moves exactly its own
-files; no destination is claimed twice or is a file that stays; no new path outside `archive/` keeps a `core` or `ml`
-segment; every tracked file under `verity/core` or `verity/ml` moves, but for `LEFT`'s; no file of a component the
-auditor doesn't trust lands under a trusted directory, but for `UNTRUSTED`'s; every moved Lake package moves whole;
-`[modules]` gives every moved module its new name; the order has no cycle.
+moves or archives has exactly one destination over all the maps, and each map moves exactly its own files; no
+destination is claimed twice or is a file that stays; no new path outside `archive/` keeps a `core` or `ml` segment;
+every tracked file under `verity/core` or `verity/ml` moves; no file of a component the auditor doesn't trust lands
+under a trusted directory, but for `UNTRUSTED`'s; every moved Lake package moves whole; `[modules]` gives every moved
+module its new name and renames no module that stays; the order has no cycle.
 """
 import argparse
 import collections
@@ -118,9 +123,13 @@ EXCEPT = [
      "the test of `leaves.py` goes into the integration's suite"),
     ("verity/ml/commitments/tests/test_vllm_v1.py", "integrations/vllm/tests/commitments/test_vllm_v1.py",
      "the test of `vllm_v1` goes into the integration's suite"),
-    ("verity/core/devices/memory_challenger/lean/scripts/replay.py",
-     "verity/protocols/pous/device/memory_challenger/lean/scripts/replay.py",
-     "an archived file inside the memory challenger's Lake package, which moves whole by one row"),
+    ("verity/core/devices/memory_challenger/", "verity/protocols/pous/device/",
+     "the memory challenger's package, one directory row: the rule puts it in `device/memory_challenger/`, beside the "
+     "module `memory_challenger.py`, two things under one import name. The row takes along one archived file inside "
+     "the package's Lake package (`lean/scripts/replay.py`), which a row of its own would split"),
+    ("verity/core/protocols/remote_bandwidth/", "verity/protocols/poub/verifier/",
+     "PoUB's reference, session and Lean verifier, one directory row: the rule names the protocol twice "
+     "(`poub/verifier/remote_bandwidth/`)"),
     ("examples/README.md", "workloads/README.md",
      "the demos' index: the rule gives `workloads/dither_full_util/examples/README.md`, inside one demo"),
     ("verity/ml/circuits/tests/test_settings.py", "verity/circuits/tests/test_settings.py",
@@ -134,27 +143,16 @@ EXCEPT_MOVE = {
     "verity/core/service/vstar/tests/test_vstar_recursive.py": "spot",
     "verity/core/service/vstar/tests/recursive_data.json": "spot",
     "verity/core/protocols/pyproject.toml": "verity",
-    "verity/core/devices/memory_challenger/lean/scripts/replay.py": "pous",
+    "verity/core/devices/memory_challenger/": "pous",
+    "verity/core/protocols/remote_bandwidth/": "poub",
     "verity/ml/circuits/tests/test_settings.py": "circuits",
 }
 #: components the layout gives a directory that stay where they are: {component id: why}
 KEEP = {
     "bench:31": "the sampling-plan calculators and figures stay in `benchmarks/`: moved under `verity/`, two of their "
                 "scripts would read `benchmarks/census` by path",
-}
-#: tracked files under `verity/core` or `verity/ml` that no map moves, each with why. Deleting them is an edit, which a
-#: move cannot make: one commit after the moves.
-LEFT = {
-    "verity/core/__init__.py": "the `__init__.py` of a package level the moves empty (the layout keeps it)",
-    "verity/ml/__init__.py": "the `__init__.py` of a package level the moves empty (the layout keeps it)",
-    "verity/ml/protocols/__init__.py": "the `__init__.py` of a package level the moves empty (the layout keeps it)",
-    "verity/core/protocols/__init__.py":
-        "the `__init__.py` of a package level the moves empty. A row for it renames the package `verity.core.protocols`, "
-        "and with it every protocol's modules in every map that runs later; in a map that runs last it lands on the "
-        "`verity/protocols/__init__.py` that `layout.py` created for the first protocol to move",
-    "verity/core/devices/__init__.py":
-        "the `__init__.py` of a package level the moves empty: by the rule it goes to "
-        "`verity/protocols/pous/device/devices/`, which renames the package `verity.core.devices` for the certifier's too",
+    "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
+                "and one of them loads `benchmarks/sampling_plan`",
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
@@ -208,6 +206,7 @@ MOVES = [
     ("workloads", "the demos and the recursion end-to-end run, to `workloads`"),
     ("benchmarks", "the GPU probes that are Definitions today, to `benchmarks`"),
     ("archive", "what the layout archives, to `archive`"),
+    ("emptied", "the `__init__.py` of each package level the moves empty, to `archive`"),
 ]
 EXCLUDE = [
     "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
@@ -310,6 +309,15 @@ def move_of(cdir):
     return s[1] if s[0] == "integrations" else s[0]
 
 
+def ancestors(d):
+    out = []
+    while d:
+        d = posixpath.dirname(d)
+        if d:
+            out.append(d)
+    return out
+
+
 def holds(row, p):
     return p == row or (row.endswith("/") and p.startswith(row))
 
@@ -397,10 +405,10 @@ def plan(data, owner, say):
             if (mv or move) is None:
                 die(f"{p}: the layout keeps it, so its EXCEPT row needs a move in EXCEPT_MOVE")
             out[p] = (new, key, mv or move)
-        elif rule is not None and p not in LEFT:
+        elif rule is not None:
             out[p] = (rule, key, move)
     for p in sorted(owner):                           # a module's circuit-check sidecar and its pins go where the module goes
-        if (m := SIDECAR.fullmatch(p)) and (mod := m.group(1) + ".py") in owner and p not in LEFT and excepted(p)[0] is None:
+        if (m := SIDECAR.fullmatch(p)) and (mod := m.group(1) + ".py") in owner and excepted(p)[0] is None:
             there = out.get(mod)
             new = None if there is None else f"{posixpath.dirname(there[0])}/{posixpath.basename(p)}"
             if (out.get(p) or (None,))[0] != new:
@@ -409,6 +417,28 @@ def plan(data, owner, say):
                     del out[p]
                 else:
                     out[p] = (new, owner[p], there[2])
+    lands = {posixpath.dirname(n) for n, _, _ in out.values()}
+    lands |= {a for d in list(lands) for a in ancestors(d)}
+    under = collections.Counter(a for p in owner if p not in out for a in ancestors(posixpath.dirname(p)))
+    under.update(posixpath.dirname(p) for p in owner if p not in out)
+    inside = collections.defaultdict(list)             # directory -> the tracked files anywhere under it
+    for p in owner:
+        for a in ancestors(p):
+            inside[a].append(p)
+    for p in sorted(owner, key=lambda p: -p.count("/")):      # the deepest first: a level is empty once those below it are
+        d = posixpath.dirname(p)
+        if posixpath.basename(p) != "__init__.py" or d in lands or excepted(p)[0] is not None:
+            continue
+        if p not in out:
+            empty = under[d] == 1                      # it stays, and every other file under it leaves
+        else:                                          # it goes by the rule, and no other file of the package goes with it
+            there = posixpath.dirname(out[p][0]) + "/"
+            empty = len(inside[d]) > 1 and not any(q != p and q in out and out[q][0].startswith(there) for q in inside[d])
+        if empty:
+            if p not in out:
+                for a in (d, *ancestors(d)):
+                    under[a] -= 1
+            out[p] = ("archive/" + p, owner[p], "emptied")
     for old, new, _ in EXCEPT:
         if old not in plain:
             say(f"dropped, EXCEPT's row {old} holds no tracked file")
@@ -533,7 +563,10 @@ def render(fname, v, before):
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
               "# archive), and files whose bytes a digest pins.",
               "exclude = [" + ",\n           ".join(", ".join(toml_str(x) for x in EXCLUDE[i:i + 4]) for i in range(0, len(EXCLUDE), 4)) + "]",
-              "include = [" + ", ".join(toml_str(x) for x in INCLUDE) + "]", "", "[modules]",
+              "include = [" + ", ".join(toml_str(x) for x in INCLUDE) + "]",
+              *(["# a mention of an emptied package that is left after the other maps stays as written",
+                 "keep_dotted = [" + ", ".join(toml_str(x) for x in v["keep_dotted"]) + "]"] if v["keep_dotted"] else []),
+              "", "[modules]",
               "# the renames [paths] and [roots] imply (`layout.py --modules`)"]
     lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["modules"].items())]
     return "\n".join(lines) + "\n"
@@ -567,15 +600,15 @@ def main():
     if onto:
         die("a destination is a file that stays:\n  " + "\n  ".join(onto[:40]))
     bad = sorted(n for n in by_new if not n.startswith("archive/") and {"core", "ml"} & set(n.split("/")[:-1]))
+    bad += sorted(p for p, (n, _, _) in dest.items() if n.startswith("archive/") and n != "archive/" + p)
     if bad:
-        die("a new path keeps a `core` or `ml` segment:\n  " + "\n  ".join(bad[:40]))
+        die("a new path keeps a `core` or `ml` segment, or an archived file loses its path:\n  " + "\n  ".join(bad[:40]))
     same = sorted(p for p, (n, _, _) in dest.items() if p == n)
     if same:
         die("a row that moves nothing:\n  " + "\n  ".join(same[:40]))
-    stay = sorted(p for p in tracked if p.startswith(("verity/core/", "verity/ml/")) and p not in dest and p not in LEFT)
-    if stay or set(LEFT) - tracked:
-        die("under verity/core or verity/ml with no destination (or LEFT names a file that is gone):\n  "
-            + "\n  ".join(stay[:40] + sorted(set(LEFT) - tracked)))
+    stay = sorted(p for p in tracked if p.startswith(("verity/core/", "verity/ml/")) and p not in dest)
+    if stay:
+        die("under verity/core or verity/ml with no destination:\n  " + "\n  ".join(stay[:40]))
     trusted_dirs = [t.strip("/") for t in data["trusted_dirs"]]
     untrusted = collections.defaultdict(list)
     for p, (n, key, _) in dest.items():
@@ -605,7 +638,9 @@ def main():
         if not mine:
             die(f"{move}: no file")
         rows = compress(mine, tracked_dirs)
-        tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows)   # the archive speaks for no directory
+        # the archive speaks for no directory, and no leftover mention of an emptied package is renamed into it
+        tokens = {} if move in ("archive", "emptied") else tokens_for(move, dest, tracked_dirs, rows)
+        keep_dotted = sorted(L.module_name(p, ROOTS) for p in mine) if move == "emptied" else []
         roots_new = {}
         for name, d in ROOTS.items():
             if not any(p.startswith(d + "/") for p in tracked):
@@ -632,7 +667,7 @@ def main():
                 die(f"{move}: {p} -> {n}: its module {mo} would be renamed {lay.module(mo)}, not {mn}")
         reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
         maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
-                      "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons}
+                      "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "keep_dotted": keep_dotted}
 
     # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
     keys = [(m, k) for m in maps for k in maps[m]["rows"]]
@@ -665,6 +700,11 @@ def main():
             for n in va["mine"].values():
                 if n.endswith(".py") and (mn := L.module_name(n, va["roots_new"])) and vb["lay"].module(mn) != mn:
                     die(f"{b}'s [modules] would rename {mn}, the new name of a module {a_} moves")
+    for p in sorted(tracked - set(dest)):
+        if p.endswith(".py") and (mo := L.module_name(p, ROOTS)):
+            for b, vb in maps.items():
+                if vb["lay"].module(mo) != mo:
+                    die(f"{b}'s [modules] would rename {mo}, a module no map moves ({p})")
     order, left = [], list(names)
     while left:
         ready = [m for m in left if not (after[m] - set(order))]
@@ -730,8 +770,6 @@ def main():
     for key, v in sorted(untrusted.items()):
         print(f"  untrusted under a trusted directory, allowed by UNTRUSTED: {key}, {len(v)} files ({v[0]})")
     print(f"  `layout.py` creates {len(created)} `__init__.py` over the maps (--created FILE lists them)")
-    for p in LEFT:
-        print(f"  left in place: {p}")
     for n in notes:
         print("  " + n)
 
