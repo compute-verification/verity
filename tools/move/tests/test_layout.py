@@ -309,6 +309,76 @@ def test_a_path_that_is_a_shell_variables_default_follows_the_move(tmp_path):
         'W=pre-flock/pod/catalog.py\n')
 
 
+def test_the_brace_that_closes_a_shell_default_is_no_part_of_its_path(tmp_path):
+    """`${T:-flock/tests/test_a.py}`: the file has no row of its own, so the path is read from its directory's row on,
+    and that reading takes braces in (`tests/{a,b}.py` is a path too). The `}` no `{` of the path opens closes the
+    expansion. Read as part of the path it makes `test_a.py}` a pattern under `flock/tests/`, which this map splits
+    (`data.json` goes elsewhere), and a reference to a split directory stops the move."""
+    r = tmp_path / "repo"
+    files = {"run.sh": 'T=${T:-flock/tests/test_a.py}\nU="${U:-flock/tests/test_a.py}"\n', "flock/tests/test_a.py": "",
+             "flock/tests/data.json": "{}\n", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"flock/tests/" = "prover/tests/"\n'
+        '"flock/tests/data.json" = "data/data.json"\n\n[modules]\n"flock.tests" = "prover.tests"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert (r / "run.sh").read_text() == 'T=${T:-prover/tests/test_a.py}\nU="${U:-prover/tests/test_a.py}"\n'
+
+
+def test_a_brace_list_whose_paths_go_two_ways_is_split(tmp_path):
+    """`flock/{tool.sh,verifier/tool.sh}` names two files. A list is carried by the row of the directory before it, which
+    is right while every path of it goes where that directory goes (`flock/{a,b}.sh`, and a pattern such as
+    `flock/k{1,2}.json`, which names no file). Here `flock/verifier/` has a row of its own: carried by the directory's
+    row the list would name `new/prover/verifier/tool.sh`, which exists nowhere, and the move would still exit 0. A
+    second map that moves one path of a list the first one split finds it there."""
+    r = tmp_path / "repo"
+    toml = 'flock = ["flock/{tool.sh,verifier/tool.sh}", "flock/{a,b}.sh", "flock/k{1,2}.json", "flock/{a.sh,verifier}"]\n'
+    files = {"boundary.toml": toml, "flock/tool.sh": "", "flock/verifier/tool.sh": "", "flock/verifier/x.sh": "",
+             "flock/a.sh": "", "flock/b.sh": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    rows = '"flock/tool.sh" = "new/prover/tool.sh"\n"flock/a.sh" = "new/prover/a.sh"\n"flock/b.sh" = "new/prover/b.sh"\n'
+    head = '[roots]\nold = {}\nnew = {}\n\n[paths]\n'
+    (tmp_path / "one.toml").write_text(head + rows + '"flock/verifier/" = "new/agreement/"\n\n'
+                                       '[tokens]\n"flock/" = "new/prover/"\n\n[modules]\n"flock.verifier" = "new.agreement"\n')
+    (tmp_path / "first.toml").write_text(head + rows + '\n[tokens]\n"flock/" = "new/prover/"\n\n[modules]\n')
+    (tmp_path / "second.toml").write_text(head + '"flock/verifier/" = "new/agreement/"\n\n[modules]\n'
+                                          '"flock.verifier" = "new.agreement"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    want = ('flock = ["{new/prover/tool.sh,new/agreement/tool.sh}", "new/prover/{a,b}.sh", "new/prover/k{1,2}.json", '
+            '"{new/prover/a.sh,new/agreement}"]\n')
+
+    def move(name: str) -> dict:
+        p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / name), "--no-lock",
+                            "--report-splits", "--report", str(tmp_path / "report.json")], capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout + p.stderr
+        return json.loads((tmp_path / "report.json").read_text())["notes"]
+
+    assert move("one.toml")["brace lists split"] == [
+        "boundary.toml: flock/{tool.sh,verifier/tool.sh} -> {new/prover/tool.sh,new/agreement/tool.sh}",
+        "boundary.toml: flock/{a.sh,verifier} -> {new/prover/a.sh,new/agreement}"]
+    assert (r / "boundary.toml").read_text() == want
+    assert (r / "new/agreement/tool.sh").is_file() and (r / "new/prover/tool.sh").is_file()
+    git(r, "reset", "-q", "--hard")
+    git(r, "clean", "-fdq")
+    move("first.toml")
+    assert '"{new/prover/tool.sh,flock/verifier/tool.sh}"' in (r / "boundary.toml").read_text()
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "first")
+    move("second.toml")
+    assert (r / "boundary.toml").read_text() == want
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
