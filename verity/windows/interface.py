@@ -184,8 +184,7 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
-# (`ALLOWED` in tests/test_boundaries.py).
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: it imports the catalog's modules alone.
 
 @functools.cache
 def _load_catalog() -> None:
