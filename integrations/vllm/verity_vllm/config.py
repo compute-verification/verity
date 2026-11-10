@@ -350,8 +350,7 @@ def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
 
 def _fetch(paths: list[Path]) -> None:
     """Fetch ``paths`` with ``research data fetch-fixtures`` in the repository holding each (the nearest ancestor with a registry),
-    by that tree's own ``research``, run from that repository's root: the command reads a relative PATH against its cwd, not
-    ``--repo``, and a reader running elsewhere (the regression's pytest, from integrations/vllm) would select nothing."""
+    by that tree's own ``research``."""
     by_repo: dict[Path, list[Path]] = {}
     for p in paths:
         repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)

@@ -180,9 +180,9 @@ class Writer:
     write release the GIL, so they overlap). A call's bytes stay in the ring until it and every call kept before it are
     written. The caller waits only while the ring is full: at most ``bound`` bytes are in flight (serve-openai's is a
     window's, `kept_bytes` of each of its calls). A window's directory is `open` on the writer until `wait` returns: once
-    every call kept there is written, raising OSError when any wasn't. A failure the writer doesn't expect stops it,
-    raised on its thread: that call and each call queued or kept after it fail their windows, so no `wait` waits on a
-    call the writer won't write."""
+    every call kept there is written, raising OSError when any wasn't. A failure the writer doesn't expect stops it, raised
+    on the thread it struck: that call and each call no thread has taken, or kept after it, fail their windows, and a call
+    another thread is writing ends as it ends, so no `wait` waits on a call the writer won't write."""
 
     def __init__(self, bound: int, threads: int = 2) -> None:
         import torch
@@ -197,7 +197,7 @@ class Writer:
         self._jobs: deque[_Job] = deque()
         self._taken, self._seq, self._written = 0, 0, set()
         self._head, self._closed = 0, False
-        #: the failure that stopped the writer's thread (None while it runs)
+        #: the first failure that stopped the writer's threads (None while it runs)
         self._stopped: str | None = None
         self._dirs: dict[str, dict[str, Any]] = {}
         self._threads = [threading.Thread(target=self._run, name=f"h1-keep-{i}", daemon=True) for i in range(threads)]
@@ -276,9 +276,9 @@ class Writer:
     def _run(self) -> None:
         while True:
             with self._cv:
-                while self._taken == len(self._jobs) and not self._closed:
+                while self._taken == len(self._jobs) and not self._closed and self._stopped is None:
                     self._cv.wait()
-                if self._taken == len(self._jobs):
+                if self._stopped is not None or self._taken == len(self._jobs):
                     return
                 job = self._jobs[self._taken]
                 self._taken += 1
@@ -294,25 +294,33 @@ class Writer:
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
             except BaseException as e:
                 with self._cv:
-                    self._stopped = f"call {job.index}: {type(e).__name__}: {e}"
-                    for queued in self._jobs:
+                    mine = f"call {job.index}: {type(e).__name__}: {e}"
+                    if self._stopped is None:
+                        self._stopped = mine
+                    # this call and each call no thread took fail here; a call another thread took is that thread's to end
+                    untaken = [self._jobs.pop() for _ in range(len(self._jobs) - self._taken)][::-1]
+                    for queued in (job, *untaken):
                         st = self._dirs[queued.directory]
                         st["pending"] -= 1
-                        st["failed"].append(self._stopped if queued is job else
+                        st["failed"].append(mine if queued is job else
                                             f"call {queued.index}: the writer stopped at {self._stopped}")
-                    self._jobs.clear()
+                    self._done(job)
                     self._cv.notify_all()
                 raise
             with self._cv:
-                self._written.add(job.seq)
-                while self._jobs and self._jobs[0].seq in self._written:
-                    self._written.remove(self._jobs.popleft().seq)
-                    self._taken -= 1
+                self._done(job)
                 st = self._dirs[job.directory]
                 st["pending"] -= 1
                 if failed is not None:
                     st["failed"].append(failed)
                 self._cv.notify_all()
+
+    def _done(self, job: _Job) -> None:
+        """``job`` has ended (under the lock): the ring gives up the bytes of each call up to the first still being written."""
+        self._written.add(job.seq)
+        while self._jobs and self._jobs[0].seq in self._written:
+            self._written.remove(self._jobs.popleft().seq)
+            self._taken -= 1
 
     def wait(self, directory: str | Path) -> dict[str, int]:
         """Once every call kept under ``directory`` is written, the directory closed on the writer: its calls, their bytes

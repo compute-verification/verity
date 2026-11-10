@@ -88,6 +88,7 @@ from __future__ import annotations
 
 import collections
 import contextlib
+import functools
 import hashlib
 import weakref
 from dataclasses import dataclass, field
@@ -99,6 +100,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
+from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.spot.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json
@@ -113,7 +115,7 @@ from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.names import B_NONCE, IDS_NONCE, LIVE_NONCE, NONCE, PREFIX, RECEIPT_NONCE, nonce
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.served_program import (card_arch, declared, declared_layout, descriptor, layout,
-                                                          unit_of, write_program)
+                                                          write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
@@ -123,6 +125,17 @@ V2 = G.SCHEMA_V2
 #: nothing)
 LOCAL_SESSION = "in-process"
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
+
+
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
 
 
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:

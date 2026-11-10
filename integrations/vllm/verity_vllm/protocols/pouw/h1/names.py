@@ -1,5 +1,5 @@
-"""How H1's served window names and salts its registered tables (`pouw_h1_served`'s and `pouw_h1_served_program`'s, which
-re-export these): the window Program's parameter prefix (`PREFIX`) and each table's nonce in the hm96 salt stream of the
+"""How H1's served window names and salts its registered tables (`pouw_h1_served`'s, which re-exports these): the window
+Program's parameter prefix (`PREFIX`) and each table's nonce in the hm96 salt stream of the
 period's key (`nonce`, `B_NONCE`, `IDS_NONCE`, `RECEIPT_NONCE`, `LIVE_NONCE`). It imports nothing that imports `pouw_h1`, so
 the Commit's tie (`pouw_h1_commit.reuse`), which `pouw_h1` imports, reads them."""
 from __future__ import annotations

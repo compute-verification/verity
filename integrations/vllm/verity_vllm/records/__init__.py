@@ -22,27 +22,15 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `weights_registration` -- the committer's weights registration (`verity-vllm/weights-registration/v1`): each weight
   parameter's hiding root, as the verifier's pins and a window's registration read it; its `of` refuses an unknown field
   and `dump` writes it back.
-<<<<<<< 0941037006
-* `source_identity` -- the source-identity record's schema id (`research-infra/source-identity/v1`) and nothing else: the
-  runner's telemetry embeds the record and no stage reads it back.
-||||||| merged common ancestors
-=======
 * `expert_tables` -- the committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v1`): each
   table's entry and salt nonce, as the verifier's pins and a window's committer read it; its `of` refuses an unknown field
   and `dump` writes it back.
->>>>>>> 7af4d24fca3e
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.
-<<<<<<< 0941037006
-* `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
-  nothing else: its readers read it as the dict it is.
-||||||| merged common ancestors
-=======
 * `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
   sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
   `of` refuses an unknown field and `dump` writes it.
->>>>>>> 7af4d24fca3e
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
