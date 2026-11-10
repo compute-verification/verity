@@ -2698,7 +2698,7 @@ class Runs:
         from research.drive import LIVE
 
         for k, n in enumerate([n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):], 1):
-            (d := self.tmp / f"c-{n}").mkdir(parents=True)
+            (d := self.tmp / f"c-{n}").mkdir(parents=True, exist_ok=True)
             bad = {**{s: x if isinstance(x, tuple) else (x, 1) for s, x in (also or {}).items() if s in plan[k - 1]},
                    **({step: (log, 1)} if k == shard else {})}
             recs = [{"step": x, "status": "failed", "rc": bad[x][1], "log": f"{x}.log"} if x in bad else
@@ -2711,7 +2711,33 @@ class Runs:
             if k == shard:
                 (d / "suites.json").write_text(json.dumps(list(rows)))
             self.state[f"c-{n}"] = ("done", 1 if bad else 0, None)
-            self.dirs.append(d)
+            self.dirs += [d] if d not in self.dirs else []
+
+    def fail(self, sha: str, shard: int, rows: tuple[dict, ...] = (), step: str = "", log: str = "", at: float = T0,
+             rc: int | None = None, plan: tuple[tuple[str, ...], ...] = PLAN) -> str:
+        """Shard ``shard`` of the newest check of ``sha`` has failed so far, its run ``rc`` None still running: pytest's
+        suites ``rows`` (its suites.failed.json, each suite's log beside it last written at ``at``), or ``step``, which ended
+        failed at ``at`` with ``log``; its state says so, as `drive.run_states` reads it.  The run's id."""
+        from research.drive import LIVE, failing
+
+        n = [n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):][shard - 1]
+        (d := self.tmp / f"c-{n}").mkdir(parents=True, exist_ok=True)
+        recs = [*({"step": x, "status": "passed"} for x in PREFLIGHT),
+                *([{"step": step, "status": "failed", "rc": 1, "log": f"{step}.log", "ended_utc": L.stamp(at)}] if step else [])]
+        (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+        if step:
+            (d / f"{step}.log").write_text(log)
+        (d / "suites.failed.json").write_text(json.dumps([{**{k: v for k, v in r.items() if k != "status"},
+                                                           "log": f"{r['name']}.log"} for r in rows]))
+        (d / "suites").mkdir(exist_ok=True)
+        for r in rows:
+            (written := d / "suites" / f"{r['name']}.log").write_text("FAILED\n")
+            os.utime(written, (at, at))
+        (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": "running", "steps": [
+            {"step": r["step"], "state": r["status"]} for r in recs]}))
+        self.state[f"c-{n}"] = ("running", None, None, failing(d)) if rc is None else ("done", rc, None)
+        self.dirs += [d] if d not in self.dirs else []
+        return f"c-{n}"
 
 
 def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
@@ -2824,6 +2850,91 @@ def test_under_gate_check_a_failure_that_names_no_test_is_never_inherited(env, m
         ("" if how == "a step with no test" else "pkg::") + vqueue_slim.unnamed(mine["key"])}
     runs.end(sha, *failed)
     assert _acts(loop.tick()) == ["slim", "eject", "drop"] and env.main() == main and len(env.withdrawn) == 1
+
+
+def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_suspect_at_once_and_stops_them(env, monkeypatch):
+    """pytest's suite pkg fails in one shard while every shard still runs: the candidate fails now, its failure read as at its
+    end.  The member whose files meet the failing test's is ejected, told which test failed; the candidate's shards are
+    cancelled, its drop's line says when the suite's failure was written and when it was dropped, and the other member is
+    built again on `main` in the same tick."""
+    main = env.main()
+    head = env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    runs.fail(sha, 2, rows=(_row(NEW),), at=T0 + 60)
+    env.clock = T0 + 300
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "eject", "drop", "build", "slim"] and env.main() == main
+    judged, eject, drop, rebuilt = logged[1:5]
+    assert "verdict" not in judged["record"] and judged["record"]["early"]["failed"] == [
+        {"task": "step pytest", "key": vqueue_slim.key(loop.world.repo, sha, "pytest"), "inputs": ["pkg/tests/test_x.py"],
+         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"]}]
+    assert env.withdrawn == [(1, head)] and f"failing pkg::{NEW}" in eject["text"]
+    assert drop["sha"] == sha and drop["outcome"]["state"] == FAIL and drop["beside_cancelled"] == ["c-4", "c-5", "c-6"]
+    assert drop["early_red"] == {"failed_at": L.stamp(T0 + 60), "dropped_at": L.stamp(T0 + 300)}
+    assert rebuilt["members"] == [2] and rebuilt["base"] == main
+
+
+def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_has_said(env, monkeypatch):
+    """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  It waits
+    while its base's check runs, which may yet fail the same; in the tick that check passes, while the lowest's still runs,
+    it is decided: its member, meeting the failing test, is ejected, the one above it is dropped as a base failure, each
+    one's shards cancelled, and its PR is built again on its base."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "1\n"})
+    head = env.put(3, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(4, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=4)
+    loop.tick()
+    two, three, four = (loop.tick()[0]["sha"] for _ in range(3))
+    runs.end(main)
+    runs.fail(three, 1, rows=(_row(NEW),))
+    assert not {"eject", "drop"} & {*_acts(loop.tick())} and not env.withdrawn and not env.cancelled
+    runs.end(two)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
+    failed, above, rebuilt = logged[2:5]
+    assert (failed["sha"], failed["outcome"]["state"], failed["beside_cancelled"]) == (three, FAIL, ["c-10", "c-11", "c-12"])
+    assert (above["sha"], above["why"], above["beside_cancelled"]) == (four, "its base failed", ["c-13", "c-14", "c-15"])
+    assert (rebuilt["base"], rebuilt["members"]) == (two, [4]) and "early_red" in failed and "early_red" not in above
+
+
+def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bisected(env, monkeypatch):
+    """Two suites fail in two shards while the check runs, each meeting one member's files: both are suspects, nobody is
+    ejected, and the next batch takes half of them."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"other/tests/test_y.py": "def test_y():\n    assert False\n"})
+    loop, runs = _check(env, monkeypatch)
+    _, built, _ = loop.tick()
+    runs.end(main)
+    runs.fail(built["sha"], 2, rows=(_row(NEW),))
+    runs.fail(built["sha"], 3, rows=({"name": "other", "suite": "other", "status": "failed",
+                                      "failed_tests": ["tests/test_y.py::test_y"], "beyond_tests": False},))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "drop", "build", "slim"] and not env.withdrawn
+    assert logged[2]["outcome"]["suspects"] == [1, 2] and logged[3]["members"] == [1]
+
+
+def test_under_gate_check_a_step_off_the_gate_or_a_killed_shard_fails_nothing_while_the_check_runs(env, monkeypatch):
+    """circuit-check is off the merge gate and lean-audit a warn step: one shard ended failing both, which fails nothing
+    while the others run; nor does a shard killed by the machine, which is infra once every shard ended, as before, nor a
+    suite a stop cut short (failed beyond its tests alone) in a shard that runs.  A gating suite's failure in a shard that
+    runs fails the candidate then, naming none of them."""
+    loop, runs, main, sha = _off(env, monkeypatch, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"},
+                                 decide=vqueue.decide)
+    runs.end(main)
+    runs.fail(sha, 3, step="circuit-check", log=_circuit(HEAD), rc=1)
+    runs.fail(sha, 1, step="lean-audit", log="AUDIT security/Foo: FAIL\n", rc=137)
+    runs.fail(sha, 2, rows=({"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [], "beyond_tests": True},))
+    assert [(r["action"], r["sha"]) for r in loop.tick()] == [("slim", main)] and not env.withdrawn and not env.cancelled
+    runs.fail(sha, 2, rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "eject", "drop"] and [f["task"] for f in logged[2]["failed"]] == ["step pytest"]
 
 
 def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_the_check(env, monkeypatch):
