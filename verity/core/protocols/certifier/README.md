@@ -248,7 +248,9 @@ A spec-level reference for network accounting's timing channel:
   audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
+  policy's layout check, which is withheld. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
