@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Assumptions
+public import Definitions.Nci
 public import Definitions.Nci.Cut.Toy
 
 /-!
@@ -11,10 +12,13 @@ charged work and every partition into blocks that each read at most `k` gates ou
 `ρ = m c / |C|`. `HE` and `HEShared` put (H) and (E) (`Definitions.Assumptions`) into both, with two arrays
 `W` and `X` whose matmuls share no pair of values, and with shared arrays. No statement reads a fan-in bound, a width
 or a padding: `W` and `X` may share values, outputs may repeat, and each slowdown holds for every `c`, as it must for a
-partition into blocks of at most `c` gates, each priced at `c`.
+partition into blocks of at most `c` gates, each priced at `c`. `CountHE` is `HE` on a count verdict: its only premise
+on the circuit is the verdict itself, `CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition, and
+both bounds are at `n`.
 
-The witnesses that each says something are at the toy (`Nci.Cut.Toy`): `Cut_honest`, their premises holding together,
-and each statement's `_nontrivial`, the toy beating its bound once the block cap `ReadsAtMost` is dropped.
+The witnesses that each says something are at the toy (`Nci.Cut.Toy`): `Cut_honest` and `CountHE_honest`, their
+premises holding together, and each statement's `_nontrivial`, the toy beating its bound once the block cap
+`ReadsAtMost`, or the verdict, is dropped.
 -/
 
 @[expose] public section
@@ -54,6 +58,23 @@ def HE : Prop :=
       (c / d.D.size d.D.computed : ℝ) * (W.N / (k + alphaHE k (βw * βx) b) -
           k / 2 * √(W.O * W.N / (βw * βx)) / (k + alphaHE k (βw * βx) b) ^ (3 / 2 : ℝ)) ≤
         m * c / d.D.size d.D.computed
+
+/-- **The bound under (H) and (E) on a count verdict.** A declaration that complies with `CompliesAtMost c k n`, at
+most `n` proof blocks of a `(c, k)`-partition (the verdict a published `complies` of the count of `(c, k)`-inference
+blocks gives, `NciCheck.Properties.DescCountsCK`), has, under `HE`'s premises on its work and no other on its circuit,
+`N ≤ n (k + α) + (k/2) √(n O / (β_w β_x))` (`workHE`, `α = alphaHE k (β_w β_x) b`), and its size ratio at `n` blocks
+each priced at `c` is at least `(c / |C|) (N / (k + α) - (k/2) √(O N / (β_w β_x)) / (k + α)^{3/2})`. The verdict's
+blocks of at most `c` gates each read at most `k` gates outside `θ` (`ReadsAtMost`), and both bounds grow with the
+number of blocks. -/
+def CountHE : Prop :=
+  ∀ (ι V : Type) [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit) (W : Work d.D ι)
+    (val : Finset (Fin d.D.N) → V) (c k n : ℕ) (βw βx b : ℝ), 0 < βw → 0 < βx → 0 < b →
+    ValuesInjective W val → NoSharedPair W val → Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k →
+    Assumptions.Exports W b → CompliesAtMost c k n d →
+      (W.N : ℝ) ≤ workHE n k (βw * βx) b W.O ∧
+      (c / d.D.size d.D.computed : ℝ) * (W.N / (k + alphaHE k (βw * βx) b) -
+          k / 2 * √(W.O * W.N / (βw * βx)) / (k + alphaHE k (βw * βx) b) ^ (3 / 2 : ℝ)) ≤
+        n * c / d.D.size d.D.computed
 
 /-- **The bound under (H) and (E), with shared arrays.** Matmul `a` reads arrays `(e a).1` and `(e a).2`, an edge of a
 graph with no clique of `ω + 1` (`Arrays`), as when the arrays fall into `ω` classes and no matmul reads two of one
@@ -107,6 +128,20 @@ def HE_nontrivial : Prop :=
     ¬ ReadsAtMost Toy.d Toy.P1 0 ∧
     ¬ ((Toy.W.N : ℝ) ≤ ((1 : ℕ) : ℝ) * (((0 : ℕ) : ℝ) + alphaHE 0 (1 * 1) 1) +
         ((0 : ℕ) : ℝ) / 2 * √(((1 : ℕ) : ℝ) * Toy.W.O / (1 * 1)))
+
+/-- **`CountHE`'s premises hold together** at the toy: a block for each MAC, one gate reading two, so the toy complies
+with `CompliesAtMost 1 2 2`; each word its own value; (H) at unit costs and `k = 2`; and (E) at `b = 1`. -/
+def CountHE_honest : Prop :=
+  CompliesAtMost 1 2 2 Toy.d ∧ ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
+    Assumptions.Hardness Toy.d Toy.arrays Toy.val ![1, 1] 2 ∧ Assumptions.Exports Toy.W 1
+
+/-- **`CountHE` without the verdict**: `HE_nontrivial`'s values, costs, (H) at `k = 0` and (E); every block of a
+partition of the toy reads an unregistered input, so the toy fails `CompliesAtMost 1 0 1`, and `N = 2` exceeds the bound
+at one block, `0`. -/
+def CountHE_nontrivial : Prop :=
+  (0 : ℝ) < 1 ∧ ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
+    Assumptions.Hardness Toy.d Toy.arrays Toy.val ![1, 1] 0 ∧ Assumptions.Exports Toy.W 1 ∧
+    ¬ CompliesAtMost 1 0 1 Toy.d ∧ ¬ ((Toy.W.N : ℝ) ≤ workHE 1 0 (1 * 1) 1 Toy.W.O)
 
 /-- **`HEShared` without the block cap**: `Cut_honest`'s arrays, costs and (E), with (H) at `k = 0`; one block
 holding both MACs reads three gates, more than `k = 0`, and `N = 2` exceeds the bound, `0`. -/

@@ -18,7 +18,8 @@
                      [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
-                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
+                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target,
+                                                   even when the store pass fails (exit 3; `error` in the JSON)
                                                    --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
@@ -365,17 +366,25 @@ def cmd_evict(argv: list[str]) -> int:
     min_bytes = int(ns.min_mb * 2**20)
     say = None if ns.json else (lambda s: print(s, flush=True))
     keep = frozenset(k for f in ns.keep_registry for k in json.loads(Path(f).read_text()) if k.startswith("art:"))
-    rep: dict = {"store": EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
-                                         keep=keep, log=say)}
-    if ns.runs:
-        from ..runs import runs_root  # noqa: PLC0415
+    rep: dict = {"store": {"evicted_bytes": 0, "reached_target": False}}
+    try:
+        rep["store"] = EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
+                                      keep=keep, log=say)
+        if ns.runs:
+            from ..runs import runs_root  # noqa: PLC0415
 
-        rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+            rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
+                                        quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+    except Exception as e:  # noqa: BLE001  the source-tree pass reads no store: a store this user can't open must not stop it
+        rep["error"] = f"store pass: {type(e).__name__}: {e}"
+        if not ns.json:
+            print(f"research data evict: {rep['error']}", file=sys.stderr)
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
         _dump(rep)
+    if rep.get("error"):
+        return 3
     last = rep.get("runs") or rep["store"]
     return 0 if last["reached_target"] else 1
 
