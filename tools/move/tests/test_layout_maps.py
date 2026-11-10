@@ -127,3 +127,20 @@ def test_a_whole_directory_is_one_row_and_a_shared_one_is_a_row_a_file():
         "v/p/": "n/p/", "v/p/a.py": "n/q/a.py", "v/g/a.py": "n/defs/a.py"}
     assert G.compress({**mine, "v/p/lean/l.toml": "b/lean/l.toml"}, dirs, own=["v/p/lean/"]) == {
         "v/p/": "n/p/", "v/p/lean/": "b/lean/", "v/g/a.py": "n/defs/a.py"}
+
+
+def test_a_directory_the_map_empties_file_by_file_is_retired_and_one_with_a_row_or_a_file_left_is_not():
+    tracked = ["a/x.py", "a/y.py", "a/sub/z.py", "a/gone.toml", "b/k.py", "b/l.py", "c/m.py", "c/n.py",
+               "d/__init__.py", "d/e/f.py", "top.py"]
+    moved = {"a/x.py": "new/one/x.py", "a/y.py": "new/two/y.py", "a/sub/z.py": "new/one/sub/z.py",
+             "b/k.py": "new/b/k.py", "b/l.py": "new/b/l.py", "c/m.py": "new/c/m.py", "d/e/f.py": "d/g/f.py"}
+    rows = {"a/x.py": "new/one/x.py", "a/y.py": "new/two/y.py", "a/sub/": "new/one/sub/", "b/": "new/b/",
+            "c/m.py": "new/c/m.py", "d/e/f.py": "d/g/f.py"}
+    # `a/` leaves file by file, a dropped file among them, and holds `a/sub/`; `b/` has a row, which carries a new file;
+    # `c/n.py` stays; `d/` keeps its `__init__.py` and takes a file, and only `d/e/` under it is emptied
+    assert G.retire(tracked, moved, ["a/gone.toml"], rows) == ["a/", "d/e/"]
+    assert G.retire(tracked, moved, [], rows) == ["d/e/"]      # `a/gone.toml` left: `a/` isn't emptied, `a/sub/` has a row
+    lay = G.L.Layout({"roots": {"old": {}, "new": {}}, "paths": rows, "retired": {"paths": ["a/", "d/e/"]}})
+    left = [p for p in ("a/late.py", "a/sub/late.py", "b/late.py", "c/late.py", "d/late.py", "d/e/late.py")
+            if lay.file(p) is None and p.startswith(lay.retired)]             # `layout.py`'s own test in `plan()`
+    assert left == ["a/late.py", "d/e/late.py"]

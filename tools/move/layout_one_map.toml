@@ -779,7 +779,21 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/ml/windows/pyproject.toml: verity/ml/commitments" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 
 [retired]
-paths = []
+# directories this map empties that no directory row holds: `layout.py` refuses a tracked file under one that has no
+# row
+paths = [
+  "examples/",
+  "verity/core/primitives/",
+  "verity/core/protocols/certifier/",
+  "verity/core/protocols/network/",
+  "verity/core/protocols/pous/",
+  "verity/core/protocols/spot/",
+  "verity/core/service/",
+  "verity/ml/circuits/",
+  "verity/ml/commitments/",
+  "verity/ml/definitions/",
+  "verity/ml/flock/",
+]
 
 [drop]
 # `benchmarks/pouw/contents/paths/machine_model.toml`: the entry of `benchmarks/pouw`'s contents for

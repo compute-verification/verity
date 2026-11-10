@@ -83,9 +83,14 @@ ORDER. The one map has none. The maps a move run in the order of their names: ea
 has a row at or under another map's row, and no destination lies under any map's row, so the files land the same in
 any order. Module names do not: a map that moves a package's `__init__.py` renames the package, and would rename with
 it the modules another map takes out of that package. So that other map runs first: the order is derived from the
-maps, their names carry it, and each map's header names the maps that run before it. `[retired]` is empty in every
-map: a directory two maps share can be retired by neither while each map passes alone, and this script's own check
-does that job.
+maps, their names carry it, and each map's header names the maps that run before it.
+
+RETIRED. The one map's `[retired]` names every directory it empties that no directory row holds, the outermost of
+them: every tracked file under it leaves and none arrives. `layout.py` refuses a tracked file under one that has no
+row, so a file that lands there after the map was cut stops the move by name, where it would have stayed behind
+unsaid. A directory with a row needs none: the row carries the file. A directory whose emptied `__init__.py` stays
+for the later commit is not emptied by the map and is not named. In a move's map `[retired]` is empty: a directory
+two maps share can be retired by neither while each map passes alone.
 
 CHECKS (the script fails on any): every tracked file is one the data places or `NEW` names; every file the layout
 moves or archives has exactly one destination, and each map moves exactly its own files; no destination is claimed
@@ -669,6 +674,20 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
     return out
 
 
+def retire(tracked, moved, drop, rows):
+    """The outermost directories a map empties that none of its directory rows holds, each ending in "/": every tracked
+    file under one is moved (`moved`, {today's path: new path}) or dropped, and no new path lies under it."""
+    stays, arrives = set(), {a for n in moved.values() for a in ancestors(n)}
+    for p in tracked:
+        if p not in moved and p not in drop:
+            stays.update(ancestors(p))
+    out = []
+    for d in sorted({a for p in tracked for a in ancestors(p)} - stays - arrives):      # a directory before those under it
+        if not any((d + "/").startswith(k) for k in (*out, *rows) if k.endswith("/")):
+            out.append(d + "/")
+    return out
+
+
 def scan_splits(repo, lay_data):
     """The references to a directory the map splits that `layout.py` would rewrite, by its own scan of the worktree."""
     import pathlib
@@ -724,7 +743,14 @@ def render(fname, v, before, one=False):
     if v["split"]:
         lines += ["", "[split]", "# references to a directory this move splits that stay right: \"old file: old directory\" = why"]
         lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["split"].items())]
-    lines += ["", "[retired]", "paths = []", "", "[drop]",
+    lines += ["", "[retired]"]
+    if v["retired"]:
+        lines += [wrap("# ", "directories this map empties that no directory row holds: `layout.py` refuses a tracked file "
+                             "under one that has no row"),
+                  "paths = [", *(f"  {toml_str(p)}," for p in v["retired"]), "]"]
+    else:
+        lines.append("paths = []")
+    lines += ["", "[drop]",
               *(wrap("# ", f"`{p}`: {DROP[p][1]}.") for p in v["drop"]),
               "paths = [" + ", ".join(toml_str(p) for p in v["drop"]) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
@@ -863,6 +889,8 @@ def main():
             if set(drop) & set(dest):
                 die(f"{move}: DROP deletes a file a row moves: {sorted(set(drop) & set(dest))}")
             lay_data["drop"] = {"paths": drop}
+            gone = retire(tracked, mine, drop, rows) if one else []
+            lay_data["retired"] = {"paths": gone}
             aliases = {k: n for k, (m, n, _) in sorted(ALIASES.items()) if one or m == move}
             for k, n in aliases.items():
                 if n not in modules.values():
@@ -879,7 +907,7 @@ def main():
             reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
             maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
                           "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data, "drop": drop,
-                          "aliases": aliases}
+                          "aliases": aliases, "retired": gone}
 
         # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
         keys = [(m, k) for m in maps for k in maps[m]["rows"]]
