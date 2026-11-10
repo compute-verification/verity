@@ -145,6 +145,22 @@ def test_a_pack_holds_what_its_entries_need_whether_or_not_the_run_stored_it(tmp
         assert tar.getnames() == held
 
 
+def test_an_entry_that_is_not_json_is_packed_as_it_is_and_needs_nothing(tmp_path, monkeypatch, capsys):
+    """An entry cut short where it names what it needs can't be read by any lookup, here or where its pack goes: it is packed
+    byte for byte with nothing it names, and the export says so rather than failing the run's every other verdict."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    cc = r["check"] / "circuit-check" / "v1"
+    _write(cc / "reads" / "r1.json", "{}")
+    before = V.snapshot()
+    _write(cc / "d" / "e3.json", (cut := '{"needs": ["../reads/r1.json"'))
+    _write(cc / "d" / "e4.json", json.dumps([{V.NEEDS: ["../reads/r1.json"]}]))
+    assert V.export(pack := tmp_path / "run.tar.gz", before) == 2
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == ["check/circuit-check/v1/d/e3.json", "check/circuit-check/v1/d/e4.json"]
+        assert tar.extractfile("check/circuit-check/v1/d/e3.json").read().decode() == cut
+    assert "verdicts: check/circuit-check/v1/d/e3.json is not JSON (" in capsys.readouterr().err
+
+
 def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
     """The caches run to hundreds of GB; re-reading every entry at both ends of a check held a finished run for an hour of
     disk reads once another job had evicted the page cache.  The per-root index memoizes each

@@ -1817,6 +1817,7 @@ def test_an_entry_in_the_old_form_is_a_miss(tmp_path):
     old.parent.mkdir(parents=True)
     old.write_text(json.dumps({"key": k, "reads": CC._digests(tmp_path, got), "report": rep}))
     assert CC.lookup(tmp_path / "cache", k, tmp_path) is None and CC.recorded(tmp_path / "cache", k, tmp_path) is None
+    assert f"{old}: KeyError: 'own'; counted as no entry" in CC.unread()
     eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
     assert CC.lookup(tmp_path / "cache", k, tmp_path) == (rep, eid)
     CC._VISIBLE.clear()

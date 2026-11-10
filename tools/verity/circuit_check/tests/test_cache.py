@@ -1173,6 +1173,44 @@ def test_each_distinct_read_record_is_stored_once_and_reuse_is_decided_as_by_who
     assert not any(b'"sites"' in p.read_bytes() for p in entries)
 
 
+def _needed(p: Path) -> set[Path]:
+    """Each record the entry or record at ``p`` names in its ``needs``, and each one those name."""
+    out: set[Path] = set()
+    todo = [p]
+    while todo:
+        q = todo.pop()
+        for n in json.loads(q.read_bytes()).get("needs", []):
+            if (r := Path(os.path.normpath(q.parent / n))) not in out:
+                out.add(r)
+                todo.append(r)
+    return out
+
+
+@pytest.mark.parametrize("bad", ["altered", "missing"])
+def test_a_record_not_its_names_bytes_or_missing_is_a_miss_the_report_names_and_the_next_store_rewrites(tmp_path, bad):
+    """A record only SynTop's entry is read with, its bytes not those its name digests (its own JSON indented, which only
+    `_record`'s digest check tells from the record) or gone: SynTop's entry counts as none, so its check runs again, and the
+    run's report names the entry, what was raised and the record (``cache.unread``).  That run's store writes the record whole
+    again (`_put`), and the next run reuses SynTop."""
+    root = _tree(tmp_path)
+    _run(root)
+    entries = {json.loads(p.read_text())["key"]["request"]["target"][1]: p for p in (root / "cache").glob("*/*/*.json")}
+    top = entries.pop("SynTop_v1")
+    rec = sorted(_needed(top) - set().union(*map(_needed, entries.values())))[0]
+    good = rec.read_bytes()
+    if bad == "altered":
+        rec.write_text(json.dumps(json.loads(good), indent=1))
+    else:
+        rec.unlink()
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1"]
+    (line,) = out["stats"]["unread"]
+    assert line.startswith(f"{top}: {'ValueError' if bad == 'altered' else 'FileNotFoundError'}: ") and str(rec) in line
+    assert rec.read_bytes() == good
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["unread"] == []
+
+
 def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tmp_path):
     """SynOther's binding and pin are in its module's sidecar (`_sidecar`).  `syn/other.py` moves to `syn/fam/` with both
     sidecar files, and every import line that names it is rewritten, the sidecar's own split and put first: a sidecar's units
