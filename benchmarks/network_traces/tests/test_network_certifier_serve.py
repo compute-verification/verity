@@ -19,16 +19,16 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
 from verity.core.protocols.certifier.grid import Reason
 from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
+from verity.core.protocols.certifier.network_certifier import (END, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell,
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
+PARAMS = NetworkCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128, egress="bytes")
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
@@ -39,7 +39,7 @@ SLOW_COMMIT_S = 0.4
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_serve", HERE / "warden_serve.py")
+    spec = importlib.util.spec_from_file_location("network_traces_network_certifier_serve", HERE / "network_certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -64,28 +64,28 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
     assert min(words) < 30 and max(words) > 500
 
 
-def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
+def test_the_gates_network_certifier_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
     """The auditor host's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs `rehearse` on traffic the
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
-    minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
+    minutes are under `network_certifier_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
     origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
-    argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
+    argv = A.network_certifier_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
     args = ws.parser().parse_args(argv[2:])
     assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens, args.height) == \
         ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64, 20)
-    assert ws.parser().parse_args(A.warden_command({"requests": 7, "height": 10}, tmp_path, "http://h:1")[2:]).height \
+    assert ws.parser().parse_args(A.network_certifier_command({"requests": 7, "height": 10}, tmp_path, "http://h:1")[2:]).height \
         == 10
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
-    assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
+    assert ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
     most = ws.varied_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
     assert ws.varied_traffic(400, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED) == most[:400]
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
-        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+        assert took <= A.network_certifier_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
 def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_cover_the_link(tmp_path):
@@ -98,11 +98,11 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
     program, sinks = "ab" * 64, [("127.0.0.1", 50001 + i) for i in range(4)]
     req = {"device": "warden", "requests": 7, "scan": True,
            "load": {"shape": "tiny", "program": program, "sink_port": 9001, "streams": 4, "minutes": 16}}
-    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", sinks=sinks, store=tmp_path / "store")
+    argv = A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001", sinks=sinks, store=tmp_path / "store")
     args = ws.parser().parse_args(argv[2:])
     assert (args.load_store, args.load_shape, args.load_sinks, args.load_program, args.load_ready_s) == \
         (tmp_path / "store", "tiny", sinks, program, A.LOAD_READY_S)
-    without = A.warden_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
+    without = A.network_certifier_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
     assert argv[:len(without)] == without and ws.parser().parse_args(without[2:]).load_store is None
     assert args.ids and ws._params(args) == ws._params(ws.parser().parse_args(without[2:]))
     assert set(A.LOAD_SHAPES) == set(ws.lr.SHAPES)
@@ -116,12 +116,12 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
 def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
     """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
     every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
-    the seed's, so `warden_minutes` still bounds the run."""
+    the seed's, so `network_certifier_minutes` still bounds the run."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     given = ws.parser().parse_args(
-        A.warden_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
-    plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
+        A.network_certifier_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
+    plain = ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:])
     assert (plain.temperature, plain.top_p, given.temperature, given.top_p) == (0.0, 1.0, 0.6, 0.9)
     varied = ws.varied_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
 
@@ -142,14 +142,14 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
     boundary, 8 an execution phase and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
-    at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
+    at its lowest height, `network_certifier_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     import scan_zk as sz
     req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
-    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    args = ws.parser().parse_args(A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     p = ws._params(args)
     assert args.ids and not args.fake and p == sz.PARAMS
     sz.CLASS.serves(p)
@@ -164,7 +164,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     def rest(t):
         return [{**x, "ids": {k: v for k, v in x["ids"].items() if k not in ("temperature", "top_p")}} for x in t]
     assert rest(traffic) == rest(drawn) and {x["ids"]["top_p"] for x in drawn} == {1.0}
-    plain = ws.parser().parse_args(A.warden_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
+    plain = ws.parser().parse_args(A.network_certifier_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
 
     window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
@@ -172,7 +172,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
                          max_tokens=(1, sz.PARAMS.egress_cells - 1))
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
-        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+        assert took <= A.network_certifier_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
 def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_schedule_ki_and_ko(tmp_path, capsys):
@@ -193,7 +193,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
         assert sz.main(["schedule", "--class", name]) == 0
         assert capsys.readouterr().out.split() == list(A.scan_schedule(scan_class=name)), name
         req = {"device": "warden", "requests": 4, "scan": True, "prompts": {"count": 1, "ids": 1}, "scan_class": name}
-        args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+        args = ws.parser().parse_args(A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
         params = ws._params(args)
         assert params == s.params == dataclasses.replace(sz.PARAMS, egress_cells=s.params.egress_cells), name
         s.cls.serves(params)
@@ -204,17 +204,17 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
         sz.W63K4.cls.serves(sz.PARAMS)
 
 
-def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
-    """The gate sizes a network certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for
+def test_the_gates_network_certifier_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
+    """The gate sizes a network certifier rehearsal's key on `network_certifier_windows` of its requests (`network_certifier_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
-    and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s
+    and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `network_certifier_serve.py`'s
     default (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
     most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     import scan_zk as sz
-    plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
+    plain = ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:])
     assert A.WARDEN_WINDOW_MS == plain.window * plain.bucket_ms
     assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == sz.PARAMS.window * sz.PARAMS.bucket_ms
     most, at = A.WARDEN_REQUESTS[1], dict(rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
@@ -227,10 +227,10 @@ def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows
         return math.ceil((traffic[n - 1]["at"] + A.WARDEN_TAIL_S) * 1000 / window_ms)
     scan_ms = sz.PARAMS.window * sz.PARAMS.bucket_ms
     for n in range(A.WARDEN_REQUESTS[0], most + 1):
-        assert all(windows(t, n, scan_ms) <= A.warden_windows(n) for t in scan.values()), n
-        assert windows(varied, n, A.WARDEN_WINDOW_MS) <= A.warden_windows(n, scan=False), n
+        assert all(windows(t, n, scan_ms) <= A.network_certifier_windows(n) for t in scan.values()), n
+        assert windows(varied, n, A.WARDEN_WINDOW_MS) <= A.network_certifier_windows(n, scan=False), n
     assert (windows(scan["prompts"], 400, scan_ms), windows(scan["prompts"], most, scan_ms)) == (259, 1064)
-    assert A.warden_height(windows(scan["prompts"], most, scan_ms)) == A.warden_height(A.warden_windows(most)) == 13
+    assert A.network_certifier_height(windows(scan["prompts"], most, scan_ms)) == A.network_certifier_height(A.network_certifier_windows(most)) == 13
 
 
 def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):
@@ -238,7 +238,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     the scan's schedule, on the gate's witness file: request j is the (j mod n)-th prompt with exactly the request's
     tokens, group g's n requests together half a bucket into execution phase g·G, G the gate's `scan_group_windows`
     (`group_windows` at the scan's schedule, for every token count the gate takes), and the run exactly its groups'
-    windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
+    windows (`groups`), which `network_certifier_group_minutes` covers with the origin's delay and 30 s for the key and the
     check. Without `--window-per-group` the prompts go at the gate's arrivals."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
@@ -248,7 +248,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     (tmp_path / A.PROMPTS).write_text(json.dumps(prompts))
     req = {"device": "warden", "requests": 7, "scan": True, "prompts": {"count": 3, "ids": 4}, "window_per_group": True,
            "tokens": 2, "height": 10, "temperature": 0.0, "top_p": 1.0}
-    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    args = ws.parser().parse_args(A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     assert (args.ids, args.window_per_group, args.prompts, args.max_tokens, args.requests) == \
         (True, True, tmp_path / A.PROMPTS, 2, 7)
     params = ws._params(args)
@@ -266,20 +266,20 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
         for tokens in (1, 2, A.WARDEN_PROMPT_TOKENS[1]):
             took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
-            assert took <= A.warden_group_minutes(groups, tokens, A.REHEARSAL_HEIGHT[0]) * 60, (groups, tokens)
+            assert took <= A.network_certifier_group_minutes(groups, tokens, A.REHEARSAL_HEIGHT[0]) * 60, (groups, tokens)
 
-    loose = ws.parser().parse_args(A.warden_command(req | {"window_per_group": False}, tmp_path, "u:1")[2:])
+    loose = ws.parser().parse_args(A.network_certifier_command(req | {"window_per_group": False}, tmp_path, "u:1")[2:])
     assert not loose.window_per_group and loose.prompts == tmp_path / A.PROMPTS
     spread = ws.traffic_of(loose, "m")
     assert [x["ids"]["prompt"] for x in spread] == [x["ids"]["prompt"] for x in traffic]
     assert spread[0]["at"] == 0 and all(x["at"] < y["at"] for x, y in zip(spread, spread[1:]))
-    assert "--prompts" not in A.warden_command({"requests": 7, "scan": True}, tmp_path, "u")
+    assert "--prompts" not in A.network_certifier_command({"requests": 7, "scan": True}, tmp_path, "u")
 
 
 def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_there_and_its_minutes_cover_it(tmp_path):
     """`warden-rehearse --scan --bucket-ms MS` runs `rehearse` at `scan_zk.PARAMS` with the tick MS, which the scan's
     class serves, and the gate counts its minutes and its key's execution phases at MS: for each tick it takes, in
-    100 ms steps up to its longest (a block of 128 s, past the minute `warden_minutes` counts for a shorter one), at
+    100 ms steps up to its longest (a block of 128 s, past the minute `network_certifier_minutes` counts for a shorter one), at
     its lowest height, they cover every request count's id traffic (its last arrival, its tail, the rest of the block
     it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
     run."""
@@ -294,21 +294,21 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
     height = A.REHEARSAL_HEIGHT[0]
     for tick in range(lo, hi + 1, 100):
         req = {"device": "warden", "requests": 7, "scan": True, "bucket_ms": tick}
-        args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+        args = ws.parser().parse_args(A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
         params = ws._params(args)
         assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
         sz.CLASS.serves(params)
         window_s = params.window * tick / 1000
-        assert A.warden_window_ms(req) == params.window * tick
+        assert A.network_certifier_window_ms(req) == params.window * tick
         for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
             blocks = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
-            assert blocks * window_s + args.start_in + 30 <= A.warden_minutes(n, height, params.window * tick) * 60, \
+            assert blocks * window_s + args.start_in + 30 <= A.network_certifier_minutes(n, height, params.window * tick) * 60, \
                 (tick, n)
-            assert blocks <= A.warden_windows(n, bucket_ms=tick), (tick, n)
+            assert blocks <= A.network_certifier_windows(n, bucket_ms=tick), (tick, n)
         for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
             for tokens in (1, 4, A.WARDEN_PROMPT_TOKENS[1]):
                 took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
-                assert took <= A.warden_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
+                assert took <= A.network_certifier_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
 
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
@@ -357,17 +357,17 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
         out = tmp_path / f"t{tokens}"
         out.mkdir()
         responses = [ws.id_response(list(range(tokens)), p.payload)] * p.lanes
-        warden = _run(out, tmp_path / f"key{tokens}", requests, responses, windows=G, params=p, id_payload=p.payload)
-        assert len(warden.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in warden.log)
-        assert {c["ended"] - c["admitted"] for c in warden.log} == {p.delay + tokens // p.slots}
-        assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in warden.log)
+        network_certifier = _run(out, tmp_path / f"key{tokens}", requests, responses, windows=G, params=p, id_payload=p.payload)
+        assert len(network_certifier.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in network_certifier.log)
+        assert {c["ended"] - c["admitted"] for c in network_certifier.log} == {p.delay + tokens // p.slots}
+        assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in network_certifier.log)
         result = ws.check(out)
         assert result["accepted"], result["problems"]
         assert (result["summary"]["ended"], result["summary"]["windows"]) == (p.lanes, G)
     assert (ws.group_windows(p, 2), ws.group_windows(p, 64)) == (1, 2)
 
 
-def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+def test_the_gates_demo_traffic_through_the_network_certifier_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
         tmp_path):
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
     prompt as it is, with exactly 24 tokens and greedy; on the network certifier at the scan's schedule, the stand-in,
@@ -383,8 +383,8 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     prompts = D.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}
-    (tmp_path / A.PROMPTS).write_bytes(A.warden_prompts(req, json.dumps(prompts).encode()))
-    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    (tmp_path / A.PROMPTS).write_bytes(A.network_certifier_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     params = ws._params(args)
     assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
     traffic = ws.traffic_of(args, D.Shape().name)
@@ -395,12 +395,12 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     out.mkdir()
     G = ws.group_windows(params, 24)
     assert G == 2
-    warden = _run(out, tmp_path / "key", requests, responses, windows=G, params=params, id_payload=params.payload,
+    network_certifier = _run(out, tmp_path / "key", requests, responses, windows=G, params=params, id_payload=params.payload,
                   servers=servers)
-    assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
+    assert len(network_certifier.log) == 4 and all(c["failed"] is None and not c["cut"] for c in network_certifier.log)
     for j, (server, response) in enumerate(zip(servers, responses)):
         sent = b"".join(data for _, data in server.writes)
-        fields = D.warden_request(sent)
+        fields = D.network_certifier_request(sent)
         assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and D.refusal(fields) is None
         assert D.answer(fields["prompt"]) == response
     result = ws.check(out)
@@ -491,8 +491,8 @@ def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_
     out.mkdir()
     gated = dataclasses.replace(PARAMS, egress="id")
     requests = [ws.http_request({"prompt": "x"}, "h:1")]
-    warden = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
-    assert [(c["failed"], c["failed_at"]) for c in warden.log] == [("format", 0)]
+    network_certifier = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
+    assert [(c["failed"], c["failed_at"]) for c in network_certifier.log] == [("format", 0)]
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id" and deployment["digest"] == gated.digest.hex() != PARAMS.digest.hex()
     problems = ws.check(out)["problems"]
@@ -535,11 +535,11 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
 
 
 class _Writer:
-    def __init__(self, warden: Warden | None = None) -> None:
-        self.warden, self.writes, self.closed, self.transport = warden, [], False, self
+    def __init__(self, network_certifier: NetworkCertifier | None = None) -> None:
+        self.network_certifier, self.writes, self.closed, self.transport = network_certifier, [], False, self
 
     def write(self, data: bytes) -> None:
-        self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
+        self.writes.append((self.network_certifier.ticks if self.network_certifier else None, bytes(data)))
 
     def is_closing(self) -> bool:
         return self.closed
@@ -572,8 +572,8 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
+         process: bool = False, servers: list | None = None, params: NetworkCertifierParams = PARAMS,
+         id_payload: int | None = None, load_heads: Path | None = None) -> NetworkCertifier:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`,
@@ -582,10 +582,10 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     Returns the network certifier."""
     tau = params.bucket_ms / 1000
     if process:
-        import warden_serve  # by name, so that the spawned process finds its functions
+        import network_certifier_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, 5 if load_heads else 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
+        publisher = network_certifier_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
         public = publisher.key
     else:
@@ -603,38 +603,38 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             servers.append(writer)
         return reader, writer
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> tuple[list[_Writer], Warden]:
+    async def main() -> tuple[list[_Writer], NetworkCertifier]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
-        running = asyncio.create_task(warden.run())
+        network_certifier = NetworkCertifier(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+        running = asyncio.create_task(network_certifier.run())
         clients, tasks = [], []
         for request in requests:
             reader = asyncio.StreamReader()
             reader.feed_data(cells(request, params.cell_bytes))
             reader.feed_eof()
-            clients.append(_Writer(warden))
-            tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+            clients.append(_Writer(network_certifier))
+            tasks.append(asyncio.create_task(network_certifier.handle(reader, clients[-1])))
+        await network_certifier.until(lambda w: w.ordinals + w.refused == len(requests))
         PROCESS_CLOCK.append(clock)
         try:
             for t in range(windows * params.window):
-                await warden.until(settled)
+                await network_certifier.until(settled)
                 clock.advance(t * tau)
-                await warden.until(lambda w, t=t: w.ticks > t)
+                await network_certifier.until(lambda w, t=t: w.ticks > t)
             await running
         finally:
             PROCESS_CLOCK.remove(clock)
         await asyncio.gather(*tasks)
-        return clients, warden
+        return clients, network_certifier
 
-    clients, warden = asyncio.run(main())
+    clients, network_certifier = asyncio.run(main())
     publisher.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
-                                      run_id=warden.run_id)
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=network_certifier.slack,
+                                      run_id=network_certifier.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -649,7 +649,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         shim.outcome = "refused" if REFUSED in kinds else "end" if END in kinds else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0, id_payload))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    return warden
+    return network_certifier
 
 
 def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(tmp_path):
@@ -658,12 +658,12 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     servers: list[_Writer] = []
-    warden = _run(out, key, requests, responses, servers=servers)
-    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    network_certifier = _run(out, key, requests, responses, servers=servers)
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in network_certifier.log}
     assert sorted(n for n, _ in release.values()) == [0, 1, 2]
     assert [b"".join(d for _, d in s.writes) for s in servers] == \
-        [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
-    assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
+        [with_release(r, release[k + 1][0], network_certifier.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
+    assert json.loads((out / "deployment.json").read_text())["run_id"] == network_certifier.run_id.hex()
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
@@ -753,8 +753,8 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20, 30, 40, 50)]
     responses = [_response([" a"]) for _ in range(4)]
-    warden = _run(out, tmp_path / "key", requests, responses, windows=2, process=process)
-    assert (warden.refused, warden.refused_windows, len(warden.log)) == (1, {0}, 4)
+    network_certifier = _run(out, tmp_path / "key", requests, responses, windows=2, process=process)
+    assert (network_certifier.refused, network_certifier.refused_windows, len(network_certifier.log)) == (1, {0}, 4)
     certified = [json.loads(x) for x in (out / "certified.jsonl").read_text().splitlines()]
     cells_ = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
     assert [(x["refused"][2], x["withheld"]) for x in certified if "refused" in x] == [(0, True)] * 3

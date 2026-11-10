@@ -2,7 +2,7 @@
 
 The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
-record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
+record's one form, `network_certifier`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
 ## Running it
@@ -26,10 +26,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
+- **The certifier as a relay.** `network_certifier_serve.py` runs `verity.core.protocols.certifier.network_certifier`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
-  `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
+  `network_certifier_chain.py` is the chain's reads of a relay run, and `network_certifier_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
@@ -175,15 +175,15 @@ members aren't scanned) is no find, nor is a piece those files hold, as they are
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
 and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
-repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
+repeats it and its ticker's stalls in `out/certs.json`, which `network_certifier_serve.check` publishes. The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
-`warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
+`warden-rehearse`, its witness under `witness/`; `network_certifier_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
-the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
+the relay's own offline check on its witness (`network_certifier_serve.check`) and holds the public `certificates.jsonl` to the
 certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
@@ -232,7 +232,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - No term for incorrect proof blocks with every proof block sampled, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the certifier's written buckets tell a receiver no more than an idle one. The
   certifier hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+  (`network_certifier.NetworkCertifier(paced=…)`, `network_certifier_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it

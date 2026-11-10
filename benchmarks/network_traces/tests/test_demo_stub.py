@@ -22,7 +22,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-import warden_serve as ws  # noqa: E402
+import network_certifier_serve as ws  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -79,7 +79,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
 def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the network certifier puts on the server's copy, the answer is the prompt's
     24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
-    network certifier's rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from
+    network certifier's rehearsal reads it (`network_certifier_serve.parse_id_response`), and the scan's cells' payloads cut from
     it."""
     ids = S.outputs(PROMPT)
     want = b"".join(IT.id_event(t, P) for t in ids) + IT.TRAILER
@@ -120,7 +120,7 @@ def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_on
     for other in (A.id_request(**fields, frame_bytes=256, offset=0), moved,
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
-        assert other != ids_request() and S.warden_request(other) is None
+        assert other != ids_request() and S.network_certifier_request(other) is None
         assert "a warden's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
@@ -136,7 +136,7 @@ def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsal
     assert all(len(p) == 3 and all(t < 5 for t in p) for p in S.prompts(2, S.Shape(3, vocab=5)))
     req = {"requests": 8, "tokens": 24, "height": 10, "minutes": 4, "prompts": True, "scan": True}
     data = json.dumps(got, separators=(",", ":")).encode()
-    assert G.warden_prompts(req, data) == data and req["prompts"] == {"count": 4, "ids": 32}
+    assert G.network_certifier_prompts(req, data) == data and req["prompts"] == {"count": 4, "ids": 32}
 
 
 def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
@@ -296,4 +296,4 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
     published = b"".join(p.read_bytes() for p in out.iterdir())
     assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
-    assert CR.warden_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+    assert CR.network_certifier_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]

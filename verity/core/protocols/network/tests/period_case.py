@@ -7,8 +7,8 @@ and checks a period with the Python the period's pieces already have: one-stage'
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
 under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), one-stage's `registration.digest` (a
 registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
-the schedule (`warden.WardenParams`) and the verifier's read of each row registration
-(`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
+the schedule (`network_certifier.NetworkCertifierParams`) and the verifier's read of each row registration
+(`network_certifier_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
@@ -20,7 +20,7 @@ parameters, commitments, evidence and cases). In the clock form: the link-window
 sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small sampled schedule
-(`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
+(`network_certifier_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
 none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
 that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
@@ -56,11 +56,11 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.certifier.warden import INTEGER_FIELDS, WardenParams
+from verity.core.protocols.certifier.network_certifier import INTEGER_FIELDS, NetworkCertifierParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.spot.one_stage import registration as R
 from verity.core.protocols.spot.one_stage.draw import stratum_k
@@ -145,7 +145,7 @@ class Params:
     sync_set: SyncSet | None
     windows: int
     #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
-    schedule: WardenParams | None = None
+    schedule: NetworkCertifierParams | None = None
     scan: Scan | None = None
 
 
@@ -222,13 +222,13 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
-def _schedule(j) -> WardenParams:
-    """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
+def _schedule(j) -> NetworkCertifierParams:
+    """`scheduleOf`: `NetworkCertifierParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
     values = {k: _nat(j[k], "schedule") for k in SCHEDULE_KEYS}
     try:
-        s = WardenParams(**values)
+        s = NetworkCertifierParams(**values)
     except ValueError as e:
         raise D.Reject(f"schedule: {e}") from None
     if not (s.cell_bytes < U32 and s.lanes * s.slots < U32 and s.window < U32):
@@ -466,7 +466,7 @@ def _audit(a, ctx: str) -> Audit:
     return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
 
 
-def _scan(j, program: str, s: WardenParams) -> Scan:
+def _scan(j, program: str, s: NetworkCertifierParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
@@ -730,7 +730,7 @@ def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, re
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
-    """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`)."""
+    """`rowsCheck`: the verifier's own read of the registration (`network_certifier_rows.check_registration`)."""
     try:
         WR.check_registration(doc, p.key, p.session, p.schedule, p.link, d, w)
     except ValueError as e:
@@ -837,7 +837,7 @@ def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
+    """The rows form's certified records of a link-window (`network_certifier_serve.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
@@ -1092,15 +1092,15 @@ SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
-def schedule_json(s: WardenParams) -> dict:
+def schedule_json(s: NetworkCertifierParams) -> dict:
     return {k: getattr(s, k) for k in SCHEDULE_KEYS}
 
 
-def _small_schedule(r: random.Random, small: bool) -> WardenParams:
+def _small_schedule(r: random.Random, small: bool) -> NetworkCertifierParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
     `small`), and a timestep `every` that divides T."""
     T = r.randint(1, 2 if small else 3)
-    return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+    return NetworkCertifierParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                         delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                         ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
                         every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
@@ -1417,7 +1417,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         c = Certificate(k.I, link, d, w, digest, b"")
         return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
 
-    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
+    def registrations(w: int, s: NetworkCertifierParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
         """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
         `ses` and registered, each head signed there."""
         s = s or sched

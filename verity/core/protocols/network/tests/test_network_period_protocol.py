@@ -24,10 +24,10 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.network_certifier import NetworkCertifierParams
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -405,7 +405,7 @@ def test_an_audit_is_held_to_its_program(server):
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
-    """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
+    """The rows form's honest registrations are `network_certifier_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -489,7 +489,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for incorrect
     proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries' free inputs,
     8 · 1,136 = 9,088 bits; and eps over the scans' δ alone."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, NetworkCertifierParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0)])
     (scan,) = out["scans"]
