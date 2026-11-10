@@ -57,3 +57,6 @@ COORDINATOR 23:05Z. (1) Way 3 is relayed to circuits on CIR-204 with what they m
 [2026-11-10T04:16Z] c659753fcd6b
 Coordinator 04:20Z: #8429's land ask is posted. New, by 11:00Z in my inbox: vllm's PRF-477 question (04:01Z), which of the long row's 48 templates round 2 needs staged and when, and may one be staged after the draw. Brief: your file on cursor/proofs-inbox (8776538f0ef).
 
+[2026-11-10T04:37Z] 3181b74d3f25
+Coordinator 04:40Z: #8429 has review-4's land verdict. Two follow-ups from it (a retired term in test_difftest.py; Schedule.why is quadratic in the requests): say in your 11:00Z entry whether the second is fixed before Thursday's serve. Your file on cursor/proofs-inbox (c83c6487b93).
+
