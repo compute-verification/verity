@@ -4588,6 +4588,42 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
     assert named & set(codes("P.AssumptionsX"))
 
 
+def test_assumptions_module_may_list_several_homes():
+    """`assumptions_module` may list modules (`Security/Properties` lists `Properties.Assumptions` beside the spec's, for an
+    assumption stated over the code, which the spec can't import): one declared in any of them is a named assumption, one
+    declared outside them all fails naming each, and every listed home is a module the build has. The string form is
+    one home, as the one-element list."""
+    def sound(module):
+        return facts(pins={"P.t": fact(
+            signature="P.t (h : P.Hyp) (s : P.Sound) (n : Nat) : P.f n = n",
+            hyps=fact()["hypotheses"] + [{"binder": "s", "type": "P.Sound", "closed": True, "named": "P.Sound",
+                                          "module": module}],
+            reads=fact()["reads"] + [{"name": "P.Sound", "module": module, "kind": "def", "hash": "5" * 32}])})
+    two = {**POLICY, "assumptions_module": ["P.Assumptions", "P.Defs"],
+           "assumptions": POLICY["assumptions"] | {"P.Sound": {"owner": "@lean"}}}
+    fails, pol = A.judge(two, sound("P.Defs"), FILES, update=True)
+    assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Sound"}
+    assert pol["guarantees"]["P.t"]["premises"]["assumptions"] == ["P.Hyp", "P.Sound"]
+    assert A.judge(pol, sound("P.Defs"), FILES)[0] == []
+    outside = [x for x in A.judge(pol | {"assumptions_module": ["P.Assumptions", "P.Thms"]}, sound("P.Defs"), FILES)[0]
+               if x.code == "assumptions.outside-module"]
+    assert outside == ["assumptions: P.Sound is declared in P.Defs, not in P.Assumptions or P.Thms, where a named "
+                       "assumption is declared: move its definition there if it is a real one, or move its entry to "
+                       "`open` with the issue that discharges it and its due date, or to `domain` with a one-line `why` "
+                       "if it is part of what the guarantee says"]
+    one = A.judge(POLICY, facts(), FILES, update=True)
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[0] == one[0] == []
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[1] == \
+        one[1] | {"assumptions_module": ["P.Assumptions"]}
+    missing = A.judge({**POLICY, "assumptions_module": ["P.Assumptions", "P.Nowhere"]}, facts(), FILES, update=True)[0]
+    assert [x for x in missing if x.code == "assumptions.module"] == [
+        "assumptions: `assumptions_module` names 'P.Nowhere', which neither the build nor the packages it requires has a "
+        "module of; name the modules the named assumptions are declared in"]
+    for bad in ([], {"P.Assumptions": 1}, ["P.Assumptions", 2]):
+        assert "assumptions.module-form" in [x.code for x in A.judge({**POLICY, "assumptions_module": bad}, facts(),
+                                                                       FILES, update=True)[0]]
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
@@ -4965,6 +5001,22 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
     assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
 
 
+def test_a_build_s_log_says_in_one_line_how_many_modules_it_restored_and_why_not_the_others():
+    """One line a build, so that any run's log says what the cache missed: the misses by reason, most frequent first,
+    each with the first module it names."""
+    assert A.staged_line({"modules": 3, "keyed": 3, "missed": {}, "first": {}}) == \
+        "3 of 3 keyed modules restored from the artifact cache"
+    assert A.staged_line({"modules": 1, "keyed": 6, "missed": {"reads a module not restored": 3, "its source": 2},
+                          "first": {"reads a module not restored": "P", "its source": "P.A"}}) == \
+        ("1 of 6 keyed modules restored from the artifact cache; missed: 3 reads a module not restored (first P), "
+         "2 its source (first P.A)")
+    assert A.staged_line({"error": "no keys"}) == "nothing restored from the artifact cache: no keys"
+    assert A.staged_line({"modules": 4, "keyed": 9, "missed": {}, "first": {}, "left": 2,
+                          "took": {"not in the cache": 3, "the cache holds another version": 1}}) == \
+        ("4 of 9 keyed modules restored from the artifact cache; traces taken from the build: 3 not in the cache, "
+         "1 the cache holds another version; 2 left to Lake, which the cache could not index")
+
+
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
     """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
     step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
@@ -4982,7 +5034,7 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
     (store / mk.INDEX).mkdir()
     mk.entry_path(store, mk.key("P", mk.keys(pkg), {})).write_text(json.dumps({
-        "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
+        "schema": mk.SCHEMA, "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
         "digests": {"a" * 16 + ".olean": mk.C.digest(b"P")}}))
     cache = store / mk.STAGE / f"{os.getpid()}-p"
     seen = []
@@ -5004,7 +5056,9 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
-    assert rep["staged"] == {"modules": 1, "keyed": 1} and "stage" in rep["seconds"] and not cache.exists()
+    assert rep["staged"] == {"modules": 1, "keyed": 1, "missed": {}, "first": {}, "took": {}, "left": 0}
+    assert "stage" in rep["seconds"]
+    assert not cache.exists()
     assert rep["failures"] == ["build-roots: exit 1\nfake build"]
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     lib.mkdir(parents=True)
@@ -5016,6 +5070,32 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert [f.code for f in rep["failures"]] == ["build"] and "P.Q (P's)" in rep["failures"][0]
     assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
+
+
+def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_the_sandbox(tmp_path, monkeypatch):
+    """What a build compiled goes into the node's artifact cache only on check.py's word that it ran in the sandbox. A
+    check.py that is killed writes no report, so that word is in the package's work directory from before the first
+    build step, and an audit that never builds, or builds elsewhere than the one before it, leaves no earlier one."""
+    pkg, out = tmp_path / "p", tmp_path / "out"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    began = out / "audit-p" / A.BUILDING
+    seen = []
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: seen.append(json.loads(began.read_text())) or (1, ""))
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    for sandbox in (True, False):
+        monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+        assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
+        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox}
+    (pkg / A.POLICY).write_text("{")
+    assert A.audit(pkg, out, build=True, runs=False)["failures"] and began.exists(), "a package it never opened keeps its own"
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, ""))
+    A.audit(pkg, out, build=False, runs=False, replay=False)
+    assert not began.exists(), "this audit built nothing: what the one before it said is gone"
 
 
 def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit_before_the_build_is_announced(
@@ -5100,7 +5180,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     monkeypatch.setattr(A, "ARTIFACTS", store)
     cache = store / mk.STAGE / "test"
     staged, said = A.stage_build(mk, b, ["P"], cache)
-    assert said == {"modules": 11, "keyed": 11}
+    assert said == {"modules": 11, "keyed": 11, "missed": {}, "first": {}, "took": {}, "left": 0}
     assert "Built" not in lake(b, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}")
     lib = b / ".lake" / "build" / "lib" / "lean"
     assert (lib / "P/M2.olean").read_bytes() == (v / ".lake/build/lib/lean/P/M2.olean").read_bytes(), "planted"
@@ -5142,7 +5222,7 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     """A dependent's sample takes modules of its path dependency, whose `.lake/build` other packages' audits read at the same
     time: their tests open its `.olean` files, and `main` re-hashes every package's sealed `.olean` files after each audit
     (`tampered`). Both look inside the recompile's window, as it starts and as Lake returns, and find every file of both
-    builds at its path with its bytes; afterwards no file was written. #8258 moved the sample's outputs out and back, and
+    builds at its path with its bytes; afterwards no file was written. When the sample moved its outputs out and back,
     this failed in the window: `D.olean` was missing."""
     if not A.sandboxed():
         pytest.skip("no sandbox here, so the recompile has no overlay to run in")
