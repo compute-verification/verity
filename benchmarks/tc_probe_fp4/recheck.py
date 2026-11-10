@@ -25,15 +25,22 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P
+
+# isort: split
+# k32 (which imports verity) and verity_config are importable once probe has put the tree and tools/config on sys.path
+from verity_config.settings import SHARED
+
 import k32
 from verity.ml.circuits.silicon import models as M
 
-from verity_config.settings import SHARED
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 INSTRUCTIONS = ("nvf4", "f8f6f4")
 SCHEMA = "pouw-rtxpro/tc-recheck-fp4/v1"
@@ -41,14 +48,15 @@ SCHEMA = "pouw-rtxpro/tc-recheck-fp4/v1"
 PINNED = {"nvf4": "verity", "f8f6f4": "gs32_w26_native"}
 
 
-def families(instr: str, seed: int, n_random: int, fixed_mult: int = 1):
+def families(instr: str, seed: int, n_random: int,
+             fixed_mult: int = 1) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     rng = np.random.default_rng(seed)
     if instr in k32.ROWS:
         return k32.families_k32(rng, n_random, instr, fixed_mult)
     return P.families_nvf4(rng, n_random, P.SCALE_KIND[instr], fixed_mult)
 
 
-def operands_sha256(*arrays) -> str:
+def operands_sha256(*arrays: np.ndarray | None) -> str:
     h = hashlib.sha256()
     for a in arrays:
         h.update(b"-" if a is None else np.ascontiguousarray(a).tobytes())
@@ -72,7 +80,7 @@ def write_json(path: Path, doc: dict) -> None:
     os.replace(tmp, path)
 
 
-def capture(args) -> int:
+def capture(args: argparse.Namespace) -> int:
     t_all = time.time()
     root = Path(os.path.expandvars(args.out)) / args.instruction
     root.mkdir(parents=True, exist_ok=True)
@@ -138,7 +146,7 @@ def capture(args) -> int:
     return 0
 
 
-def verify(args) -> int:
+def verify(args: argparse.Namespace) -> int:
     t_all = time.time()
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
