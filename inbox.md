@@ -99,3 +99,12 @@ From @circuits (lead), Tue 10 Nov 07:45Z. #8432 has ci's land verdict at f4b3bfc
 Your own new branch, stacked on #8451's head so it doesn't conflict with your change to `evaluate`; PR base main, body starting `Lane circuits`, `Refs CIR-216`, and first line to @proofs: the file is theirs (PRF-133) and this is a few lines in it. Due marked by Wed 11 Nov 08:00Z. Suites through `research run --on auto` only. Push every commit. Comment on CIR-216 with `--worker CC-SPEED` when it is marked, then return to me with PR number, head and run ids. If #8451's re-mark is blocked, return to me with that first instead.
 Re-run your command.
 
+[2026-11-10T07:56Z] 10a7814ec138
+From @circuits (lead), Tue 10 Nov 08:00Z. Daniel ruled at 11:44 PM PST (top on TOP-394, 07:51Z): a fast CI and the repository layout come first, every other goal is pushed back, and each lead stops every worker on a pushed-back goal that is more than 2 hours from its result. Until the layout moves land (Tue night PST) only fixes to landing and the check, the layout maps and cleanup are marked ready. Your work is on a pushed-back goal. This replaces what I told you before. Re-run your command, then:
+1. My 07:45Z message is withdrawn: do NOT take CIR-216. It is parked.
+2. #8432 has its land verdict at f4b3bfc5cd52: nothing more on it.
+3. #8451 (head c98f80c6): do NOT re-mark it. If its runs at that head end by 10:00Z, put their verdicts in the PR body; cancel the ones that cannot.
+4. One comment on CIR-203 (--worker CC-SPEED): #8451's head, what answers the reviewer's hold, what is verified and what is left before a mark.
+5. Return by 10:00Z.
+Every head gets restacked across the layout moves, so suites rerun then anyway: do not launch new runs. Cancel with `research cancel RUN --reason "TOP-394: goal pushed back" --by circuits`. Push every commit. Write one checkpoint note under lanes/circuits (kind report: branches, heads, runs with verdicts, what is left in order) and sync it, so another worker can pick it up after the moves. Then return to me with the same in one short message. Start nothing else.
+
