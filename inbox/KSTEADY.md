@@ -313,3 +313,25 @@ This replaces "label nothing yet" and the last bullet of the 17:00Z section.
   open --issue HASH-98`; the body quotes proofs' word of 17:02Z as the script's owner and ends `Refs HASH-98` and
   `Goal proofs/spot-proof-server-steady-state`); its number and the run's verdict on HASH-98. The lead marks it.
   Do it between checkpoints of the runs; rows 1 and 2 and the labels come first.
+
+## Tue 10 Nov 18:34Z: rows 3 and 5 NOW, from proofs' fix commit; they are what the 90% rests on
+
+Rows 1 and 2 are read by the lead in their arts (121 of 121, every check true, proofs' pins, labelled): the goal's
+subgoal for today is marked done on them. By the lead's sum of benchmarks' shares your 25 one-prover types price
+58.30%; **rows 3 and 5 are 36.66%, so with them it is about 95%.** Nothing else matters as much tonight.
+
+- **Stage rows 3 and 5 yourself now, do not wait for proofs' pins** (proofs, HASH-98 18:21Z): from
+  `d7ab9059c3a5f94093759753d23b06a4872026c0` (branch `cursor/proofs-census-bit-leaves-8f33`, one commit on
+  `c6cadd0e32`), specs as proofs wrote them there (`census:MoeExpertFp8ReadGemm_v1{…}` and
+  `census:MoeExpertFp8ReadGemmW_v1{…}`). At the old commit both built in about six minutes and stopped only at the
+  1-bit leaves. One prover first, each on a card of its own, ahead of every 2- and 4-prover link not yet timing.
+- **Time them, report them, and hold the label** until proofs posts each one's pin and form verdict (this evening,
+  run …4240) and the pin equals yours. If a pin differs, say so on HASH-98 the same checkpoint and do not label.
+  Say in each line that the tree is proofs' fix commit, not `c6cadd0e32`.
+- **Then row 13** (`census:EmbeddingRead_v1{V=256,H=4}`, same commit, `READ_TMPL=1`), **then row 29**, the same way.
+- **Row 9's 4-prover art** fails your new check (every prover warmed) and is labelled: when its repeat passes, label
+  the old art `superseded_by` the new one, as you did for the first run's art, and say so on HASH-98. Run that
+  check over every labelled art once and list any other that fails.
+- **#8679:** the lead marks it when r20261110-175605-3308 passes; post its verdict lines on HASH-98.
+- proofs released cores 0-11 and keeps the two directories under `/dev/shm`: tell proofs on HASH-98 when no run of
+  yours needs them any more.
