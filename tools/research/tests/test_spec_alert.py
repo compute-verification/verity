@@ -344,6 +344,29 @@ def test_a_gap_premise_renamed_with_its_text_is_no_growth_and_one_the_records_al
         "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `A.Other`"]
 
 
+def test_a_gap_premise_swapped_for_a_fresh_one_with_another_text_is_no_growth_and_the_dm_names_both(tmp_path):
+    """A deployed guarantee's gap premise replaced by one no old record held, whose text is another, reads in the trust as
+    a rename, so the push shows no gap grown by hand. It is not silent for that: the DM names both premises, in the
+    guarantee's own line (the one it now also rests on, the one it no longer does) and as one listed and one discharged."""
+    def doc(premise: str, digest: str, issue: str) -> dict:
+        rec = _g("G", "h1") | {"premises": {"assumptions": [], "open": [premise], "reads": []}}
+        return _trust(_doc({"A.G": rec}), ["A.G"], {"A.G": [premise]}) | {
+            "open": {premise: {"issue": issue, "due": "2026-11-30", "digest": digest}}}
+
+    old, new = doc("A.DrawIsCoin", H1, "X-1"), doc("A.SampleIsCoin", H2, "X-2")
+    rests = "• guarantee `A.G` rests now also on `A.SampleIsCoin`; no longer on `A.DrawIsCoin`"
+    assert spec._entries(old, new) == [
+        ("premises", rests),
+        ("open", "• open premise `A.SampleIsCoin` listed (X-2, due 2026-11-30)"),
+        ("discharged", "• open premise `A.DrawIsCoin` discharged: no longer listed (X-1, due 2026-11-30)")]
+    repo = _repo(tmp_path)
+    a = _commit(repo, "Security/lean-audit.json", old, "a")
+    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    text = spec.message(repo, a, b)
+    assert "• `Security`: guarantees: 1 with new premises; premises: 1 open listed, 1 discharged" in text
+    assert rests in text and "trust gap" not in text
+
+
 def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_nothing(tmp_path):
     old = _doc({"A.G": _g("G", "h1")})
     new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
