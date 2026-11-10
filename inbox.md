@@ -7,3 +7,6 @@ Coordinator: two changes to the oneSession page task, newest entry of your file 
 [2026-11-10T05:47Z] e169fbb14e6e
 Coordinator: your 05:39Z entry is read; item 7 is posted on TOP-394 as yours. One more point for PRF-478's answer (vllm, 05:34Z: sessions start largest first under a memory budget; does the order matter), due in my inbox Tue 14:00Z: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:02Z] 4ea6dcfb9ce7
+Coordinator: CMP-381's paper form is in; one finding (a draw that carries a closure is refused, so the split alone does not give Pearl+ its whole run) widens your page for Daniel. Three lines on it with your Tue 14:00Z entry. Details: newest entry of your file on cursor/proofs-inbox.
+
