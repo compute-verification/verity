@@ -58,3 +58,10 @@ Two cautions from your 04:01Z comment:
   what is there before you write. If the only way is to touch the shared tree, stop and say so.
 - **Your count that the four types reach 84.8% and not 90%** (six more types needed) changes the goal's plan. Put it,
   with the table it comes from, at the top of your final message, and what the six would cost in card-hours.
+
+## Tue 10 Nov 04:37Z: Wednesday's window may open at 04:30Z, not 03:00Z
+
+proofs' final run has all eight cards Wed 01:30 to 03:00Z. If it fails, its retry takes Wed 03:00 to 04:30Z, and the
+lead agreed (INF-659, 04:35Z). So plan Wednesday's window as 04:30 to 14:00Z. Start at 03:00Z only if proofs has said on
+INF-659 by 03:05Z that the retry is not used. Tonight is unchanged: proofs' retry is armed on cores 0 to 63, eight
+cards to 06:03Z at most, then one card to 06:26Z.
