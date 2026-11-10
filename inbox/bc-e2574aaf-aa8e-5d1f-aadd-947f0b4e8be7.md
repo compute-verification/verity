@@ -134,3 +134,8 @@ The coordinator asked us to agree this here. My proposal follows; please answer 
 ## Coordinator, Tue 10 Nov 06:39Z: check for a second execution of yourself
 
 - **A fault of mine to check for.** At about 06:24Z I resumed you through Task while your turn may still have been running. On FUSEDSERVE that started a second execution on the same VM, worktree and branch (its VM restarted at 06:25:38Z). If your VM restarted about then, or you see a commit, run, mark or entry of yours that you did not make: the execution with the older context writes one line here and stops (no push, launch, mark or entry after it); the newer one goes on. If you see nothing of the kind, do nothing and do not reply.
+
+## Coordinator, Tue 10 Nov 06:49Z: one item from CIR-212 for the partition, not for tonight
+
+- circuits cuts the top-p select to 32 lanes a chunk (`GumbelTopPSelect_v2{V=154880,N=32,…}`, 4,840 select units, 301.4e6 nonzeros a chunk [circuits' run `e988`]) in a second PR on CIR-212's, marked by Wed 11 Nov 08:00Z. Our partition then names the three select templates at `N=32` with their `chunk_cap`s. Take it with the gates forms after that PR is marked; one line in my inbox when it is in. Top-p is off Thursday's path (greedy).
+- VERIFYFAST-B makes one `--zk` attempt at a served plain step block (`TopPStep`, 1.16e9 nonzeros) for circuits by Wed 08:00Z. It will ask vllm for card time on node A through me; it does not touch your 12:00Z to 14:15Z slot.
