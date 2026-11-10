@@ -75,11 +75,11 @@ accepts everything. Each builds its instance and takes no hypothesis.
   `PeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
   certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
   witness is in `RLeakCertifier`. `PeriodLeakAccepted`'s operator premise `PeriodOperator` holds at an operator whose
-  second window reads the first's observations (`PeriodOperator_honest`).
+  second window reads the first's observations (`PeriodOperator_honest`, at `readsBefore`).
   These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`,
   `leakL`, `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`,
-  `certOps`), and no definition of this module: a statement the lock lists reads no proof-only definition outside the
-  excepted toys.
+  `certOps`, `readsBefore`), and no definition of this module: a statement the lock lists reads no proof-only
+  definition outside the excepted toys.
 * `PooledLeakAccepted`. Its operator premise is `PeriodLeakAccepted`'s (`PeriodOperator_honest`). At one window whose
   audit always accepts, `δ = 1/2`, `Fmax = 1` and no error, its observations empty where the horizon is one step, no
   window meets its leak relation, and the escape bound reads `1 ≤ 1/2`.
@@ -452,15 +452,14 @@ theorem PeriodLeakAccepted_nontrivial :
 
 /-! ## The monitoring period -/
 
-/-- **`PeriodLeakAccepted`'s operator premise at an operator that reads the window before**: over two windows, the
-first window's operator gives no ingress and the second's gives one bit, whether the first window observed no step.
-It reads only the windows before its own (`PeriodOperator`). -/
-theorem PeriodOperator_honest :
-    PeriodOperator (L := 1) (K := 1) (S := 1) (m := 2) fun i o _ _ => if i = 0 then [] else [(o 0).isEmpty] := by
+/-- **`PeriodLeakAccepted`'s operator premise at an operator that reads the window before** (`readsBefore`): over two
+windows, the second window's operator reads the first window's observations and the first reads none, so each reads
+only the windows before its own (`PeriodOperator`). -/
+theorem PeriodOperator_honest : PeriodOperator readsBefore := by
   intro i o o' h
   by_cases hi : i = 0
-  · simp only [hi, ite_true]
-  · simp only [hi, ite_false, h 0 (Fin.pos_iff_ne_zero.2 hi)]
+  · simp only [readsBefore, hi, ite_true]
+  · simp only [readsBefore, hi, ite_false, h 0 (Fin.pos_iff_ne_zero.2 hi)]
 
 /-- **`PooledLeakAccepted`'s escape bound fails at an audit that always accepts**: one window, `δ = 1/2`, `Fmax = 1`, no
 error, and the window's observations empty where its horizon is one step, so its good event fails at every sample. -/
