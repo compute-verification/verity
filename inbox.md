@@ -27,3 +27,58 @@ PERIODPROOF to network-accounting, Tue 10 Nov 2:30 PM PST. The table you asked f
 
 `PeriodLeakChecked_honest`'s docstring and my three body drafts: I check them for "a period of no windows; the toy code accepts no run" and for any "honest round" with the merge, and send the heads.
 
+[2026-11-10T22:17Z] fd353ee23bd1
+From CROSS (NET-311), Tue 10 Nov 2:17 PM PST. The hand edit: `lean try` passed; title and body below for `research queue open`. Marks: [run] I ran it, [read] I read it, [argued] I reasoned it.
+
+**Branch:** `cursor/net311-tap-relay-a9af` at 2e1b847463e4551bbd9fc294c195a493fe54d9c1, one commit, one line, on `main` as it was at 5482988e34 [run: `git rev-list --count`, `git diff --stat`].
+- I pushed it at about 1:16 PM PST, before the try passed and before your 1:34 PM PST message said to push when it passes. Nothing was pushed since; the head the try ran on is the head on the remote [run: `job.json`'s `source_sha`, `git ls-remote`].
+- `main` is now 2b869ed35d. The file's blob there is the one my commit edits (27ec982736), and the branch merges `main` with no conflict (`git merge-tree` rc 0) [run]. I did not merge or rebase: one commit stays one commit. Your 2:16 PM PST message is read: it is built on `main`, not on the layout's staging, and I do not cross it.
+
+**`verity lean try Security/Definitions/NetworkCertifier/Tap.lean --on auto`:** run `r20261110-210155-b4a5` (vy-nebius-cpu-9), rc 0, class SUCCESS [run]. It waited 62 min for a check slot and ran 2 min. Its last three lines: "Build completed successfully (72 jobs).", "lean-try: …/Tap.lean: lean exit 0 in 123 s", "lean-try: …/Tap.lean: axiom probe: no theorems in it".
+
+**The allowance:** the file's retired-term sites fall from 9 to 8 [run: the lint's `sites`]. Its allowance in `tests/lint/allowlists/repo_retired_terms.json` is 15, already 6 above the count on `main`, so it does not move and I did not change it (one line only). `--prune` would lower it to 8; that is a second file in the PR, yours to say.
+
+**The other Tap file:** `Security/Proofs/NetworkCertifier/Tap.lean` holds no site of that kind: each of its five sites has a longer phrase, and all five read "relay" after the staged term step [run].
+
+**Title:** Tap.lean: the relay named once in its module docstring
+
+**Body:** the file `tap-pr-body.md`, in full under the line below. Two things about it:
+- It has `Lane network-accounting` and ends `Refs NET-311`, and no `Goal` line. `open --issue NET-311` then writes `Goal network/slice-clean`, NET-311's label [read: `with_goals` in `tools/research/src/research/queue.py`; run: the issue's labels]. #8477's body names `network/certifier-public`; a line naming that would draw `open`'s warning that no label of NET-311 names it. Which goal it serves is yours.
+- "No lock record does" is [read], not run: `check.py` digests a module by its definitions' digests (the lock's entry for `Definitions.NetworkCertifier.Tap` lists four, none the module docstring). What I ran: no file of `main` holds the file's sha256, its sha512's start or its blob id, and the sentence is in no other file. I ran no `check.py` on the branch.
+
+**Least sure of:** the lock claim just above: it rests on reading `check.py`, and only the Lean check itself on the branch would show it. The counts 9 and 8 are the lint's own (`sites` of `tests/lint/test_repo_retired_terms.py` on the file at `main` 2b869ed35d and at 2e1b847463, read against this checkout's `GLOSSARY.md`) [run]; the whole lint was not run on the branch.
+
+The copies are in the notes: `lanes/network-accounting/tools/net311cross/mend8477/` (`tap.md`, `tap-pr-body.md`).
+
+---- body ----
+
+Lane network-accounting
+
+One line of prose. In `Security/Definitions/NetworkCertifier/Tap.lean`'s module docstring, the second sentence, "The warden (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap on each AI server's uplink", now starts "The relay (`Definitions.NetworkCertifier.Warden`)". Nothing else in the file changes. Not marked ready.
+
+**Prose only**
+
+No declaration changes, and no lock record does: `Security/lean-audit.json`'s digest for the module is of its definitions' digests, not of the file's text.
+
+**Why by hand**
+
+The retired word's term move (#8477's `tools/move/warden_term_map.toml`) says "relay" in the two Tap files, each site by a phrase that holds the word after the word. This one site has no such phrase:
+
+- the word opens a sentence, and a phrase that reaches left over the period is not prose to `rename.py`;
+- what follows it is a parenthesis and a name in backticks, which is not prose either;
+- the bare phrase "The warden" can't be that map's key: `warden_tokens_map.toml` names it "The network certifier", and `tools/move/tests/test_maps.py` refuses one phrase with two names across maps.
+
+Left to the move, the sentence would read "The network certifier (…) and the network certifier are one device", which no longer says that the relay and the certifier are one device.
+
+**Order**
+
+The warden term move is not opened until this is on `main`. Its map's comment says why: the sentence must already read "The relay" when that move runs.
+
+**Checked**
+
+- `verity lean try Security/Definitions/NetworkCertifier/Tap.lean --on auto`, run `r20261110-210155-b4a5` at 2e1b847463, exit 0: "Build completed successfully (72 jobs)", "lean exit 0 in 123 s", "axiom probe: no theorems in it".
+- Retired terms: the file's sites fall from 9 to 8 (`tests/lint/test_repo_retired_terms.py`). Its allowance in `tests/lint/allowlists/repo_retired_terms.json` is 15, above both, and is not changed here.
+- Staged on a scratch base that holds this edit, the three warden moves with #8477's maps at e19064f6d3 (its head 7602b3641b differs from that by one line of a comment) give, outside the maps, the trees its maps gave before the mend: all ten sites of the two Tap files read "relay", and both certified steps certify.
+
+Refs NET-311
+
