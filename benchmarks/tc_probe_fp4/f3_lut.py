@@ -391,7 +391,7 @@ def build(out: Path) -> dict:
 
 # ------------------------------------------------------------------------------------------------------------------------ device
 
-def _p(a: np.ndarray | None):
+def _p(a: np.ndarray | None) -> int | None:
     """A kernel argument's address.  C-contiguous only: a kernel reads memory order, which for a strided array (einsum's output,
     say) is not its index order."""
     if a is None:
@@ -645,7 +645,7 @@ def run_width(args: argparse.Namespace) -> int:
     if failures:
         return finish(out, rec, failures, args, None, t_all)
 
-    def launch(f, arm, iters, want=False):
+    def launch(f: str, arm: str, iters: int, want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         _, pk, _ = fam[f]
         if arm == "native":
             return dev.run_native(pk, rows, c, ng, rows // 16, geo["native"]["blocks"], iters, want)
