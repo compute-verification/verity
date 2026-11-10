@@ -242,18 +242,20 @@ def test_a_failed_candidate_ejects_the_member_its_failed_inputs_meet_and_the_res
     assert env.queued() == {branch(again["sha"]): again["sha"]}
 
 
-def test_an_ejection_for_a_failed_lean_lock_task_tells_its_owner_how_to_regenerate_the_package_s_records(env):
+@pytest.mark.parametrize("kind", ["lean-package", "lean-lock"])
+def test_an_ejection_for_a_failed_lean_package_audit_tells_its_owner_how_to_regenerate_the_package_s_records(env, kind):
+    """A lean-package task's audit checks its package's lock records, as a lean-lock task did in a listing made before it."""
     env.put(1, {"a.lean": "1\n"})
     two = env.put(2, {"b.txt": "2\n"})
     loop = env.loop(policy)
     (built,) = loop.tick()
-    keys = env.listed(built["sha"], {"lean-lock:Security": ["a.lean"], "pytest:b": ["b.txt"]})
-    env.result(keys["lean-lock:Security"], "lean-lock:Security", "fail")
+    keys = env.listed(built["sha"], {f"{kind}:Security": ["a.lean"], "pytest:b": ["b.txt"]})
+    env.result(keys[f"{kind}:Security"], f"{kind}:Security", "fail")
     env.result(keys["pytest:b"], "pytest:b", "pass")
     eject, _ = loop.tick()
     assert (eject["action"], eject["number"]) == ("eject", 1)
     (post,) = env.posts
-    assert "lock records of Security don't match" in post and "check.py --build --update PKG" in post, post
+    assert "the audit of Security fails on lock records" in post and "check.py --build --update PKG" in post, post
     env.put(3, {"c.txt": "3\n"})
     (again,) = loop.tick()
     keys = env.listed(again["sha"], {"pytest:b": ["b.txt"], "pytest:c": ["c.txt"]})
@@ -1547,6 +1549,29 @@ def test_a_kind_of_task_its_base_lists_and_it_lists_none_of_fails_its_listing_bu
     env.result("sha512:a2", "pytest:a", FAIL)
     v = loop.world.verdict(sha, main).verdict
     assert (v.state, [f.task for f in v.failed]) == (FAIL, ["pytest:a"])
+
+
+def test_a_listing_s_suite_and_lean_package_tasks_stand_for_the_test_files_and_lean_tasks_its_base_lists(env):
+    """The suite and lean-package families replace the test-file family's listed tasks and the lean-module, lean-lock and
+    lean-env families, each of the same job (`drive.JOB_OF_KIND`): a candidate listing the new kinds on a base listing the old
+    ones lacks no job `main` waits for and no kind its base lists, and passes on its own tasks."""
+    env.gates = ["pytest", "lean-audit"]
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha, main = built["sha"], built["base"]
+    env.graph2.list_graph(f"ready:{main}", _graph(main, [
+        {"id": "test-file:s/tests/test_a.py", "kind": "test-file", "inputs": ["a.txt"], "key": "sha512:t"},
+        {"id": "lean-module:M", "kind": "lean-module", "inputs": ["M.lean"], "key": "sha512:m"},
+        {"id": "lean-lock:L", "kind": "lean-lock", "inputs": ["L.json"], "key": "sha512:l"},
+        {"id": "lean-env:L", "kind": "lean-env", "inputs": ["lean-toolchain"], "key": "sha512:e"}]))
+    env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
+        {"id": "suite:s", "kind": "suite", "inputs": ["a.txt"], "key": "sha512:s", "vars": {"suites": "s", "suite": "s"}},
+        {"id": "lean-package:L", "kind": "lean-package", "inputs": ["M.lean", "L.json"], "key": "sha512:p"}]))
+    env.result("sha512:s", "suite:s", PASS)
+    env.result("sha512:p", "lean-package:L", PASS)
+    j = loop.world.verdict(sha, main)
+    assert (j.verdict.state, j.lacks, j.mark, j.note) == (PASS, (), None, "")
 
 
 def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for_lean_suites_whose_kind_may_go(env):

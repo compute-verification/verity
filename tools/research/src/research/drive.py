@@ -283,14 +283,19 @@ LEAN_NAMING = ("lean-audit", "lean-build", "lean-suites")
 #: landing, so every landing on its red would go unchecked
 CIRCUIT_RED = "step circuit-check"
 #: the ci.toml job a graph/v2 task's kind checks (`verity graph`'s families, tools/verity/graph/tasks.toml), by which drive's
-#: policy takes it off the merge gate (`off_gate`) and its red is named `step JOB` (a test-file task's `suite NAME`); a kind
-#: not listed is its own job
-JOB_OF_KIND = {"test-file": "pytest", "lean-module": "lean-audit", "lean-lock": "lean-audit", "circuit-binding": "circuit-check",
+#: policy takes it off the merge gate (`off_gate`) and its red is named `step JOB` (a test-file or suite task's `suite NAME`); a
+#: kind not listed is its own job. lean-module, lean-lock and lean-env are kinds of listings made before the lean-package
+#: family, which a candidate's base may still have: theirs is lean-audit, so a candidate listing lean-package tasks lacks none
+#: of them (`vqueue_loop.World._gone`)
+JOB_OF_KIND = {"test-file": "pytest", "suite": "pytest", "lean-package": "lean-audit", "lean-module": "lean-audit",
+               "lean-lock": "lean-audit", "lean-env": "lean-audit", "circuit-binding": "circuit-check",
                "circuit-coverage": "circuit-check", "circuit-catalog": "circuit-check"}
-#: the graph/v2 kind that runs check's lean-suites step on one of its suites, or a part of one (`verity_graph.runners.lean_suites`):
-#: its fail names each failed suite (`detail.failed`, suites.py's rows), which drive names, allows and blames as that suite's own
-#: red, as it does a run's, a red unit any of a suite's parts fails
+#: the graph/v2 kind that runs check's lean-suites step on one of its suites, or a part of one (`verity_graph.runners.lean_suites`)
 SUITES_KIND = "lean-suites"
+#: the graph/v2 kinds that run suites.py on one suite, or a part of one (`verity_graph.runners.suite`: lean-suites, and suite,
+#: check's pytest step's): a fail names each failed suite (`detail.failed`, suites.py's rows), which drive names, allows and
+#: blames as that suite's own red, as it does a run's, a red unit any of a suite's parts fails
+SUITE_KINDS = (SUITES_KIND, "suite")
 #: the most new failures a circuit-binding result names (`verity_graph.runners.circuit_binding.NAMED`): a list that long may
 #: leave some out, so no allowance covers it
 CIRCUIT_NAMED = 100
@@ -1904,28 +1909,31 @@ class Driver:
 
     def _task_unit(self, tip: str, task: dict) -> str:
         """The red record a failed graph/v2 ``task`` of ``tip`` is named in, the one a run's failure would be: a test-file's
-        `suite NAME`, any other's `step JOB` (`_job`; circuit-check's is `CIRCUIT_RED`)."""
+        or a suite task's `suite NAME`, any other's `step JOB` (`_job`; circuit-check's is `CIRCUIT_RED`)."""
         if task["kind"] == "test-file":
             return f"suite {self._suite_name(tip, (task.get('vars') or {}).get('suite') or '.')}"
+        if task["kind"] == "suite" and (units := self._suite_units(tip, task)):
+            return units[0]
         return f"step {self._job(task)}"
 
     def _task_units(self, tip: str, task: dict, result: dict) -> dict[str, dict | None]:
-        """The red records failed graph/v2 ``task`` names, each with its suite's report row: a lean-suites task's, each failed
-        suite its `detail.failed` names, `suite NAME` with its row, as a run's lean-suites failures are named; else, and when it
+        """The red records failed graph/v2 ``task`` names, each with its suite's report row: a lean-suites or suite task's, each
+        failed suite its `detail.failed` names, `suite NAME` with its row, as a run's suite failures are named; else, and when it
         names none (a timeout of the whole task), `_task_unit`'s alone."""
-        rows = (result.get("detail") or {}).get("failed") if task["kind"] == SUITES_KIND else None
+        rows = (result.get("detail") or {}).get("failed") if task["kind"] in SUITE_KINDS else None
         named = {f"suite {r['name']}": r for r in rows or () if isinstance(r, dict) and isinstance(r.get("name"), str)}
         return named or {self._task_unit(tip, task): None}
 
     def _suite_units(self, tip: str, task: dict) -> list[str]:
-        """The `suite NAME` of each suite lean-suites ``task`` runs (its var `suites`: suites.py's names, or directories)."""
+        """The `suite NAME` of each suite lean-suites or suite ``task`` runs (its var `suites`: suites.py's names, or
+        directories)."""
         return [f"suite {self._suite_name(tip, s) if '/' in s else s}" for s in (task.get("vars") or {}).get("suites", "").split()]
 
     def _unit_states(self, tip: str, task: dict, state: tuple[str, dict | None], ok: bool, red: set[str]) -> dict[str, bool]:
         """{red record: whether ``task`` passed it} (``ok``: the task passed, or an allowance covers its failure; ``red``: the
-        records it is red in here): its `_task_unit`'s, and a lean-suites task's for each suite it runs too, by its report (a
-        suite that passed, or whose failure an allowance covers), none passed until it has one."""
-        if task["kind"] != SUITES_KIND:
+        records it is red in here): its `_task_unit`'s, and a lean-suites or suite task's for each suite it runs too, by its
+        report (a suite that passed, or whose failure an allowance covers), none passed until it has one."""
+        if task["kind"] not in SUITE_KINDS:
             return {self._task_unit(tip, task): ok}
         d = (state[1] or {}).get("detail") or {}
         status = d.get("suites") if isinstance(d.get("suites"), dict) else {}
@@ -1937,10 +1945,10 @@ class Driver:
 
     def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None) -> policy.Coverage:
         """Whether an allowance of ``tip``'s policy covers failed graph/v2 ``task`` by its ``result``, with the expired ones that
-        would have: a failed suite of a lean-suites task's by its report ``row`` (`Policy.suite`, as a run's); a test-file's as
-        its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test, the latter only when pytest exited
-        1 with failed tests to name); a circuit-check task's by the new failures it names (`Policy.circuit`), fewer than
-        `CIRCUIT_NAMED`; no other kind's."""
+        would have: a failed suite of a lean-suites or suite task's by its report ``row`` (`Policy.suite`, as a run's); a
+        test-file's as its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test, the latter only when
+        pytest exited 1 with failed tests to name); a circuit-check task's by the new failures it names (`Policy.circuit`), fewer
+        than `CIRCUIT_NAMED`; no other kind's."""
         pol, now, d = self._policy(tip), self.now(), result.get("detail") or {}
         if row is not None:
             return pol.suite(str(row["name"]), row, now)
@@ -1970,7 +1978,7 @@ class Driver:
             return
         by_id = {x["id"]: x for x in graph["tasks"]}
         task, name = by_id[ids[0]], key.removeprefix("suite ")
-        coarse = {i for i in ids if by_id[i]["kind"] == SUITES_KIND and key.startswith("suite ")}
+        coarse = {i for i in ids if by_id[i]["kind"] in SUITE_KINDS and key.startswith("suite ")}
         rows = [x for i in coarse for x in ((states[i][1] or {}).get("detail") or {}).get("failed") or ()
                 if isinstance(x, dict) and x.get("name") == name and isinstance(x.get("suite"), str)]
         suite = ((task.get("vars") or {}).get("suite") if task["kind"] == "test-file" else None) or next(

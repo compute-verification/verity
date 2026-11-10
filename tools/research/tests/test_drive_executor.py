@@ -856,6 +856,33 @@ def test_on_a_lean_suites_tasks_failed_suite_is_judged_by_its_own_allowance(worl
     assert ("Its allowance in policy.toml expired" in ring) == (expires == EXPIRED), ring
 
 
+@pytest.mark.parametrize("rows, allow, red", [(True, None, True), (True, "suite l-suite", False), (False, None, True)])
+def test_on_a_suite_task_its_suite_is_red_as_a_run_s_and_judged_by_its_own_allowance(world, monkeypatch, tmp_path, rows, allow,
+                                                                                      red):
+    """A suite task, check's pytest step on one suite (`verity_graph.runners.suite`), fails as a lean-suites task does: its
+    failed suite is red as `suite NAME` in step pytest, as a run's is, and an allowance of the suite covers it by its row
+    (`Policy.suite`); a fail that names no row (the whole task timed out) is that suite's red too, by its var `suites`."""
+    _move_main(world, {**L_TREE, **({"tools/verity/check/policy.toml": _policy((allow, "ci", LIVE))} if allow else {})})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    tip = _land(h, 1)
+    suite = "suite:l-suite"
+    g = _v2(tip, *_graph_v2(tip)["tasks"], _task(suite, ("tools/lsuite/tests/test_l.py",), suites="l-suite"))
+    fake.list_graph(f"after-landing:{tip}", g)
+    detail = {"exit": 1, "suites": {"l-suite": "failed"}}
+    _results(fake, g, {suite: {**detail, "failed": [_suite_row("l-suite", "tools/lsuite", L_TEST)]} if rows else
+                       {**detail, "error": "the task timed out"}})
+    _slim(h, tmp_path)
+    h.tick()
+    pl = h.postland()
+    if not red:
+        assert _main(world) == tip and pl["verified"] == tip and not pl.get("red"), (h.posts, world.logs)
+        return
+    assert _main(world) == main and pl["failed"] == tip and list(pl["red"]) == ["suite l-suite"], pl.get("red")
+    assert pl["red"]["suite l-suite"]["step"] == "pytest"
+
+
 def test_on_a_suite_a_lean_suites_task_passes_ends_its_red_and_a_run_that_ran_nothing_holds_main(world, monkeypatch, tmp_path):
     """Tip 1's lean-suites task fails suites `l-suite` and `other`: each is red.  Tip 2's fails `other` alone: `l-suite`'s red
     ends there though the tip failed.  Tip 3's runner ran nothing it was to run (a skip): it gives an error, which is no result,

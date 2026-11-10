@@ -147,13 +147,14 @@ TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d
 READY_VERDICT = "ready_verdict"
 #: who graph2 writes its labels as (its `research data label ... --by executor`): a label by anyone else counts for nothing
 GRAPH2_BY = "executor"
-#: the id prefix of graph2's task checking a Lean package's lock records, and what an ejection for one tells its owner: no
-#: lock run regenerates a change's records after it lands, so the change carries them
-LEAN_LOCK = "lean-lock:"
-LEAN_LOCK_FIX = (". The lock records of {pkgs} don't match the change: if it changes a guarantee's statement or what one reads, "
-                 "regenerate each package's records on it (`research run --on auto --mem-gb 32 --max-min 180 --project verity "
-                 "--source . --cwd clone -- python3 tools/verity/lean/check.py --build --update PKG`, the lean-proofs skill's full "
-                 "record), commit them, and mark it ready again")
+#: the id prefixes of graph2's tasks auditing a Lean package, its lock records with it (lean-lock's, of listings made before
+#: the lean-package family), and what an ejection for one tells its owner: no lock run regenerates a change's records after
+#: it lands, so the change carries them
+LEAN_AUDIT = ("lean-package:", "lean-lock:")
+LEAN_AUDIT_FIX = (". Where the audit of {pkgs} fails on lock records that don't match the change: if it changes a guarantee's "
+                  "statement or what one reads, regenerate each package's records on it (`research run --on auto --mem-gb 32 "
+                  "--max-min 180 --project verity --source . --cwd clone -- python3 tools/verity/lean/check.py --build --update "
+                  "PKG`, the lean-proofs skill's full record), commit them, and mark it ready again")
 #: why a candidate's verdict waits on its base's check (`World._base`, `World._gone`; `BaseWait`): graph2 hasn't listed it,
 #: says its listing failed, or listed a graph that can't be read
 UNLISTED, BASE_LIST_FAILED, BASE_UNREADABLE = "its check isn't listed yet", "its listing failed", "its graph can't be read"
@@ -1071,7 +1072,7 @@ class World:
 
     def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
         """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
-        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+        a test file or suite task's suite's in the registry, else its job's in ci.toml at ``sha``."""
         by, d, out = self._tasks(sha), self.driver(), []
         for i in ids:
             if (t := by.get(i)) is None:
@@ -1081,8 +1082,8 @@ class World:
         return tuple(dict.fromkeys(out))
 
     def test_owners(self, sha: str, task: str, tests: Iterable[str]) -> tuple[str, ...]:
-        """The handles owning ``tests`` (result/v1's ids, relative to the suite of test file ``task`` of ``sha``'s graph): each
-        one's file's owner in the registry, as drive reads a failed test's path; else the task's owners."""
+        """The handles owning ``tests`` (result/v1's ids, relative to the suite of test file or suite ``task`` of ``sha``'s
+        graph): each one's file's owner in the registry, as drive reads a failed test's path; else the task's owners."""
         d, suite = self.driver(), _suite(self._tasks(sha).get(task) or {})
         out = [f"@{h}" for x in tests if isinstance(suite, str)
                and (h := d._path_owner(os.path.normpath(os.path.join(suite, x.split("::")[0]))))]
@@ -1114,8 +1115,8 @@ class World:
 
 
 def _suite(t: dict) -> str | None:
-    """A test file task's suite, the directory its result's test ids are relative to."""
-    return s if t.get("kind") == "test-file" and isinstance(s := (t.get("vars") or {}).get("suite"), str) else None
+    """A test file or suite task's suite, the directory its result's test ids are relative to."""
+    return s if t.get("kind") in ("test-file", "suite") and isinstance(s := (t.get("vars") or {}).get("suite"), str) else None
 
 
 def _tests(doc: object) -> frozenset[str]:
@@ -1780,8 +1781,8 @@ class Loop:
         text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
                 f"log's digest with it: `research data labels task:<key> --key result --history`. Fix it and mark it ready "
                 f"again")
-        if locks := sorted({f.task.removeprefix(LEAN_LOCK) for f in a.failed if f.task.startswith(LEAN_LOCK)}):
-            text += LEAN_LOCK_FIX.format(pkgs=", ".join(locks))
+        if locks := sorted({f.task.partition(":")[2] for f in a.failed if f.task.startswith(LEAN_AUDIT)}):
+            text += LEAN_AUDIT_FIX.format(pkgs=", ".join(locks))
         if (p := w.open().get(a.number)) is None or p.head != a.head:
             return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, failed=a.failed, done=False,
                                why=f"{a.why}; not ejected: " + ("closed" if p is None else f"pushed to {p.head[:12]} since"))
