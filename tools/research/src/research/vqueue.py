@@ -17,7 +17,8 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              (`tree`) follow the tree: they are bisected like a fail, on the members whose files meet their inputs, else on
              every member, and eject a lone member.  Without it, the default, infra that persists until infra is rung is
              bisected the same way, ejecting nobody: a lone member whose check keeps erring is rung to its owner and set
-             aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried.
+             aside behind the other PRs while any waits or it isn't marked at the head it was built at (`infra` outcome;
+             set aside again, nobody is rung), else retried.
              A launch that outran its wait or that the pod lost before any run registered (`Failed.launch`) points at the
              machines, not the members: the check is enqueued again and infra rung from `rings` on, and no member is
              bisected out or set aside for it, until `launch_tries` readings; then it is handled as any other infra.  A
@@ -257,17 +258,20 @@ def decide(s: Snapshot) -> list[Action]:
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA:
-            outcomes = _outcomes(s, acts)
-            aside, told = _waiting(s, ready, chain, landed, outcomes), _told(c1, outcomes)
+            outcomes, m = _outcomes(s, acts), c1.members[0]
+            gone = m not in ready or ready[m].head != c1.heads[0]
+            aside, told = gone or _waiting(s, ready, chain, landed, outcomes), _told(c1, outcomes)
             if not aside:
                 acts.append(Retry(c1.sha))
             if not (aside and told):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
             if not told:
-                acts.append(Ring(c1.sha, _owner_why(c1), c1.members[0]))
+                acts.append(Ring(c1.sha, _owner_why(c1), m))
             if aside:
-                acts.append(Drop(c1.sha, f"{_ring_why(c1)}, with only #{c1.members[0]} merged: it goes behind the PRs waiting, "
-                                         "and nobody is ejected for it", Outcome(c1.members, c1.heads, INFRA, c1.members, c1.base)))
+                acts.append(Drop(c1.sha, f"{_ring_why(c1)}, with only #{m} merged"
+                                         + (f", which isn't marked at {c1.heads[0][:12]} now" if gone else "")
+                                         + ": it goes behind the PRs waiting, and nobody is ejected for it",
+                                 Outcome(c1.members, c1.heads, INFRA, c1.members, c1.base)))
                 acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
                 chain = []
         elif reading == PENDING and s.now is not None and c1.enqueued is not None:

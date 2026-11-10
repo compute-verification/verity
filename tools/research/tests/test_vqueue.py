@@ -363,7 +363,8 @@ def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_w
 def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner_and_waits_never_ejected(state):
     """Without `tree_ejects`, a lone member whose check errs again is never ejected: its owner is rung beside infra.  It is
     set aside behind the PRs waiting (an `infra` outcome, which batches it last and alone, and after which setting it aside
-    again at that head rings nobody), and retried when none waits.  With `tree_ejects` it is retried and infra alone is rung."""
+    again at that head rings nobody), and retried when none waits, unless it isn't marked at the head it was built at: then
+    it is set aside, and a new head is built.  With `tree_ejects` it is retried and infra alone is rung."""
     err = (task("test-file:t/test_hang.py", "t/test_hang.py"),) if state == INFRA else ()
     c = Candidate("c1", MAIN, (3,), heads(3), Verdict(state, (), err), tries=2)
     infra = Ring("c1", "c1's check failed to list" if state == LIST_FAILED else
@@ -380,6 +381,9 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     assert decide(snap(c, ready=prs(3), history=(aside,))) == [Retry("c1"), infra]
     assert decide(snap(c, ready=prs(3, 4), history=(aside,))) == [Drop("c1", why, aside), Build((4,), MAIN, 2)]
     assert decide(snap(c, ready=prs(3, 4), tree_ejects=True)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
+    moved = why.replace("merged:", "merged, which isn't marked at h3 now:")     # its owner pushed: the new head is built
+    assert decide(snap(c, ready=[pr(3, "h3b")])) == [infra, owner, Drop("c1", moved, aside), Build((3,), MAIN, 2)]
+    assert decide(snap(c, ready=())) == [infra, owner, Drop("c1", moved, aside)]
 
 
 def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handled_as_any_other_infra():
