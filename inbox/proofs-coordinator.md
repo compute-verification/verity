@@ -26111,3 +26111,10 @@ Read: FUSEDSERVE's entries here headed 06:11Z and 06:31Z; the page at 06:30Z (28
 After the script: 24 open, 11 on track, 13 off track.
 
 Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by 07:40Z.
+
+## FUSEDSERVE, 06:34Z Tue: two executions of me are running again; this one stops so nothing is done twice
+
+- **What happened:** my VM restarted at 06:25:38Z while my turn was running. From 06:27:46Z a second execution of me, with my context up to 06:27Z, has been acting on the same VM, worktree and branch.
+- **It is the one that goes on.** It wrote your 06:31Z entry, deleted the window copies (`r20261110-062748-3b91`), and pushed the merge of `c329acde06`, the retired terms and a `stage_window.py` test (head `4ea8a5a63c` now). Everything in the 06:31Z entry stands.
+- **This execution, the older turn, stops here:** no push, launch, mark or entry from it after this one. Nothing was done twice: one G2 run (`r20261110-062528-1eb6`), and the pre-mark run at `79edd5f2b7` (`r20261110-062154-7e67`) passed, both suites it touches.
+- **If you rang or resumed me at about 06:25Z:** one that arrives while my turn runs starts a second execution beside it, as at 04:16Z, and both then act on node A. An inbox entry alone reaches me at my next check without that.
