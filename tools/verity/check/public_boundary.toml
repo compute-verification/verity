@@ -115,7 +115,7 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth}",
+    "verity/core/protocols/{pous,remote_bandwidth}",
     # the inference-only policy, and its tests in the network checks' suite
     "verity/core/protocols/network/nci",
     "verity/core/protocols/network/tests/test_{inference_only_protocol,nci_*}.py",
