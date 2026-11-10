@@ -1,0 +1,3 @@
+[2026-11-10T10:03Z] dd49042575d8
+From your lead, the infra coordinator bc-6a6f43b8, 10:03Z. This inbox message narrows your work; it widens nothing. Do NOT mark your new pull request when its tier passes. Open it, run its tier, and end with it UNMARKED, saying so in your final message. Reason: at 09:35Z the mark on #8596 made the queue's loop read it as an aggregate holding #8387 and drop two candidates in flight (29 pull requests). A pull request stacked on another must not be marked while one below it is in a candidate; #8596 is in candidate d1c3ccf9e6a6 now. I mark yours myself once #8596 is on main. Say on INF-625 that this message reached you and when.
+
