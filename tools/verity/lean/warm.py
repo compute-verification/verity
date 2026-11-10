@@ -80,7 +80,11 @@ def tools(tree: Path):
 
 def changed(tree: Path, base: str) -> list[str]:
     """The paths whose content differs between ``base`` and ``tree``'s files, a removed file's among them. ValueError when git
-    can't say."""
+    can't say, or when the commit checked out doesn't hold ``base``: the difference would then count as the change's
+    everything ``base`` gained since the two parted."""
+    if subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", base, "HEAD"], capture_output=True).returncode == 1:
+        raise ValueError(f"{tree} is checked out at a commit that doesn't hold {base[:12]}, so what differs from it isn't one "
+                         f"change: read it in a checkout of the head merged onto {base[:12]}")
     r = subprocess.run(["git", "-C", str(tree), "diff", "--name-only", "-z", "--no-renames", base, "--"], capture_output=True)
     if r.returncode:
         raise ValueError(f"`git diff {base}` in {tree} exited {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}")

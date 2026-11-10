@@ -336,3 +336,25 @@ def test_the_change_from_the_base_is_every_path_whose_content_differs_a_removed_
     assert W.changed(repo, _git(repo, "rev-parse", "HEAD")) == []
     with pytest.raises(ValueError, match="exited 128"):
         W.changed(repo, "0" * 39 + "1")
+
+
+def test_a_checkout_that_doesnt_hold_the_base_is_refused_since_the_bases_own_changes_would_count(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "a.lean").write_text("-- a\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fork point")
+    _git(repo, "checkout", "-q", "-b", "head")
+    (repo / "b.lean").write_text("-- the change\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "change")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "a.lean").write_text("-- what main gained\n")
+    _git(repo, "commit", "-q", "-am", "main moves")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "head")
+    with pytest.raises(ValueError, match=f"doesn't hold {base[:12]}.*merged onto {base[:12]}"):
+        W.changed(repo, base)
+    _git(repo, "merge", "-q", "--no-edit", "main")
+    assert W.changed(repo, base) == ["b.lean"]
