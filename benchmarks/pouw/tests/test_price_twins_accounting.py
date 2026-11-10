@@ -28,14 +28,8 @@ import clear_work as CW  # noqa: E402
 
 import price_twins as P  # noqa: E402
 
-<<<<<<< 99c8914848
-GAMMA0 = Fraction(1, 400)            # TT_OUT's γ0, at every cap (`gammaFromTTOut`)
-ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
-||||||| merged common ancestors
-GAMMA0 = Fraction(1, 400)            # TT_OUT's γ0, at every cap (`gammaFromTTOut`)
-=======
 GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
->>>>>>> 7af4d24fca3e
+ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
 DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
 #: the twins' price records by FP32 add price, each with the cast its W_ref already holds: Lean's `Prices.sm120`
 #: ⟨8, 2, ⟨40, 1⟩⟩ at 8, and `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ (`DevicePricesLoop.lean`: the in-loop add, and the
