@@ -28,8 +28,8 @@ def _session_set():
 
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
-    from verity import hardware
-    c = hardware.load(card)
+    from verity.hardware import cards
+    c = cards.load(card)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 

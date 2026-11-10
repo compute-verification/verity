@@ -47,7 +47,7 @@ sys.path.insert(0, str(HERE))
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
-from verity.hardware import load  # noqa: E402
+from verity.hardware.cards import load  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
 SPIN_CYCLES = 20_000_000
