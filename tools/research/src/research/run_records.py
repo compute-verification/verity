@@ -8,7 +8,8 @@ starts with its launch time), then the line `{"read": N}`, so an answer cut shor
 
 No command line leaves the machine: a record says only what its command is (`kind`), which check slots it asks for (`pool`) and
 for whom (`by`), read from `job.json`. From `stderr.log` it takes only slot.py's own headline (`slot: WHY; retrying every N s`),
-never the lines under it, which quote other runs' commands. Stdlib only and no import from `research`.
+never the lines under it, which quote other runs' commands. A record file that is there and can't be read, or isn't the JSON it
+should be, is named in the run's record (`unread`), never read as absent. Stdlib only and no import from `research`.
 """
 from __future__ import annotations
 
@@ -62,56 +63,74 @@ def asked_by(command: list[str]) -> str | None:
     return command[at + 1] if 0 <= at < len(command) - 1 else None
 
 
-def _doc(p: Path) -> dict:
+def _text(p: Path, unread: dict[str, str], head: int = -1) -> str | None:
+    """File ``p``'s text (its first ``head`` bytes), None where there is no such file. One that is there and can't be read is
+    named in ``unread`` with why, and reads as None too."""
+    if not p.exists():
+        return None
     try:
-        d = json.loads(p.read_text())
-    except (OSError, ValueError):
+        with p.open("rb") as f:
+            return f.read(head).decode(errors="replace")
+    except OSError as e:
+        unread[p.name] = f"{type(e).__name__}: {e.strerror or e}"
+        return None
+
+
+def _doc(p: Path, unread: dict[str, str]) -> dict:
+    """``p``'s JSON object, {} where there is no such file. One that is no JSON object (a record cut short) is named in
+    ``unread`` with why, and reads as {} too."""
+    text = _text(p, unread)
+    if text is None:
         return {}
-    return d if isinstance(d, dict) else {}
+    try:
+        d = json.loads(text)
+    except ValueError as e:
+        unread[p.name] = f"not JSON: {e}"
+        return {}
+    if not isinstance(d, dict):
+        unread[p.name] = "not a JSON object"
+        return {}
+    return d
 
 
-def _cancel(d: Path) -> dict:
+def _cancel(d: Path, unread: dict[str, str]) -> dict:
     """The run's first cancel as `events.jsonl` has it: when, by what (`manual`, `timeout`) and the reason given."""
-    try:
-        lines = (d / "events.jsonl").read_text(errors="replace").splitlines()
-    except OSError:
-        return {}
-    for line in lines:
+    for line in (_text(d / "events.jsonl", unread) or "").splitlines():
         if '"cancel_intent"' not in line:
             continue
         try:
             e = json.loads(line)
-        except ValueError:
+        except ValueError as err:
+            unread["events.jsonl"] = f"a cancel_intent line is not JSON: {err}"
             continue
         if isinstance(e, dict) and e.get("kind") == "cancel_intent":
             return {k: e[k] for k in CANCEL if e.get(k) is not None}
     return {}
 
 
-def _behind(d: Path) -> str | None:
+def _behind(d: Path, unread: dict[str, str]) -> str | None:
     """What slot.py last said the run waits behind, from the head of its stderr.log."""
-    try:
-        with (d / "stderr.log").open("rb") as f:
-            said = WAITS.findall(f.read(STDERR_HEAD).decode(errors="replace"))
-    except OSError:
-        return None
+    said = WAITS.findall(_text(d / "stderr.log", unread, STDERR_HEAD) or "")
     return said[-1] if said else None
 
 
 def record(d: Path) -> dict:
-    """Run directory ``d`` as {run, machine, kind, pool, by, claimed, status, slot, refused, cancel, job_started}, each key only
-    where its record has it: a run with no `job.json` (a refused launch) has no kind, pool or machine. `slot.why` is
-    slot.json's, else (a record written before slot.py kept it once the slot is taken) what stderr.log says."""
-    job, status, slot = (_doc(d / n) for n in ("job.json", "status.json", "slot.json"))
+    """Run directory ``d`` as {run, machine, kind, pool, by, claimed, status, slot, refused, cancel, job_started, unread}, each
+    key only where its record has it: a run with no `job.json` (a refused launch) has no kind, pool or machine. `slot.why` is
+    slot.json's, else (a record written before slot.py kept it once the slot is taken) what stderr.log says. `unread` names
+    each record file that is there and couldn't be read, with why: the rest of the record is from the files that could."""
+    unread: dict[str, str] = {}
+    job, status, slot, launch, refused, live = (_doc(d / n, unread) for n in (
+        "job.json", "status.json", "slot.json", "launch.json", "refused.json", "check-live.json"))
     command = [str(a) for a in (job.get("execution") or {}).get("command") or []]
     slot = {k: slot[k] for k in SLOT if slot.get(k) is not None}
-    if slot and not slot.get("why") and (said := _behind(d)):
+    if slot and not slot.get("why") and (said := _behind(d, unread)):
         slot["why"] = said
     out = {"run": d.name, "machine": ((job.get("run") or {}).get("remote") or {}).get("machine"),
            **({"kind": kind(command), "pool": pool(command), "by": asked_by(command)} if command else {}),
-           "claimed": _doc(d / "launch.json").get("claimed_utc"), "status": {k: status[k] for k in STATUS if status.get(k) is not None},
-           "slot": slot, "refused": {k: v for k in REFUSED if (v := _doc(d / "refused.json").get(k)) is not None},
-           "cancel": _cancel(d) if status else {}, "job_started": _doc(d / "check-live.json").get("started_utc")}
+           "claimed": launch.get("claimed_utc"), "status": {k: status[k] for k in STATUS if status.get(k) is not None},
+           "slot": slot, "refused": {k: refused[k] for k in REFUSED if refused.get(k) is not None},
+           "cancel": _cancel(d, unread) if status else {}, "job_started": live.get("started_utc"), "unread": unread}
     return {k: v for k, v in out.items() if v not in (None, {}, [])}
 
 

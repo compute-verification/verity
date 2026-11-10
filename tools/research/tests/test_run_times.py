@@ -258,6 +258,44 @@ def test_the_table_names_each_run_over_ten_minutes_and_a_window_takes_only_its_l
     assert "refused: 1 (MemoryNotAvailable 1)" in out
 
 
+def test_a_record_that_is_there_and_unreadable_is_named_never_read_as_absent(tmp_path, capsys, monkeypatch):
+    d = _run(tmp_path, WAITED, QUICK, status=_done("2026-10-28T10:00:05.000Z", "2026-10-28T10:30:00.000Z"),
+             slot={"state": "held", "since": "2026-10-28T10:00:06Z", "took": "2026-10-28T10:12:00Z"})
+    (d / "slot.json").write_text('{"state": "held", "since": "2026-10-28T10:00:06Z", "to')
+    (d / "events.jsonl").write_text('{"kind": "cancel_intent", "actor": "man\n')
+    _run(tmp_path, AT_ONCE, DIRECT, status=_done("2026-10-28T10:01:06.000Z", "2026-10-28T10:03:06.000Z"))
+    _run(tmp_path, CANCELLED, DIRECT, status=_done("the day before", "2026-10-28T10:03:06.000Z"))
+    rec = run_records.record(d)
+    assert set(rec["unread"]) == {"slot.json", "events.jsonl"} and rec["unread"]["slot.json"].startswith("not JSON: ")
+    assert "unread" not in run_records.record(tmp_path / AT_ONCE), "a record file a run doesn't have is not one it couldn't read"
+    rows, left_out = R.rows_of((run_records.record(p) for p in run_records.window(tmp_path, "r", "s")), NOW)
+    assert [(r["run"], r["outcome"], bool(r["unread"])) for r in rows] == [(WAITED, "no slot", True), (AT_ONCE, "started", False)]
+    assert list(left_out) == [CANCELLED] and "a time in its records is no time" in left_out[CANCELLED]
+    monkeypatch.setattr(R, "clock", lambda: NOW)
+    assert R.main(["--runs", str(tmp_path), "--hours", "3"]) == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"2 on 1 machine(s); LEFT OUT, in no number here: {CANCELLED} (" in out
+    assert f"1 run(s) have a record file that is there and couldn't be read, and their rows are made without it: {WAITED} (" in out
+
+
+def test_an_events_part_that_is_not_json_leaves_the_graph_unread_by_name(runs, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(R, "clock", lambda: NOW)
+    store = _store(tmp_path, [_event("queued", "test-file:a", "2026-10-28T10:00:00Z")])
+    part = tmp_path / "vault" / "events" / "v1" / "s1" / "part-000000.jsonl"
+    part.write_text(part.read_text() + "\n" + json.dumps(_event("started", "test-file:a", "2026-10-28T10:01:00Z", worker="n1/c1")) + "\n")
+
+    def read() -> dict:
+        assert R.main(["--hours", "2", "--on", "n1", "--json"], store=store, reach=lambda name: (["ssh", name], "/w/runs"),
+                      run=_machine(runs)) == 0
+        return json.loads(capsys.readouterr().out)
+
+    assert read()["graph"]["all"]["tasks"] == 1, "a blank line is no line"
+    part.write_text(part.read_text() + '{"event": "started", "task": "test-fi\n')
+    out = read()
+    assert len(out["runs"]) == 4 and out["left_out"] == {}, "the runs are read all the same"
+    assert out["graph"].startswith("ValueError: events/v1/s1/part-000000.jsonl has a line that is not JSON")
+
+
 def test_with_no_machine_read_it_answers_nothing(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(R, "clock", lambda: NOW)
 

@@ -24,7 +24,10 @@ could first run, to its `started`; never the event's own `wait_s`, which counts 
 it reads. A task queued and never started leaves no later event whether it still waits or its submission was dropped, so those
 are counted and not timed.
 
-A machine that doesn't answer, or whose answer was cut short, is named as unread: its runs are in no number here.
+A machine that doesn't answer, or whose answer was cut short, is named as unread: its runs are in no number here. Nothing
+that is there and unreadable is read as absent: a record file that can't be read is named beside its run, whose row is made
+without it; a run with a time in its records that is no time is left out and named; an events part with a line that is not
+JSON leaves graph2's tasks unread, with the part's name.
 """
 from __future__ import annotations
 
@@ -81,10 +84,8 @@ def slot_wait(slot: dict) -> float:
 
 
 def _t(s) -> datetime | None:
-    try:
-        return ts(s) if isinstance(s, str) else None
-    except ValueError:
-        return None
+    """A record's time, None where it has none. One that is no ISO time raises ValueError."""
+    return ts(s) if isinstance(s, str) else None
 
 
 def _s(a: datetime | None, b: datetime | None) -> float | None:
@@ -104,8 +105,9 @@ def cause(why: str | None) -> str:
 
 def times(rec: dict, now: datetime) -> dict:
     """The run of record ``rec`` (`run_records.record`) as a row: what it is, when each thing happened, how it came out, its
-    three times in seconds, what it waited behind and, cancelled in line, by what and why. A run still in line has waited
-    until ``now``."""
+    three times in seconds, what it waited behind and, cancelled in line, by what and why; and the record files that were
+    there and couldn't be read (`unread`), which the row is made without. A run still in line has waited until ``now``.
+    A time in the record that is no ISO time raises ValueError."""
     st, sl, rf = rec.get("status") or {}, rec.get("slot") or {}, rec.get("refused") or {}
     launched, started, ended = rid_time(rec["run"]), _t(st.get("started_utc")), _t(st.get("ended_utc"))
     since, took, job = _t(sl.get("since")), _t(sl.get("took")), _t(rec.get("job_started"))
@@ -132,7 +134,8 @@ def times(rec: dict, now: datetime) -> dict:
             "ended": st.get("ended_utc"), "state": st.get("state"),
             "wait_s": _s(launched, at), "ship_s": _s(launched, _t(rec.get("claimed"))), "line_s": _s(since, at) if since else None,
             "setup_s": _s(took, job), "run_s": _s(begun, ended), "behind": behind,
-            "cancel": f"{cancel.get('actor')}: {cancel['reason']}" if outcome == "cancelled" and cancel.get("reason") else None}
+            "cancel": f"{cancel.get('actor')}: {cancel['reason']}" if outcome == "cancelled" and cancel.get("reason") else None,
+            "unread": rec.get("unread") or None}
 
 
 def _stats(vals: list[float]) -> dict:
@@ -161,7 +164,8 @@ def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
     """{all, kind: {..}, machine: {..}, pool: {..}}: each group's count by outcome, its wait over the runs that asked to start
     (how many waited over ``over`` minutes among them), its setup where recorded and its run time, as percentiles in minutes;
     with the started runs' wait split in two (`ship`: launch to the machine's claim; `line`: joining the line to the slot), the
-    refusals by fault and how long each took to be told, and what the runs over ``over`` waited behind."""
+    refusals by fault and how long each took to be told, what the runs over ``over`` waited behind, and the runs with a record
+    file that couldn't be read (`unread`: each one's files and why)."""
     over_s = over * 60
     out: dict = {"all": _group(rows, over_s)}
     for by in ("kind", "machine", "pool"):
@@ -176,7 +180,19 @@ def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
     out["refused"] = {"faults": dict(Counter(str(r["behind"]).partition(":")[0] for r in refused).most_common()),
                       "told": _stats([r["wait_s"] for r in refused if r["wait_s"] is not None])}
     out["behind"] = dict(Counter(cause(r["behind"]) for r in slow(rows, over)).most_common())
+    out["unread"] = {r["run"]: r["unread"] for r in rows if r.get("unread")}
     return out
+
+
+def rows_of(recs: Iterable[dict], now: datetime) -> tuple[list[dict], dict[str, str]]:
+    """Each record's row (`times`), by run id; and the runs left out of them, each with why: a time in its records is no time."""
+    rows, out = [], {}
+    for rec in recs:
+        try:
+            rows.append(times(rec, now))
+        except ValueError as e:
+            out[rec["run"]] = f"on {rec.get('machine')}, a time in its records is no time: {e}"
+    return sorted(rows, key=lambda r: r["run"]), out
 
 
 def slow(rows: list[dict], over: float = OVER_MIN) -> list[dict]:
@@ -233,7 +249,8 @@ def graph_summary(g: dict, over: float = OVER_MIN) -> dict:
 
 def graph_events(remote, start: datetime) -> list[dict]:
     """Every event of the submissions that wrote one at or after ``start``: all the parts under `EVENTS` of each submission with
-    a part last written since, so a task that started in the window has its `queued` event however long before it was."""
+    a part last written since, so a task that started in the window has its `queued` event however long before it was. A part
+    with a line that is not JSON raises ValueError naming it: its tasks' waits can't be told without it."""
     listed = remote.list_times(EVENTS)
     live = {k.split("/")[2] for k, at in listed if (t := _t(at)) is None or t >= start}
     keys = [k for k, _ in listed if k.split("/")[2] in live]
@@ -241,15 +258,10 @@ def graph_events(remote, start: datetime) -> list[dict]:
     def part(item: tuple[int, str]) -> list[dict]:
         i, key = item
         remote.get(key, p := Path(d) / f"{i}.jsonl")
-        out = []
-        for line in p.read_text(errors="replace").splitlines():
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(e, dict):
-                out.append(e)
-        return out
+        try:
+            return [e for line in p.read_text(errors="replace").splitlines() if line.strip() and isinstance(e := json.loads(line), dict)]
+        except ValueError as err:
+            raise ValueError(f"{key} has a line that is not JSON ({err})") from None
 
     with tempfile.TemporaryDirectory() as d, ThreadPoolExecutor(max_workers=READ_JOBS) as ex:
         return [e for events in ex.map(part, enumerate(keys)) for e in events]
@@ -322,11 +334,12 @@ def _pcts(st: dict) -> str:
 
 
 def render(s: dict, rows: list[dict], start: datetime, end: datetime, over: float, read: list[str], unread: dict[str, str],
-           graph: dict | str | None = None) -> str:
+           graph: dict | str | None = None, left_out: dict[str, str] | None = None) -> str:
     gt = f">{over:g}"
     a = s["all"]
     lines = [f"runs launched {start:%Y-%m-%d %H:%MZ} to {end:%Y-%m-%d %H:%MZ}: {a['runs']} on {len(read)} machine(s)"
-             + (f"; UNREAD, in no number here: {'; '.join(f'{n} ({why})' for n, why in unread.items())}" if unread else ""),
+             + (f"; UNREAD, in no number here: {'; '.join(f'{n} ({why})' for n, why in unread.items())}" if unread else "")
+             + (f"; LEFT OUT, in no number here: {'; '.join(f'{run} ({why})' for run, why in left_out.items())}" if left_out else ""),
              "minutes, nearest-rank percentiles. w: the wait, launch -> check slot taken (no slot asked: -> command started); a run "
              "that got no slot counts with the time it waited (in line: still there; left: slot.py gave up at its --wait-max; "
              f"cancel: ended in line). {gt}: of those, waited over {over:g} min. s: setup, slot -> check.py started (n: the runs "
@@ -352,6 +365,9 @@ def render(s: dict, rows: list[dict], start: datetime, end: datetime, over: floa
               f"p95 {_m(p['line'], 95)} (n {p['line']['n']})",
               f"refused: {a['refused']}" + (f" ({', '.join(f'{k} {n}' for k, n in rf['faults'].items())}), told p50 {_m(rf['told'], 50)} "
                                             f"p95 {_m(rf['told'], 95)} min after launch" if a["refused"] else ""),
+              *([f"{len(torn)} run(s) have a record file that is there and couldn't be read, and their rows are made without it: "
+                 + "; ".join(f"{run} ({', '.join(f'{name}: {why}' for name, why in files.items())})" for run, files in torn.items())]
+                if (torn := s["unread"]) else []),
               ""]
     late = slow(rows, over)
     lines += [f"runs that waited over {over:g} min: {len(late)} of the {sum(a[o] for o in ASKED)} that asked to start; behind: "
@@ -421,13 +437,13 @@ def main(argv: list[str], *, store=None, reach: Callable | None = None, run: Cal
             graph = f"{type(e).__name__}: {e}"
     read = [n for n, v in got.items() if not isinstance(v, str)]
     unread = {n: v for n, v in got.items() if isinstance(v, str)}
-    rows = sorted((times(rec, now) for n in read for rec in got[n]), key=lambda r: r["run"])
+    rows, left_out = rows_of((rec for n in read for rec in got[n]), now)
     s = summary(rows, a.over)
     if a.json:
         print(json.dumps({"window": {"start": f"{start:%Y-%m-%dT%H:%M:%SZ}", "end": f"{end:%Y-%m-%dT%H:%M:%SZ}"}, "over_min": a.over,
-                          "read": read, "unread": unread, "summary": s, "runs": rows, "graph": graph}, indent=1))
+                          "read": read, "unread": unread, "left_out": left_out, "summary": s, "runs": rows, "graph": graph}, indent=1))
     else:
-        print(render(s, rows, start, end, a.over, read, unread, graph))
+        print(render(s, rows, start, end, a.over, read, unread, graph, left_out))
     if not read:
         print("research run-times: no machine was read", file=sys.stderr)
         return 1
