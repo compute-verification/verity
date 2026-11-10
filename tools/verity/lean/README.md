@@ -23,24 +23,24 @@ check run keeps each audit's and its provers' (`status_export.py --facts`), a re
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
-                                                  Mathlib is a dependency, and main's cached build of PKG (below)
+    Mathlib is a dependency, and main's cached build of PKG (below)
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
-                                                  each record goes beside its reports, which a recorded run publishes;
-                                                  refused in a tree `research run --on` shipped: use --cwd clone)
+    each record goes beside its reports, which a recorded run publishes;
+    refused in a tree `research run --on` shipped: use --cwd clone)
 python tools/verity/lean/check.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/verity/lean/check.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/verity/lean/check.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
-                                                  declaration (no record changes); it fails until you build and audit again
+    declaration (no record changes); it fails until you build and audit again
 python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"X.t": {"as": "X.Guarantees.G", "into": MODULE}}
-                                                  as `def G : Prop` in MODULE and `theorem X.SecurityProofs.G :
-                                                  X.Guarantees.G := @X.t` beside its proof (or in the module
-                                                  `"beside": M` names); then build and run
-                                                  `--update --moved LIFTS.json.moved.json PKG` (below)
+    as `def G : Prop` in MODULE and `theorem X.SecurityProofs.G :
+    X.Guarantees.G := @X.t` beside its proof (or in the module
+    `"beside": M` names); then build and run
+    `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads; lean-audit runs its ratchet on the
-                                                  audits' facts (its docstring: the seeds, the caps, the Properties gap)
+    audits' facts (its docstring: the seeds, the caps, the Properties gap)
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
@@ -273,14 +273,10 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 - `owner`, in each guarantee's entry: the registry handle of the lane that answers for it, whom a broken or restated
   guarantee goes to; an entry without one fails. Write it by hand, or pass `--update --owner @lane`, which owns only the
   new entries (`--update` keeps an entry's owner). A changed owner is one line in the review, not a changed statement.
-- An unowned lock: one that lists a guarantee or a premise and holds no `owner`, `issue` or `due` in an entry of
-  `guarantees`, `assumptions`, `domain` or `open`, and none of `default_owner`, `open_default_issue` and `open_seed`.
-  It is the lock of a tree with no lanes, and the check reads it from the lock's content; no flag makes a lock unowned.
-  No entry owes an owner, an `open` entry is its `digest` alone (a premise the lock doesn't list still fails),
-  `--update` writes no owner, and `--bookkeeping warn` repairs nothing in it. Its `AUDIT` line ends with `unowned`, and
-  its report holds `"unowned": true`. One lane field makes a lock owned and held to every rule, and a run given
-  `--owner` reads an unowned lock as owned: `--update --owner @lane` owns its entries, as in a new package's lock, and
-  every rule applies in that run. Every lock of this tree is owned (`tests/test_lean_packages.py`).
+- An unowned lock: one that lists a guarantee or a premise and holds no `owner`, `issue` or `due` in an entry, and none
+  of `default_owner`, `open_default_issue` and `open_seed`: the lock of a tree with no lanes (`unowned_lock`). No entry
+  owes an owner, an `open` entry is its `digest` alone, and its `AUDIT` line ends with `unowned`. Only `--update --owner
+  @lane` writes a lane field into it: that run reads it as owned, under every rule.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
