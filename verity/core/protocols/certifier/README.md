@@ -25,7 +25,8 @@
 - **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
   tests of `integrations/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
-  `benchmarks/network_e2e/encodings` writes; and `../network/tests/period_case.py` (`benchmarks/network_traces`).
+  `benchmarks/network_e2e/encodings` writes; and in `../network/tests`, `period_case.py` (`benchmarks/network_traces`)
+  and `test_network_period_protocol.py` (the tests of `../composition`).
 - **Loads from**: `lean/`, no package. The modules, `verity.ml.circuits`, `verity.ml.commitments`, `verity.ml.crypto`
   and `verity.core.protocols.spot`, never the prover side, which `lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs, which are in `benchmarks/network_traces`.
