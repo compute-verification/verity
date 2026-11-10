@@ -15,8 +15,8 @@ import verity.ml.circuits.ops.prims  # noqa: F401  (with verity.ml.circuits.ops.
 import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.program import Program, is_input
+from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R
 
@@ -728,6 +728,43 @@ def test_a_malformed_query_has_no_units_and_no_digest(n):
     assert e.value.detail["codes"] == codes
     with pytest.raises(ValueError):
         P.digest(P.partition(prog, q))
+
+
+def _two_programs(registered=()):
+    """Two calls of PAIR reading one table whole, and a batch of three broadcasting it: a run Input node two proof
+    blocks read, unless `registered` names it."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestTwice", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    batch = CompositeDefinition("OneStageTestBroadcast", 0, (), lambda S: ((("t", t),), Array(3, Value(8))),
+                                lambda B, S, x: B.batch(PAIR, x, axes=(None,), n=3), register=False)
+    return Program(bind(calls), registered=registered), Program(bind(batch), registered=registered)
+
+
+def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read():
+    """R8, under a template query: the verdict publishes the fan-out F of the verifier's own program (`partition.fanout`),
+    1 for a population program, whose instances each read their own share of the Input node; and it refuses a run
+    Input node whose leaves two proof blocks read (`R8-shared-input`, `partition.shared_inputs`), which F can't see:
+    two calls reading one table whole, or a batch broadcasting it.  The same table registered is a registered value,
+    which R8 doesn't refuse; and a batch reading its own share of the Input, or a call reading a leaf twice, is no
+    sharing."""
+    prog, q, rec = _registration(6)
+    v = _check(rec, prog, q)
+    assert v.ok and v.fanout == 1 and v.to_json()["fanout"] == 1 and P.shared_inputs(prog, q) == []
+    for shared in _two_programs():
+        n = P.units(shared, q)
+        inputs = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
+        assert P.fanout(shared, q) == 1 and P.shared_inputs(shared, q) == inputs
+        ports = _ports(shared, q, n)
+        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                       leaf_layer="ee" * 64)
+        v = _check(rec, shared, q)
+        assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
+    assert all(P.shared_inputs(p, q) == [] for p in _two_programs(registered=("t",)))
+    t = Array(2, Value(8))
+    twice = CompositeDefinition("OneStageTestOneCallTwice", 0, (), lambda S: ((("t", t),), Value(8)),
+                                lambda B, S, x: B.call(PAIR, array_of([x[0], x[0]])), register=False)
+    assert P.shared_inputs(Program(bind(twice)), q) == []
 
 
 def test_registration_check_refuses_a_query_core_does_not_digest():

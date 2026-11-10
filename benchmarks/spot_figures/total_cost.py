@@ -107,6 +107,10 @@ BATCH_INVARIANT = (0.237, 0.141, 0.311)
 #: the witness bits a full statement holds: the H200's ceiling, at which the `proof_overhead` card's statements are
 #: proved
 STATEMENT_BITS = 2 ** 35
+#: the replay grain's fan-out F that a served window's registration verdict publishes (`Verdict.fanout`), the capped
+#: form's N: its program is a population program, each instance reading only its own share of each Input node
+#: (`partition.fanout`)
+FANOUT = 1
 
 
 @dataclass(frozen=True)
@@ -450,7 +454,7 @@ def lean_two(g: Grain, row: dict, delta: float, served: float, form: str) -> tup
     the capped sets'): the bits it certifies, rounded up to a float, at the θ it finds from the planner's, with the
     planner's bits and that θ beside them; a point Lean refuses is an error."""
     d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served,
-                      form == "patterns", row["theta"])
+                      form == "patterns", row["theta"], fanout=FANOUT)
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")

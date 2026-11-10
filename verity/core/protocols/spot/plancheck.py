@@ -91,15 +91,21 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
 
 def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
         served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
-        search: Mapping[str, int] | None = SEARCH, fanout: int = 1) -> dict:
+        search: Mapping[str, int] | None = SEARCH, fanout: int | None = None) -> dict:
     """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Point`): its `replay_blocks`
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
     rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
     and serving `served` bits rounded up, so it refuses a `fanout` above 1 (`ValueError`); with `served` alone, the
     capped sets' form, the requests reading in each replay block serve at most `fanout` (the class's `N`, the replay
-    grain's fan-out, `partition.fanout`) times that many bits together.  Lean searches θ from `theta` unless `search`
-    is None."""
+    grain's fan-out) times that many bits together.  With `served`, `fanout` is the registered Program's, as its
+    registration verdict publishes it (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has
+    no default (`ValueError` without it); the sets' form reads none.  Lean searches θ from `theta` unless `search` is
+    None."""
+    if served is not None and fanout is None:
+        raise ValueError("a served cap is charged at the registered Program's fan-out: pass the one its registration "
+                         "verdict publishes (Verdict.fanout, WindowCommitmentRecord.fanout)")
+    fanout = 1 if fanout is None else fanout
     if not (isinstance(fanout, int) and fanout >= 1) or (union and fanout > 1):
         raise ValueError(f"a fan-out is a whole number at least 1, and the patterns' form reads each request in one "
                          f"replay block, so it needs fan-out 1, not {fanout}")

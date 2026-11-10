@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import dataclasses
 import random
+from collections import Counter
 from fractions import Fraction
 from math import comb
 
 import pytest
 
 from verity.ml.circuits import codec, partition_object as PO
+from verity.ml.circuits.cut import member_refs
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
@@ -798,18 +800,57 @@ def _shared(B, S_, x):
     return tuple_of(a, b, c, d, B.call(BLOCK, _over(d[1], x[5])))
 
 
+def _fanout_walk(program: Program, query) -> int:
+    """The fan-out walked a proof block at a time, every batch member's own share: the most proof blocks one group joined
+    by reads of each other's results holds.  The reference `partition.fanout`'s summary a root node at a time is held to;
+    a verifier never runs it."""
+    part = PO.evaluate(program, query)
+    nodes = program.root.body.nodes
+    first = {k: lo for k, _t, lo, _n in part.ranges}
+    parent = list(range(part.population))
+
+    def group(u: int) -> int:
+        while parent[u] != u:
+            u = parent[u]
+        return u
+
+    for k, _t, lo, n in part.ranges:
+        node = nodes[k]
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        for m in range(n):
+            for a, ax in zip(node.args, axes):
+                for i, a_lo, a_hi, _once in P._runs(member_refs(a, ax, m) if node.form == "batch" else a.refs):
+                    if i in first:
+                        w = nodes[i].fn.out_leaves
+                        for v in range(first[i] + a_lo // w, first[i] + (a_hi - 1) // w + 1):
+                            parent[group(v)] = group(lo + m)
+    return max(Counter(group(u) for u in range(part.population)).values())
+
+
+def _chain(B, S_, x):
+    a = B.call(BLOCK, x[0])
+    b = B.call(BLOCK, _over(a, x[1]))
+    return tuple_of(a, b, B.call(BLOCK, x[2]), B.call(BLOCK, _over(b, x[3])))
+
+
 def test_a_replay_block_reading_anothers_values_joins_its_group():
     """Fan-out (`partition.fanout`): replay blocks are joined when one reads part of another's result, directly or
-    through others, and F is the most one group holds.  A population of closed replay blocks has F = 1.  Here the second
-    reads the first's result and the fourth, a batch member, the second's, while the last reads the batch's other
-    member: groups {0, 1, 3}, {2} and {4, 5}, F = 3, each member joining only what its own share reads.  F is a template
-    query's."""
-    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == 1
+    through others, and F is at least the most one group holds, summarized a root node at a time.  A population of
+    closed replay blocks has F = 1.  Of calls alone, F is the walk's exactly: here the second and the fourth read the
+    first's chain, groups {0, 1, 3} and {2}, F = 3.  Where a batch's members read other replay blocks in parts, the
+    summary counts the whole batch: here the second reads the first's result and the fourth, a batch member, the
+    second's, while the last reads the batch's other member, groups {0, 1, 3}, {2} and {4, 5} walked a member at a
+    time (F = 3), and the summary's joined nodes hold 5.  F is a template query's."""
+    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == _fanout_walk(P.population_program(BLOCK, 4), GRAIN) == 1
     o = Array(3, Bits(8))
+    calls = Program(bind(CompositeDefinition("TwoStageTestChain", 0, (),
+                                             lambda S_: ((("x", Array(4, Array(3, Array(2, Bits(8))))),),
+                                                         Tuple(o, o, o, o)), _chain, register=False)))
+    assert P.fanout(calls, GRAIN) == _fanout_walk(calls, GRAIN) == 3
     prog = Program(bind(CompositeDefinition("TwoStageTestShared", 0, (),
                                             lambda S_: ((("x", Array(6, Array(3, Array(2, Bits(8))))),),
                                                         Tuple(o, o, o, Array(2, o), o)), _shared, register=False)))
-    assert P.units(prog, GRAIN) == 6 and P.fanout(prog, GRAIN) == 3
+    assert P.units(prog, GRAIN) == 6 and _fanout_walk(prog, GRAIN) == 3 and P.fanout(prog, GRAIN) == 5
     cells, k, f = [O.Cell(3, 8.0)], {0: 1}, P.fanout(prog, GRAIN)
     charge = O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0, fanout=f)
     assert charge == O.two_stage_exfil(cells, k, 6, .5, DELTA, f * 8.0) > O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0)

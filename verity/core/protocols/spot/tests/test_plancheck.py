@@ -119,8 +119,9 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
     enumeration, in the sets', the patterns' and the capped sets' form; and no more than at θ = 0, which the search
     tries."""
     _, theta = two_stage_rankin(cells, k, 2, .9, .3, served, union)
-    found, zero = P.check([P.two(cells, k, 2, .9, .3, served, union, theta or 1.0),
-                           P.two(cells, k, 2, .9, .3, served, union, 0.0, search=None)])
+    fan = None if served is None else 1
+    found, zero = P.check([P.two(cells, k, 2, .9, .3, served, union, theta or 1.0, fanout=fan),
+                           P.two(cells, k, 2, .9, .3, served, union, 0.0, search=None, fanout=fan)])
     count = _admissible_count(cells, k, 2, .9, .3, served, union)
     assert count < _admissible_count(cells, k, 2, 0.0, .3, served, union)
     assert found[0] is not None and zero[0] is not None and found[1] > 0
@@ -130,16 +131,21 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
 def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     """A replay grain of fan-out F (`partition.fanout`) is a capped point whose class's N is F: Lean certifies it as the
     point capped at F S with N = 1, at least log2 of that capped count by enumeration and more than at F = 1.  The
-    patterns' form, each request reading in one replay block, refuses F > 1, and the sets' form reads no N."""
+    patterns' form, each request reading in one replay block, refuses F > 1, and the sets' form reads no N.  A served
+    cap has no default fan-out: without the registration verdict's, the point is refused."""
     cells, k = SMALL[1]
     one, three = (P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=f) for f in (1, 3))
     assert one["classes"][0]["N"] == "1" and three["classes"][0]["N"] == "3"
-    (b1, _), (b3, _), (b9, _) = P.check([one, three, P.two(cells, k, 2, .9, .3, 9, theta=1.0)])
+    (b1, _), (b3, _), (b9, _) = P.check([one, three, P.two(cells, k, 2, .9, .3, 9, theta=1.0, fanout=1)])
     assert b3 == b9 > b1 and math.log2(_admissible_count(cells, k, 2, .9, .3, 9, union=False)) <= b3
     assert P.two(cells, k, 2, .9, .3, theta=1.0, fanout=3)["classes"][0]["N"] == "0"
+    assert P.two(cells, k, 2, .9, .3, theta=1.0)["classes"][0]["N"] == "0"
     for bad in ({"union": True, "fanout": 2}, {"fanout": 0}, {"fanout": 1.5}):
         with pytest.raises(ValueError, match="fan-out"):
             P.two(cells, k, 2, .9, .3, 3, **bad)
+    for union in (False, True):
+        with pytest.raises(ValueError, match="registration verdict"):
+            P.two(cells, k, 2, .9, .3, 3, union, theta=1.0)
 
 
 def test_a_two_stage_point_out_of_range_is_refused():

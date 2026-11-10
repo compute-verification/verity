@@ -287,10 +287,12 @@ def test_a_two_stage_point_is_what_lean_certifies(monkeypatch):
     monkeypatch.setattr(t.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
     count, checked = t.lean_two(g, row, .01, 80.0, "patterns")
     assert (count, checked) == (t.plancheck.upper(Fraction(10**6, 7)), {"lean": True, "planner": 50.0, "theta": 3.0})
-    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, True, 2.0)]
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, True, 2.0,
+                                    fanout=t.FANOUT)]
     seen.clear()
     assert t.lean_two(g, row, .01, 80.0, "sets") == (count, checked)
-    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, False, 2.0)]
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, False, 2.0,
+                                    fanout=t.FANOUT)]
     assert seen[0]["form"] == "capped"
     monkeypatch.setattr(t.plancheck, "check", lambda ds: [(None, Fraction(0))])
     with pytest.raises(t.plancheck.LeanError, match="refuses the planner's two-stage point"):

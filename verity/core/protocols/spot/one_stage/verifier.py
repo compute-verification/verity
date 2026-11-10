@@ -8,7 +8,9 @@ every call, both outcomes are recorded beside the one of record (a `Verdict`'s `
 alone, or an audit record that does not accept, has no profiles and fails its `verifiers` check. Lean that can't be built
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
-* `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
+* `check`: R1-R8 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes).
+  R8 is Python's alone, which the Lean doesn't check: a Python R8 refusal is a disagreement, so refused, and the fan-out
+  a verdict carries (`Verdict.fanout`) is Python's;
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -217,10 +219,10 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
     verifiers = {"of_record": RECORD_VERDICT, **both}
     same = "refused" not in got and (_same(got, mine) if whole else both["lean"] == both["python"])
     if not same:
-        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
+        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers, py.fanout)
     if RECORD_VERDICT == "lean":
-        return Verdict(got["ok"], tuple(got["codes"]), dict(got.get("detail", py.detail)), verifiers)
-    return Verdict(py.ok, py.codes, py.detail, verifiers)
+        return Verdict(got["ok"], tuple(got["codes"]), dict(got.get("detail", py.detail)), verifiers, py.fanout)
+    return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout)
 
 
 def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
@@ -275,7 +277,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`,
+    """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
     R6's seed salt when it passes `seed_salt`, and R6's pool reset, week and spent mark, a reset at most once a week,
     and R7's pool chain when it passes `pool`."""
     log = list(log)

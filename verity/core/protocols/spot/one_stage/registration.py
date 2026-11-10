@@ -10,7 +10,7 @@
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the sample. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
+  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
@@ -26,7 +26,12 @@
     window, for a bound verifier the window names its stream and prover (Binding), the window names the seed salt
     the verifier read from its challenger, or none when it read none (Seed salt), and it names the reset serving
     chose for its pool, its week and whether the week's reset is spent, as the verifier holds them, at most one reset
-    a week, or none of them for a verifier with no pool (Pool chain).
+    a week, or none of them for a verifier with no pool (Pool chain);
+  - R8, under a template query: each run Input node's leaves are read by one proof block alone, never broadcast to a
+    batch or read by two (`partition.shared_inputs`, `R8-shared-input`), so a served port reaches a proof block only as
+    its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
+    on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
+    replay block (`plancheck.two`'s `fanout`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -142,6 +147,8 @@ POOL_RESET = "pool_reset"
 POOL_WEEK = "pool_week"
 #: the window's field naming whether its week's one reset is spent at it (Pool chain)
 POOL_SPENT = "pool_spent"
+SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch broadcasts, could hold rows one of them "
+              "computed, which the fan-out can't see: give each proof block its own leaves, or register the value")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
@@ -245,7 +252,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
     chain (`R7-pool-chain`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
-    reads them."""
+    reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone
+    (`partition.shared_inputs`), and the verdict carries the fan-out F of `query` on `program` (`partition.fanout`),
+    which it publishes whatever its codes; under any other query it carries none."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -357,7 +366,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         if pool is not None:
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
-    return c.verdict()
+    # R8
+    fan = None
+    if P.is_template_query(query):
+        try:
+            fan, shared = P.fanout(program, query), P.shared_inputs(program, query)
+        except P.QueryRefused:
+            shared = []
+        if shared:
+            c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
+    return c.verdict(fanout=fan)
 
 
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],

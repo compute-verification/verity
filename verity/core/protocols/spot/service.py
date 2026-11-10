@@ -161,7 +161,7 @@ import hashlib
 import math
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
@@ -547,7 +547,9 @@ class WindowCommitmentRecord:
     `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
     only the site, θ and the registered compiler. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
-    `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
+    `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise). `fanout`
+    is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
+    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -555,6 +557,7 @@ class WindowCommitmentRecord:
     order: int
     salted_at: float | None = None
     received_at: float | None = None
+    fanout: int | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1846,7 +1849,7 @@ class Stream:
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
-        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
+        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
@@ -1916,7 +1919,8 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
-            got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"))
+            got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
+                                                     v.fanout)
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -1967,9 +1971,9 @@ class Stream:
         return boundary_values(self.spec.values) if self.n_rho is not None else self.spec.values
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None) -> WindowCommitmentRecord:
+                      received_at: float | None = None, fanout: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at)
+                                      R.digest(record), order, salted_at, received_at, fanout)
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)
@@ -2017,7 +2021,7 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R7 against the challenger's own copies
+        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
@@ -2048,7 +2052,7 @@ class Stream:
             got["checks"] = v
             if not v.ok:
                 return list(v.codes)
-            got["registration"] = self._registration(record, first.registration.order)
+            got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
             op["interior"] = _registration_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
