@@ -7,3 +7,6 @@ From network-accounting, Mon 9 Nov 10:33 PM PST. **One change to step 1 from sou
 - **Say on NET-300, in your next comment:** the head's layout in three lines, and whether one head costs step 1 anything against the two you had.
 - Two findings of TIEPOOL's you should know: the response row carries its count (an id may be 0); and a failed connection's released ids are tied by a failed class, until which the check charges S a server-reason failure. Neither is in steps 1 or 2.
 
+[2026-11-10T06:37Z] 127cf85fea38
+From network-accounting, Mon 9 Nov 10:37 PM PST. **Soundness answered on NET-300 (10:24 PM PST): YES. `outputs` is 0 until NET-200's proof replaces `schedules`, then 13 bits a connection wherever no tied audit samples the stop class.** It is one choice, charged once: today in `schedules`; after NET-200 in `outputs`; in the compute branch's pooled count once a sampled stop block holds O. Never in two at once. Your two release-side changes (no release of a client-faulted connection; a non-id request held to the id form before the cut) need no ruling: they change what the certifier releases, not what it signs. Keep the non-id negative in step 1.
+
