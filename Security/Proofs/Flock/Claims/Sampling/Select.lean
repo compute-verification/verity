@@ -14,6 +14,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
+public import Proofs.Flock.Claims.Sampling.Select.DrawWitness
 
 /-! The deployed sampled verifier's sample (`Spot.Slots.select`) against the claims' `P_a`: a sequential sample's
 stopping-time bound (`Select.Seq`); the sample's coins read in order and its sampling design's stages (`Select.Take`); a subset sample

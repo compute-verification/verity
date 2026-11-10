@@ -128,4 +128,70 @@ def DesignWellFormed : Prop :=
     (D : Claims.Sampling.Design),
     Slots.fileLayout c d query = .ok l → slotDesign rule d query table = .ok D → D.WellFormed (slotPartition l)
 
+/-- A sample that accepts everything: it checks no slot. -/
+def acceptAllSelect (_ : Select.Rule) (_ : Flock.Circuit) (_ : Program) (_ : Json) (_ : Option Json)
+    (_ : Option (Array (Int × Array Int))) (_ : ByteArray) : Flock.V (Slots.Layout × Array ℕ) := .ok (default, #[])
+
+namespace Batch
+
+/-- A primitive template `t` of one gate and one output bit. -/
+def template : Flock.Program.Defn where
+  key := "t"
+  id := "T_v1"
+  prim := true
+  params := #[]
+  ret := .value 1
+  gates := 1
+  paramLeaves := 0
+  outLeaves := 1
+
+/-- The root's one node: a batch of four instances of `t`. -/
+def node : Flock.Program.Node where
+  form := .batch
+  fn := 1
+  args := #[]
+  out := .array 4 (.value 1)
+  n := 4
+
+/-- The root's body: its one node, returning nothing. -/
+def body : Flock.Program.Body where
+  params := #[]
+  retType := .tuple #[]
+  nodes := #[node]
+  ret := Flock.Program.Seq.ofParts #[]
+  offsets := #[0]
+
+/-- The root: four instances of `t`. -/
+def root : Flock.Program.Defn where
+  key := "root"
+  id := "Root_v1"
+  prim := false
+  params := #[]
+  ret := .tuple #[]
+  body := body
+  gates := 4
+  paramLeaves := 0
+  outLeaves := 0
+
+/-- A program of four units of `t`, one stratum. -/
+def prog : Flock.Program.Prog where
+  defs := #[root, template]
+  index := {}
+  root := 0
+  programFn := "root"
+  sha512 := ⟨Array.replicate 64 0⟩
+
+/-- The program with its descriptor. -/
+def program : Program := { desc := .ofProg prog, prog := prog }
+
+/-- The template query naming `t`. -/
+def query : Json :=
+  Json.mkObj [("name", "Q_template_instance"), ("version", Lean.toJson (0 : ℕ)),
+    ("params", Json.mkObj [("template", "t")])]
+
+/-- A layout of one proof block, one gate. -/
+def layout : Slots.Layout := { classes := #[#[#[{ unit := some 0, gates := #[(0, 1)] }]]] }
+
+end Batch
+
 end Properties.Spot
