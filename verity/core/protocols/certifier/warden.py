@@ -84,6 +84,11 @@ With lengths rows the network certifier:
   are padding. So every connection it admits, released or not, holds its lane through its admission's bucket + D at
   least, the bucket through which the ingress proof block's scan holds the connection's slot (`ingress_scan.held`),
   and a lane it frees is a slot the scan has freed: a client's failure leaves the next admission a slot;
+- releases only canonical id requests: it cuts a request cell only where the ingress proof block's reference reads it
+  as the next cell of an id request on the connection (`io_request.read`: its head and first prompt field in the first
+  cell, the length its head says, its `END` at its last byte). A request that is none is cut up to the first cell that
+  doesn't read so and then fails as its client's (malformed), unreleased: no server sees it, so no server's failure
+  follows from it;
 - hands each window's releases (`Released`, to `Warden(lengths=…)`) by the slot stride of each one's `END` and in
   release order, at most K a stride. Window w's are handed once window w + 1's records are published, where each of
   their connections has ended, and only where both windows' three records were published complete: a window whose
@@ -398,6 +403,7 @@ class _Connection:
     problem: str | None = None  # the client's: failed at the next slot
     max_tokens: int | None = None  # under a response cap, its request's, read at its first request cell
     refused: bool = False  # under a response cap, its request was refused (cap): no request cell is cut
+    left: int = 0  # with lengths rows, its request's bytes still to be cut (`io_request.read`'s carry)
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
     failed: str | None = None  # one of REASONS
     failed_at: int | None = None  # the egress cell of the FAIL
@@ -496,6 +502,7 @@ class Warden:
         self.hand_lengths = lengths or (lambda window, strides: self.lengths.append((window, strides)))
         self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
         self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
+        self._form = _request_form() if params.lengths is not None else None
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -748,15 +755,18 @@ class Warden:
                     c.refused, c.problem = True, c.problem or "cap"
             if c.ingress_end is not None or c.refused or (c.problem is not None and self.params.lengths is not None):
                 out.append(pad)
-            elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended):
+            elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended) or c.ingress_ended:
+                kind = DATA if len(c.ingress) > p or not c.ingress_ended else END
+                made = cell(kind, c.ordinal, bytes(c.ingress[:p]), B)
+                if self._form is not None and not self._request_cell(c, made):
+                    c.problem = c.problem or "malformed"
+                    out.append(pad)
+                    continue
                 sent.append(bytes(c.ingress[:p]))
                 del c.ingress[:p]
-                out.append(cell(DATA, c.ordinal, sent[-1], B))
-            elif c.ingress_ended:
-                sent.append(bytes(c.ingress))
-                c.ingress.clear()
-                out.append(cell(END, c.ordinal, sent[-1], B))
-                c.ingress_end = t
+                out.append(made)
+                if kind == END:
+                    c.ingress_end = t
             else:
                 out.append(pad)
         c.ingress_cells += len(sent)
@@ -779,6 +789,16 @@ class Warden:
                 c.server[1].write(whole)
                 c.wrote = True
         return out
+
+    def _request_cell(self, c: _Connection, made: bytes) -> bool:
+        """With lengths rows: whether `made`, the next cell cut from c's request, is that cell of a canonical id
+        request as the ingress proof block reads it (`io_request.read`, against the bytes its request has left), which
+        it then counts as cut."""
+        got = self._form.read(self._form.layout(self.params.cell_bytes), made, c.ordinal, c.left)
+        if not isinstance(got, self._form.Frame):
+            return False
+        c.left = (c.left or got.length) - got.used
+        return True
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r egress cells at bucket t (the module docstring's schedule), from s + D on. A client's

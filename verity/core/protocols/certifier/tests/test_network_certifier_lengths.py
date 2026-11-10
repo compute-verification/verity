@@ -9,10 +9,12 @@ import dataclasses
 import pytest
 
 from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.certifier import connection_rows as CR
+from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, id_request
-from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, run
+from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
 
@@ -292,3 +294,103 @@ def test_a_window_whose_records_or_the_next_ones_are_not_published_complete_gets
     assert refused.refused == 1 and refused.refused_windows == {0} and len(refused.withheld) == 3
     assert [w for w, _ in refused.lengths] == [1, 2]
     assert all(not stride for _, strides in refused.lengths for stride in strides)
+
+
+# --- the id form -------------------------------------------------------------------------------------------------
+
+
+def read_as_requests(warden, ordinal: int) -> tuple[int, int] | None:
+    """The ingress proof block's reading of a connection's signed request cells, bucket by bucket from an empty carry
+    (`io_request.lane_cut`): the carry after its last bucket, (bytes left, prompt fields), or None where a bucket's
+    cells aren't pads and the next cells of a canonical id request."""
+    carry, by_bucket = (0, 0), {}
+    for t, _, f in request_cells(warden, ordinal):
+        by_bucket.setdefault(t, []).append(f)
+    for t in sorted(by_bucket):
+        carry = Q.lane_cut(Q.layout(B), by_bucket[t], ordinal, *carry)
+        if carry is None:
+            return None
+    return carry
+
+
+def no_id_requests() -> dict[str, tuple[bytes, int]]:
+    """Requests that are no canonical id request in the network certifier's cells, each with the cells the ingress
+    proof block still reads as a request's before the one it refuses."""
+    long, linked = id_req(2, 40), id_request(model="m", user="user-2", prompt=[2000 + k for k in range(40)],
+                                             max_tokens=8, seed=2, temperature=0.7, top_p=0.95, frame_bytes=B)
+    assert len(cells(long, B)) == 2 * B and len(long) > P and linked != long
+    at = long.index(b",", P + 5) + 5
+    length = b"%*d" % (10, len(long) - Q.BODY_AT)
+    assert long.count(length) == 1
+    return {"bytes": (request(300, 5), 0),
+            "a name that needs an escape": (id_req(2, 3, model='a "b"'), 0),
+            "an id that is no number": (long[:at] + b"x" + long[at + 1:], 1),
+            "another length than its head says": (long.replace(length, b"%*d" % (10, len(long) - Q.BODY_AT + 1)), 1),
+            "a request cut short": (long[:P + 40], 1),
+            "the link's form, four bytes in": (linked, 0),
+            "bytes after its end": (id_req(2, 3) + b" ", 0)}
+
+
+@pytest.mark.parametrize("name", sorted(no_id_requests()))
+def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clients(name):
+    """Beside an honest request, a request that is no id request in the cells. With lengths rows the network certifier
+    cuts its cells only up to the first the ingress proof block wouldn't read, releases nothing of it (no `END`, no
+    place in the release order, no byte for the server) and fails it as its client's (malformed), at its first egress
+    slot. It fails nothing an audit reads: every request cell the network certifier signed reads as a canonical id
+    request's, the ingress proof blocks' reference takes every bucket, and the read of the records in the clear
+    accepts every window. And it is no failure of the server's: the lengths and fails tables are those of the run
+    without it, with no failed slot in them. Without lengths rows the same request is cut whole and released, the
+    reference refuses its bucket, and the server's answer to it, which is no id response, fails as the server's
+    (format) and fails its window."""
+    bad, prefix = no_id_requests()[name]
+    honest, out = id_req(1, 60), (7, 8, 9)
+    assert len(cells(honest, B)) == 3 * B
+    arrivals = {0: [cells(honest, B), cells(bad, B)]}
+    answers = [answer(out), [(1, b"HTTP/1.1 400 Bad Request\r\n\r\n"), (2, EOF)]]
+    alone, _, _ = run([answer(out)], {0: [cells(honest, B)]}, params=LEN, windows=3)
+    assert [w for w, _ in alone.lengths] == [0, 1] and alone.lengths[0][1][1] == (Released(0, len(honest), 3, False),)
+
+    warden, clients, server = run(answers, arrivals, params=LEN, windows=3)
+    log = {e["ordinal"]: e for e in warden.log}
+    assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == (None, "malformed", 0, D)
+    assert server.conns[1].received == b"" and warden.requests_released == 1
+    mine = request_cells(warden, 2)
+    assert [k for _, k, _ in mine] == [PAD, PAD] + [DATA] * prefix + [PAD] * ((D + 1) * R - 2 - prefix)
+    assert [k for _, k, _ in clients[1].cells()] == [PAD] * (D * R) + [FAIL] + [PAD] * (R - 1)
+    assert reasons(warden) == [(D, 2, "malformed")]
+    assert (log[1]["release"], log[1]["failed"], log[1]["egress_cells"]) == (0, None, 4)
+    # no audit fails: the signed request cells read, the scan takes every bucket, the records' read accepts
+    assert read_as_requests(warden, 1) == (0, 60) and read_as_requests(warden, 2) is not None
+    assert scanned(warden, {1: out}) is not None
+    assert audit(LEN, *records(warden))["accepted"]
+    # and no failure is the server's: the tables are the run's without it, and no slot of the fails table is set
+    assert warden.lengths == alone.lengths
+    for (_, strides), (_, alone_strides) in zip(warden.lengths, alone.lengths):
+        tables = CR.tables(LEN, strides)
+        assert tables == CR.tables(LEN, alone_strides) and not any(any(row) for row in tables[CR.FAILS])
+
+    plain, _, served = run(answers, arrivals, params=PLAIN, windows=3)
+    log = {e["ordinal"]: e for e in plain.log}
+    assert (log[2]["release"], log[2]["failed"], log[2]["ended"]) == (0, "format", D)
+    assert served.conns[1].received and END in [k for _, k, _ in request_cells(plain, 2)]
+    assert read_as_requests(plain, 1) == (0, 60) and read_as_requests(plain, 2) is None
+    assert scanned(plain, {1: out}) is None and plain.lengths == []
+    assert audit(PLAIN, *records(plain))["windows"][0]["problems"] == \
+        ["connection 2 failed closed (format) at egress cell 0"]
+
+
+def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
+    """Id requests of one cell to the most the schedule takes, their bytes arriving whole or a cell a bucket: with
+    lengths rows every cell, bucket and release is the one of the run without them."""
+    reqs = [id_req(i, n) for i, n in enumerate((1, 12, 13, 57, 58, 102, 103, 147), 1)]
+    assert [len(cells(r, B)) // B for r in reqs] == [1, 1, 2, 2, 3, 3, 4, 4] and LEN.ingress_cells == 4
+    arrivals = {4 * i: [cells(r, B)] for i, r in enumerate(reqs)}
+    answers = [answer((i,)) for i in range(len(reqs))]
+    runs = [run(answers, arrivals, params=p, windows=3, run_nonce=bytes) for p in (PLAIN, LEN)]
+    (plain, plain_clients, plain_server), (warden, clients, server) = runs
+    assert [(r.link, r.window, r.grid, r.status) for r in warden.records] == \
+        [(r.link, r.window, r.grid, r.status) for r in plain.records]
+    assert [c.writes for c in clients] == [c.writes for c in plain_clients]
+    assert [c.received for c in server.conns] == [c.received for c in plain_server.conns]
+    assert warden.log == plain.log and [e["release"] for e in warden.log] == list(range(len(reqs)))
+    assert audit(PLAIN, *records(warden))["accepted"]
