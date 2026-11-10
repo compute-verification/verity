@@ -1,6 +1,6 @@
 """The exact-int8 Llama-3.1-8B role's capture profile: its shipped config, its weights record and weight map, and the two fold patterns
 (`observe.fold.patterns.int8`) over synthetic launches of the named ops (`engine.int8_ops`), the attention's under the plain read and
-under a credited read (`engine.int8_window`)."""
+under a credited read."""
 from __future__ import annotations
 
 import hashlib

@@ -233,7 +233,6 @@ BENCHMARKS_IMPORTERS = {
                                                                           "(`benchmarks/remote_session`, "
                                                                           "`config.REMOTE_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",

@@ -5,8 +5,8 @@ inside one module body, committed as the ops computed them.
   (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the call-boundary source never evaluates
   them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
   one Int8RowQuant_v1 site.
-- `verity_int8::kv_quant_batch` inside an attention module, or `verity_int8::kv_quant_window_batch` under a credited cache read
-  (`engine.int8_window`): each request's (K', V', s_v, f32(V'_0)) per KV head, its slices of the batch's results (K'[r, :, :s]
+- `verity_int8::kv_quant_batch` inside an attention module, or `verity_int8::kv_quant_window_batch` under a credited cache read:
+  each request's (K', V', s_v, f32(V'_0)) per KV head, its slices of the batch's results (K'[r, :, :s]
   and so on, s its window), are the `instance_outputs` identities of `Int8KvQuant_v1`'s ports 0..3 at `<attention>`, each over
   every KV head; the requests of a step are committed in batch order, concatenated (a request with no window, none).  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports (`ports`), so the
   binder binds them by structure whatever the manifest's member spelling (`<hint>.<port>`), and the attention's own return binds its

@@ -43,7 +43,6 @@ class Engine:
     execution: str | None = None   # the workload's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
     environ: dict | None = None    # the process environment keys its build set or changed (`engine_env.set_since`), None when not built here
-    credited_read: dict | None = None  # the int8 attention's credited read installed at the build (`int8_credited_env`), None when none
 
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
@@ -248,10 +247,6 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
-    from verity_vllm.engine import int8_credited_env
-    eng.credited_read = int8_credited_env.install(eng, engine_env.int8_credited_read())
-    if eng.credited_read is not None:
-        print(f"[engine] {int8_credited_env.ENV}: {json.dumps(eng.credited_read)}", flush=True)
     return eng
 
 
