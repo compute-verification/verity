@@ -10,6 +10,8 @@
 #   benchmarks/remote_session/gate_run.sh whatif PERIOD         # once fire has ended: gate_whatif.sh over its records
 #
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
+#                  With FETCH=1, checkpoint.sh as it stages a role: what the snapshot lacks fetched from the Hub and the
+#                  pinned directory linked, then the same check.
 #   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): the challenger host's key is PIN, PERIOD unused
 #                  and no period of the lane open, COMMIT on origin/main's first-parent line, the verifier host pinned at it
 #                  and idle. Nothing is written to a gate.
@@ -175,10 +177,12 @@ if [ "$VERB" = prover ]; then
 elif [ "$CHECKPOINT" = 0 ]; then
   echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
 else
-  echo "== 1. checkpoint on $PROVER_NODE"
+  echo "== 1. checkpoint on $PROVER_NODE${FETCH:+ (FETCH: what the snapshot lacks is fetched first)}"
   on_node "$CHECKPOINT_WAIT_S" 1200 bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"'
+  ONLY=(--env CHECK_ONLY=1)
+  [ -z "${FETCH:-}" ] || ONLY=()
   launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" \
-    --timeout "$((CHECKPOINT_WAIT_S / 60 + 20))m" --wait --env CHECK_ONLY=1 --env "ROLE=$ROLE" -- "${NODE_CMD[@]}" || exit 3
+    --timeout "$((CHECKPOINT_WAIT_S / 60 + 20))m" --wait "${ONLY[@]}" --env "ROLE=$ROLE" -- "${NODE_CMD[@]}" || exit 3
 fi
 if [ "$VERB" != prover ]; then
   echo "== 2. probe on $GATE_ON"
