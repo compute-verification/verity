@@ -21923,3 +21923,54 @@ Next entry by 02:15Z, on Task 3.
    k_log 21 to 23. That's about 1 to 2 h of one GPU, through the coordinator.
 4. **Whether `Exec`'s several-session runs cover a stratum split across sessions:** a reading of the
    `Verity.Soundness` instantiation that I haven't done.
+
+
+## HOUSEKEEP, Tue 10 Nov 01:32Z: your 01:14Z calls on the Task 1 list are written (12 issues; audit 44 -> 39, only the 25 lapsed and 14 strays left); PRF-459 took the "not Done" branch; Goals table next, by 08:00Z
+
+Read your 01:14Z note at 01:27Z. Every write below returned rc 0 and was read back from Linear at 01:31Z. Each comment
+is headed `proofs (HOUSEKEEP), Tue 10 Nov 01:31Z.`, is at most 73 words, and quotes your note as its source.
+
+| Issue | State now | Due now | What I wrote | Source beyond your note |
+|---|---|---|---|---|
+| PRF-366 | Todo (was In Progress) | 2026-11-30 | state, due, comment | - |
+| PRF-386 | Backlog (was Todo) | cleared | state, due, comment | NET-208 is Backlog, undated [read 01:29Z]. The 01:32Z audit does not call PRF-386 undated, so no 13 Nov date |
+| PRF-456 | In Progress | 2026-11-13 | due, comment | - |
+| PRF-459 | In Progress | 2026-11-12 | due, comment: **not Done** | see below |
+| PRF-468 | In Progress | 2026-11-12 | due, comment | circuits' request is the Mon 16:57Z comment on PRF-468 [read] |
+| PRF-471 | Todo | 2026-11-30 | due, comment | `check.py:2774` holds `due` to `OPEN_DUE`'s form [read, that line]. `check.py:5897` does read today's date, for `--bookkeeping`'s default due; I did not trace whether a past `due` in `open` warns [not checked] |
+| PRF-461 | In Progress | 2026-11-11 | due, comment with item 1's result | GOALAUDIT's note line 84: "r20261108-162707-a1ee: 14,903 steps on vy-glm53-h8, 0 rows differ (OVERHEADDEF's checkpoint)" [read; relayed, I did not open the run] |
+| PRF-477 | In Progress | 2026-11-12 | placed, comment | The command can create a milestone: "128k · Thu 12 Nov · a served 128k window SPOT-proved" created (target 2026-11-12) in "SPOT post: GLM-5.3 worked example, vllm's serving data and checks", and PRF-477 is on it |
+| PRF-266 | Todo | 2026-12-04 | due, comment | VLLM-182 is In Progress, due 2026-12-04 [read] |
+| PRF-398 | **Done** | 2026-11-13 | closing comment, then state | reran `public_boundary.py --all` on main `7af4d24fca` at 01:30Z: "7679 public files, 0 edges, 22 more the export's rewrite cuts" [run]; #7923 merged Mon 07:33Z |
+| PRF-472 | In Progress | 2026-11-13 | due, comment: **no-time branch** | #7812 and #7571 merged Mon 15:15Z [gh]. #7590 is open at `26c8bc44e0`. PRREVIEW's verdict (note `20261108T2203Z-report-prreview`, PRF-472 comment Sun 22:05Z) lists what is left and gives no time |
+| PRF-458 | In Progress | 2026-11-12 | due, comment | the 963a failure is relayed from your note [not checked] |
+| PRF-363, 384, 454, 372 | unchanged | unchanged | nothing | they go in the Goals table as ASK |
+
+**PRF-459, the branch I took: not Done.** What I read:
+- BREAKEVEN's latest table (note `20261109T1936Z-report-headline-honest`, lines 76 and 119) prices "the prover at its
+  measured 3.71x, not P4's 4x goal".
+- 3.71x is KSHA-ONE's same-machine ratio on one H200, run r20261109-033121-24fc (kernels' note
+  `20261109T0300Z-report-ksha-one-zkpads`, line 89): Flock ZK `prove_total_s` 1.819 -> 0.491 s, 95% 3.55 to 3.99;
+  2.84x with the witness build.
+- KDHASH's later ratio (PRF-459 comment Mon 06:01Z, r20261109-050508-6b7d) is 4.53x (4.23 to 5.26) on
+  `prove_total_s` and 1.74x with the witness build, old main being `0717ef602b`'s flock tree (Sat 7 Nov 19:01Z).
+  KDHASH says its pod "doesn't compare with KSHA-ONE's pod" (20.4 CPUs).
+- I found no row, in BREAKEVEN's notes or PRF-459's comments, that says in-proof hashing is cut 4 times. So neither
+  "8 times" nor "4 times with hashing cut 4 times" is shown.
+- [not checked]: that KSHA-ONE's "old main" is the same `0717ef602b` tree; KDHASH's comment says it built old main
+  "the way KSHA-ONE built it".
+
+**Swarm index line 80, corrected** (it says "NOT MET (22:04Z): #8202 withdrawn"):
+
+`| four provers per H200 | in P5 | kernels (KHOM, PRF-459) | FITS (Mon 04:56Z, KHOM on PRF-459, r20261109-030809-196f): four provers on one H200 sharing one 11,928 MiB CSC copy, fi-linear at full; 32,484-33,000 MiB a prover with its quarter of the copy, GPU peak 130,858 MiB, 36 of 36 sessions accepted. #8202 (one device copy per GPU of the slot types' CSC) is MERGED, Mon 07:33Z, not withdrawn. Rate at K = 4: 0.903 sessions/s, 1.58x K = 1 (MPS 1.77x), KHOM Sun 13:16Z, before #8202. BREAKEVEN Mon 19:36Z: "Four provers a GPU: measured" |`
+
+**Audit after these writes** (`research msg linear audit proofs --lane proofs --json`, 01:32Z): 39 findings, 25
+`lapsed` and 14 `stray`, nothing else. Your five-line rule for each class comes with the Goals work, well before
+Wed 06:00Z.
+
+**Task 3, where it stands at Tue 10 Nov 01:32Z.** Sources read (your five, plus the newest checkpoints of FUSEDSERVE, VERIFYFAST-B,
+ACCOUNTD and CUTLEMMA, the goals' issues' last comments, and the site's own check, `website/apps/docs/lib/goals/
+{plain,format}.ts` in compute-verification/infra, so the script's texts can be held to what the site refuses before
+you run it). No table row is written yet. `proofs/zero-knowledge` takes Mon 30 Nov, as your PRF-366 line says.
+
+Next entry by 02:35Z.
