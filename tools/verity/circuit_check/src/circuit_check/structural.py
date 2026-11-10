@@ -32,7 +32,8 @@ those ports
 
 Refused by name, since neither comparison covers them: a template one of whose rows, read or not, reads a column at or past
 its own that is no input and not the constant (so some column is not a function of the inputs), that writes a column twice
-or writes the constant, whose input columns' rows are not their
+or writes the constant, one of whose rows writes a column a row read before it copy by copy (a callee's column its caller
+writes past the copy's first column, an input whose row comes after a reader), whose input columns' rows are not their
 own ``(c)·(c)``, whose port groups overlap, reach the constant or are not the Definition's input leaves and output bits, or
 hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts, which rows
 carry as more than gates. A table read is read as the rows the flat layout writes it as (`ir_lower._Read`), so a template
@@ -171,7 +172,11 @@ def _walk(t: Any, inputs: Sequence[int], one: int, AND) -> tuple[list, dict]:
     ``one`` and input port bit ``i`` ``inputs[i]``; and what it took. A Definition's rows are read once however many copies
     place them, so the unrolled rows are never held. Every row is evaluated, read or not, so each is a function of the
     inputs: a row reading a column at or past its own that is no input and not the constant is refused, as is a column
-    written twice or the constant written; a column no row writes is zero."""
+    written twice or the constant written; a column no row writes is zero. A copy's rows are evaluated where the copy
+    starts, so a row that writes a column some row read before it in that order (a column a callee leaves to its caller
+    past the copy's first column, an input whose own row comes after a row reading it) is refused: that read saw zero
+    where column order sees the row's value, and refusing it leaves every read the column's final value, so the walk's
+    values are column order's."""
     try:
         n = t.defs[t.root].cols
     except IndexError:
@@ -187,7 +192,17 @@ def _walk(t: Any, inputs: Sequence[int], one: int, AND) -> tuple[list, dict]:
     val: list = [None] * n
     val[k] = one
     prepared: dict[int, tuple] = {}
+    early: dict[int, int] = {}
     st = {"evaluated_rows": 0, "ands": 0, "copies": 0}
+
+    def written(C: int) -> None:
+        if val[C] is not None:
+            raise Refused("malformed", "the constant is written by a row" if C == k else f"column {C} written twice")
+        if early and C in early:
+            raise Refused("order", f"column {C} is read by the row at column {early[C]} before its own row: a copy's rows "
+                                   f"are evaluated where the copy starts, so write the column before its first reader (as "
+                                   f"a row of the callee that reads it, or below the copy's first column), and put each "
+                                   f"input's row below every row that reads it")
 
     def prepare(d: int) -> tuple:
         df = t.defs[d]
@@ -207,15 +222,21 @@ def _walk(t: Any, inputs: Sequence[int], one: int, AND) -> tuple[list, dict]:
                 w = val[r]
                 if w:
                     v ^= w
+                elif w is None:
+                    early.setdefault(r, C)
             return v
         for x in loc:
             w = val[o + x]
             if w:
                 v ^= w
+            elif w is None:
+                early.setdefault(o + x, C)
         for i in ix:
             w = val[inp[i]]
             if w:
                 v ^= w
+            elif w is None:
+                early.setdefault(inp[i], C)
         return v
 
     def place(d: int, o: int, inp: list[int]) -> None:
@@ -238,8 +259,7 @@ def _walk(t: Any, inputs: Sequence[int], one: int, AND) -> tuple[list, dict]:
             C = o + col
             if not 0 <= C < n:
                 raise Refused("malformed", f"a row at column {C}, outside the unit's {n}")
-            if val[C] is not None:
-                raise Refused("malformed", "the constant is written by a row" if C == k else f"column {C} written twice")
+            written(C)
             if C in given:
                 row = tuple(tuple(sorted([o + x for x in s[0]] + [inp[i] for i in s[1]] + [k] * s[2])) for s in (sa, sb))
                 if row != ((C,), (C,)):
