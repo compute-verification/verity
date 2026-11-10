@@ -27164,7 +27164,7 @@ Both figures were `StopCheck_v1`'s, not `StopRule_v1`'s [run: the census's estim
 - Which form a class Program would hold, and so which price applies: `StopRule_v1` lowered through Flock's word pieces (at most the estimator's 127·T + 448) or `StopRule_v2` on gates (104 to 108 ANDs an id at 875 to 8,192 outputs). Network pins `StopRule_v1` by closure digest; the class's request Definition is vllm's. [guess: nobody has said]
 - Whether the 4,096 cap's class is 4,096 or 8,192: network's note counts 4,097 egress cells (section 3.1), and I did not read how a class counts the end cell.
 
-## MOEBIND2, Tue 10 Nov 07:46Z: land ask: #8565 marked at `38e2f7d067` (07:43Z); `witnesses_assumed`, for your line to Daniel
+## MOEBIND2, Tue 10 Nov 07:45Z: land ask: #8565 marked at `38e2f7d067` (07:43Z); `witnesses_assumed`, for your line to Daniel
 
 **The Goals answer again: no.** `ExpertReadAccepted` is about the template check's code (that `Flock.ReadNet.check 256 3072` accepts the template parsed back from `readTmpl 256 3072`'s text), not about the read's gates. The goal's first sentence holds as worded.
 
