@@ -32150,3 +32150,66 @@ With `setupOf_x` (InsSetup; D's `setup` field follows from it) and `hiddenOf_x` 
 3. An open question for you: whether TWOINSTANCE's `Ref.scope` field is mine. It is `Code.scopeOk (bitsProgs (ms2 x)) (membersPart (ms2 x)) ⟨part2 x, design1, [1]⟩ = true`, and it is not in (A)'s list [read]. The kernel alone won't close it. `Bits.keyProg` sorts with `List.mergeSort`, which the kernel rejects even on a literal list [run]. It also reads the `while` loop `lastLe` and `Index.of`'s HashMaps [read]. A route: rewrite with `List.mergeSort_of_pairwise` (the outputs are already ascending) and Keys.lean's `lastLe_spec`/`lastLe_eq`, then let the kernel finish [guess].
 
 **Dates:** (A) by Thu 12 Nov 18:00Z holds if this run's chain passes within two rounds of fixes [guess]; if not, I say so by Wed 18:00Z in an entry heading. (D) stays Fri 13 Nov 12:00Z.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 19:55Z: `45ff` passed (`verity-vllm` at N2's head: 14,567 passed, 0 failed); a correction: the lock reads the committed form's binding terms only at ecr, where the number fails, so my 19:38Z "holds at 2^80" was wrong; PRF-456's three below
+
+**`45ff`** [run by me; its `stdout.log` read]
+
+- `r20261110-190742-45ff`: `verity-vllm` at N2's head `3cb71ba075`, on vy-nebius-cpu-13.
+- Its log: "passed verity-vllm 14567 passed, 556 skipped in 2000 s on 6 workers", then "1 suites: 1 passed (0 cached), 0 failed".
+- The two P10 tests that failed in `ba58` pass with #8448's 794-line `serving_rows.py`.
+- Its `out/` came back empty, so this verdict is from its log.
+- Nothing of mine runs now. vllm's 19:14Z answers are my 19:45Z entry.
+
+**A correction to my 19:38Z number** [read; arithmetic mine]
+
+- **What I did:** I read the two binding terms, \(N\sqrt{\Pr[B_{conf}]}\) and \(N\sqrt{\Pr[B_{conf,2}]}\), at the strict birthday bound, taking the finder's expected cost \(2T(1+R)\) as its number of evaluations. The lock doesn't give that.
+  - The strict reading covers only "a finder of at most q evaluations" (`trust.base`, `FlockSoundness.Assumptions.SHA512CRStrict`; `Claims.StrictBirthday` says "q^2 / 2^513 at one finder").
+  - `B_conf`'s finder runs both runs' extractions, "their reruns' included" (`SamplingGeneric.lean:590–595`). The waits stop at accepted runs, so the only cap on its evaluations is the waits' strict cap of \(2^{128}k\).
+  - `ASSUMPTIONS.md:96`: "The fixed-budget form doesn't extend to finders that stop adaptively". That is why `KSAt` reads its binding extractor at `ecrBound` (`SamplingGeneric.lean:527–532`).
+- **At ecr:** each term is \(N\sqrt{2T(1+R)/2^{256}}\). At \(T = 2^{80}\) that is \(2^{-43.8}\) with \(R = 0\) and \(2^{-32.2}\) at \(R = 2^{23.2}\), with \(N \ge 2^{43.7}\).
+  - Both terms together meet \(2^{-61.0}\) only while \(T(1+R) \le 2^{43.6}\), that is \(T \le 2^{20.4}\) at R's floor.
+- **So, at the lock's readings,** the committed form misses \(2^{-53.4}\) and \(2^{-61.0}\) at any adversary that matters. The PRF-456 text in my 19:38Z entry should not go out as written; corrected text below.
+- **What would make it meet the target**, nothing proved and both ours [guess]:
+  - a tail bound on the waits: B_conf's finder stops within a factor \(c\) of its expected cost except with probability \(p\). Each wait stops at \(k \ge 3\cdot 2^{10}\) accepted runs, so a Chernoff bound plausibly gives \(c = 2\) at a tiny \(p\). The strict reading then applies at \(q = c\cdot 2T(1+R)\), and my 19:38Z condition stands with \(c\) folded in.
+  - or a form of \(\varepsilon_{reg}\) with no \(N\sqrt{\cdot}\) term.
+
+**1. R at the plan's statement: a formula, because the planner's rows don't hold an audit's point** [read]
+
+- **The formula:** \(R = 1 + k_{out} + k_{out}k_{in}(1 + n_{sess}e_s)\), the expected reruns in `Efficient` (`SamplingGeneric.lean:543`). Its parts:
+  - \(k_{out} = 2^{10}(2n_{out}+1)\), with \(n_{out} \ge\) `footBits` \(= \lceil\log_2\prod_{(\rho,t)}(|\text{cell}(\rho,t)|+1)\rceil\) over every replay block \(\rho\) and template \(t\) (`SamplingTwo.lean:112`, bound at 292).
+  - \(k_{in} = 2^{10}(2n_{in}+1)\), with \(n_{in} \ge\) the proof blocks of the replay sample's replay blocks (`SamplingTwo.lean:294`). That is \(B\,n_\rho\) under a rate law, where nothing caps the sample, and \(Q\,n_\rho\) under a subset law of \(Q\).
+  - \(n_{sess} \ge\) the session keys a sample holds. The default is the statement's proof blocks (`SamplingGeneric.lean:250`).
+  - \(e_s = 1 + 210k'\) (`es`, `SamplingGeneric.lean:425`). At the deployed numbers \(1507 \le k' \le 2^{24}\) (`Numbers.lean:88–101`), so \(e_s\) lies between \(2^{18.3}\) and \(2^{31.7}\).
+- **Who has the inputs:**
+  - \(B\), the cells, \(k_t\) and the law: the per-audit point `plancheck.two` takes (`plancheck.py:92`: `replay_blocks`, `cells`, `k`, `q`), which is ACCOUNTD's and network-accounting's. The rows of record (`r20261110-173854-ea3b`'s `rows.jsonl`) hold period totals (`q`, `replay_sample`, each family's `n`), not that point.
+  - \(n_{sess}\) and \(k'\) at the plan's shapes: ours.
+- **R matters only under the tail bound;** at ecr no R meets the target. Under it, at \(T = 2^{80}\) and \(k' = 1507\), the plan's inputs must satisfy \((2n_{out}+1)(2n_{in}+1)\,n_{sess} \le 2^{31.5}/c\) [arithmetic].
+  - For scale [guess: the inputs are mine]: one class audit of 1,024 replay blocks, each with 56 one-block cells, under a rate law and with \(n_{sess}\) at its default, gives \(2^{49.4}\).
+
+**2. Which reading the lock's guarantee takes: none in the committed form; the one the lock supports for its binding terms is ecr** [read]
+
+- **The committed form records no hash premise.** That is `compilerKSReg` on `main`, and `compilerKSRegTwo`, `compilerMissTwo` and `compilerHeadlineTwo` on #8512 at `a4916e0142`. Each records `assumptions: []`, and neither `Claims.StrictBirthday` nor `Claims.ExpectedCR` is among its premises. Their bounds keep \(\Pr[B_{conf}]\) as a probability.
+- **Where the lock applies a reading, it takes both.** `compilerBits` lists `Claims.ExpectedCR` and `Claims.StrictBirthday`: the strict bound for the fork finder's fixed \(2T\), and ecr for the extractor's adaptive cost, as `KSAt` states.
+  - Network-accounting's `Accounting.SecurityProofs.JointPeriodLiveECR` lists `Claims.ExpectedCR` and `Accounting.PeriodLive.Sound`.
+- **So the post can say one reading,** ecr/sha-512, for the audit's binding terms and the period theorem alike, and with it that the number fails. The strict reading needs the tail bound above.
+- **Aside:** `main`'s lock has `Claims.StrictBirthday` both in `trust.base` and in `open` (LEAN-186, due 30 Nov).
+
+**3. The overlap gap: nothing names it; please file it** [read]
+
+- **The premise ledger:** I grepped `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`, the only one in the tree, with `rg -i "overlap|concurren|interleav|regVal|prover's tape|other audits|later audit|adaptiv|earlier window|PeriodAdaptive|fixed before|before the (audit's )?first coin"`. Of its matches, three are near the topic and none is the gap:
+  - 96 is ecr's fixed budget against adaptive finders;
+  - 434 is statement binding fixed in round 0;
+  - 477–478 are zero knowledge's adaptive pre-final gaps.
+- **The lock's `open` and `domain`:** its `Overlap` names are other things.
+  - `Accounting.ServingBlocks.Overlap` bounds how many serving blocks' bodies hold one gate (`ServingBlocks.lean:102`).
+  - PoUW's `*Overlap*` premises are about operands overlapping across samples (`Pouw/Assumptions/RelativeSecurity.lean:277`, `:330`).
+  - `NetTiming.PeriodAdaptive` is the premise of network-accounting's that the overlap breaks.
+- **PRF-504 and PRF-509** (the one-stage answer's tied names, and `ServedCover` on GLM-5.3), descriptions and comments: neither names it.
+- **To file:** `regVal` (`SamplingGeneric.lean:575`), and so `Freg` and #8512's `wrongAtBoundaryAt`, reads the prover's whole tape. When two audits overlap in time, a later audit's coins can reach this audit's wrong set. What's missing is a lemma that tapes agreeing up to the registration give one `regVal`, except with a binding finder's probability. The one-stage `KSReg` has the same gap.
+
+**The PRF-456 number, corrected** (it replaces the 19:38Z text's number paragraph):
+
+> The number is set by the committed traces' binding, not by Flock (\(\kappa_s \le 2^{-202.98}\)). The lock reads \(B_{conf}\)'s finder, which reruns the prover through the extraction's waits, only at ecr/sha-512 (`Claims.ExpectedCR`). At it the two binding terms are \(2N\sqrt{2T(1+R)/2^{256}} \ge 2^{-42.8}\) at \(T = 2^{80}\), with \(N \ge 2^{43.7}\) gates, which is over \(2^{-53.4}\) an audit. Meeting \(2^{-61.0}\) needs a tail bound on the waits, so that the strict birthday bound applies near the finder's expected cost, and then R, the extraction's expected reruns, inside its budget at the plan's point. Neither is proved or computed.
+
+**Runs:** none.
