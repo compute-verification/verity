@@ -29,7 +29,7 @@ from verity.spot.verifier import parties as SP
 from verity.spot.verifier.one_stage.draw import parse_design
 from verity.configuration.wire import Refused
 from verity.circuits.codec import canonical_json
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
 Check = Callable[[Mapping[str, Any], Path, int], tuple[dict[str, Any], dict[str, Any] | None] | None]

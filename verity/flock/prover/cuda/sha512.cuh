@@ -139,7 +139,7 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
     s512_out(st, tree + (write_start + j) * 64);
 }
 
-// ---- hm96-sha512/v1 leaves (verity.ml.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
+// ---- hm96-sha512/v1 leaves (verity.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
 //   leaf = SHA-512(leaf_prefix || b || c). Salts are the host's (zk_hooks::LeafSalts, read from the OS): the tree callback hands
 //   tree k's salts (192 bytes per leaf, in host memory until the proof ends); a salted tree's leaves are hashed and finished

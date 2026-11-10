@@ -7,7 +7,7 @@ import struct
 
 import numpy as np
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 from verity_flock import circuit as FC
 from verity.spot.verifier.one_stage import registered as G
 

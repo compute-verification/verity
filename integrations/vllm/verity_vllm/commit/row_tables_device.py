@@ -32,10 +32,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import domain_message
+from verity.commitments import row_table as RT
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import domain_message
 from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 from . import row_tables as RTB

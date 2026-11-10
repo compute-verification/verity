@@ -1,6 +1,6 @@
 /-
 `Flock.ReadNet`: the table read's parts as builder programs over `Flock.HmNets`, each its Python lowering
-(`verity/ml/commitments/gates`) step for step, so the verifier can build each part's Definition itself: one `HmNets.and`
+(`verity/commitments/gates`) step for step, so the verifier can build each part's Definition itself: one `HmNets.and`
 per Python `AND`, in Python's order, XOR and NOT as forms, and each sub-Definition call as a sub-generator call in the same
 order. What the rows force is proved in the soundness package (`Accounting.ReadUnit.Gates`).
 

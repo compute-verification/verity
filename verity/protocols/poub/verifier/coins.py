@@ -53,7 +53,7 @@ from verity.spot.device import remote
 from verity.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments.scheme import DIGEST_BYTES
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"

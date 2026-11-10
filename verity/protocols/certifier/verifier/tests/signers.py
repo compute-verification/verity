@@ -7,7 +7,7 @@ import hashlib
 from functools import lru_cache
 from pathlib import Path
 
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier.certificate import LmsSigner
 
 SMALL = lms.Params(64, 1, 6)

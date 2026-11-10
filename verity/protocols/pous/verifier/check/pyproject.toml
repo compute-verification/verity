@@ -46,8 +46,8 @@ inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/ml/protocols/__init__.py",
           "verity/protocols/pous/prover", "verity/difftest", "verity/ml/__init__.py",
-          "verity/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
-          "verity/flock/verifier/interface", "verity/core/primitives/identity", "verity/core/primitives/randomness", "verity/flock/verifier/Flock",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
+          "verity/flock/verifier/interface", "verity/commitments/identity", "verity/commitments/randomness", "verity/flock/verifier/Flock",
           "verity/flock/verifier/lakefile.toml", "verity/flock/verifier/lake-manifest.json",
           "verity/flock/verifier/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
@@ -55,7 +55,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/pous/band_gpu/__init__.py",
           "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
           "verity/protocols/pous/device/timed_audit.py", "benchmarks/pous/band_gpu/harness.py",
-          "verity/protocols/pous/device/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean",
+          "verity/protocols/pous/device/lean", "verity/commitments/attest/lean", "verity/commitments/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
           # (`deploy.stream.Side`) and runs on
           "verity/configuration/deploy", "verity/configuration/wire"]

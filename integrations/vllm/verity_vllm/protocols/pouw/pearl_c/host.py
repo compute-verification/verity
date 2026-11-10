@@ -14,8 +14,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
-from verity.ml.commitments import RangeIndexedDomain
-from verity.ml.commitments.merkle import domain_message
+from verity.commitments import RangeIndexedDomain
+from verity.commitments.merkle import domain_message
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import (

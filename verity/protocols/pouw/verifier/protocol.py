@@ -2,7 +2,7 @@
 
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
 transcript leaf and the useful output.  Everything else (commitments, the salt, the sample, the openings, the profile) is
-the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
+the protocol's, in `audit`, and is the same for every scheme.  Like `verity.commitments.scheme.CommitmentScheme`, a
 scheme is a named, versioned object: its ``name`` is what `verity.protocols.pouw.prover.schemes.get` looks up, and its module's docstring and its
 pinned vectors under ``tests/vectors`` carry the same string.
 
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Protocol, runtime_checkable
 
-from verity.ml.randomness import Part, frame
+from verity.commitments.randomness import Part, frame
 
 U64 = 1 << 64
 CALL_RANGE = 1 << 32
@@ -31,7 +31,7 @@ class DomainError(ValueError):
 
 
 def tagged(tag: str, *parts: Part) -> bytes:
-    """SHA-512 over ``tag \\0 || frame(part)...`` (`verity.ml.randomness.frame`), all 64 bytes."""
+    """SHA-512 over ``tag \\0 || frame(part)...`` (`verity.commitments.randomness.frame`), all 64 bytes."""
     return hashlib.sha512(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
 
 

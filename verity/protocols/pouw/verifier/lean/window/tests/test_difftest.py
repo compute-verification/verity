@@ -32,8 +32,8 @@ from hypothesis import strategies as st
 from verity.protocols.pouw.verifier import verifier as V
 from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as Ch
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

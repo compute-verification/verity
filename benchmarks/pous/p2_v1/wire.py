@@ -3,7 +3,7 @@ vectors are made with, and the reference verifier, `verify_audit`, which reads a
 the exact `FINAL` frame.
 
 A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py`, PoUS's verification tree
-(`verity.protocols.pous.verifier.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.ml.randomness`, with
+(`verity.protocols.pous.verifier.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.commitments.randomness`, with
 v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and the
 frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
 kit's, it decodes a public setup's blocks back to the committed `W`, and checks a private setup's declared root against the

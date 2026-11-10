@@ -207,11 +207,11 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.protocols.certifier.verifier import audit as host_audit, head_check as HC, lean_audit as LA, served as SV
 from verity.protocols.certifier.verifier.lean_audit import Audit
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey, \

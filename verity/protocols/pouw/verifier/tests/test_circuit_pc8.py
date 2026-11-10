@@ -27,8 +27,8 @@ from verity.definitions.ops.fp32 import F32FmaV2
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.definitions.ops.scalar import I32Le
 from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest
-from verity.ml.randomness import derive
+from verity.commitments.rowleaf import sha512_row_seg_digest
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc8, plan
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.circuit import words as W
@@ -337,7 +337,7 @@ def test_the_port_check_holds_advice_to_unread_parameters():
 
 def _row_seg_arguments(row: bytes, n_bits: int) -> list[int]:
     """`Sha512RowSeg_v1{N_BITS}`'s argument, the row's bits in leaf order: bit i is bit i % 8 of byte i // 8 (as
-    `verity.ml.commitments.gates.rowleaf.arguments` gives it)."""
+    `verity.commitments.gates.rowleaf.arguments` gives it)."""
     return [(row[i >> 3] >> (i & 7)) & 1 for i in range(n_bits)]
 
 
@@ -353,7 +353,7 @@ def test_the_h3_hiding_tile_returns_the_row_its_leaf_hashes(shape, tile):
     """`Pc8TileHiddenH3` on each of the -h3 scheme's tiles (its A′, P_A, B̃ and P_B) returns that tile's messages: its
     words' bits, as a Boolean lowering carries them, are `Sha512RowSeg_v1`'s argument over ``b"".join(messages)``, whose
     `sha512_row_seg_digest` is the scheme's -h3 leaf.  At 16 x 64 each row is two 32-column chunks, so a word in the wrong
-    chunk or field moves; 64 x 64 is the scheme's tile, 262,144 bits in 32 segments.  `Sha512RowSeg_v1`'s gates over this value are `verity.ml.commitments.gates.rowleaf`'s."""
+    chunk or field moves; 64 x 64 is the scheme's tile, 262,144 bits in 32 segments.  `Sha512RowSeg_v1`'s gates over this value are `verity.commitments.gates.rowleaf`'s."""
     m, k, n = shape
     s, ctx, *_ = _case("pc8-h3-tile", shape, "sm120", tile=tile, hashing="h3")
     noise = s.noise(ctx)
@@ -390,7 +390,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     leaf's bits in order) are the window's side rows (`window.side_row`), A's row-seg and B's v2, k/2 + 72 words each."""
     from verity.protocols.pouw.verifier import window as Wd
     from verity.protocols.pouw.prover.circuit import leaves as L
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef

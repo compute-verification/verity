@@ -77,12 +77,12 @@ sys.path.insert(0, str(TREE / "benchmarks" / "pouw" / "accel_v31"))
 
 import v31  # noqa: E402
 
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.limits import VerificationLimits  # noqa: E402
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
 
 #: the model's linears; a config's LAYERS are its calls (`calls`), the linears with down split along K
 LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))

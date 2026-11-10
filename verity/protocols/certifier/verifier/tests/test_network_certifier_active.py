@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 import signers
-from verity.ml.crypto import aead, lms
+from verity.commitments.crypto import aead, lms
 from verity.protocols.certifier.verifier import active, online, served
 from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsKey, LmsSigner, parameters_digest
 from verity.protocols.certifier.verifier.active import (

@@ -40,7 +40,7 @@ link on the host too, over the opening (`CertifiedRecord.verify`).
 
 **The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session and the
 execution phase, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
-network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), each field but I and the window prefixed
+network-certificate role digest (`verity.commitments.crypto.lms.certificate_message`), each field but I and the window prefixed
 with its length as a u64be:
 
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
@@ -87,9 +87,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.crypto import lms
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
 

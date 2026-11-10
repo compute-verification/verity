@@ -33,7 +33,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.protocols.pous.verifier import protocol, setup
 from verity.protocols.pous.verifier.schemes import p2 as P2
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 from verity_difftest import protocol as P
 
 LEAN = Path(__file__).resolve().parents[1]

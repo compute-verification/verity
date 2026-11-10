@@ -172,7 +172,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-512 over the parameters and
    `W`, tag `verity-pous/w-commitment/v2`).
-2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.ml.randomness`
+2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.commitments.randomness`
    from its own secret or a later beacon round).
 3. **Encode.** The server computes `C* = Enc(W, salt)` and sends it segment by segment. The verifier builds `vk` by
    `setup.verifier_setup`, one of two ways.
@@ -239,7 +239,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 - **What a scheme supplies.** It implements `encode_segment(salt, s, w_seg)` and `decode_segment(salt, s, blocks)`, and
   overrides `respond` only if an honest answer is more than the stored block. It also sets `name` (its byte-format
-  string), `backend` (its reference primitives) and `certificate`. As with `verity.ml.commitments.scheme.CommitmentScheme`,
+  string), `backend` (its reference primitives) and `certificate`. As with `verity.commitments.scheme.CommitmentScheme`,
   a scheme is named and versioned, looked up by name, and has conformance vectors pinned under its name.
 - **The registry.** `schemes.get(name, segments)` returns a registered scheme at its own parameters, or at
   `params=` of the same name. Each scheme is one module, `schemes/<name>.py`:
@@ -274,7 +274,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - Its keys are fresh per block and expanded where they are used, so nothing key-sized is stored, which keeps the
     1.05× space bound. Two codecs differ only in the expander:
     - `p2-16448/v4`: the spec's §4 counter-mode SHA-512 streams with its v4 framing (`frame` is
-      `verity.ml.randomness.frame`), one for K and one for t's candidates, per `(segment, block)`, each 64-byte
+      `verity.commitments.randomness.frame`), one for K and one for t's candidates, per `(segment, block)`, each 64-byte
       chunk one compression after the zero-padded prefix's midstate. This is the expander the spec's setup assumption
       P2-EXP-IO names (decision F4). The keys are the spec's vectors' given the spec's prefix; the prefix frames the
       protocol's 24-byte salt (derived from the commitment to W by `setup.draw_salt`) where the spec frames the model
@@ -341,7 +341,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     either way;
   - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
     below;
-  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme flips none.
+  - every coin comes from `verity.commitments.randomness` through `setup` and `audit`, and a scheme flips none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
   segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
   - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
@@ -693,7 +693,7 @@ is `SHA512(0x00 || tag_s || u16(v) || R(c2_v))`, 99 bytes and one compression, w
 the block's `sha512/row/v2` digest (`rowleaf.sha512_row_v2_digest`), the digest
 `verity.protocols.pous.prover.answer_circuit`'s `PousRowDigest` checks; `tag_s` is 32 bytes and `v` 2, little-endian. Each
 node is `SHA512(0x01 || l || r)`. The memory challenger keeps the root and every 64-byte leaf digest, or only the root
-and checks the server's audit path. This follows the instantiation's byte format rather than `verity.ml.commitments`'
+and checks the server's audit path. This follows the instantiation's byte format rather than `verity.commitments`'
 frame v3.
 
 ## Rounds

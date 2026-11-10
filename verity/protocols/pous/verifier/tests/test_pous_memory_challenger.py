@@ -13,8 +13,8 @@ import pytest
 
 import pous_test_signer as ts
 from pous_fakes import Clock
-from verity.ml.commitments import rowleaf
-from verity.ml.crypto import lms
+from verity.commitments import rowleaf
+from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import schemes
 

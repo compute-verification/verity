@@ -133,7 +133,7 @@ class Traced:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
         the call's commitment as the execution phase's receipt lists it (`Ledger.commitment`, by call index), never one supplied
         with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
-        from verity.ml.commitments import Commitment, VerificationLimits, verify_opening
+        from verity.commitments import Commitment, VerificationLimits, verify_opening
 
         from verity.protocols.pouw.verifier.audit import ROW_SCHEMA
         from verity.protocols.pouw.verifier.protocol import DomainError

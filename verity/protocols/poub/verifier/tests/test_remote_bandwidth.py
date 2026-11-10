@@ -17,7 +17,7 @@ from remote_bandwidth_fakes import Clock, Entropy
 from verity.spot.verifier.profile import IntegrityProfile, Subset
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Params, SessionError
-from verity.ml.randomness import frame
+from verity.commitments.randomness import frame
 
 N = 20
 NODE = b"node-under-test"
@@ -558,8 +558,8 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
     """Equal payloads (blocks 0 and 3 are zeros) commit to different leaves under their salts, as hm96-sha512/row/v2."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_v2_digest
     x = sha512_row_v2_digest(store.payloads[0], 8 * codec.BLOCK_BYTES)
     assert store.payloads[0] == store.payloads[3] and store.payload_tree.open(0).value != store.payload_tree.open(3).value
     assert store.payload_tree.open(0).value == hm96.SHA512.tree_leaf(

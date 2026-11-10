@@ -73,7 +73,7 @@ Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`
 compiled circuit to that code.
 
 ~~~python
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 
 signer = mc.LmsSigner(key, state_path)  # key = lms.keygen(lms.DEPLOYED, seed); lms.LeafState.create(state_path, ...) once
@@ -175,7 +175,7 @@ a time, `Δ = 0.5 ms` plus a measured RTT allowance of at most 354 µs, and SHA-
 Every integer is fixed-width, unsigned and big-endian. A block's `K` and `t` are expanded where they are used:
 counter-mode SHA-512 over a prefix that frames the setup salt, sampled after `W` is committed, zero-padded to whole 128-byte
 chunks; `K` is the stream's first `w/8` bytes and `t` its first `w/8`-byte word below `p`. The challenges are
-`verity.ml.randomness` v2, bound to the epoch, the verification root and the salt. P2 is experimental: its
+`verity.commitments.randomness` v2, bound to the epoch, the verification root and the salt. P2 is experimental: its
 instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
 
 - **Lean.** The package `pous_check` (`check/`) is P2's verifier: `PousCheck.P2`, `Keys` and `Wire.Codec` (the maps and

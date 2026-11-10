@@ -21,8 +21,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.crypto import lms
+from verity.commitments.merkle import tree_levels
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import active
 from verity.protocols.certifier.verifier.active import Proxy
 from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner

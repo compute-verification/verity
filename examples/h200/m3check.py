@@ -82,7 +82,7 @@ def replay(shape, mp: Map, weights: Weights, fam: str, template: str, idx: int, 
 
 
 def lms_verify(key, message: bytes, signature: bytes) -> bool:
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     p = lms.Params(64, key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))

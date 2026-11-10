@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
+from verity.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
 from verity.protocols.pouw.prover.circuit import leaves as L  # noqa: E402
 from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.pouw.prover.circuit import pc8  # noqa: E402

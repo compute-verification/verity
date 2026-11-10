@@ -24,7 +24,7 @@ import pytest
 
 from verity.spot.device import challenger as C
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 SERVE = Path(__file__).resolve().parents[1] / "serve.py"
 STUB = Path(__file__).resolve().parent / "stub_serve.py"

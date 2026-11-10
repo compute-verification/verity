@@ -10,7 +10,7 @@ its hiding leaf.  One input per round, k per audit.
 
 Every array is of `Value<1>`.  Byte strings (the block, digests, salts, commit strings) are bits in byte order, bit t
 being bit t mod 8 of byte ⌊t/8⌋ (hm96's order); a chaining value is SHA-512's eight words, each least significant bit
-first.  Every compression is core's `verity.ml.commitments.gates.sha512.compress_gadget`, 58,120 ANDs at most.
+first.  Every compression is core's `verity.commitments.gates.sha512.compress_gadget`, 58,120 ANDs at most.
 
 **The statement.** For round j the memory challenger signs (i_j, send, receipt, h), where h is the digest of the 2,056
 bytes it received.  C's leaf i_j is ``hm96-sha512/row/v2``: the frame leaf over the commit string ``bc = b ‖ c`` of the
@@ -33,9 +33,9 @@ from verity.circuits.boolean.forms import and_reduce, const_bits
 from verity.circuits.boolean.trace import part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.sha512 import compress_gadget, midstate, pad_tail, words_be
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments import hm96
+from verity.commitments.gates.sha512 import compress_gadget, midstate, pad_tail, words_be
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 from .circuit import _check, _traced_body, bits
 

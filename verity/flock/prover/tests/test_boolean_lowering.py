@@ -22,7 +22,7 @@ from verity.definitions.ops import scalar as S
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import scalar as BSC
 from verity.circuits.types import Array
-from verity.ml.commitments.gates import embedding as EM
+from verity.commitments.gates import embedding as EM
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 

@@ -8,7 +8,7 @@ A session has four steps:
 1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
    session's first challenge.  Before the session the memory challenger samples its `k` indices from its own secret
-   (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
+   (`verity.commitments.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
    root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
    audits (`SessionCommitment`).
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
@@ -29,7 +29,7 @@ signed record.  The guarantee of the sequential sample is the coin tree's: an in
 (binding) and unknown to the server until its round reveals it (hiding).
 
 **Coin tree** (`COIN_TREE`): hm96-sha512/v1 hiding leaves in a frame-v3-sha512 tree, core's helpers
-(`verity.ml.commitments.hm96`, `.merkle`), with integers big-endian:
+(`verity.commitments.hm96`, `.merkle`), with integers big-endian:
 
 ~~~text
 x_j     = SHA-512(COIN_TAG ‖ session ‖ u32 j ‖ u64 index_j)          round j's coin, private until opened
@@ -45,14 +45,14 @@ bound, `k · 2^-256` under the fresh key.  The domain's 32-byte binding is the f
 **Round records** (`RECORDS_TREE`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)` (92
 bytes), the value of frame leaf `(rank j, position j, RECORD_SCHEMA)`, in a frame-v3-sha512 tree over the session's
 rounds (binding(RECORD_BINDING, session), owner -1).  `H(block)` is the block's `sha512/row/v2` digest
-`SHA-512(P(8N) ‖ block)` for an N-byte block (`verity.ml.commitments.rowleaf.sha512_row_v2_digest`), the inner
+`SHA-512(P(8N) ‖ block)` for an N-byte block (`verity.commitments.rowleaf.sha512_row_v2_digest`), the inner
 digest of C's `hm96-sha512/row/v2` leaf: `answer_circuit.PousAnswerOpens_v1` proves it equal to `h` and opens it against
 C's leaf with no second hash of the block.  The digest costs the same 17 compressions as a plain SHA-512 of the block,
 P's block a constant midstate, and is taken after the receipt time.
 
 **Signatures.** A `Signer` signs a session's record (`message`, 64 bytes) under its session id; `SCHEMES` maps an
 accepted scheme to its `verify(public_key, session, record, signature)`.  The one accepted scheme is S1's, `LMS`:
-LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.ml.crypto.lms`, claim `euf-cma/lms-sha512-n64`), which signs
+LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.commitments.crypto.lms`, claim `euf-cma/lms-sha512-n64`), which signs
 the memory challenger role's digest `lms.memory_challenger_message(I, session, record)`; `LmsSigner` is its signer.  A
 test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
 tests, as is an unsigned one.
@@ -77,13 +77,13 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-from verity.ml.crypto import lms
-from verity.ml.randomness import derive
+from verity.commitments import hm96
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
+from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
 
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.protocol import CapacityBound, Scheme

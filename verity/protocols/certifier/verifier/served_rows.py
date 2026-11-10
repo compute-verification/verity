@@ -17,7 +17,7 @@ is the slice's P steps in turn, each packed as `rows_bits` packs it (an idle ste
 
 **The commitment** (`register`), made when the window closes and published with its run root before the advice check and
 the sample: each block of G steps of window w (j = 0 … P / G − 1, `block_bits`) as row w·(P / G) + j of one
-hm96-sha512/row/v2 registration in a frame-v3-sha512 tree (`verity.ml.commitments.advice`'s construction), its row the
+hm96-sha512/row/v2 registration in a frame-v3-sha512 tree (`verity.commitments.advice`'s construction), its row the
 block's bits as u16 words, as a proof commits a row, under `binding` of the run root. G is P unless given, so a window is
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
 the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
@@ -37,9 +37,9 @@ from dataclasses import dataclass
 
 from verity.protocols.certifier.verifier import compile_slice as CS, replay_step as RS
 from verity.spot.verifier.one_stage import produced, registered as REG
-from verity.ml.commitments import advice as ADV
-from verity.ml.commitments.frame_v3 import BitRowLeaf
-from verity.ml.commitments.rowleaf import bit_row, row_leaf
+from verity.commitments import advice as ADV
+from verity.commitments.frame_v3 import BitRowLeaf
+from verity.commitments.rowleaf import bit_row, row_leaf
 
 SCHEMA = "verity/certifier/served-rows/v1"
 DOMAIN = b"verity/certifier/served-rows/v1"

@@ -22,11 +22,11 @@ from verity.errors import InvalidArtifact
 from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.identity import identity_digest, identity_digest_sha512
 from ..leaves import LEAF_TAG, shape_text
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.commitments.scheme import LeafLayout, Path
-from verity.ml.commitments.scheme import sha as _sha
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.scheme import LeafLayout, Path
+from verity.commitments.scheme import sha as _sha
 
 __all__ = [
     "FA2H_KIND_CHUNK",

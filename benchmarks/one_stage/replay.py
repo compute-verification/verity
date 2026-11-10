@@ -57,9 +57,9 @@ import verity_difftest as DT
 from verity_difftest import protocol as PR
 from verity.spot.verifier.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.circuits import codec, partition_object as PO
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 from verity.definitions.registry import catalog
 
 import r2_population as R2
@@ -1625,7 +1625,7 @@ def served_window(run: Run) -> Iterator[Case]:
     no verdict of record reports registered reads."""
     from verity.protocols.pouw.verifier import window as Wd
     from verity.protocols.pouw.prover.circuit import leaves as L, pc8
-    from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
     commit = run.commit()
@@ -1772,7 +1772,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
     from verity.protocols.pouw.prover.circuit import leaves as L, pc8
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
                          capture_output=True, text=True) if commit else None
@@ -1994,7 +1994,7 @@ def a6(run: Run) -> Iterator[Case]:
     map from member to its public file's SHA-512."""
     from verity.circuits.defs import bind
     from verity.definitions.ops import gemm as OG
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     base = "out/a6"
     a = run.json(f"{base}/audit.json")
     summary = run.json(f"{base}/summary.json")
@@ -2124,7 +2124,7 @@ def a7(run: Run) -> Iterator[Case]:
 
     from verity.definitions.circuits import requirement_units as RU
     from verity.circuits.defs import bind
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"
     a = run.json(f"{base}/audit.json")
     summary = run.json(f"{base}/summary.json")

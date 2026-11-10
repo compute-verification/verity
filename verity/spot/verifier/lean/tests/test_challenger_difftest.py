@@ -67,9 +67,9 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.spot.device import challenger as Ch, coins as T
-from verity.ml.commitments import coin_tree as CT
-from verity.ml.commitments.identity import canonical_json_text
-from verity.ml.crypto import lms
+from verity.commitments import coin_tree as CT
+from verity.commitments.identity import canonical_json_text
+from verity.commitments.crypto import lms
 
 PACKAGE = Path(__file__).resolve().parents[1]
 PIECES = "sampled-proofs-difftest"

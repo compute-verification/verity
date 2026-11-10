@@ -29,7 +29,7 @@ proof block exists"). The target reads the map inside the proof under the advice
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
-registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
+registers (`verity.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
 proof block reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public
 with the map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
@@ -73,11 +73,11 @@ from typing import Any, NamedTuple, Sequence
 from verity.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments import hm96
+from verity.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.certifier.verifier import head_check as HC
 from verity.protocols.certifier.verifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
 from verity.spot.verifier.one_stage import produced

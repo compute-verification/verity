@@ -64,9 +64,9 @@ from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier.credit import CREDIT, draw_root
 from verity.protocols.pouw.verifier.protocol import tagged
 from verity.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.ml.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
-from verity.ml.commitments.hm96 import batch
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
+from verity.commitments.hm96 import batch
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 
 
 @dataclass(frozen=True)

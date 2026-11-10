@@ -98,7 +98,7 @@ the status instead, which is 64 bytes per execution phase, or about 92 KB per li
   - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
   - then the T 64-byte row digests.
 
-  `tagged_sha512` is `verity.ml.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
+  `tagged_sha512` is `verity.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
 - **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-512`,
   equal digests mean equal records, so the audit stays exact. The verifier never needs the raw grid, because the
   Program fixes every egress frame.
@@ -141,7 +141,7 @@ execution phase, so a certificate can't be replayed onto another window, link, d
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-This is LMS's network-certificate role digest (`verity.ml.crypto.lms.certificate_message`, its tag `lms.ROLES`'
+This is LMS's network-certificate role digest (`verity.commitments.crypto.lms.certificate_message`, its tag `lms.ROLES`'
 `network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkCheck.messageInput` hashed. I is the
 certifier's 16-byte LMS identifier. `session` is the certifier session's id: 32 bytes (`lms.SESSION_BYTES`) the
 challenger samples for the session and issues to the certifier, and the audit takes from its parameters, as it takes the
@@ -560,7 +560,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   "the advice is opened to the verifier until the compile unit exists"). Nothing may call the tie zero-knowledge until
   it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
-  the advice before the sample, as rows of `verity.ml.commitments.advice` (fixed-width bit rows under
+  the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
   `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: a window's 8N
   bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile unit holds the
   map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows
@@ -797,7 +797,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   under the network certifier's root, and no gate of the proof block hashes the row or climbs the tree.
 - **The port** is the Commit's value: one `hm96-sha512/row/v2` row a step of the session, its P sampled ids (u32be in
   batch-row order, zero past its batch), in a dense `frame-v3-sha512` tree of 2^DS steps whose root and domain the
-  Commit registers (`verity.ml.commitments.advice`'s registration of the rows). The proof block's `port` input is its
+  Commit registers (`verity.commitments.advice`'s registration of the rows). The proof block's `port` input is its
   bucket's S rows at the map's steps, each a registered port (`io_tie.port_reads`: `port[s]` reads the bucket's s-th
   step), so the proof system's registered reads check them under the Commit's root, and no gate of the proof block
   hashes a row or climbs the tree. This is the fake upstream's layout. The real port is vLLM's Commit
@@ -866,7 +866,7 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
 - **The port's rows** (the fake upstream's; the real ones are vLLM's) are the same leaves and tree over the session's
   2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`:
-  `verity.ml.commitments.advice`'s registration of the rows), which each proof block reads as registered rows
+  `verity.commitments.advice`'s registration of the rows), which each proof block reads as registered rows
   (`port_reads`).
 - **Not needed by the All tie:** a per-stream sequence number in the header.
 
@@ -1905,7 +1905,7 @@ The clock and the sleep are injected (`VirtualClock` serves a run driven event b
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
 replays recorded traces through the proxy in real time, and on an injected clock.
 
-## Sealed pair links (`active.Pair`, `verity.ml.crypto.aead`)
+## Sealed pair links (`active.Pair`, `verity.commitments.crypto.aead`)
 
 The leaf and spine switches between blocks are the prover's, so they can copy every frame that crosses from one block's
 certifier to another's. On a sealed pair link (`Proxy(pair=active.Pair.of(…))`, off by default, and with it off every
@@ -1917,7 +1917,7 @@ sealed under an AEAD built from SHA-512 alone.
   link carries r units of B + 64 bytes a bucket whatever the occupancy. The records, the occupancy, the commitments and
   the certificates are the unsealed run's, so N2 and the timing bound read the same grids
   (`test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs`).
-- **The construction** (`verity.ml.crypto.aead`, the standard library's SHA-512 with its whole output; no new hash).
+- **The construction** (`verity.commitments.crypto.aead`, the standard library's SHA-512 with its whole output; no new hash).
   H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), and [x] is u16be len(x) ‖ x.
   - Keys, by HKDF-Expand (RFC 5869) with one output block. S is 64 uniform bytes, so there is no extract step:
     `K_enc = HMAC(S, "verity-network-certifier/pair/v1/enc" ‖ [σ] ‖ [ℓ] ‖ 0x01)`, and `K_mac` is the same under
@@ -1930,7 +1930,7 @@ sealed under an AEAD built from SHA-512 alone.
   - Why each piece is standard:
     - Each keystream input is 88 bytes, inside one compression block, with the key in it. That is SHA-512's compression
       function as a dual PRF keyed by the secret bytes of its first block: the claim `prf/sha-512`
-      (`verity.claims`), on which `verity.ml.randomness`'s keyed streams already rest. Every input has one
+      (`verity.claims`), on which `verity.commitments.randomness`'s keyed streams already rest. Every input has one
       length, so length extension doesn't arise.
     - Counter mode over a PRF is IND-CPA while no nonce repeats under a key (Bellare, Desai, Jokipii and Rogaway, 1997).
     - HMAC-SHA512 is a PRF under the same assumption (Bellare, 2006; FIPS 198-1), so it is a strongly unforgeable MAC.

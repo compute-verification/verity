@@ -87,9 +87,9 @@ from verity.circuits.boolean.gf128 import mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments import rowleaf as RL
+from verity.commitments import rowleaf as RL
 from verity.definitions.commitments.gates import block_key as BK
-from verity.ml.commitments.gates import rowleaf as RG
+from verity.commitments.gates import rowleaf as RG
 from verity.protocols.certifier.verifier import cache_step as CST, compile_slice as CS, replay_chain as RC
 from verity.protocols.certifier.verifier import replay_step as RS
 from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v5 as V5

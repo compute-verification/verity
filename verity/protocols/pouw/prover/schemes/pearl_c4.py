@@ -122,7 +122,7 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.errors import InvalidArtifact
-from verity.ml.commitments import domains
+from verity.commitments import domains
 from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 

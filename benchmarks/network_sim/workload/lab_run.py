@@ -96,8 +96,8 @@ from verity.protocols.certifier.verifier.certificate import Direction, parameter
 from verity.protocols.certifier.verifier.schedule import ClockSync
 from verity.protocols.certifier.verifier.served import Admission, ServedProfile, derive
 from verity.protocols.certifier.verifier.service import LEAVES, LinkWindows
-from verity.ml.commitments import hm96
-from verity.ml.crypto import lms
+from verity.commitments import hm96
+from verity.commitments.crypto import lms
 
 from . import framing as F
 from . import lab as L

@@ -37,11 +37,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/pouw/verifier/lean/check/models.json",
           "verity/claims/__init__.py",
           "verity/spot/verifier/__init__.py", "verity/spot/device/challenger.py",
-          "verity/spot/device/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness", "verity/difftest/python",
+          "verity/spot/device/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/commitments/randomness", "verity/difftest/python",
           "verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",
-          "verity/core/primitives/randomness", "verity/difftest/lean",
+          "verity/commitments/randomness", "verity/difftest/lean",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
           # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_party.py`), whose books
           # test_p2.py holds to `RemoteAudit.P2Session` and whose sessions test_p2_party.py runs on the Lean of record
@@ -52,17 +52,17 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/poub/verifier/p2_lean.py", "verity/protocols/poub/verifier/p2_case.py",
           "verity/core/protocols/pous",
           "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
-          "verity/core/primitives/identity/lakefile.toml",
-          "verity/core/primitives/identity/lake-manifest.json", "verity/core/primitives/identity/lean-toolchain",
+          "verity/commitments/identity/lakefile.toml",
+          "verity/commitments/identity/lake-manifest.json", "verity/commitments/identity/lean-toolchain",
           # the memory challenger's party, whose kept setup (`keep`) test_p2_party.py registers a store from
           "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
           "verity/protocols/pous/device/challenger_party.py",
           "verity/protocols/pous/device/lean/lakefile.toml",
           "verity/protocols/pous/device/lean/lake-manifest.json",
-          "verity/protocols/pous/device/lean/lean-toolchain", "verity/core/attest/lean/lakefile.toml",
-          "verity/core/attest/lean/lake-manifest.json", "verity/core/attest/lean/lean-toolchain",
-          "verity/core/primitives/lms/lean/lakefile.toml",
-          "verity/core/primitives/lms/lean/lake-manifest.json", "verity/core/primitives/lms/lean/lean-toolchain",
+          "verity/protocols/pous/device/lean/lean-toolchain", "verity/commitments/attest/lean/lakefile.toml",
+          "verity/commitments/attest/lean/lake-manifest.json", "verity/commitments/attest/lean/lean-toolchain",
+          "verity/commitments/lms/lean/lakefile.toml",
+          "verity/commitments/lms/lean/lake-manifest.json", "verity/commitments/lms/lean/lean-toolchain",
           "verity/protocols/poub/verifier/tests/fixtures/p2-c-star.bin",
           "verity/protocols/poub/verifier/tests/fixtures/p2-store.json",
           # the deployment layer and its wire, which the period hook's verifier side is started through

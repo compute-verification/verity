@@ -55,8 +55,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, ClassVar
 
-from verity.ml.commitments import domains
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+from verity.commitments import domains
+from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import descriptor_id
 from verity.circuits.cut import CallGraph, check_cut

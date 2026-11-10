@@ -68,8 +68,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/core/protocols/certifier",
-          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/definitions/kernels", "verity/ml/randomness", "verity/flock/prover/python", "verity/windows",
+          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/definitions/kernels", "verity/commitments/randomness", "verity/flock/prover/python", "verity/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
@@ -200,7 +200,7 @@ paths = [
     "verity/protocols/pouw/verifier",
     "verity/spot/verifier/one_stage",
     "verity/circuits",
-    "verity/ml/commitments/frame_v3",
+    "verity/commitments/frame_v3",
     "verity/flock/prover/python/verity_flock",
 ]
 

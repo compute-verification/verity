@@ -12,7 +12,7 @@ pins both files' SHA-256).
 exact length, and `verifier.verify_path` (the wire verifier's too) on each leaf's honest path and on a flipped,
 shortened, lengthened, swapped (leaf for sibling), odd-length or misindexed one, and on an index past the tree.
 
-`randomness` instances are `verity.ml.randomness` derivations, streams and uniforms over random parts, and P2's audit id,
+`randomness` instances are `verity.commitments.randomness` derivations, streams and uniforms over random parts, and P2's audit id,
 mode-0 key, indices and nonces and mode-1 round indices (`reference.audit_key`, `round_key`).
 
 `audit` instances are sessions for `wire.verify_audit`, whose answer is its `FINAL` frame, the `WireError` code it raises,
@@ -152,7 +152,7 @@ def _randomness(rng: random.Random) -> dict:
 
 def _randomness_answers(py, inst: dict) -> dict:
     reference = py[0]
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
     key = derive(bytes.fromhex(inst["source"]), inst["domain"], {k: _value(v) for k, v in inst["context"]})
     p2 = inst["p2"]
     src, epoch, root, salt = (bytes.fromhex(p2[k]) for k in ("source", "epoch", "root", "salt"))
@@ -731,7 +731,7 @@ def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: 
     from verity.protocols.pous.verifier.protocol import StorageProfile, TimedAudit
     from verity.protocols.pous.verifier.schemes.p2 import P2, P2Params
     from verity.protocols.pous.verifier.verifier import VerifierKey
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
     try:
         params = P2Params(w, c0, bps, segments)
     except ValueError:

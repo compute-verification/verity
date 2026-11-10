@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.ml.commitments import domains
-from verity.ml.randomness import Part, frame
+from verity.commitments import domains
+from verity.commitments.randomness import Part, frame
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 

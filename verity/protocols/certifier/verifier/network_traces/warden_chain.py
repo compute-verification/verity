@@ -41,7 +41,7 @@ from verity.protocols.certifier.verifier import warden as W
 from verity.protocols.certifier.verifier.active import DATA, id_request
 from verity.protocols.certifier.verifier.certificate import Direction
 from verity.protocols.certifier.verifier.schedule import SyncSet
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")

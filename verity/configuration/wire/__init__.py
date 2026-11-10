@@ -60,7 +60,7 @@ def _plain(value: Any, path: str = "$") -> Any:
 
 
 def canonical(value: Any) -> bytes:
-    """`value` as canonical JSON: the commitments' rules (`verity.ml.commitments.identity.canonical_json_bytes`)."""
+    """`value` as canonical JSON: the commitments' rules (`verity.commitments.identity.canonical_json_bytes`)."""
     return json.dumps(_plain(value), ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
 
 

@@ -138,7 +138,7 @@ def rtt_cap_ns() -> int:
 def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = None) -> Any:
     """The memory challenger's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     from verity.protocols.pous.device import memory_challenger as mc
 
     p = params or lms.DEPLOYED

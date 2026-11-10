@@ -15,9 +15,9 @@ from fractions import Fraction
 import pytest
 
 import window_vectors as V
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.protocol import Shape, grid_tiles
 

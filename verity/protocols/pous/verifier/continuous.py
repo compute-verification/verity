@@ -41,7 +41,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from verity.ml.randomness import Key
+from verity.commitments.randomness import Key
 
 from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, AuditResult, ChallengeReply, UnsignedRounds
 from .verifier import VerifierKey

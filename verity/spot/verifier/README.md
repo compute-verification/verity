@@ -273,7 +273,7 @@ from verity.spot.costfit import fit
     challenger's coins (or a sampler) under the expanded design, with a work sample's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
-  registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
+  registered root's commitment domain (`verity.commitments.window`'s, which an integration commits under).
 - `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the registration and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.

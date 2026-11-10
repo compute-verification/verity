@@ -31,7 +31,7 @@ from verity.circuits.boolean.forms import ONE, ZERO, const_bits
 from verity.circuits.boolean.gf128 import mul, mul_forms
 from verity.circuits.types import Array, Tuple
 
-from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
+from verity.commitments.gates.sha512 import IV, compress_gadget, pad_tail
 
 __all__ = ["BlockKey", "KeyPrint", "ROOT", "block_key", "chain", "key_print", "pack_tokens"]
 

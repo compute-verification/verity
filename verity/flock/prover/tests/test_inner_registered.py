@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity.spot.verifier.one_stage import registered as G

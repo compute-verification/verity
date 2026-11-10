@@ -208,7 +208,7 @@ def _one_stage():
     import numpy as np
     from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 
     return SimpleNamespace(a0=a0, a7=a7, a8=a8, np=np, D=D, P=P, R=R, V=V, canonical_json=canonical_json,

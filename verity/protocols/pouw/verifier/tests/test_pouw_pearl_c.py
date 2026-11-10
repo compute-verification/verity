@@ -17,7 +17,7 @@ import pytest
 
 import pearl_c_vectors as CV
 import pearl_vectors as PV
-from verity.ml.crypto.turboshake import turboshake128
+from verity.commitments.crypto.turboshake import turboshake128
 from verity.definitions.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16
@@ -644,7 +644,7 @@ def test_h3_is_sha512_throughout():
     bytes are H_"line"(H_"noise-line"(seed) ‖ side ‖ factor ‖ u32 LE line) under Pearl's map to codes; the tile leaf is
     ``sha512/row-seg/v1`` over the tile's messages; a ticket is H_"jackpot"(seed_A ‖ fold).  E_A moves with a row's bytes
     and position alone; no BLAKE3 claim is left."""
-    from verity.ml.commitments.rowleaf import sha512_row_seg_digest
+    from verity.commitments.rowleaf import sha512_row_seg_digest
     from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     s, h0 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h0"))
@@ -705,9 +705,9 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
     from dataclasses import replace
 
-    from verity.ml.commitments import CommitmentDomain, hm96
-    from verity.ml.commitments.merkle import tree_levels
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
+    from verity.commitments import CommitmentDomain, hm96
+    from verity.commitments.merkle import tree_levels
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
     from verity.protocols.pouw.verifier.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
                                                   rows_domain, transcript_domain, weight_binding)
     from clear_audit import Prover, Sampled, Verifier

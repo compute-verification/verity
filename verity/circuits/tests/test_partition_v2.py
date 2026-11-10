@@ -1,6 +1,6 @@
 """`verity/partition/v2` (`verity.circuits.partition_v2`): the advice of a private partition, its rows, the statement, the
 global predicates G1-G7 and their refusals, the local predicates L1-L4 on each sampled proof block (from the opened rows alone, against
-the advice root of `verity.ml.commitments.advice`), v1's numbering in query mode, and the pinned vector
+the advice root of `verity.commitments.advice`), v1's numbering in query mode, and the pinned vector
 `partition_v2_vectors.json`.  Its `--write` rewrites it; `REWRITE` names the command that runs it.
 
 The program is v1's pinned program (`partition_vectors.json`) on 16-bit values: the same Calls on BF16 instead of I32 and F32,
@@ -26,8 +26,8 @@ from verity.circuits.evaluation import evaluate_region
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.ml.commitments import advice as A
-from verity.ml.commitments.frame_v3.vectors import expand
+from verity.commitments import advice as A
+from verity.commitments.frame_v3.vectors import expand
 from verity.definitions.ops.fp32 import Bf16Add
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import Bf16GtStrict, SelectBf16

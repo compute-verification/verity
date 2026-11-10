@@ -14,8 +14,8 @@ import types
 import pytest
 
 import pouw_rows_vectors as V
-from verity.ml.commitments.frame_v3 import vectors_sha512 as FV
-from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, bit_row,
+from verity.commitments.frame_v3 import vectors_sha512 as FV
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, bit_row,
                                         nvfp4_row_bytes, row_bytes, sha512_row_seg_digest, sha512_row_seg_word_digest,
                                         sha512_row_v2_digest)
 from verity.circuits.evaluation import evaluate

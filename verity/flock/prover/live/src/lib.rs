@@ -265,7 +265,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
 }
 
 /// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
-/// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
+/// randomness, after registration and before the statement is fixed, with `verity.commitments.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
 /// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified sampling design is the
@@ -440,7 +440,7 @@ pub mod unit_draw {
         }
     }
 
-    /// A uniformly random `k`-subset of `[0, n)`, sorted: the partial Fisher-Yates of verity.ml.randomness's Key.subset.
+    /// A uniformly random `k`-subset of `[0, n)`, sorted: the partial Fisher-Yates of verity.commitments.randomness's Key.subset.
     fn subset(k: u64, n: u64) -> Vec<u64> {
         let mut swapped: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
         let at = |m: &std::collections::BTreeMap<u64, u64>, i: u64| *m.get(&i).unwrap_or(&i);

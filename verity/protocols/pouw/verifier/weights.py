@@ -14,8 +14,8 @@ rows of the execution phase Program's linears of that K, and `weights_root`, the
   folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
   shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
   ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits a challenger host
-  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
-  blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
+  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.commitments.crypto.chacha20`, the
+  blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
 * `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
@@ -37,11 +37,11 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.protocols.pouw.verifier.protocol import tagged
 from verity.spot.verifier.one_stage import registered as G
-from verity.ml.commitments import domains, hm96
-from verity.ml.commitments.hm96 import batch as hm96_batch
-from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.ml.crypto import chacha20
+from verity.commitments import domains, hm96
+from verity.commitments.hm96 import batch as hm96_batch
+from verity.commitments.merkle import merkle_depth
+from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.crypto import chacha20
 
 #: an H1 execution phase's weights' root: each K's registered ``…/b/<K>`` root
 WEIGHTS_TAG = domains.POUW_H1_WEIGHTS

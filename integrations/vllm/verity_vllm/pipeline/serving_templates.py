@@ -154,7 +154,7 @@ def template(t: str) -> Template:
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
-    importlib.import_module("verity.ml.commitments.gates.embedding")
+    importlib.import_module("verity.commitments.gates.embedding")
     errors = BB.load()
     try:
         fn = specialization(spec_base(t), spec_statics(t))
@@ -348,7 +348,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
 
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
         if (fam := EXPERTS.get(spec_base(spec))) is not None:
-            from verity.ml.commitments.gates.embedding import read
+            from verity.commitments.gates.embedding import read
 
             S = spec_statics(spec)
             E, K, N, G = (int(S[x]) for x in ("E", "K", "N", "G"))
@@ -391,7 +391,7 @@ def fused_block(spec: str, n: int) -> Any:
     it does not bind."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
-    from verity.ml.commitments.gates.embedding import read
+    from verity.commitments.gates.embedding import read
     from verity.definitions import boolean as BB
     from verity_vllm.query.program_view import spec_base, spec_statics
 

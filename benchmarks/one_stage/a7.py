@@ -88,10 +88,10 @@ from verity.definitions.circuits import requirement as RQ, requirement_units as 
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.protocols.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
 
 M_MAX = 35
@@ -235,9 +235,9 @@ def canon(kind: str, bits: int, words: list[list[int]], key: bytes) -> dict:
 
 def canon_root(c: dict, bcs: list[bytes]) -> str:
     """The root the verifier recomputes from a canonical commitment's published ``b || c`` list."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.frame_v3 import FrameV3, Port as FPort
-    from verity.ml.commitments.rowleaf import row_leaf
+    from verity.commitments import hm96
+    from verity.commitments.frame_v3 import FrameV3, Port as FPort
+    from verity.commitments.rowleaf import row_leaf
 
     dom = canon_dom(c["kind"], len(bcs))
     fv = FrameV3({c["kind"]: FPort(dom, c["port"].leaf())})

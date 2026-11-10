@@ -39,7 +39,7 @@ from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
 from verity.spot.device import challenger as LC  # noqa: E402
 from verity.spot.device import remote as R  # noqa: E402
 from verity.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 from verity_vllm.pipeline import pouw_serve  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402

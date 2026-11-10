@@ -60,10 +60,10 @@ def test_shake256_matches_hashlib(nlanes, nbytes):
 @pytest.mark.parametrize("nlanes,nbytes,domain", [(1, 32, 0x21), (20, 32, 0x22), (21, 32, 0x1F), (22, 200, 0x01),
                                                   (64, 32, 0x7F)])
 def test_turboshake128_matches_core(nlanes, nbytes, domain):
-    """Core's TurboSHAKE128 (`verity.ml.crypto.turboshake`): the domain byte and the final bit in one lane (20 lanes), a
+    """Core's TurboSHAKE128 (`verity.commitments.crypto.turboshake`): the domain byte and the final bit in one lane (20 lanes), a
     whole padding block (21), a second absorbed block, squeezing past one rate block, and Pearl-C's message (32 words of C̃
     and 32 of U, 64 lanes)."""
-    from verity.ml.crypto.turboshake import turboshake128 as native
+    from verity.commitments.crypto.turboshake import turboshake128 as native
 
     from verity.protocols.pouw.prover.circuit.hashes import turboshake128
     rng = random.Random(nlanes * 1000 + domain)

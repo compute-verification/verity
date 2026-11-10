@@ -7,8 +7,8 @@ mirrors), v4's leaves and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
-`verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
-`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
+`verity.commitments.randomness` is the spec's derivation (`frame`, `derive`) and
+`verity.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
 (`VECTORS_SHA512`).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile and the store's shape (blocks per segment, segments). A
@@ -32,10 +32,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from verity.protocols.pous.verifier.schemes import p2 as P2
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.randomness import Key, derive, frame
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
@@ -194,7 +194,7 @@ def decode(params: Params | P2.P2Params, c: int, k: int, t: int) -> int:
 
 def w_commitment(params: Params, w: bytes) -> bytes:
     """The commitment to `W` (`w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
-    (`verity.ml.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
+    (`verity.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
     h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
     h.update((8 + len(manifest) + len(w)).to_bytes(8, "big") + len(manifest).to_bytes(8, "big") + manifest)

@@ -37,10 +37,10 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments import hm96
+from verity.commitments.hm96 import batch as HB
+from verity.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.spot.verifier.one_stage import registered as G
 
 INST = hm96.SHA512

@@ -32,8 +32,8 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
+from verity.commitments import hm96
+from verity.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
                                            sha512_row_seg_segments, sha512_row_v2_prefix)
 from verity.definitions.kernels import ROW_COMMIT, SHA512
 

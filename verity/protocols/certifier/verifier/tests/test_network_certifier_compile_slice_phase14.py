@@ -14,7 +14,7 @@ from verity.protocols.certifier.verifier.tests.test_network_certifier_compile_sl
 from verity.protocols.certifier.verifier.tests.test_network_certifier_compile_slice_w212 import CARRY, CLASS, FITTED, OWN
 from verity.protocols.certifier.verifier.tests.test_network_certifier_compile_slice_w212 import _load
 from verity.spot.verifier.one_stage import produced
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 PROGRAM, REGISTRATION = "compile-slice-phase14", "cd" * 64
 

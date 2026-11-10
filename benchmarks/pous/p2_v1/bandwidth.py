@@ -78,7 +78,7 @@ from verity.protocols.pous.verifier import verifier as V
 from verity.protocols.pous.verifier.labels import salt_value, tag
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES

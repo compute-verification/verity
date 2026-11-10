@@ -22,7 +22,7 @@ import pytest
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_period as W
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]

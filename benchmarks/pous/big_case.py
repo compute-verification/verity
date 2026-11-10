@@ -19,8 +19,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.randomness import derive
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.randomness import derive
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import run as R

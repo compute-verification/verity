@@ -255,7 +255,7 @@ wheels = [
 [[package]]
 name = "core-identity"
 version = "0.1.0"
-source = { virtual = "verity/core/primitives/identity" }
+source = { virtual = "verity/commitments/identity" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -265,8 +265,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity" },
+    { name = "verity-difftest" },
 ]
 
 [[package]]

@@ -120,7 +120,7 @@ it signs) and the deployment record's custody (the keys and the run id it gives 
 hold only on the auditor's side.
 
 **Sealed pair links** (`Proxy(pair=…)`, off by default; PROTOCOL.md, "Sealed pair links"): when the link's peer is
-another of the auditor's certifiers, the frames between them are sealed under `verity.ml.crypto.aead`, keys of the
+another of the auditor's certifiers, the frames between them are sealed under `verity.commitments.crypto.aead`, keys of the
 pair's session secret per direction (`Pair.of`). The egress tick seals each of its bucket's r slots, frames and padding
 alike, after the egress certifier records it (`Sealer`, slot j of bucket t at nonce (t // T, t mod T, j)), and the
 link carries r units of B + 64 bytes a bucket. The ingress side opens the k-th unit it reads as slot k of the peer's
@@ -194,9 +194,9 @@ from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, 
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.crypto import aead
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.crypto import aead
 from verity.protocols.certifier.verifier.audit import Audit, Verdict
 from verity.protocols.certifier.verifier.certificate import PublicKey, Signer, SignerRefused
 from verity.protocols.certifier.verifier.grid import (

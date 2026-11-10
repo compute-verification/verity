@@ -100,7 +100,7 @@ def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     from verity.protocols.pouw.prover.circuit import h1tile as H
     from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.protocols.pouw.prover.circuit import h1zy as Z
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
     wp = 2 * LL.words(k)
     if unit == "lane":
@@ -155,7 +155,7 @@ def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str, bind: 
         os.environ["HZ_STAGE"] = staging
         PC._lower(k, r, c, ZERO_BIND, path)
         return {"bind": ZERO_BIND}
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     d, rows = leaf_statement(U, unit, k, r, c)
     out = {"bind": ZERO_BIND}
     if bind == "leaf":

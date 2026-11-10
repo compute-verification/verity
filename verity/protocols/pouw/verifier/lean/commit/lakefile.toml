@@ -17,11 +17,11 @@ path = "../../../../../flock/verifier"
 
 [[require]]
 name = "core_randomness"
-path = "../../../../../core/primitives/randomness"
+path = "../../../../../commitments/randomness"
 
 [[require]]
 name = "core_identity"
-path = "../../../../../core/primitives/identity"
+path = "../../../../../commitments/identity"
 
 [[lean_lib]]
 name = "PouwCommit"

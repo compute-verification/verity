@@ -26,8 +26,8 @@ import pouw_check_cases as cases
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import row_leaf
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import row_leaf
 
 #: (context, program, partition, entries): the execution phases the generator opens
 WINDOWS = [(f"served-zk/opening-{i}/{random.Random(i).randbytes(8).hex()}", random.Random(10 + i).randbytes(64).hex(),

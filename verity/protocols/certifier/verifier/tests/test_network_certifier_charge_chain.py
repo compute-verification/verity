@@ -13,7 +13,7 @@ import pytest
 from verity.protocols.certifier.verifier import arith_encode as AE, charge_chain as CC
 from verity.protocols.certifier.verifier.head_check import ands
 from verity.spot.verifier.one_stage import produced
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"
 PROGRAM, REGISTRATION = "charge-chain-test", "ab" * 64

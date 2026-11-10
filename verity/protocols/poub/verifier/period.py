@@ -46,7 +46,7 @@ from typing import Any, Protocol
 from verity.protocols.pous.verifier.period import Period, Run
 from verity.protocols.pous.verifier.period import records
 from verity.spot.verifier.profile import WINDOW_DELTA
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
 from . import coins as C

@@ -47,7 +47,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import audit
 from verity.protocols.certifier.verifier.audit import Published, Verdict
 from verity.protocols.certifier.verifier.certificate import (STATUS_CODES, Certificate, CertifiedClock, CertifiedRecord,

@@ -27,10 +27,10 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
+from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                            VerificationLimits, verify_opening)
-from verity.ml.commitments import domains, hm96
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import domains, hm96
+from verity.commitments.scheme import DIGEST_BYTES
 from verity.spot.device.challenger import coin_claim
 
 from .protocol import DomainError, tagged

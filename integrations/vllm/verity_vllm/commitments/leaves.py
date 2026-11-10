@@ -43,8 +43,8 @@ from typing import Any
 
 from verity.errors import InvalidArtifact
 
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.commitments.scheme import sha as _sha
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.scheme import sha as _sha
 
 __all__ = [
     "DIGEST_BYTES",

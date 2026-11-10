@@ -314,7 +314,7 @@ from verity.spot.device.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # 
                                                              circuit_of as _circuit_of, day_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, pin_line,
                                                              pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
-from verity.ml.crypto import lms  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 
 ZERO = "0" * 128
 PORTS = range(7811, 7900)
@@ -830,13 +830,13 @@ def load_key(host: Host, params=None, workers: int | None = None):
     """The challenger's key and leaf state in `host.key`, made there when absent (serve.py's `load_key`)."""
     sys.path.insert(0, str(HERE))
     import serve
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     return serve.load_key(host.key, params or lms.DEPLOYED, workers or len(os.sched_getaffinity(0)))
 
 
 def key_signer(host: Host, params=None, workers: int | None = None):
     """(I, sign, key_sha512) for `append`; each signature opens the key's leaf state and closes it after."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     key, state = load_key(host, params, workers)
     state.close()
     public = lms.public_key(key)
@@ -2552,7 +2552,7 @@ def main(argv: list[str] | None = None) -> int:
         elif argv[:1] == ["pinned"] and len(argv) == 3:
             print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
         elif argv[:1] == ["keygen"] and len(argv) == 1:
-            from verity.ml.crypto import lms
+            from verity.commitments.crypto import lms
             key, state = load_key(host)
             state.close()
             public = lms.public_key(key)

@@ -17,15 +17,15 @@ path = "../../../../flock/verifier"
 
 [[require]]
 name = "core_randomness"
-path = "../../../../core/primitives/randomness"
+path = "../../../../commitments/randomness"
 
 [[require]]
 name = "lms"
-path = "../../../../core/primitives/lms/lean"
+path = "../../../../commitments/lms/lean"
 
 [[require]]
 name = "core_attest"
-path = "../../../../core/attest/lean"
+path = "../../../../commitments/attest/lean"
 
 [[require]]
 name = "core_protocol"

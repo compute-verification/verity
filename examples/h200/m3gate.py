@@ -26,7 +26,7 @@ from typing import Any
 
 from verity.spot.device import challenger as Ch
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 HOST = "vy-challenger-1"
 

@@ -2,7 +2,7 @@
 
 In v1 (`partition_object`) the partition is a query the verifier evaluates on a circuit it holds.  In v2 the circuit and its
 partition are the prover's: the partition is *advice*, fixed-width rows committed before any coin (hm96-sha512 hiding rows in one
-frame-v3-sha512 tree, `verity.ml.commitments.advice`), and the verifier holds only a statement naming the predicates the
+frame-v3-sha512 tree, `verity.commitments.advice`), and the verifier holds only a statement naming the predicates the
 advice must satisfy.  A proof shows them (the global predicates once per registration, the local ones with each sampled proof block);
 this module is the reference both statements are checked against.
 
@@ -88,7 +88,7 @@ FORMAT = "verity/partition/v2"
 ROW_BYTES = 128
 ROW_BITS = 8 * ROW_BYTES
 MAGIC = b"verity/partition/v2\0"
-#: the 32-byte binding of the advice tree's domain (`verity.ml.commitments.advice`)
+#: the 32-byte binding of the advice tree's domain (`verity.commitments.advice`)
 BINDING = hashlib.sha512(b"verity/partition/v2/advice").digest()[:32]
 NONE = (1 << 64) - 1
 FLAT, PARTS = 1, 2
@@ -591,7 +591,7 @@ class _Graphs:
 
 def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdict:
     """G1-G7: the advice rows `rs` (all R_b of them, as registered) against the statement and the program.  The rows' root is the
-    commitment's to check (`verity.ml.commitments.advice`); this is what the registration statement proves of them."""
+    commitment's to check (`verity.commitments.advice`); this is what the registration statement proves of them."""
     v = validate(st)
     if not v.ok:
         return v

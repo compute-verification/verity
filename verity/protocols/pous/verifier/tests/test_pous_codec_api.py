@@ -6,7 +6,7 @@ import itertools
 import random
 
 import pytest
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed

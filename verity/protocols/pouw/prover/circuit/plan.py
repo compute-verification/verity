@@ -40,8 +40,8 @@ from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
 
 from verity.spot.verifier.profile import Stratified, Stratum
-from verity.ml.commitments import domains
-from verity.ml.randomness import Key
+from verity.commitments import domains
+from verity.commitments.randomness import Key
 
 from verity.protocols.pouw.verifier.protocol import DomainError
 from ..schemes.ncp import FORM_UNITS

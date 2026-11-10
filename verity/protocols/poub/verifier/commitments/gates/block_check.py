@@ -98,11 +98,11 @@ from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha512_row_v2_digest, sha512_row_v2_prefix
 
-from verity.ml.commitments.gates.frame_v3 import opens_at, read_at
-from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf, reference as hm96_leaf
-from verity.ml.commitments.gates.sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
+from verity.commitments.gates.frame_v3 import opens_at, read_at
+from verity.commitments.gates.hm96 import Hm96Sha512Leaf, reference as hm96_leaf
+from verity.commitments.gates.sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
 __all__ = ["BlockOpeningCheck", "FIELDS", "TOY", "VERDICT", "key", "opening_args", "opening_check", "opening_public",
            "opening_rows", "receipt", "row_words", "sketch", "verdict"]

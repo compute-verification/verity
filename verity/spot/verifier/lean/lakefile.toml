@@ -23,7 +23,7 @@ path = "../../../flock/verifier"
 # The proof system's challenger signs its record with LMS (`Spot.ChallengerRecord`).
 [[require]]
 name = "lms"
-path = "../../../core/primitives/lms/lean"
+path = "../../../commitments/lms/lean"
 
 [[require]]
 name = "verity_difftest"

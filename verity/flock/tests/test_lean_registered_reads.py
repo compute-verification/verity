@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program

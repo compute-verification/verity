@@ -24,7 +24,7 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments import domains
+from verity.commitments import domains
 
 from verity.protocols.pouw.verifier.protocol import Matmul, Tile, tagged
 

@@ -67,8 +67,8 @@ inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/spot/verifier/__init__.py",
           "verity/hardware/record.py",
-          "verity/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/definitions/kernels", "verity/definitions/private_circuits",
-          "verity/ml/randomness", "verity/definitions", "verity/flock/prover/python/verity_flock", "verity/windows",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels", "verity/definitions/private_circuits",
+          "verity/commitments/randomness", "verity/definitions", "verity/flock/prover/python/verity_flock", "verity/windows",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py", "verity/protocols/pouw/verifier/salt.py",
           "verity/protocols/pouw/verifier/protocol.py",
           # circuit/h1window.py imports both, so building the H1 units reads them.
@@ -231,7 +231,7 @@ paths = [
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",
     "verity/circuits",
-    "verity/ml/commitments/gates",
+    "verity/commitments/gates",
     "verity/flock/prover/python/verity_flock",
     "verity/definitions/private_circuits",
 ]

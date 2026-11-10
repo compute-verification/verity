@@ -62,7 +62,7 @@ from verity.circuits.evaluation import evaluate_words
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 ROOT = Path(__file__).resolve().parents[2]
 

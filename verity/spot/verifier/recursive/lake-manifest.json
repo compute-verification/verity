@@ -34,7 +34,7 @@
    "name": "lms",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../core/primitives/lms/lean",
+   "dir": "../../../commitments/lms/lean",
    "configFile": "lakefile.toml"}],
  "name": "core_vstar_recursive",
  "lakeDir": ".lake",

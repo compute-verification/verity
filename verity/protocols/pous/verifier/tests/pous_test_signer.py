@@ -1,4 +1,4 @@
-"""A TEST signer for the memory challenger's sessions: S1's LMS (`verity.ml.crypto.lms`) at a small tree height,
+"""A TEST signer for the memory challenger's sessions: S1's LMS (`verity.commitments.crypto.lms`) at a small tree height,
 so a key is made in milliseconds.  Its scheme id starts with `memory_challenger.TEST_PREFIX`, which
 `memory_challenger.register` refuses, so a record it signs is accepted only by a test's own mapping (`SCHEMES`), never
 by `memory_challenger.SCHEMES`.  Its leaf state, and a test's session log (`session_log`), are each in a fresh directory
@@ -11,7 +11,7 @@ import hashlib
 import tempfile
 from pathlib import Path
 
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 
 HEIGHTS = range(1, 11)

@@ -26,7 +26,7 @@ from verity.protocols.pous.verifier import wipe_party as WP
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.pous.verifier import wipe_store as WS
 from verity.configuration.wire import canonical
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
 C, P = WPS.CHALLENGER, WPS.PROVER

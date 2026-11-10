@@ -26,8 +26,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.crypto import lms
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier.audit import Audit
 from verity.protocols.certifier.verifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
                                                                 Direction, Issuer, LmsKey, RecordHead, SignerRefused,

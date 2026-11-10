@@ -24,11 +24,11 @@ import numpy as np
 import pytest
 
 import settings
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.gates import embedding as E
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import bit_row
+from verity.commitments import row_table as RT
+from verity.commitments.gates import embedding as E
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.rowleaf import bit_row
 from verity_flock import tmpl as T
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"

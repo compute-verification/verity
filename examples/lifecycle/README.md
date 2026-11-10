@@ -154,7 +154,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the demo |
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
 | `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the demo |
-| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/spot/verifier/one_stage/registered.py` over `verity.ml.commitments.hm96` |
+| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/spot/verifier/one_stage/registered.py` over `verity.commitments.hm96` |
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.circuits.evaluation.evaluate_words` |
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/spot/device/coins.py` (`draw_first`), `verity/protocols/pouw/verifier/window.py` (`bucket`, `k_prime`) |
@@ -164,7 +164,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/composite/verifier/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
-| `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
+| `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/commitments/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
 | `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
 | `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/configuration/deploy/` (`party`, `manifest`, `runtime.run`) |
 
@@ -228,7 +228,7 @@ In a noun-based layout, each part of the demo goes where its noun is:
 - `verity/circuits`: the units, the execution blocks and the registered circuit as blocks chained by state wires, with a
   digest of the chain (today's `verity.circuits`).
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
-  `verity.ml.commitments` and the certifier's own).
+  `verity.commitments` and the certifier's own).
 - `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the ZK server.
 - `verity/protocols/onsite` and `verity/protocols/remote`: the parties and manifests, each composite's per-declaration
   subprotocol checks and `account`, over the composition's rule.

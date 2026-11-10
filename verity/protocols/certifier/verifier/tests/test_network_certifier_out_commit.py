@@ -13,7 +13,7 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import out_commit as O
 from verity.protocols.certifier.verifier.certificate import Issuer, LmsKey, LmsSigner, SignerRefused
 from verity.protocols.certifier.verifier.tests import signers as S

@@ -14,7 +14,7 @@ publishes the coin commitment:
 The hm96 leaves keep every unopened coin statistically hidden; binding rests on SHA-512's collision resistance.  The
 challenger opens coin ``(label, i)`` once, after the verifier recorded the root the coin follows (`LiveOpening.after`),
 and never twice: a retry never resamples.  There is no beacon and no Fiat–Shamir: a coin is the challenger's own bytes, and
-a client derives what it samples from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
+a client derives what it samples from the opened coin (`verity.commitments.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
@@ -49,7 +49,7 @@ commitment with its LMS key over SHA-512 (`LiveChallenger.sign_record`) and writ
     message = SHA-512([RECORD_ROLE] || I || [[host]] || [identity_digest_sha512(COMMITMENT_TAG, commitment)])
 
 each [x] a u64 big-endian length then x, and I the key's identifier (its public key's first 16 bytes): the LMS role
-digest's form (`verity.ml.crypto.lms`).  The verifier reads the record from the challenger's file, never from the prover's
+digest's form (`verity.commitments.crypto.lms`).  The verifier reads the record from the challenger's file, never from the prover's
 bundle, and checks it under its own challenger's key (`ChallengerKey`: the LMS parameters and public key):
 `trusted_commitment` returns the commitment, or raises naming why the record is missing, malformed or unsigned, so a client
 that trusts no other commitment fails closed.  `record_reason` is that check and `trusted_reason` adds that a commitment the
@@ -168,7 +168,7 @@ through `pinned_session`: `credited_session` (the pin first, then the circuit) a
 `audited_session` checks no pin and credits nothing.
 
 **A ``--zk`` session's coins** are the challenger's too: Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
-`verity.ml.commitments.coin_tree`), sampled in the window's session from the challenger's entropy under the prover's
+`verity.commitments.coin_tree`), sampled in the window's session from the challenger's entropy under the prover's
 ``Hello`` nonce (`LiveChallenger.sample_tree`), each round opened by the challenger once it has received what the round
 follows (`open_tree`).  The release log holds a line per tree and per round it opened, each written before what it
 records leaves the host, so the signed close covers them:
@@ -189,7 +189,7 @@ Flock's live-coin part releases them, so its unopened coins rest on the tree's h
 
 The first client is PoUW's live window (`verity.protocols.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments`, `verity.claims` and `verity.hardware.record`, so any client calls it as it is.
+`verity.commitments`, `verity.claims` and `verity.hardware.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -209,11 +209,11 @@ from typing import Any, NamedTuple
 
 from verity import claims
 from verity.hardware import record as core_record
-from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
+from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
-from verity.ml.commitments import coin_tree as CT
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
+from verity.commitments import coin_tree as CT
+from verity.commitments import hm96
+from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -610,7 +610,7 @@ class ChallengerRecord:
 
 
 #: `verify(key, message, signature)`: whether `signature` signs `message` under LMS at `key`'s parameters
-#: (`verity.ml.crypto.lms.verify` over `Params(64, key.W, key.H)`), false for a signature that doesn't decode.
+#: (`verity.commitments.crypto.lms.verify` over `Params(64, key.W, key.H)`), false for a signature that doesn't decode.
 Verify = Callable[[ChallengerKey, bytes, bytes], bool]
 
 

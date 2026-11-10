@@ -8,7 +8,7 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.ml.commitments.identity import tagged_sha512
+from verity.commitments.identity import tagged_sha512
 from verity.protocols.certifier.verifier import head_check as HC
 from verity.protocols.certifier.verifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest
 from verity.protocols.certifier.verifier.grid import Reason, Status

@@ -168,7 +168,7 @@ one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.l
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
 
 The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
-`verity/ml/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
+`verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
 sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
 (statement setup); `archive-put` (the object store); `evaluate`; and `rec-inner`, `rec-statements`, `rec-transcript` and

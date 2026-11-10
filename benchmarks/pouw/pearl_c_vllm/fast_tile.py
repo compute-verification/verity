@@ -266,7 +266,7 @@ def _ieee() -> bool:
 
 
 def _native_blake3():
-    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.ml.crypto.blake3`."""
+    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.commitments.crypto.blake3`."""
     try:
         import blake3 as native
     except ImportError:
@@ -279,7 +279,7 @@ def install(scheme, debit: bool = True) -> callable:
     of the plain-Python one wherever a loaded module holds it; returns the undo.  ``debit=False`` leaves
     `pearl_c_debit.chain_debit` to the caller (`served_debit.py` records it through a wrapper of its own)."""
     import sys
-    from verity.ml.crypto import blake3 as pure
+    from verity.commitments.crypto import blake3 as pure
     if scheme.forming != "v1" or scheme.device.g is None:
         raise ValueError(f"{scheme.name}: the batch forms take Pearl-C v1 on a promoted device")
     if not _ieee():

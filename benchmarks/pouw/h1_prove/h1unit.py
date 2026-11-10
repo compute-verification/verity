@@ -67,11 +67,11 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS
@@ -623,8 +623,8 @@ def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> d
     """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row) of ``n`` instances,
     each port's tree over its table's rows."""
     from verity_flock import circuit as FC
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.ml.commitments.frame_v3 import Port as FPort
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.commitments.frame_v3 import Port as FPort
     bind, doms = {}, {}
     for p in ports:
         bind[p.name] = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name, "lo": 0, "hi": int(n), "port": p.name, "schema": p.schema})

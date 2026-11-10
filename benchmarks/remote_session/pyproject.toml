@@ -34,7 +34,7 @@ untraced = [
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/spot/verifier/profile.py", "verity/protocols/poub/verifier", "verity/ml/__init__.py",
           "verity/hardware/record.py",
-          "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
+          "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
           "verity/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
@@ -42,7 +42,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # path requires
           "verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",
-          "verity/core/primitives/randomness", "verity/difftest/lean",
+          "verity/commitments/randomness", "verity/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader

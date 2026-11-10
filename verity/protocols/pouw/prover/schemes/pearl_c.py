@@ -90,10 +90,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.ml.commitments import domains
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest
-from verity.ml.crypto.blake3 import blake3, keyed
-from verity.ml.crypto.turboshake import turboshake128
+from verity.commitments import domains
+from verity.commitments.rowleaf import sha512_row_seg_digest
+from verity.commitments.crypto.blake3 import blake3, keyed
+from verity.commitments.crypto.turboshake import turboshake128
 from verity.definitions.silicon import fp32
 
 from verity.protocols.pouw.verifier.protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
@@ -119,7 +119,7 @@ LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_S
 HASHINGS = ("h0", "h3")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
-#: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
+#: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 #: the per-row cap at a census k, as a multiple of ρ: there each credited row's debit
 #: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; the gap rests on

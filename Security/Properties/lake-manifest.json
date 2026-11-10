@@ -155,7 +155,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/primitives/randomness",
+   "../../verity/commitments/randomness",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -163,7 +163,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/primitives/lms/lean",
+   "../../verity/commitments/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -171,7 +171,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/primitives/identity",
+   "../../verity/commitments/identity",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -187,7 +187,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/attest/lean",
+   "../../verity/commitments/attest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

@@ -287,7 +287,7 @@ A spec-level reference for network accounting's timing channel:
   link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
-  sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
+  sealed after its record and opened before it (`verity.commitments.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
   nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
   proof blocks, one a bucket row of the network certifier's registered ingress cells, proved as
@@ -302,7 +302,7 @@ A spec-level reference for network accounting's timing channel:
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha512` and
 `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
 Definition, and in `active` the proof system's registration and receipt, which `reveal` reads, and the pair link's
-AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
+AEAD (`verity.commitments.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.

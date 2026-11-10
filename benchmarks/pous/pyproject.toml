@@ -22,9 +22,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
           "verity/core/devices/__init__.py",
-          "verity/flock/verifier", "verity/core/primitives/identity", "verity/core/primitives/randomness",
-          "verity/core/primitives/lms", "verity/difftest", "verity/protocols/pous/device",
-          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
+          "verity/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
+          "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
+          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean

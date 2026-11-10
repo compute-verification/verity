@@ -16,7 +16,7 @@ import pytest
 from verity.protocols.certifier.verifier import compile_slice as CS, served_rows as SR
 from verity.protocols.certifier.prover import served_statics as SS
 from verity.spot.verifier.one_stage import registered as REG
-from verity.ml.commitments import advice as ADV
+from verity.commitments import advice as ADV
 
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE.parent), str(HERE.parents[1] / "one_stage")]

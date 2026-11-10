@@ -106,7 +106,7 @@ pin and so past the floor, refusing the credit period. Every execution phase of 
 another circuit registers them under its own.
 
 An `a_link` case is an execution phase's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
-SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
+SHA-512 trees (`verity.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
 `credit.cover` segments of every A value under `credit.round_root` of a random inner root. Its mutations register an A
 tree other than the one the rounds committed, rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms. It may also
@@ -143,8 +143,8 @@ from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier import live_reads as LR
 from verity.spot.device import challenger as Ch
 from verity.spot.verifier.one_stage import registered as G
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 
 MODULES = ["q_proj", "k_proj", "o_proj", "down_proj", "attn·out"]
 

@@ -64,8 +64,8 @@ import hashlib
 import struct
 from dataclasses import dataclass
 
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 BLOCK_BYTES = 4096

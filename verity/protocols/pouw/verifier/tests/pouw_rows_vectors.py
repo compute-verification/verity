@@ -17,7 +17,7 @@ import json
 import types
 from pathlib import Path
 
-from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
                                         sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from verity.protocols.pouw.prover.circuit import leaves as L
 from verity.protocols.pouw.prover.schemes import pearl_c as C

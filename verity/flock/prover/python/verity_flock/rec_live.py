@@ -71,7 +71,7 @@ proxy given none stops one whose coins come with an opening, as the contract dec
 **The coin tree.** Under the challenger's coin tree (``--coin-tree``, `INNER_COIN_SPEC`; the prover under ``FC_COINS=tree``
 with ``FC_COIN_STREAMS`` naming the streams after the circuit's reps) the challenger's live-coin part takes each session's tree from its
 source (`TreeSource`): the challenger's device (``--tree-from``), which at ``Hello`` samples a nonce of its own, then the tree's
-key and every coin of the session (`verity.ml.commitments.coin_tree`), logs the tree and answers with the nonce, the root and
+key and every coin of the session (`verity.commitments.coin_tree`), logs the tree and answers with the nonce, the root and
 the key, and opens each round only once given what the round answers (`link_after`, `round_after`), logging each opening;
 or, in tests alone, this host's generator (``--tree-test-os``, `OsTree`). The proxy answers the prover's ``Hello`` with the
 root and the key, checks each round's coins against the root before it hands them on (`coin_tree.check`; a coin that does
@@ -119,8 +119,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from verity.ml.commitments import coin_tree as CT
-from verity.ml.commitments import hm96
+from verity.commitments import coin_tree as CT
+from verity.commitments import hm96
 
 from .rec_algebra import fast100
 from .record_text import session_text
@@ -395,7 +395,7 @@ def row_elements(row: list[int]) -> list[int]:
 
 def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
     """Each row's ``b || c`` as a registered row's (``hm96-sha512/row/v1`` over ``sha512/row/v1``, role x)."""
-    from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     inst = hm96.SHA512
     return [inst.commit_string(inst.default_key, sha512_row_digest(r, 16, ROLE_X), s) for r, s in zip(rows, salts, strict=True)]

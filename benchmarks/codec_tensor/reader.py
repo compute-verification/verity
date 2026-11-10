@@ -30,10 +30,10 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
 from verity.protocols.poub.verifier import receipts as rb, store
-from verity.ml.commitments import merkle_depth
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import domain_message
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments import merkle_depth
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import domain_message
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 import sketch_receipt as skr
 

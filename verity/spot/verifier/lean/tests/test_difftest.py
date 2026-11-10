@@ -74,7 +74,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.ml.commitments.window import window_binding
+from verity.commitments.window import window_binding
 
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 

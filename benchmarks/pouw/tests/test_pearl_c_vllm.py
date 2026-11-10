@@ -22,8 +22,8 @@ from verity.protocols.pouw.verifier import core_check as CC
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.commitments import MerkleTree
-from verity.ml.commitments.merkle import tree_levels
+from verity.commitments import MerkleTree
+from verity.commitments.merkle import tree_levels
 from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
@@ -1320,7 +1320,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: sample d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never taken inside the run."""
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)

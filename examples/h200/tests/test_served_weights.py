@@ -14,8 +14,8 @@ from verity.spot.verifier.one_stage import registered as REG
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates import embedding
+from verity.commitments import hm96
+from verity.commitments.gates import embedding
 from e2e_h200 import served_weights as W
 
 FIXTURE = Path(__file__).parent / "fixtures" / "weights-v1.json"

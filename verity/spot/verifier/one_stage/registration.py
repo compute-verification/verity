@@ -35,7 +35,7 @@
 * **`window`** is provenance, apart from the binding and the seed salt it names (Binding, Seed salt). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).
-* **Window domains** (`window_domain`, `verity.ml.commitments.window`'s): each port's frame domain binds the program, the
+* **Window domains** (`window_domain`, `verity.commitments.window`'s): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
@@ -122,8 +122,8 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ml.commitments import history as HT
-from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
+from verity.commitments import history as HT
+from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 

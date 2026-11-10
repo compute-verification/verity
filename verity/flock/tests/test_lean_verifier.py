@@ -121,8 +121,8 @@ def test_layout_agrees_with_the_reference(tmp_path):
 
 
 def _stream_uniform(n, stream, pos):
-    """`verity.ml.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
-    from verity.ml.randomness import uniform_from_words
+    """`verity.commitments.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
+    from verity.commitments.randomness import uniform_from_words
     w = (n.bit_length() + 64 + 7) // 8
     at = [pos]
 
@@ -1092,8 +1092,8 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     ``sha512_row_v2_digest`` at every residue of the length."""
     import random
 
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_v2_digest
 
     rng, cases = random.Random(20261001), []
     for n_bits in BIT_ROW_LENGTHS:
@@ -1242,8 +1242,8 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     `MAX_COMPS`, a v1 prefix and midstate under v2, a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a
     schema missing, no row with a compression, and a pinned dummy ``b || c`` that is not the padding instance's row of the
     port's bits (here, a v1 row's of its words)."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1394,8 +1394,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
     don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
     after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import sha512_row_seg_word_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1482,8 +1482,8 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
     commitment ``b || c`` and hm96 tree leaf; each side's statement digest is the one `flock-circuit statement` gives it,
     seeded and on the coin tree (`COINS`). A run written as a v1 row, or at a length other than its words, is refused."""
     import numpy as np
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_v2_digest
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     inst = hm96.SHA512

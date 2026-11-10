@@ -1,7 +1,7 @@
 """The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
 sampled inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
-(`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
+(`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.commitments.verify_opening`
 over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
 registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed sampled
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
@@ -21,8 +21,8 @@ import ra_cases as M
 import verity_difftest as D
 from verity.protocols.poub.verifier import audit, codec, receipts
 from verity.protocols.poub.verifier.receipts import Plan
-from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, verify_opening
-from verity.ml.randomness import derive
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, verify_opening
+from verity.commitments.randomness import derive
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

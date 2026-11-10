@@ -11,7 +11,7 @@ import pytest
 
 import circuit_fixtures as F
 import pouw_regions_vectors as RV
-from verity.ml.crypto.blake3 import blake3, keyed
+from verity.commitments.crypto.blake3 import blake3, keyed
 from verity.protocols.pouw.prover.circuit import ncp2, pc4, pc8, traced_as
 from verity.protocols.pouw.prover.circuit import reference as R
 from verity.protocols.pouw.prover.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,

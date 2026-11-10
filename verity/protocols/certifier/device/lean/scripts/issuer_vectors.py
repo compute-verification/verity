@@ -51,7 +51,7 @@ from verity.protocols.certifier.verifier.certificate import (SALT_BYTES, Certifi
                                                                  SignerRefused, parameters_digest)
 from verity.protocols.certifier.verifier.grid import GridParams, Reason, Record, Status
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 COUNT = 160
 #: (N, W, H, toy) by weight: the audit runs the difftest interpreted, so N = 64 is W = 1 at height 1, and W = 8, whose

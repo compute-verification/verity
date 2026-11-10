@@ -2884,7 +2884,7 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
                   "verity/protocols/pouw/verifier/", "verity/core/protocols/pous/", "verity/flock/prover/python/",
-                  "verity/ml/commitments/", "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
+                  "verity/commitments/", "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
 
 
 def contained_first(entries: dict[int, Entry]) -> list[int]:

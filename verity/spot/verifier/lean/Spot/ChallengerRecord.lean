@@ -9,7 +9,7 @@ its own host:
     message = SHA-512([RECORD_ROLE] ‖ I ‖ [[host]] ‖ [taggedSha512(COMMITMENT_TAG, commitment)])
 
 each `[x]` a u64 big-endian length then `x`, and `I` the key's identifier (its public key's first 16 bytes): the LMS
-role digest's form (`verity/ml/crypto/lms.py`). The verifier reads the record from the challenger's file, never from the
+role digest's form (`verity/commitments/crypto/lms.py`). The verifier reads the record from the challenger's file, never from the
 prover's bundle, and checks it under its own challenger's key (`ChallengerKey`: the LMS parameters and public key).
 `recordReason` is `record_reason`: no record, a malformed one, or one whose signature doesn't verify under the key, each
 a reason in Python's words. `trustedReason` is `trusted_reason`: `recordReason`, then that a coin commitment the prover

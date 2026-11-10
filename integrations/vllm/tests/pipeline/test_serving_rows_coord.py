@@ -18,7 +18,7 @@ from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.definitions.numerics import deepgemm_twins as DT
 from verity.definitions.registry import boolean_deepgemm as BDG
-from verity.ml.commitments.gates import embedding as EMB
+from verity.commitments.gates import embedding as EMB
 from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import deepgemm as DG

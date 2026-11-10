@@ -59,7 +59,7 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import online
 from verity.protocols.certifier.verifier.lean_audit import Audit
 from verity.protocols.certifier.verifier.calibration import choose_syncs

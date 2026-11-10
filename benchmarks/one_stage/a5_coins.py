@@ -68,7 +68,7 @@ from verity.spot.device import challenger as Ch, coins as CC, remote as R
 from verity.spot.verifier import service as S
 from verity.spot.verifier.one_stage import draw as D, verifier as V
 from verity.circuits.program import Program
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
 SCHEME = "verity/one-stage/a5-draw/v1"

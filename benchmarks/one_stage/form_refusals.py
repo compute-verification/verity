@@ -43,7 +43,7 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.definitions.ops.fp32 import F32AddFtz  # noqa: E402
 from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
 from verity.circuits.types import Array, Value  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402

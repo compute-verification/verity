@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import active
 from verity.protocols.certifier.verifier.active import Proxy
 from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner

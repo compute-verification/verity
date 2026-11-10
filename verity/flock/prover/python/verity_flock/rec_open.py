@@ -62,7 +62,7 @@ from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE, ZERO
-from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
+from verity.commitments.gates.sha512 import IV, compress_gadget, pad_tail
 from verity.definitions.ops.boolean import gf2k as G
 
 from .rec_residuals import residual_forms

@@ -13,7 +13,7 @@ path's prover commits and its verifier reads.
 The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
 reference tool, not a verifier: ``verity/protocols/pouw/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
 
-Commitments are `verity.ml.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
+Commitments are `verity.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
 hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
 ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
@@ -30,12 +30,12 @@ from dataclasses import dataclass
 
 from verity.protocols.pouw.verifier.salt import pouw_salt, pouw_window
 from verity.errors import ProtocolError
-from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.ml.commitments import domains, hm96
-from verity.ml.commitments.gates import sha512 as sha512_gates
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.randomness import derive
+from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.commitments import domains, hm96
+from verity.commitments.gates import sha512 as sha512_gates
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
 from .protocol import DomainError, Matmul, PoUWScheme, Tile, tagged

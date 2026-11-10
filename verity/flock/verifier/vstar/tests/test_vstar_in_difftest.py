@@ -43,7 +43,7 @@ from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstage as S
 from verity_flock import rec_vstar as V
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 LEAN = Path(__file__).resolve().parents[1]
 FLOCK_TESTS = LEAN.parents[2] / "ml" / "flock" / "tests"

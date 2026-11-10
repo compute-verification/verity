@@ -97,8 +97,8 @@ from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments import hm96
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.certifier.verifier.head_check import BIT, _part
 from verity.spot.verifier.one_stage import produced
 from verity.spot.verifier.one_stage import registered as G

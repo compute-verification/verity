@@ -19,7 +19,7 @@
    "properties": {"root": {"$ref": "#/$defs/h64"}, "leaves": {"$ref": "#/$defs/nat"}, "domain": {"$ref": "#/$defs/h64"}, "schema": {"type": "string"}}
   },
   "opening": {
-   "description": "verity.ml.commitments.row_table.RootOpening as JSON: one index of a tree over roots, the root there and its multiproof",
+   "description": "verity.commitments.row_table.RootOpening as JSON: one index of a tree over roots, the root there and its multiproof",
    "type": "object", "required": ["indices", "roots", "proof"], "additionalProperties": false,
    "properties": {"indices": {"type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 1, "maxItems": 1},
                   "roots": {"type": "array", "items": {"$ref": "#/$defs/h64"}, "minItems": 1, "maxItems": 1},

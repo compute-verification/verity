@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.ml.crypto.turboshake import turboshake128
+from verity.commitments.crypto.turboshake import turboshake128
 from verity.protocols.pouw.verifier import audit as AU
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C

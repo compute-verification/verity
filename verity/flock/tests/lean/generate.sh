@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate tests/fixtures/randomness_lean.json from the security proofs package's Lean spec of verity.ml.randomness v2 and the
+# Regenerate tests/fixtures/randomness_lean.json from the security proofs package's Lean spec of verity.commitments.randomness v2 and the
 # PoUW window sample (tests/lean/RandomnessVectors.lean). PACKAGE_DIR defaults to this checkout's
 # Security/Proofs; pass another checkout's to keep its Lake build directory apart. The fixture records the sha256
 # of each file the vectors depend on, which the tests compare with the tree.
@@ -10,7 +10,7 @@ root=$(cd "$here/../../../../.." && pwd)
 pkg=$(cd "${1:-$root/Security/Proofs}" && pwd)
 out=$(mktemp)
 (cd "$pkg" && lake build Proofs.Flock.Soundness.PlanDraw >&2 &&
-  lake env lean --run "$here/RandomnessVectors.lean" "$root/verity/ml/randomness/tests/vectors.json") > "$out"
+  lake env lean --run "$here/RandomnessVectors.lean" "$root/verity/commitments/randomness/tests/vectors.json") > "$out"
 python3 - "$out" "$here" "$pkg" "$root" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
@@ -20,9 +20,9 @@ sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 verifier = root / "verity/flock/verifier"
 data["inputs"] = {
     "verity/flock/tests/lean/RandomnessVectors.lean": sha(here / "RandomnessVectors.lean"),
-    "verity/ml/randomness/tests/vectors.json": sha(root / "verity/ml/randomness/tests/vectors.json"),
-    "verity/core/primitives/randomness/Randomness.lean":
-        sha(root / "verity/core/primitives/randomness/Randomness.lean"),
+    "verity/commitments/randomness/tests/vectors.json": sha(root / "verity/commitments/randomness/tests/vectors.json"),
+    "verity/commitments/randomness/Randomness.lean":
+        sha(root / "verity/commitments/randomness/Randomness.lean"),
     **{"Security/Proofs/" + f: sha(pkg / f) for f in (
         "Flock/Soundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
     **{"verity/flock/verifier/" + f: sha(verifier / f) for f in ("Flock/Hash.lean", "Flock/Draw.lean")}}

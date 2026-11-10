@@ -16,7 +16,7 @@ from verity.circuits.defs import bind
 from verity.definitions.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments import advice
+from verity.commitments import advice
 
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Accounts, Assumption, Cadence, Carried, Challenge,
                         Computed, Credit, Datacenter, Deviation, DeviceEntry, Entered, Fleet, Held, Interval, LinkEntry,

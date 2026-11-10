@@ -13,8 +13,8 @@ from fractions import Fraction
 import pytest
 
 from verity.protocols.poub.verifier import receipts, timing
-from verity.ml.commitments import MerkleTree, scheme
-from verity.ml.randomness import derive
+from verity.commitments import MerkleTree, scheme
+from verity.commitments.randomness import derive
 
 PRIME = 1_000_003
 

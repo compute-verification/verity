@@ -66,7 +66,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Speci
 from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, runs
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments.scheme import DIGEST_BYTES
 
 from verity.protocols.pouw.verifier import grind as GR
 from verity.protocols.pouw.verifier.protocol import DomainError

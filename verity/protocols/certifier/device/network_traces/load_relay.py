@@ -92,11 +92,11 @@ from typing import Any, BinaryIO
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
 
-from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.hm96 import batch as HB  # noqa: E402
-from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
-from verity.ml.crypto import chacha20  # noqa: E402
+from verity.commitments import hm96  # noqa: E402
+from verity.commitments.hm96 import batch as HB  # noqa: E402
+from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
+from verity.commitments.crypto import chacha20  # noqa: E402
 from verity.protocols.certifier.verifier import transfer_rows as TR  # noqa: E402
 from verity.protocols.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
 from verity.protocols.pous.verifier.schemes import p2 as P2  # noqa: E402

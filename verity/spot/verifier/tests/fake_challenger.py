@@ -25,8 +25,8 @@ from verity.spot.device import challenger as C, coins as T, remote as R
 from verity.spot.verifier import second_stage as SS, service as S
 from verity.spot.verifier.one_stage import draw as D, partition as P
 from verity.circuits.codec import canonical_json, descriptor_id
-from verity.ml.commitments.identity import canonical_json_text
-from verity.ml.commitments.window import window_binding
+from verity.commitments.identity import canonical_json_text
+from verity.commitments.window import window_binding
 
 from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key

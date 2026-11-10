@@ -1,4 +1,4 @@
-"""History tables (`Spot.HistoryTable`) against `verity.ml.commitments.history`: a table's domain, placeholder and root
+"""History tables (`Spot.HistoryTable`) against `verity.commitments.history`: a table's domain, placeholder and root
 at a capacity (`history_root`), the registered root held to it (`history_check`), and each position's source from the
 program's runs (`history_order`), on valid and broken inputs at capacities up to 64, and once at the pinned capacity,
 `2^17`. The named cases hold what the guarantee reads off the check: a rank past the table's length opens as the public
@@ -20,7 +20,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.ml.commitments import history as H
+from verity.commitments import history as H
 
 PACKAGE = Path(__file__).resolve().parents[1]
 PIECES = next(e["name"] for e in tomllib.loads((PACKAGE / "lakefile.toml").read_text())["lean_exe"]

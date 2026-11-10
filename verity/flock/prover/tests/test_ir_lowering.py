@@ -994,7 +994,7 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     import json
 
     import blake3
-    from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key
+    from verity.commitments.rowleaf import ROLE_X, blake3_row_key
 
     s = InputSet.open(SLICES / "rope-head-d64")
     path = REG.module("rope-head").stage(s, 0, 1, tmp_path)

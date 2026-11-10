@@ -18,8 +18,8 @@ from verity.protocols.certifier.verifier import compile_slice as CS
 from verity.protocols.certifier.verifier import replay_chain as RC
 from verity.protocols.certifier.verifier.head_check import ands
 from verity.circuits import boolean as BL
-from verity.ml.commitments import rowleaf as RL
-from verity.ml.commitments.gates import rowleaf as RG
+from verity.commitments import rowleaf as RL
+from verity.commitments.gates import rowleaf as RG
 from verity.protocols.certifier.prover import compile_slice_v5 as V5, compile_slice_v6 as V6
 
 POOL, OPEN, CLOSE, KEYS = 0x1, 0x2, 0x4, 0x8

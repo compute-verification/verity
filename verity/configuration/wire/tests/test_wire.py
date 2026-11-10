@@ -10,8 +10,8 @@ import pytest
 from verity.configuration.wire import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema,
                               Str, canonical, frame, frames, parse, split)
 from verity.configuration.wire import handshake as H
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.crypto import lms
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.crypto import lms
 
 PING = Schema("Ping", 1, "structure", {"n": Int(0, 9), "who": Str(8), "ids": List(Hex(4), 3)}, Body(max=16, unit=2))
 PING2 = Schema("Ping", 2, "output", {"n": Int()})

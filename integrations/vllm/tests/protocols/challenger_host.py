@@ -30,7 +30,7 @@ from verity.protocols.pouw.verifier import weights as Wt
 from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as LC
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
 HOST = "vy-challenger-1"

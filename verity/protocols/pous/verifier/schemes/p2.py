@@ -25,7 +25,7 @@ keys       fresh per block j of segment s, sampled after W through the salt, and
            one stream, ChaCha8(key = seed_s, nonce = u64 j, counter 0, 1, …): K, then t's candidates
 ~~~
 
-`frame` is `verity.ml.randomness.frame`, and the prime id is `p2-p{w}-c{c0}`.  After the prefix's midstate, each
+`frame` is `verity.commitments.randomness.frame`, and the prime id is `p2-p{w}-c{c0}`.  After the prefix's midstate, each
 64-byte chunk is one compression (the base's last 16 bytes, P and the counter are 21 bytes).  Given the same prefix,
 v4's keys are the spec's byte for byte (`../../../protocols/pous/verifier/tests/fixtures/p2-v4-keys.json`, from `benchmarks/pous/p2_v1/vectors.json`).
 The prefix differs from the spec's in one place: where the spec frames the model commitment and its 32-byte setup salt,
@@ -73,8 +73,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
 
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.randomness import frame
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.randomness import frame
 
 from ..codec import Codec
 from ..labels import salt_value, tag

@@ -42,7 +42,7 @@ from verity.protocols.pouw.verifier import live_reads as LR
 from verity.spot.verifier.one_stage import registered as G
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.ml.commitments import Commitment
+from verity.commitments import Commitment
 
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import registered as NR

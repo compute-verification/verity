@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from verity_flock import rec_live as RL
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT
 from verity.spot.verifier.one_stage import registered as G
 
 

@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments import hm96
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.certifier.verifier import service as SVC, tie_service as TS, warden_rows as WR
 from verity.spot.verifier import service as S
 from verity.spot.verifier.one_stage import proofs as PF, registered as G

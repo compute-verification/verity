@@ -26,9 +26,9 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet

@@ -26,7 +26,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.definitions.ops.boolean import gf2k as G
 from verity.definitions.ops.boolean.gf2k import mul
 from verity.circuits.types import Value
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity_flock import rec_algebra as A

@@ -400,7 +400,7 @@ def inner_rows(meta_: dict, inst: Path) -> SimpleNamespace:
     ``input_ports``; the row ports past them are its output rows), and per instance and row port in META's order (a shared
     row through the instance's ref, as `Flock.Public.digest` reads it) the row's digest ``x``, its salt ``y`` and its
     ``b || c``, each the commitment of ``x`` under ``y``."""
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     from . import circuit as FC
 
@@ -457,7 +457,7 @@ def drawn_rows(seed: int, units: int, n_in: int, n_out: int, links: list) -> Sim
     reader row its writer's digest under its own salt."""
     import random
 
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     g, H = random.Random(seed), hm96.SHA512
     x = [[g.randbytes(H.digest_bytes) for _ in range(n_in + n_out)] for _ in range(units)]
@@ -622,7 +622,7 @@ def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
 
 def acc_salts(path: Path, n: int) -> list[bytes]:
     """The running sums' ``n`` salts: sampled when ``path`` does not exist and kept there (the prover's), read back otherwise."""
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     k = hm96.SHA512.salt_bytes
     if not path.exists():

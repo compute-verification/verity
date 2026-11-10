@@ -17,7 +17,7 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
 from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
 from verity.circuits.cut import CallGraph

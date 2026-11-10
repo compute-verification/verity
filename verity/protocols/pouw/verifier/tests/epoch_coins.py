@@ -8,7 +8,7 @@ import dataclasses
 import itertools
 from collections.abc import Callable
 
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.verifier.coins import Challenger, CoinOpening
 
 EPOCH = 7

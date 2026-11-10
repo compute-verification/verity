@@ -197,7 +197,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     finally:
         _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
-                selection=f"verity.ml.randomness.derive({VX.SELECTION_SOURCE!r}, {VX.SELECTION_DOMAIN!r}, {{run_root}}); per family key.shard(('family', "
+                selection=f"verity.commitments.randomness.derive({VX.SELECTION_SOURCE!r}, {VX.SELECTION_DOMAIN!r}, {{run_root}}); per family key.shard(('family', "
                           "family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))")
     prov.setdefault("weights", {})
     prov["weights"] = dict(prov["weights"], sample=WEIGHT_SAMPLE_RULE, rows_per_gemm=limits.gemm_coords_per_row)

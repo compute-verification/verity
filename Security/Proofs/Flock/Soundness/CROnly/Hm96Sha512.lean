@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.CROnly.Hiding
 /-!
 # `hm96-sha512`'s hiding gap
 
-`hm96-sha512` (`verity/ml/commitments/hm96/PROTOCOL.md` §1) hashes a salt of `l = 1536` bits with the Hankel matrix of a key
+`hm96-sha512` (`verity/commitments/hm96/PROTOCOL.md` §1) hashes a salt of `l = 1536` bits with the Hankel matrix of a key
 of `n + l − 1 = 2047` bits into `n = 512` bits, beside the salt's own SHA-512 hash `c`, which takes at most `2^512`
 values. The leftover hash lemma (`sum_hidingGap_le`, `hankel_universal`) gives the gap's mean over a uniform key,
 `½·√(2^512·2^512/2^1536) = 2^-257` (`hm96_sha512_sum`), and Markov's inequality the keys whose gap exceeds `2^-193`:

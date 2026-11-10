@@ -210,7 +210,7 @@ def test_a_malformed_tree_is_refused(change, why):
 
 def test_the_row_formats_are_the_commitment_layers():
     """`row_schema`'s values are the frame-v3-sha512 leaf schemas Flock's ports name (`Flock.HmRow.ROW_SCHEMA*`)."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     from verity.spot.verifier.one_stage.served import SCHEMAS
 
     assert SCHEMAS == G.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)

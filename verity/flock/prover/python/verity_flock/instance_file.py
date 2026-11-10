@@ -55,7 +55,7 @@ def word_schema(y_bits: int) -> tuple[str, int]:
 
 def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, K: int, tree: str, schema: str) -> bytes:
     """Identity of the committed object: the frozen input set (by manifest digest), which rows of it, the leaf schema."""
-    from verity.ml.commitments import identity_digest
+    from verity.commitments import identity_digest
 
     if tree not in OWNER:
         raise ValueError(f"unknown tree {tree!r}")
@@ -66,9 +66,9 @@ def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi
 def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_row: str, digests_a, digests_b, y, y_bits: int) -> dict:
     """frame-v3 roots over given row digests and output words, each tree bound by :func:`binding_digest` of the set, range, K,
     tree and schema."""
-    from verity.ml.commitments.frame_v3 import FrameV3, Port, WordLeaf
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+    from verity.commitments.frame_v3 import FrameV3, Port, WordLeaf
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain, tree_levels
 
     n = len(y)
     ysch, ybytes = word_schema(y_bits)
@@ -97,7 +97,7 @@ def _write_file(path, header: dict, row_x: bytes, row_w: bytes, accs, out, y) ->
 
 
 def _row_digests(rows_bytes: list[bytes], leaf: str, role: int) -> list[bytes]:
-    from verity.ml.commitments.rowleaf import blake3_row_key
+    from verity.commitments.rowleaf import blake3_row_key
     if leaf == "sha256":
         raise ValueError("sha256 row digests need the row's word width: use _row_digests_words")
     import blake3
@@ -116,7 +116,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
     from verity.definitions.silicon.cast import f32_to_bf16_word
 
     d = Path(set_dir)

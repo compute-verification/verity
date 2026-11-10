@@ -85,10 +85,10 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                     "verity/protocols/certifier/verifier/certificate.py::Certificate"),
     "Challenger": ("verity/spot/verifier/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
-    "CoinTree": ("verity/ml/commitments/coin_tree.py::CoinTree",),
+    "CoinTree": ("verity/commitments/coin_tree.py::CoinTree",),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
     "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
-    "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
+    "Commitment": ("verity/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
@@ -108,7 +108,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Netlist": ("verity/definitions/private_circuits/universal.py::Netlist",),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
-    "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
+    "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
     "Period": (),
@@ -121,7 +121,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                      f"{SITE_PY}::Registration"),
     "Registry": (),
     "Session": (),
-    "Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/ml/crypto/lms.py::Signature"),
+    "Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/commitments/crypto/lms.py::Signature"),
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
@@ -156,7 +156,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
          "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
     "verity/spot/verifier/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
-    "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
+    "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
     f"{REQ_PY}::Store": (f"{REQ}::CircuitRequirement.Store", "requirement-difftest", "the requirement's port"),
     f"{REQ_PY}::Placement": (f"{REQ}::CircuitRequirement.Placement", "requirement-difftest", "the requirement's port"),
@@ -796,7 +796,7 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     # verity/core/
-    "verity/core/attest/__init__.py::Period":
+    "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/configuration/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/protocols/certifier/device/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
@@ -977,9 +977,9 @@ KNOWN: dict[str, str] = {
     "verity/definitions/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
     "verity/definitions/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
-    "verity/ml/commitments/advice.py::Opening":
+    "verity/commitments/advice.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
-    "verity/ml/commitments/advice.py::Registration":
+    "verity/commitments/advice.py::Registration":
         "homonym, a hiding commitment to a private partition's rows: rename (`Advice.Committed`) (proofs)",
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
     "verity/flock/prover/python/verity_flock/firewall_transcript.py::Session":

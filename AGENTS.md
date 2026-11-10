@@ -146,7 +146,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
-  never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
+  never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
   before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
   sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring

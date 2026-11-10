@@ -18,7 +18,7 @@ import pytest
 from verity.protocols.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
 from verity.protocols.certifier.verifier.warden import WardenParams
 from verity.protocols.pous.verifier import streamed_wipe as sw
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))

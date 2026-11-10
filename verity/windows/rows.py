@@ -29,7 +29,7 @@ value: no output word is ever public).  A bit-row member
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
-window-domain rule (``verity.ml.commitments.window``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
+window-domain rule (``verity.commitments.window``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
@@ -74,12 +74,12 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO
-from verity.ml.commitments import hm96, row_table as RT
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
-from verity.ml.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
-from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
+from verity.commitments import hm96, row_table as RT
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.hm96 import batch as HB
+from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
+from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
+from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.circuits.codec import canonical_json
 from verity.windows.population import population_program, template_partition

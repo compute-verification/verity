@@ -12,11 +12,11 @@ import pytest
 from verity.protocols.pouw.verifier import weights as Wt
 from verity.protocols.pouw.verifier.audit import chacha20_block, hm96_salt
 from verity.spot.verifier.one_stage import registered as G
-from verity.ml.commitments import hm96
-from verity.ml.commitments.hm96 import batch as hm96_batch
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-from verity.ml.crypto import chacha20
+from verity.commitments import hm96
+from verity.commitments.hm96 import batch as hm96_batch
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments.crypto import chacha20
 
 CIRCUIT = "ab" * 64
 PREFIX = "h1/"
