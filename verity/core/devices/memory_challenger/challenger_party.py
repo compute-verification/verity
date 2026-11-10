@@ -44,7 +44,7 @@ those readings alone, so on the same coins and readings it signs the same bytes 
 connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a
 round.
 
-`python -m verity.core.protocols.pous.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
+`python -m verity.core.devices.memory_challenger.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
 (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks", "k",
 "limit_ns", "node"}` (with `audit` and `published` when it names its audit), and answers the salt request with its
 source, or prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log
@@ -83,15 +83,15 @@ from verity.core.deploy.stream import Side
 from verity.core.wire import Body, Int, Message, Phase, Refused, Schema
 from verity.ml.randomness import derive
 
-from . import memory_challenger as mc
-from . import run as R
-from . import setup as pous_setup
-from .schemes.p2 import P2Params
+from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous import run as R
+from verity.core.protocols.pous import setup as pous_setup
+from verity.core.protocols.pous.schemes.p2 import P2Params
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (module docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
-MODULE = "verity.core.protocols.pous.challenger_party"
+MODULE = "verity.core.devices.memory_challenger.challenger_party"
 PREMISE = "trusted-host"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
@@ -105,7 +105,7 @@ SESSION_ID_TAG = b"verity-pous/memory-challenger/session-id/v1\0"
 AUDIT_BYTES = 64
 MAX_BLOCK = 1 << 24
 MANIFEST = Manifest(
-    ID, VERSION, "verity.core.protocols.pous.challenger_party:request_of",
+    ID, VERSION, "verity.core.devices.memory_challenger.challenger_party:request_of",
     parties=(Role(CHALLENGER, "auditor", needs=("clock", "coins", "signing-key")),
              Role(PROVER, "developer", per="server", needs=("store",))),
     channels=(Channel(CHALLENGER, PROVER, ("Warmup", "Index", "End"), carries_coins=True),
@@ -366,7 +366,7 @@ class Prover:
 
 
 def _challenger() -> Challenger:
-    from . import period  # period imports this module
+    from verity.core.protocols.pous import period  # period imports this module
 
     return Challenger(period.SESSION_DOMAIN)
 
@@ -526,7 +526,7 @@ def _refused(e: BaseException) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from . import period  # noqa: PLC0415  (period imports this module)
+    from verity.core.protocols.pous import period  # noqa: PLC0415  (period imports this module)
 
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`period.challenger`)")
