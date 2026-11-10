@@ -16,53 +16,21 @@ import hashlib
 import numpy as np
 import pytest
 
-<<<<<<< 0941037006
-torch = pytest.importorskip("torch")
-
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.pouw.serving import PassCommitment  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.commit import lead_rows as L  # noqa: E402
-from verity_vllm.engine import hooks  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.errors import Refused  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
-from verity_vllm.protocols.pouw.lead import feed as F  # noqa: E402
-from verity_vllm.protocols.pouw.lead import record as R  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import passes as PP  # noqa: E402
-||||||| merged common ancestors
-torch = pytest.importorskip("torch")
-
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.pouw.serving import PassCommitment  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import hooks  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
-from verity_vllm.protocols.pouw.lead import feed as F  # noqa: E402
-from verity_vllm.protocols.pouw.lead import record as R  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import passes as PP  # noqa: E402
-=======
 from tests.protocols._needs_torch import torch
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.serving import PassCommitment
 from verity_vllm import protocols as PO
+from verity_vllm.commit import lead_rows as L
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
+from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw import lead as PL
 from verity_vllm.protocols.pouw.lead import feed as F
 from verity_vllm.protocols.pouw.lead import record as R
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
->>>>>>> 7af4d24fca3e
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"
@@ -276,21 +244,13 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     record, window = run.record, run.window
     out = run.end_pass(step=True)
     assert isinstance(out, PassCommitment) and out is record.published and run.passes == [out]
-<<<<<<< 0941037006
     assert [e[0] for e in log][-1] == "words" and [e[0] for e in log].count("words") == 1
     twin = Keys.twin(0, 2, record.salt)
     assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) and len(backend.handed[0]) == 2
-    sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
-||||||| merged common ancestors
-    assert [e[0] for e in log][-1] == "words_root" and [e[0] for e in log].count("words_root") == 1
-    sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
-=======
-    assert [e[0] for e in log][-1] == "words_root" and [e[0] for e in log].count("words_root") == 1
 
     def sha(parts: list[bytes]) -> bytes:
         return hashlib.sha512(b"".join(parts)).digest()
 
->>>>>>> 7af4d24fca3e
     assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == \
         (PL.SCHEME, 1, 2, 0, link.windows[0].salt, "stand-in")
     assert out.units == 2 and out.tiles == sum(R.tiles(c.shape) for c in record.calls)

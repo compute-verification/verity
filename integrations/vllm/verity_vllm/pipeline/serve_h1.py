@@ -278,31 +278,9 @@ class H1Windows:
     (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
     ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
-<<<<<<< 0941037006
-    draw under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
-    each window's Commit record at its close, once the window is sealed (`sealed`), so its release runs on ``closer``.
-    ``clock`` times each part."""
-||||||| merged common ancestors
-    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
-||||||||| merged common ancestors
-    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
-    None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
-    release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
-    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
-=========
-    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`; None:
-    kept nowhere, so no drawn unit or round of it can be proved); ``receipts`` each window's `Served` registers each
-    call's ``receipt@<c>`` (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each
-    window's release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome
-    itself. ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release
-    puts its draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
->>>>>>>>> Temporary merge branch 2
-=======
     sample under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
     each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
     so its release runs on ``closer``. ``clock`` times each part."""
->>>>>>> 7af4d24fca3e
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,

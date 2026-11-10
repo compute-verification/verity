@@ -96,7 +96,6 @@ def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_i
     assert w._fit(n * PV.ALIGN) == (None if at is None else at * PV.ALIGN)
 
 
-<<<<<<< 0941037006
 def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_the_ring_in_order(tmp_path, monkeypatch):
     """With two writer threads, call 1's file is written while call 0's is still held, and a third call waits for room
     though call 1 is written: its bytes go where call 0's still are only once call 0 is written, so every file is
@@ -131,21 +130,12 @@ def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_th
     w.close()
 
 
-def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
-    """A write that fails is its window's: `wait` raises OSError naming the call once the window's other calls are
-    written, and the next window on the writer is written whole."""
-||||||| merged common ancestors
-def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
-    """A write that fails is its window's: `wait` raises OSError naming the call once the window's other calls are
-    written, and the next window on the writer is written whole."""
-=======
 @pytest.mark.parametrize("error, named", [(OSError(28, "No space left on device"), r"OSError: .*No space"),
                                           (RuntimeError("CUDA error: an illegal memory access was encountered"),
                                            r"RuntimeError: CUDA error")])
 def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch, error, named):
     """A write that fails, the file system's or the device's, is its window's: `wait` raises OSError naming the call once
     the window's other calls are written, and the next window on the writer is written whole."""
->>>>>>> 7af4d24fca3e
     savez = PV._savez
 
     def full(path, *arrays):

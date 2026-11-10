@@ -208,22 +208,12 @@ for s in sessions:
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-<<<<<<< 0941037006
-    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (draw K 2), with each call's
-    receipts (`_with_receipts`: J10-R's word reference's, or under the stand-in its own, which drawn then rebuilds), a
+    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (sample K 2), with each call's
+    receipts (`_with_receipts`: J10-R's word reference's, or under the stand-in its own, which sampled then rebuilds), a
     prover dir and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served
-    weights as drawn's ``--weights``."""
+    weights as sampled's ``--weights``."""
     receipt = _j10r_receipt if REAL else _stand_in_receipt
     monkeypatch.setattr(SV.Served, "commit", _with_receipts(SV.Served.commit, receipt))
-||||||| merged common ancestors
-    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (draw K 2), with a prover dir
-    and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served weights as
-    drawn's ``--weights``."""
-=======
-    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (sample K 2), with a prover dir
-    and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served weights as
-    sampled's ``--weights``."""
->>>>>>> 7af4d24fca3e
     if not REAL:
         j10r = _unit(defn=StandInJ10R)
         monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)

@@ -9,36 +9,16 @@ the leaves the sampled blocks open.
   blocks' own rows. `leaves_of` takes them to the step's leaves (`leaf_span`); a read of a member the window didn't commit is
   refused by name.
 * **When.** `Draws.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
-<<<<<<< 0941037006
-  until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
+  until every protocol of ``--release-after`` has sampled window k, then hands the union to the device pool's `release` (the
   window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. The step-input port's
   committed positions, which the seal holds to the rows the window ran (`serve_seal.positions_off_of`), are read just before
-  (`served_record.committed_raw`'s ``read_before_release``); no bundle holds them. A release can't come before the last draw,
-  and a window is released once: a second draw of a window by the same protocol is refused (a draw is never redrawn), as is
-  any draw once the window was released. The sealed bundle then holds the kept set with its leaves' salts, every step's root
+  (`served_record.committed_raw`'s ``read_before_release``); no bundle holds them. A release can't come before the last sample,
+  and a window is released once: a second sample of a window by the same protocol is refused (a sample is never redrawn), as is
+  any sample once the window was released. The sealed bundle then holds the kept set with its leaves' salts, every step's root
   and the tree nodes an opening inside it reads (`store_dump.drawn`), so each kept leaf's opening path stays whole until the
   last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
-* **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
-  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
-||||||| merged common ancestors
-  until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
-  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
-  release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
-  refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
-  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
-  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
-* **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
-  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
-=======
-  until every protocol of ``--release-after`` has sampled window k, then hands the union to the device pool's `release` (the
-  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
-  release can't come before the last sample, and a window is released once: a second sample of a window by the same protocol is
-  refused (a sample is never redrawn), as is any sample once the window was released. The sealed bundle then holds the kept set,
-  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
-  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
 * **Where samples come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
   open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
->>>>>>> 7af4d24fca3e
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
@@ -148,14 +128,8 @@ class Draws:
             self._cv.notify_all()
 
     def fail(self, why: str) -> None:
-<<<<<<< 0941037006
-        """Every waiting release fails with ``why``: no draw is coming. So does every step waiting on the device pool for an earlier
+        """Every waiting release fails with ``why``: no sample is coming. So does every step waiting on the device pool for an earlier
         window's release (`DevicePool.fail`): it ends by name, uncommitted, rather than waiting on a release that won't come."""
-||||||| merged common ancestors
-        """Every waiting release fails with ``why``: no draw is coming."""
-=======
-        """Every waiting release fails with ``why``: no sample is coming."""
->>>>>>> 7af4d24fca3e
         with self._cv:
             self.failure = why
             self._cv.notify_all()

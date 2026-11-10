@@ -45,18 +45,11 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-<<<<<<< 0941037006
-``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare (`serve_row`).
-||||||| merged common ancestors
-``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
-(`serve_row`).
-=======
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
 buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
->>>>>>> 7af4d24fca3e
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -79,27 +72,11 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-<<<<<<< 0941037006
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
 ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
-device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
-||||||| merged common ancestors
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
-`serve_seal.scheme_refusal`). ``--seal`` seals each closed
-window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
-device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
-=======
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
-`serve_seal.scheme_refusal`). ``--seal`` seals each closed
-window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
->>>>>>> 7af4d24fca3e
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
 beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
@@ -150,20 +127,10 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-<<<<<<< 0941037006
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as SPL,
                                    serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW, serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-||||||| merged common ancestors
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-=======
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
->>>>>>> 7af4d24fca3e
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop

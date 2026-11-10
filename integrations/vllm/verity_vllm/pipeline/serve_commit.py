@@ -17,7 +17,6 @@ its rows and the committer's trace. ``marks`` hears each window's open and close
 With ``seal`` each closed window is also sealed as a deferred Commit's row dir (`serve_seal.seal_window`); with a ``sealer``
 (`seal_stages.Sealer`) off the engine loop. There the close itself runs off the loop too: the loop ends the window's last
 step, detaches the window into a view of the committer (`NativeHostCommitter.detach`), takes the ledgers as they stand and
-<<<<<<< 0941037006
 opens the next window, and the window's finalize, its readback, its records and its requests' checks run on the sealer's
 first thread in window order (`CommitWindows._finish`), then its seal on its second, beside the next window's finalize; a
 committer that detaches no window is finalized at the close and frozen for its seal (`serve_seal.freeze`). The window's line
@@ -26,26 +25,7 @@ is its line in ``seals.jsonl``, once written, in window order; a sealer with a `
 writes only each seal's store files on its thread, and the rest of the seal runs in that spawned process. With ``release``
 (`serve_release.Draws`, ``--retain device --release-after``) a window's seal, on either path, first waits for its
 draw-gated release (on the first thread), which keeps only the leaves its
-subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
-||||||| merged common ancestors
-opens the next window, and the window's finalize, its readback, its records, its requests' checks and then its seal run on
-the sealer's thread in window order (`CommitWindows._finish`); a committer that detaches no window is finalized at the
-close and frozen for its seal (`serve_seal.freeze`). The window's line in ``windows.jsonl``, written once its finalize has
-run and before its seal, names its row dir (``seal``); what its seal wrote is its line in ``seals.jsonl``, once written,
-in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each seal's store files on its thread,
-and the rest of the seal runs in that spawned process. With ``release`` (`serve_release.Draws`, ``--retain device
---release-after``) a window's seal, on either path, first waits for its draw-gated release, which keeps only the leaves its
-subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
-=======
-opens the next window, and the window's finalize, its readback, its records, its requests' checks and then its seal run on
-the sealer's thread in window order (`CommitWindows._finish`); a committer that detaches no window is finalized at the
-close and frozen for its seal (`serve_seal.freeze`). The window's line in ``windows.jsonl``, written once its finalize has
-run and before its seal, names its row dir (``seal``); what its seal wrote is its line in ``seals.jsonl``, once written,
-in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each seal's store files on its thread,
-and the rest of the seal runs in that spawned process. With ``release`` (`serve_release.Draws`, ``--retain device
---release-after``) a window's seal, on either path, first waits for its draw-gated release, which keeps only the leaves its
 subprotocols' sampled blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
->>>>>>> 7af4d24fca3e
 where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
 worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and ``close_phases_s``, and where its steps'
 Commit time went on the serving thread and the worker (``commit_s``, `commit_s_of`). ``window_bytes``
@@ -278,7 +258,6 @@ class CommitWindows:
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
-<<<<<<< 0941037006
     ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). A window closed on the loop takes
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
@@ -288,18 +267,6 @@ class CommitWindows:
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
     ``sealed`` hears each window's seal line, or why it has none."""
-||||||| merged common ancestors
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
-    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on."""
-=======
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
-    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
-    with ``sealed`` hears each window's seal line, or why it has none."""
->>>>>>> 7af4d24fca3e
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -505,8 +472,6 @@ class CommitWindows:
             self.mirror()
         if isinstance(job, tuple):
             self._land(rec, job)
-        else:
-            self._no_seal(rec, job)
         return rec
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
@@ -578,23 +543,11 @@ class CommitWindows:
         """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
         so the next windows' steps don't wait on them (``rec["release"]``); and the arm hears why (`_sealed`)."""
         if isinstance(job, tuple):
-<<<<<<< 0941037006
             return
         why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
         if self.release is not None and com is not None:
             if (got := self.release.discard(rec["window"], com, f"not sealed: {why}")) is not None:
                 rec["release"] = got
-||||||| merged common ancestors
-            self._land(rec, job, here=(c.t_close, c.seal_wait))
-=======
-            self._land(rec, job, here=(c.t_close, c.seal_wait))
-        else:
-            self._no_seal(rec, job)
-
-    def _no_seal(self, rec: Mapping[str, Any], job: Any) -> None:
-        """A window that reaches no seal: the arm hears why (`_sealed`)."""
-        why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
->>>>>>> 7af4d24fca3e
         self._sealed({"window": rec["window"], "error": f"not sealed: {why}"})
 
     def _sealed(self, line: Mapping[str, Any]) -> None:
@@ -732,7 +685,6 @@ class CommitWindows:
 
             def seal_one() -> dict[str, Any]:
                 if self.sealer is not None and self.sealer.process is not None:
-<<<<<<< 0941037006
                     return self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
                                                     written=(lambda: thaw(com)) if com is not self.com else None, **kw)
                 return seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
@@ -756,52 +708,6 @@ class CommitWindows:
                     self.mirror()
 
             return seal
-||||||| merged common ancestors
-                    sealed = self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
-                                                      written=(lambda: thaw(com)) if com is not self.com else None, **kw)
-                else:
-                    sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
-            except SealFailed as e:
-                sealed = {"error": str(e)[:500]}
-            except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
-                sealed = {"error": f"{type(e).__name__}: {e}"[:500]}
-            finally:
-                if com is not self.com:
-                    thaw(com)
-            line = {"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), **sealed,
-                    "queued_s": round(t0 - t_close, 3), "seal_wait_s": round(waited, 4)}
-            if self.release is not None:
-                line["release"] = released
-            with self._lock:
-                self.seals.append(line)
-            with open(self.out / "seals.jsonl", "a") as fh:
-                fh.write(json.dumps(line) + "\n")
-            if self.mirror is not None:
-                self.mirror()
-=======
-                    sealed = self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
-                                                      written=(lambda: thaw(com)) if com is not self.com else None, **kw)
-                else:
-                    sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
-            except SealFailed as e:
-                sealed = {"error": str(e)[:500]}
-            except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
-                sealed = {"error": f"{type(e).__name__}: {e}"[:500]}
-            finally:
-                if com is not self.com:
-                    thaw(com)
-            line = {"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), **sealed,
-                    "queued_s": round(t0 - t_close, 3), "seal_wait_s": round(waited, 4)}
-            if self.release is not None:
-                line["release"] = released
-            with self._lock:
-                self.seals.append(line)
-            with open(self.out / "seals.jsonl", "a") as fh:
-                fh.write(json.dumps(line) + "\n")
-            self._sealed(line)
-            if self.mirror is not None:
-                self.mirror()
->>>>>>> 7af4d24fca3e
 
         if here is not None:
             return run(here[1])
