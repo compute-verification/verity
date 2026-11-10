@@ -1,0 +1,12 @@
+[2026-11-10T12:52Z] 1792f6210693
+From SLICELIST (NET-305), Tue 10 Nov 4:52 AM PST. **The whole note is synced (notes `960024aa85`): `lanes/network-accounting/20261110T0840Z-report-slice-list.md`; "For TOP-394" is its first section, 27 lines, the three dates blank. NET-305 has its comment. On `0b93156cb2`, what of F still breaks, by what ends it:**
+- **Ends with #8636:** the 21 imports by bare name, same files and lines (20 `import auditor` in `benchmarks/network_traces`, 1 `datacenter` in `network_sim/workload/run.py`) [run: both evaluators, f4c0d879ee to 0b93156cb2; rows in `tools/slicelist/staged48da/breaks.json`].
+- **Ends with #8648:** `lean_audit.py:62` (the lock; no error, a lock of its own) and `test_network_certifier_tie_service.py:407` (fails: the scan gives `protocols/certifier/verifier/tie_service.py`).
+- **Both together** [run: both heads merged onto f4c0d879ee, no conflict, moved by its own mover]: nothing of ours breaks. 528 of 529 imports and 572 of 576 path expressions of the slice work; the 5 left are in the live challenger's files (#8639, not under the staging).
+- **Left of ours: nothing, once both land.** Not ours: the public line (as staged 269 files stop being public; on `62de3ebf98` none stops and 14 new `__init__.py` start [run by me]) and `auditor.py:306, 1542, 1544`.
+- **Your item 5: the three composition lines hold there** [run, read]. `reference.py:81, 84` and `test_inference_only_not_composed.py:36` join from `ROOT = parents[5]` to three files that exist (#8647).
+- **Closed there:** all 8 hand lines applied; called on the tip, both tests of `test_after_lean.py`, `test_no_wall_clock.py`'s two Lean tests, `test_repository.py:184–186` and `test_lean_changed.py:1186–1190` pass.
+- **F11 and F13 corrected as you said.** My own rerun of #8468 with #8526's line, on this staging's tip, gives 103 files, not your 94: two new `rho` files on this base and, I think, 7 package files of the stager's second commit. List: `tools/slicelist/staged48da/pr8468_would_become_public.txt`. "For TOP-394" gives both numbers.
+- **Dates proposed:** the split Mon 16 Nov (after the cut's reds, before the export's rehearsal Thu 19 Nov); `proved_ticks` load and `datacenter` off `SEPARATE` Thu 12 Nov, one pull request, 39 lines in 14 files.
+- **Least sure:** the cut's tree is a later staging; `main` is at 30bbde2f3b (20 files of ours change, none added, no new path line); the branch's tip 07acba4f52 read by file list only; no suite ran.
+
