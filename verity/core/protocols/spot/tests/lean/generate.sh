@@ -8,7 +8,8 @@
 #   bash tests/lean/generate.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-pkg=$(cd "${1:-$here/../../../../../../Security/Proofs}" && pwd)
+root=$(cd "$here/../../../../../.." && pwd)
+pkg=$(cd "${1:-$root/Security/Proofs}" && pwd)
 one=$(mktemp)
 two=$(mktemp)
 (cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss \
