@@ -92,7 +92,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT / "benchmarks" / "datacenter"), str(ROOT)]
+PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT / "verity" / "composite" / "datacenter"), str(ROOT)]
 sys.path[:0] = PATHS
 
 import active_replay as ar  # noqa: E402

@@ -9,8 +9,8 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
-policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
+`verity/composite/verifier/remote/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
+policy, and onsite (`verity/composite/verifier/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
@@ -202,9 +202,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
-  machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
+  machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
+  as the far end of that coin link (`verity/composite/device/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
     is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them

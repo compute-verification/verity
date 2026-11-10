@@ -146,7 +146,7 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     from verity.protocols.pouw.prover.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", (Path(__file__).parents[4] / "benchmarks") / "pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     compiled = pouw.compile(s8_grid(), h1tile.SCHEME).program
@@ -186,7 +186,7 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     from verity.protocols.pouw.prover.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", (Path(__file__).parents[4] / "benchmarks") / "pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     assert h1tile.SCHEME_V3 == PT.SCHEME_V3

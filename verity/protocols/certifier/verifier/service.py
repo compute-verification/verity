@@ -35,7 +35,7 @@ verifier's on those bytes (`lean_draw`: Flock's `flock-verify draw --population 
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
 object it is handed lists. Selection `All` (K None) samples every window and reads no coin, and K = n leaves nothing to
-sample. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+sample. The datacenter model (`verity/composite/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 

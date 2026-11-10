@@ -278,7 +278,7 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
 
 
 def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
-    """`certifier-rehearse`'s command (`benchmarks/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
+    """`certifier-rehearse`'s command (`verity/composite/device/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
     temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A

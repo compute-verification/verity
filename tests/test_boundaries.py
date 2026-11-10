@@ -274,9 +274,9 @@ BENCHMARKS_IMPORTERS = {
                      "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
                      "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
+                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
     **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
-                    "proofs: the live challenger's gate and model registry (`benchmarks/live_challenger`)"),
+                    "proofs: the live challenger's gate and model registry (`verity/composite/device/live_challenger`)"),
     **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
                      "integrations/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "

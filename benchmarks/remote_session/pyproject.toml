@@ -54,8 +54,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/core/protocols/certifier", "verity/ml/protocols/__init__.py", "verity/protocols/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
-          "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json", "benchmarks/live_challenger/serve.py",
-          "benchmarks/live_challenger/tests/stub_serve.py",
+          "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json", "verity/composite/device/live_challenger/serve.py",
+          "verity/composite/device/live_challenger/tests/stub_serve.py",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
 
@@ -64,4 +64,4 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_gate_whatif.py"]
-paths = ["benchmarks/live_challenger/tests"]
+paths = ["verity/composite/device/live_challenger/tests"]

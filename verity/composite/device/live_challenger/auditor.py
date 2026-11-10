@@ -2092,7 +2092,7 @@ def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> 
     """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
     link carries to the peer (no `--peer`: serve.py opens no tunnel of its own), and serves it `--withhold` when its open
     says `withheld: true`."""
-    return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "serve.py"),
+    return [sys.executable, "-I", str(tree / "verity" / "composite" / "device" / "live_challenger" / "serve.py"),
             "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--scheme", open_body["scheme"],
             "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]),
             "--key", str(host.key), "--host", open_body["host"],
@@ -2104,7 +2104,7 @@ def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> 
 def coin_link_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
     """The session's coin link (`coin_link.py`): from the open's port on its peer to serve.py's on this host, for one
     minute more than the window's, at D7's parameters."""
-    return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "coin_link.py"),
+    return [sys.executable, "-I", str(tree / "verity" / "composite" / "device" / "live_challenger" / "coin_link.py"),
             "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--peer", open_body["peer"],
             "--peers", str(host.peers), "--minutes", str(open_body["minutes"] + 1)]
 

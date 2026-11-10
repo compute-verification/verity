@@ -17,7 +17,7 @@ from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[5]
-SERVE = ROOT / "benchmarks" / "live_challenger" / "serve.py"
+SERVE = ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py"
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:

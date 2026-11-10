@@ -8,7 +8,7 @@ or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
+Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/composite/verifier/remote/CoreRemote.lean`) is what the verifier
 establishes with no hardware of its own at the developer's site. It composes three protocols (`Core.Remote.components`):
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
@@ -30,7 +30,7 @@ stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run 
 sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
-`verity/core/protocols/remote/README.md`, "Which remote", lists them.
+`verity/composite/verifier/remote/README.md`, "Which remote", lists them.
 
 ## How far a demo runs, and how far it's proved
 
@@ -72,7 +72,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 - `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
   period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
   simulated in one process, the prover is a labelled stand-in for Flock, and the verdict is the composition's Python
-  mirror (`verity/core/protocols/composition/tests/reference.py`), not `remote check`. It is the only demo that steps
+  mirror (`verity/composite/verifier/composition/tests/reference.py`), not `remote check`. It is the only demo that steps
   through the whole remote composite; its tests (`examples/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8

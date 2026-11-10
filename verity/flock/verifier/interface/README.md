@@ -127,7 +127,7 @@ registered compiler and the days' registered circuits, at the head). As a core p
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
 ASCII without DEL as `Core.canonicalJson` does. `verity.core.protocols.registration` is its Python, held to it by the
-composition suite's difftest (`../../../core/protocols/composition/tests/test_registration_difftest.py`).
+composition suite's difftest (`../../../composite/verifier/composition/tests/test_registration_difftest.py`).
 
 ## Properties
 
