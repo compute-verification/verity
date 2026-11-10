@@ -34627,3 +34627,57 @@ The nightly, every test: 5,016 s at `main`, 2,885 s here. No thousand comes unde
 - [run] `9f3b` holds slot b0 on cpu-3 (since 22:53Z), still building the Proofs package for the records.
 - [guess] ETA about 01:15Z, from `2f1a`'s 101 minutes of checking after its build.
 - Then: the lock-only commit, the suites that read the two locks, "ready to mark #8539 at <sha>", and the records compared with `41a78d81cf` and `bec1e5cdaa18`. #8539's final head is the lock-only commit, which doesn't exist yet.
+
+## PRF-499 OUTERSTEP, Tue 10 Nov 23:54Z: yes on both. The 16-part outer step at k_log 27 (m 35) took 1,978 s against 3,000 and peaked at 97.0 GiB RSS against 110, on 16 vCPUs (r20261110-163252-0788, rc 0); modeled was 2,830 s and 97 GiB; claims was 6, not 2
+
+**For memory-accounting (PRF-499): yes on time and yes on memory, from one run that finished clean.**
+
+- **Time: yes.** The 16 outer parts took 1,978 s against 3,000 s. That is 2bb7's definition: each part's ready time minus its start, summed. [run]
+- **Memory: yes.** The peak summed RSS was 97.0 GiB against 110 GiB, 164 s into L0. That counts every process of the job. By 2bb7's narrower count (ZK server and prover) it is 94.7 GiB, against 2bb7's 97.2. [run; read for 2bb7's]
+- **CPU: 12,832 CPU-s,** 12,082 in the ZK server and 750 in the prover. [run]
+- **The run:** `r20261110-163252-0788` on vy-nebius-cpu-4, rc 0, class SUCCESS, every step exit 0, at `main`'s `c3ae3eaaf0`. All 16 parts were released at their times with no stop, and Lean's verifier accepted each of the 16 releases. [run]
+- **So the recursion layer stages V\* over a `k_log` 27 inner session today.** It is exactly at the verifier's limit: 16 statements, and `MAX_STATEMENTS` is 16. [run; read for the limit]
+
+**Measured against modeled.** You carried 2bb7 x 1.08 to 1.09: about 2,830 s, 17,600 CPU-s and 97 GiB. [read: PRF-499] Measured is 0.70 of that time, 0.73 of those CPU-seconds and the same memory. At your count of proofs a session, 650 CPU-h becomes about 475. [guess: scaled, and the count is yours]
+
+Each part, with 2bb7's time for the part of the same name (2bb7's were smaller: 3 blocks, `k_log` 26, m 29):
+
+| part | statement, openings | seconds | 2bb7 seconds | ZK server CPU-s | peak RSS GiB |
+|---|---|---:|---:|---:|---:|
+| L0 | `rec-open/l64-h16`, 436 | 697 | 937 | 4,713 | 97.0 |
+| L1 | `rec-open/l16-h15`, 212 | 205 | 312 | 1,222 | 30.0 |
+| L2 | `rec-open/l16-h13`, 142 | 203 | 359 | 1,203 | 29.3 |
+| L3 | `rec-open/l16-h12`, 106 | 112 | 170 | 603 | 17.7 |
+| L4 | `rec-open/l16-h10`, 86 | 113 | 150 | 611 | 17.5 |
+| L5 | `rec-open/l16-h8`, 72 | 110 | none | 598 | 17.8 |
+| L6 | `rec-open/l16-h6`, 64 | 73 | none | 350 | 12.0 |
+| alg-p0 | `rec-residuals/m35-k27-c6-p0` | 225 | 402 | 1,659 | 54.2 |
+| alg-p1 | `rec-residuals/m35-k27-c6-p1` | 112 | 143 | 781 | 28.5 |
+| 7 caps | `rec-cap/n128`, `n64` | 128 | 126 (5 caps) | 308 | 5.1 |
+| all | 16 statements | 1,978 | 2,598 | 12,048 | 97.0 |
+
+All of the table is [run]; 2bb7's column is recomputed from its own records. CPU-seconds run to each part's ready time (the ZK server takes 34 more while parts are held), and each peak is the larger of the two samplers'.
+
+**Why it is faster than the model.** [guess] Mostly the code since 2bb7's commit, and partly the node; I did not look for which change.
+- The model assumed each part costs what it did on 2bb7. Today's L0 is larger than 2bb7's and still took fewer ZK-server CPU-seconds: 4,713, against 6,428 for the smaller L0 on 3 Nov (aff7). [run; read for aff7]
+- cpu-4 is not simply a faster node: aff7 ran those 12 smaller parts on cpu-4 itself in 2,353 s. [read: ZKSIZE's note]
+- 2bb7 shared its prover vCPUs: other work took 19% of them. [read] Here everything but the ZK server and prover took 1%, and those two took 46%. [run]
+
+**What this run is not.** Five things differ from the cap as PRF-499 states it, or limit what the run shows.
+1. **claims is 6, not 2.** The run's cap is `instances=256,claims=6,k_log=27,vus_per_block=1`. A staged inner statement has link regions and claims = 2 + 2 a region; this one has 2. [run; read for the rule] Both caps have the same seven levels and seven caps; only the two algebra parts differ, and they are 337 s of the 1,978. [run] Fewer claims should make them smaller. [guess]
+2. **The inner statement is a stand-in:** 256 blocks of `silu-mul-v2/i16384/bf16`, not PoUB's opening unit. V\*'s statements are a function of the cap alone, so the outer step is the cap's. [read: `rec_shape.outer`] The inner step is not yours to carry from here. Its proof took 61 s, 625 CPU-s and 102.3 GiB, which is under 110 GiB but closer to it than the outer step. [run]
+3. **One run, no repeat,** on a nearly idle node. The 16 prover vCPUs are 8 cores' two threads, as 2bb7's were. [run]
+4. **Peak RSS is sampled once a second.** The processes' own high-water marks bound the true peak at 101.1 GiB. Memory as the job's cgroup charges it, page cache included, peaked at 112.1 GiB (9.3 GiB of it page cache), with no memory event. [run] A hard limit of 110 GiB on the cgroup would have had to reclaim cache.
+5. **The run's wall was 20,081 s, and that is my schedule, not proving time.** I set release windows of 19,650 s and each part is held to its window. Counting the whole inner, staging and Lean steps beside the 16 parts (173, 202 and 108 s) gives 2,461 s, still under 3,000. [run]
+
+**The command,** at `c3ae3eaaf0` with no code change; `job.sh`, `memguard.py` and `cpustat.py` are in the run's `inputs/`: [run]
+
+```
+research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as proofs --cwd source --mem-gb 256 --timeout 27000 --pool-wait 1800 --send job.sh --send memguard.py --send cpustat.py -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/job.sh PCPUS=16 NCPU=32 N=256 SUBCIRCUIT=silu-mul-v2/i16384/bf16 MEM_KILL_GB=250 RELEASE_WINDOWS_S=lead=5400,L0=3000,L=1200,alg=1500,cap=150,other=900'
+```
+
+`job.sh` runs `bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i16384/bf16 N=256 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench RELEASE=1 TREE_FROM=local MODES=firewall STEPS=build,inner,vstage,vcap,oprove,lean PCPUS=16` on cores 102-133: the prover and the ZK server on 102-117, the verifier on 118-133. [run]
+
+**How the figures were read.** Seconds are `release.json`'s `ready_ms` less `release-wall.tsv`'s start, a part. CPU-seconds and RSS are the harness's 1 s process samples (`resources.jsonl`), as ZKSIZE read 2bb7's; my own sampler in the run (`out/memguard.tsv`) puts the peak at 95.5 GiB, the same second. [run]
+
+**Nothing is left for the yes or no, and I launched nothing else.** A second sample, or PoUB's own inner statement, would be a new run.
