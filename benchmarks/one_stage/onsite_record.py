@@ -674,14 +674,23 @@ PREMISES: dict[str, dict[str, Any]] = {
                           "in the accepted statement, proved and none sampled (the check's Facts.whole), since a "
                           "sampled scan with a wrong unit leaks its egress rows, not its entries; an accepted scan's "
                           "only input gates are its rows, its state and its slot entries (scanOf's refusal); and its "
-                          "state is no free input, each unit's state read being an earlier unit's output (the state "
-                          "chain, by checked inputs whose outputs are unique). Egress is then a function of ingress, "
-                          "which the wire fixes, the initial state and the entries, so the audits tied to the scan "
-                          "move at most the entries' bits to the link, whatever their units computed. "
-                          "RowsKBoundsCount, in the lock, is its arithmetic alone: the product at the check's numbers "
-                          "is at most 2^K. Not yet stated: open, by this name, until the statement is in the lock and "
-                          "named here",
+                          "state rows are no free input, each ingress unit's state read being the unit before's "
+                          "output (the state chain, which the scan's registration states and the check reads, by "
+                          "checked inputs whose outputs are unique). With the egress units' views tied too "
+                          "(`view-tied`), egress is a function of ingress, which the wire fixes, the initial state "
+                          "and the entries, so the audits tied to the scan move at most the entries' bits to the "
+                          "link, whatever their units computed. RowsKBoundsCount, in the lock, is its arithmetic "
+                          "alone: the product at the check's numbers is at most 2^K. Not yet stated: open, by this "
+                          "name, until the statement is in the lock and named here",
                     "discharged_by": (), "charge": "entries"},
+    "view-tied": {"is": "that each egress unit's view of the scan's state is its ingress unit's output: the scan's "
+                        "second state tie, beside the state chain. The scan's registration states the chain alone and "
+                        "the period check reads nothing of the view, so no check of this run holds a prover to it: "
+                        "untied, the view rows are free inputs of the scan that the count reads and K charges nothing "
+                        "for, and the figure of a phase is then those rows' width in place of its slot entries. Open "
+                        "until the registration states the tie and the period check reads it as it reads the chain, "
+                        "or a statement in the lock gives it of the scan's Program",
+                  "discharged_by": (), "charge": "entries"},
     "wires-fit": {"is": "ScopeAcc at each statement the count reads: the sampling scope (Scope, the sampled verifier's, "
                         "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
                         "(BoundaryGates.Fits, every clause). At a scan's statement, at the layout the count reads it "

@@ -329,7 +329,8 @@ negatives.
   each cell that would read proved: no bits are added for what is open, the advice's cap included, since the link
   figure charges the advice through the entries, a scan's slot entries, which the check charges once where every proof
   block of the scan is drawn. A phase charged so rests on that cut (`entries-cut`, open till its statement is in the
-  lock) and on none of the tied charge's premises or checks. The record says how the figure tightens, in its place and
+  lock), on the scan's second state tie (`view-tied`: each egress unit's view is its ingress unit's output, which the
+  registration doesn't state and the period check doesn't read) and on none of the tied charge's premises or checks. The record says how the figure tightens, in its place and
   never beside it. For a phase charged its tied audits, the figure says which charge K applied each (`state_charge`):
   its free inputs with its reads of
   the scan's state held (`stateFree`) only where the lock holds RowsStateHeld at its pinned statement reading

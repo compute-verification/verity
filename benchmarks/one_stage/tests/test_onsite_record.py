@@ -1016,21 +1016,22 @@ def test_no_guarantee_counts_a_phases_tied_audits_so_that_count_is_a_premise_of_
     what one would give is the premise tied-count, with no discharge named. A phase charged its tied audits is open
     on it, by name, with every check held and every other premise discharged. A phase charged its scan's slot entries
     once doesn't rest on it, or on any premise or check of the tied charge: it rests on entries-cut, open by name till
-    its statement is in the lock, and on the premises of both charges."""
-    for name in ("tied-count", "entries-cut"):
+    its statement is in the lock, on view-tied, the scan's second state tie, which no check of the run reads, and on
+    the premises of both charges."""
+    for name in ("tied-count", *OR.ENTRIES):
         monkeypatch.setitem(OR.PREMISES, name, UNNAMED[name])
     assert not any("TiedCount" in g for g in (*OR.RESTS_ON, *OR.DISCHARGES))
-    assert UNNAMED["tied-count"]["discharged_by"] == UNNAMED["entries-cut"]["discharged_by"] == ()
-    assert ("tied-count" in OR.TIE, "entries-cut" in OR.ENTRIES) == (True, True)
+    assert all(UNNAMED[name]["discharged_by"] == () for name in ("tied-count", *OR.ENTRIES))
+    assert ("tied-count" in OR.TIE, OR.ENTRIES) == (True, ("entries-cut", "view-tied"))
     of = held_both(tmp_path / "tied")["bound"]["of_record"]
     assert (of["tie_charged"], of["open"], of["K"]) == ([0], ["tied-count"], K)
-    assert "entries-cut" not in of["premises"]["premises"] and set(OR.TIE) <= set(of["premises"]["premises"])
+    assert not set(OR.ENTRIES) & set(of["premises"]["premises"]) and set(OR.TIE) <= set(of["premises"]["premises"])
     rec = record(accepted(tmp_path / "once", ONCE))
     of = rec["bound"]["of_record"]
-    assert (of["tie_charged"], of["held"], of["open"], of["K"]) == ([], [], ["entries-cut"], K)
-    assert not set(OR.TIE) & set(of["premises"]["premises"]) and "entries-cut" in of["premises"]["premises"]
+    assert (of["tie_charged"], of["held"], of["open"], of["K"]) == ([], [], ["entries-cut", "view-tied"], K)
+    assert not set(OR.TIE) & set(of["premises"]["premises"]) and set(OR.ENTRIES) <= set(of["premises"]["premises"])
     assert set(of["premises"]["premises"]) == set(OR.PREMISES) - set(OR.TIE)
-    assert (rec["periods"]["run"]["how"], rec["periods"]["run"]["open"]) == ("open", ["entries-cut"])
+    assert (rec["periods"]["run"]["how"], rec["periods"]["run"]["open"]) == ("open", ["entries-cut", "view-tied"])
 
 
 def test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list(monkeypatch, tmp_path):
