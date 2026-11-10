@@ -248,8 +248,7 @@ def test_root_s_oneshot_mints_with_the_node_s_key_and_writes_a_token_only_the_gr
     script(bin_ / "curl", '#!/bin/sh\ncat "$REPLY"\n')
     script(bin_ / "python3.12", f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     reply = tmp_path / "reply"
-    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "GH_APP_KEY": str(key), "CALLS": str(tmp_path / "calls"),
-           "REPLY": str(reply)}
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "GH_APP_KEY": str(key), "CALLS": str(tmp_path / "calls"), "REPLY": str(reply)}
 
     def run() -> subprocess.CompletedProcess:
         return subprocess.run([str(lib / "token.sh"), str(out)], env=env, capture_output=True, text=True)
