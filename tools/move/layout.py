@@ -214,6 +214,14 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
 
 
+def braces(token: str) -> list[str]:
+    """Each path a brace list names: `a/{x,y/z}.py` is `a/x.py` and `a/y/z.py`; a token with no list is itself."""
+    m = re.search(r"\{([^{}]*)\}", token)
+    if not m:
+        return [token]
+    return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
+
+
 def derived_modules(layout: Layout) -> dict[str, str]:
     """The module renames that [paths] and [roots] imply: one per path entry whose old and new names differ."""
     out = {}
@@ -594,6 +602,8 @@ class Run:
             if not head:
                 return None
             new, approx = self.L.path(head, True)
+            if "{" in tail and "*" not in t and (each := self._brace_list(t, tail, new, path)):
+                return each + ("/" if slash else "")
             if new is None:
                 if approx:
                     self.note("unmapped directory paths", f"{path}: {token}")
@@ -612,6 +622,21 @@ class Run:
         if approx:
             self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
+
+    def _brace_list(self, t: str, tail: str, new: str | None, path: str) -> str | None:
+        """Brace list `t` (`flock/{tool.py,verifier/tool.py}`) as a list of its paths, each mapped alone, where every one
+        is in the old tree and they don't all go where the directory before the list goes (`new`); else None, and that
+        directory's row carries the list as written: so does a pattern, one path of which names nothing. Each path is
+        written whole, so a later map still finds one that this map leaves where it is."""
+        olds = braces(t)
+        if not all(o in self.known_old or o in self.old_dirs for o in olds):
+            return None
+        news = [self._map_token(o, path) or o for o in olds]
+        if news == braces(f"{new}/{tail}" if new is not None else t):
+            return None
+        out = "{" + ",".join(news) + "}"
+        self.note("brace lists split", f"{path}: {t} -> {out}")
+        return out
 
     def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
         slash = token.endswith("/")
