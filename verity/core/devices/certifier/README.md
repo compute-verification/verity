@@ -14,9 +14,9 @@ Python package and no console script.
   by path. Its executables: `certifier-device-difftest` and `certifier-issuer-difftest`, each `INSTANCES PYTHON N`,
   and `certifier-device-smoke`, which takes no argument and which no test runs, since it reads the wall clock.
 - **Scripts**: each package's `scripts/` writes its difftests' instances and the Python's results on them,
-  `python scripts/NAME.py CHECKOUT --out DIR [--count N]`, as the package's `lean-audit.json` runs them (`runs`). No
-  code outside this directory imports them; their tests are in `../verifier/tests`, which loads them by path and
-  runs the executables.
+  `python scripts/NAME.py CHECKOUT --out DIR [--count N]`. The Lean check runs each script, then its difftest on what
+  it wrote, as the package's `lean-audit.json` says (`runs`). No code outside this directory imports the scripts;
+  their tests are in `../verifier/tests`, which load them by path and hold what they write to that file's pins.
 - **Documents**: none but those instance and result files, which the difftest executables read.
 - **Loads from**: `program/lean/`, nothing. `lean/`, the packages at `program/lean`, `../verifier/lean`,
   `verity/hardware/world` and `verity/commitments/lms/lean`. The scripts, `verity.protocols.certifier.verifier`;
