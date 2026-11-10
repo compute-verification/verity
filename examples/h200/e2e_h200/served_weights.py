@@ -62,14 +62,14 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from verity.spot.verifier.one_stage import registered as REG
-from verity.ml.commitments import hm96
-from verity.ml.commitments.hm96 import batch as hm96_batch
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments import hm96
+from verity.commitments.hm96 import batch as hm96_batch
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.merkle import merkle_depth
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
-from verity.ml.crypto import chacha20
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.commitments.crypto import chacha20
 
 FORMAT = "verity/seeded-weights/v1"
 MANIFEST = "verity/seeded-weights/manifest/v1"

@@ -24,7 +24,7 @@ from verity.spot.verifier.profile import Bernoulli, Subset
 from verity.spot.verifier import second_stage as SS, service as S
 from verity.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
-from verity.ml.commitments.window import window_binding
+from verity.commitments.window import window_binding
 
 import fake_challenger as FC
 

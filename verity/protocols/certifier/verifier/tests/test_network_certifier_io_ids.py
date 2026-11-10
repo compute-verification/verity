@@ -15,8 +15,8 @@ import pytest
 from verity.circuits.boolean.forms import and_reduce
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.ml.commitments import advice as ADV
-from verity.ml.commitments.gates.frame_v3 import _part
+from verity.commitments import advice as ADV
+from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.certifier.verifier import head_check as HC
 from verity.protocols.certifier.prover import io_ids as I
 from verity.protocols.certifier.verifier import io_request as Q
@@ -146,7 +146,7 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_buckets():
 
 
 def test_the_read_rows_are_the_commits_at_the_maps_steps():
-    """Each bucket's read rows are the Commit's registered rows (`verity.ml.commitments.advice`'s registration) at its
+    """Each bucket's read rows are the Commit's registered rows (`verity.commitments.advice`'s registration) at its
     map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have proof block u read bucket u's steps, and the
     Lean verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a
     step other than the Commit's, as `reads_open` does in the clear."""

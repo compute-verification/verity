@@ -34,7 +34,7 @@ from verity.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.ml.commitments.gates import embedding as E
+from verity.commitments.gates import embedding as E
 from verity.definitions.registry import io_shell as IO
 from verity.windows import interface as IF
 

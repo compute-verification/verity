@@ -102,10 +102,10 @@ from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.spot.verifier.profile import WINDOW_DELTA, IntegrityProfile, Subset
-from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
-from verity.ml.commitments import verify_opening
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.randomness import derive, frame
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
+from verity.commitments import verify_opening
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.randomness import derive, frame
 
 from . import codec, coins, receipts
 from . import pooled as _pooled

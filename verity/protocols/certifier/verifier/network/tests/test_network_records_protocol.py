@@ -23,7 +23,7 @@ from hypothesis import strategies as st
 import test_network_check_protocol as V2
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.ml.commitments.identity import tagged_sha512
+from verity.commitments.identity import tagged_sha512
 from verity.protocols.certifier.verifier.audit import Audit
 from verity.protocols.certifier.verifier.certificate import CertifiedRecord
 from verity.protocols.certifier.verifier.commitment import CommittedRecord, commit, record_digest

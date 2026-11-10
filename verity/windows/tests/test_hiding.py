@@ -1,4 +1,4 @@
-"""The vectorized ``hm96`` leaves (`verity.windows.hiding`) are core's reference (`verity.ml.commitments.hm96`) byte for byte: on
+"""The vectorized ``hm96`` leaves (`verity.windows.hiding`) are core's reference (`verity.commitments.hm96`) byte for byte: on
 both instances' vectors, and over more leaves than one numpy batch with fresh salts."""
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import os
 
 import pytest
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.hm96 import vectors as V
+from verity.commitments import hm96
+from verity.commitments.hm96 import vectors as V
 from verity.windows import hiding
 
 

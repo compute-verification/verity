@@ -25,7 +25,7 @@ from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 
 HERE = Path(__file__).resolve().parent

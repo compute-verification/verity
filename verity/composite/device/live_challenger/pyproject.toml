@@ -26,5 +26,5 @@ inputs = ["verity/protocols/certifier/device/network_traces/load_relay.py", "ver
           "verity/spot/device/challenger.py", "verity/spot/device/coins.py",
           "verity/spot/device/remote.py",
           "verity/spot/verifier/one_stage", "verity/ml/__init__.py", "verity/circuits",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/protocols/pouw/verifier",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/pouw/verifier",
           "verity/ml/protocols", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py"]

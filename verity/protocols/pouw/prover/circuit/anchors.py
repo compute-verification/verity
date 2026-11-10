@@ -43,7 +43,7 @@ import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
-from verity.ml.commitments import domains
+from verity.commitments import domains
 
 from verity.protocols.pouw.verifier.protocol import DomainError
 from .ncp2 import Shape
@@ -398,7 +398,7 @@ class Ledger:
         """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so an execution phase's secret is fresh and used once (C2)."""
-        from verity.ml.randomness import derive
+        from verity.commitments.randomness import derive
 
         from .plan import DRAW_DOMAIN
 
@@ -488,7 +488,7 @@ class SaltWindows:
 
 def replay_key(record: dict[str, str]):
     """The execution phase's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
 
     from .plan import DRAW_DOMAIN
 

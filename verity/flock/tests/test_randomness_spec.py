@@ -1,4 +1,4 @@
-"""`verity.ml.randomness` against its Lean spec (`verity/core/primitives/randomness/Randomness.lean`),
+"""`verity.commitments.randomness` against its Lean spec (`verity/commitments/randomness/Randomness.lean`),
 which the keyed-draw theorems read (`KeyedDraw.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "randomness_lean.json").read_text())
@@ -22,9 +22,9 @@ def _key(v):
 
 
 def test_the_lean_spec_reproduces_the_pinned_vectors():
-    """The spec, run on `verity/ml/randomness/tests/vectors.json`'s inputs, returns every frame, key, stream, shard
+    """The spec, run on `verity/commitments/randomness/tests/vectors.json`'s inputs, returns every frame, key, stream, shard
     key, uniform value, Bernoulli bit and subset the file pins."""
-    assert FIXTURE["kat"] == json.loads((ROOT / "verity/ml/randomness/tests/vectors.json").read_text())
+    assert FIXTURE["kat"] == json.loads((ROOT / "verity/commitments/randomness/tests/vectors.json").read_text())
 
 
 def test_python_matches_every_lean_vector():

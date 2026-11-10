@@ -24,7 +24,7 @@ path = "../../../../hardware/world"
 
 [[require]]
 name = "lms"
-path = "../../../../core/primitives/lms/lean"
+path = "../../../../commitments/lms/lean"
 
 [[lean_lib]]
 name = "CertifierDevice"

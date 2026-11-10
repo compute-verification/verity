@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.windows import interface as IF
 from verity.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR

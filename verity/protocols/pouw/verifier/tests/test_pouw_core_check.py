@@ -23,8 +23,8 @@ from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as Ch
 from verity.spot.verifier import service as S
 from verity.spot.verifier.one_stage import registration as R
-from verity.ml.crypto import lms
-from verity.ml.randomness import derive
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/protocols/pouw/verifier/lean/check"
@@ -415,7 +415,7 @@ def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
     from verity.protocols.pouw.prover.circuit import leaves as L
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X
     assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
     case = openings.honest(random.Random(1))

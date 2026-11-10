@@ -134,7 +134,7 @@ sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
 from verity.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402

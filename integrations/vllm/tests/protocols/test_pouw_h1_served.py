@@ -39,9 +39,9 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind 
 from verity.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.circuits.refs import Coll, coll_concat  # noqa: E402
 from verity.circuits.types import Array, RecordType, Value  # noqa: E402
-from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.merkle import tree_levels  # noqa: E402
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
+from verity.commitments import hm96  # noqa: E402
+from verity.commitments.merkle import tree_levels  # noqa: E402
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
 from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import registered as NR  # noqa: E402

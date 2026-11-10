@@ -22,7 +22,7 @@ from verity.circuits.program import Program
 from verity.definitions.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.definitions.silicon import fp32
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc4, plan
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes
 from verity.protocols.pouw.prover.circuit import words as W

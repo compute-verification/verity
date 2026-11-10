@@ -1,5 +1,5 @@
 """A party's signed period root as a Boolean Definition: what a certification period's proof runs to accept the root the
-party's lower key signed (`verity.core.attest`, Lean's `Attest.check`) without revealing the root, the record count or the
+party's lower key signed (`verity.commitments.attest`, Lean's `Attest.check`) without revealing the root, the record count or the
 signature.
 
     AttestPeriod_v1{N, W, H, L}
@@ -36,13 +36,13 @@ import hashlib
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
-from verity.ml.commitments.merkle import RANGE_U64_MESSAGE_BYTES, range_u64_domain_message
-from verity.ml.crypto import lms as R
+from verity.commitments.merkle import RANGE_U64_MESSAGE_BYTES, range_u64_domain_message
+from verity.commitments.crypto import lms as R
 
-from verity.ml.commitments.gates.lms import DIGEST, IDENT, WORD, LmsEqual, Sha512Compress, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
-from verity.ml.commitments.gates.lms import arguments as lms_arguments
-from verity.ml.commitments.gates.lms import verifier
-from verity.ml.commitments.gates.sha512 import IV, midstate, pad_tail
+from verity.commitments.gates.lms import DIGEST, IDENT, WORD, LmsEqual, Sha512Compress, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
+from verity.commitments.gates.lms import arguments as lms_arguments
+from verity.commitments.gates.lms import verifier
+from verity.commitments.gates.sha512 import IV, midstate, pad_tail
 
 __all__ = ["AttestPeriod", "BINDING", "arguments", "context", "period"]
 
@@ -50,7 +50,7 @@ BIT = BL.BIT
 BYTE = Array(8, BIT)
 U64 = Array(64, BIT)
 TAG = R.ROLES["period-root"].encode()
-#: the period tree's binding (`verity.core.attest.BINDING`)
+#: the period tree's binding (`verity.commitments.attest.BINDING`)
 BINDING = hashlib.sha512(b"verity/period-records/v1").digest()
 #: the domain message at count 0: its first block is the constant one, and its last 8 bytes are the count's
 _DOMAIN = range_u64_domain_message(BINDING, -1, 0, 0)

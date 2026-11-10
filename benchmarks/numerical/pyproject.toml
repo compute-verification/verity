@@ -50,4 +50,4 @@ paths = ["verity/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_lowerings.py"]
-paths = ["verity/ml/commitments", "verity/ml/crypto", "verity/flock/prover/python/verity_flock"]
+paths = ["verity/commitments", "verity/commitments/crypto", "verity/flock/prover/python/verity_flock"]

@@ -38,7 +38,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
 

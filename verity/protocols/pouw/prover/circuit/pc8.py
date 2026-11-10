@@ -54,8 +54,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, ClassVar
 
-from verity.ml.commitments import domains
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+from verity.commitments import domains
+from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.circuits import partition_object as PO
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, tuple_of

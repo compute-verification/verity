@@ -41,8 +41,8 @@ from verity.protocols.pouw.verifier import coins as Co
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as Ch
-from verity.ml.commitments.identity import canonical_json_text
-from verity.ml.crypto import lms
+from verity.commitments.identity import canonical_json_text
+from verity.commitments.crypto import lms
 
 #: the mutations that need at least one recorded round, and those that need one round left unrecorded
 _RECORDED = {"twice", "early-root", "never", "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "label",

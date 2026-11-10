@@ -38,7 +38,7 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
 * **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a sampled
   tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
   lowers that tile's weight to its credited cells, which is exactly the bound claimed.
-* **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.ml.randomness.derive`.
+* **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.commitments.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
     and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.protocols.pouw.verifier.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
@@ -72,7 +72,7 @@ from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120, Prices
 from verity.protocols.pouw.prover.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
 from verity.protocols.pouw.verifier.serving import HASH_FORMATS
-from verity.ml.randomness import Key, derive
+from verity.commitments.randomness import Key, derive
 
 DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"
 DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v1"

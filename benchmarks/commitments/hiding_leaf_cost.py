@@ -43,8 +43,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.spot.optimize import SHA512_ANDS
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
+from verity.commitments import hm96
+from verity.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
 from verity_vllm.commit import scheme
 from verity.windows.hiding import HidingLeaves
 

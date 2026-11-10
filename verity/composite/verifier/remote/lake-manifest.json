@@ -71,7 +71,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../core/primitives/lms/lean",
+   "../../../commitments/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -86,7 +86,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../core/primitives/identity",
+   "../../../commitments/identity",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -94,7 +94,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../core/primitives/randomness",
+   "../../../commitments/randomness",
    "configFile": "lakefile.toml"}],
  "name": "core_remote",
  "lakeDir": ".lake",

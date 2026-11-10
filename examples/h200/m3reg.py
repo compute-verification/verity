@@ -19,10 +19,10 @@ import time
 from pathlib import Path
 
 from verity.circuits.codec import canonical_json
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootTree
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.row_table import ROOTS_SCHEMA, RootTree
 
 FORMAT = "verity/e2e-h200/m3-registration/v1"
 PARTITION = "verity/e2e-h200/m3-partition/v1"

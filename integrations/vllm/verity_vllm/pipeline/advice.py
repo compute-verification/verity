@@ -23,7 +23,7 @@ the first step, in which the engine emitted it (the step's clock reading): with 
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
 The advice is not published: its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
-hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
+hm96-sha512 rows under `verity.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
 the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 

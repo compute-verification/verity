@@ -70,8 +70,8 @@ from benchmarks.word_codec import cuda_lib  # noqa: E402
 from verity.protocols.poub.verifier.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.protocols.poub.verifier.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.protocols.poub.verifier.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
-from verity.ml import randomness  # noqa: E402
+from verity.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
+from verity.commitments import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
 import reader as rdr  # noqa: E402

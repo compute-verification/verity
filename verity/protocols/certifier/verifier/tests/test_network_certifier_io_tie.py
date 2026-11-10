@@ -21,10 +21,10 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.ml.commitments import advice as ADV
-from verity.ml.commitments.gates.frame_v3 import _part, opens
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import row_leaf
+from verity.commitments import advice as ADV
+from verity.commitments.gates.frame_v3 import _part, opens
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import row_leaf
 from verity.protocols.certifier.verifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD
 from verity.protocols.certifier.verifier.certificate import Direction
@@ -448,7 +448,7 @@ def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
 
 
 def test_the_ports_reads_are_the_commits_registration():
-    """The fake Commit's port tree is `verity.ml.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
+    """The fake Commit's port tree is `verity.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
     leaves under `domain`), the form the served rows' registration takes, so its root is one the Lean verifier's
     registered reads open. `port_reads` has proof block `reads_from + t` read its bucket's s-th step at `port[s]`, a row
     of 2P u16 words, keys a one-row port `port`, and refuses proof blocks of unequal S and a read past the Commit's

@@ -15,7 +15,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
 from verity.circuits.evaluation.reference import standalone_call
-from verity.ml.commitments import rowleaf
+from verity.commitments import rowleaf
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.ml.protocols.pous import verdict_circuit as V
 

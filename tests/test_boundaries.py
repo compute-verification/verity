@@ -24,7 +24,7 @@ string (`RUN_TIME_READ`, matched in the text, f-strings too).
 numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
 the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.definitions.silicon`
-among them).  `verity.ml.randomness` is exact stdlib arithmetic too.
+among them).  `verity.commitments.randomness` is exact stdlib arithmetic too.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ ALLOWED = {
     # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
     # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
-    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
+    # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),

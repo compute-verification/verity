@@ -22,11 +22,11 @@ path = "../../../../flock/verifier/interface"
 
 [[require]]
 name = "core_identity"
-path = "../../../primitives/identity"
+path = "../../../../commitments/identity"
 
 [[require]]
 name = "core_randomness"
-path = "../../../primitives/randomness"
+path = "../../../../commitments/randomness"
 
 [[require]]
 name = "verity_difftest"

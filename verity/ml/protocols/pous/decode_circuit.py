@@ -48,8 +48,8 @@ from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
 from verity.circuits.boolean.trace import part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat
-from verity.ml.commitments.gates.sha512 import IV, pad_tail
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments.gates.sha512 import IV, pad_tail
+from verity.commitments.scheme import DIGEST_BYTES
 
 from .answer_circuit import PousSha512Compress, compress, from_words
 from .circuit import PousModSquare, _check, _traced_body, bits, column_sum

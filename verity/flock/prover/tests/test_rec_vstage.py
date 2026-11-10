@@ -211,7 +211,7 @@ def test_each_forgery_fails_the_relation_that_reads_it(side):
 def test_stagings_with_one_salts_file_read_one_chain(inner, tmp_path):
     """The pod stages each statement in its own process: the running sums' salts, sampled once and kept in the salts file, give
     every staging the same chain, and a file of another length is refused."""
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     p = tmp_path / "acc-salts.bin"
     a = S.stage(inner, _fold(), tmp_path / "a", levels=[], algebra=False, salts=p)
@@ -302,7 +302,7 @@ def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     """`forge_row` on a two-instance statement's ``inst.bin``: one bit of the named row moves, its header, its other rows, its
     salts and every ``b || c`` stay, and a word the layout does not put there is refused."""
     from test_rec_residuals import S_SMALL, _holding, _rows
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
     from verity.spot.verifier.one_stage import registered as RG
 
     g = random.Random(13)

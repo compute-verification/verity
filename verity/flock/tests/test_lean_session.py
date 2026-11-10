@@ -32,7 +32,7 @@ from test_lean_hello import (  # noqa: F401
     built,
 )
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 STOP = "PROVER-STOPPED: "
 

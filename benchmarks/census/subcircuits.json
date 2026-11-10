@@ -1511,7 +1511,7 @@
     "accumulate": null,
     "reference_batch": null,
     "commitment_opening": {
-      "note": "the spec treats the row gather as a commitment opening, not arithmetic a backend proves: its value is opened against the committed table (verity.ml.commitments), so no proof-backend cell covers it and the headline lists it uncovered for that reason, never imputed",
+      "note": "the spec treats the row gather as a commitment opening, not arithmetic a backend proves: its value is opened against the committed table (verity.commitments), so no proof-backend cell covers it and the headline lists it uncovered for that reason, never imputed",
       "sources": [
         {
           "label": "docs vllm-subcircuit-coverage (Embedding_v1: spec: a commitment opening, not a subcircuit); verity_vllm.observe.fold.patterns.embedding (Embedding_v1{V,H}: a row gather of weight[V,H])"

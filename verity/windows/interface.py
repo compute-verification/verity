@@ -10,12 +10,12 @@ at a time, in four records:
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
    public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
-   hiding commitment (`verity.ml.commitments.advice`): its root and its length in bits, which is charged. Verity never
+   hiding commitment (`verity.commitments.advice`): its root and its length in bits, which is charged. Verity never
    reads the advice.
 3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
-   window-domain rule (`verity.ml.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
+   window-domain rule (`verity.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
    the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
 4. **On a sample, the openings**: a sampled member's private rows and salts as Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the ZK server.
@@ -110,8 +110,8 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array
-from verity.ml.commitments import advice as AC, history as HT
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments import advice as AC, history as HT
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS
 
@@ -196,7 +196,7 @@ def _load_catalog() -> None:
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
             importlib.import_module(m.name)
-    importlib.import_module("verity.ml.commitments.gates.embedding")
+    importlib.import_module("verity.commitments.gates.embedding")
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
@@ -660,7 +660,7 @@ class Opening:
 
 @dataclass(frozen=True)
 class History:
-    """A history table (`verity.ml.commitments.history`): template ``writer``'s ``out`` rows of ``words`` u16 words, one a
+    """A history table (`verity.commitments.history`): template ``writer``'s ``out`` rows of ``words`` u16 words, one a
     position in the order ``runs`` give (`history.order`: each a run of the writer's units, or of rows the verifier holds
     from the table's earlier windows), in a tree of ``capacity`` leaves under its domain for ``program`` (the table's, the
     same in every window that writes or reads it) and ``name``, its placeholder past its length. Its table reads
@@ -1554,7 +1554,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
 def advice_binding(compiler: Mapping[str, str], root: str, bits: int) -> dict[str, Any]:
     """The registration's binding of a circuit's compiler and advice: the compiler's ``name`` and ``digest``, with the
     ``commit`` its code is at when the integration gives one (where a verifier fetches code that hashes to the digest,
-    `compiler_digest`), and the root and length in bits of the advice's hiding commitment (`verity.ml.commitments.advice`),
+    `compiler_digest`), and the root and length in bits of the advice's hiding commitment (`verity.commitments.advice`),
     each refused unless well-formed."""
     if not {"name", "digest"} <= set(compiler) <= {"name", "digest", "commit"} or not isinstance(compiler["name"], str) \
             or not _DIGEST.fullmatch(str(compiler["digest"])) or ("commit" in compiler and not _COMMIT.fullmatch(str(compiler["commit"]))):
@@ -1610,7 +1610,7 @@ def advice_rows(data: bytes) -> list[bytes]:
 
 
 def commit_advice(compiler: Mapping[str, str], data: bytes, salts: Sequence[bytes] | None = None) -> AC.Committed:
-    """The advice's hiding commitment (`verity.ml.commitments.advice`: `advice_rows` under `advice_tree_binding`), fresh salts
+    """The advice's hiding commitment (`verity.commitments.advice`: `advice_rows` under `advice_tree_binding`), fresh salts
     unless ``salts`` is given."""
     return AC.commit(advice_rows(data), ADVICE_ROW_BITS, advice_tree_binding(compiler), salts)
 

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha512
+from verity.commitments.identity import Digest, canonical_json_bytes, tagged_sha512
 from verity.protocols.certifier.verifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
 
 ROW_TAG = "verity-network-certifier/row-sha512/v1"

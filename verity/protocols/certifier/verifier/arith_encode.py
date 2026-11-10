@@ -142,7 +142,7 @@ from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, c
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments.gates import sha512 as SG
+from verity.commitments.gates import sha512 as SG
 from verity.protocols.certifier.verifier.head_check import BIT, _part
 
 PREC = 32

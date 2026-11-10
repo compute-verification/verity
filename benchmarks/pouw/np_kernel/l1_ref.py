@@ -2,8 +2,8 @@
 
     python3 benchmarks/pouw/np_kernel/l1_ref.py SEED ROWS K CALL
 
-One JSON line with the fields l1_check prints; frame-v3-sha512 from verity.ml.commitments.merkle, hm96-sha512/v1 from
-verity.ml.commitments.hm96, the call seed and noise blocks from pouw's seeds.
+One JSON line with the fields l1_check prints; frame-v3-sha512 from verity.commitments.merkle, hm96-sha512/v1 from
+verity.commitments.hm96, the call seed and noise blocks from pouw's seeds.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import json
 import sys
 
 from verity.protocols.pouw.prover.circuit import seeds
-from verity.ml.commitments import hm96
-from verity.ml.commitments.indexed import RangeU64Domain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments import hm96
+from verity.commitments.indexed import RangeU64Domain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 
 M64 = (1 << 64) - 1
 SEG = 1024

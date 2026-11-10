@@ -122,7 +122,7 @@ that `G` hashed in the two row digests have one digest.
 
 Scope:
 * **What it is about.** The reference's outputs (`Definitions/Hash/EmbeddingRead.lean`), not the gates; the gates'
-  tests (`verity/ml/commitments/tests/test_boolean_embedding.py`) hold them to the reference.
+  tests (`verity/commitments/tests/test_boolean_embedding.py`) hold them to the reference.
 * **What the unit's wiring supplies.** `root`, `domain` and `key` are the registered table's: the root and domain id are
   registered reads of the table's root in the unit that holds the read, the domain's count is `V`, and the key is hm96's
   pinned key, which the table's registration uses. `RowBinding`'s note on domains applies: the domain's binding says it

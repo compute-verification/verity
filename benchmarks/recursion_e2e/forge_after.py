@@ -136,12 +136,12 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
 
 def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
     """The header's frame-v3-sha512 root of `port` over its table rows' `b || c` (`circuit.statement`)."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.ml.commitments.frame_v3 import Port as FPort
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.commitments.rowleaf import row_leaf
+    from verity.commitments import hm96
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.commitments.frame_v3 import Port as FPort
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import row_leaf
     from verity_flock import circuit as FC
 
     p = {q.name: q for q in FC._meta_ports(json.loads(text.split("\n", 2)[1][5:]))}[port]

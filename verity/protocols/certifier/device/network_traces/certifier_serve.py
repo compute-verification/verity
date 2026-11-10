@@ -225,7 +225,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import active_replay as ar
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import calibration, out_commit
 from verity.protocols.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \

@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 SALT_BYTES, BC_BYTES = hm96.SHA512.salt_bytes, hm96.SHA512.proven_bytes
 

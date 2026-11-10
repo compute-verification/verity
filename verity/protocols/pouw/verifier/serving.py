@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verity.ml.commitments import domains
+from verity.commitments import domains
 
 
 @dataclass(frozen=True)

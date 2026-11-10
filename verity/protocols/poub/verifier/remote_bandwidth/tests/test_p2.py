@@ -17,7 +17,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.protocols.poub.verifier.remote_bandwidth import audit, codec, coins, p2, receipts, timing
-from verity.ml.randomness import frame
+from verity.commitments.randomness import frame
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SOURCE = b"the verifier's secret"

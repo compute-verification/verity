@@ -109,7 +109,7 @@ import json
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments import MerkleTree
+from verity.commitments import MerkleTree
 
 from . import audit
 from . import schedule as _schedule

@@ -37,11 +37,11 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.gates import embedding as EMB
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import bit_row
+from verity.commitments import row_table as RT
+from verity.commitments.gates import embedding as EMB
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import bit_row
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe as FM

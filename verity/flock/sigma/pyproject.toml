@@ -9,7 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the PoUW circuit's Boolean profile through the registry); `lake` builds this package against Flock's verifier and
 # the difftest harness, both required by path, and `flock-verify sigma-check` is Flock's verifier.
 inputs = ["verity/definitions", "integrations/vllm/verity_vllm", "verity/circuits", "verity/definitions/kernels",
-          "verity/ml/randomness",
+          "verity/commitments/randomness",
           "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/ml/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/protocol.py",
           "verity/protocols/pouw/verifier/live_reads.py", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py",

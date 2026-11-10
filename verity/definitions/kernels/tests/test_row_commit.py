@@ -1,4 +1,4 @@
-"""``row_commit.cuh`` against ``verity.ml.commitments``: its frame-v3-sha512 leaf, pad and node are `CommitmentDomain`'s at
+"""``row_commit.cuh`` against ``verity.commitments``: its frame-v3-sha512 leaf, pad and node are `CommitmentDomain`'s at
 every length of uint below 2^32, through the compile-time and the run-time forms (the leaf's also a body a length,
 `frame_leaf_nb`, and the node's also through `Compact`), and the forms with no plan (`pad_of`, `node_at`, and the whole
 messages through a sink, `put_leaf`, `put_pad` and `put_node`, hashed as they are built or from the sink) past it too; its
@@ -26,12 +26,12 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.ml.commitments import hm96
-from verity.ml.commitments.frame_v3.vectors_sha512 import domain
-from verity.ml.commitments.gates import frame_v3 as F
-from verity.ml.commitments.gates import hm96 as H
-from verity.ml.commitments.gates.sha512 import midstate, words_be
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments import hm96
+from verity.commitments.frame_v3.vectors_sha512 import domain
+from verity.commitments.gates import frame_v3 as F
+from verity.commitments.gates import hm96 as H
+from verity.commitments.gates.sha512 import midstate, words_be
+from verity.commitments.merkle import merkle_depth
 from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 SOURCE = Path(__file__).resolve().with_name("row_commit_cases.cu")

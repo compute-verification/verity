@@ -20,7 +20,7 @@ inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/pri
           "verity/spot/verifier/__init__.py", "verity/spot/device/challenger.py",
           "verity/ml/__init__.py", "verity/circuits", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover",
           "verity/ml/protocols/pous",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/definitions/kernels", "verity/ml/randomness"]
+          "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels", "verity/commitments/randomness"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

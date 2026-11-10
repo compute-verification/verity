@@ -701,7 +701,7 @@ def test_p2_v4_keys_are_the_specs():
     K and t of the spec's `vectors.json` (`fixtures/p2-v4-keys.json`, copied with that file's hash), at w = 64, 96, 128
     and 16,448.  The protocol's prefix frames its 24-byte salt where the spec frames the model commitment and its 32-byte
     setup salt, and nothing else differs; both are zero-padded to whole 128-byte blocks."""
-    from verity.ml.randomness import frame
+    from verity.commitments.randomness import frame
 
     from verity.core.protocols.pous.schemes.p2 import KEYS_TAG, PROTOCOL_ID, expand_prefix, sha512_keys, stream
 

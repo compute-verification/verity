@@ -49,7 +49,7 @@ from pathlib import Path
 
 from verity.definitions.ops.boolean import gf2k as G
 from verity.definitions.ops.boolean.gf2k import mul
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT
 
 from . import rec_algebra as A
 from . import rec_live as RL

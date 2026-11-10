@@ -14,7 +14,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
+Every coin is flipped here through `verity.commitments.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
 none.  The claims a certificate rests on are ids in `verity.claims`' format (`claim`).
 """
 
@@ -29,7 +29,7 @@ from typing import Any, ClassVar
 
 from verity.claims import Entry
 from verity.claims import get as core_claim
-from verity.ml.randomness import Key
+from verity.commitments.randomness import Key
 
 from . import audit, setup
 from .codec import Codec, Geometry, split
@@ -160,7 +160,7 @@ class Scheme(ABC):
     """A POUS scheme over `params` (its `codec.Geometry`, with the number of segments of `W`) and primitives `prims`
     (the reference backend by default).
 
-    Like `verity.ml.commitments.scheme.CommitmentScheme`, it is a named, versioned format behind a small interface, looked
+    Like `verity.commitments.scheme.CommitmentScheme`, it is a named, versioned format behind a small interface, looked
     up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
     subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
     `certificate` (and `certificates`, when it has several).  It implements `encode_segment` and `decode_segment`, and

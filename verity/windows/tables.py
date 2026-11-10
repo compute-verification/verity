@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.ml.commitments import row_table as RT
+from verity.commitments import row_table as RT
 
 from verity.windows import rows as CS
 

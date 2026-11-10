@@ -47,7 +47,7 @@ from verity.configuration.deploy.manifest import Channel, Manifest, Role
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
 from verity.configuration.deploy.stream import Side
 from verity.configuration.wire import Body, Int, Message, Schema
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 
 from . import memory_challenger as mc
 from . import run as R

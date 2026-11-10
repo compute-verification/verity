@@ -10,10 +10,10 @@ import tracemalloc
 import pytest
 
 import verity.definitions.ops.scalar  # noqa: F401
-from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain, hm96
-from verity.ml.commitments import history as HT
-from verity.ml.commitments.merkle import merkle_depth, tree_levels
-from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
+from verity.commitments import history as HT
+from verity.commitments.merkle import merkle_depth, tree_levels
+from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -105,7 +105,7 @@ def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
 def test_a_16_bit_value_binds_only_the_five_keys():
     """16 is the default width: its domain binds the five keys alone, under the SHA-512 identity frame (64 bytes), and a
     whole-block row is the port's row as it stands (`ROOT_16`)."""
-    from verity.ml.commitments.identity import identity_digest_sha512
+    from verity.commitments.identity import identity_digest_sha512
 
     prog = P.program_digest(_program())
     binding = identity_digest_sha512(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
@@ -230,7 +230,7 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
     unpadded, little-endian), `x` its `sha512/row/v2` or `sha512/row-seg/v1` digest, each leaf framed under the port's
     schema, so the root differs from the `row/v1` root of the same rows and salts, and a read opens it only in its format.
     The domain is the same in every format."""
-    from verity.ml.commitments.rowleaf import bit_row, row_leaf, sha512_row_seg_digest, sha512_row_v2_digest
+    from verity.commitments.rowleaf import bit_row, row_leaf, sha512_row_seg_digest, sha512_row_v2_digest
 
     prog = P.program_digest(_program(w=word_bits))
     rows = [[0x3727C5AC & ((1 << word_bits) - 1), 0x3E38AA3B & ((1 << word_bits) - 1)], [5, 6], [7, 8]]
@@ -261,7 +261,7 @@ def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
     """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
     ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
     registration's root and domain id, and at no other token's."""
-    from verity.ml.commitments.gates import embedding as E
+    from verity.commitments.gates import embedding as E
 
     V, H = 5, 3
     rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]

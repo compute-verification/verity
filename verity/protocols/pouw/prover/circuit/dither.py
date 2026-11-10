@@ -81,14 +81,14 @@ from verity.definitions.silicon.integer import (
     exact_k_limit,
 )
 from verity.circuits.types import Array, Value
-from verity.ml.commitments import domains, hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import domains, hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.commitments.scheme import DIGEST_BYTES
 
 from . import segment as SG
 

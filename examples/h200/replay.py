@@ -47,7 +47,7 @@ template, evaluates each group in one batch and reports every unit whose outputs
 onto it in `units_of`.
 
 **The sample** (`draw`): the units of a step to replay, from live coins (a key holder's bytes, never a commitment) through
-`verity.ml.randomness`, as core's sample object (`one_stage.draw`): ``uniform:K`` (a K-subset of all units), ``stratified:K``
+`verity.commitments.randomness`, as core's sample object (`one_stage.draw`): ``uniform:K`` (a K-subset of all units), ``stratified:K``
 (core's per-template sizes, `draw.stratum_k`) or an explicit plan ``{template: k}`` (proofs' stratified plan).
 """
 from __future__ import annotations
@@ -61,7 +61,7 @@ from typing import Any
 import numpy as np
 
 from verity.spot.verifier.one_stage.draw import stratum_k
-from verity.ml import randomness
+from verity.commitments import randomness
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G

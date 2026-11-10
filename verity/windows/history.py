@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import history as HT
+from verity.commitments import history as HT
 
 from . import interface as I, rows as CS, wiring as WI
 

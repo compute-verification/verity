@@ -98,7 +98,7 @@ identity (it takes no premise). At L ≥ K an output cell commits O alone. So se
 at L ≥ K earns none (see "What is credited").
 
 **Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
-under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
+under the prover's salts (`verity.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
 compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither has no leaf format of its own.
 - Each call has an operand root, bound in its execution phase's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "An execution phase's runs"), both before the block's check coin.
@@ -360,7 +360,7 @@ The challenger issues every live coin, in each replica's one sequence of runs; u
 certifier device (see "The boundary"). Before the monitoring period it flips a random coin c for each sample and commits
 to them in one root (see "The coin commitment"). Once the receipt a sample follows is in, it opens that sample's c against
 the root and derives the sample's coins from c and the receipt, inside the challenger,
-as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
+as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.commitments.randomness`: SHA-512 over the domain tag, the coin and
 the receipt, under tags distinct from PoUW's noise-seed tags), where:
 - c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
   root before its last root, and receives the paths and the root at close (the withheld mode): opening sample j to it

@@ -1,6 +1,6 @@
 """The row-table layout of the serving rows (`pipeline.serving_rows.with_row_tables`, `ml.windows.rows.RowTable`) and PoUW's
 interface to it (`commit.row_tables`): one hm96-sha512/row-seg/v1 table per (engine step, linear) in the canonical order, whose
-root is `verity.ml.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
+root is `verity.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
 offset, a ScaledMmS8Coordinate replay from the table that reproduces every output, the step roots serving computes at its step
 boundary equal to the window's (each the step's subtree of the window's table, which is the tree over them), the verifier's
 registration and cross-check through the step roots, step openings that verify and tampered rows that don't, and the bytes the
@@ -19,7 +19,7 @@ import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as OG
-from verity.ml.commitments import row_table as RT
+from verity.commitments import row_table as RT
 from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.windows import rows as CS, tables as TB

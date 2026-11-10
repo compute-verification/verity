@@ -283,7 +283,7 @@ paths = [
     "integrations/vllm/verity_vllm/engine",
     "integrations/vllm/verity_vllm/pipeline",
     "verity/core/protocols/certifier",
-    "verity/ml/crypto",
+    "verity/commitments/crypto",
 ]
 
 [[tool.verity.tests.reads]]

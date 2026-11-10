@@ -41,8 +41,8 @@ from verity.protocols.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WE
 from verity.protocols.pouw.verifier.coins import Challenger, coin_reason
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
 from verity.errors import ProtocolError
-from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
-from verity.ml.randomness import derive
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
+from verity.commitments.randomness import derive
 
 AUDIT_DOMAIN = "verity/pouw/audit/v1"
 

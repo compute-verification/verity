@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 import epoch_coins as E
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.verifier import audit as au
 from verity.protocols.pouw.verifier import coins as EC
 

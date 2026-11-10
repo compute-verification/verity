@@ -1,5 +1,5 @@
 """The tile checks' committed rows (`pc4`, `pc8`): each row a unit reads or writes is a Flock-committed port, which Flock
-commits as an hm96-sha512 row and hashes in the proof (`verity.ml.commitments.hm96`), so the Programs hold no leaf.  What stays
+commits as an hm96-sha512 row and hashes in the proof (`verity.commitments.hm96`), so the Programs hold no leaf.  What stays
 in gates is the work's own digest:
 
 * `PearlTileDigest{TM,TN}`: `pearl_c.leaf` (hashing h0) of a tile's C̃ and U: TurboSHAKE128 (D = 0x21) of each row's
@@ -125,8 +125,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Sequence
 
-from verity.ml.commitments import domains, hm96
-from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+from verity.commitments import domains, hm96
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import coll_concat

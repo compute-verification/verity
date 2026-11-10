@@ -3,7 +3,7 @@
 // leaf_from_digest, after Committer::salts; Committer::nodes folds the tree). One translation unit: C is __constant__.
 //
 // A GPU committer for hm96-sha512/row/v2 and hm96-sha512/row-seg/v1 rows in frame-v3-sha512 trees, bit for bit the
-// reference's (verity.ml.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
+// reference's (verity.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
 // The frame's leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one
 // row commitment (`rc`, verity/definitions/kernels/row_commit.cuh); this file keeps the committer's schedule: its rows' digests, its
 // salts, its kernels and streams, and its constants in __constant__ memory.

@@ -1,5 +1,5 @@
 """A device's HSS role digests and checks in Lean (`Lms.Hss`, `Attest.Period`, served by
-`memory-challenger-difftest`) against `verity.ml.crypto.lms`, `verity.ml.commitments.merkle` and `verity.core.attest`: the
+`memory-challenger-difftest`) against `verity.commitments.crypto.lms`, `verity.commitments.merkle` and `verity.commitments.attest`: the
 three role digests, two-level verification, the range-u64 domain id, the period tree's root, the verifier's acceptance
 of a period (the public key check in the clear, then the period check a period's proof runs) and the liveness check,
 each on sampled inputs around a real device's signatures (a small identity, H = 2) that include what both sides must
@@ -15,10 +15,10 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.core import attest
-from verity.ml.commitments.indexed import RangeU64Domain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.crypto import lms
+from verity.commitments import attest
+from verity.commitments.indexed import RangeU64Domain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

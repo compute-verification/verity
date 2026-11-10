@@ -614,7 +614,7 @@ pub mod v1 {
         level[0]
     }
 
-    /// `identity_digest(tag, doc)` (`verity.ml.commitments.identity`): tagged SHA-256 of the compact sorted-key JSON.
+    /// `identity_digest(tag, doc)` (`verity.commitments.identity`): tagged SHA-256 of the compact sorted-key JSON.
     pub fn identity(tag: &str, doc: &Value) -> [u8; 32] {
         let json = serde_json::to_string(doc).unwrap();
         let mut h = Sha256::new();

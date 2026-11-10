@@ -15,8 +15,8 @@ import random
 import pytest
 
 from verity.spot.device import challenger as C
-from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.crypto import lms
+from verity.commitments.merkle import merkle_depth
+from verity.commitments.crypto import lms
 
 LABEL = "commit"
 HOST = "auditor-1"

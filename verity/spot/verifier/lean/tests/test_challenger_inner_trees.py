@@ -31,7 +31,7 @@ from test_challenger_difftest import (DROP, PACKAGE, PIECES, SESSIONS, TABLES, S
 
 import verity_difftest as D
 from verity.spot.device import challenger as Ch, remote as R
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT
 from verity_flock import rec_live as RL
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

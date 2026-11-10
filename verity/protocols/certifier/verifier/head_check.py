@@ -70,14 +70,14 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import FrameV3Read, root_ref
-from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.ml.commitments.gates.lms import LmsEqual, Sha512Compress
-from verity.ml.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
-from verity.ml.commitments.identity import tagged_sha512, tagged_sha512_prefix
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments import hm96
+from verity.commitments.gates.frame_v3 import FrameV3Read, root_ref
+from verity.commitments.gates.hm96 import Hm96Sha512Leaf
+from verity.commitments.gates.lms import LmsEqual, Sha512Compress
+from verity.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
+from verity.commitments.identity import tagged_sha512, tagged_sha512_prefix
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.protocols.certifier.verifier.certificate import (CERTIFICATE_TAG, DIGEST_BYTES, RECORD_TAG, STATUS_CODES,
                                                          certificate_digest)
 from verity.protocols.certifier.verifier.grid import GridParams

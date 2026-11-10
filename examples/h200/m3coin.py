@@ -19,7 +19,7 @@ before the session is reserved and ``draw.json`` (``{law, k, population, units}`
   requires (`m3check.session_audit`, `challenger.withheld_on`). A reserve the gate doesn't mark withheld is refused
   before its open, an open answer that hands out the root or isn't withheld is refused, and so is a session whose
   challenger answers the hello with its root, each before any coin.
-* `units = derive(coin, DOMAIN, {"registration": digest}).subset(k, population, "m3")` (`verity.ml.randomness`): the
+* `units = derive(coin, DOMAIN, {"registration": digest}).subset(k, population, "m3")` (`verity.commitments.randomness`): the
   prover can't compute it before the coin opens, and the coin opens only after the registration is in the ledger.
 * One sample. Any failure after the open is written to ``coin.json`` as the visible failure, and nothing is retried: a
   second session over the same root is refused by the ledger, and this script never asks for another.
@@ -41,7 +41,7 @@ from typing import Any
 
 from verity.spot.device import challenger as Ch
 from verity.spot.device import remote
-from verity.ml import randomness as R
+from verity.commitments import randomness as R
 
 sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parent / "interfaces")]
 import m3reg as REG  # noqa: E402
@@ -160,7 +160,7 @@ def coin(ask: Ask, reg: dict, out: Path, *, gate_name: str, peer: str, minutes: 
         return 3
     units = draw(opening.coin, digest, law["k"], population)
     write(commitment=commitment, opening=opening.to_json(), units=units,
-          derivation=f"verity.ml.randomness.derive(coin, {DOMAIN!r}, {{'registration': digest}}).subset({law['k']}, {population}, 'm3')")
+          derivation=f"verity.commitments.randomness.derive(coin, {DOMAIN!r}, {{'registration': digest}}).subset({law['k']}, {population}, 'm3')")
     if step:
         (out / "draw.json").write_text(json.dumps({"law": "subset", "k": law["k"], "population": population,
                                                     "units": sorted(units)}, sort_keys=True) + "\n")

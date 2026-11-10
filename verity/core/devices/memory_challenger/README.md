@@ -39,5 +39,5 @@ The proofs of the properties are in `Security/Proofs/Properties/Pous/` (`MemoryC
 - `verity/core/devices/memory_challenger/challenger_party.py` and `wipe_party.py`: each as a party of its own on the challenger's
   host; `wipe_parties.py`, the wipe's parties on the party runtime (`verity/configuration/deploy`).
 - `verity/core/protocols/pous/period_reports.py`: the device's runs reported under its party's per-period root
-  (`verity/core/attest`).
+  (`verity/commitments/attest`).
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

@@ -44,7 +44,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments.scheme import DIGEST_BYTES
 
 __all__ = ["DIGEST_BITS", "RECORD_BITS", "PousVerdict", "chain", "counter_width", "gates", "round_hit", "round_verdict",
            "verdict_value"]

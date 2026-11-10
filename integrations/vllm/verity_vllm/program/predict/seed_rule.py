@@ -29,8 +29,8 @@ from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, Explicit
 from verity.circuits.types import Array
-from verity.ml.commitments.gates import sha512 as H
-from verity.ml.commitments.gates.lms import Sha512Compress
+from verity.commitments.gates import sha512 as H
+from verity.commitments.gates.lms import Sha512Compress
 from verity_vllm.engine import served_seed
 
 __all__ = ["SeedBlocks", "SeedCheck", "SeedEqual", "SeedSelect", "ServedSeed", "blocks", "check_reference", "reference"]

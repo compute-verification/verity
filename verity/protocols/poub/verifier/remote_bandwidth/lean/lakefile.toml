@@ -22,7 +22,7 @@ path = "../../../../../flock/verifier"
 
 [[require]]
 name = "core_randomness"
-path = "../../../../../core/primitives/randomness"
+path = "../../../../../commitments/randomness"
 
 [[require]]
 name = "verity_difftest"

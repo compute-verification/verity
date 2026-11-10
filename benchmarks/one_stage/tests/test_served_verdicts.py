@@ -1998,7 +1998,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
     from verity.protocols.pouw.verifier import credit as CR
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     A = _auditor()

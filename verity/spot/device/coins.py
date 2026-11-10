@@ -28,7 +28,7 @@ from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from typing import Any, NamedTuple
 
-from verity.ml.randomness import uniform_from_words
+from verity.commitments.randomness import uniform_from_words
 
 from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
                          WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,

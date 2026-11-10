@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 import pearl_vectors as PV
-from verity.ml.crypto.blake3 import blake3
+from verity.commitments.crypto.blake3 import blake3
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_kw as P

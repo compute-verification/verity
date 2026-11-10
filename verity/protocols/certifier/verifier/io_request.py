@@ -62,7 +62,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
-from verity.ml.commitments.gates.frame_v3 import _part
+from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.certifier.verifier import head_check as HC
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import warden as W

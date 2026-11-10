@@ -51,7 +51,7 @@ from typing import Any
 from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, row_count
 from verity.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.spot.device.remote import HEADER, MAX_HEAD
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 
 PARAMETERS_TAG = "verity-network-coin-link/parameters/v1"
 #: the link's two grids: the challenger's frames to the prover (ingress), the prover's to the challenger (egress)

@@ -1,5 +1,5 @@
 """The remote window's openings: the pooled sample, its bounds against v0's deployed point, the exact multiproof
-expectation against `verity.ml.commitments.multiproof` by enumeration, and the cheapest-point searches."""
+expectation against `verity.commitments.multiproof` by enumeration, and the cheapest-point searches."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import pytest
 
 from verity.core.protocols.bandwidth import audit
 from verity.core.protocols.bandwidth import openings as o
-from verity.ml.commitments.multiproof import multiproof_cost
-from verity.ml.randomness import derive
+from verity.commitments.multiproof import multiproof_cost
+from verity.commitments.randomness import derive
 
 
 def _key(tag: bytes = b"window"):

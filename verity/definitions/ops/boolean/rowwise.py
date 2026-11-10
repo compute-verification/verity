@@ -24,7 +24,7 @@ and ``cvt.rn.bf16.f32``:
 - ``p_j = bf16_rn(RN(e_j * r))``. `SoftmaxOut` recomputes e_j from x_j and m, so it reads x_j, m and r's two halves.
 
 **The embedding's coordinate** j at step t is ``Bf16AddF2fp_v1(h, pos)``, where h is ``col[tok]`` if tok < V and 0x7FFF
-otherwise, as `Embedding_v1` fills (`verity.ml.commitments.gates.embedding`). Here col is column j of the V × H token table,
+otherwise, as `Embedding_v1` fills (`verity.commitments.gates.embedding`). Here col is column j of the V × H token table,
 pos is the position table's word (t, j), and tok is the u16 token that the previous step's `ArgmaxCombine_v1` or the request
 row gives. col and pos are registered reads at public positions (j and t), and tok is a value, so the column is selected
 inside the proof. The select is `MoeSelectBf16x{E}_v2`'s: the multiplexer tree (`boolean.gather`) over tok's low

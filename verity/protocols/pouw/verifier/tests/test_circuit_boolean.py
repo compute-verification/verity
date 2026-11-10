@@ -257,7 +257,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     half-lane per round, and as many commits of its outputs, so χ's operands are θ's outputs, 11 committed bits at most;
     without the commits χ's XOR terms compound round over round, and the 12 rounds' AND operands grow to thousands of bits
     each."""
-    from verity.ml.crypto.turboshake import turboshake128
+    from verity.commitments.crypto.turboshake import turboshake128
     from verity.circuits.boolean.forms import ONE, Circuit, const_bits
 
     from verity.protocols.pouw.prover.circuit import hashes as H

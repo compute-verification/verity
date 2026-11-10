@@ -1,7 +1,7 @@
 """``verity/flock-circuit``: any lowered IR template (``flock-ir-unit/v2`` circuits, :mod:`ir_lower`) proved with its serving
 rows committed in the circuit and nothing else public (``live/src/circuit.rs`` is the statement).
 
-Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.ml.commitments.rowleaf``): a row's inner digest is
+Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.commitments.rowleaf``): a row's inner digest is
 ``x = SHA-512(sha512_row_prefix || row)`` (``sha512/row/v1``), its hiding commit string ``b || c`` with ``b = x XOR M(key) y`` and
 ``c = SHA-512(salt_prefix || y)`` for a 192-byte salt ``y`` (``hm96.SHA512``, key its ``default_key``), and the frame leaf binds
 ``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private. A port may instead
@@ -85,7 +85,7 @@ INST_FORMAT = "flock-circuit-inputs"
 BINDING_TAG = "verity/flock-circuit/binding/v2"
 OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity and swappable: ``hm96-sha512/v1`` (``verity.ml.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
+#: identity and swappable: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
 #: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``),
 #: never reused or stored, as ``salt_source`` says. The Lean verifier pins this object (``Flock/Tags.lean``'s
@@ -230,7 +230,7 @@ def _log2(x: int) -> int:
 @dataclass
 class Port:
     """An input port's rows: ``words`` u16 leaves, framed as ``sha512/row/v1`` x rows of u16 words (whole SHA-512 blocks), or
-    (``bits``) as core's bit row ``sha512/row/v2`` of ``bits`` bits (``verity.ml.commitments.rowleaf``): its leaves the row's bits
+    (``bits``) as core's bit row ``sha512/row/v2`` of ``bits`` bits (``verity.commitments.rowleaf``): its leaves the row's bits
     low first, ``words = ceil(bits / 16)``, the bits past ``bits`` zero."""
 
     name: str
@@ -254,7 +254,7 @@ class Port:
         """Compressions after the constant first block: the message's blocks but its last, which the hm96 slot compresses (the
         row's last bytes, if any, then SHA-512's padding: ``ceil((bytes + 17) / 128)`` blocks in all)."""
         if self.seg:
-            from verity.ml.commitments.rowleaf import sha512_row_seg_segments
+            from verity.commitments.rowleaf import sha512_row_seg_segments
 
             segs = sha512_row_seg_segments(self.bits)
             return sum(-(-((m + 7) // 8 + 17) // 128) for m in segs) + -(-(64 * len(segs) + 17) // 128) - 1
@@ -265,7 +265,7 @@ class Port:
         segmented row's segment's or outer message's first. Every other reads the previous compression's output."""
         if not self.seg:
             return k == 0
-        from verity.ml.commitments.rowleaf import sha512_row_seg_segments
+        from verity.commitments.rowleaf import sha512_row_seg_segments
 
         first = 0
         for m in sha512_row_seg_segments(self.bits):
@@ -286,19 +286,19 @@ class Port:
     def schema(self) -> str:
         """The frame leaf's schema: ``hm96-sha512/row/v1``, a bit row's ``hm96-sha512/row/v2``, a segmented row's
         ``hm96-sha512/row-seg/v1``."""
-        from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
         return ROW_SCHEMA if self.bits is None else SCHEMA_HM96_SHA512_ROW_SEG if self.seg else SCHEMA_HM96_SHA512_ROW_V2
 
     def digest(self, row: bytes) -> bytes:
         """The row's inner digest of its ``bytes`` row bytes (``sha512/row/v1``, ``/v2`` or ``sha512/row-seg/v1``)."""
-        from verity.ml.commitments.rowleaf import sha512_row_seg_digest
+        from verity.commitments.rowleaf import sha512_row_seg_digest
 
         return sha512_row_seg_digest(row, self.bits) if self.seg else self.layout().digest(row)
 
     def prefix(self) -> bytes:
         """The row's first block: core's prefix, or a segmented row's outer ``Q(bits)``."""
-        from verity.ml.commitments.rowleaf import sha512_row_seg_prefix
+        from verity.commitments.rowleaf import sha512_row_seg_prefix
 
         return sha512_row_seg_prefix(self.bits) if self.seg else self.layout().prefix
 
@@ -306,14 +306,14 @@ class Port:
     def tail_bytes(self) -> int:
         """The bytes the padding follows: the row's, or a segmented row's outer message's (its segments' digests)."""
         if self.seg:
-            from verity.ml.commitments.rowleaf import sha512_row_seg_segments
+            from verity.commitments.rowleaf import sha512_row_seg_segments
 
             return 64 * len(sha512_row_seg_segments(self.bits))
         return self.bytes
 
     def leaf(self):
-        from verity.ml.commitments.frame_v3 import BitRowLeaf, RowLeaf
-        from verity.ml.commitments.rowleaf import ROLE_X
+        from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
+        from verity.commitments.rowleaf import ROLE_X
 
         return RowLeaf("sha512", ROLE_X, 16, self.words) if self.bits is None else BitRowLeaf(self.bits)
 
@@ -341,7 +341,7 @@ def _port(name: str, words: int, bits: int | None = None, seg: bool = False) -> 
 def _meta_ports(meta: dict) -> list[Port]:
     """META's rows, each a bit row (or a segmented one) of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1``
     rows)."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
     if "row_schemas" not in meta:
         return [Port(nm, w) for nm, w, _ in meta["ports"]]
@@ -975,7 +975,7 @@ def _expanded(lay: IL.LoweredUnit, name: str) -> str:
 def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
     """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1``, ``/v2`` or ``row-seg/v1`` of the leaves' first
     ``Port.bytes`` bytes, and its salt). Refuses a bit row whose leaves have a bit set past its length."""
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     inst = hm96.SHA512
     out = {}
@@ -1037,13 +1037,13 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
     bit row; the input rows, then the output rows; over ``rows[port]``: the instances' rows, or a shared-row file's table),
     each under a domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and
     every row's ``b || c``."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.ml.commitments.frame_v3 import Port as FPort
-    from verity.ml.commitments.identity import identity_digest_sha512
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.commitments.rowleaf import row_leaf
+    from verity.commitments import hm96
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.commitments.frame_v3 import Port as FPort
+    from verity.commitments.identity import identity_digest_sha512
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import row_leaf
 
     inst = hm96.SHA512
     schemas = {p.name: p.schema for p in ports}

@@ -57,8 +57,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.configuration.deploy.stream import Side
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.crypto import lms
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.crypto import lms
 
 from . import challenger_session
 from . import memory_challenger as mc

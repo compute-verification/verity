@@ -24,7 +24,7 @@ from verity.core.protocols.pous import run as RUN
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.protocols.poub.verifier.remote_bandwidth import p2, p2_case, p2_lean
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[5]
 BANDWIDTH = ROOT / "verity/protocols/poub/verifier/remote_bandwidth"

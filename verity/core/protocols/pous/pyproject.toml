@@ -10,10 +10,10 @@ untraced = ["tests/test_pous_wipe_store.py", "tests/test_pous_wipe_stream.py"]
 # and the rest of the trusted layer's import closure that lean/TRUSTED.sha256 hashes (Core's Game): test_pous_trusted fails
 # while a file it hashes is outside these, naming the lines to add.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
-          "verity/core/attest/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/commitments/attest/__init__.py", "verity/core/protocols/__init__.py",
           "verity/protocols/reporting.py", "verity/ml/__init__.py", "verity/circuits",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/configuration/wire", "verity/configuration/deploy",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/configuration/wire", "verity/configuration/deploy",
           "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
           "verity/core/devices/memory_challenger/challenger_party.py",
           "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Proofs/Pous",

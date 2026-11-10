@@ -17,10 +17,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.prover.circuit import leaves as L
 

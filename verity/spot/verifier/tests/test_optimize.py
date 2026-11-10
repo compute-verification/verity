@@ -245,8 +245,8 @@ def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
     are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the
     ripple-carry model's count, leaves out."""
     from verity.circuits.boolean.forms import Circuit
-    from verity.ml.commitments import gates
-    from verity.ml.commitments.gates.sha512 import compress_gadget
+    from verity.commitments import gates
+    from verity.commitments.gates.sha512 import compress_gadget
 
     pins = {name: json.loads(Path(gates.__file__).with_name(f"{name}.circuit-check.json").read_text())["definitions"]
             for name in ("lms", "block_check")}

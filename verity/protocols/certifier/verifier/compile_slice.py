@@ -13,7 +13,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
 **The rows**, each a field list (elements least significant bit first) zero-padded to whole 16-bit words:
 - ``pub``, the public input: the declared charge ``c`` (`arith_encode.CW` bits) and the registered book's tables
   (`charge_chain.book_fields(D)`: n_arrived's bins, its total, and the zero counts' frequencies and totals);
-- ``adv``, the committed advice, a row under the advice's hiding root (`verity.ml.commitments.advice`): the window's raw
+- ``adv``, the committed advice, a row under the advice's hiding root (`verity.commitments.advice`): the window's raw
   decision bits ``dec`` (D), their ``count`` and the window's executed step count ``steps``;
 - ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O) and ``tok``,
   each slot's first CU·B certified token ids (its prompt, then its outputs; zero past them), a row the verifier holds to

@@ -50,7 +50,7 @@ from verity.circuits.boolean.forms import Circuit, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.ml.commitments.gates.frame_v3 import _part
+from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.certifier.verifier import head_check as HC, replay_chain as RC, served_rows as SR
 from verity.protocols.certifier.prover import served_tie as ST
 from verity.protocols.certifier.verifier.head_check import BIT

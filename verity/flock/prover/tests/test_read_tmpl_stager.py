@@ -21,11 +21,11 @@ from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.types import Array
-from verity.ml.commitments import row_table
-from verity.ml.commitments.gates import embedding as E
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
+from verity.commitments import row_table
+from verity.commitments.gates import embedding as E
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.windows import interface as IF
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS

@@ -1,6 +1,6 @@
 """``cuda/sha512.cuh``'s ``launch_hm96_finish`` (``hm96_mask_leaves``, then ``hm96_finish_leaves``), the device's hm96-sha512
 tree leaves, byte for byte against
-``verity.ml.commitments.hm96.batch.tree_leaves``: at both block sizes its launches use (``launch_merkle512``'s 256 and
+``verity.commitments.hm96.batch.tree_leaves``: at both block sizes its launches use (``launch_merkle512``'s 256 and
 ``flock_cuda_hm96_leaves``' 128), over a partial last block, from a base past leaf 0 (the digests below it untouched) and
 across many blocks; and the block sizes ``hm96_tpb_fits`` refuses, which ``launch_merkle512`` aborts on. Whole salted trees
 whose salts ``hm96_copy_ahead`` copied before their builds are the trees whose pieces copy theirs beside the build.
@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.commitments.hm96 import SHA512, batch
+from verity.commitments.hm96 import SHA512, batch
 
 SOURCE = Path(__file__).resolve().with_name("hm96_leaves.cu")
 #: (leaves, base): one leaf; a partial block; a base past leaf 0 inside a block and past one; many blocks

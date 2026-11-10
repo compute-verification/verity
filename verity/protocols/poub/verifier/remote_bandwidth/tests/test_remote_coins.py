@@ -24,7 +24,7 @@ from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, stor
 from verity.protocols.poub.verifier.remote_bandwidth import coins
 from verity.spot.device import challenger as C
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""

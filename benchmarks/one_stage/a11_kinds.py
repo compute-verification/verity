@@ -39,7 +39,7 @@ sys.setrecursionlimit(100000)
 
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.program import input_id, is_input  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.definitions.boolean import load_program  # noqa: E402
 
 #: flock-circuit's spec shape: a statement's m = k_log + nbl, nbl >= 3, is at most 35 (`a6.M_MAX`)

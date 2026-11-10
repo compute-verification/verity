@@ -20,7 +20,7 @@ import pytest
 
 from verity.spot.device import challenger as C
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

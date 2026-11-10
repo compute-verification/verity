@@ -34,7 +34,7 @@ from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.spot.device import challenger as LC
 from verity.spot.device import remote as R
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw

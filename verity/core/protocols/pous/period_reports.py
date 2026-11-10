@@ -1,4 +1,4 @@
-"""The memory challenger's sessions reported under its party's per-period root (`verity.core.attest`).
+"""The memory challenger's sessions reported under its party's per-period root (`verity.commitments.attest`).
 
 As an auditor party with a device identity (`lms.Identity`, the lower key it issued the challenger, `lms.PartyKey`),
 the challenger signs no session alone. `PeriodSigner` is its `memory_challenger.Signer`: each session it closes is the
@@ -19,8 +19,8 @@ the verifier the certificate in the clear (`Attest.accepts` is both), which `Pro
 """
 from __future__ import annotations
 
-from verity.core import attest
-from verity.ml.crypto import lms
+from verity.commitments import attest
+from verity.commitments.crypto import lms
 
 from .memory_challenger import Verify
 

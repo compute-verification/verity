@@ -2,12 +2,12 @@
 
 This is the commitment framing vLLM's serving Commit path emits by name, as a named scheme; its default is `rows-sha512`
 (`integrations/vllm/verity_vllm/commit/step_rows.py`). It is permanent and sits
-beside frame-v3 (`verity.ml.commitments.frame_v3`). Backends select one or the other, and both are
+beside frame-v3 (`verity.commitments.frame_v3`). Backends select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.
 
 - Reference: `verity_vllm.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
-  `verity.ml.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
+  `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
 - Vectors: `vectors.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors`. `--check` exits
   nonzero if the file is stale.
@@ -123,7 +123,7 @@ A published root is a raw SHA-256 over a tag and fixed-width fields, and wraps t
   because their trailing fields are decimal integers and the profile id is fixed-width hex, so the integration
   must keep those fields that way. `program` is the first 32 bytes of the Program digest (`commit.scheme.program_field`): for a
   Program, its SHA-512 `codec.program_digest` truncated to 256 bits.
-- **The hm96 context suffix.** Under the opt-in `hm96-sha256/v1` leaves (`verity.ml.commitments.hm96`, §5), native-host
+- **The hm96 context suffix.** Under the opt-in `hm96-sha256/v1` leaves (`verity.commitments.hm96`, §5), native-host
   `ctx` is `SHA-256(run_id/step=s ‖ "/leaf=" ‖ scheme_digest(key))`, with the scheme digest as 32 raw bytes.
   - The committer computes it only for a step whose leaves it salted, so no hm96-bound root sits over unsalted leaves.
   - Without hm96, `ctx` is byte-identical to before, and so are today's roots.

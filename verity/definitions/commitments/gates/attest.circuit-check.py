@@ -14,6 +14,6 @@ def _attest_roots() -> list[Any]:
     root's prefix and bytes, the domain message's constant bytes, and the padding. The messages are the same at N = 64
     apart from I, whose words the verifier reads the same way at both."""
     from verity.definitions.commitments.gates.attest import period
-    from verity.ml.crypto.lms import TOY_N
+    from verity.commitments.crypto.lms import TOY_N
 
     return [period(TOY_N, 1, 1, 161)]

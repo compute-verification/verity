@@ -179,7 +179,7 @@ A run is one execution of the audit over one store (`Verifier.window()`, a `Wind
 1. **Seed.** The verifier samples a fresh 32-byte nonce from its own randomness and records it in the store's state
    (`Window.open`, §5). It derives the run's key from its own secret,
    `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
-   (`audit.window_key`, `verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock
+   (`audit.window_key`, `verity.commitments.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock
    (`Window.start`). The nonce is never a counter and never sampled twice for a store, so no two runs over a store share
    a key, whichever verifier, tag or restart opens them. A key fixed by a run number would repeat in every verifier
    counting from the same place: a fast-check run would reveal, after its commitment, the samples of the certified
@@ -228,7 +228,7 @@ leaf_c         SHA512(prefix(leaf, σ) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+
 root           RFC 6962 SHA-512 tree over the leaves: node = SHA512(0x01 ‖ left ‖ right)
 ~~~
 
-`frame` is `verity.ml.randomness.frame`. `ro-blake3/v1`'s message is 2,064 bytes, three BLAKE3 chunks (1,024, 1,024 and
+`frame` is `verity.commitments.randomness.frame`. `ro-blake3/v1`'s message is 2,064 bytes, three BLAKE3 chunks (1,024, 1,024 and
 16 bytes): 33 chunk compressions and 2 parent compressions, each starting from `K`, which keyed mode puts in every
 chunk's and every parent's chaining value. Its leaf of 16 tags takes 5 SHA-512 compressions after the prefix.
 
@@ -336,7 +336,7 @@ assumption is needed for the two properties of runs that overlap in time:
   16-tag leaves end short). Label `j` is the first bytes of the SHA-512s of
   `"verity/bandwidth/test-block/v1\0" ‖ u64be j ‖ u32be c` for `c = 0, 1, …`, concatenated.
 - `tests/test_openings.py`: `openings.py` against this audit's sampling term and slack, and its multiproof and
-  retention expectations by enumeration against `verity.ml.commitments.multiproof`.
+  retention expectations by enumeration against `verity.commitments.multiproof`.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), whose roots over
   the full store and the vectors' 37 labels must equal `tag_pass`'s before anything is timed; its harness (`gpu.py`:
   `challenger_device(tagger, gpu)`, `Tagger.tag_pass`, `open(j, store_tree)`, `Prover(tagger, store, blocks, scrub)`

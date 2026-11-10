@@ -2,7 +2,7 @@
 ``pouw.roots`` to them.
 
 One row table per int8 quantize output: the token rows of one linear at one engine step, one ``hm96-sha512/row-seg/v1`` leaf each
-(``verity.ml.commitments.row_table``).  At the serving loop's step boundary, once every quantize output of the step is written,
+(``verity.commitments.row_table``).  At the serving loop's step boundary, once every quantize output of the step is written,
 ``step_roots`` gives the step's root: the tree over its tables' roots, 64 bytes, which the loop records with the challenger before
 that step's coin (``LiveRecord.record``) and which that step's PoUW noise reads (``window.round_key``'s ``root``).  The window's
 ``row-table`` port is the tree over the step roots, and the window's commit holds its step roots to the recorded ones.
@@ -30,8 +30,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments import row_table as RT
+from verity.commitments.merkle import CommitmentDomain
 
 from verity.windows import rows as CS
 

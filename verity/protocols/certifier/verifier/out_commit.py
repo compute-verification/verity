@@ -50,9 +50,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.circuits.program import Program
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments import hm96
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.merkle import CommitmentDomain
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey,
                                                          Signer, SignerRefused, _text, _u)
 from verity.spot.verifier.one_stage import partition as P

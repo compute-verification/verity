@@ -60,7 +60,7 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 import run as L  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
 from verity.spot.verifier.one_stage import partition as P  # noqa: E402

@@ -14,8 +14,8 @@ KEPT = {
     "verity/core/protocols/bandwidth/PROTOCOL.md": "experimental: the bandwidth audit over PoUS's store has no Lean verifier",
     "verity/protocols/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
     "verity/circuits/PROTOCOL.md": "a format: the circuit file",
-    "verity/ml/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
-    "verity/ml/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
+    "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
+    "verity/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
     "integrations/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
     "verity/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
 }

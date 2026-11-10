@@ -489,7 +489,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     p = lms.Params(64, key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))

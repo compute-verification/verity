@@ -10,7 +10,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``window``: the window's run root, registration digest, circuit record SHA-512, partition and program digests, scheme,
   population and leaf layer (``registration.json`` / ``window.json``), and ``roots``: every port root a unit's opening
   reaches, ``{port: {root, leaves, domain, schema}}``, each the registration's root under the window-domain rule
-  (`verity.ml.commitments.window`).
+  (`verity.commitments.window`).
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
@@ -93,12 +93,12 @@ from verity.spot.verifier.one_stage import draw as D, registered as REG
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
-from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
-from verity.ml.commitments.window import window_domain
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
+from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
+from verity.commitments.window import window_domain
 from verity.windows import interface as IF, rows as CS
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "commit_slots"

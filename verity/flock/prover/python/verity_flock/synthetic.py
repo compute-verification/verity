@@ -1,6 +1,6 @@
 """Synthetic input sets from the IR: seeded samples of a subcircuit's inputs, each with the output the IR evaluator computes.
 
-The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; sample ``j`` is
+The key is ``verity.commitments.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; sample ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
 ``verity.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
 subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted sample
@@ -19,7 +19,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from verity.ml.randomness import Key, derive
+from verity.commitments.randomness import Key, derive
 
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
@@ -97,7 +97,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     ports.update({p.name: [o[p.name] for _j, _d, o in kept] for p in sub.outputs})
     rows = [[i, None, None, None, None, None, None, "synthetic", {"draw": jj, **d.sub}] for i, (jj, d, _o) in enumerate(kept)]
     recipe = {"generator": "verity_flock.synthetic", "template": sub.template.id, "subcircuit": sub.id, "parameters": sub.params,
-              "seed": int(seed), "n": n, "key": f"verity.ml.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
+              "seed": int(seed), "n": n, "key": f"verity.commitments.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
               "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
               "samplers": sub.recipe, "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
               "draws": draws_used, "rejected": len(rejected), "rejected_draws": rejected[:64]}

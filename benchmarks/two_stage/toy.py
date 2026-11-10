@@ -47,7 +47,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.windows import links as LK, rows as CS
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row

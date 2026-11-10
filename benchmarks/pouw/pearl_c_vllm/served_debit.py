@@ -78,9 +78,9 @@ sys.path.insert(0, str(HERE.parent / "clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
-from verity.ml.commitments import Commitment  # noqa: E402
-from verity.ml.commitments import verify_opening  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
+from verity.commitments import Commitment  # noqa: E402
+from verity.commitments import verify_opening  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
 from verity.protocols.pouw.verifier.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
                                               weight_binding)
 from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
@@ -609,7 +609,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                            "points of its own)", "inputs": rows}
     if fresh:
         doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
-                                        "derived from fresh_source after the pass (verity.ml.randomness.derive, " + FRESH + "): "
+                                        "derived from fresh_source after the pass (verity.commitments.randomness.derive, " + FRESH + "): "
                                         "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

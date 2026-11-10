@@ -1,5 +1,5 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
-`streamed_wipe.py` and `verity.ml.crypto.lms`: the coins and their tree, the round records' root, the header and the
+`streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' root, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
 egress count, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
 `test_wipe_verdict.py` hold the verdicts)."""
@@ -19,7 +19,7 @@ import verity_difftest as D
 import wipe_cases as W
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

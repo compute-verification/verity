@@ -137,7 +137,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
-from verity.ml.commitments.gates import embedding as E
+from verity.commitments.gates import embedding as E
 from verity.definitions.registry import rmsnorm_fused_split as NS
 from verity.definitions.registry import int8_exact as IX
 from verity.definitions.registry import io_shell as IO

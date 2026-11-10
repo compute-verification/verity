@@ -33,11 +33,11 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
-from verity.ml.commitments import history as HT, row_table as RT
-from verity.ml.commitments.gates import embedding as E
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
+from verity.commitments import history as HT, row_table as RT
+from verity.commitments.gates import embedding as E
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
                                            row_leaf)
 from verity.windows import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
 

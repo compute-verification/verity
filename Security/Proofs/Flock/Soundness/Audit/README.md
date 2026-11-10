@@ -81,7 +81,7 @@ neither: their sampling design is the verifier's own (`liveLaw`) and their bound
 the same miss probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
 sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
-**the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.ml.randomness` stream, has
+**the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.commitments.randomness` stream, has
 no higher miss probability than the uniform $k$-subset. The window's per-call samples under one key form one
 `Law.stratified` over its (call, template) strata. So the live window sample (`keyedWindow`) misses $B$ with probability
 at most `Law.stratified`'s miss probability plus the $\eta$ of A4 (`Assumptions.KeyedStreamsUniform`), on a

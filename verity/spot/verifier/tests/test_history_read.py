@@ -16,8 +16,8 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
-from verity.ml.commitments import history as HT
-from verity.ml.commitments.gates.rowleaf import digest_bits
+from verity.commitments import history as HT
+from verity.commitments.gates.rowleaf import digest_bits
 from verity.spot.verifier.one_stage import partition as P, registered as G, registration as R, verifier as V
 
 from test_registered import LAW, MIX, POS, Q, SCHEME, SERVED, TABLE

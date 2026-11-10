@@ -113,7 +113,7 @@ from dataclasses import asdict, dataclass, field, fields, replace
 from functools import cached_property
 from typing import Any
 
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.protocols.certifier.verifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
                                                    precise_sleep)
 from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count

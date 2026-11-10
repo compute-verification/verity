@@ -6,7 +6,7 @@ is refused (Keccak's are constants). χ's output is committed (`sha512_circuit.c
 would compound round over round. `check()` holds each to its primitive on random words."""
 import random
 
-from verity.ml.commitments.gates.sha512 import commit
+from verity.commitments.gates.sha512 import commit
 from verity.protocols.pouw.prover.circuit import words as W
 
 

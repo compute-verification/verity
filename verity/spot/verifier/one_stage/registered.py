@@ -67,11 +67,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                             bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest,
                                             sha512_row_v2_digest)
 from verity.circuits.codec import canonical_json, jcs_domain_error

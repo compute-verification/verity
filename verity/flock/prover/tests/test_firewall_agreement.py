@@ -24,7 +24,7 @@ from verity_flock import rec_live as RL
 
 from test_rec_live import (CAP0, CAP1, HELLO, PROVER_NONCE, SCHEDULE, TREE, _binding_round, _bytes, _content, _domain, _hdr,
                            _label, _obs, _sq, _tree_hello)
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"

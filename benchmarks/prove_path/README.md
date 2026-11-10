@@ -185,7 +185,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **Statement.** The unit outputs one bit, and it is 1 exactly when all three hold:
   1. ρ is the root of a's rows:
      - row i is a[32i … 32i + 31], zero-padded;
-     - leaf i is `verity.ml.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
+     - leaf i is `verity.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
        sha512/row/v2 digest under y_i, as an `hm96-sha512/row/v2` row leaf at rank i;
      - the tree is the frame-v3-sha512 tree over those leaves, with domain D = CommitmentDomain(`advice_windows.commitment_binding(C)`,
        −1, RangeIndexedDomain(R), sha512).

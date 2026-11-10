@@ -186,7 +186,7 @@ def test_a_opens_against_the_step_root_and_refuses_neg_b():
     """On PoUW's side, a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
     against the committed root, and re-committing A' moves both roots."""
-    from verity.ml.commitments import row_table as RT
+    from verity.commitments import row_table as RT
 
     t, k, key = 64, 64, bytes(range(64))
     calls = [_padded_call(5, t, 64, k, 20 + w) for w in range(3)]
@@ -319,7 +319,7 @@ def test_b_tables_are_row_tables_under_the_weights_root():
     """root(B) is AROW's row-table format over the weight rows and their scales (`b_rows`, `s8_table`), built in pool chunks
     or whole; the weights' root is the tree over the B roots, each opens in it, a tile's 32 B rows open against root(B) and
     a tampered weight row is refused."""
-    from verity.ml.commitments import row_table as RT
+    from verity.commitments import row_table as RT
 
     SV = _load("serve")
     layers = [_Layer(96, 64, 1), _Layer(64, 128, 2)]
@@ -412,7 +412,7 @@ MAIN = ["e1" * 20, PIN]
 @functools.cache
 def _host_key():
     """The fake auditor host's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     return lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 
 
@@ -430,7 +430,7 @@ class _Host:
                  root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
                  parent: _Host | None = None) -> None:
         from verity.spot.device import remote as R
-        from verity.ml.crypto import lms
+        from verity.commitments.crypto import lms
         self.tmp_path, self.epoch, self.host, self.sid, self.draw = tmp_path, epoch, host, sid, None
         self.R, self.directory, self.secret = R, tmp_path / ("session" if parent is None else "draw") / "out", secret
         self.directory.mkdir(parents=True)
@@ -471,7 +471,7 @@ class _Host:
         self._thread.start()
 
     def sign(self, message: bytes) -> bytes:
-        from verity.ml.crypto import lms
+        from verity.commitments.crypto import lms
         return lms.sign_at(self.private, next(self.leaves), message).encode()
 
     def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
@@ -554,7 +554,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     refuses a session the manifest doesn't name, a manifest naming another window, a window outside the verifier's
     period, an open of another layout, and a window whose round root, opening, salt or sample root isn't what the
     challenger logged."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     SV = _load("serve")
     host = _Host(tmp_path)
     cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=host.open_draw)

@@ -424,7 +424,7 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     Lean is built, its `statement` accepts the honest files and refuses the forged claim row. About 3 minutes, most of it
     building the statement (1,839,105 unit rows) twice."""
     from verity.spot.verifier.one_stage import registered as RG
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
     from verity_flock.rec_outer import CLAIM_VALUE
 
     s = sess

@@ -30,9 +30,9 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.crypto import lms
-from verity.ml.commitments import coin_tree as CT
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.crypto import lms
+from verity.commitments import coin_tree as CT
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
 

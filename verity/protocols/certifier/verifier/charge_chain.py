@@ -46,8 +46,8 @@ from verity.circuits.boolean.forms import ZERO, Circuit, and_reduce
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments import hm96
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.certifier.verifier import arith_encode as AE
 from verity.protocols.certifier.verifier.arith_encode import Carry, ChargeBook
 from verity.protocols.certifier.verifier.head_check import BIT, _part

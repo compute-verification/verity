@@ -335,11 +335,11 @@ def statement(input_set, lo: int, hi: int, logits: np.ndarray, scalars: dict, ou
     to the set, the range, the port and its schema (``ir_frame.BINDING_TAG``). Returns the header's ``frame_v3`` entry and
     the logits row digests."""
     import blake3
-    from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.ml.commitments.identity import identity_digest
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
+    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.commitments.identity import identity_digest
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
 
     n, V = logits.shape
     widths = {p: (2 if input_set.subcircuit.inputs[[q.name for q in input_set.subcircuit.inputs].index(p)].dtype == "u64" else 1)

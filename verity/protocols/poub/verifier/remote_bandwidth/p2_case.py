@@ -34,7 +34,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 from . import p2_party
 

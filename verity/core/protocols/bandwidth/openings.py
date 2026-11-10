@@ -33,7 +33,7 @@ queries hit the store.  `slack_bits` evaluates it three ways (`Slack`):
   equal answers, `C(q, 2)/2^h` more error, so `λ ≈ ε·N·log₂(e/ε)`, about zero, and needs no bound on `q`.
 
 **Bytes and compute.**  `Geometry` describes a window; `opening_cost` gives the expected bytes and the verifier's work
-per opening with every tree's openings sent as one multiproof (`verity.ml.commitments.multiproof`), from the exact
+per opening with every tree's openings sent as one multiproof (`verity.commitments.multiproof`), from the exact
 expectation of the multiproof's size under the sample (`expected_siblings`).  The work is counted in operations: SHA-512
 compressions in the audit's framing (`pous.verifier`'s rows, leaves and nodes, `tags`' leaves), the codec's squarings
 to decode the label, and the sketch's multiply-adds.  `Rates` turns them into core-seconds, and `achievable` gives
@@ -50,7 +50,7 @@ from dataclasses import dataclass
 from enum import Enum
 from fractions import Fraction
 
-from verity.ml.randomness import Key
+from verity.commitments.randomness import Key
 
 from . import audit
 
@@ -130,7 +130,7 @@ def slack_bits(form: Slack, *, queries_log2: float, blocks: int, certified: int,
 
 def expected_known(leaves: int, weight: float, s: int) -> list[float]:
     """Expected known nodes at each level `0..D` of the padded tree over `leaves` real leaves
-    (`verity.ml.commitments.multiproof`'s), each leaf sampled with probability `weight` per opening, after `s` openings
+    (`verity.commitments.multiproof`'s), each leaf sampled with probability `weight` per opening, after `s` openings
     with replacement.  The audit's RFC 6962 tree is the padded one with its padding pruned, so it needs at most as
     many siblings."""
     depth = (leaves - 1).bit_length()

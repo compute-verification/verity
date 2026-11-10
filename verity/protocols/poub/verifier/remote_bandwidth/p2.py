@@ -54,7 +54,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
-from verity.ml.randomness import frame
+from verity.commitments.randomness import frame
 
 from . import audit, coins, receipts
 from .codec import P2_LAYOUT, P2Codec

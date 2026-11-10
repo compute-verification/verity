@@ -36,8 +36,8 @@ from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
 from verity.protocols.poub.verifier.remote_bandwidth import p2_case, p2_lean
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]

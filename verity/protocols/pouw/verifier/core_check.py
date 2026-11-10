@@ -88,14 +88,14 @@ from verity.spot.device import challenger as Ch
 from verity.spot.verifier.one_stage import registered as G
 from verity.protocols.pouw.verifier.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.protocols.pouw.verifier.protocol import U64, tagged
-from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.crypto import lms
-from verity.ml.randomness import derive, frame
+from verity.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive, frame
 
 ID = domains.POUW_PROTOCOL
 ONE_STAGE = domains.ONE_STAGE_PROTOCOL
@@ -1300,7 +1300,7 @@ def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
-    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.ml.crypto.lms`).
+    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.commitments.crypto.lms`).
     A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
     verify."""
     p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)

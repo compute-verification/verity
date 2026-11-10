@@ -7,7 +7,7 @@ request still running at a close is carried to the next window, so a span never 
 least powers of two, at least `MIN_CAP`, covering its prompt's ids and the ids it was served. Each class is its own
 registration over N replay blocks, slot r its r-th span.
 
-**Values** (`PORTS`): one `hm96-sha512/row/v2` row a span each, under its window domain (`verity.ml.commitments.window`:
+**Values** (`PORTS`): one `hm96-sha512/row/v2` row a span each, under its window domain (`verity.commitments.window`:
 program, partition, port, schema, N leaves, run); a u32 is two u16 words, low first, a float its f32 bits.
 
 | value | row |
@@ -57,9 +57,9 @@ from verity.circuits.population import population
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 from verity.windows import rows as CS
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 

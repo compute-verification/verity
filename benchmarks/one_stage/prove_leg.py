@@ -85,7 +85,7 @@ import a7  # noqa: E402
 from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 
 FORMAT = "verity/prove-leg/v0"
@@ -271,9 +271,9 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
 def frame_ports(set_name: str, meta: dict, n: int, tables: Mapping[str, Any] | None = None) -> dict[str, dict]:
     """Each port's frame-v3 tree as the verifier derives it: its binding names the set, the instance range, the port and its
     schema; its leaves are the instances' rows, or a shared-row port's table rows (`circuit.statement`)."""
-    from verity.ml.commitments.identity import identity_digest_sha512
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
+    from verity.commitments.identity import identity_digest_sha512
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
 
     out = {}
     for (port, _w, _c), (schema, _bits) in zip(meta["ports"], meta["row_schemas"], strict=True):
@@ -869,12 +869,12 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             return out
         return fn, call
     if fam == "embedding-read":
-        from verity.ml.commitments.gates import embedding as E
-        from verity.ml.commitments.gates.frame_v3 import root_ref
-        from verity.ml.commitments.gates.hm96 import reference as hm96_leaf
-        from verity.ml.commitments.gates.rowleaf import reference as row_digest
-        from verity.ml.commitments.merkle import merkle_depth
-        from verity.ml.commitments.rowleaf import bit_row
+        from verity.commitments.gates import embedding as E
+        from verity.commitments.gates.frame_v3 import root_ref
+        from verity.commitments.gates.hm96 import reference as hm96_leaf
+        from verity.commitments.gates.rowleaf import reference as row_digest
+        from verity.commitments.merkle import merkle_depth
+        from verity.commitments.rowleaf import bit_row
 
         def emb_read(rng, n):
             names, cols = ("tok", "root", "domain", "row", "salt", "path"), []

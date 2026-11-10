@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
 from verity.protocols.poub.verifier.remote_bandwidth.session import verifier
 from verity.spot.device import challenger as Ch
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.crypto import lms
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[5]
 SERVE = ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py"

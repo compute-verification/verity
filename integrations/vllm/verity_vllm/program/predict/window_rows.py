@@ -49,7 +49,7 @@ from verity.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
-from verity.ml.commitments.gates import embedding as E
+from verity.commitments.gates import embedding as E
 from verity.definitions.numerics.rows import ROWS
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry.b1 import NEG_INF_BF16

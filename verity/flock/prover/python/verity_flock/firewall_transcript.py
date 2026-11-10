@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_prefix
+from verity.commitments import hm96
+from verity.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_prefix
 
 from . import rec_live as RL
 

@@ -1,5 +1,5 @@
 // The ZK statement's row commitment on the serving GPU, for served_zk's cost measurement (rows_bench.py): a call's rows as
-// hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.ml.commitments: rowleaf's sha512/row-seg/v1 and
+// hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.commitments: rowleaf's sha512/row-seg/v1 and
 // sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being Flock's (verity/flock/prover/cuda/
 // sha512.cuh: s512_compress) and the frame messages, the mask, the salt digest and the hm96 leaf's value
 // verity/definitions/kernels/row_commit.cuh's over it.  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).

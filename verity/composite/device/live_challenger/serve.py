@@ -68,7 +68,7 @@ from verity.spot.device import remote  # noqa: E402
 from verity.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
                                                              served_claim)
 from verity.spot.verifier.one_stage import verifier as V  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
 HELLO_SECONDS = 10.0

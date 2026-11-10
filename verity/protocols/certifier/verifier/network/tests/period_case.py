@@ -70,8 +70,8 @@ from verity.circuits.defs import REGISTRY
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.crypto import lms
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.crypto import lms
 from verity.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"

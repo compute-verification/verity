@@ -50,7 +50,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import CompositeDefinition, bind
@@ -59,7 +59,7 @@ from verity.circuits.refs import Coll
 from verity.circuits.types import Array
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ZERO, Circuit, L
-from verity.ml.commitments.gates.sha512 import commit
+from verity.commitments.gates.sha512 import commit
 from verity.definitions.ops.boolean import gf2k as G
 
 from . import circuit as FC
@@ -433,7 +433,7 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
 def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> dict:
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
-    from verity.ml.commitments.merkle import tree_levels
+    from verity.commitments.merkle import tree_levels
     from verity.spot.verifier.one_stage import registered as RG
 
     dom = RG.domain(program, value, words_, len(bcs))

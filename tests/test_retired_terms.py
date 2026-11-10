@@ -201,7 +201,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|\bcommit{_SPACE}periods?\b")
 _DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
 #: The commitments' own docs, where hm96 rows keep their name.
-HM96_HOME = "verity/ml/commitments/"
+HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {

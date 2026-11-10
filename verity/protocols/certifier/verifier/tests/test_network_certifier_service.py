@@ -20,10 +20,10 @@ from verity.protocols.certifier.verifier.certificate import (CertifiedRecord, Di
                                                                           RecordHead, parameters_digest)
 from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Record, occupancy
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet, run_shaper
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import root_ref
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.commitments import hm96
+from verity.commitments.gates.frame_v3 import root_ref
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.protocols.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, LinkWindows, encode,
                                                                       rows)
 from verity.spot.verifier import service as S

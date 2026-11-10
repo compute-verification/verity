@@ -92,12 +92,12 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512, tagged_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.protocols.certifier.verifier.active import HEADER
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)

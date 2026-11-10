@@ -80,7 +80,7 @@ from verity.circuits.boolean import trace as TR
 from verity.definitions.ops.boolean import gf2k as G
 from verity.definitions.ops.boolean.gf2k import mul
 from verity.circuits.boolean.forms import ZERO
-from verity.ml.commitments.gates.sha512 import commit
+from verity.commitments.gates.sha512 import commit
 
 __all__ = ["PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "SparsePublics", "ands", "copy_rows", "definition", "entries",
            "inner_points", "layout_factors", "lowering", "message_ports", "out_words", "port_words", "ports", "products",

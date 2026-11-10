@@ -23,12 +23,12 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
 from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
 from verity.circuits.program import Program
 from verity.definitions.silicon import fp32
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import cap, pc8, plan
 from verity.protocols.pouw.prover.circuit import leaves as L
 from verity.protocols.pouw.verifier.protocol import DomainError, Shape

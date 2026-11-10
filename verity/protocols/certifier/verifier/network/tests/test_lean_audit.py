@@ -26,7 +26,7 @@ import test_network_check_protocol as V2
 import test_network_records_protocol as R
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import audit, lean_audit, service
 from verity.protocols.certifier.verifier.certificate import (CertifiedClock, CertifiedRecord, Direction, Issuer, LmsKey,
                                                         LmsSigner, SignedClocks, clock_commitment, parameters_digest)

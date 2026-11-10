@@ -161,7 +161,7 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
 
     p = lms.Params(64, key.W, key.H)
     try:

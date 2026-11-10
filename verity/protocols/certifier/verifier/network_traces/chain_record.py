@@ -212,7 +212,7 @@ def custody(gates: Path) -> dict:
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     from verity.protocols.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
@@ -952,7 +952,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
     from verity.spot.verifier.one_stage import registration as R
-    from verity.ml.commitments.identity import tagged_sha512
+    from verity.commitments.identity import tagged_sha512
 
     try:
         raw, params = bytes.fromhex(case["commitment"]), case["params"]

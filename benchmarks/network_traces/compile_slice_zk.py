@@ -44,7 +44,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
-  ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
+  ``adv`` row is row i of the advice's hiding registration (`verity.commitments.advice`: its leaf from b‖c, its path
   to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
   (`served_rows.leaf`, `served_rows.leaf_ok`), its
   ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
@@ -86,9 +86,9 @@ from verity.protocols.certifier.verifier import arith_encode as AE  # noqa: E402
 from verity.protocols.certifier.verifier import charge_chain as CC  # noqa: E402
 from verity.protocols.certifier.verifier import compile_slice as CS  # noqa: E402
 from verity.protocols.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.ml.commitments import advice as ADV  # noqa: E402
-from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
-from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
+from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
+from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURES = REPO / "verity/protocols/certifier/verifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"

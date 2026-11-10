@@ -14,7 +14,7 @@ from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 
 FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"
 VO = (R.VO_ROTATION, R.HEAD_INTERLEAVE)

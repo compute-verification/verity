@@ -16,7 +16,7 @@ import pytest
 from verity.protocols.certifier.verifier import compile_slice as CS, served_rows as SR
 from verity.protocols.certifier.prover import served_statics as SS, served_tie as ST
 from verity.spot.verifier.one_stage import registered as REG
-from verity.ml.commitments import advice as ADV
+from verity.commitments import advice as ADV
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 

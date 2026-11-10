@@ -70,7 +70,7 @@ from verity.spot.verifier.one_stage import draw as D, partition as P, registrati
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.protocols.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
 
 NODE, SOURCE = b"a8-node", b"a8 verifier's secret"

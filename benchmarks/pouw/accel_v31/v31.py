@@ -46,8 +46,8 @@ import reference as cref
 
 from verity.protocols.pouw.prover.circuit import dither
 from verity.protocols.pouw.prover.circuit.dither import NOISE, PAD, STREAMS, TILE, leaf_h, prf_salt, prg, wrap8
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.commitments.rowleaf import row_leaf
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import row_leaf
 
 
 # ---------------------------------------------------------------------------------------------------------- the coins

@@ -28,7 +28,7 @@ path = "../../verity/protocols/certifier/device/program/lean"
 
 [[require]]
 name = "core_randomness"
-path = "../../verity/core/primitives/randomness"
+path = "../../verity/commitments/randomness"
 
 # V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
 [[require]]

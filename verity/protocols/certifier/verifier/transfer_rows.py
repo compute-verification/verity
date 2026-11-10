@@ -61,9 +61,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments import hm96
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.merkle import CommitmentDomain
 from verity.protocols.certifier.verifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
 from verity.spot.verifier.one_stage import produced
 from verity.spot.verifier.one_stage import registered as G

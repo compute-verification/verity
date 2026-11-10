@@ -69,7 +69,7 @@ import window_chain as WC  # noqa: E402
 from verity.protocols.certifier.verifier import advice as I1  # noqa: E402
 from verity.protocols.certifier.verifier.active import compact_record_data  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.commitments import advice as AC  # noqa: E402
+from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 

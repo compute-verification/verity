@@ -19,10 +19,10 @@ from verity.protocols.poub.verifier.remote_bandwidth import receipts as RC
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.ml.commitments import Commitment, CommitmentDomain, Opening, verify_opening
+from verity.commitments import Commitment, CommitmentDomain, Opening, verify_opening
 from verity.protocols.poub.verifier.commitments.gates import block_check as BC
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import MerkleTree, merkle_depth
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import MerkleTree, merkle_depth
 
 FIELD = dict(BYTES=4096, ROWS=16, LEAF=16, P=40, DR=2, DP=3, DV=3)
 P512 = SimpleNamespace(N=512, C=569, K=2, MASKED=0, **FIELD)
