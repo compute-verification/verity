@@ -43,6 +43,8 @@ Files:
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
+- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
+  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   `flock-verify ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
   doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.
