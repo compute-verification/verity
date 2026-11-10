@@ -34,13 +34,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.deploy import config as K
-from verity.core.deploy.config import Component, Workload
-from verity.core.deploy.manifest import Channel, Role
+from verity.configuration.deploy import config as K
+from verity.configuration.deploy.config import Component, Workload
+from verity.configuration.deploy.manifest import Channel, Role
 from verity.core.protocols.pous import wipe_parties as WP
 from verity.core.protocols.spot import parties as SP
 from verity.core.protocols.spot.one_stage.draw import parse_design
-from verity.core.wire import Refused
+from verity.configuration.wire import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVED_WINDOW, GATE, CHECK = "served-window", "gate", "check"

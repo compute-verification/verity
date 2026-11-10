@@ -2067,6 +2067,13 @@
         "verity/ml/kernels/": "verity/definitions/kernels/",
         "verity/ml/private_circuits/": "verity/definitions/private_circuits/"
       }
+    },
+    {
+      "paths": {
+        "tools/config/": "verity/configuration/config/",
+        "verity/core/deploy/": "verity/configuration/deploy/",
+        "verity/core/wire/": "verity/configuration/wire/"
+      }
     }
   ]
 }

@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.deploy import config as K
-from verity.core.deploy.manifest import Channel
-from verity.core.wire import Refused
+from verity.configuration.deploy import config as K
+from verity.configuration.deploy.manifest import Channel
+from verity.configuration.wire import Refused
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)

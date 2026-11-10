@@ -1,10 +1,10 @@
 # The served window's onsite run
 
-`config.toml` is one deployment configuration (`verity/config/v0`, `verity.core.deploy.config`) of onsite's seven
+`config.toml` is one deployment configuration (`verity/config/v0`, `verity.configuration.deploy.config`) of onsite's seven
 subprotocols (`verity/onsite/v0`): sampled proofs, PoUW, the inference-only policy, PoUS, PoUB (`bandwidth`), the network
 certifier and the wipe, on the `served-window` workload: one window of Llama-3.2-1B in int8 served through the
 vLLM integration's committing endpoint. `verity run` executes it, reading `served_table.py` (`verity_cli.run.REGISTRY`).
-The file is `served_table.configuration` rendered by `verity.core.deploy.config.render`, and
+The file is `served_table.configuration` rendered by `verity.configuration.deploy.config.render`, and
 `tools/verity/cli/tests/test_onsite_served.py` holds it to that byte for byte. It names no host and no address: those are
 the deploy bindings' (below), so binding another host changes no hash.
 

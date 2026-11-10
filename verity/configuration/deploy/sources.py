@@ -20,7 +20,7 @@ import os
 import time
 from collections.abc import Callable
 
-from verity.core.wire import Body, Int, Message, MessageTypes, Schema
+from verity.configuration.wire import Body, Int, Message, MessageTypes, Schema
 
 from .party import Action, Identity, Params, Received, Send
 

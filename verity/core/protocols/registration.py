@@ -42,7 +42,7 @@ from typing import Any
 
 from verity.core import site as S
 from verity.core.site import Auditor, Malformed
-from verity.core.wire import canonical
+from verity.configuration.wire import canonical
 
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"

@@ -8,7 +8,7 @@ The manifest is a typed object in each protocol's package (`render` writes it as
   rest capabilities such as `gpu` or `signing-key`);
 - its channels (`Channel`): who may send which messages to whom, under what latency bound, whether they carry coins,
   and the messages sent before them (`after`);
-- its messages: the wire schemas (`verity.core.wire.Schema`), each with its kind;
+- its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind;
 - what it needs of the workload (`needs`: `windows`, `store`, ...), which a workload's `provides` must cover
   (`workload`).
 
@@ -26,7 +26,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.core.wire import NAME, MessageTypes, Refused, Schema
+from verity.configuration.wire import NAME, MessageTypes, Refused, Schema
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")

@@ -25,7 +25,7 @@ VLLM_BENCH_POINT = Tool(
         "benchmarks/harness/**",
         "benchmarks/specs/**",
         "integrations/vllm/**",
-        "tools/config/**",
+        "verity/configuration/config/**",
         "uv.lock",
     ],
     key_params=["identity"],

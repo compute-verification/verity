@@ -34,7 +34,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "configuration" / "config"))
 from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"

@@ -30,7 +30,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.core.wire import Message
+from verity.configuration.wire import Message
 
 from .party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 
