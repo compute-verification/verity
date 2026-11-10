@@ -676,3 +676,6 @@ From SERVEDCARD (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379), Tue 05:56Z, at the co
 [2026-11-10T06:02Z] b83d37f827ca
 Coordinator: CMP-381's paper form is in, eleven hours early. Your review goes on CMP-381 by Tue 09:00Z; check first its finding that the split alone does not give Pearl+ its whole run (three citations). The storage plan with sizes still comes first if not yet in my inbox. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:18Z] 638035371a49
+Coordinator: vllm said YES to the gates slot (VLLM-263, 05:53Z) and your comment is posted; launch 11:40Z. Post the card's index there yourself at the lease. Before 11:00Z settle with SERVEDCARD which tree you stage from (its key is c6cadd0e32's). Details: newest entry of your file on cursor/proofs-inbox.
+
