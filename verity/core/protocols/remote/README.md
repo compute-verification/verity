@@ -113,8 +113,8 @@ failure probability that, beyond the sample and SHA-512, rests on undischarged p
 - the hardware's credited time went to the registered circuit's work, on part 3's premises, which the deployed path
   doesn't meet;
 - the registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f fresh bits per
-  gate, hence padded blocks of c = Γ gates and k = ⌊α_f·Γ⌋ fresh bits (part 4: remote runs the inference-only
-  policy's check, its third subprotocol).
+  gate, hence padded blocks of c = Γ gates and k = ⌊α_f·Γ⌋ fresh bits (part 4, the inference-only policy's
+  check).
 
 Conditionally on the items under What's open below, a fourth claim follows: training a new frontier model takes more
 fleet-time than it would without the protocol, by the slowdown bound (part 6). That bound is the argument's one
@@ -242,20 +242,19 @@ The time credit adds the data sheet's rates.
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
 fresh bits per gate, anything outside the registered information θ (`Nci.Complies Γ α_f`); and θ is registered
 information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
-k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
-(`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Complies` as a hypothesis.
+k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates, with gates up to W bits wide
+(`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. The Lean slowdown bound `DampenerRemote`
+instead takes `Complies` as a hypothesis.
 
 **How it is checked.**
 
-- *By whom.* By remote: the policy is one of its three subprotocols (Subprotocols, above), as
-  `NciCheck.Protocol.protocol`, `verity/inference-only/v0`, whose check is `NciCheck.Baseline.evaluate`. The
-  same check runs on its own as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`).
+- *By whom.* By remote: the policy is one of its three subprotocols (Subprotocols, above), whose check is
+  `NciCheck.Baseline.evaluate`. The same check runs on its own as `nci-check` (`NciCheck.Baseline.check`,
+  `verity/core/protocols/network/nci/lean`).
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
 - *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What binds it
-  to the other subprotocols is the run's record: the policy and sampled proofs must commit to the same one
-  (`Core.Remote.tied`), and every window of PoUW's period must name it as its Commit record (`Core.Remote.windows`).
+  to the other subprotocols is the run's record (`Core.Remote.tied`, `Core.Remote.windows`; Subprotocols, above).
 - *In the clear.* The check reads the inference partition and θ's provenance in the clear, and v0 publishes the
   declared division and each inference block's profile. Remote composes it as a stated exception to
   everything-zero-knowledge (`CoreRemote.lean`'s header), until a private form replaces it: the partition committed
@@ -550,8 +549,8 @@ the slowdown calculator). Its `periods.py` gives the slowdown bound for monitori
 ## The demo
 
 **No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
-runs remote's sampled proofs for real, and the vLLM demo runs sampled proofs and PoUW, two of remote's three
-subprotocols, on one served run, PoUW's as a development run:
+runs remote's sampled proofs for real, and the vLLM demo runs sampled proofs and PoUW on one served run,
+PoUW's as a development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
