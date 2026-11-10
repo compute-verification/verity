@@ -502,15 +502,15 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     """4.13.1's rules on M (`he_of_rows`, `he_figure`): the optimizer's products and attention's leave M; a weight is an
     operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
     backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
-    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568 and linear in log
-    k between the red-team's points, none past 8e8, weights their width or less the record's code bits a trained weight,
+    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568, between two
+    red-team points the next one's, none past 8e8, weights their width or less the record's code bits a trained weight,
     a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
     whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
     after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
     with the layers' are unmeasured from 8e7, and every M past 8e8."""
     c, k, C, T = 1e11, 65_536.0, 1e13, 1024
     assert (F.beta_k(1.0), F.beta_k(145_568), F.beta_k(8e6), F.beta_k(8e8)) == (15.9, 15.9, 10.8, 0.37)
-    assert F.beta_k(math.sqrt(8e6 * 8e7)) == pytest.approx((10.8 + 2.7) / 2, rel=1e-12) and F.beta_k(8.1e8) is None
+    assert F.beta_k(8e6 + 1) == F.beta_k(math.sqrt(8e6 * 8e7)) == F.beta_k(8e7) == 2.7 and F.beta_k(8.1e8) is None
     he = F.he_of_rows(HE_STEP, k, 10.0, T)
     opt, att = HE_STEP[7], HE_STEP[8]
     assert he["left_out_macs"] == 10 * (opt["count"] * opt["macs"] + att["count"] * att["macs"])

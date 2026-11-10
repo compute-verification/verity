@@ -105,7 +105,7 @@ lean = "Nci.Cut.Assumptions.Hardness"
 standing = "assumed"
 beyond = "contested"
 credible_bits = { value = 8e8, unit = "bit", source = "beta's last k: no β is stated past it, and the min-cut class bounds no block there", status = "derived" }
-beta = { value = [[145568, 15.9], [800000, 15.3], [8e6, 10.8], [8e7, 2.7], [8e8, 0.37]], unit = "(bit, bit/value)", source = "measured: the least ratio κ(S) / |val(S ∩ X)| a red team of (H) found over its sets S with κ(S) ≤ k, on one traced step of a small dense model in bf16. (H) is refuted there at any β above a row, and a row is not evidence (H) holds at it; between rows rho/min_cut.py takes β linear in log k. The red team's generator is not in the tree", status = "assumed" }
+beta = { value = [[145568, 15.9], [800000, 15.3], [8e6, 10.8], [8e7, 2.7], [8e8, 0.37]], unit = "(bit, bit/value)", source = "measured: the least ratio κ(S) / |val(S ∩ X)| a red team of (H) found over its sets S with κ(S) ≤ k, on one traced step of a small dense model in bf16. (H) is refuted there at any β above a row, and a row is not evidence (H) holds at it. That least only falls as k rises, so between two rows it is at least the next row's value and at most the one before's, and the rows say nothing more: rho/min_cut.py takes the next row's, the largest β no set behind the rows refutes between them. The red team's generator is not in the tree", status = "assumed" }
 
 [premise.training-cut-exports]
 lean = "Nci.Cut.Assumptions.Exports"
