@@ -25,11 +25,11 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.ops.mufu import RsqrtApprox
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.ops.mufu import RsqrtApprox
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as T
 from verity.ml.definitions.registry import boolean_dsv4_qnorm_insert as BQ

@@ -1,6 +1,6 @@
 """Compact representation: operand references as RUN PROGRESSIONS instead of one tuple per run.
 
-The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.ml.circuits.refs.runs).
+The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.circuits.refs.runs).
 On a real fold 91 % of all runs are the K/V gathers of Attention (mprof, llama B8 256/32: 3.52 M runs, 200 per Attention
 instance): the SAME window [lo, hi) read from an ARITHMETIC SEQUENCE OF PRODUCER NODES -- one K-projection node per cached position,
 consecutive in a prefill (idx delta 1), one per decode step later (idx delta = the step's instance count).  Every per-instance pass of
@@ -168,12 +168,12 @@ def from_json(j, alias: Callable[[int, int], list[Prog]] | None = None) -> list[
 
 
 def _walk_refs(acc: _Acc, r) -> None:
-    """`_walk` over the fold's own Refs OBJECTS (verity.ml.circuits.refs: Affine / Strided / Concat / Explicit -- a fold body has no alias
+    """`_walk` over the fold's own Refs OBJECTS (verity.circuits.refs: Affine / Strided / Concat / Explicit -- a fold body has no alias
     references, those are a descriptor's), the same greedy rule, without the `to_json()` dict tree in between.  A Concat's run of
     consecutive Affine parts (the real shape: the alias-spliced K/V gathers are one Affine per cached position, per mprof) is
     folded by ONE local loop that inlines `_Acc.run` + `_Acc._close` -- no method call, no tuple arithmetic per run; the accumulator's
     state is taken into locals at entry and written back at exit, so a non-Affine part in the middle simply hands over and resumes."""
-    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.circuits.refs import Affine, Concat, Explicit, Strided
     tr = type(r)
     if tr is Affine:
         if r.count > 0:
@@ -493,7 +493,7 @@ def lean_root(desc: dict, registry) -> dict:
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
     v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
     descriptors have no aliases."""
-    from verity.ml.circuits.codec import SCHEMA_V0, definition_decoder, descriptor_id, type_from_json
+    from verity.circuits.codec import SCHEMA_V0, definition_decoder, descriptor_id, type_from_json
     get = definition_decoder(desc, registry)
     schema = desc["schema"]
     if schema == SCHEMA_V0:

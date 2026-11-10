@@ -116,7 +116,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     passes with nothing checked. A registered fixture, or a path inside one, keys its id. An artifact is a Lake build's
     output, so its package must be here."""
     tables = _suite_tables()
-    assert "verity/ml/circuits/pyproject.toml" in tables
+    assert "verity/circuits/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)
            and not any(i.rstrip("/") == r or i.startswith(r + "/") for r in registered())]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])

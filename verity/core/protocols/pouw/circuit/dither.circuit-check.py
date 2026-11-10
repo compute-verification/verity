@@ -12,7 +12,7 @@ def _pouw_roots() -> list[Any]:
     segments, the last short (`PouwDitherLastOk_v2`, X W′ᵀ over the first segment, T_S being O's), O's sum through
     `PouwDitherOutDot0_v2` and `PouwDitherOutDot_v2`. Both grow linearly in their lengths / 32, which larger L and K are
     priced by. `PouwDitherLast_v1` checks O for O's consumers and earns no credit, at one segment or more."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.core.protocols.pouw.circuit import dither as D
 
     return ([bind(D.PouwDitherBlock, L=L, FIRST=first) for L in (32, 64, 1024) for first in (True, False)]

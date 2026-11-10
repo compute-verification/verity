@@ -38,7 +38,7 @@ def partition(d: Path) -> dict:
     """The partition object, program and full draw the inner statement in ``d`` binds, written beside it; refused unless META
     binds exactly that partition and program and the population is the statement's ``N`` units."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity_flock import rec_live as RL
 
     t, n = template(), int(os.environ["N"])

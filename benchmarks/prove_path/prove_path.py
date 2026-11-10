@@ -195,7 +195,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
@@ -350,8 +350,8 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     the verifier reads them only from Builds it wrote itself (`own_builds`)."""
     import gzip
 
-    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
     from verity.ml.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF

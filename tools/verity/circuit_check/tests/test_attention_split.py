@@ -39,7 +39,7 @@ def _top_level(tree: ast.Module) -> list[str]:
 
 def _family() -> dict[str, str]:
     """``id -> module`` for every Definition a family module binds at top level itself (not one it imports)."""
-    from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
+    from verity.circuits.defs import FunctionDefinition, SpecializedDefinition
 
     out = {}
     for m in MODULES:
@@ -52,10 +52,10 @@ def _family() -> dict[str, str]:
 
 
 def _digest(fn) -> str:
-    """The canonical descriptor digest of ``fn``: its Program's (`verity.ml.circuits.codec.program_digest`), a primitive's entry's."""
-    from verity.ml.circuits.codec import canonical_json, definition_entry, program_digest
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.program import Program
+    """The canonical descriptor digest of ``fn``: its Program's (`verity.circuits.codec.program_digest`), a primitive's entry's."""
+    from verity.circuits.codec import canonical_json, definition_entry, program_digest
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.program import Program
 
     if isinstance(fn, PrimitiveDefinition):
         return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
@@ -126,7 +126,7 @@ def now(suite, served):
 def test_every_family_definition_keeps_its_id_and_digest(now, part):
     """Every id and digest at every binding the snapshot holds (this test's slice of them), and every family Definition and pin
     the snapshot names."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
 
     assert sorted(set(SNAPSHOT["family"]) - set(now["family"])) == []
     keys = sorted(SNAPSHOT["definitions"])[part::PARTS]

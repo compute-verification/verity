@@ -18,10 +18,10 @@ template has a reader of every table.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.ops.scalar import U32Hi16
-from verity.ml.circuits.refs import Coll, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import composite
+from verity.circuits.ops.scalar import U32Hi16
+from verity.circuits.refs import Coll, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.boolean import sigma_lift
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.int8_exact import row_parts_refusal

@@ -14,17 +14,17 @@
       },
       "semantics": {
         "type": "string",
-        "description": "the exact tensor-core instruction whose accumulator step the chain uses (verity.ml.circuits.silicon.instructions)"
+        "description": "the exact tensor-core instruction whose accumulator step the chain uses (verity.circuits.silicon.instructions)"
       }
     },
     "accumulate": "fp32",
     "reference_batch": 4096,
     "ir_definitions": [
-      "GemmCoordinate_v2{K, DOT} (verity.ml.circuits.ops.gemm); vLLM Gemm_v1 (N per token row, Ampere mma) and Gemm_v2 (Hopper wgmma) are N of them"
+      "GemmCoordinate_v2{K, DOT} (verity.circuits.ops.gemm); vLLM Gemm_v1 (N per token row, Ampere mma) and Gemm_v2 (Hopper wgmma) are N of them"
     ],
     "sources": [
       {
-        "label": "verity.ml.circuits.targets.target (GemmCoordinate<K>); archive/AGENTS.md: the decision workload, B = 4096 K = 1536 (frozen 2026-09-22)"
+        "label": "verity.circuits.targets.target (GemmCoordinate<K>); archive/AGENTS.md: the decision workload, B = 4096 K = 1536 (frozen 2026-09-22)"
       }
     ],
     "work_model": {
@@ -33,7 +33,7 @@
       "special_per_input": {},
       "basis": "K multiply-accumulates (an FMA is 2 ops); the bf16 epilogue conversion is not counted (views.native, the tables' N)",
       "variables": {},
-      "source": "verity.ml.circuits.ops.gemm GemmCoordinate: K/16 tensor-core steps of 16 multiply-adds",
+      "source": "verity.circuits.ops.gemm GemmCoordinate: K/16 tensor-core steps of 16 multiply-adds",
       "bytes_per_input": "K*BITS//8",
       "bytes_basis": "reads the coordinate's weight row w[K] at the operand datatype's width (BITS, benchmarks/census/datatypes.json); x[K] is shared by every coordinate of its row and y is one word, so neither is counted per coordinate (the batch-1 decode reading: GEMM streams its weights)",
       "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): gemm-coordinate x[K], w[K] -> y"
@@ -63,10 +63,10 @@
             "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs",
             "sources": [
               {
-                "label": "docs ontology, Presentation rules (fidelity notes); verity.ml.circuits.targets.target BF16_HOPPER"
+                "label": "docs ontology, Presentation rules (fidelity notes); verity.circuits.targets.target BF16_HOPPER"
               },
               {
-                "label": "three H100 runs, two of wgmma (A from shared memory / registers) and one of mma.sync on a second H100: every word matches hopper_bf16_wgmma_k16's total step, 0 mismatches; the specials family identical word for word across the instructions; veritor's wgmma records replayed through mma.sync, 0 mismatches (verity/ml/circuits/ops/tests/test_wgmma_bf16.py)"
+                "label": "three H100 runs, two of wgmma (A from shared memory / registers) and one of mma.sync on a second H100: every word matches hopper_bf16_wgmma_k16's total step, 0 mismatches; the specials family identical word for word across the instructions; veritor's wgmma records replayed through mma.sync, 0 mismatches (verity/circuits/ops/tests/test_wgmma_bf16.py)"
               }
             ]
           }
@@ -89,7 +89,7 @@
           "ruling": "record the equivalence rather than duplicate cells; new real-K H100 BF16 cells use this subcircuit's id",
           "sources": [
             {
-              "label": "lane wgmma-bf16 H100 runs r20260926-020157-242a (art:8f903385, wgmma, A from shared memory) and r20260926-020210-aee8 (art:f9508ae8, wgmma, A from registers) on one H100; r20260926-023321-ecb5 (art:4ece89a0, mma.sync, a second H100): 25,833,472 swept elements incl. 6,144 specials, 0 mismatches against hopper_bf16_wgmma_k16's total step; veritor's 44,046 wgmma records replayed through mma.sync, 0 mismatches (PR #49, verity/ml/circuits/ops/tests/test_wgmma_bf16.py)"
+              "label": "lane wgmma-bf16 H100 runs r20260926-020157-242a (art:8f903385, wgmma, A from shared memory) and r20260926-020210-aee8 (art:f9508ae8, wgmma, A from registers) on one H100; r20260926-023321-ecb5 (art:4ece89a0, mma.sync, a second H100): 25,833,472 swept elements incl. 6,144 specials, 0 mismatches against hopper_bf16_wgmma_k16's total step; veritor's 44,046 wgmma records replayed through mma.sync, 0 mismatches (PR #49, verity/circuits/ops/tests/test_wgmma_bf16.py)"
             }
           ]
         }

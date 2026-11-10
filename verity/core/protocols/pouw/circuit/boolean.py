@@ -18,11 +18,11 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Lo_v1
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
 
-Each is traced from a builder over core's `forms` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are the builder's
+Each is traced from a builder over core's `forms` (`verity.circuits.boolean.trace.definition`), so its And gates are the builder's
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); Flock's lowering runs the
 builder itself (``.build``), for the word primitive's piece and for an activation of the Definition, so it keeps the commits.
 
-* the windows: the 15 calls of the atom's own builder (`verity.ml.circuits.ops.boolean.gemm`) that build a window's masked words, on a
+* the windows: the 15 calls of the atom's own builder (`verity.circuits.ops.boolean.gemm`) that build a window's masked words, on a
   view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that
   doesn't read the accumulator, are built once for its 2^j words on any circuit, Flock's (which has no common-subexpression
   pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
@@ -32,7 +32,7 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   every AND that doesn't read F's sign: on sm_120 2,493 ANDs where two atom calls and casts are 20,062 (1,806 against
   15,230 on the H100).
 
-* `f32_sqrt_rn`: `verity.ml.circuits.ops.boolean.sqrt`'s (a digit-by-digit root of the normalized significand).
+* `f32_sqrt_rn`: `verity.circuits.ops.boolean.sqrt`'s (a digit-by-digit root of the normalized significand).
 * `e_tilde`: the significands' 2 x 4-bit product, normalized, and the exponent fields' sum; the product's sign or-ed with E's.
 * `sq_acc`, `sq_ge`: m² (a squarer, every cross product once) shifted by 2 · max(e, 1) (`words.sq300`).  `sq_ge` never
   builds the 558-bit square: m² has 48 bits, so its `up48` encoding is exact, m² shifted left by min(2 · max(e, 1), its
@@ -50,15 +50,15 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import scalar as BS
-from verity.ml.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
-from verity.ml.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
+from verity.circuits.silicon import fp
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import scalar as BS
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
+from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 
 from . import words as W
 

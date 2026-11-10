@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import Program
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.cut import CallGraph, call_scope
+from verity.circuits import Program
+from verity.circuits.codec import program_digest
+from verity.circuits.cut import CallGraph, call_scope
 
 pc8 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc8", reason="the tile template is `verity.core.protocols.pouw.circuit.pc8`'s")
 pc4 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc4", reason="the tile template is `verity.core.protocols.pouw.circuit.pc4`'s")

@@ -20,7 +20,7 @@ from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_builder import WEIGHTS
 from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
 
-from verity.ml.circuits import partition_v2 as PV2
+from verity.circuits import partition_v2 as PV2
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
 

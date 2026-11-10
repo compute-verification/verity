@@ -50,11 +50,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.ml.circuits import boolean as BL, census as CE, codec, partition_v2 as PV2
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.parts import n_members
-from verity.ml.circuits.population import mixed_population_program
-from verity.ml.circuits.program import is_input
+from verity.circuits import boolean as BL, census as CE, codec, partition_v2 as PV2
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.parts import n_members
+from verity.circuits.population import mixed_population_program
+from verity.circuits.program import is_input
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.windows import interface as IF
 from verity_vllm.config import option

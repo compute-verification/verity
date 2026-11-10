@@ -52,15 +52,15 @@ from verity.core.protocols.sampled_proofs import parties
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
 from verity.core.wire import Body, Int, Message, Schema
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.boolean import trace
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, or_reduce
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_words
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.boolean import trace
+from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, or_reduce
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_words
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 from verity.ml.commitments import hm96
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -160,7 +160,7 @@ def unit_ands() -> int:
 
 @cache
 def block_program(n: int) -> str:
-    """An execution block's Program, as descriptor text (`verity.ml.circuits.codec`): its input state wires are the
+    """An execution block's Program, as descriptor text (`verity.circuits.codec`): its input state wires are the
     previous block's output state wires, and theta is a registered input."""
     return json.dumps(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
 
@@ -189,7 +189,7 @@ def forward(theta: Theta, state: int, x: Sequence[int]) -> tuple[list[int], int]
 
 
 def evaluate_unit(theta: Theta, state: int, x: Sequence[int]) -> tuple[list[int], int]:
-    """The unit's circuit evaluated in the clear (`verity.ml.circuits.evaluation`, through the Boolean Definition's word
+    """The unit's circuit evaluated in the clear (`verity.circuits.evaluation`, through the Boolean Definition's word
     view)."""
     u8 = lambda v: [c & 0xFF for c in v]  # noqa: E731
     out = evaluate_words(UNIT, np.array([state]), np.array([u8(theta.w1)]), np.array([u8(theta.w2)]), np.array([u8(x)]))[0]

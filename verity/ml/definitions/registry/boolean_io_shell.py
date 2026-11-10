@@ -16,11 +16,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ONE, ZERO
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ONE, ZERO
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import io_shell as X
 from verity.ml.definitions.registry.boolean_dsv4_indices import GateOps
 

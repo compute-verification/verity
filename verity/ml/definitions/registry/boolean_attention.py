@@ -2,10 +2,10 @@
 the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) over Boolean Definitions, the same
 operations in the same order, so their word views are those chains at the same statics.
 
-Every word is its bits (`verity.ml.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
-callees are the Boolean versions of the word chains' (`DOT`, `verity.ml.circuits.ops.boolean.gemm`, v6's `AmpereBF16TcDot16_v3`;
+Every word is its bits (`verity.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
+callees are the Boolean versions of the word chains' (`DOT`, `verity.circuits.ops.boolean.gemm`, v6's `AmpereBF16TcDot16_v3`;
 `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2`, the inverse sum (v6's `Fa2InvSum_v2`; v7's, v8's and
-v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`, `verity.ml.circuits.ops.boolean.mufu`), where a
+v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`, `verity.circuits.ops.boolean.mufu`), where a
 row of them shares an operand cut at it (`elementwise.shared_operand`), so that the head computes no value twice: each k16 step
 of q.k and of p.v is an `AttnDotStep` whose shared operand (the query's or p's 16 words, a partial step's zero words folded in)
 is decoded once per row by `AttnDotStepA`; o's rescale and the epilogue's `o * inv` are `ScaleRow*`, the scores' `s * scale -
@@ -21,18 +21,18 @@ input), v15 v12's (v7), v16 v13's (v9) and v17 v11's (v8), each over its own blo
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
+from verity.circuits import boolean as BL
 from collections.abc import Callable
 
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.boolean import attention as BA
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import mufu as BM
-from verity.ml.circuits.boolean.forms import const_bits
-from verity.ml.circuits.boolean.trace import definition, word_of
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.boolean.forms import const_bits
+from verity.circuits.boolean.trace import definition, word_of
 from verity.ml.definitions.registry import hopper
 from verity.ml.definitions.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, scale_log2_bits)

@@ -6,7 +6,7 @@
 
 The slot is wiring around one multiplexer tree.  BS = 2^k, so on a valid x (sign bit 0) x / BS is x's bits k..30 and x % BS its
 low k bits, and bn * BS + x % BS is those k bits under bn's low 32 - k: the slot gathers only the blocks' low 32 - k bits, by
-x's bits k..k+m-1, m = ceil(log2 NB) (`verity.ml.circuits.boolean.gather`, an index in [NB, 2^m) selecting the fill's low bits).
+x's bits k..k+m-1, m = ceil(log2 NB) (`verity.circuits.boolean.gather`, an index in [NB, 2^m) selecting the fill's low bits).
 `GatherI32x{NB}_v1`'s fill is -1, so a block past the row makes the slot's high 32 - k bits ones, and so does a negative x, whose
 slot is -1: each high bit is ORed with the OR of x's bits from k + m up (its sign among them), each low bit with the sign.  NB
 words cost (NB - 1 + p) * (32 - k) ANDs, p the levels at which an odd count meets the fill, then 32 - k - m for the OR and 32 for
@@ -17,12 +17,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, compress_columns, or_reduce
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, OR, ZERO, compress_columns, or_reduce
+from verity.circuits.boolean.gather import gather
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import dsv4_decode_indices as X
 
 #: the length's lives are 1-bit elements, so that TOPK of them are TOPK 1-bit words (`BL.word_type`), not one TOPK-bit word (as

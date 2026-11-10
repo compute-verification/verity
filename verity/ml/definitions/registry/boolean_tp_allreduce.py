@@ -18,7 +18,7 @@ bits (bf16 = Array<16, Value<1>>).
     AllReduceNcclTree_v2{WORLD,SIZE,CHAIN}     (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
                                                                                           word view: AllReduceNcclTree_v1
 
-Each coordinate is traced for its statics (`elementwise.specialized`) through `verity.ml.circuits.silicon.fp`, so a payload's 16
+Each coordinate is traced for its statics (`elementwise.specialized`) through `verity.circuits.silicon.fp`, so a payload's 16
 constant-zero low bits fold into its adds. The MNNVL sum is written as what each FADD.FTZ does to the words it can meet:
 
 * a payload is read with -0 written as +0 and a subnormal flushed to its signed zero (its mantissa ANDed with "exponent
@@ -35,15 +35,15 @@ with a subnormal flushed to its signed zero and an add's FTZ result unflushed. N
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import OR, or_reduce
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean.softmax import ftz
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import OR, or_reduce
+from verity.circuits.defs import bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean.softmax import ftz
+from verity.circuits.refs import array_of, coll_concat
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import tp_allreduce as TA
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",

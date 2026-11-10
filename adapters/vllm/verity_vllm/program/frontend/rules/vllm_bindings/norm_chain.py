@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, runs
+from verity.circuits.refs import Coll, runs
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule

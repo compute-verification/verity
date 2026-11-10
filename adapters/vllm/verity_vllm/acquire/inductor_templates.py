@@ -33,8 +33,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind
+from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.acquire.inductor_texts import (ADD2_NORM, ADD2_NORM_FINAL, ADD_NORM, ADD_NORM_COPY, EMBED_NORM, QK_NORM_ROPE, ROPE_QK,
                                                 SILU_MUL)
 from verity.ml.definitions.registry import b1

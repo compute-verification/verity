@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.ml.circuits.census import NoBooleanWork
-from verity.ml.circuits.program import Program
+from verity.circuits.census import NoBooleanWork
+from verity.circuits.program import Program
 
 from . import logical as L
 from .logical import Registration, Value
@@ -172,7 +172,7 @@ class Placed:
         or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
-        from verity.ml.circuits import partition_object as PO
+        from verity.circuits import partition_object as PO
 
         program = self.program
         if record is None:

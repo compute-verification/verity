@@ -24,14 +24,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import cast as BC, gemm as BG
+from verity.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.gates import sha512_stream as SS
@@ -1686,7 +1686,7 @@ def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
 
 
 def test_a_template_whose_static_is_a_composite_definition_resolves():
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     fn = bind(BG.ScaledMmS8CoordinateRows, K=128, R=2, DOT=BG.GEMM_SM120_S8["DOT"])
     assert descriptor_id(I.resolve(descriptor_id(fn))) == descriptor_id(fn)
 

@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """OLMoE's routed sum at TOPK = 8 over 8 columns, the sum in 64-column chunks (`MoeSum_v3`, GLM-5.3's at 96 chunks) at two
     chunks and a remainder of 8, OLMoE's router at 8 experts, 2 slots, 4 values per thread, and GLM-5.3's sigmoid `noaux_tc`
     router at 8 experts, 2 slots, on both of its kernels, on bits (its word view is `registry.moe.MoeRouterSigmoidBias_v1`)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_moe as BMOE
     from verity.ml.definitions.registry import moe as M
 

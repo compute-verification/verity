@@ -12,8 +12,8 @@ import re
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity.ml.definitions.numerics import cublas_gemm_rows as C, rows
 from verity.ml.definitions.numerics.kernel_registry import Declined

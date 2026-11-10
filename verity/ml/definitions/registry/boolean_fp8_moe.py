@@ -13,7 +13,7 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
     MoeExpertFp8CoordinateChunk_v2{E,K,G,KB,SWAP,DOT,FIRST,LAST}
                     word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits (E <= 1024)
 
-The callees are `verity.ml.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.ml.circuits.ops.boolean.scalar`'s FP32 pieces,
+The callees are `verity.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.circuits.ops.boolean.scalar`'s FP32 pieces,
 `boolean_moe.NvExpf_v2` and `boolean_fp8.Fp8RowScale_v2`; the constant words are constant bits and `-g` is one NOT gate on g's sign bit
 (`F32Neg_v1`).  Each callee is its word Definition on every word, NaN payloads included.  No table or lookup gate.
 """
@@ -21,15 +21,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.boolean.gather import gather
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.boolean.gather import gather
+from verity.circuits.boolean.trace import definition
 from verity.ml.definitions.registry import boolean_gather as BGA
 from verity.ml.definitions.registry import boolean_moe as BMOE
 from verity.ml.definitions.registry import fp8 as F8

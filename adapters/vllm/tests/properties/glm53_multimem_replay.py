@@ -88,8 +88,8 @@ def launches(run: Path) -> tuple[list[dict[str, Any]], list[str]]:
 
 def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     """(WORLD, SIZE) words through `AllReduceMultimemVector_v2`, one instance per vector of each run of one tree."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import bits as BS
     from verity.ml.definitions.registry import boolean_tp_allreduce as BA
 
     W, size = parts.shape
@@ -105,8 +105,8 @@ def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
 
 
 def replay_one(launch: dict[str, Any]) -> dict[str, Any]:
-    from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.defs import bind
+    from verity.circuits import evaluation as E
+    from verity.circuits.defs import bind
 
     st = launch["statics"]
     trees, ftz, size = st["TREES"], bool(st["FTZ"]), int(st["SIZE"])

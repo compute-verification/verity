@@ -49,7 +49,7 @@ at most 16 bits:
   visible failure (`Call.refuse`, `fold_admits`): `Layout.Admits`' counterpart on the private words, which the verifier
   makes through the unit's ok.
 
-ok is the AND of those bits (`verity.ml.circuits.boolean.and_gate`). The tags, codes, biases and row weights are public
+ok is the AND of those bits (`verity.circuits.boolean.and_gate`). The tags, codes, biases and row weights are public
 constants of the tile's position, and the coins enter as the feed sends them. A cell's step multiplies only its lanes
 that vary with both its row and its column: at step 0 the 21 data lanes, a₁[i, q]·C[q, j] and T(i)_q·G[q, j], 29 in all
 (`PouwLeadStep0`), and at a later step its 28 data lanes (`PouwLeadStep`), which adds the tag lane 1 + b_t[i] as an
@@ -97,12 +97,12 @@ from typing import Any
 
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, const_bits, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind, primitive
-from verity.ml.circuits.refs import Affine, Coll, Strided, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, const_bits, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind, primitive
+from verity.circuits.refs import Affine, Coll, Strided, concat
+from verity.circuits.types import Array, Value
 
 __all__ = [
     "MAX_K", "MAX_ROWS", "MAX_COLS", "LEAD_FOLD_BOUND", "FOLD_MAGIC", "PIECE_ANDS", "PIECES", "Unit", "Call", "unit_ands",
@@ -948,7 +948,7 @@ class Call:
 
     def unit_ok(self, R0: int, C0: int, BLK: int, words: list | None = None) -> int:
         """The unit's verdict on the call's committed words ``words`` (`words` by default)."""
-        from verity.ml.circuits.evaluation.bits import evaluate_words
+        from verity.circuits.evaluation.bits import evaluate_words
 
         u = self.unit(R0, C0, BLK)
         fn = bind(PouwLeadTile, K=u.K, R0=R0, C0=C0, ROWS=u.ROWS, COLS=u.COLS, BLK=BLK)

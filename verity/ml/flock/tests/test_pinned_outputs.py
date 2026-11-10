@@ -21,7 +21,7 @@ def pinned_toy(pinned_words: int, rowed: bool = False, flip: bool = False):
     word ``o`` the XOR of input words ``o`` and ``o + pinned_words`` (``flip``: and the constant one, so the all-zero
     instance's ``d`` is not zero); ``rowed``: before it, an output port ``a0`` of one word (input word 0) with its own row.
     Returns the lowering, the subcircuit and the input set."""
-    from verity.ml.circuits.types import Array, Tuple, Value
+    from verity.circuits.types import Array, Tuple, Value
     from verity_flock import class_statement as CS
     from verity_flock import gf2
     from verity_flock import ir_lower as IL

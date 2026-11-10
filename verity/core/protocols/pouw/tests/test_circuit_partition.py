@@ -6,11 +6,11 @@ from collections import Counter
 
 import pytest
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import CallGraph, check_cut
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import partition_object as PO
+from verity.circuits.cut import CallGraph, check_cut
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 
 from verity.core.protocols.pouw.circuit import ncp2
 from verity.core.protocols.pouw.circuit import partition as P
@@ -110,8 +110,8 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
     assert not wr.ok
     assert {us[u].role for u, _ob, _og in wr.too_wide} == set(P.POUW_ROLES) - {"form_y"}
     # the verifier never takes this Program: it builds its own and compares digests
-    from verity.ml.circuits.codec import encode_program
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import encode_program
+    from verity.circuits.program import Program
     from verity.core.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 

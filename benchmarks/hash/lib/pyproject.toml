@@ -19,7 +19,7 @@ inputs = [
   "verity/ml/commitments",
   "verity/ml/kernels/__init__.py",
   "verity/ml/kernels/tc.py",
-  "verity/ml/circuits",
+  "verity/circuits",
   "verity/ml/crypto",
   "verity/ml/randomness",
   "verity/core/__init__.py",

@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 
 from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity_vllm.program import compact as CP
 from verity.ml.definitions.numerics import batched_gemm_rows, rows

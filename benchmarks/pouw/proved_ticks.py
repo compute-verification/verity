@@ -146,7 +146,7 @@ def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
     from verity.core.protocols.pouw.circuit import h1tile
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}
 

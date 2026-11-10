@@ -57,7 +57,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.deploy.stream import Side
-from verity.ml.circuits import requirement
+from verity.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive

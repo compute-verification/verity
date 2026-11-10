@@ -29,7 +29,7 @@ from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity.core.protocols.sampled_proofs.one_stage import draw as D
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 from verity.ml.commitments.gates import sha512_stream as SS
 from verity.ml.commitments.gates.sha512 import IV
 from verity.ml.windows import interface as IF

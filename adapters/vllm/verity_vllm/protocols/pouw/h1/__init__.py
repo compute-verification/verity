@@ -82,12 +82,12 @@ from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
+from verity.circuits.types import Array
 
 from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,

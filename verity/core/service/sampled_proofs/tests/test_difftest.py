@@ -65,11 +65,11 @@ from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE
                                                              UNUSED_TREE, ChallengerKey, CoinError, sample_link_first)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first, law_problem
 from verity.core.protocols.sampled_proofs.coins import ran_out as draw_ran_out
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, input_id, is_input
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, RecordType, Tuple, Value
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program, input_id, is_input
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, RecordType, Tuple, Value
 
 from test_challenger_difftest import DRAW_MUTATIONS, ORDERS, Drawn, _flip, _mutated, lms_verify
 

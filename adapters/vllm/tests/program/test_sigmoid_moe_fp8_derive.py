@@ -24,8 +24,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB

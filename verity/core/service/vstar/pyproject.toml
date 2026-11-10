@@ -8,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # statement's bindings are the one-stage audit's partition (`one_stage.partition`, which `rec_residuals.statement` reads)
 # and its registered values (`one_stage.registered`, which the stagers commit V*'s port inputs under);
 # `lake` builds this package against Flock's verifier and the difftest harness, both required by path.
-inputs = ["verity/ml/flock/python", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels",
+inputs = ["verity/ml/flock/python", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels",
           "verity/ml/randomness", "verity/ml/windows", "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py",
           "verity/core/service/flock",
           "verity/core/difftest", "verity/core/__init__.py", "verity/core/protocols/__init__.py",

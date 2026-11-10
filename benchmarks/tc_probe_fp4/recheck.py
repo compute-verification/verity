@@ -31,7 +31,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P
 import k32
-from verity.ml.circuits.silicon import models as M
+from verity.circuits.silicon import models as M
 
 from verity_config.settings import SHARED
 

@@ -25,8 +25,8 @@ from types import SimpleNamespace
 
 import torch
 
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of

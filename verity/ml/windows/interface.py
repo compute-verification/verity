@@ -96,11 +96,11 @@ from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
-from verity.ml.circuits import boolean as B, partition_object as PO
-from verity.ml.circuits.codec import canonical_json, descriptor_id
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as B, partition_object as PO
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.types import Array
 from verity.ml.commitments import advice as AC
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
@@ -178,10 +178,10 @@ def _static(v: Any) -> Any:
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.ml.circuits.ops`, the catalog's, the embedding's registered read
+    """Import every module of `verity.circuits.ops`, the catalog's, the embedding's registered read
     (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
     each registers its Definitions as it loads."""
-    from verity.ml.circuits import ops
+    from verity.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:

@@ -90,10 +90,10 @@ def template(t: str) -> Template:
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits import boolean as BL
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import CompositeDefinition, bind
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
@@ -196,8 +196,8 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.program import is_input
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     sp, hit = _bind(spec), ()
@@ -259,8 +259,8 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     """The registry's Definition bound at ``spec``'s statics (``over`` replacing some), each ``{"fn": id}`` static (`spec_statics`
     reads it as the id) the primitive it names; with ``family``, that family's Definition at those of the statics it has.  None
     when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
-    from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import REGISTRY
     from verity.ml.definitions.registry.catalog import load
     from verity_vllm.query.program_view import spec_base, spec_statics
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 
 from ..coins import law_problem
 from . import draw as D, partition as P

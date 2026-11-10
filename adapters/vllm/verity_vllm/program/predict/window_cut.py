@@ -15,8 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import runs
+from verity.circuits.defs import bind
+from verity.circuits.refs import runs
 from verity.ml.definitions.registry import linear_cut as LC
 from verity.ml.windows import interface as IF
 

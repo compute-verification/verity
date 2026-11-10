@@ -49,7 +49,7 @@ from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observati
 
 from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, for_target, grain_costs, leak_count, loc_bits,
                                                            row_ands, sqrt_grain)
@@ -58,7 +58,7 @@ DELTA = float(WINDOW_DELTA)
 LAMBDA = log(1 / DELTA)
 EPS = 0.01
 LEAK_BITS = 2.0 ** 30
-#: the pieces' ANDs (their circuit-check pins: `verity/ml/circuits/ops/*.circuit-check.json`)
+#: the pieces' ANDs (their circuit-check pins: `verity/circuits/ops/*.circuit-check.json`)
 F32_FMA, F32_MUL, F32_ADD, F32_MAX, EX2, RCP, F2BF16, F32_DIV, S8_CLAMP = 4498, 2406, 823, 283, 688, 197, 77, 2493, 71
 F32_RINT = 275
 

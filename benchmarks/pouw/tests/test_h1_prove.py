@@ -451,11 +451,11 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
     for assertions or table reads), the flat statement, said on stderr."""
-    from verity.ml.circuits.boolean import BIT
-    from verity.ml.circuits.boolean.forms import add
-    from verity.ml.circuits.boolean.trace import definition
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.types import Array
+    from verity.circuits.boolean import BIT
+    from verity.circuits.boolean.forms import add
+    from verity.circuits.boolean.trace import definition
+    from verity.circuits.defs import bind
+    from verity.circuits.types import Array
     from verity_flock import circuit as FC
     from verity_flock import struct_lower as SL
 

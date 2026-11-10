@@ -1,4 +1,4 @@
-"""What serving commits on a served Program is the canonical partition's committed set (`verity.ml.circuits.partition_object`).
+"""What serving commits on a served Program is the canonical partition's committed set (`verity.circuits.partition_object`).
 
 The manifest names the Program's partition of record as a `verity/partition/v1` object (`required.partition_of`: Q_word v1,
 X = 16, W = 32), and the object derives what each Call commits: every gate another unit of the Call's cut reads and every gate the
@@ -19,8 +19,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits import partition_object as PO  # noqa: E402
-from verity.ml.circuits.codec import descriptor_id  # noqa: E402
+from verity.circuits import partition_object as PO  # noqa: E402
+from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.definitions import word as W  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.pipeline.manifest import recorded_program_digest  # noqa: E402

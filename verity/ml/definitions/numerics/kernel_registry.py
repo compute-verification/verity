@@ -1,6 +1,6 @@
-"""The integration's kernels as core `verity.ml.circuits.evaluation` kernels, plus what core's kernel registry does not carry yet.
+"""The integration's kernels as core `verity.circuits.evaluation` kernels, plus what core's kernel registry does not carry yet.
 
-Every kernel here is registered with `verity.ml.circuits.evaluation.register_kernel` against the Definition id it computes and is
+Every kernel here is registered with `verity.circuits.evaluation.register_kernel` against the Definition id it computes and is
 checked against the reference by core `self_check` on its check specialisations (`check`: by tests/program/test_kernel_self_check.py,
 and by the sampled replay before it grades a row with it, `check.replay.definitions`).  Core's kernel is a batch function returning a decline mask; the
 integration's kernels are written per instance, and their callers record WHY an instance was declined.  `register` keeps
@@ -27,8 +27,8 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import Kernel, register_kernel, self_check
-from verity.ml.circuits.evaluation.reference import key_of, statics_of
+from verity.circuits.evaluation import Kernel, register_kernel, self_check
+from verity.circuits.evaluation.reference import key_of, statics_of
 
 __all__ = ["Declined", "Registered", "check", "covers", "instance", "prim_static", "register", "registered"]
 
@@ -42,7 +42,7 @@ _DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
 
 def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
     """A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
-    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec.descriptor_id); a bare
+    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.circuits.codec.descriptor_id); a bare
     `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
     v = statics.get(key, "")
     raw = str(getattr(v, "id", v) or "")

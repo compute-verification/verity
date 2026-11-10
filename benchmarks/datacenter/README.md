@@ -4,9 +4,9 @@ A datacenter as Verity accounts for it, in a small Python API: a Program, the ha
 them, the verifier's plan, a run with what the trusted devices record, the audit's claims, and the account.
 
 The accounting layer has two layers. The **logical layer** is where the cryptography happens: `logical` (a
-`verity.ml.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
+`verity.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
 census's grain: its root nodes, the census values they pass each other, each Call's work by kind and its ANDs, the
-credit; its evaluation, a Call at a time through `verity.ml.circuits.evaluation`'s kernels; and the hm96-sha512
+credit; its evaluation, a Call at a time through `verity.circuits.evaluation`'s kernels; and the hm96-sha512
 commitments to its registered inputs, with the occupancy profiles the developer may choose from, and to a run's census
 values, a row per element, so that inputs and rows are words in the word view whether the Program is Boolean or not) and
 `claims` (`audit`: what the trusted devices' records and the commitments establish about the prover system, with no

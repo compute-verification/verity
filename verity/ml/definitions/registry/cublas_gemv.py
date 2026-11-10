@@ -16,12 +16,12 @@ the numpy twin.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.types import Array
 from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import ll_bf16 as LL
 

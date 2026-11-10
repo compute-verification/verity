@@ -8,13 +8,13 @@ from dataclasses import replace
 
 import pytest
 from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
-from verity.ml.circuits import partition_object
-from verity.ml.circuits.census import census
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import partition_object
+from verity.circuits.census import census
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Accounts, Assumption, Cadence, Carried, Challenge,
                         Computed, Credit, Datacenter, Deviation, DeviceEntry, Entered, Fleet, Held, Interval, LinkEntry,
@@ -79,7 +79,7 @@ def _float(w: int) -> float:
 
 
 def test_a_program_of_registered_definitions_has_census_values_work_and_its_evaluation():
-    """The circuit is a `verity.ml.circuits` Program: its root nodes are its parameters' input nodes and its named Calls,
+    """The circuit is a `verity.circuits` Program: its root nodes are its parameters' input nodes and its named Calls,
     its values are the census's (what each node passes the Calls that read it), each Call's work is counted by kind
     from its Definition's body and its ANDs from the census's Boolean work, and its evaluation is the BF16 tensor-core
     step's, which a float matmul matches to BF16's precision."""

@@ -22,10 +22,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import gf2k as G
-from verity.ml.circuits.boolean.forms import Circuit
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.boolean.forms import Circuit
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
 from verity_flock.record_text import session_text

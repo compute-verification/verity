@@ -82,8 +82,8 @@ def reference_draw(law: dict, src: bytes) -> list[int] | None:
 
 
 def _templates(m: int):
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.circuits.types import Array, Value
     xor = PrimitiveDefinition("StratAgreeXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                               register=False)
     return [bind(CompositeDefinition(f"StratAgreeT{i}", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
@@ -144,7 +144,7 @@ def main() -> int:
     ap.add_argument("--draws", type=int, default=400, help="draws of the small program on fresh streams, for the frequency check")
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)

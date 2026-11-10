@@ -50,8 +50,8 @@ from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.profile import work_k
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from . import partition as P
 from .verdict import Verdict, _Collect

@@ -105,7 +105,7 @@ from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.layout import TensorLayout
 from verity.core.protocols.pous.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
                                                     expand_prefix, stream)
-from verity.ml.circuits import requirement
+from verity.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 

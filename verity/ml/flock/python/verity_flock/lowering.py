@@ -44,7 +44,7 @@ class Pipe:
     width: int
     floor: int
     epilogue: bool       # f32_to_bf16 in-circuit (GemmCoordinate) or the bare FP32 word (GemmAccumulator)
-    model: str           # verity.ml.circuits.silicon.models name
+    model: str           # verity.circuits.silicon.models name
     total: bool = False  # every encoding (unit_total, F2fpBf16 epilogue) rather than finite operands asserted
 
     @property
@@ -198,18 +198,18 @@ def evaluate(relation: str, x: list[int], w: list[int], c: int, sx: list[int] = 
 
 
 def _model(name: str):
-    from verity.ml.circuits.silicon import models, total
+    from verity.circuits.silicon import models, total
     return getattr(models, name) if hasattr(models, name) else getattr(total, name)
 
 
 def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
-    """Mismatches of the lowered unit against ``verity.ml.circuits.silicon`` (``tc_dot`` and the ``f32_to_bf16`` epilogue) on ``n``
+    """Mismatches of the lowered unit against ``verity.circuits.silicon`` (``tc_dot`` and the ``f32_to_bf16`` epilogue) on ``n``
     random units over the whole finite domain: operand words uniform over every finite encoding (all exponent fields,
     subnormals and signed zeros included), and accumulators uniform over every finite FP32 exponent field, with a third of
     the cases drawn near each other in exponent so the alignment and cancellation paths are exercised too. Saturating
     units (the reference's +-inf word) are compared like any other."""
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-    from verity.ml.circuits.silicon.models import tc_dot
+    from verity.circuits.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.models import tc_dot
 
     pipe = PIPES[relation]
     model = _model(pipe.model)

@@ -27,7 +27,7 @@ first), guarded to 0 at -inf; `scale_i = ex2((lse_i - max) * LOG2E)` (`expf`); `
 operand; every reader of the max (the -inf guard, FADD.FTZ) maps either to the same word.
 
 MUFU.LG2 (`MufuLg2Ftz_v1`, `lg2.approx.ftz.f32`).  The fraction v(m) of log2(1.m) in units of 2^-36 is the special-function unit's
-quadratic interpolator, `verity.ml.circuits.ops.boolean.mufu.Fit` over `mufu_lg2.json` (64 segments of 2^17 mantissas, the square
+quadratic interpolator, `verity.circuits.ops.boolean.mufu.Fit` over `mufu_lg2.json` (64 segments of 2^17 mantissas, the square
 from column 19, square_shift 1, shift 2), and v(0) = 0.  With E the exponent field and t = (E + 1) mod 128, M is the 43-bit
 `t << 36 | v` for E >= 127 and its complement below (|log2 x| 2^36 less one), and the word is M truncated to 24 significant bits:
 exponent bit_length(M) + 90, sign E < 127, +0 at M = 0.  A zero or subnormal gives -inf, a negative word or a NaN the MUFU NaN
@@ -58,13 +58,13 @@ from importlib import resources
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.ops.boolean.mufu import Fit
-from verity.ml.circuits.ops.mufu import DivFullRcp
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.boolean.mufu import Fit
+from verity.circuits.ops.mufu import DivFullRcp
+from verity.circuits.ops.prims import const
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import sparse_mla as M
