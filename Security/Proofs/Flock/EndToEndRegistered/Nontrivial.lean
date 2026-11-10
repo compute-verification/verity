@@ -7,6 +7,7 @@ public import Flock.Firewall
 public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
+public import Mathlib
 public import Proofs.Flock.EndToEndRegistered.Inputs
 public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.SessionLoop.Concrete.Public
@@ -15,11 +16,11 @@ public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Binding.RowSeg
 public import Proofs.Flock.Soundness.Binding.RowsX
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.SessionBatch
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.SessionLoop.Concrete.Inputs
+import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
