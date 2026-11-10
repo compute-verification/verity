@@ -126,7 +126,8 @@ from .common import cyclic_gc_off, edge_config
 from .ingress_policy import ingress_body, policy_of, request_of
 from .phi import Phi
 from .segment import edge_groups, edge_of, launch_of, segment_of
-from .traced import NO_EDGE_TRACE, trace_commands, trace_dir  # noqa: F401 (read through here)
+from .traced import NO_EDGE_TRACE, trace_dir
+from .traced import trace_commands as trace_commands
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
