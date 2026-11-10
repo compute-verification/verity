@@ -72,7 +72,8 @@ theorem prCoin_ne_top {C : Type} [Fintype C] (p : C → Prop) : prCoin p ≠ ⊤
 
 theorem pr_eq_prCoin {C : Type} [Fintype C] (p : C → Prop) : Pous.pr p = prCoin p := by
   classical
-  unfold Pous.pr prCoin avg
+  rw [Pous.pr_eq_card]
+  unfold prCoin avg
   rw [ENNReal.div_eq_inv_mul, Finset.card_filter, Nat.cast_sum, Finset.mul_sum]
   refine Finset.sum_congr rfl fun c _ => ?_
   by_cases hc : p c <;> simp [hc]
