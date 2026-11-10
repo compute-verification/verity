@@ -7,7 +7,7 @@ in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) a
 it with two inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes
 from the run's record (whoever writes the record could otherwise list its own key), and the 32-byte id the audit fixes
 for its session, which the verifier computes itself and never reads from the record: on the served piece
-`challenger_party.session_id`, derived from the audit's binding and the commitment and salt the memory challenger logged
+`challenger_session.session_id`, derived from the audit's binding and the commitment and salt the memory challenger logged
 for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
 `Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
 
