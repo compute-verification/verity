@@ -4,6 +4,7 @@ public import Proofs.Flock.SpotFlock.InstanceCodes
 public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.SessionLoop.Concrete.Public
+import Proofs.Flock.SessionLoop.Concrete.Inputs
 import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
@@ -61,11 +62,15 @@ The statement's linked reads are held to those (`SecondStage.readOk`'s linked ar
 each slot at row `0`). `decode_x0` reads `x0` back as it wherever its strings are plain (`plain_boundary0`), as hex
 roots and domains are.
 
+Round 2 holds the statement's header to its template's reference with the run's fields put in (`SecondStage.atRun`):
+each port's binding is `portBinding interior0` at it. `portBinding_i0` and `portBinding_o0` give them, `bindOf "i0" s 1`
+and `bindOf "o0" s 2` at the reference's schema `s`: the window domain's tagged SHA-512 of `bindJ`'s canonical string,
+which stays a term, since the kernel evaluates neither the hash nor `canonUtf8` at a free schema.
+
 ## What this does not show
 
-The roots and domains `boundary0` takes, the registered reads' own, and the statement's bindings, which hash
-`interior0`'s program, partition and leaves with the run's name, are not fixed here. Nothing here states that either
-record is any served run's: they are the records of the synthetic run whose acceptance the instance needs.
+The roots and domains `boundary0` takes and the registered reads' own are not fixed here. Nothing here states that
+either record is any served run's: they are the records of the synthetic run whose acceptance the instance needs.
 -/
 
 @[expose] public section
@@ -286,6 +291,56 @@ theorem decode_x0 (h : Flock.Firewall.plain (boundary0 vI rI dI vO rO dO) = true
   rfl
 
 end Boundary
+
+/-! ### The header's bindings -/
+
+/-- **A port's binding, given its record's fields**: `portBinding` hashes the canonical string of the record's program
+and partition, the port, the schema, the port's leaves and the run. -/
+theorem portBinding_of {rec e : Json} {port port' schema run program partition : String} {leaves : ℕ}
+    (hp : Spot.getD rec "program" = .str program) (hq : Spot.getD rec "partition" = .str partition)
+    (he : (Spot.Record.byPort rec).find? (·.1 == port) = some (port', e))
+    (hl : Spot.nat? (Spot.getD e "leaves") = some leaves) :
+    Spot.SecondStage.portBinding rec port schema run =
+      (Flock.canonUtf8 (Json.mkObj [("program", .str program), ("partition", .str partition), ("port", .str port),
+        ("schema", .str schema), ("leaves", Lean.toJson leaves), ("run", .str run)])).toOption.bind fun m =>
+          pure (Flock.hexOf (Flock.FV3.Sha512.taggedSha512 Spot.SecondStage.WINDOW_DOMAIN m.toUTF8)) := by
+  simp only [Spot.SecondStage.portBinding, hp, hq, he, hl, Option.bind_eq_bind, Option.bind_some]
+
+/-- The object a port's binding hashes at the instance's run, at schema `schema`. -/
+def bindJ (port schema : String) (leaves : ℕ) : Json :=
+  Json.mkObj [("program", .str "program-0"), ("partition", .str "partition-0"), ("port", .str port),
+    ("schema", .str schema), ("leaves", Lean.toJson leaves), ("run", .str RUN0)]
+
+/-- **A port's binding at the instance's run**: the window domain's tagged SHA-512 of `bindJ`'s canonical string, in
+hex. -/
+def bindOf (port schema : String) (leaves : ℕ) : String :=
+  Flock.hexOf (Flock.FV3.Sha512.taggedSha512 Spot.SecondStage.WINDOW_DOMAIN
+    ((Flock.canonUtf8 (bindJ port schema leaves)).toOption.getD "").toUTF8)
+
+theorem plainStr_bindOf (port schema : String) (leaves : ℕ) :
+    Flock.Firewall.plainStr (bindOf port schema leaves) = true :=
+  FlockDeploy.Concrete.plainStr_hexOf _
+
+/-- At a port of `interior0` with `leaves` leaves, its binding is `bindOf`, at any schema. -/
+theorem portBinding_interior0 {port schema : String} {leaves : ℕ} {e : Json}
+    (he : (Spot.Record.byPort interior0).find? (·.1 == port) = some (port, e))
+    (hl : Spot.nat? (Spot.getD e "leaves") = some leaves) :
+    Spot.SecondStage.portBinding interior0 port schema RUN0 = some (bindOf port schema leaves) := by
+  have hc := FlockDeploy.Concrete.canonUtf8_eq (j := bindJ port schema leaves) (by kernel_rfl)
+  rw [portBinding_of (program := "program-0") (partition := "partition-0") (by kernel_rfl) (by kernel_rfl) he hl]
+  change (Flock.canonUtf8 (bindJ port schema leaves)).toOption.bind _ = _
+  rw [hc]
+  rfl
+
+/-- **Port `i0`'s binding** at the instance's run: one leaf. -/
+theorem portBinding_i0 (schema : String) :
+    Spot.SecondStage.portBinding interior0 "i0" schema RUN0 = some (bindOf "i0" schema 1) :=
+  portBinding_interior0 (e := rootI0) (by kernel_rfl) (by kernel_rfl)
+
+/-- **Port `o0`'s binding** at the instance's run: two leaves. -/
+theorem portBinding_o0 (schema : String) :
+    Spot.SecondStage.portBinding interior0 "o0" schema RUN0 = some (bindOf "o0" schema 2) :=
+  portBinding_interior0 (e := rootO0) (by kernel_rfl) (by kernel_rfl)
 
 variable (R : Ref) (desc : Msg) (q : Query) (c₀ : Code)
 
