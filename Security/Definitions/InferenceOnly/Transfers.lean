@@ -18,8 +18,8 @@ and in the Boolean profile (`w = 1`, `Verity.Boolean.Circuit.toCircuit`) `|trans
 
 The machines are a partition rather than a family of `Covering.Subcircuit`s for two reasons. A machine's gates are what
 compute credit counts, each computed gate credited to the one machine that computes it, so the credits add up to
-`size(C)`. And a partition is `CompliesRate`'s division into IUs, so when each machine (one whole-node session) is one
-IU, the machines are that division. Subcircuits may overlap and recompute, so neither holds of them. Each machine is
+`size(C)`. And a partition is `CompliesRate`'s division into inference blocks, so when each machine (one whole-node session) is one
+inference block, the machines are that division. Subcircuits may overlap and recompute, so neither holds of them. Each machine is
 still a subcircuit (`machine`): `R_m ∪ in(R_m)`, with inputs `in(R_m)` and the gates of `R_m` that have no predecessors,
 which a subcircuit holds as inputs (`Covering.sources`). In the subcircuits' terms, the transfer gates from `a` to `b`
 are `(machine a).inner ∩ (machine b).ins`, apart from one kind of gate. A gate of `R_a` with no predecessors (a
