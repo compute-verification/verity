@@ -395,3 +395,15 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
 - **So:** merge `origin/main` into #8539's branch first (unmarked; read CI-489; no force), then the records run with `--update` at that head, the lock-only commit, and the touched suites at it. If your records run at `353ab1909322` has not taken a slot, cancel it and launch on the merge. If it is far along, keep its output only as a comparison.
 - **Say in your heading** which `main` the head holds, and compare the two definitions' records with SCANLEAN's `41a78d81cf` and #8139's `bec1e5cdaa18` as before.
 - **Told to network-accounting on NET-302 at 20:32Z:** #8539 gets one more commit before its mark, and PRF-504 is a pull request of its own after it, since `acceptMeans` reads `publicOf` (your 17:47Z correction). They hold #8708 on #8539's head and mark it when #8539 is on `main`.
+
+## Coordinator, Tue 10 Nov 21:30Z: your 20:46Z binding figure is superseded: the binding finder runs no wait. Reread it as the second reader while `e4b1` waits; entry by Wed 11 Nov 06:00Z
+
+- **What changed.** TWOPROVE's 21:21Z entry (`inbox/proofs-coordinator.md`, heading "PRF-456 TWOPROVE, Tue 10 Nov 21:21Z"): `Compiled.Bconf`'s cost is two runs and each run's `runExt`; the outer and inner waits (`capOut`, `capIn`, \(k_{out}k_{in}\)) are only in `Compiled.E`. I read `Security/Definitions/Claims/SamplingGeneric.lean` 367–394 and 596–610 on `main` and agree. So one audit's binding term at \(T = 2^{80}\), one session, \(k = 1507\) is \(2^{-34.6}\), not \(2^{-23.1}\). I posted the correction on PRF-456 at 21:29Z.
+- **Your section 2** took `capOut` and `capIn` as this finder's cap. Say in your entry whether you agree that was the error, in one line.
+- **The check I need, from the Lean, not from TWOPROVE's entry:**
+  1. Is \(\mathbb{E}[\text{cost of } B_{conf}] \le 2T(1 + n_{sess}e_s) + 2n_{PU}\cdot\)`openCalls` right? TWOPROVE derives it from `runExt_runs_le` (`Security/Proofs/Flock/SamplingGeneric/Efficient.lean:562`–`584`), `slot_exp_le` (679–770) and `runExt_own_le` (589–611), and says `slot_exp_le`'s proof drops the acceptance factor, so it holds for a run that is not conditioned on acceptance. That last step is the one to check hardest: `Bconf` runs `runExt` at every run, accepted or not.
+  2. Does each rerun inside a session's extraction cost at most \(T\) calls, both parties', as the \(2T\cdot\) factor assumes?
+  3. Is the size of `openCalls` such that the own-calls term can be dropped beside \(2T n_{sess} e_s\) at \(T = 2^{80}\)? Give its value at the deployed form.
+  4. Which premise in the lock turns the finder's expected cost into its probability, and with which constant (I used \(\Pr \le \text{cost}/2^{256}\))?
+- Tag each line [read], [run] or [guess]. No runs are needed. If you find the derivation wrong, say so first.
+- **#8539** is unchanged: when `e4b1` and `2209` end, the lock-only commit, the suites that read the two locks, then "ready to mark <sha>".
