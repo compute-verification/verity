@@ -50,17 +50,17 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 
-from verity.ml.commitments import Commitment, MerkleTree, Opening
+from verity.commitments import Commitment, MerkleTree, Opening
 
-from verity.core.protocols.pouw import audit as au
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.ml.protocols.pouw.schemes import get
-from verity.ml.protocols.pouw.schemes import pearl_c4 as F
-from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.protocols.pouw.verifier import audit as au
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.protocols.pouw.prover.schemes import get
+from verity.protocols.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.pouw.prover.schemes import pearl_c_work as W
 from verity_config.settings import of
 
-# the work sampling design and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 

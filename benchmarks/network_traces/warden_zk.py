@@ -67,13 +67,13 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import warden_serve as ws  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
-from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.types import Array  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Certificate  # noqa: E402
+from verity.protocols.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced, registered as G  # noqa: E402
 
 #: the unit's ports: its input row and its output row
@@ -227,8 +227,8 @@ def _statement():
     """What staging a statement reads: one-stage's partition, Flock's unit stager and the Program's encoding."""
     import numpy as np
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 
     return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2, CS=CS)
@@ -244,14 +244,14 @@ def _one_stage():
 ||||||| merged common ancestors
     import numpy as np
     from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 =======
     import numpy as np
-    from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 >>>>>>> 7af4d24fca3e
 

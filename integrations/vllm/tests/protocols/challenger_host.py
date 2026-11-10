@@ -25,12 +25,12 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.spot import challenger as LC
-from verity.core.protocols.spot import remote as R
-from verity.ml.crypto import lms
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.verifier import window as Wd
+from verity.spot.device import challenger as LC
+from verity.spot.device import remote as R
+from verity.commitments.crypto import lms
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
 HOST = "vy-challenger-1"
@@ -47,8 +47,8 @@ TREE = Path(__file__).resolve().parents[4]
 
 @functools.cache
 def models():
-    """Infra's model registry, ``benchmarks/live_challenger/models.py``, as a module of its own."""
-    spec = importlib.util.spec_from_file_location("live_challenger_models", TREE / "benchmarks/live_challenger/models.py")
+    """Infra's model registry, ``verity/composite/device/live_challenger/models.py``, as a module of its own."""
+    spec = importlib.util.spec_from_file_location("live_challenger_models", TREE / "verity/composite/device/live_challenger/models.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -141,7 +141,7 @@ def session_id(n: int) -> str:
 
 
 class Gate:
-    """Infra's challenger gate (`benchmarks/live_challenger/auditor.py`, v2) in this process, its ledger's entries
+    """Infra's challenger gate (`verity/composite/device/live_challenger/auditor.py`, v2) in this process, its ledger's entries
     written as the gate's `append` writes them and signed under `private` at rising one-time keys, from `leaf` on:
     `reserve` appends a window's reserve entry (``withheld=True``: ``reserve --withhold``), `open` its open entry
     (two-step after its reserve, else one-step) and returns the gate's open answer (``commitment`` null, as before

@@ -688,7 +688,7 @@ def test_a_lean_change_lands_on_its_verdict_and_the_after_landing_lean_audit_tak
 
 
 #: a Lake package with a lock outside `Security/`, whose Lean runs as code
-FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
+FLOCK_LOCK = {"verity/flock/verifier/lean-audit.json": "{}\n"}
 
 
 def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_title(world, monkeypatch):
@@ -707,7 +707,7 @@ def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_tit
                  5: {"Security/Definitions.lean": "import Definitions.X\n"},
                  6: {"Security/lakefile.toml": "name = \"security\"\n"},
                  7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
-                 8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
+                 8: {"verity/flock/verifier/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
     for n, files in {**two_demos, 9: {"Security/Definitions/Z.lean": "def z := 1\n"}}.items():
         world.gh.put(n, head := world.change(files))
         if n in two_demos:

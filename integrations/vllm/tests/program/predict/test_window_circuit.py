@@ -32,14 +32,14 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 from verity_vllm.records import weights_registration as WRG
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.pouw import audit as AU
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.windows import interface as IF
-from verity.ml.windows import wiring as WI
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.pouw.verifier import audit as AU
+from verity.spot.verifier.one_stage import partition as P
+from verity.spot.verifier.one_stage import registered as G
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.registry import io_shell as IO
+from verity.windows import interface as IF
+from verity.windows import wiring as WI
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)

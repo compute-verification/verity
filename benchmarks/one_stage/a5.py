@@ -193,28 +193,29 @@ import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
-from verity.ml.commitments import row_table as RT  # noqa: E402
+from verity.commitments import row_table as RT  # noqa: E402
 <<<<<<< 99c8914848
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
+from verity.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 ||||||| merged common ancestors
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
 =======
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.spot.device import coins as CC
+from verity.spot.verifier import service as S  # noqa: E402
+from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
 >>>>>>> 7af4d24fca3e
-from verity.ml.windows import wiring as WI  # noqa: E402
+from verity.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)
@@ -1293,7 +1294,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     members' (``<member>/<port>``)."""
 >>>>>>> 7af4d24fca3e
     import replay as RP
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.spot.verifier.one_stage import proofs as PF
 
     if [m for m, _ in statements] == [None]:
         pr, blobs = PF.evidence_v2(statements[0][1], sessions)
@@ -1401,7 +1402,7 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.spot.verifier.one_stage import proofs as PF
 >>>>>>> 7af4d24fca3e
 
     if not zk:

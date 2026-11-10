@@ -21,7 +21,7 @@ summary of the B1/B0 programs can be produced from this record without them.
 The record is what typed-b1.md §3 states in prose; the two must agree (`tests/program/test_conformance_record.py`).
 =======
 One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
-`verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
+`verity.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
 or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
 recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them
 (`tests/program/test_conformance_record.py`).
@@ -33,9 +33,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
-from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
+from verity.definitions.registry import b1, prims  # noqa: F401  (registration)
 
 # Structured qualifications on Input gates: which committed leaves are *not* checkpoint tensors and what their
 # registered source is. Counts are the correspondence records' (`corr-*.json`, `input_gate_records.weights`).
@@ -78,7 +78,7 @@ NAN_CANONICALISATION = {
     "production_conversion": "F2fpBf16_v1",
     "nan_word": "0x7FFF",
     "nan_rule": "every FP32 NaN (either sign, quiet or signalling, any payload) -> 0x7FFF; sign and payload dropped",
-    "source": "measured: verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
+    "source": "measured: verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
               "(12 +qNaN, 12 -qNaN, 34 +sNaN, 26 -sNaN), all 0x7FFF on both devices; not an assumption",
     "not_bound": {"F32ToBf16Rn_v1": "NaN -> 0x7FC0 (software canonical); registered, unchanged, not bound by B0/B1"},
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},

@@ -18,11 +18,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, ClassVar
 
-from verity.ml.commitments import RangeIndexedDomain
-from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import (
+from verity.commitments import RangeIndexedDomain
+from verity.commitments.merkle import domain_message
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import (
     HM96,
     Epoch,
     Workload,
@@ -32,10 +32,10 @@ from verity.core.protocols.pouw.audit import (
     salt_of,
     weights_root,
 )
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.challenger import LiveCommitment, LiveOpening
+from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.pouw.verifier.protocol import DomainError
+from verity.spot.device import challenger as Ch
+from verity.spot.device.challenger import LiveCommitment, LiveOpening
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024

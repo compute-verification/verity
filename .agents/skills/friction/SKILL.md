@@ -215,7 +215,7 @@ Protocols and claims:
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 <<<<<<< 99c8914848
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/protocols/pouw/verifier/README.md`.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
 ||||||| merged common ancestors
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512

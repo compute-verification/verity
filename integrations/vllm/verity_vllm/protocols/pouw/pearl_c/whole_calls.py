@@ -56,7 +56,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 

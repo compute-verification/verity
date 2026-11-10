@@ -37,8 +37,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
-from verity.core.protocols.pouw.serving import PassCommitment
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.protocols.pouw.verifier.serving import PassCommitment
+from verity.commitments.merkle import CommitmentDomain
 
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.errors import Refused

@@ -81,8 +81,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
-    from verity.ml.protocols.pouw.schemes import pearl_c as C
-    from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
+    from verity.protocols.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -189,7 +189,7 @@ def _llama():
 def test_llama_linears_are_one_cards_and_all_in_the_domain():
     """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
     domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
-    examples/vllm serves at (8) among DECODE_M."""
+    workloads/vllm serves at (8) among DECODE_M."""
     L = _llama()
     rows = {r["name"]: r for r in L.table()}
     assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {
@@ -575,13 +575,13 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/clear"))
     import clear_work as CW
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.pouw.audit import (
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.pouw.verifier.audit import (
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
         ROW_SCHEMA,
@@ -595,10 +595,10 @@ def retained(tmp_path_factory):
         weight_binding,
         weights_root,
     )
-    from verity.core.protocols.pouw.coins import Challenger
-    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
-    from verity.ml.commitments.merkle import tree_levels
+    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+    from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
+    from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
@@ -713,7 +713,7 @@ def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_cap
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.protocols.pouw.verifier.coins import CoinCommitment
 
     out = _copy(retained, tmp_path)
     before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}

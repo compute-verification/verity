@@ -1,4 +1,4 @@
-"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.ml.protocols.pouw.circuit.live`),
+"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.protocols.pouw.prover.circuit.live`),
 the proof block that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 
@@ -36,13 +36,13 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.ml.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.commitments import Commitment
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier import live_reads as LR
+from verity.spot.verifier.one_stage import registered as G
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.commitments import Commitment
 
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import registered as NR

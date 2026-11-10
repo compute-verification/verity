@@ -1,4 +1,4 @@
-"""The sampling plan for an int8 row under Flock (`verity.core.protocols.spot`), Llama-3.1-8B or Qwen3-8B: the
+"""The sampling plan for an int8 row under Flock (`verity.spot.verifier`), Llama-3.1-8B or Qwen3-8B: the
 fitted cost model, the cuts the generator finds, the frontier of ε against the verification overhead B, the break-even
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
 than one scale, and the weight classes' weights at each target.
@@ -47,9 +47,9 @@ from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)
 =======
-from verity.core.protocols.spot.candidates import Shape, cuts, pressure  # noqa: E402
-from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.spot.candidates import Shape, cuts, pressure  # noqa: E402
+from verity.spot.costfit import Fitted, fit  # noqa: E402
+from verity.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            ReplayGrain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)

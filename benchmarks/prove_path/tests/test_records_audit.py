@@ -1,5 +1,5 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.ml.windows.interface`) under core's registration:
+(`verity.windows.interface`) under core's registration:
 
 * the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
   the registration binds; a window with row tables is refused until its records carry their segment roots;
@@ -42,12 +42,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
-from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.windows import interface as IF, rows as CS
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.definitions.ops import gemm as G
+from verity.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -128,7 +128,7 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
     """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
     tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
@@ -136,7 +136,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
@@ -363,7 +363,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.core.protocols.pouw import operands as OP
+    from verity.protocols.pouw.verifier import operands as OP
 
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
@@ -791,7 +791,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
     assert seen["declared"] == {} and "day" not in summary
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
     day = G.chain("remote", [G.Declaration(0, got.rec["program"])])
     (tmp_path / "log.json").write_bytes(G.committed("remote", day))
     named = tmp_path / "w-day.json"
@@ -826,7 +826,7 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     takes with the day. The window's program declared for its day passes R2; a day declared to another program is refused
     (``R2-declared``), and a day the log doesn't declare too (``R2-undeclared``). A log declaring a day twice is core's
     ``duplicate-declaration``, and day options without ``--day`` are refused, each before any session."""
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
 
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     program, log = written.rec["program"], tmp_path / "log.json"
@@ -857,7 +857,7 @@ def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in
     naming another day, a digest the log doesn't hold for day 3 (day 4's), the log's chained digest of day 3's entry, or a
     day without ``--day`` is refused before any session. A W naming no day under no ``--day`` (Pearl+'s, every window
     without the switch) is as before."""
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
 
     log = tmp_path / "log.json"
     entries = G.chain("remote", [G.Declaration(3, "5d" * 64), G.Declaration(4, "6e" * 64)])
@@ -886,9 +886,9 @@ def _auditor():
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
-    code (`benchmarks/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
+    code (`verity/composite/device/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
     from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
@@ -933,7 +933,7 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     UTC day of the window's signed open and the declarations its lane signed before it, which R2 takes in place of
     ``--day``. W's naming is held to the Declaration rebuilt from the device's entry (no ``previous``): the prover log's
     chained digest, or another day's, is refused."""
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     program, root = written.rec["program"], "01" * 64
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
@@ -955,7 +955,7 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     (``R2-undeclared``) and W's naming of the later declaration is refused, while a window opened after it passes. A lane
     that never declares isn't gated at the challenger, so its windows open, but under ``--day-ledger`` they read no
     declaration (another lane's binds them not) and R2 refuses them too; with the switch off R2 reads no day."""
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     program = written.rec["program"]
 
@@ -980,7 +980,7 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
     (`pous.period.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.core.protocols.pous import period as PP
+    from verity.protocols.pous.verifier import period as PP
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     cut = [lines[i] for i in PP.cited([json.loads(x) for x in lines], {S1})]
@@ -996,7 +996,7 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     though the lane declares D+1 after midnight while it runs, and W's naming of D+1's declaration is refused. Declared
     only for D+1, after midnight, it reads no declaration and R2 refuses it (``R2-undeclared``). Declared only for D+1
     ahead of the open, the device would have refused the open, and a ledger holding it is refused."""
-    from verity.core.protocols import registration as G
+    from verity.hardware import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     program, root = written.rec["program"], "01" * 64
 
@@ -1149,7 +1149,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 def _history(d: Path, n: int = 4) -> SimpleNamespace:
     """``n`` units of ``Gemm_v2{K=16, N=8}``, two a member, their outputs history table ``latent``'s rows (capacity 16),
     the window written to ``d`` with the members' public bodies."""
-    from verity.ml.commitments import history as HT
+    from verity.commitments import history as HT
     g8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
     gid, rng = descriptor_id(g8), np.random.default_rng(3)
 
@@ -1178,7 +1178,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     and sample nothing, so the audit doesn't pass."""
     import a5 as A5
     import a5_coins as AC
-    from verity.ml.commitments import history as HT
+    from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
 
@@ -1284,7 +1284,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
     of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     fn = bind(BX.ScanSlotsV2, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
@@ -1592,7 +1592,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)

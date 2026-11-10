@@ -22,7 +22,7 @@ gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` 
 `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
 distinguishable on the domain.  `tanhf` is the `TanhF32Rn` stand-in (see `tanh_f32.py`).
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 ||||||| merged common ancestors
 """`GeluTanhMulBf16` — one output word of vLLM `_C.gelu_tanh_and_mul` (csrc/activation_kernels.cu, `act_and_mul_kernel<bf16,
@@ -55,17 +55,17 @@ gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` 
 `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
 distinguishable on the domain.  `tanhf` is the `TanhF32Rn` stand-in (see `tanh_f32.py`).
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 =======
 """`GeluTanhMulBf16`, one output word of vLLM `_C.gelu_tanh_and_mul`: the registry's object
-(`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, whose comment derives it from the kernel's source and SASS),
+(`verity.definitions.registry.dense.GeluTanhMulBf16`, whose comment derives it from the kernel's source and SASS),
 re-exported so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` read the same object.
 >>>>>>> 7af4d24fca3e
 """
 from __future__ import annotations
 
-from verity.ml.definitions.registry.dense import GeluTanhMulBf16, gelu_tanh_bf16_bits, BETA_BITS, KAPPA_BITS, HALF_BITS, ONE_BITS, ZERO_BITS
+from verity.definitions.registry.dense import GeluTanhMulBf16, gelu_tanh_bf16_bits, BETA_BITS, KAPPA_BITS, HALF_BITS, ONE_BITS, ZERO_BITS
 
 SEMANTIC_ID = "dense/GeluTanhMulBf16@v1"
 

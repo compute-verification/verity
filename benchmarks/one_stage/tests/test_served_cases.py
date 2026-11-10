@@ -40,18 +40,18 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import weights as PW
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import weights as PW
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

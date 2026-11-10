@@ -91,7 +91,7 @@ if [ "${1:-}" != leased ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
+    (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
@@ -243,7 +243,7 @@ fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"

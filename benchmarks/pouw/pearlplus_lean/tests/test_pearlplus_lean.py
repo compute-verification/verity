@@ -41,7 +41,7 @@ pytest.importorskip("torch")
 import verity_difftest as D  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
-PACKAGE = ROOT / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus"
 SOURCE = b"verifier" * 4
 H100 = "pearl-c-h100-v1-h3"
 RECORDED = os.environ.get("POUW_PEARLPLUS_RECORDED")

@@ -28,7 +28,7 @@ are the challenger's, the setup's salt and the session's:
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
-The two sides are parties of the deployment layer (`verity.core.deploy`), the challenger (`Challenger`) and the prover
+The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`Challenger`) and the prover
 (`Prover`), whose messages are those frames. The challenger takes its coin tree's hiding key and each round's salt from
 its host's coins too:
 
@@ -38,13 +38,13 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 ~~~
 
 `Frames` is their codec over the session's stream, which the deployment layer's byte-stream adapter
-(`verity.core.deploy.stream`) drives them on: `serve` and `answer` are the two parties run there, on the clock and coins
+(`verity.configuration.deploy.stream`) drives them on: `serve` and `answer` are the two parties run there, on the clock and coins
 they are given. The challenger reads its clock once before each index it sends and once after each block it takes,
 those readings alone, so on the same coins and readings it signs the same bytes wherever it runs. Each side reads its
 connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a
 round.
 
-`python -m verity.core.protocols.pous.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
+`python -m verity.protocols.pous.verifier.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
 (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks", "k",
 "limit_ns", "node"}` (with `audit` and `published` when it names its audit), and answers the salt request with its
 source, or prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log
@@ -75,23 +75,23 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.core.deploy import stream
-from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Send
-from verity.core.deploy.runtime import ProtocolDef
-from verity.core.deploy.stream import Side
-from verity.core.wire import Body, Int, Message, Phase, Refused, Schema
-from verity.ml.randomness import derive
+from verity.configuration.deploy import stream
+from verity.configuration.deploy.manifest import Channel, Manifest, Role
+from verity.configuration.deploy.party import Finish, Identity, Received, Send
+from verity.configuration.deploy.runtime import ProtocolDef
+from verity.configuration.deploy.stream import Side
+from verity.configuration.wire import Body, Int, Message, Phase, Refused, Schema
+from verity.commitments.randomness import derive
 
-from . import memory_challenger as mc
-from . import run as R
-from . import setup as pous_setup
-from .schemes.p2 import P2Params
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import run as R
+from verity.protocols.pous.verifier import setup as pous_setup
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (module docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
-MODULE = "verity.core.protocols.pous.challenger_party"
+MODULE = "verity.protocols.pous.verifier.challenger_party"
 PREMISE = "trusted-host"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
@@ -105,7 +105,7 @@ SESSION_ID_TAG = b"verity-pous/memory-challenger/session-id/v1\0"
 AUDIT_BYTES = 64
 MAX_BLOCK = 1 << 24
 MANIFEST = Manifest(
-    ID, VERSION, "verity.core.protocols.pous.challenger_party:request_of",
+    ID, VERSION, "verity.protocols.pous.verifier.challenger_party:request_of",
     parties=(Role(CHALLENGER, "auditor", needs=("clock", "coins", "signing-key")),
              Role(PROVER, "developer", per="server", needs=("store",))),
     channels=(Channel(CHALLENGER, PROVER, ("Warmup", "Index", "End"), carries_coins=True),
@@ -366,7 +366,7 @@ class Prover:
 
 
 def _challenger() -> Challenger:
-    from . import period  # period imports this module
+    from verity.protocols.pous.verifier import period  # period imports this module
 
     return Challenger(period.SESSION_DOMAIN)
 
@@ -415,7 +415,7 @@ def command(device: str | Path) -> tuple[str, ...]:
 def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
     """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
     node, else `challenger.pous`'s `command` and `address`, which infra writes once the host serves the challenger's
-    side (the bandwidth gate's path, `benchmarks/live_verifier`)."""
+    side (the bandwidth gate's path, `verity/protocols/poub/device/live_verifier`)."""
     return Side.of(period, node, "pous", command(device))
 
 
@@ -526,7 +526,7 @@ def _refused(e: BaseException) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from . import period  # noqa: PLC0415  (period imports this module)
+    from verity.protocols.pous.verifier import period  # noqa: PLC0415  (period imports this module)
 
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`period.challenger`)")

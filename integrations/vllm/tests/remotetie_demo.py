@@ -38,8 +38,8 @@ Run from the tree's root: PYTHONPATH=. python3 integrations/vllm/tests/remotetie
 """
 import hashlib
 
-from verity.core.protocols.pouw import credit as C
-from verity.core.protocols.pouw import weights as W
+from verity.protocols.pouw.verifier import credit as C
+from verity.protocols.pouw.verifier import weights as W
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 

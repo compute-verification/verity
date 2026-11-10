@@ -63,7 +63,7 @@ def test_new_and_stale_entries(tmp_path, monkeypatch) -> None:
 
 def test_the_moved_definitions_are_scanned_under_their_repository_paths() -> None:
     p = R.DEFINITIONS / "registry" / "a.py"
-    assert R.rel(p) == "verity/ml/definitions/registry/a.py" and R.module_name(p) == "verity.ml.definitions.registry.a"
+    assert R.rel(p) == "verity/definitions/registry/a.py" and R.module_name(p) == "verity.definitions.registry.a"
     assert R.rel(R.PKG / "program" / "b.py") == "verity_vllm/program/b.py"
     assert not any(p.is_relative_to(R.DEFINITIONS) for p in R.library_files(".py", R.CORE_PKG))
     assert set(R.library_files()) >= set(R.library_files(".py", R.DEFINITIONS))

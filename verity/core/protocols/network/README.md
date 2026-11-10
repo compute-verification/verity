@@ -1,14 +1,14 @@
-# Network certification's Lean checks (`verity/core/protocols/network`)
+# Network certification's Lean checks (`verity/protocols`)
 
 `NetworkCheck` is the Lean verifier of the network certifiers' records and of the certification period's check, with
-the suite that holds each check to its Python reference in `verity/core/protocols/certifier/`.
+the suite that holds each check to its Python reference in `verity/protocols/certifier/`.
 
 A network certifier is an auditor-trusted device on a node's uplink. For each sampling block of transfer blocks it
 carries on a link (the code's *link-window*, over one sampling period) it signs a network certificate. A certification
 period is m consecutive link-windows on one link under one signed root (`NetworkCheck.Period`). The identifiers keep the
 names `window` and `LinkWindow` until a format version (the Glossary's older names).
 
-- `verity/core/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
+- `verity/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
   audit), and in its README the protocol.
 - `nci/`: the inference-only policy's check, a separate package with its own README.
 - `Security/Proofs/NetworkCertifier/README.md`: the guarantees and proofs about the certifier's timing channel, which
@@ -17,15 +17,15 @@ names `window` and `LinkWindow` until a format version (the Glossary's older nam
 ## What runs
 
 `lean/` is the Lake package `network_check` (library `NetworkCheck`). It requires five packages by path and no
-Mathlib: C-Flock's verifier (`verity/core/service/flock`), the core protocol interface
-(`verity/core/protocols/interface`), the certifier program (`verity/core/protocols/certifier/lean`), the LMS port
-(`verity/core/primitives/lms/lean`) and core's identity hash (`verity/core/primitives/identity`).
+Mathlib: C-Flock's verifier (`verity/flock/verifier`), the core protocol interface
+(`verity/flock/verifier/interface`), the certifier program (`verity/protocols/certifier/device/program/lean`), the LMS port
+(`verity/commitments/lms/lean`) and core's identity hash (`verity/commitments/identity`).
 
 Each check is a `Core.Protocol`, so each executable has the interface's three commands: `id`,
-`check PARAMS COMMITMENT EVIDENCE` and `serve` (`verity/core/protocols/interface/README.md`). The module docstring of
+`check PARAMS COMMITMENT EVIDENCE` and `serve` (`verity/flock/verifier/interface/README.md`). The module docstring of
 each check states its parameters, commitment and evidence byte for byte.
 
-The Python references below are in `verity/core/protocols/certifier/` except `tests/period_case.py`, which is this
+The Python references below are in `verity/protocols/certifier/` except `tests/period_case.py`, which is this
 package's.
 
 | executable | protocol id | module | what it decides | its Python reference |
@@ -64,7 +64,7 @@ bits a covert sender in the server can move through the network certifier in the
 
 | executable | run by |
 | --- | --- |
-| `network-records` | `verity/core/protocols/certifier/lean_audit.py` (`lean_audit.Audit`) and `service.py`'s link-window verdict (`verdicts`' `link-window`); the records' runners (`benchmarks/network_e2e/run.sh`, `benchmarks/network_traces/chain_record.sh`) build it and pass it on |
+| `network-records` | `verity/protocols/certifier/verifier/lean_audit.py` (`lean_audit.Audit`) and `service.py`'s link-window verdict (`verdicts`' `link-window`); the records' runners (`benchmarks/network_e2e/run.sh`, `benchmarks/network_traces/chain_record.sh`) build it and pass it on |
 | `network-period` | `benchmarks/network_traces/certifier_piece.py`, `block_certifier.py` and `scan_period.sh` |
 | `network-check-difftest` | the Lean check, on the vectors below |
 | `network-check` | only its own test, `tests/test_network_check_protocol.py`; the records run `network-records` |
@@ -72,7 +72,7 @@ bits a covert sender in the server can move through the network certifier in the
 - `lean_audit.Audit` is `audit.Audit` with every verdict taken from one `network-records verdicts` process.
   `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
   network-records` here.
-- The onsite composite protocol (`verity/core/protocols/onsite`) composes `verity/certifier/v0` as its communication
+- The onsite composite protocol (`verity/composite/verifier/onsite`) composes `verity/certifier/v0` as its communication
   component (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from
   `tests/period_case.py`.
 
@@ -91,19 +91,19 @@ bits a covert sender in the server can move through the network certifier in the
 
 `lean/scripts/difftest_vectors.py` writes `network-check-difftest`'s data, 2,000 random instances and
 `certificate.py`'s results on each. The Lean check runs the difftest on them (`runs` in `lean-audit.json`, which pins
-both files' SHA-256), and `verity/core/protocols/certifier/tests/test_network_check_lean_difftest.py` checks that the
+both files' SHA-256), and `verity/protocols/certifier/verifier/tests/test_network_check_lean_difftest.py` checks that the
 script still writes them.
 
 ## How to run it
 
 ~~~sh
-cd verity/core/protocols/network/lean && lake build      # the four executables, under .lake/build/bin/
+cd verity/protocols/certifier/verifier/lean && lake build      # the four executables, under .lake/build/bin/
 .lake/build/bin/network-check id                          # verity/network-certificate/v4
 ~~~
 
 From the repository root:
 
 ~~~sh
-uv run tools/verity/check/suites.py verity/core/protocols/network    # the difftests and the period mirror
-python3 tools/verity/lean/check.py --build verity/core/protocols/network/lean    # this package's Lean check
+uv run tools/verity/check/suites.py verity/protocols    # the difftests and the period mirror
+python3 tools/verity/lean/check.py --build verity/protocols/certifier/verifier/lean    # this package's Lean check
 ~~~

@@ -17,13 +17,13 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.ml.windows import rows as CS
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import partition as P, registration as R
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array
+from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW

@@ -51,14 +51,14 @@ from math import ceil, log
 from pathlib import Path
 
 <<<<<<< 99c8914848
-from verity.core.protocols.pous import wipe_monitoring
-from verity.ml.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+from verity.protocols.pous.verifier import wipe_monitoring
+from verity.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
 ||||||| merged common ancestors
-from verity.core.protocols.pous import wipe_monitoring
-from verity.ml.windows.interface import K_MAX
+from verity.protocols.pous.verifier import wipe_monitoring
+from verity.windows.interface import K_MAX
 =======
-from verity.core.protocols import reporting
-from verity.ml.windows.interface import K_MAX
+from verity.protocols import reporting
+from verity.windows.interface import K_MAX
 >>>>>>> 7af4d24fca3e
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)

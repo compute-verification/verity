@@ -104,7 +104,7 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) need=(benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py) ;;
   remote) products=(remote) need=(benchmarks/one_stage/composite.py)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/core/protocols/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/composite/verifier/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 for f in "${need[@]}"; do
@@ -163,17 +163,17 @@ fi
 bad=0
 for x in "${products[@]}"; do
 <<<<<<< 99c8914848
-  e=$(exe "$x" "verity/core/protocols/${x%-v1}") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/${x%-v1}") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" \
     "$D/private/compose" "$D/private/deferred" <<'EOF'
 ||||||| merged common ancestors
 for x in remote onsite; do
-  e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/$x") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$P" "$x" <<'EOF'
 =======
-  e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/$x") || { bad=1; continue; }
   cases=() skips=("$P")
   [ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "${skips[@]}" <<'EOF'

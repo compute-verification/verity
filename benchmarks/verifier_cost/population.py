@@ -16,10 +16,10 @@ import json
 from pathlib import Path
 
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.ml.circuits import codec
-from verity.ml.circuits.program import input_id
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import codec
+from verity.circuits.program import input_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.types import Array, Value
 
 XOR8 = PrimitiveDefinition("BenchPopulationXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)

@@ -11,12 +11,12 @@ import random
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.ml.commitments import hm96, merkle
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
-from verity.ml.commitments.multiproof import multiproof, multiproof_root
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments import hm96, merkle
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
+from verity.commitments.multiproof import multiproof, multiproof_root
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity_vllm.commit import step_rows as R
 
 _CORE = os.path.dirname(merkle.__file__)

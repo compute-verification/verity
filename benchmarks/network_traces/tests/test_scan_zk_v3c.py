@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 from test_scan_zk import sz
 
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.windows import rows as RWS
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.windows import rows as RWS
 
 S = sz.W63K4
 V2 = sz.REG.SCHEMA_V2

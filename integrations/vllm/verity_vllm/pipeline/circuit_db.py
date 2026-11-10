@@ -29,7 +29,7 @@ the job reads into one file (`bundle`), ships it (`research run --send FILE`), a
 bundle=...)`), each digest checked against the record as from the store.
 
     from verity_vllm.pipeline import circuit_db
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
     rec = circuit_db.record(row)                      # the config record
     progs = circuit_db.programs(row, ranks=[0], part=["workload"])   # {rank: {part: DecodedProgram}}, each digest checked
     p = progs[0]["workload"]                          # the Program the Commit binds; "build_step", "build_request_LP*_T*" beside it
@@ -149,7 +149,7 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
-    from verity.ml.definitions.boolean import load_program
+    from verity.definitions.boolean import load_program
     rec = record(row, bundle)
     want = selected(rec, ranks, part)
     paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]

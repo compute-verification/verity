@@ -525,7 +525,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
 >>>>>>> 7af4d24fca3e
     except LookupError:
         core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
-    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.ml.circuits, verity.ml.circuits.silicon, verity_sp1.proofs
+    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.definitions.silicon, verity_sp1.proofs
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:

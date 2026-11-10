@@ -71,7 +71,7 @@ serve() {  # NAME RETAIN-ARGS...: one endpoint, ROUNDS rounds of the fixed load,
   fi
   say "SERVE $name $(grep -m1 'SERVE-OPENAI listening' "$log" | cut -c1-200)"
   for r in $(seq 1 "$ROUNDS"); do
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --fixed "$SLOTS" --window-steps "$WINDOW_STEPS" \
+    "$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" --fixed "$SLOTS" --window-steps "$WINDOW_STEPS" \
       --prompt-range "$PROMPT:$PROMPT" --release "$name-r$r" --seed "$r" --out "$D/load-r$r.jsonl" > "$OUT/$name/load-r$r.log" 2>&1 || rc=$?
     say "REQUESTS $name round $r (exit $rc): $(tail -1 "$OUT/$name/load-r$r.log" | cut -c1-200)"
   done

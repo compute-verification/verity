@@ -57,8 +57,8 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as G, registration as R
-from verity.ml.commitments.gates import sha512_stream as SS
-from verity.ml.windows import interface as IF
+from verity.commitments.gates import sha512_stream as SS
+from verity.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header
 from verity_vllm.config import UsageError, group, option

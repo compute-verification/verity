@@ -96,7 +96,7 @@ on it:
 Prop in two ways: only Python joins the 10 per-part verdicts (no single compiled verdict exists), and its prover is
 Python's builder with Flock's CPU prover, not `refP`.
 
-What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
+What ties the two provers is `verity/flock/verifier/vstar_cli/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
 whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
@@ -109,7 +109,7 @@ block and range for range, on parts Python's `rec_vstage.stage` staged:
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
 The checks of `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest compares
-`refP`'s inner rounds with Python's builder; `verity/core/service/vstar/tests/test_irdep_difftest.py` does, on the
+`refP`'s inner rounds with Python's builder; `verity/flock/verifier/vstar_cli/tests/test_irdep_difftest.py` does, on the
 run's own tree: `IrDep x`'s rows at every inner round, openings, running-sum salts, κ, eq(α) and v, evaluated by
 `IrDepSession.lean` (the setup-level copies `IrDep.lean` proves equal to `IrDep`'s own), are what `rec_live`,
 `rec_vstar` and `rec_vstage` built there, and a planted byte in any of them is refused. -/

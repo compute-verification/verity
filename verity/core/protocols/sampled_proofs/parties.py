@@ -1,6 +1,6 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
+"""Sampled proofs' parties on the deployment layer (`verity.configuration.deploy`): the challenger, the firewall, the workers and the
 verifier, as roles and channels a deployment configuration declares (`MANIFEST`), and their table (`PROTOCOL`;
-`PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`).
+`PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.configuration.deploy.runtime.run`).
 
 ~~~text
 challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
@@ -27,7 +27,7 @@ name with that reason recorded (an audit's or a product's is that block's ``erro
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
 The run's parameters (`params_of`) are its execution phases (``blocks``), the configuration's listed subprotocols
-(``components``: exactly one composite's, by name, `SUBPROTOCOLS`, `verity.core.deploy.config.COMPOSITES`) and what
+(``components``: exactly one composite's, by name, `SUBPROTOCOLS`, `verity.configuration.deploy.config.COMPOSITES`) and what
 its coins are (``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else
 ``development``, a key made for the session).
 
@@ -58,11 +58,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.core.deploy.config import COMPOSITES
-from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send
-from verity.core.deploy.runtime import ProtocolDef
-from verity.core.wire import Body, Hex, Int, Message, Schema, Str
+from verity.configuration.deploy.config import COMPOSITES
+from verity.configuration.deploy.manifest import Channel, Manifest, Role
+from verity.configuration.deploy.party import Finish, Identity, Received, LogEntry, Send
+from verity.configuration.deploy.runtime import ProtocolDef
+from verity.configuration.wire import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
 

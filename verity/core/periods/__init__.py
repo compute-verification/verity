@@ -1,5 +1,5 @@
 """Ticks, spans of ticks and the monitoring period: the Python mirror of the code's `CoreProtocol.Period`
-(`verity/core/protocols/interface/CoreProtocol/Period.lean`), which is the code's copy of
+(`verity/flock/verifier/interface/CoreProtocol/Period.lean`), which is the code's copy of
 `Security/Definitions/Core/Period.lean`. The difftest port `core-periods-difftest` holds this to that Lean. Stdlib only,
 and it imports no other unit.
 

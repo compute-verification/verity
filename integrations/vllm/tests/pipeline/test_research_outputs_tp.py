@@ -10,7 +10,7 @@ from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import research_result, serve_commit
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
-COMMIT_SH = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "commit.sh"
+COMMIT_SH = Path(__file__).resolve().parents[4] / "workloads" / "vllm" / "commit.sh"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]
 #: an evidence dir's files that hold request values, where each rank ran or when each process ran: never published
 PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "generated_token_ids": [[3]], "timing": {}},
@@ -276,7 +276,7 @@ def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
 
 
 def test_the_example_commit_publishes_its_stages_records_and_none_of_its_private_files(tmp_path):
-    """examples/vllm/commit.sh publishes what `research-outputs write` declares for the stages it names, and copies nothing into its
+    """workloads/vllm/commit.sh publishes what `research-outputs write` declares for the stages it names, and copies nothing into its
     run record: the sealed bundle (the committed store with its salts, Kw in weights/tree.json, the opened weights, the requests'
     context, the manifest of the values the store doesn't retain), the slim keep and the Match's capture planes stay on the node."""
     lines = [ln for ln in COMMIT_SH.read_text().splitlines() if not ln.lstrip().startswith("#")]

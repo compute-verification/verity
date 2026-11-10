@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96, ROW_SCHEMA, hm96_salt, rows_domain
-from verity.core.protocols.pouw.protocol import tagged
-from verity.ml.commitments import CommitmentDomain
-from verity.ml.commitments.merkle import tree_levels
+from verity.protocols.pouw.verifier.audit import HM96, ROW_SCHEMA, hm96_salt, rows_domain
+from verity.protocols.pouw.verifier.protocol import tagged
+from verity.commitments import CommitmentDomain
+from verity.commitments.merkle import tree_levels
 
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _put, _stream, _write, _zeros
 

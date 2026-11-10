@@ -30,15 +30,15 @@ from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
 ||||||| merged common ancestors
-from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.pouw.verifier.schemes import pearl_c_work as PW
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
 =======
-from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8

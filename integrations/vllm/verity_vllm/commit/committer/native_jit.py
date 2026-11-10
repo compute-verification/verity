@@ -27,7 +27,7 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.ml.kernels import ROW_COMMIT, SHA512
+from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_rows.cu")

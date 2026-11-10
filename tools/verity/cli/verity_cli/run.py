@@ -1,5 +1,5 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
-(`verity.core.deploy.config`).
+(`verity.configuration.deploy.config`).
 
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR] [--bindings FILE] [--dry-run]
     verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
@@ -7,11 +7,11 @@
     verity config hash CONFIG
 
 `verity run` checks the configuration, refusing any set of subprotocols that is no composite's (``composite``,
-`verity.core.deploy.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
+`verity.configuration.deploy.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
 soundness covers; H1's development composite is refused), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
-parties are those of the static table `REGISTRY` names: the served window's (`examples/onsite_served/served_table.py`);
+parties are those of the static table `REGISTRY` names: the served window's (`workloads/onsite_served/served_table.py`);
 `verity_cli`'s tests also run the toy's (`tools/verity/cli/tests/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 
@@ -70,14 +70,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.core.deploy import config as K
-from verity.core.wire import Refused
+from verity.configuration.deploy import config as K
+from verity.configuration.wire import Refused
 
 from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 #: the static table: the directory on its import path, and its module (module docstring)
-REGISTRY: tuple[Path, str] | None = (ROOT / "examples" / "onsite_served", "served_table")
+REGISTRY: tuple[Path, str] | None = (ROOT / "workloads" / "onsite_served", "served_table")
 #: the deploy bindings `begin` keeps beside the run (module docstring)
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools

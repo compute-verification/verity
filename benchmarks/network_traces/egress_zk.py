@@ -6,15 +6,15 @@ certifier's signed root
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), which name every port of the
 statement (`Flock.Registered.checkComplete`); each unit's one public output, its 16-bit ``o0`` (1 when the state
 renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
-holds these units yet (`verity.core.protocols.certifier.egress`).
+holds these units yet (`verity.protocols.certifier.verifier.egress`).
 ||||||| merged common ancestors
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
-(`verity.core.protocols.certifier.egress`).
+(`verity.protocols.certifier.verifier.egress`).
 =======
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
-(`verity.ml.protocols.certifier.egress`).
+(`verity.protocols.certifier.prover.egress`).
 >>>>>>> 7af4d24fca3e
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
@@ -63,15 +63,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import warden_zk as WZ  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
-from verity.ml.protocols.certifier import egress as EG  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.certifier.prover import egress as EG  # noqa: E402
+from verity.protocols.certifier.verifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/egress_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/protocols/certifier/verifier/tests/egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)

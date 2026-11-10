@@ -1,4 +1,4 @@
-"""Pearl+'s live draw end to end on one CPU machine, against infra's own gate code (`benchmarks/live_challenger/auditor.py`)
+"""Pearl+'s live draw end to end on one CPU machine, against infra's own gate code (`verity/composite/device/live_challenger/auditor.py`)
 on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier of record's (``sampled-proofs-verifier``, built first).
 
@@ -58,14 +58,14 @@ WAIT_S = 300
 
 def _auditor():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "benchmarks" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
 
 
 def _host(root: Path):
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     A = _auditor()
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
     return A, host, A.key_signer(host, lms.Params(64, *PARAMS), workers=1), (root / "pin").read_text().strip()
@@ -188,7 +188,7 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.core.protocols.pouw import salt as PS
+    from verity.protocols.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -213,12 +213,12 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (root / "pin").write_text(pin + "\n")
     host.pins.write_text(A.pin_line(pin, pin, A.utc(datetime.now(UTC))) + "\n")
     (main := out / "main.txt").write_text(pin + "\n")
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     key_sha512 = A.key_signer(host, lms.Params(64, *PARAMS), workers=1)[2]
     gate_cmd = shlex.join([sys.executable, str(Path(__file__).resolve()), "gate", "--root", str(root)])
     piece, log = out / "pieces" / "pouw", []
     piece.mkdir(parents=True)
-    report: dict = {"gate": "benchmarks/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
+    report: dict = {"gate": "verity/composite/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
@@ -296,7 +296,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
-            pkg = TREE / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus"
+            pkg = TREE / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus"
             b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
             log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
             exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"

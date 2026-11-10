@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import (
+from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     activation_binding,
@@ -26,7 +26,7 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
 )
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
-from verity.ml.commitments.merkle import tree_levels
+from verity.commitments.merkle import tree_levels
 from verity_vllm.program.predict.window_class import PearlTables
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY

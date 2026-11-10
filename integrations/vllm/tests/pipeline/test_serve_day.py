@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core import site as ST
-from verity.core.protocols import registration as G
+from verity.hardware import site as ST
+from verity.hardware import registration as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD

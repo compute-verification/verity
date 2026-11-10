@@ -45,7 +45,7 @@ The draw `audit.pooled` reads, as the verifier runs it. A session has `n` window
 the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
 the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
-`derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
+`derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/commitments/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
 `w = 8 ⌈(bitlen N + 64) / 8⌉`, and returns the first word below `2^w − (2^w mod N)`, reduced mod `N`
@@ -88,7 +88,7 @@ the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t,
   which are fixed before coin `t` and its salt are released: a distinguisher of hm96 commitments at leaf `t` between
   coin `t` and zeros (claim `statistical-hiding`). At the pinned key (`common-reference-string`, `hash-derived-key`)
   hm96 puts each within the pair distance of leaf `t`'s commit strings, and over a session's `n` openings leaves those
-  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/ml/commitments/hm96/PROTOCOL.md` §3), so
+  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/commitments/hm96/PROTOCOL.md` §3), so
   the session's hiding terms total at most `n·2^-191` (`ledger.hiding`). That bound reads a prover whose view before
   coin `t` holds no salt of a coin not yet released, as the deployed prover's doesn't: a `view` that reads leaf `t`'s
   salt off the other coins gets no bound from hm96, rightly.

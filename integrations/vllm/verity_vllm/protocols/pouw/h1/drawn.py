@@ -84,16 +84,16 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw import weights as Wt
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.one_stage import produced as PR
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.spot.device import challenger as Ch
+from verity.spot.verifier.one_stage import produced as PR
+from verity.spot.verifier.one_stage import proofs as PF
+from verity.spot.verifier.one_stage import registered as G
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
                                                      leaf_rows, leaf_statement, operands, outputs_held, partials,
@@ -371,7 +371,7 @@ def unit_outputs(z: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> dict
     """Each staged unit's outputs as J10-R's word reference computes them (`h1zy.reference`, chunked by
     `chunks_reference`) on its rows, the window's Program salt, its position, its call's roots and (u0, blocks): ``o0``
     its receipt's u16 words, ``o1`` its ok. Refused when a unit's ok is not 1 (its record is not its rows' product)."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     lay, (r, c), x = win["layout"], tuple(win["layout"]["tile"]), Wt.chunks(k)
     u0, salt = int(z["u0"]), bytes.fromhex(win["salt"])
     n = next(nn for name, kk, nn in lay["linears"] if name == lay["calls"][int(z["call"])][0])

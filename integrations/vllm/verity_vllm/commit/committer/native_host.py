@@ -2089,7 +2089,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity/ml/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`verity/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).
@@ -2104,7 +2104,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                             "rule": "derived-row rule (candidate, NOT verified here): phi = registry exact model of the pinned norm kernel over the bound "
                                     "source row (R2e residual / R2b embedding bf16 row) + registered weight row; opening = source-row leaf + weight "
                                     "opening + replay; verifier + binding/value tests not implemented in this lane",
-                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.ml.circuits registry (row-4 work)"})
+                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.circuits registry (row-4 work)"})
         for src in self.sources:
             classes.extend(src.declaration_classes())
         notes = ["binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "

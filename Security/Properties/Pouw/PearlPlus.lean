@@ -7,7 +7,7 @@ public import Properties.Pouw.Commit
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
 
-The properties of the executable verdict (`verity/core/protocols/pouw/lean/pearlplus/`, the port of
+The properties of the executable verdict (`verity/protocols/pouw/verifier/lean/pearlplus/`, the port of
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
 the epoch's coin commitment, the retained passes' manifests, the number of draws, the verifier's coin (a source, or its
 record of the coin) and the prover's openings. Each has one shape, the input, the acceptance, then what it establishes.

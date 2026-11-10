@@ -49,7 +49,7 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="module")
 def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     """The serve dir, ``verify``'s document's path and the document, accepted."""
-    from verity.core.protocols.pouw import verifier as PV
+    from verity.protocols.pouw.verifier import verifier as PV
 
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
@@ -142,7 +142,7 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     `window.LIVE_SCHEME`) adds ``--of-record``; both after the over-cap rule and test instance and before the passes,
     which stay last."""
     import shutil
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch
 
     d, verify, doc = run

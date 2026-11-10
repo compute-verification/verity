@@ -46,12 +46,12 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
-from verity.core.protocols.remote_bandwidth.store import store_salt
-from verity.ml.circuits import requirement
-from verity.ml.commitments import merkle_depth
-from verity.ml.commitments.merkle import Opening
+from verity.protocols.poub.verifier import receipts as rb
+from verity.protocols.poub.verifier.receipts import PER_LEAF, Plan
+from verity.protocols.poub.verifier.store import store_salt
+from verity.definitions.circuits import requirement
+from verity.commitments import merkle_depth
+from verity.commitments.merkle import Opening
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, ChainHead, Codec, Counters,
                                          Layout, PageLayout, PassCommitment, Receipt, RegionInfo, Segment, Source,
                                          Stale, WindowRecord)

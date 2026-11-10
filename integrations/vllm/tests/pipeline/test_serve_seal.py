@@ -537,7 +537,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     """registration.json's compiler digest is the one PROVE-PATH's capped re-commit binds: `advice_windows.Capped`'s formula."""
     import hashlib
 
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.program.predict import steps as ST
 
@@ -554,8 +554,8 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
 def test_bs_builder_item_is_what_the_registration_log_registers_once():
     """B's entry in the registration log: the inner compiler's digest, advice v0 and ℓ, read back as the log's builder; a
     second builder is refused."""
-    from verity.core.protocols import registration as REG
-    from verity.core.protocols.certifier import advice as I1
+    from verity.hardware import registration as REG
+    from verity.protocols.certifier.verifier import advice as I1
 
     item = ADV.builder_item(ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096))
     assert item == {"advice": I1.SCHEMA, "cap": 4096, "digest": "cd" * 64, "kind": "builder"}

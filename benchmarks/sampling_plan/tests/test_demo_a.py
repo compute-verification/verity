@@ -14,18 +14,18 @@ from math import floor, fsum, log1p
 import pytest
 
 import demo_a as D
-from verity.core.protocols.pouw.window import k_prime
-from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
+from verity.protocols.pouw.verifier.window import k_prime
+from verity.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
 <<<<<<< 99c8914848
 from verity.core.protocols.sampled_proofs.consumers import location_bits
 from verity.core.protocols.sampled_proofs.optimize import Objective, certify
-from verity.ml.windows.interface import K_MAX
+from verity.windows.interface import K_MAX
 ||||||| merged common ancestors
 from verity.core.protocols.sampled_proofs.consumers import location_bits
 from verity.core.protocols.sampled_proofs.optimize import Objective, certify
 =======
-from verity.core.protocols.spot.consumers import location_bits
-from verity.core.protocols.spot.optimize import Objective, certify
+from verity.spot.verifier.consumers import location_bits
+from verity.spot.optimize import Objective, certify
 >>>>>>> 7af4d24fca3e
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)

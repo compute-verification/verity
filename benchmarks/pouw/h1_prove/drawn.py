@@ -18,18 +18,18 @@ from typing import Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import credit as CR
+from verity.protocols.pouw.verifier import credit as CR
 <<<<<<< 99c8914848
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 ||||||| merged common ancestors
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 =======
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.spot.verifier.one_stage import proofs as PF
 >>>>>>> 7af4d24fca3e
 from verity_vllm.protocols.pouw.h1 import drawn as D
 
-MODELS = Path(__file__).resolve().parents[2] / "live_challenger" / "models.py"
+MODELS = Path(__file__).resolve().parents[3] / "verity" / "composite" / "device" / "live_challenger" / "models.py"
 
 
 def _models():

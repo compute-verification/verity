@@ -57,8 +57,8 @@ from inputs import I, KEY, observations  # noqa: E402
 from inputs import CARDS, I, observations  # noqa: E402
 >>>>>>> 7af4d24fca3e
 
-from verity.core.protocols import reporting
-from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
+from verity.protocols import reporting
+from verity.spot.verifier.profile import Stratified, Stratum  # noqa: E402
 <<<<<<< 99c8914848
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
@@ -72,16 +72,16 @@ from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_tab
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
 =======
-from verity.core.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.spot.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.spot.candidates import Shape, cuts, shape_of  # noqa: E402
+from verity.spot.costfit import Fitted, fit  # noqa: E402
+from verity.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
+from verity.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
 >>>>>>> 7af4d24fca3e
                                                            frontier, ln_upper, row_ands)
-from verity.ml.circuits.codec import descriptor_id  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.definitions.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
 #: core's reporting deltas (`reporting`), as floats
 DELTAS = tuple(map(float, reporting.DELTAS))
@@ -105,7 +105,7 @@ TILE_COLS = 32
 
 
 def pieces() -> dict[str, int]:
-    """Every pinned piece's ANDs (circuit-check's pins beside `verity.ml.circuits.ops`)."""
+    """Every pinned piece's ANDs (circuit-check's pins beside `verity.definitions.ops`)."""
     out: dict[str, int] = {}
     for f in sorted(Path(P.__file__).parent.glob("*.circuit-check.json")):
         out |= {k: v["and"] for k, v in json.loads(f.read_text()).get("pieces", {}).items() if "and" in v}

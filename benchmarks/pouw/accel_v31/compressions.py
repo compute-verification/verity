@@ -34,9 +34,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from h200_step import MODELS
 
-from verity.ml.protocols.pouw.circuit import dither
-from verity.ml.commitments import merkle, scheme
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.pouw.prover.circuit import dither
+from verity.commitments import merkle, scheme
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 M = 16384
 NAMES = {"8b": {(6144, 4096): "qkv", (4096, 4096): "o", (28672, 4096): "up", (4096, 14336): "down"},

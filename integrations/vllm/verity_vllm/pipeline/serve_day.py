@@ -1,7 +1,7 @@
 """serve-openai's day (``--day DAY --day-log LOG --day-program DIGEST``): before the day's first window, the server declares
 the one circuit it serves that day in the deployment's registration log, and every window it ties names that declaration.
 
-* **The declaration.** A ``verity/registration/declaration/v1`` entry (`verity.core.protocols.registration.Declaration`):
+* **The declaration.** A ``verity/registration/declaration/v1`` entry (`verity.hardware.registration.Declaration`):
   the day, by its index among the monitoring period's days (the caller's, on the auditor's clock), the SHA-512 of the
   program the day's windows register (``--day-program``: under ``--h1-window-commit`` the audited window circuit's, R's
   ``program``), and its block Definitions by descriptor key (``--day-blocks``).
@@ -35,8 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.core import site as S
-from verity.core.protocols import registration as G
+from verity.hardware import site as S
+from verity.hardware import registration as G
 from verity_vllm.config import UsageError, option
 
 #: the serve dir's record of the day's declaration

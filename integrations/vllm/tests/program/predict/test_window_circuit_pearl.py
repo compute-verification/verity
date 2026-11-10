@@ -30,13 +30,13 @@ from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
-from verity.core.protocols.pouw.audit import hm96_salt
-from verity.core.protocols.pouw.schemes import SCHEMES
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.pouw.verifier.schemes import SCHEMES
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.types import Array, Value
-from verity.ml.windows import interface as IF
+from verity.circuits.codec import descriptor_id
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.types import Array, Value
+from verity.windows import interface as IF
 
 #: the scheme the remote demo's Pearl+ serves under, on the H200
 SCHEME = "pearl-c-h100-v1-h3"

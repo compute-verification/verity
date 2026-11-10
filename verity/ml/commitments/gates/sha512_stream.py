@@ -29,14 +29,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, Tuple
 
-from .lms import Sha512Compress
-from .sha512 import IV, compress_ref, pad_tail, words_be
+from verity.commitments.gates.lms import Sha512Compress
+from verity.commitments.gates.sha512 import IV, compress_ref, pad_tail, words_be
 
 __all__ = ["HALF", "Sha512StreamLast", "Sha512StreamRow", "carry_words", "end_reference", "last", "last_reference", "row",
            "row_reference", "state", "state_bits"]

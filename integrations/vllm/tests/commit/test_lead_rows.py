@@ -12,8 +12,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.errors import Refused
 
@@ -226,7 +226,7 @@ def _window(calls: int = 64) -> L.WindowKeying:
 
 
 def test_window_reproduces_the_keyed_vectors():
-    """``verity.ml.commitments.keyed``'s vectors through the committer: keyLeaf, d(A_j) at f 3, calls 64, j 5 over 2 rows of K
+    """``verity.commitments.keyed``'s vectors through the committer: keyLeaf, d(A_j) at f 3, calls 64, j 5 over 2 rows of K
     2048 (4 segments), the forward's words over two calls (chunks of 65,536, 65,536, 32,768 and 1,024 words), and a one-leaf
     A at j 7."""
     w = _window()
