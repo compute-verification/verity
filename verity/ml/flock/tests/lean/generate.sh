@@ -17,7 +17,6 @@ from pathlib import Path
 out, here, pkg, root = map(Path, sys.argv[1:])
 data = json.loads(out.read_text())
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
-verifier = root / "verity/core/service/flock"
 data["inputs"] = {
     "verity/ml/flock/tests/lean/RandomnessVectors.lean": sha(here / "RandomnessVectors.lean"),
     "verity/ml/randomness/tests/vectors.json": sha(root / "verity/ml/randomness/tests/vectors.json"),
@@ -25,7 +24,8 @@ data["inputs"] = {
         sha(root / "verity/core/primitives/randomness/Randomness.lean"),
     **{"Security/Proofs/" + f: sha(pkg / f) for f in (
         "Flock/Soundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
-    **{"verity/core/service/flock/" + f: sha(verifier / f) for f in ("Flock/Hash.lean", "Flock/Draw.lean")}}
+    **{f: sha(root / f) for f in ("verity/core/primitives/base/Base/Hash.lean",
+                                  "verity/core/primitives/commitments/Commitments/Draw.lean")}}
 (here.parent / "fixtures" / "randomness_lean.json").write_text(json.dumps(data, indent=1) + "\n")
 PY
 rm -f "$out"

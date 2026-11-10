@@ -244,7 +244,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_randomness_spec.py"]
-paths = ["verity/core/service/flock/Flock/Draw.lean", "verity/core/service/flock/Flock/Hash.lean"]
+paths = ["verity/core/primitives/commitments/Commitments/Draw.lean", "verity/core/primitives/base/Base/Hash.lean"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_circuits.py"]
