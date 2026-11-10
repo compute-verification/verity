@@ -5,6 +5,17 @@ public import Properties.Pouw.PearlPlus.Witnesses
 public import Proofs.Properties.Pouw.Commit
 public import Proofs.Properties.Pouw.PearlPlus.Noise
 public import Std.Data.String.ToNat
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.List.Control
+import all Init.Data.List.Sort.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Range.Basic
+import all Init.Data.Repr
+import all Init.Data.String.Defs
+import all Lean.Data.Json.Basic
 
 /-!
 # Pearl+'s properties say something
