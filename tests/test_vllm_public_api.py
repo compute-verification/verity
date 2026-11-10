@@ -38,7 +38,7 @@ NOT_SCANNED = {
 
 #: The public modules: module -> the interface it is (the vision note's I1..I10).
 PUBLIC = {
-    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
+    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.forward_pass": "I2: the model runner's one seam around each forward pass (ForwardSeam): observers "
