@@ -119,7 +119,7 @@
    "due": "2026-11-30"
   }
  },
- "meaning": ["Flock"],
+ "meaning": ["Flock", "Base", "Circuits", "Commitments"],
  "escapes": {
   "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
  },
@@ -359,7 +359,8 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until its spec is extracted"
+  "Flock": "C-Flock is excepted until its spec is extracted",
+  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`): its lock declares no spec layer, so its definitions are recorded here as read rather than as a spec, excepted with C-Flock until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {

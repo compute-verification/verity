@@ -54,7 +54,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until its spec is extracted: the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
+  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`), excepted with C-Flock until its spec is extracted: the records check's evidence bridge reads its `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
