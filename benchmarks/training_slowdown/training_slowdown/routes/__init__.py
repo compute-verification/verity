@@ -7,7 +7,8 @@ A route module states:
 - `build(shape, dials)`, the model θ loads into (a start's `shape`, `training_slowdown.model`) and its optimizers;
 - `step(model, rows, optimizers, dials, t, n)`, training step `t` of `n` on `rows`, a batch of windows of the start's
   data, (batch, ctx + 1) token ids;
-- `plan(dials)`, the `training_slowdown.codecs.Plan` the output model's E is encoded with against θ.
+- `plan(dials)`, the `training_slowdown.codecs.Plan` the output model's E is encoded with against θ; it raises
+  `ValueError` on a dial value the route has no meaning for, which a config's load turns into its refusal.
 
 The harness owns the loop around `step` (`training_slowdown.run`): the counter, the data, the checkpoints, their
 evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted. A

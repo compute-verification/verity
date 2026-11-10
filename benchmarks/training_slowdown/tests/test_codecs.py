@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from training_slowdown.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, SeedReplay, SparseMask, Unencodable,
-                            derive_seed, from_spec)
+from training_slowdown.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, ScaledQuant, SeedReplay, SparseMask,
+                            Unencodable, derive_seed, from_spec)
 from training_slowdown.codecs.wire import pack_bits, unpack_bits
 
 
@@ -65,6 +65,51 @@ def test_quant_delta_rebuilds_a_quantized_parameterization(base):
     assert torch.allclose(c.decode(enc, base), target, atol=1e-6)
     assert c.size_bits(enc) < 2 * base.numel() + 8 * 200
     assert c.cost_macs(enc, base) == base.numel()
+
+
+def test_scaled_quant_rounds_each_entry_to_its_groups_nearest_level():
+    """Each entry's delta is coded to the nearest of the levels across its group's largest magnitude, so it comes
+    back within half a level, and f16's rounding of the codebook and the scale; a group that didn't move comes back
+    as the base's bits; the codes take at most `bits` bits an entry beside the codebook and the scales."""
+    gen = torch.Generator().manual_seed(2)
+    base = torch.randn(6, 128, generator=gen)
+    delta = 1e-3 * torch.randn(6, 128, generator=gen) * torch.tensor([1.0, 4.0, 0.0, 0.25, 16.0, 1.0])[:, None]
+    target = base + delta
+    moved = (target - base).view(6, 128)
+    top = moved.abs().amax(1, keepdim=True)
+    for bits in (8, 4, 2):
+        c = ScaledQuant(bits)
+        enc = c.encode(target, base)
+        out = c.decode(enc, base)
+        assert out.dtype == base.dtype and same(out[2], base[2]) and not same(out[0], base[0])
+        assert ((out - base) - moved).abs().le(top * (0.5 / (2 ** (bits - 1) - 1) + 2 ** -10) + 3e-7).all(), bits
+        assert c.size_bits(enc) <= bits * base.numel() + 16 * (2 ** bits + 6) + 8 * 200
+        assert c.cost_macs(enc, base) == 2 * base.numel()
+    out = ScaledQuant(8).decode(ScaledQuant(8).encode(target, base), base)
+    assert (out - target).norm() / moved.norm() < 0.01
+    assert from_spec(c.spec()).spec() == c.spec() == {"kind": "scaledquant", "bits": 2, "group": 128}
+
+
+def test_scaled_quant_groups_divide_the_tensor_and_keep_the_bases_dtype():
+    base = torch.randn(5, 12, generator=torch.Generator().manual_seed(3)).bfloat16()
+    codebook = ((torch.arange(16) - 8) / 7 * 0.5).half()
+    scales = torch.tensor([0.25, 0.5, 1.0, 0.0, 2.0]).half()
+    target = ScaledQuant.apply(base, codebook, scales, (torch.arange(60) * 7) % 16)
+    assert target.dtype == torch.bfloat16 and same(target[3], base[3]) and not same(target[4], base[4])
+    c = ScaledQuant(4, group=12)
+    out = c.decode(c.encode(target, base), base)
+    assert out.dtype == torch.bfloat16 and same(out[3], base[3])
+    assert (out.float() - target.float()).abs().max() <= 0.5 * (2.0 * 0.5 / 7) + 2 ** -6
+    odd = torch.zeros(7, 9)   # 63 entries: groups of one, so each entry is its own scale times the top level
+    out = ScaledQuant(8).decode(ScaledQuant(8).encode(odd + 0.5, odd), odd)
+    assert (out - 0.5).abs().max() <= 0.5 * 2 ** -10
+    with pytest.raises(ValueError, match="for a weight of 60"):
+        c.decode(ScaledQuant(4).encode(odd + 0.5, odd), base)
+    with pytest.raises(Unencodable):
+        c.encode(torch.zeros(0), torch.zeros(0))
+    for bits in (1, 9):
+        with pytest.raises(ValueError, match="2 to 8 bits"):
+            ScaledQuant(bits)
 
 
 def test_seed_replay_rebuilds_a_mezo_log(base):

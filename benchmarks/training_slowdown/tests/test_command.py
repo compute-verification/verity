@@ -133,6 +133,23 @@ def test_a_dry_run_starts_and_labels_nothing(tree, reg_path, capsys):
     assert "would run: research run --queue" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("name, jobs", [("s-t20-1.1x-shallow-strideshare", 8), ("s-t20-1.1x-ref-optim", 4)])
+def test_the_trees_configs_dry_run_against_the_registry(name, jobs, capsys):
+    """Each config of `attacks/` loads against starts.toml, its honest config beside it, and a dry run names every
+    job it would queue: one per seed and split of the config and of its honest config."""
+    r = Research()
+    assert command(r, name, "--dry-run") == 3
+    assert r.runs == [] and r.labels == []
+    out = capsys.readouterr().out
+    assert out.count("would run: research run --queue --kind training-attack") == jobs
+    assert out.count(f"--config attacks/{name}.toml") == 4 and f"{jobs} of {jobs} jobs pending" in out
+    cfg = config.load(cmd.HERE / "attacks" / f"{name}.toml", starts.registry())
+    assert (cfg.start.name, cfg.route, cfg.target, cfg.policy) == ("s-t20", "subset", {"gain": 1.1}, "console")
+    assert cfg.seeds == {"search": [0], "final": [0, 101, 102]} and "minutes" not in cfg.budget
+    honest = config.honest(cfg, starts.registry())
+    assert (honest.name if honest else None) == {8: "s-t20-1.1x-ref-optim", 4: None}[jobs]
+
+
 def test_a_queued_job_reads_its_config_from_the_tree(tree, reg_path, tmp_path):
     path = write_config(tmp_path / "elsewhere" / "a.toml")
     with pytest.raises(SystemExit, match="is outside"):

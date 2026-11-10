@@ -152,13 +152,39 @@ def one_step(plan):
     return train
 
 
-def test_each_checkpoint_carries_its_e_and_one_that_doesnt_rebuild_is_invalid(tmp_path, theta):
-    (cp,) = counted(tmp_path / "full", theta, one_step(Plan([("w1.*", Identity())])))["checkpoints"]
+def test_each_checkpoint_carries_its_e_and_its_output_is_what_e_rebuilds(tmp_path, theta):
+    """Under a plan that keeps the trained weights whole the output model is the trained state, as it was hashed and
+    scored before any plan could keep less. Under one that keeps less, the output is the model E rebuilds from θ:
+    its digest, the state the evaluator gets and the kept weights are that model's, and `trained_sha256` is the
+    trained state's. A plan with no E of the output makes the run invalid."""
+    scored = {}
+
+    def run_one(name, plan):
+        def evaluator(state, sha):
+            scored[name] = (sha, {k: v.clone() for k, v in state.items()})
+            return {"bpb": 1.0}
+        te = run.Harness(theta, tmp_path / name, clock=lambda: 0.0, evaluator=evaluator, keep_weights=True)
+        with te.counter:
+            one_step(plan)(te)
+        return te.finish({})
+
+    (cp,) = run_one("full", Plan([("w1.*", Identity())]))["checkpoints"]
     assert (cp["format"], cp["changed"], cp["rebuild_macs"]) == ("full", 1, 0)
-    assert cp["e_bytes"] >= 4 * D * D and len(cp["e_sha256"]) == 64
-    rec = counted(tmp_path / "lossy", theta, one_step(Plan([("w1.*", QuantDelta(bits=1))])))
-    assert rec["checkpoints"][0]["format"] == "codecs"
-    assert any("doesn't rebuild its output's ['w1.weight']" in p for p in rec["invalid"])
+    assert cp["e_bytes"] >= 4 * D * D and len(cp["e_sha256"]) == 64 and "trained_sha256" not in cp
+    sha, trained = scored["full"]
+    assert sha == cp["output_sha256"] == run.theta_sha256(trained) != run.theta_sha256(theta)
+    assert run.theta_sha256(torch.load(tmp_path / "full" / cp["path"], weights_only=True)) == sha
+
+    rec = run_one("lossy", Plan([("w1.*", QuantDelta(bits=1))]))
+    (lossy,) = rec["checkpoints"]
+    assert rec["invalid"] == [] and lossy["format"] == "codecs" and lossy["trained_sha256"] == cp["output_sha256"]
+    sha, output = scored["lossy"]
+    enc = (tmp_path / "lossy" / lossy["e_path"]).read_bytes()
+    rebuilt = theta | Plan([("w1.*", QuantDelta(bits=1))]).decode(enc, {"w1.weight": theta["w1.weight"]})
+    assert sha == lossy["output_sha256"] == run.theta_sha256(rebuilt) == run.theta_sha256(output) != cp["output_sha256"]
+    assert not torch.equal(output["w1.weight"], trained["w1.weight"]) and torch.equal(output["emb"], trained["emb"])
+    assert run.theta_sha256(torch.load(tmp_path / "lossy" / lossy["path"], weights_only=True)) == sha
+
     rec = counted(tmp_path / "none", theta, one_step(Plan([("emb", Identity())])))
     assert rec["checkpoints"][0]["e_bytes"] is None
     assert any("has no E of its output" in p for p in rec["invalid"])
