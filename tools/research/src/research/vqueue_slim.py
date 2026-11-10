@@ -113,10 +113,12 @@ def shard_count(shards: int | str) -> tuple[int, bool]:
     raise ValueError(f"shards {shards!r}: N, ci.toml's plan with N shards, or auto:N, N shards of an auto plan")
 
 
-def deselection(driver: Driver, listed: Path | None) -> Path | None:
-    """The file a candidate's check leaves out the tests of (`train.sh --deselect`), from the loop's list ``listed``, read at
-    each launch: its node ids (`DESELECT_RE`; blank and `#` lines skipped), written beside it as ``<name>.sent``, each other
-    line logged and left out, so a typo there drops no test and reds no candidate.  None while it is absent or names none."""
+def deselection(driver: Driver, listed: Path | None, sha: str = "") -> Path | None:
+    """The file candidate ``sha``'s check leaves out the tests of (`train.sh --deselect`), from the loop's list ``listed``, read
+    at each launch: its node ids (`DESELECT_RE`; blank and `#` lines skipped) whose file ``sha``'s tree holds, so one list
+    names a test both before and after a move renames its file, written beside it as ``<name>.<sha12>.sent``, the launch's own
+    (its shards read it after the loop has gone on to the next launch).  Each other line is logged and left out, so a typo or a
+    renamed file there drops no test and reds no candidate.  None while it is absent or names none."""
     if listed is None or not listed.is_file():
         return None
     lines = [s for line in listed.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
@@ -124,9 +126,16 @@ def deselection(driver: Driver, listed: Path | None) -> Path | None:
     if bad := [s for s in lines if not DESELECT_RE.fullmatch(s)]:
         driver.q.log(f"research queue vqueue: {listed}: {len(bad)} line(s) not a test's node id (PATH.py::NAME, PATH from the "
                      f"repository's root), left out: {'; '.join(bad[:5])}")
+    if sha and ids:
+        files = sorted({i.split("::", 1)[0] for i in ids})
+        held = set(_git(driver.repo, "ls-tree", "-r", "--name-only", sha, "--", *files, check=False).stdout.split())
+        if gone := [i for i in ids if i.split("::", 1)[0] not in held]:
+            driver.q.log(f"research queue vqueue: {listed}: {len(gone)} test(s) in a file {sha[:12]}'s tree doesn't hold, left "
+                         f"out of its list: {'; '.join(gone[:5])}")
+        ids = [i for i in ids if i not in gone]
     if not ids:
         return None
-    sent = listed.with_name(f"{listed.name}.sent")
+    sent = listed.with_name(f"{listed.name}.{sha[:12]}.sent" if sha else f"{listed.name}.sent")
     part = sent.with_name(f"{sent.name}.{os.getpid()}")
     part.write_text("".join(f"{i}\n" for i in ids))
     os.replace(part, sent)
@@ -152,7 +161,7 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
     n, auto = shard_count(shards)
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
-    if left := deselection(driver, deselect):
+    if left := deselection(driver, deselect, sha):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
     every = AFTER_LANDING if n else SLIM_STEPS
