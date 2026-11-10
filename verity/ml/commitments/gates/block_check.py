@@ -102,16 +102,16 @@ v1's; check 4 (the tile, under a z-binding registration) is in neither version. 
 functions for it.
 
 **v2's legal range,** to which `_check_opening_v2` holds a binding, refusing any other by the static that takes it out and
-why (`CAPS_V2`, `LEVELS`): a field of `FIELDS` at K 2 or 3, masked or not; a 4,096-byte block (the toy's a power of two from
+why (`LIMITS_V2`, `LEVELS`): a field of `FIELDS` at K 2 or 3, masked or not; a 4,096-byte block (the toy's a power of two from
 64); ROWS and LEAF 1 to 16; DR 1 to 28 (a u32 pos's leaf pos >> 4), DP and DV 1 to 32 (u32 ranks); and DR + DP + DV at most
 `LEVELS`. Every binding in it is one Flock block within K_MAX: its unit's useful cells are below its 2^26 slot. Each static
 only adds cells as it grows, and the other fields' decodes cost less, so the costliest bindings are p1024/k3/masked at 16
-rows and LEAF 16, and the caps are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's
+rows and LEAF 16, and the limits are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's
 ANDs). At a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB store's 192,626,953) that
 unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26, and a tree level costs 235,000 to 239,000 (three
 compressions and its sibling's 512 input bits): room for 13 levels past those 53. `LEVELS` takes 11 and keeps two: the
 costliest binding it admits, DR 1, DP 31, DV 32, has at most 66,615,297, 493,567 short, and every binding of at most 66
-levels fits. p512's and the toy's fit at every depth the width caps admit. A fourth round (32 more word rounds, about 15.1M
+levels fits. p512's and the toy's fit at every depth the width limits admit. A fourth round (32 more word rounds, about 15.1M
 ANDs) takes the masked p1024 unit past 2^26 even at DR = DP = DV = 1, and 64 sketch rows (about 2.9M more cells) take it
 past at a whole node's depths.
 """
@@ -134,7 +134,7 @@ from .frame_v3 import opens_at, read_at
 from .hm96 import Hm96Sha512Leaf, reference as hm96_leaf
 from .sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
-__all__ = ["BlockOpeningCheck", "BlockOpeningCheckV2", "CAPS_V2", "FIELDS", "LEVELS", "TOY", "VERDICT", "key", "opening_args",
+__all__ = ["BlockOpeningCheck", "BlockOpeningCheckV2", "FIELDS", "LEVELS", "LIMITS_V2", "TOY", "VERDICT", "key", "opening_args",
            "opening_args_v2", "opening_check", "opening_check_v2", "opening_public", "opening_public_v2", "opening_rows",
            "opening_rows_v2", "receipt", "row_words", "sketch", "verdict"]
 
@@ -675,8 +675,8 @@ BlockOpeningCheck = CompositeDefinition(
 
 #: v2's three trees together have at most this many levels (the module docstring's legal range)
 LEVELS = 64
-#: v2's caps, each a static's largest value and the reason a binding past it is refused
-CAPS_V2 = (
+#: v2's limits, each a static's largest value and the reason a binding past it is refused
+LIMITS_V2 = (
     ("K", 3, "a fourth round is 32 more word rounds, about 15M ANDs at p1024, past a masked unit's 2^26 cells at every depth"),
     ("ROWS", 16, "more sketch rows take the room the tree levels use: 64 are about 2.9M more cells"),
     ("LEAF", PER_LEAF, "a receipt leaf holds 16 receipts"),
@@ -696,7 +696,7 @@ def _check_opening_v2(S) -> None:
         raise ValueError(f"BlockOpeningCheck_v2: {e}") from None
     if S.MASKED not in (0, 1):
         raise ValueError(f"BlockOpeningCheck_v2: MASKED is 0 or 1, not {S.MASKED!r}")
-    for k, top, why in CAPS_V2:
+    for k, top, why in LIMITS_V2:
         v, low = getattr(S, k), 2 if k == "K" else 1
         if isinstance(v, bool) or not isinstance(v, int) or not low <= v <= top:
             past = f": {why}" if isinstance(v, int) and v > top else ""
@@ -797,7 +797,7 @@ def _opening_body_v2(B, S, *colls):
 BlockOpeningCheckV2 = CompositeDefinition(
     "BlockOpeningCheck", 2, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DP", "DV"), _opening_signature_v2,
     _opening_body_v2, conformance="exact-model-tested",
-    doc="A drawn receipt's opening under the identity plan (remote_bandwidth §6 checks 1-3 and 5), u32 positions: the receipt "
+    doc="A sampled receipt's opening under the identity plan (PoUB §6 checks 1-3 and 5), u32 positions: the receipt "
         "leaf on its path to the pass's root at pos >> 4 and pos = j (receipt-path); every word of block below p and decoding "
         "to payload under the codec key at j, with b_j(c_a) of the payload's own digest and coin if bound (codec); the payload "
         "on its path to the payload root or its append's and, if bound, to the value commitment (payload-path); the block's "
