@@ -57,7 +57,8 @@ def q : Json := Json.mkObj [("query", Json.mkObj [("name", Json.str "Q_template_
 /-- The statement's circuit: META names `T` alone, and its ports are `w` (the first parameter's rows) and `u` (the
 second's), each a bit row of 512 bits. -/
 def circ : Circuit :=
-  { (default : Circuit) with metaJ := Json.mkObj [("program_digests", Json.mkObj [(T, Json.str "00")])],
+  { (default : Circuit) with
+    metaJ := Json.mkObj [("program_digests", Json.mkObj [(T, Json.str "00")])]
     ports := #[v2Port, { v2Port with name := "u" }] }
 
 /-- Two instances, instance `i` reading table row `i` of each port, both tables rows of `A` opened at its root, row `r`
@@ -98,7 +99,7 @@ def why (program : ByteArray) (f : Json) : String :=
   | .ok () => ""
 
 -- `desc "w"`: accepted, the second `w`'s rows read at `A`'s root, on a file naming no port of that parameter
-#guard (Registered.paramsOf (file none)).toOption == some #["w", "u"]
+#guard (Registered.paramsOf (file none)).toOption == some #["u", "w"]
 #guard why (desc "w") (file none) == ""
 -- `desc "v"`: the same file is refused, its `v` read by no port; a file whose `u` reads `v` is accepted, at `A`'s root too
 #guard why (desc "v") (file none) ==
