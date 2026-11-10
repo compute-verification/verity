@@ -5,8 +5,9 @@
 # verity/core/devices/certifier. `tools/move/rename.py --map tools/move/period_net_map.toml` renames them in one move.
 # The word becomes the Glossary's for what it denotes: a window that is an execution phase -> "execution phase"; the
 # link-window -> "transfer blocks" (an execution phase's transfer blocks); a monitoring period's "period" -> "monitoring
-# period"; a certifier's 32-byte session id -> "attachment". Three words name a declaration of another area too, which
-# this move renames with ours, in the same sense: `windowCheck` (RemoteAudit.Verifier (memory-accounting)), `windowsOn` (CoreOnsite (soundness)), `windowOf` (FlockSoundness.KeyedDraw (proofs) and PouwCheck.CreditDifftest (compute-accounting)).
+# period"; a certifier's 32-byte session id -> "attachment". Two words name a declaration of another area too, which
+# this move renames with ours, in the same sense: `windowsOn` (CoreOnsite (soundness)) and `windowOf`
+# (FlockSoundness.KeyedDraw (proofs)). Where the same word names something else, [keep_in] keeps it.
 # `NetTiming.WindowCharge.Window` takes the code's new name with it, so that the refactor that makes it a use of
 # `NetworkCertifier.WindowCharge.Window` finds one name.
 
@@ -92,7 +93,8 @@
 [[words_in]]
 # One execution phase's `Window`: the certifier's code (`NetworkCertifier.WindowCharge`), its reference in Security
 # (`NetTiming.WindowCharge`) and the network check's (`NetworkCheck.Period`), the word alone, in their declaring files
-# and the files that spell them. PoUW's `PouwCheck.Window` is compute-accounting's to move.
+# and the files that spell them. PoUW's `PouwCheck.Window` and its `windowOf`s are compute-accounting's to move, with their
+# Python mirrors.
 files = [
     "Security/Definitions/NetworkCertifier/WindowCharge.lean",
     "Security/Proofs/NetworkCertifier/Code.lean",
@@ -135,3 +137,10 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 # the map again on its move changes nothing (`stage.py`'s rerun).
 strings = ["MonitoringPeriodLeaksChecked", "MonitoringPeriodAdaptive", "MonitoringPeriodChannel", "MonitoringPeriodEscapes"]
 
+[keep_in]
+# The words where another area's declaration holds them in another sense: PoUW's `windowOf`s, compute-accounting's to
+# move with their Python mirrors, and PoUB's `RemoteAudit.Verifier.windowCheck`, whose window is the span one challenge
+# covers, not an execution phase.
+"verity/core/protocols/pouw/**" = ["windowOf"]
+"verity/core/protocols/remote_bandwidth/**" = ["windowCheck"]
+"Security/Properties/Accounting/Remote/Live.lean" = ["windowCheck"]
