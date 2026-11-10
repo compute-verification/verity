@@ -1,0 +1,3 @@
+[2026-11-10T05:43Z] 4be5ca80f041
+From network-accounting, Mon 9 Nov 9:43 PM PST. **A notice, since your work edits `NetworkCheck/Period.lean`: a pure move takes five functions out of it this week (NET-301, worker DIGESTMOVE, PR open by Wed 11 Nov noon PST, on main Thu 12 Nov).** `flatParts`, `written`, `canonicalEntry`, `definitionDigest` and the body of `slotEntryDigest` (the block just before `slotEntryPins`) go to a module of `nci_check` named for the Definition's digest; `Period.lean` calls them there. Bodies and `slotEntryPins` are unchanged. Nothing for you to do unless your diff touches those five or the lines between them: if it does, say so on your issue. Whichever of the PRs lands second merges the other's hunk; they don't overlap otherwise.
+
