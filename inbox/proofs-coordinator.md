@@ -34681,3 +34681,41 @@ research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as
 **How the figures were read.** Seconds are `release.json`'s `ready_ms` less `release-wall.tsv`'s start, a part. CPU-seconds and RSS are the harness's 1 s process samples (`resources.jsonl`), as ZKSIZE read 2bb7's; my own sampler in the run (`out/memguard.tsv`) puts the peak at 95.5 GiB, the same second. [run]
 
 **Nothing is left for the yes or no, and I launched nothing else.** A second sample, or PoUB's own inner statement, would be a new run.
+
+## CONCRETE, Tue 10 Nov 23:56Z: the move compiles on a node and #8764 is open, unmarked; but lean's `cursor/lean-remote-merge-chain-fc8d` holds the same cut for the remote merge and the two conflict, so which one lands is yours and lean's to say before a mark
+
+**The answer.** `cursor/proofs-concrete-leaves-1ca7` at `a6723b6558ca81bd57a79e935e4c3e6e6f5dc010` compiles: every one of the 227 modules at or above its nine files. [#8764](https://github.com/compute-verification/verity/pull/8764) is open on it, not marked. Its suites pass and its records run is in flight, ETA about 01:00Z. Do not mark it before you read "The same cut, twice".
+
+**The compile** [run: `r20261110-220813-2263`, cpu-1].
+- Step 1, `lean_changed.py --try Security/Proofs/Flock.lean --siblings`: "Build completed successfully (12342 jobs)", then `lean exit 0 in 2909 s` on the root. No Lean error, so the fallback to the first commit never ran.
+- Step 2, `--build` of the four modules outside `Proofs.Flock`: "Build completed successfully (11722 jobs)", exit 0 at 23:46:55Z.
+- The log against the import graph: 207 of the 227 compiled in step 1, 19 in step 2, and the root was elaborated.
+- The run's status reads `failed 1`. That is the sibling check alone: its stub stopped at `unknown module prefix 'Base'` with 3,470 modules imported, before it compared a name. No module of `main` or the branch is named `Base`. [guess] A build of another branch left in slot tree `build-0`; LEAN-248, in review, is that fix. The records run builds the roots, where a clash would show.
+
+**What it measures** [run for the times, read for the graphs]. That node ran 1.50 times slower than eca8's.
+- `File` 902 s, `Public` 262 s, `Trace` 770 s (654, 182 and 542 on eca8's): unchanged by the move, as said.
+- Longest chain at this run's times: 69.3 min under `main`'s imports, 37.3 under the branch's. At eca8's: 47.9 and 25.6 (my 47.8 and 25.5 of 21:36Z, with the root counted).
+- On the branch the chain through `File` is 25.0 min and a chain of about 218 general modules is 25.6 (heaviest `Soundness.Refine.Setup`, 104 s). So a further cut of the three alone no longer shortens a build.
+
+**The PR** [run]. #8764, `Lane proofs`, `Goal proofs/proof-check-fast`, `Refs CI-485`. `open` warned twice that CI-485 carries no goal label. I named CI-485 because the ask and your answers are there; `research queue link 8764 --issue KEY` changes it.
+
+**Runs at the head** [run]. `main` was still `2b869ed35db5` at 23:33Z, so the head holds its tip.
+- Suites, `r20261110-233605-6980`: "4 suites: 4 passed (0 cached), 0 failed" (`repository` 279, `verity-graph` 181, `pouw` 1,843, `ml/circuits/ops` 946).
+- Records, `r20261110-233505-c5f4` on cpu-7 (`--records Security/Proofs --update`): took its slot at 23:35Z (22 cores, slot tree `build-2`), cap 01:35Z. **ETA about 01:00Z** [guess]. I post its printout here and on the PR. If it prints a changed guarantee record I stop and say so.
+- [guess] No record moves. One doubt: lean's hand-over of its cut lists "the VStarNets `reads` digest" (LEAN-190, 23:30Z), and my split of `VStarNets.lean` is close to theirs.
+
+**The same cut, twice** [read and run: git, LEAN-190, the Goals page].
+- **Where.** `cursor/lean-remote-merge-chain-fc8d` at `ad3fb8e7419f`, lean's worker HELDINLINE, on the remote merge's Lean branch: `040d74b420`, `9464d2740d`, `505ca08879` (15:53Z to 15:57Z today), then two imports for `EndToEndRegistered/Nontrivial.lean` (`e66a3ffa30`, `9a4b388a88`).
+- **I did not know of it.** Neither lean's 21:11Z ask nor my brief names it. The goal `proofs/proof-check-fast` does: "A worker of @lean's has written that change on the remote merge's Lean branch. It is not compiled yet, and is handed to the merge by Wed noon once it builds".
+- **Same.** Its `File.lean` and `Public.lean` are my blobs, byte for byte (`de6ab741a8`, `6f40a3948d`). Its longest chain is 25.7 min at eca8's times, by the same script.
+- **Different.** It splits the other way: `Names.lean` keeps the text lemmas and drops the heavy imports, a new `UnitName.lean` takes `file_unitName`, `hUnitName_of` and `hOpenName_of`, and `Setup`, `OutCols`, `PartKeys` and `Record/Reg` import it. A new `VStarNetsStaged.lean` takes the staged half. Its `Names` loads 22 Proofs modules, mine 614.
+- **Its state.** Not compiled yet. Its build `r20261110-202347-04df` (source `ad3fb8e7419f`, the same four outside modules as mine) waited for a slot on cpu-2 from 20:24Z; at 23:55Z `research status` shows it running. It is in neither `cursor/lean-remote-merge-fc8d` (`f63a7b76334d`) nor `cursor/lean-remote-merge-main-fc8d` (`97876e5336e1`).
+- **Conflict** [run: `git merge-tree`]. Mine against it: `Names.lean` and `VStarNets.lean`. Mine merges cleanly into those two branches of the remote merge. Text only; nothing is built on a merge.
+- **Three ways, yours and lean's to pick** [guess on each cost]:
+  1. #8764 lands on `main`, the remote merge takes `main`, and lean drops its three commits. Compiled today; costs lean a rebase of its hand-over.
+  2. #8764 is closed and lean's cut arrives with the remote merge. Nothing on `main` until then.
+  3. `main` takes lean's split instead of mine, so both sides hold one text. [run] Its five commits cherry-pick onto `main` `2b869ed35db5` with no conflict, and 13 of the 15 files then equal lean's tree (`Claims.lean` and `Record/Reg.lean` differ by the merge's other edits). I can push that to #8764's branch as new commits and compile it: one try, about 50 min. Say the word; I do not do it unasked.
+
+**Two tool defects, as friction notes** [run]. `proofs/20261110T2353Z-friction-siblings-stale-olean-base` (recurs). `proofs/20261110T2353Z-friction-lean-build-after-try-recompiles`: step 2 began with "4 module(s) half-written by an earlier build, rebuilt" and compiled 1,877 modules again that step 1 had just built, 39 minutes of the slot for 19 modules of work.
+
+**Next.** The records run's printout, here and on the PR. Then NET-313's reading, due Wed 20:00Z.
