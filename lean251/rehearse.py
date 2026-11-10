@@ -14,6 +14,9 @@
         `git merge-tree --merge-base=MOVED_ANCESTOR MOVED_OURS MOVED_BASE`, counted against the same merge unmoved. With
         many merge bases the ancestor is the one `git merge` itself builds (`virtual_base`), and also the one
         `git merge-base` names.
+    rehearse.py movesfirst-staged NAME OURS BASE STAGED
+        the same for a window someone staged: every move of BASE..STAGED, word map or path map, each with its own base's
+        scripts, on OURS and on the ancestor, then the merge of the moved OURS with STAGED over the moved ancestor.
 
 Everything is written to $OUT as it is known, so a run that times out keeps what it had.
 """
@@ -115,6 +118,31 @@ def moves_on(commit: str, base: str, maps: list[str]) -> dict:
     return {"status": "made", "commit": tip, "tree": RS.tree_of(tip, None), "steps": steps}
 
 
+def apply_moves(commit: str, moves: list[tuple[str, str, tuple[str, ...]]]) -> dict:
+    """Each staged move's script and arguments (`restack.moves_on`'s rows) run on `commit` and then on the one before, each
+    with the scripts of that move's own base, as `restack.py` runs them: the last commit, or the first that made none."""
+    steps, tip = [], commit
+    for move, script, args in moves:
+        t0 = time.time()
+        base = RS.move_base(move, None)
+        rec = {"on": tip, "move": move, "scripts_of": base, "script": script, "args": list(args)}
+        RS.SCRIPT, RS.SCRIPT_ARGS = script, tuple(args)
+        try:
+            tree, restored, output = RS.run_script(tip, base, sys.executable, None)
+        except (RS.ScriptFailed, SystemExit, Exception) as e:  # noqa: BLE001
+            rec.update(status="script-failed" if isinstance(e, RS.ScriptFailed) else "refused", error=str(e) or repr(e),
+                       minutes=minutes(t0))
+            steps.append(rec)
+            say(f"  {' '.join(args)} on {tip[:12]}: {rec['status']} ({rec['minutes']} min)")
+            return {"status": rec["status"], "steps": steps, "error": rec["error"], "reached": tip}
+        if tree != RS.tree_of(tip, None):
+            tip = RS.commit_tree(tree, [tip], f"LEAN-251: {script} {' '.join(args)} with {base[:12]}'s scripts\n", None)
+        rec.update(status="made", commit=tip, tree=tree, restored=restored, output=output, minutes=minutes(t0))
+        steps.append(rec)
+        say(f"  {' '.join(args)} on {rec['on'][:12]}: made ({rec['minutes']} min)")
+    return {"status": "made", "commit": tip, "tree": RS.tree_of(tip, None), "steps": steps}
+
+
 def conflicts(ours: str, theirs: str, base: str | None = None) -> dict:
     t0 = time.time()
     try:
@@ -190,7 +218,7 @@ def do_stage(branch: str, base: str, maps: list[str]) -> int:
     p = subprocess.run([sys.executable, "tools/move/stage.py", *maps, "--base", base, "--no-fetch", "--branch", branch,
                         "--bundle", os.path.join(OUT, "move.bundle"), "--certificate", os.path.join(OUT, "cert.json")],
                        capture_output=True, text=True)
-    rec = {"environment": environment(), "base": RS.rev(base, None), "maps": maps, "branch": branch, "rc": p.returncode,
+    rec = {"environment": environment(), "base": base, "maps": maps, "branch": branch, "rc": p.returncode,
            "stdout": p.stdout[-6000:], "stderr": p.stderr[-6000:], "minutes": minutes(t0)}
     if p.returncode == 0:
         rec["head"] = RS.rev(branch, None)
@@ -313,6 +341,50 @@ def do_movesfirst(name: str, ours: str, base: str, maps: list[str]) -> int:
     return 0
 
 
+def do_movesfirst_staged(name: str, ours: str, base: str, staged: str) -> int:
+    """The moves-first merge of OURS with a staged window BASE..STAGED: the window's moves on OURS and on the ancestor git
+    builds for OURS and BASE, then the merge of the moved OURS with STAGED over the moved ancestor."""
+    ours, base, staged = RS.rev(ours, None), RS.rev(base, None), RS.rev(staged, None)
+    moves = RS.moves_on(staged, base, None)
+    res: dict = {"name": name, "ours": ours, "base": base, "staged": staged, "environment": environment(),
+                 "moves": [{"move": m, "script": s, "args": list(a)} for m, s, a in moves]}
+
+    def keep() -> None:
+        save(f"movesfirst-{name}.json", res)
+
+    say(f"{name}: {len(moves)} staged moves; on ours {ours[:12]}")
+    res["ours_moved"] = apply_moves(ours, moves)
+    keep()
+    res["merge_bases"] = len(RS.out("merge-base", "--all", ours, base).split())
+    say(f"{name}: the ancestor git merge builds ({res['merge_bases']} merge bases)")
+    with tempfile.TemporaryDirectory(prefix="lean251-") as tmp:
+        try:
+            res["virtual"] = virtual_base(ours, base, tmp)
+        except Exception as e:  # noqa: BLE001
+            res["virtual"] = {"error": repr(e)}
+    keep()
+    if v := res["virtual"].get("commit"):
+        res["unmoved_virtual"] = conflicts(ours, base, v)
+        keep()
+        if res["ours_moved"]["status"] == "made":
+            res["virtual_moved"] = apply_moves(v, moves)
+            if res["virtual_moved"]["status"] == "made":
+                res["moved_virtual"] = conflicts(res["ours_moved"]["commit"], staged, res["virtual_moved"]["commit"])
+                if "tree" in res["moved_virtual"]:
+                    res["bundle"] = bundle(f"lean251-{name}-movesfirst",
+                                           RS.commit_tree(res["moved_virtual"]["tree"], [res["ours_moved"]["commit"], staged],
+                                                          "LEAN-251: the moves-first merge, conflicts as markers\n", None),
+                                           [ours, staged], f"movesfirst-{name}.bundle")
+            keep()
+    say(f"{name}: the plain merge of ours, unmoved, with the staged head")
+    res["plain_staged"] = conflicts(ours, staged)
+    keep()
+    for k in ("unmoved_virtual", "moved_virtual", "plain_staged"):
+        if k in res:
+            say(f"{name}: {k}: {res[k].get('count', res[k].get('error'))} files in conflict ({res[k].get('minutes')} min)")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     os.environ.update(IDENT)
     os.makedirs(OUT, exist_ok=True)
@@ -327,6 +399,8 @@ def main(argv: list[str]) -> int:
     if mode == "movesfirst":
         base, maps = parse_pair(argv[3])
         return do_movesfirst(argv[1], argv[2], base, maps)
+    if mode == "movesfirst-staged":
+        return do_movesfirst_staged(argv[1], argv[2], argv[3], argv[4])
     raise SystemExit(__doc__)
 
 
