@@ -1628,6 +1628,11 @@
         "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean",
         "Security/Properties/RemoteAudit/Subprotocol.lean": "Security/Properties/Accounting/Remote/Subprotocol.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
     }
   ]
 }
