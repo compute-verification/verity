@@ -99,6 +99,11 @@ def graded(runs, honest, config=CONFIG, **kw) -> dict:
     return G.grade(config, registry(), runs, honest, **kw)
 
 
+def reach(at: int, seed: int, n: int = 8) -> dict:
+    """A final job whose seed first reaches the gain at checkpoint `at` (from 1) of `n`."""
+    return job([OVER] * (at - 1) + [UNDER] * (n - at + 1), seed)
+
+
 def test_the_fit_reads_the_frontier_of_one_data_and_recovers_its_parameters():
     """Four starts on L(C) = E + A·C^(−γ) give it back; the start off the frontier (more compute, a worse loss) and the
     other data's are not read; under five points the fit is provisional, and under three there is none. A target is
@@ -126,6 +131,46 @@ def test_a_route_that_reaches_the_gain_is_priced_against_the_honest_run():
     assert s["p"]["honest"] == s["p"]["any"]
     assert s["p"]["honest"]["p"] == pytest.approx(3.5 / 2) and s["p"]["honest"]["range"] == pytest.approx([1.5, 2.0])
     assert s["attack"]["splits"]["final"]["C"]["sd"] == pytest.approx(STEP_GATES * math.sqrt(0.5))
+
+
+def test_the_range_of_p_is_least_c_over_greatest_h_to_greatest_c_over_least_h():
+    """Seeds that differ on both sides: the attack's reach at 5 and 7 steps and the honest config's at 2 and 4, so
+    the range runs from 5/4 to 7/2 about p = 2, and pairing least with least would give 5/2 to 7/4."""
+    s = graded([reach(5, 0), reach(7, 1)], [reach(2, 0), reach(4, 1)])
+    C, H = s["attack"]["splits"]["final"]["C"], s["H"]["honest"]["C"]
+    assert (C["min"], C["max"]) == pytest.approx((5 / 6 * C["mean"], 7 / 6 * C["mean"])) and H["n"] == 2
+    assert (H["min"], H["max"]) == pytest.approx((2 / 3 * H["mean"], 4 / 3 * H["mean"]))
+    p = s["p"]["honest"]
+    assert p["p"] == pytest.approx(2.0) and p["range"] == pytest.approx([5 / 4, 7 / 2])
+    assert p["range"][0] < p["p"] < p["range"][1]
+
+
+def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
+    """The run at S is the mean |C| over the final seeds times ρ: not their least, their greatest, or the search
+    record's |C| that ρ was read at."""
+    s = graded([reach(5, 0), reach(7, 1), traced([OVER, UNDER, UNDER])], [reach(2, 0), reach(4, 1)])
+    C, rho = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
+    assert C["min"] < C["mean"] < C["max"] and rho > 1
+    per_and = gates.per_and("gemm/bf16")
+    assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * rho / per_and)
+    for other in (C["min"], C["max"], s["rho"]["C_gates"]):
+        assert s["per_period"]["run_and_gates"] != pytest.approx(other * rho / per_and)
+    assert s["S"]["honest"] == pytest.approx(2.0 * rho)
+
+
+def test_rho_reads_the_first_planned_search_seed():
+    """With two search records, ρ is read on the seed the config's `seeds.search` names first, whatever order the
+    records come in."""
+    early, late = traced([OVER, UNDER, UNDER]), traced([OVER, OVER, OVER, UNDER], seed=1)
+    runs, ref = [reach(5, 0), reach(7, 1), early, late], [reach(2, 0)]
+    first = graded(runs, ref, CONFIG | {"seeds": {"search": [0, 1], "final": [0, 1]}})
+    second = graded(runs, ref, CONFIG | {"seeds": {"search": [1, 0], "final": [0, 1]}})
+    assert (first["rho"]["seed"], first["rho"]["checkpoint_step"]) == (0, 2 * PER - 1)
+    assert (second["rho"]["seed"], second["rho"]["checkpoint_step"]) == (1, 4 * PER - 1)
+    assert first["rho"]["C_gates"] < second["rho"]["C_gates"] and first["rho"]["rho"] != second["rho"]["rho"]
+    swapped = graded([reach(5, 0), reach(7, 1), late, early], ref,
+                     CONFIG | {"seeds": {"search": [0, 1], "final": [0, 1]}})
+    assert swapped["rho"]["seed"] == 0 and swapped["rho"]["rho"] == first["rho"]["rho"]
 
 
 def test_a_route_that_does_not_reach_the_gain_has_no_p_and_no_s():
