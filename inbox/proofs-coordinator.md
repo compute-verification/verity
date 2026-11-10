@@ -32888,3 +32888,58 @@ Read your 20:35Z entry and CI-489 to its 20:36Z comment [read]. Neither PR is re
 **#8438's body** has `0ccc`'s verdict, the reproduction and the fix branch in place of the "likely, not confirmed" lines. Friction note `lanes/proofs/20261110T2017Z-friction-spot-proved-disk-floor.md` is updated; checkpoint `lanes/proofs/20261110T2050Z-checkpoint-benchcross.md`.
 
 **Runs still out:** `r20261110-204235-e083` (#8523) and `r20261110-204238-384b` (#8553), both about 22:15Z [guess]; `r20261110-200916-78bc` (#8197), about 21:15Z [guess]. The 22:15Z guess rests on cpu-6's line: 8 slots, all held, 17 waiting ahead, and a quick tier holding a slot for 13 to 35 minutes [run: the slot listing in `e083`'s log]. When resumed I read the three, put each in its body, and write "ready to mark #8523 at SHA, #8553 at SHA" only if both pass and `main` is still `5482988e3496`, or with a carry or a new run if it has moved. I end my turn.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 20:52Z: the refusal is on `cursor/proofs-interior-names-562b` at `59aed63254`; this is a second gap, not 19:38Z's, and it sits under `SpotFlock.Addresses`, open in `SpotKSTwo` and `SpotExfilTwo`; `45ff` passed
+
+**Item 3: a second gap.**
+- **19:38Z's gap** [read] is across audits. `Security/Definitions/Claims/SamplingGeneric.lean:575` reads `noncomputable def regVal (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)`. It takes the prover's whole tape, so when audits overlap, another audit's coins can reach this one's wrong set. It sits under network-accounting's composition premise `NetTiming.PeriodAdaptive` (`Security/Definitions/NetworkCertifier/Checked.lean:164`), and it needs a lemma (PRF-516), not code.
+- **This gap** [read] is inside one audit, in round 2's code. One name has a value in each registration, and the interior's value, registered after the first stage's coins, is read in place of round 1's. That gives a gate's value two addresses, which is what the premise `SpotFlock.Addresses` rules out. `Security/Proofs/Flock/SpotFlock/SlotsAt.lean:320–322` reads: "**Every gate's value has one address**, fixed before the run, that holds at every accepted run's checked unit that needs the gate (`CheckedRun.AddressHolds`). The premise `SlotsAt` rests on (the module's docstring)."
+- **Where the lock lists it** [read], in `Security/lean-audit.json`:
+  - `Flock.SecurityProofs.SpotKSTwo`: `"domain": ["SpotFlock.Built"]`, `"open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"]`.
+  - `Flock.SecurityProofs.SpotExfilTwo`: `"open": ["Claims.Sampling.InScopeTwo", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"]`.
+- **What the refusal doesn't do** [guess]: it doesn't prove `Addresses`. One value under two names still passes a name check, for example a writer's output that is both wired (the interior's port) and returned (round 1's port). `Security/Proofs/Flock/SamplingGeneric/Guarantees.lean:24–25` names that case: "`Addresses` fails at a registration that commits a value one proof block writes and another reads in two trees."
+
+**The refusal.**
+- **The branch** [run]: `cursor/proofs-interior-names-562b`, cut from `origin/main` at `5482988e34`.
+  - `dbb7fb10c1` holds the refusal.
+  - `59aed63254` fixes a parse error in one example `#guard`.
+  - There is no PR, and nothing went to #8486 or #8458.
+- **What it refuses** [read, my diff]:
+  - The code `second-interior-names` fires when a value the interior record registers (an entry of its `registered`) has a name that round 1's record also has, as a port (`Record.byPort`) or as a registered value (`registeredEntry`).
+  - It is `SecondStage.namesOk` in Lean and `second_stage.names_ok` in Python.
+  - It is the middle step of `interiorFailures`, after `second-interior-order` and before `second-schedule`. So it runs before any statement, in every branch of `check`.
+  - It only refuses; no form is newly accepted.
+  - In Lean, `interiorFailures_names` states it, and `interiorFailures_nil` now reaches one level deeper. `check_ok` is unchanged.
+- **What flips on `main`** [read]: two cases.
+  - In `SecondStageExamples.lean`, the run where both registrations register `w2` (`exBothRegistering`) now gets `second-interior-names`. Before, it passed.
+  - The difftest's `_read_linked` registered the link's name `BX` in the interior beside round 1's port `BX`. It now drops round 1's root of that name, so its test still covers a value only the interior registers. With the root kept (`kept=True`), it is refused.
+- **Honest callers** [read]: none registers an interior value.
+  - The toy's interior goes through `toy.write`, which passes `registered=` (header reads) and not `entries`. `rows.registration`'s `entries` defaults to `()`.
+  - In vLLM, `rg -n "entries=" integrations/vllm/verity_vllm` gives only `records/query_checks.py:45` (`alias_entries=`) and `observe/fold/patterns/dsv4_cache.py:68` (`entries=list(entries)[:8]`). Neither is a registration.
+- **The negative case** [read, my diff]:
+  - In the difftest, `_shadowing` joins `SECOND_CHANGES`; it has the interior register a value under one of round 1's four names (`BOUT`, `BX`, `w`, `w2`).
+  - `test_round_two_refuses_an_interior_that_registers_a_name_round_one_has` replays each case through Lean against Python. It expects `["second-interior-names"]`, and `["second-interior-names", "second-read"]` for the kept link read at the boundary port.
+  - In Lean, `#guard`s cover `namesOk` on its own and inside `check`, at a shared `w2` and at round 1's port `bx`.
+
+**What ran.**
+- **Locally** [run]:
+  - ruff on the two Python files: passed.
+  - `verity/core/protocols/spot/tests/test_two_stage.py` on the branch's sources: 93 passed in 192 s.
+- **`r20261110-202602-441d`**, `verity lean try SecondStage.lean --siblings` at `dbb7fb10c1` [run]:
+  - "lean exit 0 in 5 s".
+  - "axiom probe: none of its 26 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `interiorFailures_names` is among them.
+  - "siblings: no built module of its package that doesn't import Spot.SecondStage declares a name it does". Seven unbuilt siblings were unchecked (`Spot.Bits` through `Spot.Supplied`), and `rg` finds none of them declaring a `SecondStage` name (exit 1).
+- **`r20261110-202601-ecf8`**, `verity lean try SecondStageExamples.lean` at `dbb7fb10c1` [run]: it failed with `SecondStageExamples.lean:342:119: error: unexpected token '('; expected '}'`. My `#guard` put a structure instance's argument on its own line. That was the file's only error. Only `Spot.lean` imports the examples, not `Spot.Pieces`, so the difftest's build was unaffected.
+- **`r20261110-204742-992f`**, the same try at `59aed63254` [run]: "lean exit 0 in 14 s" and "axiom probe: no theorems in it". Every `#guard` holds, the new ones included, since a false one is an error. I cancelled the first relaunch, `r20261110-204117-5b96`, before it started, because its line was about 105 min.
+- **Running, not waited for** [run]: `r20261110-202503-ceff`.
+  - It runs the suites `verity-core-sampled-proofs` (the difftest, with `_shadowing` and the new named test), `verity/core/protocols/spot` and `benchmarks/two_stage`.
+  - It runs at `dbb7fb10c1`. That has the same Python and difftest as `59aed63254`; only the examples differ, and no suite builds them.
+  - It has held slot r9 on vy-nebius-cpu-1 since 20:27Z, at a peak of 8.6 GiB. Its 90-min cap ends it by 21:57Z.
+  - I cancelled its first launch, `r20261110-202339-07e8`, because at 32 GB its line was about 56 min.
+  - Its verdict comes from `research fetch r20261110-202503-ceff`, and I'll report it when I'm next woken.
+
+**The rest.**
+- **`45ff`** [run]: `research fetch r20261110-190742-45ff` at 20:28Z gave "done rc=0 class=SUCCESS result=absent". It passed. The count of 14,567 passed is from its stdout log; I read that in the 19:55Z turn, and your 20:14Z reading agrees.
+- **Records** [guess]: a guarantee whose record reads `SecondStage.check` through `SpotFlock.code` may get a new record. I launched no records run; that waits for a PR.
+- **PRF-516 and PRF-517**: I would take PRF-516, the `regVal` lemma, because it is the gap I named at 19:38Z. Your 20:35Z asks, including a date for each with the lemmas and files, come in the Wed 12:00Z entry.
+- **Still mine when the inputs come**: #8458's merge once you write BASE, and the stager's step (3) once the law is named.
