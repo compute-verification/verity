@@ -18,7 +18,8 @@
                      [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
-                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
+                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target,
+                                                   even when the store pass fails (exit 3; `error` in the JSON)
                                                    --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
@@ -365,17 +366,25 @@ def cmd_evict(argv: list[str]) -> int:
     min_bytes = int(ns.min_mb * 2**20)
     say = None if ns.json else (lambda s: print(s, flush=True))
     keep = frozenset(k for f in ns.keep_registry for k in json.loads(Path(f).read_text()) if k.startswith("art:"))
-    rep: dict = {"store": EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
-                                         keep=keep, log=say)}
-    if ns.runs:
-        from ..runs import runs_root  # noqa: PLC0415
+    rep: dict = {"store": {"evicted_bytes": 0, "reached_target": False}}
+    try:
+        rep["store"] = EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
+                                      keep=keep, log=say)
+        if ns.runs:
+            from ..runs import runs_root  # noqa: PLC0415
 
-        rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+            rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
+                                        quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+    except Exception as e:  # noqa: BLE001  the source-tree pass reads no store: a store this user can't open must not stop it
+        rep["error"] = f"store pass: {type(e).__name__}: {e}"
+        if not ns.json:
+            print(f"research data evict: {rep['error']}", file=sys.stderr)
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
         _dump(rep)
+    if rep.get("error"):
+        return 3
     last = rep.get("runs") or rep["store"]
     return 0 if last["reached_target"] else 1
 
@@ -431,7 +440,7 @@ def cmd_select(argv: list[str]) -> int:
     `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
-    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
@@ -493,7 +502,20 @@ def cmd_snapshot(argv: list[str]) -> int:
     return 0
 
 
+def _hide_tokens(v):
+    """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
+    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    if isinstance(v, dict):
+        return {k: _hide_tokens(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_hide_tokens(x) for x in v]
+    if isinstance(v, str) and v.startswith("eyJ") and v.count(".") == 2:
+        return f"<token, {len(v)} chars>"
+    return v
+
+
 def _fmt_label_value(v) -> str:
+    v = _hide_tokens(v)
     return v if isinstance(v, str) else json.dumps(v)
 
 
@@ -544,7 +566,7 @@ def cmd_labels(argv: list[str]) -> int:
         _dump([lab.to_doc() for lab in labs])
         return 0
     for lab in labs:
-        print(f"{lab.ts}  {lab.key}={json.dumps(lab.value) if not isinstance(lab.value, str) else lab.value}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
+        print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
     if not labs:
         print(f"no labels on {ns.target}", file=sys.stderr)
     return 0

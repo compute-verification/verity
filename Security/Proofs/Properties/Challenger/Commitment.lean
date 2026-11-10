@@ -20,7 +20,7 @@ with one form are one (`canon_inj`).
 namespace Properties.Challenger.Commitment
 
 open Lean (Json)
-open SampledProofs.Challenger (LiveCommitment familiesJson)
+open Spot.Challenger (LiveCommitment familiesJson)
 open Properties.Pouw.LiveSalt.Canon (canon_obj canon_nat canon_families canon_str famStr canonStr_split nat_split
   fam_split)
 

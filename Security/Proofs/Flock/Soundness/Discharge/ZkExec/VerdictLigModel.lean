@@ -44,14 +44,14 @@ theorem foldRoundsZK_val {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProo
     ∀ (k j a : ℕ) (s : ZkSession.LinK 𝕂 np) (q : ZkSession.QuadL 𝕂 np) (cs : List (Array F128)),
       cs.length = k → (∀ c ∈ cs, c.size = 2) →
       ∃ s', Plays fOf (ZkSession.foldRoundsZK execArith P k j s q) (kMsgs p a (k - 1)) cs
-        (cs.map fun c => execArith.ofLimbs (fOf c[0]!) (fOf c[1]!), s')
+        (cs.map fun c => execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!), s')
   | 0, j, a, s, q, cs, hl, _ => by
       rw [List.eq_nil_of_length_eq_zero hl, ZkSession.foldRoundsZK, show kMsgs p a (0 - 1) = [] by simp [kMsgs]]
       exact ⟨s, Plays.pure _⟩
   | 1, j, a, s, q, c :: cs, hl, hs => by
       rw [List.eq_nil_of_length_eq_zero (by simpa using hl : cs.length = 0), ZkSession.foldRoundsZK,
         show kMsgs p a (1 - 1) = [] by simp [kMsgs]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c (hs c (by simp)) (by omega)) (Plays.pure _)
           (by simp) (by simp)
@@ -59,14 +59,14 @@ theorem foldRoundsZK_val {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProo
   | k + 2, j, a, s, q, c :: cs, hl, hs => by
       rw [ZkSession.foldRoundsZK, show kMsgs p a (k + 2 - 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) (k + 1 - 1) by
         simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c (hs c (by simp)) (by omega)) (Plays.pure _)
           (by simp) (by simp)
       obtain ⟨s', ih⟩ := foldRoundsZK_val P p (k + 1) (j + 1) (a + 1)
-        ((q.eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!))))
+        ((q.eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!))))
         (ZkSession.fromMsgL (ZkSession.unmask execArith P (j + 1) (gOf p.messages[a]!.1, gOf p.messages[a]!.2))
-          (q.eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))) cs (by simpa using hl)
+          (q.eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))) cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])
       refine ⟨s', Plays.bind' hk ?_ rfl rfl⟩
       refine Plays.bind' (Plays.recv _ (gOf p.messages[a]!.1, gOf p.messages[a]!.2)) ?_ rfl rfl
@@ -78,7 +78,7 @@ theorem drawKs_two (c₀ c₁ : Array F128) (h₀ : c₀.size = 2) (h₁ : c₁.
       (Fin.cons (execArith.ofLimbs (fOf c₀[0]!) (fOf c₀[1]!))
         (Fin.cons (execArith.ofLimbs (fOf c₁[0]!) (fOf c₁[1]!)) Fin.elim0)) := by
   have hk : ∀ c : Array F128, c.size = 2 →
-      Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := fun c hc => by
+      Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := fun c hc => by
     unfold Model.drawK
     exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
   rw [Model.drawKs, Model.drawKs, Model.drawKs]

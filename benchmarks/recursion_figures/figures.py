@@ -5,7 +5,7 @@
 
 The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
 stay private, and scales the measurement over them: its cost, its knowledge-soundness error
-and its stop-leak bound, for one window and pooled over the monitoring periods (`wipe_monitoring.PERIODS`: a week, a month,
+and its stop-leak bound, for one window and pooled over the monitoring periods (`reporting.PERIODS`: a week, a month,
 a year), over one datacenter (``benchmarks/census/deployments.json``'s reference) and over the world's compute (the
 adversary resource model, ``adversary.json``'s reference). Every figure says its basis: ``measured`` (this run),
 ``proved`` (a Lean theorem, by name, with what it assumes) or ``scaled`` (and what is scaled).
@@ -50,7 +50,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
-from verity.core.protocols.pous.wipe_monitoring import PERIODS  # noqa: E402
+from verity.core.protocols.reporting import PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"

@@ -11,7 +11,7 @@ public import Proofs.Flock.Soundness.StrictCR
 `flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`), and their forms at the executable's sampling design
 (`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
 SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
-* `HmRowComputes` (`hHm`), the circuit's row hashing (phase 2i), the one gap of the binding;
+* `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
 * the layout's facts, in `lay : Layout` (`decode_row`: the decoder reads the rows the witness holds) and `rs : HmRows`
   (`bc_registered`: the `b ‖ c` the witness holds hashes to the registered leaf; `other_registered`: the returned
   outputs' leaves).
@@ -62,7 +62,7 @@ theorem prob_split_accept {n : ℕ} (G : Game (Bool × Finset (Fin n))) (S : Str
     (fun o h => (Bool.eq_false_or_eq_true o.1).elim (fun h1 => Or.inl ⟨⟨h1, h.1⟩, h.2⟩)
       fun h1 => Or.inr ⟨h.1, h1⟩) G S).trans (prob_or_le _ _ G S)
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

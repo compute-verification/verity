@@ -101,7 +101,7 @@ def _backend(params, flip_last: bool = False):
     from verity.core.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.memory_challenger import scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -262,7 +262,7 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     from verity.core.protocols.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.memory_challenger import params_of, scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)
@@ -394,7 +394,7 @@ def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path)
     """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real samples fail now
     and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
     _harness()
-    from band_gpu import memory_challenger as mc
+    from verity.core.devices.memory_challenger import timed_audit as mc
 
     files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
     with pytest.raises(SystemExit) as refused:

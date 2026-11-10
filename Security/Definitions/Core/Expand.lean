@@ -97,11 +97,11 @@ theorem bit_lt {a g : Fin C.N} (h : a < g) (i : Fin (C.w a)) (j : Fin (C.w g)) :
   outputs := univ.filter fun b => (C.unbit b).1 ∈ C.outputs
 
 /-- `X` read bit by bit: a transcript of the expansion. -/
-def expandT (X : C.Transcript) : C.expand.Transcript :=
+def expandT (X : C.Trace) : C.expand.Trace :=
   fun b => BitVec.ofBool ((X (C.unbit b).1).getLsbD (C.unbit b).2)
 
 /-- A transcript of the expansion assembled gate by gate: a transcript of `C`. -/
-def collapse (a : C.expand.Transcript) : C.Transcript :=
+def collapse (a : C.expand.Trace) : C.Trace :=
   fun g => ofBits fun i => (a (C.bit g i)).getLsbD 0
 
 /-- **Positive fan-in in bits**: every computed gate of positive width reads a gate of positive width. The expansion

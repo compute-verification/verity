@@ -18,7 +18,7 @@ column tiles is paid once and read by every tile, so its price per word goes to 
 increment still depends on few lanes:
 
 * **`AccInOfFrag`**: if every multiplicand register depends on at most `q` lanes, the increments are in
-  `LaneFns (K·q) β`. So `AccFragIn` implies `AccIn` at `m = K·q`, and `DenseCert`, `ApartCert` and `LegacyGamma` apply
+  `LaneFns (K·q) β`. So `AccFragIn` implies `AccIn` at `m = K·q`, and `DenseCert`, `ApartCert` and `LegacyGap` apply
   at `m = K·q`, however widely each fragment is shared.
 * **`DenseWritesFrag`**: the k8 bound with computed fragments, `a·|T₁| + c·|T₂| ≤ cost`, for targets dense and apart
   for `LaneFns (K·q) β`.

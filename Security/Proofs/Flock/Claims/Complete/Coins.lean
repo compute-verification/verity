@@ -64,7 +64,7 @@ open Flock FlockDeploy
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   norm_cast
@@ -93,7 +93,7 @@ theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : �
 
 theorem Pr_eq_const {α : Type} [Fintype α] (c : α) : Claims.Pr (fun a : α => a = c) = 1 / Fintype.card α := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 1
   rw [Finset.filter_eq' Finset.univ c]
   simp

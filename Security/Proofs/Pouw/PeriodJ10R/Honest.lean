@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Properties.Pouw.PeriodJ10R
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -51,7 +51,7 @@ function of the window's round coin (`regOf`) and the rest of whose inputs a fun
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`), so `SaltIsLiveCoin` holds with no round trip
   through `hex?`;
-* the units `Credit.descriptorDrawn` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileDrawIsCoin`'s
+* the units `Credit.descriptorDrawn` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileSampleIsCoin`'s
   body on every window.
 
 They are facts of the code on honest windows, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
@@ -61,7 +61,7 @@ and its `window-drawn` entry sample the Python verifier's units on generated coi
 
 * The circuit (`circuit N`): `N = N_p` committed words of no operands, one a unit, one live round, so every tile's late
   cone is its own word and its share `1/N` (`shareCone_eq`): `ρ = 1` meets `ρ·N_p·share ≤ 1` with equality.
-* The scheme is the ComposePeriod twin's (operand luck pinned, `r_B = ½`, guess `½`).
+* The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`).
 * The registration reads the round coin and not the sampling coin, so it is fixed before the sample
   (`registeredBeforeDraw`, by `coinAt_spliceAt`).
 * Every tile is live and paid with its words right, the openings are in `Unit` and the unit's relation is `True`, so
@@ -78,7 +78,7 @@ namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
 
@@ -353,7 +353,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
     (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
       opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
       (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileDrawIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
+    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
     Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧

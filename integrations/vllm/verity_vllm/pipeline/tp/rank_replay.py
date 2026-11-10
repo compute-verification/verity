@@ -210,7 +210,8 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
                            targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
                            manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)),
-                           memo=index_memo(p, man) if memo is None else memo)
+                           memo=index_memo(p, man) if memo is None else memo,
+                           certified={str(r["request_id"]): {"request_id": str(r["request_id"]), "seed": r.get("seed")} for r in p.reqs})
     sr["wrapper_prefix"] = p.index.prefix
     sr["tp_context"] = p.tp
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}
@@ -233,20 +234,21 @@ def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
 
 def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | None = None,
                index_kw: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """`tp-commit --memory-map`: the rank's memory map (`pipeline.memory_map.after_commit` at the rank) from its Programs of record,
+    """`tp-commit --memory-map`: the rank's memory map (PoUB's `commit_map.after_commit` at the rank) from its Programs of record,
     its committed slots and KV words (``committed``) and its KV-slots source's caches, its Program indices built under ``index_kw``
     (`index_query`: the manifest's spelling) and read from and put in the replay's ``indices`` when given; what its record keeps
     of it (counts and the engine's agreement, or the failure), None without a request.  It changes no verdict."""
+    from verity_vllm import protocols
     from verity_vllm.acquire.sources.kv_slots_source import caches_of
-    from verity_vllm.pipeline import memory_map as MMP
 
     request = (st.get("replay") or {}).get("memory_map")
     if not request:
         return None
     try:
-        got = MMP.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
-                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices,
-                               index_kw=index_kw)
+        CM = protocols.driver("remote-bandwidth", "commit_map")
+        got = CM.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
+                              arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices,
+                              index_kw=index_kw)
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:400]}
     return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}

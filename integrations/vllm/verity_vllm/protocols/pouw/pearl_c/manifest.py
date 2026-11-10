@@ -9,7 +9,7 @@ from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.window import LIVE_SCHEME
-from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
+from verity.core.protocols.spot.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 

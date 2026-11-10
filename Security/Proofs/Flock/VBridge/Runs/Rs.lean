@@ -61,7 +61,7 @@ theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128} (hne : No
     simp only [CoinSource.ofRounds, filter_noEmpty hne, e] at h
     cases h
 
-theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = c[0]! := by
+theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = (c)[0]! := by
   rw [getElem!_pos c 0 (by omega)]
   simp [Array.getD, h]
 

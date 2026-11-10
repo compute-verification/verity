@@ -93,9 +93,9 @@ from verity.core.protocols.pouw import weights as W
 from verity.ml.protocols.pouw.circuit import h1tile as H
 from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.ml.protocols.pouw.circuit import h1device as D
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import registered as G
 
 #: the tile unit's parameters, in order: its R A rows, its C B rows, its z/y record, the salt, its position, the roots
 TILE_PARAMS = ("a", "b", "zy", "salt", "position", "roots")

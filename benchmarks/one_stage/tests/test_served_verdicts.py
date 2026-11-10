@@ -54,7 +54,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 from verity.core.protocols.pous import wipe_period as W
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -339,7 +339,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+def test_the_spot_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
@@ -496,7 +496,7 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_an_undecided_block_record(tmp_path):
+def test_spot_alone_composes_to_an_undecided_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
@@ -558,7 +558,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
-    row = S.sampled_proofs_row(tmp_path)
+    row = S.spot_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
@@ -579,7 +579,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
     with its issue, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
     wipe.mkdir(parents=True)
     if case == "refused":
@@ -639,7 +639,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
     for comp in COMPONENTS:
         (d := pieces / comp).mkdir(parents=True)
@@ -695,7 +695,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
-def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and sampled proofs' and PoUW's accepts on its node leave it pending with nothing
@@ -704,7 +704,7 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     the published line keeps that."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
@@ -1057,7 +1057,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
-              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "core" / "service" / "spot", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
@@ -1678,6 +1678,9 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
                                   [])
 
 
+ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -1726,17 +1729,75 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
-    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
-    the preflight refuses any onsite piece's command set, before anything runs."""
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece, with ONSITE_PIECES naming the file of
+    onsite's defaults, its default WIPE_CMD isn't set, and the preflight refuses any onsite piece's command set, before
+    anything runs."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
-           "PRODUCT": product, **extra}
+           "PRODUCT": product, "ONSITE_PIECES": str(ONSITE_PIECES), **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+@pytest.mark.parametrize("product, pieces, called", [
+    ("onsite", "pieces.sh", ["onsite"]),
+    ("onsite", None, []),
+    ("remote", "pieces.sh", []),
+])
+def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, product, pieces, called):
+    """Under PRODUCT=onsite, ONSITE_PIECES (a path from the tree) names the file whose `onsite_piece_commands` sets the
+    onsite pieces' defaults; unset, nothing is sourced, and under PRODUCT=remote the file is read but sets none."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    (tree / "pieces.sh").write_text(f'onsite_piece_commands() {{ echo "$PRODUCT" >> {tmp_path}/called; }}\n')
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **({"ONSITE_PIECES": pieces} if pieces else {})}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
+
+
+def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "ONSITE_PIECES": "nowhere/pieces.sh"}
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                         check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: ONSITE_PIECES={tree}/nowhere/pieces.sh is not a file")
+
+
+@pytest.mark.parametrize("files, keys, want", [
+    ((), (), ("", "", "")),
+    (("benchmarks/pous/streamed_wipe/served_wipe.sh",), (), ("wipe", "", "")),
+    (("benchmarks/pous/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
+    (("benchmarks/one_stage/served_bandwidth.sh", "store/setup.json"), ("vy-auditor2-bw",), ("", "", "session")),
+    (("benchmarks/one_stage/served_bandwidth.sh",), ("vy-auditor2-bw",), ("", "", "")),
+])
+def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
+    """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
+    POUS_CMD where it has PoUS's and the node the memory challenger's key, and BANDWIDTH_CMD to collect PoUS's session
+    then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
+    tree, home = tmp_path / "tree", tmp_path / "home"
+    for f in files:
+        (tree / f).parent.mkdir(parents=True, exist_ok=True)
+        (tree / f).write_text("")
+    (home / ".ssh").mkdir(parents=True)
+    for k in keys:
+        (home / ".ssh" / k).write_text("")
+    got = subprocess.run(["bash", "-c", f'. {ONSITE_PIECES}; onsite_piece_commands; '
+                          'printf "%s\\n" "${WIPE_CMD-}" "${POUS_CMD-}" "${BANDWIDTH_CMD-}"'],
+                         env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
+                         check=True, capture_output=True, text=True).stdout.split("\n")[:3]
+    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_bandwidth.py collect",
+             "session": "served_bandwidth.sh"}
+    assert all((marks[w] in g) if w else g == "" for w, g in zip(want, got)), got
 
 
 def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
@@ -1782,7 +1843,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
-    and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
+    and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
+    says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and under it no
@@ -1821,6 +1883,11 @@ sys.exit(1)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text() == ("COMPOSITE: not run, onsite's own cases come from ONSITE_PIECES's file, "
+                                                  "and it is unset\n")
+    (out / "verdicts.txt").unlink()
+    env["ONSITE_PIECES"] = str(ONSITE_PIECES)
     r = run()
     assert r.returncode == 0, r.stderr
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()

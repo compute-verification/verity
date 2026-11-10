@@ -26,17 +26,17 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 /-- **A commitment of at most `unitClassMax` values has a size class**, which holds it. -/
 theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitClassMax) :
     ∃ w, unitClass Cp u = some w ∧ committed Cp u ≤ w := by
   have hlog : Nat.log2 (unitClassMax / 16) = 14 := by
     rw [show unitClassMax / 16 = 2 ^ 14 from rfl, Nat.log2_two_pow]
-  have hmem : unitClassMax ∈ unitClasses := by
-    rw [unitClasses, hlog]
+  have hmem : unitClassMax ∈ sizeClasses := by
+    rw [sizeClasses, hlog]
     exact List.mem_map.2 ⟨14, by simp, rfl⟩
-  have hs : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
+  have hs : (sizeClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
     List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hs
   have hd := List.find?_some hw
@@ -44,7 +44,7 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
 
 theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x ∈ lower C κ g, x ≠ .input := by
   unfold lower
-  cases h : C.op g <;> simp_all [Op.isInput]
+  cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
 /-- A unit's lowered gates are not inputs: only an input gate lowers to one, and no unit holds an input. -/
 theorem progOf_ne_input_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u) :

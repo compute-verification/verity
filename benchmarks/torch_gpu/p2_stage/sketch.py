@@ -43,11 +43,11 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
 from verity.ml.kernels import SHA512
-from verity_config.settings import of
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent

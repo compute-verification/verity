@@ -11,9 +11,9 @@ public import Proofs.Properties.Accounting.Remote.Pooled
 /-!
 # The remote bandwidth audit's verifier: its properties, proved (`Properties.Accounting.Remote`)
 
-`Window`: an accepted window checks every sampled opening (`acceptChecksOpenings`, `acceptOpensDraws`), and the
+`Window`: an accepted window checks every sampled opening (`acceptChecksOpenings`, `acceptOpensSamples`), and the
 verifier's process's chunked check is the whole window's (`chunkedIsWhole`). `Draw`: the draws
-are the sampler's subset mapped to distinct receipts (`drawIsSubset`), on `Bisect` (`bisectRight`, running ends) and
+are the sampler's subset mapped to distinct receipts (`sampleIsSubset`), on `Bisect` (`bisectRight`, running ends) and
 `Sort` (`Array.qsort` permutes). `Plan`: an accepted plan reads distinct blocks (`planReadsDistinct`,
 `changedReadsDistinct`). `Session`: one invariant of every state a run reaches, and from it the session's statements
 (`acceptedMinPasses`, `passesStepped`, `passesReadDistinct`, `appendsInOrder`, `passesChained`). `Released`: a

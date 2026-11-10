@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.EndToEnd.Joint.V5.Member
 public import Proofs.Flock.EndToEnd.Joint.Prod
-public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the bound over a window's members, per window and pooled

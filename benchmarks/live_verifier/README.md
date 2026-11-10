@@ -1,7 +1,7 @@
 # The verifier's auditor host
 
 `host.py` is vy-auditor-1's verifier service: the verifier of PoUB
-(`benchmarks/remote_session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
+(`verity/core/protocols/remote_bandwidth/session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
 gate `vy-verifier-gate` that every key of the host's `research` is forced to. Its docstring is the reference: who reaches
 the gate, what runs, a run, a bound run, a replay and the store. The host's deployed files are
 `tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py` and owns their entries in

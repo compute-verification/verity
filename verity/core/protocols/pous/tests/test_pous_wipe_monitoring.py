@@ -17,6 +17,7 @@ from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_monitoring as WM
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.protocols import reporting
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
 STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
@@ -74,7 +75,7 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
         row = r["periods"][name]
         t = 3 * days
         assert (row["wipes"], row["wipes_per_machine"]) == (t, days)
-        for d in WM.DELTAS:
+        for d in reporting.DELTAS:
             assert row[str(d)]["failing_at_most"] == 0 and row[str(d)]["meeting_at_least"] == t
         assert row["per_wipe"]["except_with"] == f"T·eps = {float(t * W.EPS):.3g}"
     assert r["leaves_out"][0] == WM.EXCEPT and any(s.startswith("link control") for s in r["leaves_out"][1:])

@@ -32,7 +32,7 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
-`Accounting.Guarantees.Remote.PooledDraw`; its PRF advantages are a named assumption, not a number, and it has no
+`Accounting.Guarantees.Remote.PooledSample`; its PRF advantages are a named assumption, not a number, and it has no
 hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
 session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
 why.

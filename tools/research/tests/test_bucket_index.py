@@ -134,8 +134,8 @@ def test_a_record_that_does_not_match_its_key_is_reported_and_left_out(tmp_path)
 
 
 def test_a_multipart_sidecar_beside_a_manifest_is_no_record(tmp_path):
-    """A manifest big enough for a multipart upload gets `<key>.parts.json` beside it (remote_s3.parts_sidecar); the index read it
-    as a manifest and failed every pass with 'manifest hashes to ...' (21 Oct)."""
+    """A manifest big enough for a multipart upload gets `<key>.parts.json` beside it (remote_s3.parts_sidecar); the index must not read it
+    as a manifest, which fails every pass with 'manifest hashes to ...'."""
     b = tmp_path / "bucket"
     good = artifact(b)
     _put(b, f"manifests/{ids.hex_of(good)}.json.parts.json", {"key": f"manifests/{ids.hex_of(good)}.json", "parts": []})

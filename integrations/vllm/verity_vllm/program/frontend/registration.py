@@ -9,6 +9,7 @@ from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import RecordType, Type, Value
 
 from verity.ml.definitions.registry.tables import table_type
+from verity_vllm.program.inputs import run_field
 
 
 class RegisteredInputs:
@@ -68,22 +69,27 @@ class RegisteredInputs:
 
 
 class RunInputs:
-    """The `run` parameter: values the served run decides that the Program checks in gates rather than computes (the top-k order of
-    a DSA row past TOPK), one field per read, in first-read order.  Its RecordType is finalised after the translation, as `values` is."""
+    """The `run` parameter: values the Program takes rather than computes (a training survey's holes), one field per read, in
+    first-read order.  Its RecordType is finalised after the translation, as `values` is."""
 
     def __init__(self, param: int) -> None:
         self.param = param
         self.fields: list[dict] = []   # {name, type, offset}, offset in leaves
+        self._names: set[str] = set()
+        self._leaves = 0
 
     @classmethod
     def declare(cls, params: list[tuple[str, Type]]) -> RunInputs:
         params.append(("run", RecordType()))
         return cls(len(params) - 1)
 
-    def value(self, name: str, t: Type) -> Coll:
-        if any(f["name"] == name for f in self.fields):
+    def value(self, name: str, t: Type, declared: str) -> Coll:
+        """Field `name`, read under declaration `declared` of `program.inputs`, refused unless it declares it (`run_field`)."""
+        run_field(name, declared)
+        if name in self._names:
             raise ValueError(f"run value {name!r} is read twice")
-        offset = sum(f["type"].leaves for f in self.fields)
+        self._names.add(name)
+        offset, self._leaves = self._leaves, self._leaves + t.leaves
         self.fields.append({"name": name, "type": t, "offset": offset})
         return Coll(t, Affine("p", self.param, offset, t.leaves))
 

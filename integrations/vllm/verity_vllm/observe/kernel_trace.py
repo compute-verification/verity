@@ -10,6 +10,8 @@ import json
 from collections import OrderedDict
 from pathlib import Path
 
+__all__ = ["kernels_of_trace_events", "load_trace", "summarize_kernels"]
+
 _KERNEL_CATS = {"kernel", "Kernel", "gpu_memcpy", "gpu_memset", "cuda_runtime_kernel", "gpu_op"}
 
 

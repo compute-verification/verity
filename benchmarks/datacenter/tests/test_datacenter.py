@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from verity.core.protocols import registration
-from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
+from verity.core.protocols.spot.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import program_digest
@@ -146,7 +146,8 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks",
+                                                  Path(__file__).parents[3] / "benchmarks/pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     compiled = pouw.compile(s8_grid(), h1tile.SCHEME).program
@@ -186,7 +187,8 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks",
+                                                  Path(__file__).parents[3] / "benchmarks/pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     assert h1tile.SCHEME_V3 == PT.SCHEME_V3

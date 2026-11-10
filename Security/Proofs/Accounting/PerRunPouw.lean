@@ -44,7 +44,7 @@ theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by
     (fun (A' : Adversary CM) (x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N)) =>
       AuditAccepts (correctSet P U x.1 x.2.1 (A'.transcript U x.1 x.2.1)) x.2.2 ∧ ¬ A'.Breaks U x.1 x.2.1)
     (fun A' T => A'.Bounded U T q) A (fun x => onlineCost A U x.1 x.2.1)
-    ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout) ((1 - εs) ^ t + ε q U.layout.N)
+    ((1 - reductionGap γ₀ Ωmax) * (1 - εs) * totalWref P U.layout) ((1 - εs) ^ t + ε q U.layout.N)
     (fun x => hCM.1 _ _ _ _ _ _)
     (fun A' T hT hA' => le_trans (pr_mono fun x hx => ⟨hx.1.1, hx.2, hx.1.2⟩)
       (Pouw.SecurityProofs.EndToEnd Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU T hT q hq A' hA' t εs hεs))

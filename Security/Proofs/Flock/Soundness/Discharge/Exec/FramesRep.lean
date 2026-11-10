@@ -8,7 +8,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
 /-!
-# The PIOP's rounds, as the frames they emit (R11b)
+# The PIOP's rounds, as the frames they emit (for the decoder premise)
 
 The phases before Ligerito, in the form `Emitted` composes (`Emit.lean`): each succeeds on retained rounds only
 by emitting its frames, in order.

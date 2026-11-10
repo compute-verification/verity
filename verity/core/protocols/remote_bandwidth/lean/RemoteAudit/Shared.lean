@@ -46,7 +46,7 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
   if let some u := group.find? (s.windows[·]!.roots.size < s.params.minPasses) then return s.fail u .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let lengths := group.foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
-  let some drawn := draws s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
+  let some drawn := receiptSample s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
     | throw "the openings' draw ran past its reads"
   let share := fun (base n : Nat) => drawn.filterMap fun (i, p) =>
     if base ≤ i && i < base + n then some (i - base, p) else none

@@ -3,7 +3,7 @@
 
 K = 1536 is the frozen sets' K (``Chunk(3)`` for BF16, ``Fp8`` for E4M3). Any other K lowers when a row is whole BLAKE3
 chunks, at least two (``Chunk(n)``, n = K x word bytes / 1024: K = 2048 and 8192 so far); ``stage`` writes an input set's
-range as the instance file (``instances.write_set``, rows per template instance). A proof holds at most 32,768 / n
+range as the instance file (``instance_file.write_set``, rows per template instance). A proof holds at most 32,768 / n
 template instances (CN2); larger batches are sub-batches."""
 from pathlib import Path
 
@@ -58,10 +58,10 @@ def relation(subcircuit, scheme):
 def stage(input_set, lo, hi, out_dir) -> Path:
     """Template instances ``[lo, hi)`` of ``input_set`` as a ``flock-pure-instances/v1`` file (accumulators re-chained under the relation's
     model and checked against the set's y)."""
-    from verity_flock import instances
+    from verity_flock import instance_file
 
     rel = RELATIONS[input_set.subcircuit.params["semantics"]]
     out = Path(out_dir) / f"instances-{lo}-{hi}.bin"
     out.parent.mkdir(parents=True, exist_ok=True)
-    instances.write_set(out, rel, input_set.path, lo, hi)
+    instance_file.write_set(out, rel, input_set.path, lo, hi)
     return out

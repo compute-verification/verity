@@ -33,6 +33,40 @@ def test_a_challenger_passes_only_if_it_exits_0_and_audits_at_least_one_record(m
     assert CH.end(tmp_path / "c", _Proc(0), recs) == {"exit": 0, "sessions": 3, "audit": False, "ok": False, "audit_tail": "no"}
 
 
+#: a stand-in for `pod/challenger.sh`: the key and secret under CHALLENGER_WORK as the real one keeps them, the public key
+#: and audit under DIR, and an audit that fails unless the secret is still there
+FAKE_SH = r'''
+challenger_start() {
+  local dir=$1 name; name=$(basename "$1")
+  mkdir -p "$dir" "$CHALLENGER_WORK/$name"
+  CHALLENGER_SECRET=$CHALLENGER_WORK/$name/secret
+  echo s3cret > "$CHALLENGER_SECRET"; echo lms > "$CHALLENGER_WORK/$name/key"; echo '{"public": 1}' > "$dir/key.json"
+  true & echo $! > "$CHALLENGER_WORK/$name/pid"
+  CHALLENGER=127.0.0.1:1
+}
+challenger_end() { return 0; }
+challenger_audit() { echo '{"ok": true}' > "$1/audit.json"; [ -f "$CHALLENGER_WORK/$(basename "$1")/secret" ]; }
+'''
+
+
+def test_a_challengers_key_and_secret_stay_out_of_its_callers_tree_and_end_deletes_them(monkeypatch, tmp_path: Path):
+    """A caller keeps the tree ``d`` is in (a leg's or an audit's out directory), so the challenger's key and secret go in a
+    private directory of their own, there until the audit and gone after it."""
+    sh = tmp_path / "pod" / "a" / "b" / "c" / "challenger.sh"
+    sh.parent.mkdir(parents=True)
+    sh.write_text(FAKE_SH)
+    monkeypatch.setattr(CH, "SH", sh)
+    out = tmp_path / "out"
+    d = out / "proof-server" / "verifier-00-challenger"
+    p, flags = CH.start(d)
+    secret = Path(flags[flags.index("--tree-secret-file") + 1])
+    assert secret.read_text() == "s3cret\n" and p.work in secret.parents and out not in p.work.parents
+    assert p.work.stat().st_mode & 0o077 == 0
+    assert CH.end(d, p, [str(out / "s0")]) == {"exit": 0, "sessions": 1, "audit": True, "ok": True}
+    assert not p.work.exists()
+    assert sorted(x.name for x in out.rglob("*") if x.is_file()) == ["audit.json", "key.json"]
+
+
 def test_the_verifier_pods_servers_each_take_their_own_challengers_trees_and_fail_the_plan_if_one_fails(monkeypatch, tmp_path: Path):
     def stage(a, low, input_set, total, d, public):
         d.mkdir(parents=True, exist_ok=True)

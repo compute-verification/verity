@@ -44,7 +44,7 @@ words, so it asks more than `UnitFixed`'s first half. What it gains is its objec
 under option A, computed, every steering unit computed) that the labelling defines, where `UnitFixed` reads the run's
 modes.
 
-* `ModesRun`: the modes are the run's. `Accounting.TS.DrawnLayer`'s docstring states it as the protocol structure
+* `ModesRun`: the modes are the run's. `Accounting.TS.SampledLayer`'s docstring states it as the protocol structure
   `UnitFixed` is claimed under; here it is a premise, per unit.
 * `CountsFixed`: the labelling counts a fixed word as fixed. The play's `fixed` and `folded` are free reals
   (`Anatomy.fixed`), which mean something only through the labelling's definition of `N_right − N_adapt`, so some

@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The headlines with R11b's message half discharged
+# The headlines with the decoder premise's message half discharged
 
 Each headline takes `hdec` (`DecodesOn`, or `DecodesOnJ` at `J` tables). These corollaries fix the decoder, the
 openings, single coins, no final messages and `capOfRoot` at the values the decoding theorems are about, and replace

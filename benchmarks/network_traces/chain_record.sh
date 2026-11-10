@@ -45,6 +45,7 @@
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
 #      --draw K: N2's period sampled, K of the link-windows sampled on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
+#      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
 #      is built, and an accepted report whose answer is this chain's and network-period's own on its case also writes
@@ -199,7 +200,7 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
@@ -279,7 +280,7 @@ EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   $( [ "${CR_PATH:-}" = warden ] && echo --tie "$OUT/tie/summary.json") \
   ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}

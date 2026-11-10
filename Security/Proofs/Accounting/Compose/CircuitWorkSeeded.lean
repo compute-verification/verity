@@ -18,7 +18,7 @@ public import Proofs.Accounting.Lemmas.TS
 * **The live sample** (`live_le`): given the oracle's answers, a uniform `K_d`-subset misses the tiles whose checked values
   aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so a pass with `ρ·K_d·U ≥ ln(1/δ_s)` costs
   `δ_s`.
-* **The work**: off `DrawnRightOff`'s event on `Declared.atDraw`'s layer, `Of` gives the share game's pass; off the
+* **The work**: off `SampledRightOff`'s event on `Declared.atSample`'s layer, `Of` gives the share game's pass; off the
   rest, `S = (L − κ·U) + (1 + κ)·U` per mode (`share_split`) puts `a·S_F + b·S_0` below `rOfSeeded`'s first three terms,
   and `UnitFixed` with `ServiceCovers` on `Declared.atIR`'s layer gives the words as in `CircuitWork`
   (`WorkProof.work_of_bounds`).
@@ -280,8 +280,8 @@ theorem circuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := b
     hS hδg hKd hρ hρN ha hb hκ hG hOf hMoved hJS hPins hSE hSLF hSLW hUF
   obtain ⟨hwf, -, -, hδs, -⟩ := hS
   have hw0 := WorkProof.shareCone_nonneg Sc Cd Np
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.DrawnRightOff (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) 1
-    _ Kd (Cd.atDraw.layer hr hK pr) δbind δks hMoved hJS hPins
+  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) 1
+    _ Kd (Cd.atSample.layer hr hK pr) δbind δks hMoved hJS hPins
   have hE' : prob E ≤ δbind + δks := by simpa using hE
   obtain ⟨Off, hOffP, hOffS⟩ := hSE
   choose gF BrF hF using hSLF

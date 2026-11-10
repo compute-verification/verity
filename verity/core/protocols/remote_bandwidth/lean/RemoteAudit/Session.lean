@@ -278,7 +278,7 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
-  let some drawn := draws s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
+  let some drawn := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
     | throw "the openings' draw ran past its reads"
   return (.drew drawn, { s with windows := s.windows.modify t ({· with drawn := some drawn, openedNs := some now}) })
 

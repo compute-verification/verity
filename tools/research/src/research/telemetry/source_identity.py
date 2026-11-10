@@ -1,7 +1,7 @@
 """Source identity of the packages a job imports -- the generic half (stdlib only; project-independent).
 
-[R18 infra, F-r17-tp-06 / COORD M-1848 (2)] A Commit under --gpu-tree without the tree variable (now VERITY_TREE) imported `verity_ir` from the pod's DEFAULT tree
-while `verity_vllm` ran the release and versions.json named the release commit (tp M-1830).  The fix by construction has three parts and
+A Commit under --gpu-tree without the tree variable (VERITY_TREE) can import `verity_ir` from the pod's DEFAULT tree while
+`verity_vllm` runs the release and versions.json names the release commit.  The fix by construction has three parts and
 this module is the evidence half: for every important imported package record
 
     resolved_path   the file/directory Python actually resolves the name to (importlib.util.find_spec, NOT an import -- nothing runs)

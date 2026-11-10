@@ -232,7 +232,7 @@ theorem convex_pool_tight (N n : ℕ) [NeZero n] :
     simp [Fintype.card_fin]
   · rw [one_mul, Real.exp_log hn]
     simp [h]
-  · unfold prob
+  · unfold prob Claims.prUniform
     have key : ∀ ω : Fin n,
         (ω = 0 ∧ Real.log n * ∑ _u : Fin N, 1 / (1 : ℝ) ≤ ∑ _u : Fin N, Real.log n) ↔ ω = 0 :=
       fun ω => by simp [Finset.sum_const, mul_comm]

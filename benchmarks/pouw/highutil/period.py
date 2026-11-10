@@ -719,7 +719,7 @@ class Coins:
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
         import a5_coins as A5
-        from verity.core.protocols.sampled_proofs import remote as R
+        from verity.core.protocols.spot import remote as R
         self.A5, self.R, self.how = A5, R, how
         self.main = R.main_lines(main)
         self.peer, self.key_record, self.gate_key = peer, key_record, gate_key
@@ -736,7 +736,7 @@ class Coins:
         """The verifier's check of the session once it has ended: the auditor's ledger and the session's sealed files
         (`remote.trusted_session`), every coin used opened against its signed commitment after the receipt it was
         recorded after, and the open's pin on main."""
-        from verity.core.protocols.sampled_proofs import challenger as Ch
+        from verity.core.protocols.spot import challenger as Ch
         try:
             directory, ledger, pins_log, key = session.finish(dest)
             commitment, roots = self.R.trusted_session(directory, [ledger], {"root": root}, key, self.A5.lms_verify)

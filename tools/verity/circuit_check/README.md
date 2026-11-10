@@ -13,13 +13,19 @@ uv run circuit-check --ambient TARGET...                             # each lowe
 ~~~
 
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts
-(`--fail-on-warnings` makes them fail). A target whose every input is unchanged is reused
+(`--fail-on-warnings` makes them fail). Each realization is compared on at least 2 random vectors while the reference's work
+on those the floor adds stays within 10M gate evaluations: a lowering on random vectors added after the all-edge ones, a
+kernel on vectors its own sampler samples in its domain. The report counts and names the targets compared on a random vector
+(`random`), on all-edge vectors only (`edge-only`) or on none (`none`), and the last two are warnings; a constant, with no
+input to sample, is in none of them. A target whose every
+input is unchanged is reused
 from the result cache (`--no-cache` checks it now). It needs about 24 GB a process, so run it on a node through
 `research run --on auto`.
 
 | Module (`src/circuit_check/`) | What it holds |
 | --- | --- |
-| `checks.py` | the checks: correspondence with the reference on every realization, declared port intervals, redundant and dead gates, the partition |
+| `checks.py` | the checks: correspondence with the reference on every realization, declared port intervals, redundant and dead gates, the partition, the Flock block a Definition needs as one unit |
+| `block_held.py` | the Definitions past the Flock block that the report holds rather than fails, each with why; it only shrinks: a held one that fits, or that the whole catalog no longer checks, fails |
 | `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
 | `targets.py` | what a target string names, and the catalog `--all` runs over |
 | `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json` |

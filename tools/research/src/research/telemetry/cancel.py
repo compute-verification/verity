@@ -61,7 +61,7 @@ def pgid_members(pgid: int) -> list[dict[str, Any]]:
 
 def run_dir_strays(pgid: int, want: str) -> list[dict[str, Any]]:
     """Processes outside group `pgid` whose environment names RESEARCH_RUN_DIR=`want`: workers that left the workload's group with
-    setsid (vLLM's TP workers, circuit_check's pool; INF-48, INF-53), which the group's signal misses. The group leader's ancestors
+    setsid (vLLM's TP workers, circuit_check's pool), which the group's signal misses. The group leader's ancestors
     (the runner, which records the exit and publishes custody) and this process are never among them."""
     keep, pid = {os.getpid(), os.getppid()}, pgid
     while pid > 1 and (st := stat_fields(pid)) is not None:

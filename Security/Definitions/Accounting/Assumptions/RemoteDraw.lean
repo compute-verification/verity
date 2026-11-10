@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # What the remote audit's opening draw assumes (trusted)
 
-The premises of `Accounting.Guarantees.Remote.PooledDraw`, which derives the memory line's `LiveCoins` from the
+The premises of `Accounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
 verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
@@ -89,6 +89,6 @@ def Refused [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ �
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
 def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
-  ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
+  ∀ ω, T.accepts ω → T.incorrect ω ≤ D.incorrect ω
 
 end Accounting.Remote.Draw.Assumptions

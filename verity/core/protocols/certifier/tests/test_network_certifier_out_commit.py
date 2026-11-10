@@ -17,8 +17,8 @@ from verity.ml.crypto import lms
 from verity.core.protocols.certifier import out_commit as O
 from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner, SignerRefused
 from verity.core.protocols.certifier.tests import signers as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 
 ROWS, WORDS, WINDOW = 4, 8, 3
 

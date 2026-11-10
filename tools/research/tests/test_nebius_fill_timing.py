@@ -520,7 +520,7 @@ def test_timing_cpus_leave_out_every_cpu_another_cgroup_or_a_fence_may_use_and_f
 
 
 def test_no_timing_job_starts_while_a_lent_scope_holds_124_191_and_one_starts_once_it_ends(node2, monkeypatch):
-    """Node 2 on 3 Oct, 18:30-20:10Z: circuits' 235B Commit in a scope of the top-level vy-lend.slice on 80-91,124-191, beside
+    """Node 2 with circuits' 235B Commit in a scope of the top-level vy-lend.slice on 80-91,124-191, beside
     compute accounting's two zk runs in that slice on 48-79 and 92-123. Each scope counts on its own: the Commit's (or an
     AllowedCPUs on the slice itself) holds every chunk back, and once it is gone a chunk starts with the zk runs still there."""
     load, fill, cg = node2
@@ -610,8 +610,8 @@ def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, m
 
 
 def test_node_ops_quiet_spares_a_gpu_leases_jobs_and_their_own_groups(tmp_path, monkeypatch):
-    """A GPU lease's JIT build (ninja gives each compile a group of its own) paused by a timed window held flashinfer's lock, and
-    the timed lease's own job then waited on it until its lease ran out (n2, 24 Oct 07:0xZ). Quiet now leaves a lease's processes
+    """A GPU lease's JIT build (ninja gives each compile a group of its own) paused by a timed window would hold flashinfer's lock,
+    and the timed lease's own job would wait on it until its lease ran out. Quiet leaves a lease's processes
     and every group they start running, and still pauses an ordinary CPU-heavy group."""
     token = f"quiet-lease-test-{os.getpid()}"
     busy = f"import signal; print('ready', flush=True); signal.pause()  # -m research.telemetry sample {token}"

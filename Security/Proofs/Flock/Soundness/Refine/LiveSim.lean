@@ -21,7 +21,7 @@ any strategy.
 
 * `PlaysT g ts a`: `g`, played with the typed steps `ts` (messages and coins, in order), ends with `a`.
 * `Decodes`: on every accepted live outcome, each rep's model game runs on the tape decoded from its stream and its
-  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (R11b) provide.
+  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (the decoder premise) provide.
 * `live_le`: against any live prover, the live verdict's probability is at most the model's against the simulated
   prover.
 -/

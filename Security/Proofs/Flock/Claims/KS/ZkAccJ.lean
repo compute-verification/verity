@@ -39,8 +39,7 @@ import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound with escapes on accepted runs

@@ -80,9 +80,9 @@ from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
 from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import registered as G
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, held, leaf_rows,
                                                      leaf_statement, operands, partials, receipt_value,
@@ -589,7 +589,7 @@ def stage(a: Any) -> int:
                     raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn doesn't rebuild (a "
                                   "receipt table: stage it as the window registered it)")
         print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
-        from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+        from verity.core.protocols.spot.one_stage import proofs as PF
         circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
         if a.recompose:
             built = work / f"k{k}.circuit.txt"

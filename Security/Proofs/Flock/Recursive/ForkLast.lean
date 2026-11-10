@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Recursive.ForkRuns
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: the inner fork with the last round's message unbound

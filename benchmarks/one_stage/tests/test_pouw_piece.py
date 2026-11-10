@@ -26,7 +26,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
 STATEMENTS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"

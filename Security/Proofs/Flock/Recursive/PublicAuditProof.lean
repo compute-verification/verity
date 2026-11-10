@@ -18,7 +18,7 @@ import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.ForkInnerC
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The recursive audit at public units: its proof

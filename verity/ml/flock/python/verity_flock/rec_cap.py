@@ -134,8 +134,8 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     at a later level rep 0's top then rep 1's), the verifier's own files beside the prover's (``out_dir``): ``circuit.txt``,
     the prover's ``inst.bin``, the verifier's ``pub.bin``, ``program.json``, ``partition.json`` and the reads file
     ``registered.json``. Instance ``i`` reads row ``i``."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import registered as G
 
     level = level_of(tops.own["value"])
     N = tops.own["leaves"]

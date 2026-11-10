@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
@@ -47,6 +48,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
   `deltaEntry_inDelta`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
+* `Built`: an untyped statement's unit is built, from the parse (`built_of_parseStmt`);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);

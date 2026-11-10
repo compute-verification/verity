@@ -18,6 +18,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), its check template and the template's instances a prompt row and an output in `BOUNDARY_ROWS` (JSON) | `record` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -29,7 +30,13 @@ It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's
 schedule, every sampled token and its logprob's bits, and at the far edge the KV pool's root, each block's fingerprint,
-the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how).
+the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how). `rebuild.py` starts from
+less, only what a host copy of the K/V pages and the step record hold: it adds each request held at the edge to a fresh
+engine as a new request with its outputs so far, copies its computed prefix's pages from the edge's KV file into blocks
+the fresh engine allocates, as a KV connector's load does, and compares the replay the same way, with each request's K/V
+over its computed tokens as a SHA-512 root at both edges (``--tail`` sets what a partial block holds past its prefix).
+With `--at-step S --mirror-out DIR`, then `--from-mirror DIR`, it starts at an arbitrary step inside the replay block
+instead, from per-step copies of the slots each step wrote (its docstring says how).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap

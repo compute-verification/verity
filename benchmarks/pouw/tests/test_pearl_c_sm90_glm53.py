@@ -1,5 +1,5 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
-checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
+checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, the H200
 session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ def test_linears_are_one_tp8_ranks():
 
 def test_domain_refuses_the_short_k_and_narrow_n():
     """k = 512 is under the record's k ≥ 1,024 and not its census k = 256 (which takes both down projections); n = 160 is
-    not a multiple of 64.  Every other linear is in, with γ at both FADD readings, the data sheet's (cheaper add) a little
-    above the record's, and γ falling with n."""
+    not a multiple of 64.  Every other linear is in, with the gap at both FADD readings, the data sheet's (cheaper add) a little
+    above the record's, and the gap falling with n."""
     rows = {r["name"]: r for r in G.table()}
     refused = {name for name, r in rows.items() if r["refused"]}
     assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
@@ -67,8 +67,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 
 
 def test_gamma_is_the_lean_twins():
-    """`Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
-    at 32 (24 over the credited 8), γ = 173561/22302500."""
+    """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
+    at 32 (24 over the credited 8), the gap 173561/22302500."""
     from verity.ml.protocols.pouw.schemes import pearl_c as C
     from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
 
@@ -395,7 +395,7 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(HERE.parent / "clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
     import clear_work as CW
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD

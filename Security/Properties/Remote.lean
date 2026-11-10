@@ -5,18 +5,18 @@ public import Definitions.Core
 public import Properties.Composition
 public import Properties.Nci.Desc
 public import Properties.Nci.Baseline
-public import Properties.SampledProofs
+public import Properties.Spot
 
 /-!
 # Remote's acceptance and the inference-only policy
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
-(`PouwCheck.Period.protocol`) and sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
-one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
-proofs' (the one-stage registration record, `SampledProofs.OneStage.commitmentOf`, in both forms) are the run's
-registration record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over
-`Core.Remote.tied`);
+(`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
+one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). The policy's
+commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
+forms) are the run's registration record, and the composite rejects unless both decode to one digest
+(`Core.Composition.strays` over `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
 record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
 (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
@@ -37,8 +37,10 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program sampled proofs verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.CompliesRate Γ α d` from
-  acceptance, on a declaration acceptance exhibits and on every other.
+* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerThreaded` reads, `Nci.CompliesRate Γ α d` from
+  acceptance, on a declaration acceptance exhibits and on every other. `Nci.Guarantees.DampenerRemote` reads the count
+  verdict instead, `Nci.CompliesAtMost c k n d`, which a published `complies` of the count gives
+  (`NciCheck.Properties.DescCountsCK`).
 
 A check that accepts every input accepts `ev = []`, where neither conclusion holds (`InferenceOnlyHeld` and
 `CompliesHeld` take three cases): the proofs show both fail there.
@@ -110,17 +112,17 @@ def CaseHeld (k : Case) : Prop :=
 
 /-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
-(`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
-params, `SampledProofs.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
+(`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
+params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
 soundness the recursive audit (`RecursiveAuditC3`) states. -/
 def StageHeld (k : Case) : Prop :=
-  (∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment),
+  (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
-    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier) ∨
-  (∃ (q : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment),
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier) ∨
+  (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
-    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record q.base.verifier)
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
@@ -138,7 +140,7 @@ def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
     (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
-    Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment = some r ∧
+    Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
 
 /-- **Remote's acceptance gives the inference-only policy on the registered circuit.** On every input remote's check
@@ -147,7 +149,7 @@ def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → InferenceOnlyHeld ev
 
-/-- What remote's acceptance establishes in the form `Nci.Guarantees.DampenerRemote` reads, about its cases `ev`: they
+/-- What remote's acceptance establishes in the form `Nci.Guarantees.DampenerThreaded` reads, about its cases `ev`: they
 are the three subprotocols' cases in order, the policy's case decodes to the parameters `p`, the run's record `cr` and
 the evidence `e`, the record names the registered circuit `P` by its SHA-512, the instance the policy checked, expanded
 gate by gate, has a parse carrying the policy's parameters and a declaration `P` lays out with its θ, which complies at
@@ -167,7 +169,7 @@ def CompliesHeld (ev : List Case) : Prop :=
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
         VerifierOwn p i ∧ Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 
-/-- **Remote's acceptance gives `Nci.CompliesRate`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes: on every input
+/-- **Remote's acceptance gives `Nci.CompliesRate`**, the hypothesis `Nci.Guarantees.DampenerThreaded` takes: on every input
 remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),

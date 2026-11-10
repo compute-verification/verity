@@ -213,7 +213,7 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
     """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
     tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
-    `weightOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
+    `fixedOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
     excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
     count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
     rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
@@ -240,7 +240,7 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
 def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
-    check may see it (L3's `TileCheck.Accepts` asks `weightOK` of every column): the padded tile's rows are voluntary,
+    check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
     which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
     504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
     under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their

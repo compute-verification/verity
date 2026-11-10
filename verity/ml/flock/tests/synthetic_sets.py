@@ -1,7 +1,7 @@
 """The synthetic input sets these tests read, committed under ``fixtures/synthetic_sets/<subcircuit id>/``: each is the set
-the bench's generator writes for one (subcircuit, n, seed), with the provenance naming its run cleared, and its manifest's
-recipe (template, parameters, samplers, n, seed) is what finds it. The generator and the test holding these sets to it are
-the bench's (``benchmarks/numerical``, ``verity_numerical.bench.fixture_sets``), so the tests here need neither."""
+`verity_flock.synthetic` writes for one (subcircuit, n, seed), with the provenance naming its run cleared, and its manifest's
+recipe (template, parameters, samplers, n, seed) is what finds it. The command that adds one and the test holding these sets
+to the generator are the bench's (``benchmarks/numerical``, ``verity_numerical.bench.fixture_sets``)."""
 from __future__ import annotations
 
 import inspect

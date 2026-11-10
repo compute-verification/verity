@@ -1,10 +1,10 @@
-"""Per-template lowering modules (``bench.lowerings``): every family has one module per catalogue template, each declaring
+"""Per-template lowering modules (``verity_flock.lowerings``): every family has one module per catalogue template, each declaring
 what it lowers; today's GEMM cells resolve to the relation names their pod scripts take."""
 from __future__ import annotations
 
 import pytest
 
-from verity_numerical.bench import lowerings as L
+from verity_flock import lowerings as L
 from verity_flock import subcircuit_templates as TM
 
 FAMILIES = sorted(L.DIRECTORIES)

@@ -12,14 +12,13 @@ from verity_flock import circuit as FC
 from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit, const_bits
 
-pytest.importorskip("verity_numerical")
 from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 
 
 def _set(sid: str, n: int, tmp_path):
-    summary = generate(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
+    summary = synthetic_set(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
     return InputSet.open(summary["path"])
 
 
@@ -361,13 +360,14 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock = Path(__file__).resolve().parents[1]
+    lean_flock = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
     words = {k: v for k, v in FC.LEAF_SCHEME.items() if k in ("id", "inner", "salt_source", "key")}
     lean = r'\("(\w+)", (?:s )?"([^"]*)"\)'
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
-    copies = {"Flock.Tags.leafSchemeHm96Os": re.findall(lean, _body(service / "flock" / "Flock" / "Tags.lean",
+    copies = {"Flock.Tags.leafSchemeHm96Os": re.findall(lean, _body(lean_flock / "Flock" / "Tags.lean",
                                                                     "def leafSchemeHm96Os")),
-              "VStar.leafScheme": re.findall(lean, _body(service / "flock" / "VStar" / "Compose.lean", "def leafScheme")),
+              "VStar.leafScheme": re.findall(lean, _body(lean_flock / "VStar" / "Compose.lean", "def leafScheme")),
               "circuit.rs leaf_scheme": [("id", re.search(r'\{ \("([^"]+)", 192\) \}', rust)[1]),
                                          *re.findall(r'"(\w+)": "([^"]*)"', rust)]}
     for name, pairs in copies.items():
@@ -381,8 +381,8 @@ def test_the_zk_hooks_name_the_provers_randomness():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
-    lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
+    flock = Path(__file__).resolve().parents[1]
+    lean = _body(Path(__file__).resolve().parents[4] / "verity/core/service/flock/Flock/Zk.lean", "def hooks")
     os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
     assert set(os_words) == {"pads", "draws"}, os_words
     want = {k: re.search(rf'\("{k}", s s!"([^"]*)"\)', lean)[1].replace("{pads}", os_words["pads"])

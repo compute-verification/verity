@@ -6,7 +6,7 @@
             "run_record": "art:4bc894c68a07c3947a61c23263c4e062762359b73c7883dca4b3b2fca9ff16fc"},
     "captured_utc": "2026-10-16"
   },
-  "cublas_route_scan": {"run_record": "art:25d1b501ceb55aaf04ef28d0b34431bcc02a9b3038d5575bb813dca7f22eaa49"},
+  "cublas_route_scan": {"run_record": "art:e97608d2cf64a3d489defaf31289f706144c3a7ee29713c6e93be56f12cca4d9"},
   "cublas_cc12_probes": {"run_records": ["art:db886b970d327bb2f2e2253fdac0fbb8dae098c646f2f641c16ba1280214f750",
                                          "art:916168fad15230f7bacb35eb2b2388351b267dd47fd8ef22d56072beffbd3d53",
                                          "art:13a8b8e6f6378f42b3eb297db5d78c90ac8999b8fb5dfc1cca02b93c4dd660bf"]},

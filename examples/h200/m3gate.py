@@ -24,8 +24,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import remote as R
 from verity.ml.crypto import lms
 
 HOST = "vy-challenger-1"

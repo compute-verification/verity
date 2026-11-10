@@ -24,7 +24,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

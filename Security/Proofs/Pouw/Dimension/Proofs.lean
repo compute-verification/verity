@@ -15,7 +15,7 @@ import Proofs.Pouw.NCP.Proofs
 * `dimLePriced`: one dimension per priced value; `count_le`, the generic count.
 * `secondDifference`: the four-point evaluation lemma, jointly over units and entries. The mixed difference kills
   `V₀` (`sd_V0`), and `A = g(F₁)` drops out because the words have no `A·E` term (`mixdiff2`).
-* `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `γ₀ = 16/(3k)`).
+* `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `g₀ = 16/(3k)`).
 * `algWitness`, `algSharp`: the hypotheses hold jointly, the bound is attained, and `16/(3k)` is sharp.
 -/
 
@@ -366,9 +366,9 @@ theorem algBound : AlgBound := by
   have := h16_cost hH
   omega
 
-/-- **TT_NCP in AlgM_16** at `γ₀ = 16/(3k)`. -/
+/-- **TT_NCP in AlgM_16** at `g₀ = 16/(3k)`. -/
 theorem ttNCPAlg : TTNCPAlg := by
-  intro k m n N R A B U L P γ₀ h16 hk hind hU hL hH hout hγ hγ1 hev
+  intro k m n N R A B U L P g₀ h16 hk hind hU hL hH hout hg hg1 hev
   have hb := algBound k m n N R A B U L P hind hU hL hH hout
   obtain ⟨k', rfl⟩ := h16
   have hk' : 1 ≤ k' := by omega
@@ -379,10 +379,10 @@ theorem ttNCPAlg : TTNCPAlg := by
     push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at this
     linarith
   rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
+  have hpos : 0 < 1 - g₀ := by linarith
   rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have h48 : 16 ≤ γ₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hγ
+  push_cast at hev hg
+  have h48 : 16 ≤ g₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hg
   have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
   nlinarith [mul_le_mul_of_nonneg_left h48 hX]
 
@@ -439,9 +439,9 @@ theorem algWitness : AlgWitness := by
   exact ⟨R, honest k m n N R A B U 16, hadm, hind, coords_V0, honest_h16 le_rfl, honest_outputs,
     honest_cost _ _ _ _ _ _ _ _ _⟩
 
-/-- **`γ₀ = 16/(3k)` is sharp in AlgM_16.** -/
+/-- **`g₀ = 16/(3k)` is sharp in AlgM_16.** -/
 theorem algSharp : AlgSharp := by
-  intro k m n N R A B U γ₀ h16 hk _ hne hmn hγ
+  intro k m n N R A B U g₀ h16 hk _ hne hmn hg
   refine ⟨honest k m n N R A B U 16, honest_h16 le_rfl, honest_outputs, ?_⟩
   rw [honest_cost]
   obtain ⟨k', rfl⟩ := h16
@@ -452,16 +452,16 @@ theorem algSharp : AlgSharp := by
     have := Nat.cast_pos (α := ℝ).2 (Nat.mul_pos (card_pos.2 hne) hmn)
     push_cast at this
     exact this
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hγ ⊢
+  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hg ⊢
   have hk'R : (1 : ℝ) ≤ k' := by exact_mod_cast hk'
-  have hγ' : γ₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hγ
-  have hpos : 0 < 1 - γ₀ := by
+  have hg' : g₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hg
+  have hpos : 0 < 1 - g₀ := by
     have : (16 : ℝ) / (3 * (16 * k')) ≤ 1 / 3 := by
       rw [div_le_iff₀ (by positivity)]
       nlinarith
     linarith
   rw [div_lt_iff₀ hpos]
-  nlinarith [mul_lt_mul_of_pos_left hγ' hX]
+  nlinarith [mul_lt_mul_of_pos_left hg' hX]
 
 /-! ## Sanity: the degenerate cases -/
 

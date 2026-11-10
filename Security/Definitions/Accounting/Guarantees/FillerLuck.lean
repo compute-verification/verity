@@ -91,7 +91,7 @@ def PinnedFillBudget : Prop :=
 /-- **Theorem S with another block beside pinned receipts** (the budget row of `eps.py`'s cheater LP at the filler's
 `p = 0`). Each round checks another block on its own coins, its share `d₀` fixed before them and passing with
 probability at most `1 − (1 − p₀)·d₀` (`p₀ ≤ 1`), and recomputes one uniform tile's receipt. Outside probability `δ`,
-an accepted window has `Σ_w ((1 − p₀)·d₀_w + wrongShare_w) < ln(1/δ)`. -/
+an accepted window has `Σ_w ((1 − p₀)·d₀_w + incorrectShare_w) < ln(1/δ)`. -/
 def PinnedFillBlocksDeficit : Prop :=
   ∀ {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [Fintype Ω₀] (F : D → C → τ → V) (p₀ δ : ℝ) {S : ℕ}
     (g : RoundGame (Ω₀ × (C × τ)) S),

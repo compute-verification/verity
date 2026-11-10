@@ -69,7 +69,7 @@ theorem ex_drawOne {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game �
 
 theorem ex_drawK {f : 𝕂 → Game β} {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = 2)
     (h : ∀ r, ∃ b, Plays fOf (f r) ms cs b) : ∃ b, Plays fOf (Model.drawK execArith >>= f) ms (c :: cs) b := by
-  have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+  have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
     unfold Model.drawK
     exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
   obtain ⟨b, hb⟩ := h _

@@ -35,7 +35,7 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
     (hplan : ∀ p < T.passes, T.plan ω p = univ) {u : ℕ} (hu0 : K.released ω 0 ≤ u) (hu1 : u ≤ K.ended ω 0)
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p,
       ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : (T.wrong ω : ℝ) ≤ W) :
+    (hw : (T.incorrect ω : ℝ) ≤ W) :
     ((K.stop ω - u : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
           - 2 * K.longest ω *
               ((s / E + β + βl) * (((K.stop ω - u : ℕ) : ℝ) + 2 * K.longest ω) + (Br + Bd + Bl))
@@ -102,7 +102,7 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
     obtain ⟨t, ht1, ht2, ht⟩ := hk p hpP j hc
     obtain ⟨hp3, hp4⟩ := hpass g hg p hp1 hp2
     exact ⟨t, mem_Ico.2 ⟨by omega, by omega⟩, ht⟩
-  have hwrong : ∑ g ∈ range (C + 1), K.size ω g * nw g ≤ T.wrong ω := by
+  have hwrong : ∑ g ∈ range (C + 1), K.size ω g * nw g ≤ T.incorrect ω := by
     calc ∑ g ∈ range (C + 1), K.size ω g * nw g
         ≤ ∑ g ∈ range (C + 1), ∑ p ∈ Ico (K.first ω g) (K.first ω (g + 1)), (T.plan ω p \ T.correct ω p).card := by
           refine sum_le_sum fun g hg => ?_
@@ -111,7 +111,7 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
             hnw_le g (Nat.lt_succ_iff.1 (mem_range.1 hg)) p (mem_Ico.1 hp).1 (mem_Ico.1 hp).2
       _ = ∑ p ∈ Ico (K.first ω 0) (K.first ω (C + 1)), (T.plan ω p \ T.correct ω p).card :=
           sum_groups _ _ fun g hg => (hfg g (by omega)).le
-      _ ≤ T.wrong ω := sum_le_sum_of_subset fun p hp => mem_range.2 ((mem_Ico.1 hp).2.trans_le hfP)
+      _ ≤ T.incorrect ω := sum_le_sum_of_subset fun p hp => mem_range.2 ((mem_Ico.1 hp).2.trans_le hfP)
   -- the knapsack's point
   have hrate : ∀ g, 0 ≤ K.rate ω g := fun g => by
     unfold Pace.rate

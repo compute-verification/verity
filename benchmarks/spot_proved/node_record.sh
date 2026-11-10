@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # What a GLM-5.3 replay's bits can depend on besides its inputs and the all-reduce tree (which the all-reduce probe reads), written
-# so that two nodes' records compare with `diff -r A B`: no serials, clocks or host names.
+# so that two nodes' records compare with `diff -r -x ids.txt A B`: no serials, clocks or host names outside ids.txt.
 #   VENV=DIR [CK=DIR PINS=FILE] bash node_record.sh OUTDIR
+# ids.txt        which machine this is, so a replay on it counts as cross-machine or same machine: each GPU's serial, UUID and PCI
+#                bus, the host name, machine id and boot id
 # gpu.txt        each GPU's name, compute capability and memory, the driver, VBIOS, ECC and MIG modes; SMs, torch, its CUDA, cuDNN
 #                and NCCL
 # cuda.txt       nvcc's version (FlashInfer's and DeepGEMM's JIT build with it)
@@ -9,7 +11,8 @@
 # libs.sha256    every shared object under the venv's site-packages
 # caches/*.sha256  each JIT, autotune and compile cache the engine reads, file by file: TensorRT-LLM's kernels, vLLM's FlashInfer
 #                autotune choices and torch.compile cache, FlashInfer's JIT, DeepGEMM's, Triton's, and the driver's PTX JIT cache
-#                (empty when no kernel was compiled from PTX, so the driver's own compiler reached no bits)
+#                (empty when no kernel was compiled from PTX, so the driver's own compiler reached no bits); not the caches' logs.
+#                A cache only grows as kernels are compiled, so two records of one node differ by added entries alone
 # checkpoint.txt with CK and PINS (benchmarks/ppl/pins/glm-5.3.json): each pinned file's sha256 against the pin, OK or its digest
 # topo.txt       the NVLink topology, which reaches the bits only through the tree
 set -uo pipefail
@@ -17,6 +20,8 @@ O=${1:?usage: VENV=DIR bash node_record.sh OUTDIR}; mkdir -p "$O/caches"
 PY=${VENV:?VENV: the venv the engine runs}/bin/python
 nvidia-smi --query-gpu=index,name,compute_cap,memory.total,driver_version,vbios_version,ecc.mode.current,mig.mode.current \
   --format=csv > "$O/gpu.txt"
+{ nvidia-smi --query-gpu=index,serial,uuid,pci.bus_id --format=csv
+  echo "host=$(hostname) machine_id=$(cat /etc/machine-id 2>/dev/null) boot_id=$(cat /proc/sys/kernel/random/boot_id)"; } > "$O/ids.txt"
 "$PY" -c 'import torch; p = torch.cuda.get_device_properties(0)
 print(f"sms={p.multi_processor_count} torch={torch.__version__} cuda={torch.version.cuda} cudnn={torch.backends.cudnn.version()} nccl={torch.cuda.nccl.version()}")' >> "$O/gpu.txt"
 NVCC=${CUDA_HOME:-/usr/local/cuda-12.9}/bin/nvcc
@@ -31,7 +36,7 @@ for kv in "tensorrt_llm:$HOME/.tensorrt_llm/cache" "flashinfer_autotune:$VC/flas
           "deep_gemm:${DG_JIT_CACHE_DIR:-$HOME/.deep_gemm}" "triton:${TRITON_CACHE_DIR:-$HOME/.triton/cache}" \
           "driver_ptx_jit:${CUDA_CACHE_PATH:-$HOME/.nv/ComputeCache}"; do
   d=${kv#*:}
-  if [ -d "$d" ]; then (cd "$d" && find . -type f ! -name '*.lock' -print0 | xargs -0 -r -P 16 -n 64 sha256sum | sort -k2)
+  if [ -d "$d" ]; then (cd "$d" && find . -type f ! -name '*.lock' ! -name '*.log' -print0 | xargs -0 -r -P 16 -n 64 sha256sum | sort -k2)
   else echo "absent $d"; fi > "$O/caches/${kv%%:*}.sha256"
 done
 if [ -n "${CK:-}" ] && [ -n "${PINS:-}" ]; then

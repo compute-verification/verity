@@ -19,10 +19,13 @@ def _boolean_roots() -> list[Any]:
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
-    leaf families they do not reach, at small statics."""
+    leaf families they do not reach, at small statics.  Then GLM-5.3's served k_pe head, `RoPEHeadGptJ_v2{D=64}`: vLLM's
+    `fused_norm_rope` writes the latent cache row's words 512-575 with it, beside `DsaRMSNorm_v1{N=512}`'s words 0-511
+    (`verity_vllm.observe.fold.patterns.dsa.DsaNormRope`; `dsa_norm`'s sidecar)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_rope
 
     return [
         ("RoPEGptJ_v2", lambda: bind(boolean_rope.RoPEGptJV2, NHEADS=2, D=16)),
+        ("RoPEHeadGptJ_v2/glm53-kpe", lambda: bind(boolean_rope.RoPEHeadGptJV2, D=64)),
     ]

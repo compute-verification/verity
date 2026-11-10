@@ -64,8 +64,8 @@ theorem sat_of_read {R : Rows} {z z' : Fin R.w → Bool} (hz : R.Sat z)
   intro i
   have hab : ∀ x ∈ R.a i ++ R.b i, z' x = z x := fun x hx => h x (Or.inl ⟨i, x, hx, rfl⟩)
   rw [h (R.comp i) (Or.inr (by simp [Rows.comp])), hz i,
-    xorSum_congr fun x hx => (hab x (List.mem_append_left _ hx)).symm,
-    xorSum_congr fun x hx => (hab x (List.mem_append_right _ hx)).symm]
+    Verity.Boolean.xorSum_congr fun x hx => (hab x (List.mem_append_left _ hx)).symm,
+    Verity.Boolean.xorSum_congr fun x hx => (hab x (List.mem_append_right _ hx)).symm]
 
 theorem le_rowCol : ∀ (ps : List (String × ℕ)) (k q : ℕ), k ≤ rowCol ps k q
   | [], _, _ => le_refl _
@@ -178,7 +178,7 @@ theorem laid_partR {net : Flock.Net} (hB : Built net) (S : Flock.RecOpen.GfS) (n
 
 /-- **A copy of the verifier's `rec-residuals` unit computes its residuals from its read columns** (`laid_partR` at
 `sat_copy`), as `unit_part` from all its row columns. -/
-theorem unit_partR {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_partR {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : tr (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (hres : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS)

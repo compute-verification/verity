@@ -1,5 +1,5 @@
 """The replay harness (`replay.py`) on records it can be sure of: transcripts of recorded sessions, and the
-`verifier.json` that `benchmarks/remote_session/verifier.py` would write of them, built here from the session as it
+`verifier.json` that `verity/core/protocols/remote_bandwidth/session/verifier.py` would write of them, built here from the session as it
 builds it. Both verifiers must agree on each and give the recorded verdict; a record whose verdict the replay
 contradicts (an accepted session with a window that sampled another count) is caught."""
 

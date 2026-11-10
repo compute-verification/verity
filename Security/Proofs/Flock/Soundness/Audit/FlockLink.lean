@@ -3,9 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
 public import Proofs.Flock.Soundness.LinkFinder
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
@@ -58,7 +56,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -279,7 +277,7 @@ theorem expect_trial (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ
           (gameω H E plan R τ w.1) (stratω H E plan R τ w.1).2) /
         Fintype.card (P.Ωc plan tab vb L c) := by
   unfold trialG trialStrat
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]

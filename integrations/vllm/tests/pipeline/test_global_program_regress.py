@@ -212,7 +212,7 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
     with gzip.open(d / "descriptor.json.gz", "wb") as f:
         f.write(canonical_json(desc))
     with gzip.open(d / "instances.json.gz", "wt") as f:
-        json.dump({"params": [[n, t] for n, t in _WP(LP)]}, f)
+        json.dump({"params": [[n, t] for n, t in _WP(LP)], "rows": []}, f)
     json.dump({"program": {"digest": program_digest(desc)},
                "applicability": {"execution": execution, "numerics_profile": "toy", "sampler": "greedy",
                                  "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}, open(d / "result.json", "w"))

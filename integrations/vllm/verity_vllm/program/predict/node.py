@@ -10,8 +10,8 @@ Builder, one rank at a time in rank order, each up to its next collective. Colle
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
 would be a cycle: a rank's collective k reads the other ranks' partials from the middle of their own forwards.
 
-Its parameters are the prompt (and a stochastic request's seed and splits) once, then each rank's schedule words where its
-decoder reads them (`rank<r>.schedule`), then each rank's weights, one parameter per field of its weights record
+Its parameters are the prompt (and a stochastic request's seed and splits) once, then each rank's weights, one parameter per
+field of its weights record
 (`rank<r>.weights[i]`, as a workload Program's `shared.weights[i]` are), bound at registration and marked θ. It returns every
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
 
@@ -33,9 +33,10 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity_vllm.program.inputs import check_params
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows, reads_run, wrapper_keys
+from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows
 from .phi import Phi
 
 
@@ -146,8 +147,8 @@ class _Lockstep:
 class _Joined(_Peers):
     """A rank's view of the others in a node's body: each collective's rows are every rank's own, posted in lockstep."""
 
-    def __init__(self, lockstep: _Lockstep, rank: int, schedule: Coll | None) -> None:
-        super().__init__([], lockstep.world, rank, schedule)
+    def __init__(self, lockstep: _Lockstep, rank: int) -> None:
+        super().__init__([], lockstep.world, rank)
         self.lockstep = lockstep
 
     def take(self, own: list) -> list[list]:
@@ -157,13 +158,11 @@ class _Joined(_Peers):
 
 @dataclass(frozen=True)
 class NodeParameters:
-    """A node Program's parameters (module docstring) and what they are read from: each rank's φ and decoder, its schedule words
-    (0 where its decoder reads none) and their parameter, and its weights record, whose fields are its θ parameters from `weights_at`."""
+    """A node Program's parameters (module docstring) and what they are read from: each rank's φ and decoder, and its weights record,
+    whose fields are its θ parameters from `weights_at`."""
     phis: list[Phi]
     nets: list
     params: tuple[tuple[str, Type], ...]
-    words: list[int]
-    sched_at: dict[int, int]
     leaves: list[list[tuple[str, Type]]]
     weights_at: list[int]
 
@@ -188,29 +187,19 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
     nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
-    if any(reads_run(net, wrapper_keys(wrapper, M, LP, T)) for net in nets):
-        raise Unexpressible("vocabulary cannot express: a node Program whose rows read more than INDEX_TOPK keys (each rank's top-k "
-                            "order is its own `run` input, which its rank Program reads: `build.build_program`)")
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
-    passes = [n] + [1] * (events - 1)
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
-    words = [sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0 for net in nets]
-    sched_at = {}
-    for r, w in enumerate(words):
-        if w:
-            sched_at[r] = len(params)
-            params.append((f"rank{r}.schedule", Array(w, I32)))
     leaves = [net.leaves() for net in nets]
     weights_at = []
     for r, ls in enumerate(leaves):
         weights_at.append(len(params))
         params += [(f"rank{r}.weights[{i}]", t) for i, (_, t) in enumerate(ls)]
-    return NodeParameters(phis, nets, tuple(params), words, sched_at, leaves, weights_at)
+    return NodeParameters(phis, nets, check_params(params), leaves, weights_at)
 
 
 def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
@@ -218,7 +207,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     """The node Program of the Build's `wrapper` for φ's world (φ's own rank is ignored): `build.build_program`'s, joined."""
     t0 = time.time()
     P = node_parameters(phi, wrapper, LP=LP, T=T, M=M, pos0=pos0)
-    phis, nets, params, words, sched_at, theta = P.phis, P.nets, P.params, P.words, P.sched_at, P.theta
+    phis, nets, params, theta = P.phis, P.nets, P.params, P.theta
     world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
@@ -235,8 +224,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     batch = launch_batch(phis[0], LP, T) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
-    peers = [_Joined(lockstep, r, Coll(params[sched_at[r]][1], Affine("p", sched_at[r], 0, words[r])) if r in sched_at else None)
-             for r in range(world)]
+    peers = [_Joined(lockstep, r) for r in range(world)]
     models = []
     for r in range(world):
         model = nets[r].model(B, W[r], peers[r])
@@ -264,8 +252,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         t.join()
     if lockstep.error is not None:
         raise lockstep.error
-    if len(set(lockstep.taken)) != 1 or any(p.k != w for p, w in zip(peers, words)):
-        raise AssertionError(f"the ranks took {lockstep.taken} collectives and read {[p.k for p in peers]} of {words} schedule words")
+    if len(set(lockstep.taken)) != 1:
+        raise AssertionError(f"the ranks took {lockstep.taken} collectives")
     out = Coll(Array(world * events, I32), concat([t.refs for ts in toks for t in ts]))
     B.ret_type = out.type
     body = B.finish(out)

@@ -407,7 +407,7 @@ DEV void chacha20_block(const uint32_t* key, uint64_t counter, uint64_t nonce, u
 }
 DEV uint64_t rs_bswap64(uint64_t v) { return rs_be64((uint32_t)v, (uint32_t)(v >> 32)); }
 
-// the inner leaves of an `audit.HM96` tree (Flock's ``hm96_finish_leaves``): leaf i < i0 over x_i (p0 + 64 i: a row's
+// the inner leaves of an `audit.HM96` tree (Flock's ``launch_hm96_finish``): leaf i < i0 over x_i (p0 + 64 i: a row's
 // sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte
 // tables), c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x,
 // p1 out (64 B a leaf, hl), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each,

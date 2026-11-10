@@ -4,10 +4,10 @@ subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verit
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
-subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
-form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
-the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
-refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+subprotocol, and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
+v2's audit on the proofs themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's,
+and the recursive audit, which SPOT's soundness doesn't cover, are refused). `Core.Composition.tiedSameB`
+composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
@@ -26,16 +26,16 @@ public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import NciCheck.Protocol
 public import PouwCheck.Period
-public import SampledProofs.OneStage
-public import SampledProofs.OneStageZk
+public import Spot.OneStage
+public import Spot.OneStageZk
 public import VStarRecursive.Sampled
 meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
 meta import CoreComposition.Tie
 meta import NciCheck.Protocol
 meta import PouwCheck.Period
-meta import SampledProofs.OneStage
-meta import SampledProofs.OneStageZk
+meta import Spot.OneStage
+meta import Spot.OneStageZk
 meta import VStarRecursive.Sampled
 
 @[expose] public section
@@ -102,10 +102,10 @@ private def allRefused : Answer := answer (components.map refused)
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/v1 is not a component of this composition"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
-    refused SampledProofs.OneStage.protocol]).reason ==
+    refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
-    refused SampledProofs.OneStageZk.protocol]).reason ==
+    refused Spot.OneStageZk.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
 /-- A registration record every record reader decodes, a window's Commit record among them. -/
@@ -158,7 +158,7 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 `W` is the serving process's registration of a window's tables, the log's first record, in the form a served window
 writes it. `R`, the run's registration record, is chained after it (`previous`) and registers those tables under the
 names PoUW's Commit gives them (`PouwCheck.Credit.commitRows`, `commitIds`) as output values that reuse `W`'s entries
-(`outputs`). The policy's case, sampled proofs' (one-stage v2's, `SampledProofs.OneStageZk`) and the period's one window
+(`outputs`). The policy's case, sampled proofs' (one-stage v2's, `Spot.OneStageZk`) and the period's one window
 all name `R`. `R` registers one window's tables, so a period credits at most one window on it: every window must name
 `R` (`windows`), and PoUW's ROOTS1 holds each window's tables to `R`'s (`Internal.arow`). -/
 
@@ -167,7 +167,7 @@ open Lean (Json)
 private def rep (b : String) : String := String.join (List.replicate 64 b)
 private def jsonOf (s : String) : Json := (Json.parse s).toOption.getD .null
 private def textOf (j : Json) : String := (Flock.canon j).toOption.getD ""
-private def digestOf (j : Json) : String := (SampledProofs.Registration.digestHex j).toOption.getD ""
+private def digestOf (j : Json) : String := (Spot.Registration.digestHex j).toOption.getD ""
 
 /-- A table of `leaves` rows of one 16-bit word. -/
 private def tableEntry (value root domain : String) (leaves : Nat) : Json :=
@@ -178,14 +178,14 @@ private def windowA : Json := tableEntry "pouw/h1/a/64@0" (rep "ab") (rep "a1") 
 private def windowIds : Json := tableEntry "pouw/h1/ids@0" (rep "ba") (rep "a2") 8
 
 private def recW : Json := Json.mkObj [("format", "verity/registration/v2"), ("previous", Json.null),
-  ("program", rep "11"), ("protocol", SampledProofs.Registration.PROTOCOL),
+  ("program", rep "11"), ("protocol", Spot.Registration.PROTOCOL),
   ("registered", Json.arr #[windowA, windowIds]),
   ("window", Json.mkObj [("entry", 0), ("kind", "served"), ("open_root", rep "0e"), ("refused", Json.arr #[])])]
 
-/-- The audited circuit: one `CoreSampledProofsPair` instance over `x`, beside the window's two tables as registered
+/-- The audited circuit: one `CoreSpotPair` instance over `x`, beside the window's two tables as registered
 parameters. -/
 private def descriptor : String :=
-  r#"{"annotations":{},"callees":["CoreSampledProofsXor8_v1","Input8_v1","RegisteredInput16_v1","CoreSampledProofsPair_v0"],"definitions":{"CoreSampledProofsPair_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0},{"refs":{"affine":["p",0,1,1]},"type":0}],"fn":0,"form":"primitive","out":0}],"params":[["x",["Array",2,["Value",8]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",8]},"form":"composite","id":"CoreSampledProofsPair_v0"},"CoreSampledProofsXor8_v1":{"form":"primitive","id":"CoreSampledProofsXor8_v1","params":[["a",["Value",8]],["b",["Value",8]]],"ret":["Value",8]},"Input8_v1":{"form":"primitive","id":"Input8_v1","params":[],"ret":["Value",8]},"RegisteredInput16_v1":{"form":"primitive","id":"RegisteredInput16_v1","params":[],"ret":["Value",16]},"Root[CoreRemoteReuse_v0{N=1}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":2,"out":1},{"args":[],"axes":[],"fn":2,"form":"batch","n":8,"out":2},{"args":[],"axes":[],"fn":2,"form":"batch","n":4,"out":3},{"args":[{"refs":{"affine":["n",0,0,2]},"type":4}],"axes":[0],"fn":3,"form":"batch","n":1,"out":5}],"params":[],"ret":{"affine":["n",3,0,1]},"ret_type":["Array",1,["Value",8]]},"form":"composite","id":"Root[CoreRemoteReuse_v0{N=1}]_v1"}},"program_fn":"CoreRemoteReuse_v0{N=1}","root":"Root[CoreRemoteReuse_v0{N=1}]_v1","schema":"verity-ir/descriptor/v1","types":[["Value",8],["Array",2,["Value",8]],["Array",8,["Value",16]],["Array",4,["Value",16]],["Array",1,["Array",2,["Value",8]]],["Array",1,["Value",8]]]}"#
+  r#"{"annotations":{},"callees":["CoreSpotXor8_v1","Input8_v1","RegisteredInput16_v1","CoreSpotPair_v0"],"definitions":{"CoreSpotPair_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0},{"refs":{"affine":["p",0,1,1]},"type":0}],"fn":0,"form":"primitive","out":0}],"params":[["x",["Array",2,["Value",8]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",8]},"form":"composite","id":"CoreSpotPair_v0"},"CoreSpotXor8_v1":{"form":"primitive","id":"CoreSpotXor8_v1","params":[["a",["Value",8]],["b",["Value",8]]],"ret":["Value",8]},"Input8_v1":{"form":"primitive","id":"Input8_v1","params":[],"ret":["Value",8]},"RegisteredInput16_v1":{"form":"primitive","id":"RegisteredInput16_v1","params":[],"ret":["Value",16]},"Root[CoreRemoteReuse_v0{N=1}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":2,"out":1},{"args":[],"axes":[],"fn":2,"form":"batch","n":8,"out":2},{"args":[],"axes":[],"fn":2,"form":"batch","n":4,"out":3},{"args":[{"refs":{"affine":["n",0,0,2]},"type":4}],"axes":[0],"fn":3,"form":"batch","n":1,"out":5}],"params":[],"ret":{"affine":["n",3,0,1]},"ret_type":["Array",1,["Value",8]]},"form":"composite","id":"Root[CoreRemoteReuse_v0{N=1}]_v1"}},"program_fn":"CoreRemoteReuse_v0{N=1}","root":"Root[CoreRemoteReuse_v0{N=1}]_v1","schema":"verity-ir/descriptor/v1","types":[["Value",8],["Array",2,["Value",8]],["Array",8,["Value",16]],["Array",4,["Value",16]],["Array",1,["Array",2,["Value",8]]],["Array",1,["Value",8]]]}"#
 
 private def signature : Json := jsonOf
   r#"[["x",["Array",1,["Array",2,["Value",8]]]],["input-ids/0",["Array",8,["Value",16]]],["row-table/0/k64",["Array",4,["Value",16]]]]"#
@@ -195,7 +195,7 @@ private def circuit : String :=
   | .ok P => Flock.hexOf P.sha512
   | .error _ => ""
 
-private def query : Json := jsonOf r#"{"name":"Q_template_instance","params":{"template":"CoreSampledProofsPair_v0"},"version":0}"#
+private def query : Json := jsonOf r#"{"name":"Q_template_instance","params":{"template":"CoreSpotPair_v0"},"version":0}"#
 private def partition : Json := Json.mkObj [("program", circuit), ("query", query)]
 private def law : Json := jsonOf r#"{"k":1,"law":"subset"}"#
 private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1"), ("leaves", 2)]),
@@ -204,9 +204,9 @@ private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1")
 /-- The run's record after `previous`, registering `registered`. -/
 private def runRecord (previous : Json) (registered : Array Json) : Json := Json.mkObj [("anchors", Json.arr #[]),
   ("format", "verity/registration/v2"), ("law", law), ("leaf_layer", rep "ee"),
-  ("partition", (SampledProofs.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
-  ("program", circuit), ("protocol", SampledProofs.Registration.PROTOCOL),
-  ("query", (SampledProofs.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
+  ("partition", (Spot.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
+  ("program", circuit), ("protocol", Spot.Registration.PROTOCOL),
+  ("query", (Spot.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
   ("roots", Json.arr #[Json.mkObj [("domain", rep "d1"), ("leaves", 2), ("port", "out"), ("root", rep "cd")],
     Json.mkObj [("domain", rep "d2"), ("leaves", 1), ("port", "x"), ("root", rep "ab")]]),
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window", Json.mkObj [("kind", "served"), ("run", "r-1")])]
@@ -297,7 +297,7 @@ private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
 
 /-- The verdicts `flock-verify verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
 and accepting, reporting the roots it opened `rec`'s registered values against. -/
-private def grantedOf (rec : Json) (e : SampledProofs.OneStageZk.Evidence) : Array (String × Json) :=
+private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (String × Json) :=
   let reads := match rec.getObjValD "registered" with
     | .arr xs => xs.toList.flatMap fun x => [0, 1].map fun (i : Nat) =>
       (s!"{(x.getObjValD "value").getStr?.toOption.getD ""}.{i}",
@@ -312,18 +312,18 @@ sessions' run gives (`grantedOf`); the recursive form refused. -/
 private def proved : Core.Protocol where
   id := VStar.Recursive.Sampled.PROTOCOL
   Params := VStar.Recursive.Sampled.Params
-  Commitment := SampledProofs.OneStage.Commitment
+  Commitment := Spot.OneStage.Commitment
   Evidence := VStar.Recursive.Sampled.Evidence
-  Public := SampledProofs.OneStage.Public
+  Public := Spot.OneStage.Public
   Profile := Core.Integrity
   params := VStar.Recursive.Sampled.paramsOfJson
-  commitment := SampledProofs.OneStage.commitmentOf
+  commitment := Spot.OneStage.commitmentOf
   evidence := VStar.Recursive.Sampled.evidenceOf
   digest c := c.digest
   check p c e := match p, e with
-    | .inl p, .inl e => SampledProofs.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
+    | .inl p, .inl e => Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
     | _, _ => .reject "the one-stage form only"
-  publicJson := SampledProofs.OneStage.publicJson
+  publicJson := Spot.OneStage.publicJson
   profileJson := Core.Integrity.toJson
 
 private def provedOn (log : Array Json) (outputs : Option Json) : Answer := answerOf proved (sampledOn log outputs recR)

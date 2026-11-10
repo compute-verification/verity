@@ -20,9 +20,7 @@ import Proofs.Flock.EndToEnd.Joint.Prod
 import Proofs.Flock.EndToEnd.Period.Union
 import Proofs.Flock.Soundness.Audit.HarmBound
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the joint stratified bound, per sampling block and pooled over a period

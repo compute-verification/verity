@@ -1,9 +1,11 @@
 """`engine.served_seed`: a request admitted without a seed is sampled under the public default, a client's seed is kept, and
-the caller's params are never changed."""
+the caller's params are never changed; the seed the compiler derives from a window's coin and a request's id is a hash of both."""
 from __future__ import annotations
 
 import copy
 import hashlib
+
+import pytest
 
 from verity_vllm.engine import served_seed
 
@@ -27,6 +29,19 @@ class Engine:
 def test_the_default_is_the_hash_of_its_name():
     want = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
     assert served_seed.DEFAULT_SEED == want and 0 <= want < 1 << 63
+
+
+def test_a_derived_seed_is_the_hash_of_its_domain_the_coin_and_the_id_each_length_prefixed():
+    coin = bytes(range(64))
+    data = served_seed.DERIVED + (64).to_bytes(4, "big") + coin + (2).to_bytes(4, "big") + b"q1"
+    want = int.from_bytes(hashlib.sha512(data).digest()[:8], "big") >> 1
+    assert served_seed.derived(coin, "q1") == want and 0 <= want < 1 << 63 and want != served_seed.DEFAULT_SEED
+    assert served_seed.derived(coin + b"q", "1") != served_seed.derived(coin, "q1")
+    for bad in (b"", "coin", None):
+        with pytest.raises(ValueError, match="a window's verifier coin is non-empty bytes"):
+            served_seed.derived(bad, "q1")
+    with pytest.raises(ValueError, match="a request's id is a string"):
+        served_seed.derived(coin, 1)
 
 
 def test_install_seeds_unseeded_requests_only_and_copies():

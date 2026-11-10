@@ -766,10 +766,10 @@ theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
 
 open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff) in
 /-- **A well-formed value's objects hold their keys in order.** -/
-theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.SampledProofs.sortedKeys j = true := by
-  refine FlockDeploy.json_ind (fun _ => by simp [_root_.SampledProofs.sortedKeys])
-    (fun _ _ => by simp [_root_.SampledProofs.sortedKeys]) (fun _ _ => by simp [_root_.SampledProofs.sortedKeys])
-    (fun _ _ => by simp [_root_.SampledProofs.sortedKeys]) ?_ ?_
+theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
+  refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
+    (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])
+    (fun _ _ => by simp [_root_.Spot.sortedKeys]) ?_ ?_
   · intro a ih hw
     cases hw with
     | arr h => exact sortedKeys_arr.2 fun x hx => ih x hx (h x hx)
@@ -835,10 +835,10 @@ theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k)
 
 /-- **The coins v2 reads at an accepted case fit `MAX_COINS` frames**: v2's evidence holds its segment's openings
 within `LIMITS`, and v2 reads one frame of `COIN_BYTES` per opening. -/
-theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray}
+theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray}
     {dr : Draws} (h : V2Accepts bs a b e p c ev ξ dr) :
-    ξ.size ≤ _root_.SampledProofs.Challenger.COIN_BYTES * _root_.SampledProofs.Challenger.MAX_COINS := by
+    ξ.size ≤ _root_.Spot.Challenger.COIN_BYTES * _root_.Spot.Challenger.MAX_COINS := by
   obtain ⟨-, -, hev, hξ, hdr, -⟩ := h
   obtain ⟨b', hb'⟩ := Binding.dispatch_evidence hev
   obtain ⟨-, -, -, -, hops, -⟩ :=
@@ -884,10 +884,10 @@ verifier, whose sampled verdict accepts, whose log v2 read is the device's, and 
 bytes are the coins `κ`. Where the play holds more of the family's coins than `κ`, v2's still fit `κ`'s
 (`coins_size_le`, `hm`). -/
 theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
-    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) {m : ℕ} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) {m : ℕ} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
     {κ : Fin m → Fin 512 → Bool} {ω : A.Ω}
-    (hsrc : _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 κ 0))
+    (hsrc : _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 κ 0))
     {o : Verity.Exchange} (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o)
     {label : String} {after : ByteArray} (hN : SampleNamed k o.sent label after)
     (hc : CoinsAgree (freshCoins label after o.log) (fillCoins κ)) {record : String}
@@ -902,14 +902,14 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
   have hξ := coins_size_le hacc
   unfold ShowsDraw at hs
   rw [hlab, haft] at hs
-  have e₀ : bitsOf (_root_.Properties.SampledProofs.bytesOf (coinBytes m 64 κ 0)) = (fillCoins κ).flatten :=
+  have e₀ : bitsOf (_root_.Properties.Spot.bytesOf (coinBytes m 64 κ 0)) = (fillCoins κ).flatten :=
     bitsOf_streamOf_coinBytes (B := 64) κ
-  have hpre : bitsOf ξ <+: bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) := by
+  have hpre : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (A.src ω 0)) := by
     rw [hsrc, e₀]
     rcases hc with hc | hc
     · exact hs.trans (prefix_flatten hc)
     · refine List.prefix_of_prefix_length_le hs (prefix_flatten hc) ?_
-      have h64 : _root_.SampledProofs.Challenger.COIN_BYTES = 64 := rfl
+      have h64 : _root_.Spot.Challenger.COIN_BYTES = 64 := rfl
       rw [h64] at hξ
       rw [length_bitsOf, length_fillCoins]
       omega
@@ -943,9 +943,9 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {label : String} {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool}
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
-    (hrd : PicksOpenings rd) (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
+    (hrd : PicksOpenings rd) (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
     (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) {x : Verity.Exchange}
     (hreach : PlayReaches (firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).g'
       (firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).s' x)

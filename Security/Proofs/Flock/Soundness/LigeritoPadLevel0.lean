@@ -9,10 +9,8 @@ import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Pr
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LigeritoWeights
 import Proofs.Flock.Soundness.LincheckPhase
@@ -107,7 +105,7 @@ theorem prCoin_affine_le (a c : K) (ha : a ≠ 0) :
     have hdeg : (Polynomial.C a + Polynomial.C c * Polynomial.X).natDegree ≤ 1 := by
       refine (Polynomial.natDegree_add_le _ _).trans (max_le (by simp) ?_)
       exact (Polynomial.natDegree_C_mul_le _ _).trans (by simp)
-    refine (prCoin_mono fun r h => ?_).trans ((prCoin_eval_eq_zero_le _ hP).trans ?_)
+    refine (prCoin_mono fun r h => ?_).trans ((Verity.Game.prCoin_eval_eq_zero_le _ hP).trans ?_)
     · simp only [Polynomial.eval_add, Polynomial.eval_C, Polynomial.eval_mul, Polynomial.eval_X]
       rw [mul_comm]; exact h
     · gcongr

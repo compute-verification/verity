@@ -5,7 +5,7 @@ public import Proofs.Flock.Recursive.FirewallAccepts
 public import Proofs.Flock.Recursive.FirewallFixed
 public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.SessionLoop.TablesSide
-public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Proofs.Flock.Soundness.Audit.OneStage
 import all Init.Control.Except
 import all Init.Data.Array.Basic
 import all Init.Data.Int.Repr

@@ -58,9 +58,9 @@ STREAM = "circuit/rep0"
 def _population(sub, n: int, sets: Path, seed: int):
     """The input set of ``sub`` at ``n`` (seeded samples), its lowering, and the `verity/partition/v1` object
     `Q_template_instance` v0 over `population_program` of its template at ``n`` (instance i is unit i), with that program."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_numerical.bench.generate import generate
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_flock.input_sets import InputSet
+    from verity_flock.synthetic import generate
 
     s = InputSet.open(generate(sub, n, seed, sets)["path"])
     template = s.subcircuit.definition(**FC.set_statics(s))
@@ -79,7 +79,7 @@ def _write_binding(out: Path, part: dict, program) -> None:
 
 
 def _shape(out: Path, low, sub_id: str, n: int, part: dict) -> dict:
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -102,7 +102,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
     ``partition.json`` with its program, ``program.json``, and its full sample, ``draw.json``. ``stacked``
     (flock-circuit, with ``sparse``, the bucket's `rec_sparse.Shape`): the stacked table R registered with it here
     (`rec_session.stage_stacked`, ``forge`` ``cell`` its forgery), the circuit registration whose digest META binds."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_flock import subcircuit_templates as TM
 
     RB.check_inner(n)
@@ -128,7 +128,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     the ones the window's registration commits, so ``pub-<n>.bin``'s body is ``m<k>-public.bin`` itself, which the result's
     ``public_body`` states. ``zk_out``: the same member under the hm96 circuit as well (today's ``--zk`` statement, 85's
     ``stage-zk``)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.windows.flock_inputs import flock_input_files
     from verity_flock import subcircuit_templates as TM
 
@@ -285,7 +285,7 @@ def tree_held(challenger: Path, sessions: list[Path]) -> dict:
     """Each rec_live session directory of ``sessions`` held to the release log in ``challenger`` (`rec_live.tree_held_reason`):
     its live-coin part's record (``public.json``) and its coin tree (a stopped session's ``coin_tree.json``, else its session
     record's ``coin_tree``)."""
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.spot import remote as R
 
     held = []
     for d in sessions:
@@ -294,7 +294,7 @@ def tree_held(challenger: Path, sessions: list[Path]) -> dict:
         held.append((d.name, tree, json.loads((d / "public.json").read_text())))
     why = RL.tree_held_reason(R.log_lines(challenger / R.RELEASES), held)
     return {"sessions": [n for n, _, _ in held], "reason": why, "ok": why is None,
-            "held_by": "rec_live.tree_held_reason, the Python mirror of SampledProofs.Challenger.innerTreesReason, which "
+            "held_by": "rec_live.tree_held_reason, the Python mirror of Spot.Challenger.innerTreesReason, which "
                        "the recursive audit reads"}
 
 

@@ -3,7 +3,7 @@
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
-are the ones `SampledProofs.OneStage.check` makes public (the sampled and proved units, the bound on incorrect proof blocks at δ, each
+are the ones `Spot.OneStage.check` makes public (the sampled and proved units, the bound on incorrect proof blocks at δ, each
 template's under a stratified or work sampling design; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
@@ -16,7 +16,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
+from verity.core.protocols.spot.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
 

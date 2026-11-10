@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.CompiledLock
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!

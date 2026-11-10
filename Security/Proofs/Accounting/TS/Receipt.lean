@@ -20,7 +20,7 @@ final states from the pinned start give the replaced word right (`duoRun_update_
 segment's word right (`LiLemmas.right_of_same`, `DuoCPLemmas.right_of_same`, `DuoCPLemmas.fx1_right_of_same`). The
 event `same ∧ ¬right` is empty.
 
-The keyed rounds (`operandLuck_wrongWords`): a share positive only where a deficient word is wrong makes
+The keyed rounds (`operandLuck_incorrectWords`): a share positive only where a deficient word is wrong makes
 `right ∧ d > 0` empty, the operand luck at 0.
 
 The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned on the coins before the bits, a deficient
@@ -133,12 +133,12 @@ theorem operandLuck_cube (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fin
           rw [expect_mul_left, prob_eq_expect]
 
 /-- The keyed rounds' share: a share positive only where a deficient word is wrong gives the operand luck at 0. -/
-theorem operandLuck_wrongWords {Ω : Type} [Fintype Ω] :
-    ∀ {S : ℕ} (G : ReceiptGame Ω S), G.WrongWords → G.OperandLuck 0
+theorem operandLuck_incorrectWords {Ω : Type} [Fintype Ω] :
+    ∀ {S : ℕ} (G : ReceiptGame Ω S), G.IncorrectWords → G.OperandLuck 0
   | _, .done, _ => trivial
   | _, .round d _ right _ next, h => by
     obtain ⟨hd, hw, hN⟩ := h
-    refine And.intro hd (And.intro ?_ fun ω => operandLuck_wrongWords (next ω) (hN ω))
+    refine And.intro hd (And.intro ?_ fun ω => operandLuck_incorrectWords (next ω) (hN ω))
     rw [zero_mul]
     exact (prob_mono (q := fun _ => False) fun ω h => hw ω h.2 h.1).trans Rounds.prob_false.le
 
@@ -171,6 +171,6 @@ theorem Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind :=
   fun D ω => DuoCPLemmas.fx1_right_of_same D ω
 
 theorem LuckCaseAKeyed : Accounting.Guarantees.TS.LuckCaseAKeyed :=
-  fun G hpin hA hw => LuckCaseA G 0 hpin hA (operandLuck_wrongWords G hw)
+  fun G hpin hA hw => LuckCaseA G 0 hpin hA (operandLuck_incorrectWords G hw)
 
 end Accounting.SecurityProofs.TS

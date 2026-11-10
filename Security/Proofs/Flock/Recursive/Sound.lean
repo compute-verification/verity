@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Recursive.Fork
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: soundness of the recursive audit under `cr/sha-512`

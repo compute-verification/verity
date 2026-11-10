@@ -56,7 +56,7 @@ namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.PeriodJ10R
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 section By
 

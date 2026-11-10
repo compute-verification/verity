@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.LockLevel
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CompiledAlign
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The masked level 0's locksteps for two level-0 tables are aligned

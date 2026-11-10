@@ -19,6 +19,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 
 def cpus_of(text: str) -> set[int]:
@@ -59,8 +63,9 @@ def probe(prefix: list[str]) -> str | None:
     return None if r.returncode == 0 else (r.stderr.strip() or f"rc {r.returncode}")
 
 
-def plan(env, affinity: set[int], *, bus_id=smi_bus_id, sys_root: Path = Path("/sys"), numactl: str | None = None,
-         check=probe) -> tuple[list[str], dict]:
+def plan(env: Mapping[str, str], affinity: set[int], *, bus_id: Callable[[str], str] = smi_bus_id,
+         sys_root: Path = Path("/sys"), numactl: str | None = None,
+         check: Callable[[list[str]], str | None] = probe) -> tuple[list[str], dict]:
     """The prefix CMD runs under (empty: unbound) and the record of how and why."""
     rec: dict = {"bound": False, "node": None, "affinity": cpu_list(affinity)}
     if env.get("DITHER_NUMA", "1") == "0":

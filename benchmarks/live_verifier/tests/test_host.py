@@ -26,16 +26,18 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 RS = ROOT / "benchmarks" / "remote_session"
 PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
+sys.path.insert(0, str(ROOT))
 
-import challengers  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 import store_layout as SL  # noqa: E402
-import verifier as V  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier as V  # noqa: E402
+from benchmarks.remote_session import verifier_process as VP  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
@@ -125,7 +127,8 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
-    assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
+    assert argv[:3] == ["/usr/bin/python3", "-I",
+                        str(H.TREE / "benchmarks" / "remote_session" / "verifier_process.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
@@ -151,8 +154,8 @@ def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_par
 
 
 def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
-    """verifier.py's arguments as its own parser reads the gate's command line, and where it then listens: its main up
-    to the listen, which nothing reaches."""
+    """The verifier's arguments as its own parser reads the gate's command line, and where it then listens: its
+    process's main (`verifier_process.py`) up to the listen, which nothing reaches."""
     got = {}
     parse = argparse.ArgumentParser.parse_args
 
@@ -172,7 +175,7 @@ def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
     monkeypatch.setattr(sys, "setswitchinterval", lambda s: None)
     monkeypatch.setattr(sys, "argv", argv[2:])
     with pytest.raises(Listened) as e:
-        V.main()
+        VP.main()
     return got["a"], e.value.args
 
 
@@ -514,7 +517,8 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "print(host.replay_module().__file__)",
     "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
-    "sys.argv = ['auditor_line.py', '--help']; runpy.run_path(str(host.VERIFIER.parent / 'auditor_line.py'), "
+    "sys.argv = ['auditor_line.py', '--help']; "
+    "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
     "run_name='__main__')",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
@@ -701,7 +705,8 @@ def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
 def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
     code = ("import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period, "
-            "verity.core.protocols.pous.challenger_party, verity.core.protocols.remote_bandwidth.p2_party; print('ok')")
+            "verity.core.devices.memory_challenger.challenger_party, verity.core.protocols.remote_bandwidth.p2_party; "
+            "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
 

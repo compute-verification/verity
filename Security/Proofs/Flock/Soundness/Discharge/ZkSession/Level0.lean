@@ -7,8 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
 public import Proofs.Flock.Soundness.SoundnessPad
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!

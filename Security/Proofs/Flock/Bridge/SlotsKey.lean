@@ -26,7 +26,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 /-- **A unit's lowered gate on its boundary is a committed wire's position**: a row's two XORs are interior
 (`boundary_inner`), and a gate outside the unit reading a wire's position reads the wire. -/

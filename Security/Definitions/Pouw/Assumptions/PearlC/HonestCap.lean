@@ -6,7 +6,7 @@ public import Definitions.Pouw.PearlC.Tile
 # The honest tiles' measured cap rate, completeness's one assumption (trusted; a `Prop` taken as a hypothesis)
 
 The sampled audit's completeness (`CompleteSampled`, `Definitions.Pouw.PearlC.Completeness`) takes the workload's weights
-passing the rules as a hypothesis (`Workload.WeightsOK`), and needs two facts about the honest prover's sampled tile: its
+passing the rules as a hypothesis (`Workload.FixedOK`), and needs two facts about the honest prover's sampled tile: its
 words are the reference's, and its replayed debit is within the cap. The first is
 proved (`HonestWords`: every reference value is an FP32 word's). The second depends on the activations and the noise,
 and nothing proves it; `HonestTileCapRate` assumes it at the rate a measurement gives.
@@ -81,7 +81,7 @@ through the Python check that the L5 test ties to it. The measurement is `served
 with failures and for fresh trials. -/
 def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes, Served U act →
+  ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes, Served U act →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
       pr (fun x : (Q → R) × S × Ticket w (TR.tiling U.layout).NT =>
           (TR.tiling U.layout).unit x.2.2.1 < U.layout.N ∧

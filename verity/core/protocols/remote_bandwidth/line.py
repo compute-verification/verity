@@ -2,7 +2,7 @@
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
 rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, held to this by the difftest
-(`lean/tests/test_line.py`, every refusal compared word for word): `benchmarks/remote_session/verifier.py`'s
+(`lean/tests/test_line.py`, every refusal compared word for word): `verity/core/protocols/remote_bandwidth/session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
 clock) read it.  The declared outputs' paced forms (`ledger.memory`) are the same arithmetic in floats, over the whole
 session as one stretch (`session_lost`); floats are otherwise for display only, outside this module.

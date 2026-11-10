@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The fleet's usage record, daily compute report and quota watch (INF-60): every Nebius VM recorded, the H200s included.
+"""The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included.
 
     fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
                                  and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
@@ -15,8 +15,8 @@
     fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
     fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
                                  $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at 15:00Z (08:00 PDT) the last
-                                 24 h's report to infra's status thread and @top, and to each lane that owns an idle machine a
-                                 doorbell with only its own machines
+                                 24 h's report to infra's status thread and the admin lane, and to each lane that owns an idle
+                                 machine a doorbell with only its own machines
 
 Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
 quotas stopped launches with no warning. A VM's rate and address come from the machines registry (`research
@@ -64,7 +64,7 @@ SSH_KEY = os.environ.get("FLEET_SSH_KEY", str(Path.home() / ".ssh" / "research_k
 JUMP = os.environ.get("FLEET_JUMP", "research@81.85.2.165")        # a private address (10.*) is reached through it
 INTERVAL_S, QUOTA_EVERY_S, REPORT_HOUR_UTC = 300, 1800, 15
 BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
-# a memory-bound job (circuits' GLM folds on vy-glm53-cpu-2, 25 Oct: 2-4 busy cores of 192, 150-700 GB of 755 GB) is not idle
+# a memory-bound job (a few busy cores of 192 and hundreds of GB of memory in use) is not idle
 IDLE_MEM_SHARE = 0.15
 STATUS_THREAD = "1791351683.780959"
 #: a RUNNING VM with a registered host that no sample has read this long is unreachable: one alert with its serial log's tail,
@@ -360,7 +360,7 @@ def render_lane(rows: list[dict], hours: float, end: float) -> str:
 
 
 def daily(now: float, send: Callable[[list[str], str], str | None] | None = None) -> list[str]:
-    """The 24 h brief to infra's status thread and @top, and each owning lane's idle machines to its inbox; a post that fails is
+    """The 24 h brief to infra's status thread and the admin lane, and each owning lane's idle machines to its inbox; a post that fails is
     alerted on in #agent-alerts (once, naming every failure) and logged. What failed."""
     send = send or post
     rep = report(load_samples(now - 86400, now), 24)

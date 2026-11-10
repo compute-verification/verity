@@ -33,8 +33,8 @@ theorem Pr_const_eq {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [None
     Pr (fun _ : α => P) = Pr (fun _ : β => P) := by
   classical
   by_cases h : P
-  · simp [Pr, h, Fintype.card_ne_zero]
-  · simp [Pr, h]
+  · simp [Pr, Claims.prUniform, h, Fintype.card_ne_zero]
+  · simp [Pr, Claims.prUniform, h]
 
 theorem Ex_Pr_comm {α β : Type} [Fintype α] [Fintype β] (q : α → β → Prop) :
     Ex (fun a => Pr fun b => q a b) = Ex (fun b => Pr fun a => q a b) :=

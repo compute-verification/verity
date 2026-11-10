@@ -475,7 +475,7 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
 
 /-! ## The model's lane rounds -/
 
-theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) = gOf (coinK c) :=
+theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!) = gOf (coinK c) :=
   ofLimbs_coin c
 
 /-- One lane round on forms is `laneStepE`. -/
@@ -483,7 +483,7 @@ theorem laneStep_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len
     (ch : Array F256) (j : ℕ) (hP : ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val)
     {s : ZkSession.LinK 𝕂 lay.len} {x : Zk.Lin2} (hs : Rel2 s x) (c : Array F128) (hc : coinK c = ch[j]!) :
     Rel2 ((ZkSession.fromMsgL (ZkSession.unmask execArith P j (gOf lg.messages[j]!.1, gOf lg.messages[j]!.2))
-        s).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!))) (laneStepE lay lg ch x j) := by
+        s).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!))) (laneStepE lay lg ch x j) := by
   have h1 := rel2_masked lg.messages[j]!.1 (P.msg j 0) (P.msg j 1) (hP 0) (hP 1)
     (by simp [Zk.PadLayout.lgMsg])
   have h2 := rel2_masked lg.messages[j]!.2 (P.msg j 2) (P.msg j 3) (hP 2) (hP 3)
@@ -510,7 +510,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
       obtain ⟨hc2, hck⟩ := hc 0 (by omega)
       simp only [List.getElem!_cons_zero, Nat.add_zero] at hc2 hck
       rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (1 - 1) = [] by simp [kMsgs]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
       refine ⟨_, Plays.bind' (ms₂ := []) (cs₂ := []) hk (Plays.pure _) rfl rfl, ?_⟩
@@ -529,7 +529,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
           simpa [show j + (i + 1) = j + 1 + i by omega] using this)
       rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (k + 2 - 1) =
           kMsg lg.messages[j + 1]! :: kMsgs lg (j + 1 + 1) (k + 1 - 1) by simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
       refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ _) (Plays.bind' hpl (Plays.pure _) (List.append_nil _).symm
@@ -538,7 +538,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
       exact hrel
 
 theorem plays_drawK (c : Array F128) (hc : c.size = 2) :
-    Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+    Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
   unfold Model.drawK
   exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
 

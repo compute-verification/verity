@@ -225,9 +225,10 @@ noncomputable def err (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs 
       8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
     4 * t * 3 ^ t * (Claims.Fork sha (((Stops T L pc fc).swP vs).prover w) v.Vs v.θ x).Pr sha)
 
-/-- **The live path's premises at `(x, w)`**, each as `zk_server_lean_loop` takes it: the transport's frame states
-(`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). -/
+/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
+states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
+`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
+worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -260,7 +261,7 @@ theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs :
   obtain ⟨hR, hPr, hLk, hF, hE, hEf⟩ := hR
   intro E
   have h := Claims.ZKServer.Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc (fun _ _ => True)
-    ((Sess T).swCausalOn_of_swCausal vs _ hsc) hT L₀ L hL wk x w hR pc fc hPr ((Sess T).stopsOk_true _) hLk hF hE
+    ((Sess T).swCausalOn_of_swCausal vs _ hsc) hT L₀ L hL wk x w hR pc fc hPr ((Sess T).stopsOk_true _) hLk hF hE.own
     hEf v.Vs v.θ (v.hk x) E
   rw [server_real_pr, server_sim_pr, err]
   refine (ENNReal.ofReal_le_ofReal (h.trans_eq (congrArg (fun z => 2 * z) (add_assoc _ _ _)))).trans ?_

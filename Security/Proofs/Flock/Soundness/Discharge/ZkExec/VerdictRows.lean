@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck

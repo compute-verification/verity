@@ -58,7 +58,7 @@ namespace Pouw.PearlC.Assumptions
 variable {Q R S : Type}
 
 /-- **TT_OUT(1/400) at a device record with the cap on the chain's share**: `TTOut` at
-`pearlCProtocolDevChainCap d sem ρ`, `pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. It is `TTOutPearlCDev` with
+`pearlCProtocolDevChainCap d sem ρ`, `pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with
 fewer units credited: a unit counts only if its debit is at most `ρ` times its chain's credited work, which bounds its
 flagged share of atom-words by `ρ` at every width (`chainCap_flagged_le`). It asserts less than `TTOutPearlCDev` at the
 same `ρ` (`ttOutPearlCDevChainCap_of_cap`). The game, charging rule, error, debit, falsifiers and cost model are
@@ -66,7 +66,7 @@ same `ρ` (`ttOutPearlCDevChainCap_of_cap`). The game, charging rule, error, deb
 instance is `devSm120v2` at `ρ = 1/1,000` (`tt-out/pearl-c-sm120-unpromoted-chaincap1000`). -/
 def TTOutPearlCDevChainCap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile with the cap on the chain's share**: `TTOutTile` at
 `pearlCProtocolDevChainCap d sem ρ` and `pearlCTilesDevChainCap d sem ρ`. It asserts less than `TTOutTilePearlCDev` at
@@ -74,19 +74,19 @@ the same `ρ` (`ttOutTilePearlCDevChainCap_of_cap`): the same fixed credit on fe
 def TTOutTilePearlCDevChainCap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolDevChainCap d sem ρ) (pearlCTilesDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400)
-    εPearlC
+    δPearlC
 
 /-- **TT_OUT(1/400) with the cap on the chain's share, at W1 on `dv`**: `TTOutPearlCDevChainCap` with its cost model the
 term `W1.w1Priced dv salt` (`TTOutW1`). -/
 def TTOutPearlCDevChainCapW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile with the cap on the chain's share, at W1 on `dv`**: `TTOutTilePearlCDevChainCap` at
 `W1.w1Priced dv salt` (`TTOutTileW1`). -/
 def TTOutTilePearlCDevChainCapW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolDevChainCap d sem ρ) (pearlCTilesDevChainCap d sem ρ) (pearlCDomainDev d)
-    (1 / 400) εPearlC
+    (1 / 400) δPearlC
 
 end Pouw.PearlC.Assumptions

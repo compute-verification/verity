@@ -52,10 +52,12 @@ class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: Region, trace: Trace, *, strict: bool = True) -> Trace:
-    """Evaluate every gate of `sub` in canonical order, writing into `trace` (mutated and returned).
-    `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
-    for gv in sub:
+def evaluate_region(circuit: Circuit, sub: Region | Iterable, trace: Trace, *, strict: bool = True) -> Trace:
+    """Evaluate every gate of `sub` (a `Region`, or any iterable of gates) in canonical order, writing into `trace`
+    (mutated and returned). `Input` gates must be present already. With `strict=False`, gates whose operands are missing are
+    skipped. In a `Region`, a primitive with ``evaluate_lazy`` resolves only the operands it reads (`Circuit.gates`' ``lazy``)."""
+    gates = sub.circuit.gates(sub.lo, sub.hi, lazy=True) if isinstance(sub, Region) else sub
+    for gv in gates:
         prim = gv.prim
         if getattr(prim, "family", None) == "Input":
             if gv.index not in trace:

@@ -1233,7 +1233,7 @@ def template(reg: CircuitTypeTable, tname: str, tp: dict, T_range=None, cache: d
 def _spine(reg: CircuitTypeTable, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
     """A spine template's record: its Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
     single unit), its Definition walked."""
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     mod = lowerings.registry("C-Flock").module(sub.template.id)
     if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:

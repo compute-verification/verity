@@ -544,7 +544,7 @@ def measured_row(result: Mapping[str, Any]) -> dict[str, Any]:
 
 
 #: The checker GKR's per-layer (b, s_in) at B = 4096 (96 x 4096 = 393,216 unit copies, b = 19; 826 wires): fitted to
-#: the measured checker chain 197 of r20260922-074606-be7b (6 x 19 + 2 x 39 + 5); the B = 64 run's 167 is
+#: the measured checker chain 197 (6 x 19 + 2 x 39 + 5); the B = 64 run's 167 is
 #: 6 x 13 + 2 x 42 + 5. The 16-bit range table's fractional tree has n = 26 levels (352 = measured lookup chain).
 A_CHECKER_LAYERS_B4096: tuple[tuple[int, int], ...] = ((19, 7), (19, 7), (19, 7), (19, 6), (19, 6), (19, 6))
 A_R16_LEVELS_B4096 = 26

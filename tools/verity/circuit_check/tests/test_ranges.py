@@ -15,7 +15,7 @@ def _id(t: int, ns: int, d: int = 16, scale: str = "0.0625") -> str:
 
 
 def test_a_rule_spans_the_statics_written_as_ranges_and_fixes_the_rest_by_their_spelling():
-    assert RULE.family == "Fam_v1" and RULE.over == (("T", 1, 64), ("NS", 1, 4))
+    assert RULE.family == "Fam_v1" and RULE.over == (("T", 1, 64, 1), ("NS", 1, 4, 1))
     assert RULE.fixed == (("D", "16"), ("DOT", "Dot_v1"), ("SCALE", "0.0625"))
     assert RULE.spots == (_id(1, 1), _id(64, 4), _id(30, 2))
     assert RULE.at(_id(64, 1)) == {"T": 64, "NS": 1}
@@ -26,10 +26,23 @@ def test_a_rule_spans_the_statics_written_as_ranges_and_fixes_the_rest_by_their_
                                      "Fam_v1{T=x,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625}")] == [True] + [False] * 11
 
 
+def test_a_stepped_range_spans_its_grid_from_lo_to_hi_and_nothing_between():
+    grid = RG.parse("Cls_v1{N=4096..131072 step 2048,K=2048}", ["N=4096", "N=131072", "N=67584"])
+    assert grid.over == (("N", 4096, 131072, 2048),) and grid.spots[2] == "Cls_v1{N=67584,K=2048}"
+    assert [grid.covers(f"Cls_v1{{N={n},K=2048}}") for n in (4096, 6144, 129024, 131072, 2048, 4097, 6143, 133120)] == \
+        [True] * 4 + [False] * 4
+    assert RG.statuses({"targets": [], "ranges": [{"rule": grid.text, "holds": True}]},
+                       ["Cls_v1{N=8192,K=2048}", "Cls_v1{N=8193,K=2048}"]) == \
+        {"Cls_v1{N=8192,K=2048}": "by range", "Cls_v1{N=8193,K=2048}": "unregistered"}
+
+
 @pytest.mark.parametrize("text, spots, match", [
     ("Fam_v1", [], "is no id"),
     ("Fam_v1{T=4,D=16}", [], "spans no static"),
     ("Fam_v1{T=9..2}", [], "is empty"),
+    ("Fam_v1{T=1..64 step 2}", [], "doesn't reach hi from lo"),
+    ("Fam_v1{T=1..64 step 0}", [], "doesn't reach hi from lo"),
+    ("Fam_v1{T=0..64 step 2}", ["T=0", "T=64", "T=33"], "outside its ranges"),
     (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=65,NS=1"], "outside its ranges"),
     (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=8"], "not an integer for each of"),
     (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=1,NS=1"], "listed twice"),
@@ -55,8 +68,9 @@ def test_a_rule_holds_where_the_run_checked_each_of_its_spots_and_each_passed():
 
 
 def test_a_spot_that_passed_without_running_a_check_is_named_beside_the_verdict():
-    """A partition over its leaf budget is a warning, which fails nothing (circuit-check's own verdict); the rule still holds,
-    and the section names the spot and the check it skipped, so a reader doesn't take it as checked."""
+    """The partition over its leaf budget of a spot that is no Call is a warning, which fails nothing (circuit-check's own
+    verdict); the rule still holds, and the section names the spot and the check it skipped, so a reader doesn't take it as
+    checked."""
     skip = {"check": "partition", "code": "unchecked"}
     style = {"check": "redundant-gates", "code": "boolean"}
     targets = [{"target": RULE.spots[0], "failures": [], "warnings": [style]},

@@ -19,10 +19,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.sampled_proofs import challenger as C
+from verity.core.protocols.spot import challenger as C
 from verity_flock import rec_compose as RC
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock/.lake/build/bin/flock-verify"
 
 pytestmark = [pytest.mark.slow,
               pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")]

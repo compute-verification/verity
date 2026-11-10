@@ -4,10 +4,10 @@ prose.
 
 A record's meta is everything the run knows, numbers included: the kernel variant (`verity.core.protocols.pouw.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
-metrics and the per-step time split, γ at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
+metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
 
-γ is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
+The gap is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
 panel line and version) on the priced path it ran (the gate's ``prices``, from the variant's), at both FP32 prices, and the
 larger is published. An arm whose lineage declares ``gamma`` gets no record (`typed_gamma`); the arm's own `Work.gamma`
 is kept as ``arm_claim`` and never published.
@@ -162,17 +162,18 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     return rec
 
 
-# ---- γ at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------------
+# ---- the gap at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------
 
 
 def typed_gamma(result: dict) -> dict[str, str]:
-    """The arms whose build record types γ in (a lineage ``gamma``): they get no record, since γ comes from the pins."""
+    """The arms whose build record types the gap in (a lineage ``gamma``): they get no record, since the gap comes from
+    the pins."""
     out = {}
     for name, arm in (result.get("arms") or {}).items():
         lineage = ((arm or {}).get("build") or {}).get("lineage") or {}
         if "gamma" in lineage:
-            out[name] = ("γ is typed into its lineage: the ledger looks γ up from the Lean-pinned price twins on the "
-                         "priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
+            out[name] = ("the gap is typed into its lineage: the ledger looks it up from the Lean-pinned price twins on "
+                         "the priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
     return out
 
 
@@ -193,9 +194,9 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
 
 def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate: dict, shape: dict,
           arm_claim: Any) -> dict:
-    """γ as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
-    reading beside it, every pin with its status (pinned in the Lean store, or staged), and the arm's own derivation kept
-    as ``arm_claim``, never published."""
+    """The gap as the record keeps it (under ``gamma``, its stored key): the forming-credited twins at both FP32 prices and
+    the larger published, with its advantage ε = g/(1 − g) as ``eps``, the chain-only reading beside it, every pin with
+    its status (pinned in the Lean store, or staged), and the arm's own derivation kept as ``arm_claim``, never published."""
     stmt = P.statement((panel or {}).get("line"), (panel or {}).get("version"))
     if twins is None:
         out = {"statement": stmt, "path": gate.get("prices"), "published": None, "by_price": {},
@@ -209,8 +210,14 @@ def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate
     if conflict:
         out["missing"].append(conflict)
         out["published"] = None
+    out["eps"] = None if out["published"] is None else str(eps(Fraction(out["published"])))
     out["arm_claim"] = arm_claim
     return out
+
+
+def eps(gap: Fraction) -> Fraction:
+    """The adversary's advantage ε that a gap g carries: g/(1 − g) (Lean `Pouw.Proofs.gGap_iff_gε`)."""
+    return gap / (1 - gap)
 
 
 def _twins() -> list[dict] | None:
@@ -312,7 +319,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
             time: str | None = None, twins: list[dict] | None | str = "table") -> list[dict]:
     """One record per arm row of every shape in a verified result (`verify.py`'s rewritten RESULT_JSON): ``kind``,
     ``meta``, ``refs`` and the ``labels`` to assert. `hypothesis`, `parent`, `outcome` and `reason` (the run's, from
-    verify.py's flags) win over the arm's lineage. An arm that types γ in (`typed_gamma`) gets none. `twins` is the
+    verify.py's flags) win over the arm's lineage. An arm that types the gap in (`typed_gamma`) gets none. `twins` is the
     price-twin table (default: `price_twins.json`)."""
     if tier not in TIERS:
         raise LedgerError(f"tier {tier!r} is not one of {TIERS}")
@@ -530,13 +537,14 @@ def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
         what.append("mechanism " + ", ".join(meta["mechanism"]))
     gm = meta.get("gamma") or {}
     if g is not None:
-        what.append(f"γ {gm.get('path')} at FADD {gm.get('published_at')}, the larger, from "
-                    + ("staged price twins (not yet in the Lean store)" if "staged" in (gm.get("pins") or []) else
-                       "Lean-store price twins"))
+        what.append(f"ε {float(eps(Fraction(g))):.4%} from the gap on {gm.get('path')} at FADD {gm.get('published_at')}, "
+                    "the larger, from " + ("staged price twins (not yet in the Lean store)"
+                                           if "staged" in (gm.get("pins") or []) else "Lean-store price twins"))
     else:
-        what.append("γ not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
+        what.append("ε not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
     if outcome:
         what.append(f"outcome {outcome}" + (f": {reason}" if reason else ""))
+    # "gamma" is panel.py's column for the gap g
     row = {"attempt": panel.get("attempt"), "line": panel["line"], "version": panel["version"],
            "precision": meta.get("stream"), "phase": phase, "shape": shape if tier == "2b" else f"{shape}:screen",
            "kind": "measured", "slowdown": mt["slowdown"], "lo": None, "hi": None,

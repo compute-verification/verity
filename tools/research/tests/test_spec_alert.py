@@ -1,4 +1,4 @@
-"""`spec_alert`: the DM Daniel gets when a push lands a change to what a guarantee says, and nothing for a move or a reprint."""
+"""`spec_alert`: the DM the spec's reader gets when a push lands a change to what a guarantee says, and nothing for a move or a reprint."""
 from __future__ import annotations
 
 import json
@@ -106,8 +106,8 @@ def test_a_lock_that_drops_its_readers_sends_nothing(tmp_path):
 
 
 def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or_is_first_recorded():
-    """LEAN-60: a premise outside `meaning` has only its own record's digest, so #4641's strengthened
-    `RecDeploy.PlainLeavesAdmitted` reached no DM. A changed digest is shown (tallied as rehashed when no Lean input
+    """A premise outside `meaning` has only its own record's digest, so a strengthened premise (such as
+    `RecDeploy.PlainLeavesAdmitted`) would reach no DM. A changed digest is shown (tallied as rehashed when no Lean input
     changed), and so is one first recorded; one a `reads` record holds shows as its definition, an unchanged one shows
     nothing, and a new one shows as a named assumption listed."""
     def doc(assumed: dict, defs: dict | None = None) -> dict:
@@ -197,13 +197,88 @@ def test_a_conjecture_added_or_marked_falsified_is_shown_with_its_reason():
 
 
 def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
-    """`verifier.allow` (LEAN-33) lists the `@[extern]` and `@[implemented_by]` constants the verifier may reach, which no
+    """`verifier.allow` lists the `@[extern]` and `@[implemented_by]` constants the verifier may reach, which no
     proof sees: an entry added is shown; one dropped, or the list unchanged, is not."""
     base = _doc({"P.t": _g("P.t : A", H1)}) | {"verifier": {"entries": ["P.verify"], "allow": ["Nat.add"]}}
     more = base | {"verifier": {"entries": ["P.verify"], "allow": ["ByteArray.push", "Nat.add"]}}
     assert spec.changes(base, more) == ["• compiled code allowed on the verifier's path, which no proof sees: `ByteArray.push`"]
     assert spec.changes(more, base) == [] and spec.changes(more, more) == []
     assert spec._tally(["compiled", "compiled", "new"]) == "guarantees: 1 new; verifier: 2 allowed"
+
+
+TRUST_KINDS = {"grown", "deployed", "undeployed", "trusted", "untrusted", "shrunk", "trust"}
+
+
+def _trust(doc: dict, deployed: list[str], gap: dict, base: dict | None = None, extra: dict | None = None) -> dict:
+    return doc | {"deployed": deployed, "trust": {"base": base or {}, "extra": extra or {}}, "trust_gap": gap}
+
+
+def test_a_trust_gap_grown_by_hand_comes_first_and_one_that_shrank_is_shown_after_the_statements():
+    """An update only shrinks `trust_gap`, so a premise a deployed guarantee newly rests on outside its trust was added by
+    hand, the one way past that ratchet: it leads the DM, ahead of a restated guarantee."""
+    old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G", "A.H"], {"A.G": ["P1"], "A.H": ["Q1", "Q2"]})
+    new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H'", "h3")}), ["A.G", "A.H"], {"A.G": ["P1", "P2"], "A.H": ["Q1"]})
+    got = spec.changes(old, new)
+    assert got[0] == "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `P2`"
+    assert got[1].startswith("• changed guarantee `A.H`, before:")
+    assert got[2] == "• trust gap shrunk: `A.H` no longer rests outside its trust on `Q2`"
+    assert spec._tally([k for k, _ in spec._entries(old, new)]) == "trust: 1 gap grown by hand, 1 gap shrunk; guarantees: 1 changed"
+
+
+def test_a_guarantee_deployed_or_no_longer_and_a_premise_trusted_or_no_longer_are_shown():
+    old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G"], {}, {"C.CR": "collision resistance",
+                                                                                   "C.Old": "an old bound"},
+                 {"A.G": {"C.Src": "the firewall's randomness"}})
+    new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.H"], {}, {"C.CR": "collision resistance, strict",
+                                                                                   "C.New": "a new bound"},
+                 {"A.H": {"C.Src": "the firewall's randomness"}})
+    assert spec.changes(old, new) == [
+        "• deployed guarantee `A.H` listed: it states the deployed system",
+        "• `A.G` no longer listed as deployed",
+        "• trust base `C.CR`: collision resistance, strict (was: collision resistance)",
+        "• trust base `C.New`: a new bound, listed",
+        "• deployed guarantee `A.H` also trusts `C.Src`: the firewall's randomness",
+        "• trust base `C.Old` no longer listed (it stated: an old bound)",
+        "• deployed guarantee `A.G` no longer trusts `C.Src`"]
+    assert spec._tally([k for k, _ in spec._entries(old, new)]) == \
+        "trust: 1 deployed, 1 no longer deployed, 3 trusted, 2 no longer trusted"
+
+
+def test_a_rename_carries_the_trust_with_it_and_changes_nothing_of_it():
+    """A guarantee renamed with its type hash and a premise renamed with its digest keep their places in `deployed`, the
+    trust and `trust_gap`: no trust entry, though the renamed assumption itself still shows as listed and no longer listed."""
+    def doc(g: str, p: str) -> dict:
+        d = _trust(_doc({g: _g("G", "h1")}), [g], {g: [p, "A.Assumptions.Kept"]}, {p: "a trusted bound"}, {g: {p: "a ruling"}})
+        return d | {"assumptions": {p: {"digest": "d1"}, "A.Assumptions.Kept": {"digest": "d2"}}}
+
+    old, new = doc("A.SpotSound", "A.Assumptions.SampledHash"), doc("A.SpotSound", "A.Assumptions.SpotHash")
+    kinds = [k for k, _ in spec._entries(old, new)]
+    assert not TRUST_KINDS & set(kinds), spec.changes(old, new)
+    assert sorted(kinds) == ["assumed", "unassumed"]
+
+
+def test_a_gap_premise_renamed_with_its_text_is_no_growth_and_one_the_records_already_held_is():
+    """A rename that changes a premise's text changes its hash too (`DrawIsCoin` to `SampleIsCoin`): a name no old record
+    held, in place of one no new record holds, is that rename. A premise the records already held, newly in the gap, was
+    put there by hand."""
+    def doc(renamed: str, h: str, gap: list[str]) -> dict:
+        d = _trust(_doc({"A.G": _g("G", "h1")}, {renamed: h, "A.Other": "h2"}), ["A.G"], {"A.G": gap})
+        return d | {"open": {renamed: {"issue": "X-1"}, "A.Other": {"issue": "X-2"}}}
+
+    old = doc("A.DrawIsCoin", "h3", ["A.DrawIsCoin"])
+    new = doc("A.SampleIsCoin", "h4", ["A.SampleIsCoin", "A.Other"])
+    assert [t for k, t in spec._entries(old, new) if k in TRUST_KINDS] == [
+        "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `A.Other`"]
+
+
+def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_nothing(tmp_path):
+    old = _doc({"A.G": _g("G", "h1")})
+    new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
+    assert spec._entries(old, new) == [] and [k for _, k, _ in spec._across({"x": old}, {"x": new})] == ["trust"]
+    repo = _repo(tmp_path)
+    a = _commit(repo, "Security/lean-audit.json", old, "a")
+    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    assert spec.message(repo, a, b) is None
 
 
 def test_a_record_from_before_the_rename_compares_by_what_it_says():
@@ -239,8 +314,8 @@ def _source(repo: Path, rel: str, text: str = "def x := 1\n") -> None:
 
 
 def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallied_and_not_listed(tmp_path):
-    """The audit regrouping its reads records (#1544) changed 116 definitions' hashes with no Lean source behind them, and
-    the DM would have listed every one; a Lean input changed in the push, or one outside the audit's own directory, lists
+    """The audit regrouping its reads records can change a hundred definitions' hashes with no Lean source behind them, and
+    the DM would list every one; a Lean input changed in the push, or one outside the audit's own directory, lists
     them as before."""
     repo = _repo(tmp_path)
     old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1, "P.E": H2}), "base")
@@ -262,8 +337,8 @@ def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallie
 
 
 def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropped_one_is_not(tmp_path):
-    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins (top, 06:06Z): pinning
-    another one with no manifest change would otherwise show only as `rehashed`. #1544 re-keys two bundles and drops a pin."""
+    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins: pinning another one with
+    no manifest change would otherwise show only as `rehashed`. Re-keying a bundle or dropping a pin is no Lean input."""
     repo = _repo(tmp_path)
     pins = lambda **deps: {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
     _commit(repo, spec.DEPS_PINS, pins(k1=H1, k2=H2), "pins")
@@ -296,6 +371,20 @@ def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_pa
     edited = _commit(repo, "p/lean/lean-audit.json", _doc({"P.t": _g("P.t : C", H3), "P.u": _g("P.u : B", H2)}), "m")
     text = spec.message(repo, old, edited)
     assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
+
+
+def test_a_fixture_of_the_audits_tests_is_no_record(tmp_path):
+    """A layout move renamed a test fixture named `lean-audit.json` under the audit's directory, whose `reads` are lists:
+    read as a record it failed the DM, and Daniel was told the records couldn't be read."""
+    repo = _repo(tmp_path)
+    toy = {"guarantees": {"Core.G": {"owner": "@lean"}}, "reads": {"Core.G": ["Core.helper"]}}
+    old = _commit(repo, "tools/verity/lean/tests/fixtures/unread/Old/lean-audit.json", toy, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "tools/verity/lean/tests/fixtures/unread/Old",
+                    "tools/verity/lean/tests/fixtures/unread/new"], check=True)
+    moved = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", toy, "Layout move (#9)")
+    assert spec._records_changed(repo, old, moved) == [] and spec.message(repo, old, moved) is None
+    edited = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", {**toy, "roots": ["A"]}, "m")
+    assert spec.message(repo, moved, edited) is None
 
 
 def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_as_moves(tmp_path):

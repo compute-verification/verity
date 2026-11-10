@@ -14,7 +14,7 @@ def test_reference_board_is_reference():
 
 
 def test_re_memoried_4090_is_a_variant_with_its_percentage():
-    v = part.verdict("NVIDIA GeForce RTX 4090", 49140, FAMILIES)   # the RunPod board lane ada-fp8-dumps landed on (48 GiB)
+    v = part.verdict("NVIDIA GeForce RTX 4090", 49140, FAMILIES)   # a RunPod board with 48 GiB
     assert v["reference"] is False and v["verdict"] == "variant (+100 %)"
 
 

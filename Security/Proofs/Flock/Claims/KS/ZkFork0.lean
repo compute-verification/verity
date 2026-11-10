@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ZkStep
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The masked simulator's fork bound at level 0

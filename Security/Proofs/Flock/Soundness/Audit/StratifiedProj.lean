@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.HarmBound
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The stratified sampling design, one stratum at a time

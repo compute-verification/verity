@@ -1,7 +1,8 @@
 """`circuit.refuse_past_range`: a unit whose Definition alone needs more witness bits than Flock's proved range of
 2^`K_MAX` is refused by `UnitStager` before it is lowered, read off the Definition (`ir_lower.definition_ands`); one in
 range is staged as before. The count is held to the flat lowering's ANDs on staged units, and compose refuses what this
-refuses unless the lowering lays out fewer than half the witness bits counted."""
+refuses unless the lowering lays out fewer than half the witness bits counted. `circuit.unit_block`, the whole block
+(rows, mask and the unit's slot) read off the Definition, is held to the block `compose` places a staged unit in."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from test_class_statement_unit_stager import STATEMENTS, TOY, TOY_ROWS
 from verity.ml.circuits.boolean import AND, BIT, and_gate
+from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -83,6 +85,36 @@ def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
     assert w["ands"] == TW.ands(16) and w["k"] <= FC.K_MAX
     with pytest.raises(ValueError, match=r"^unit/topp: the unit needs a slot of 2\^29 witness bits \(372,127,590 ANDs"):
         FC.refuse_past_range(SM.topp_mask_word(256), "unit/topp")
+
+
+def test_the_block_read_off_a_definition_is_composes():
+    """Staged on its own rows (a bit row per parameter, one per return field, as `verity.ml.windows.interface.unit_rows`
+    gives them), a unit's block is the one `circuit.unit_block` reads off its Definition: the cells its lowering lays out,
+    its slot, its sha512x3 and hm96 slots, and its k_log, which compose raises only by packing more units (up to 2^22)."""
+    d = bind(definition("UnitRangeOwnRows", 1, lambda C, a, w: [C.AND(w[i], a[i % 32]) for i in range(1, 2048)],
+                        (("a", Array(32, BIT)), ("w", Array(2048, BIT))), Array(2047, BIT), register=False))
+    rows = [("a", V2, 32, ["a"]), ("w", V2, 2048, ["w"])]
+    low, _ = CS.unit_lowering(d, "unit/own-rows", [(r, ps) for r, _s, _b, ps in rows])
+    meta = CS.UnitStager(d, "unit/own-rows", rows, [(V2, (0,))]).meta
+    b = FC.unit_block(d)
+    assert (b["useful"], b["unit_log"]) == (low.layout.useful, meta["unit_log"]) == (8193, 14)
+    assert (b["rows"], b["sha512x3"], b["hm96"]) == (3, meta["per_vu"][FC.SHA_NET], meta["per_vu"][FC.HM_NET])
+    assert b["k_log"] <= meta["k_log"] <= max(b["k_log"], 22) and FC.past_block(b) is None
+
+
+def test_rows_push_a_unit_whose_slot_fits_past_the_block():
+    """A gate-free unit copying a row of 2^17 words: its slot is 2^23, in range, but its two 256 KiB rows take 1,366 sha512x3
+    slots, so its block is 2^29 and `past_block` names it with the breakdown, where `past_range` passes it."""
+    from verity.ml.circuits.types import Value
+
+    d = bind(CompositeDefinition("UnitRangeRows", 1, (), lambda S: ((("x", Array(1 << 17, Value(16))),), Array(1 << 17, Value(16))),
+                                 lambda B, S, x: x, register=False))
+    b = FC.unit_block(d)
+    assert (b["ands"], b["unit_log"], b["sha512x3"], b["hm96"], b["k_log"]) == (0, 23, 1366, 2, 29)
+    assert FC.past_range(b) is None
+    assert FC.past_block(b).startswith("the unit needs a block of 2^29 bits (367,263,744): its slot of 2^23 (4,194,305 cells "
+                                       "for 0 ANDs and its ports, read off its Definition), its 2 rows' 1366 sha512x3 and 2 "
+                                       "hm96 slots")
 
 
 @pytest.mark.parametrize("which", list(STATEMENTS))

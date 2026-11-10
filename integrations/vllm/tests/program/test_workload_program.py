@@ -570,12 +570,13 @@ def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes
 
 
 def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
-    """`_repoint` swaps a callee and a function-valued static for its canonical object only when that object has the same id:
-    a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id. Such
-    a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
+    """`shared_definitions.repoint` swaps a callee and a function-valued static for its canonical object only when that object has
+    the same id: a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id.
+    Such a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import IdentityConflict, SpecializedDefinition
+    from verity_vllm.program.shared_definitions import repoint
 
     def sig(S):
         return (("a", Value(16)),), Value(16)
@@ -588,8 +589,8 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
 
     o, h = SpecializedDefinition(outer, {"F": f}, ()), SpecializedDefinition(holder, {"OPS": {"f": f}}, ())
     before = [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
-    W._repoint(o, {descriptor_id(f): same})
-    W._repoint(h, {descriptor_id(f): same})
+    repoint(o, {descriptor_id(f): same})
+    repoint(h, {descriptor_id(f): same})
     assert o.bindings["F"] is o.body.nodes[-1].fn is same and h.bindings["OPS"]["f"] is same
     assert [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
     assert (o.id, h.id) == (SpecializedDefinition(outer, dict(o.bindings), ()).id,
@@ -600,7 +601,7 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
                           (SpecializedDefinition(holder, {"OPS": {"f": f}}, ()), lambda fn: fn.bindings["OPS"]["f"], before[1][0])):
         assert fn.body.nodes and fn.id == was
         with pytest.raises(IdentityConflict, match="E_IDENTITY: " + why):
-            W._repoint(fn, {descriptor_id(f): other})
+            repoint(fn, {descriptor_id(f): other})
         assert held(fn) is f and fn.id == was
 
 

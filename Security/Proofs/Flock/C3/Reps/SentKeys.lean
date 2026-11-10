@@ -55,7 +55,7 @@ open FlockSoundness.Discharge.Exec (weave)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- `unitWeave`'s shape at `S`, `nX` extra claims and `sch₀`. -/
-def unitShape (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
+def unitShape (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
   holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀
 
 /-- `unitWeave`'s messages at `nX` extra claims. -/

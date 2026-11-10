@@ -29,7 +29,7 @@ import Proofs.Flock.Soundness.Lowering
 
 The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes each sampled proof block's place in its `--zk`
 table's statement (`place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u`). This is the `--zk` form of
-e2e-placed's `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
+`Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
 
 * `acceptsZK_accepted`: flock-verify `--zk`'s acceptance (`ZkExec.AcceptsZK`), on the untyped path without hidden
   outputs, gives for every table of the session an `Placed.Accepted` statement: `Stmt.setupH`'s run under the table's

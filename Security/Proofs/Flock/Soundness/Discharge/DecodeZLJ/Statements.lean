@@ -167,7 +167,7 @@ def DrawOkJ (dj : Finset (Fin n) → Json) (S : Finset (Fin n)) : Prop :=
   ∀ j < I.count, ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
     (some (partJson (dj S) I.count j)) I.partition I.program = .ok st → st.mPts = mPts
 
-/-- **The decoder is right at `J` tables** (R11b at `--session-tables J`): given the tags, `wr` the challenger's record
+/-- **The decoder is right at `J` tables** (the decoder premise at `--session-tables J`): given the tags, `wr` the challenger's record
 and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
 sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table's two streams, single coins as field
 elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/

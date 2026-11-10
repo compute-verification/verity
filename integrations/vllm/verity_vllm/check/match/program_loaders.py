@@ -26,7 +26,7 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
     n_user = max(1, len(user_inputs))
     reg = SI.derived_registration(prov, n_user, d)   # a `registered_values` derivation's `values`, between them
     fields = {n_user + bool(reg) + w["field"]: w["name"] for w in prov["weights"]}  # derive: user inputs first, then one Input batch per field
-    P = cls(label, desc, fields, tok_node=0, compact=compact)
+    P = cls(label, desc, fields, tok_node=0, compact=compact, checks=check_rows(d))
     SI.set_supplied(P, [(n_user, None, reg)] if reg else [], d)
     # a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
     # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0), and so is each WITNESS (a
@@ -51,6 +51,14 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
         P.tp_links = links.get("links") or []
     PX.load_layout(P, d)
     return P
+
+
+def check_rows(d: str) -> list[int]:
+    """The instance rows of Program dir ``d``'s checks (its `instances.json.gz` header's `checks`, `at`; none without one), which
+    the runtime never runs, so no fold holds them."""
+    from verity_vllm.query.program_view import _read_instance_header
+    path = os.path.join(d, "instances.json.gz")
+    return [int(a[0]) for a in _read_instance_header(path).get("checks", {}).get("at", ())] if os.path.exists(path) else []
 
 
 def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
@@ -139,7 +147,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} has duplicate field ordinals")
         p.peer_fields[node] = flds
         p.peer_index[node] = int(ent["request_index"])
-    # a witness parameter (`witness_layout`: the Marlin align's `schedule`) is one homogeneous Input node, bound by its name as the rank
+    # a witness parameter (`witness_layout`) is one homogeneous Input node, bound by its name as the rank
     # Program's witness input of that name is (`load_derived`)
     for ent in pj.get("witness_layout") or []:
         node = int(ent["param"])

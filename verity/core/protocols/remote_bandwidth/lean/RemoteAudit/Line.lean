@@ -227,7 +227,7 @@ def SHARED : String :=
 auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
 the auditor's, and window `t`'s receipts and draws are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the
 auditor saw each of the record's windows and each window drew `min(s, U_t)` of its receipts at the session's `samples`
-`s`, as the verifier's draw does (`Session.draws`). -/
+`s`, as the verifier's draw does (`Session.samples`). -/
 def ofSummary (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
   if seen.size ≠ sm.windows.size then
@@ -256,13 +256,13 @@ def lineOfRecord (sm : Session.Summary) (samples : Nat) (seen : Array Seen) (per
 /-- The draws of a record sampled `g` windows a coin (`Shared`), as the pooled bound reads them
 (`audit.pooled_windows`): draw `c` is windows `cg … min((c + 1)g, W) − 1`, its receipts `U` and its draws theirs
 summed. -/
-def drawsOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) :=
+def samplesOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) :=
   (Array.range ((ws.size + g - 1) / g)).map fun c =>
     let xs := ws.extract (c * g) (c * g + g)
     (xs.foldl (fun a w => a + receipts w) 0, xs.foldl (fun a w => a + w.drawn) 0)
 
 /-- `ofSummary` of a record sampled `g` windows a coin (`Shared`): `ofSummary` at g = 1; above it the same groups, one a
-window, and the record's draws in place of its windows (`drawsOf`), refused unless each draw drew `min(s, U)` of its
+window, and the record's draws in place of its windows (`samplesOf`), refused unless each draw drew `min(s, U)` of its
 `U` receipts at the session's `samples` `s`, as `Shared.close`'s draw does, and has fewer than `RECEIPT_LIMIT` (2^64)
 receipts, as `receive` holds each window to: the memory model's draw reads at most `2^64 − 1` receipts a draw
 (`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts, each below the limit, need not be. -/
@@ -272,7 +272,7 @@ def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array S
   else if seen.size ≠ sm.windows.size then
     .error s!"the auditor saw {seen.size} windows, not the record's {sm.windows.size}"
   else
-    let ds := drawsOf g sm.windows
+    let ds := samplesOf g sm.windows
     match ds.findIdx? fun (u, d) => d != min samples u with
     | some c => .error s!"draw {c} drew {ds[c]!.2} of its {ds[c]!.1} receipts, not min({samples}, {ds[c]!.1})"
     | none =>

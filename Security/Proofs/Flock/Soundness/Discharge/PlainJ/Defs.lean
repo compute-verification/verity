@@ -23,14 +23,14 @@ import Proofs.Flock.Soundness.Discharge.Hm.Site
 `flock-verify verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
 `Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
 `j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
-`Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are e2e-layout's directly,
+`Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
 with no transfer to compiled tables:
 
 * `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `DrawSetup` table where
   flock-verify sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
   `nTab I` tables, and each sampled proof block's table (`partOf`).
 * `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they parse,
-  and e2e-layout's site fact.
+  and `Discharge/Layout`'s site fact.
 * `layPJ`, `rsPJ`, `rsPJ_computes`: `keyedLayout`, `keyedRowsOuts` and `hHm` at those sites.
 * `DrawOkPJ`, `opnPJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings.
 -/
@@ -154,7 +154,7 @@ theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
 
 variable (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
 
-/-- **`lay` at `J` tables**: e2e-layout's `keyedLayout` at `sitesPJ`, the program's outputs the returned outputs' bits,
+/-- **`lay` at `J` tables**: `Layout.keyedLayout` at `sitesPJ`, the program's outputs the returned outputs' bits,
 the rows' salts at the `hm96` slots' salt columns, the registration's bits the population's returned outputs. -/
 noncomputable abbrev layPJ :
     Binding.Layout ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (planPJ (Reg := Reg) ht dj x₀)
@@ -163,7 +163,7 @@ noncomputable abbrev layPJ :
         (Layout.keyPlace (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
   Layout.keyedLayout (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- **`rs` at `J` tables**: e2e-layout's `keyedRowsOuts` at `sitesPJ`, its circuit conditions from `scopeOk`. -/
+/-- **`rs` at `J` tables**: `Layout.keyedRowsOuts` at `sitesPJ`, its circuit conditions from `scopeOk`. -/
 noncomputable abbrev rsPJ : Binding.HmRows (layPJ ht dj x₀ hc hU (pub := pub) (Reg := Reg)) :=
   Layout.keyedRowsOuts (sitesPJ_parse ht dj x₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1

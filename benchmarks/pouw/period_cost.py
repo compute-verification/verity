@@ -2,7 +2,7 @@
 
     uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
-**The bound.** An accepted period of n windows (`ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
+**The bound.** An accepted period of n windows (`ComposeMonitoringPeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
 sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
 
     x = K_d/(r·M),  Λ = max(a/(M·(−ln(p + (1 − p)e^{−x}))), b/(M·(−ln(p0 + (1 − p0)e^{−x})))),

@@ -62,6 +62,26 @@ def test_a_review_landing_moves_checked_and_main_follows_only_once_its_after_lan
     assert any(f"`main` fast-forwarded to {tip[:12]}" in x for x in world.logs), world.logs
 
 
+def test_the_status_command_reads_the_verified_queues_admission_onto_main_not_nexts_places_or_checkeds_landings(world, monkeypatch):
+    """`next` and `checked` stay frozen behind the verified queue, which builds onto `main` from the marked PRs: `research queue
+    status` gives no place on `next`, and a head is landed once it is on `main`, not on `checked`."""
+    h = Review(world, monkeypatch, land_into="checked")
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.tick()
+    drive, loop = h.q.status(), h.q.status(loop=True)
+    assert [(drive[n].state, drive[n].position) for n in (1, 2)] == [("queued", None), ("queued", 1)], drive
+    assert [(loop[n].state, loop[n].position) for n in (1, 2)] == [("ready", None), ("ready", None)], loop
+    assert loop[1].why == loop[2].why and loop[2].why.startswith("admitted: the verified queue builds it into a batch onto `main`")
+    _pass(h)
+    h.tick()
+    assert _main(world) == _checked(world), world.logs
+    loop = h.q.status(loop=True)
+    assert (loop[1].state, loop[1].why, loop[2].state) == ("queued", "landed: its head is on `main`", "ready"), loop
+
+
 def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_reverted_on_checked(world, monkeypatch, tmp_path):
     _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
     h = Review(world, monkeypatch, land_into="checked")
@@ -89,6 +109,25 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     h.tick()
     assert _main(world) == reverted and not h.postland()["red"]
     assert world.on_next(h.q) == []                             # #2, reverted, is still open: its head is on `checked`
+
+
+def test_a_failure_at_or_below_a_tip_that_passed_it_since_is_no_red(world, monkeypatch, tmp_path):
+    """A late rerun of an old shard can fail a suite that a newer run passed above it (its green), or that `main` was verified
+    past: that failure is no red, so it holds no landing and reverts no culprit."""
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    old = _checked(world)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    new = _checked(world)
+    late = {"tip": old, "ids": ["r-late"]}
+    for pl in ({"green": {"suite pkg": new}, "verified": old}, {"verified": new, "verified_as": {"steps": ["pytest"]}}):
+        h.d._name({}, pl, late, "suite pkg", tmp_path, {"suite": "pkg", "step": "pytest"}, [])
+        assert pl["red"] == {}, pl
+    assert sum(f"suite pkg failed at `checked` {old[:12]} (run r-late), but it passed at" in x for x in world.logs) == 2
 
 
 def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_an_unlanded_pr_still_does(world, monkeypatch):
@@ -136,7 +175,7 @@ def test_ci_baseline_moves_main_at_once_beside_a_tick_holding_its_lock_and_write
         monkeypatch.delenv(DRIVE_ENV)
         assert Q.main(argv) == 1 and "this isn't drive" in capsys.readouterr().err
         monkeypatch.setenv(DRIVE_ENV, "1")
-        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only ci" in capsys.readouterr().err
+        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only with --by ci" in capsys.readouterr().err
         assert Q.main([*argv, "--steps", ",".join(GATED[:-1])]) == 1
         assert f"--steps leaves out {GATED[-1]}, on the merge gate" in capsys.readouterr().err
         assert Q.main(_cli(h, "baseline", f"{tip}^2", "--by", "ci")) == 1      # #1's head, merged into `checked`
@@ -620,7 +659,7 @@ def test_ci_accepting_a_checked_drive_didnt_write_lets_drive_go_on_from_it_and_n
     landed = _checked(world)
     outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
     assert h.tick().startswith(f"`checked` is at {outside[:12]}")
-    with pytest.raises(QueueError, match="only ci accepts"):
+    with pytest.raises(QueueError, match="accepted only with --by ci"):
         Q.accept_checked(h.q, outside, "lane-1")
     with pytest.raises(QueueError, match=f"is not `checked`'s tip, {outside[:12]}"):
         Q.accept_checked(h.q, landed, "ci")

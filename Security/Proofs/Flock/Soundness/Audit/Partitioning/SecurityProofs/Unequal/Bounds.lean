@@ -99,7 +99,7 @@ theorem achievability : Guarantees.Achievability := by
       calc (num u : ℝ) < q u * den + 1 := h1
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
-  refine ⟨bern num den, fun B hB => ?_, fun u => ?_⟩
+  refine ⟨Law.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
   · rw [bern_escape_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)

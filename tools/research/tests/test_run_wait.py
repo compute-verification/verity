@@ -1,5 +1,5 @@
 """`research run --on ... --wait`: `run --on` returns once the machine has started the run, so a loop of launches never serialized
-them (a compute-accounting worker held 5 GPUs against a 2-GPU budget, INF-36). `--wait` fetches the run's records until it ends and
+them (a worker could hold 5 GPUs against a 2-GPU budget). `--wait` fetches the run's records until it ends and
 exits with its rc; an unreachable machine is waited out, for at most WAIT_CAP_S (no tool call may block more than 20
 minutes)."""
 from __future__ import annotations
