@@ -41,6 +41,7 @@ Files:
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
   statement it proves (`out/kept/`: the public files and every drawn session's records, not the circuit or the witness)
   and each statement's seconds (`out/seconds.tsv`), which a later `prove` balances its GPUs by (`WIN_SECONDS`).
+  `settings.py` declares each variable it reads, with its default.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   `flock-verify ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
   doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.

@@ -30,7 +30,7 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_
        killed and FLOCK_WORK is removed (its links, not what they point to), unless WIN_KEEP=1. A stopped `stage` kills its
        stagings and keeps FLOCK_WORK.
 
-Limits (env): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
+Limits (env, each declared in settings.py with its default): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
 WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp, or under /dev/shm, where what it
 holds counts as host memory beside the processes' RSS), WIN_MEM_PEER (stage: another job's pid, whose process tree's RSS
 counts against WIN_MEM_GB too, so two stagings share one memory grant), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu builds and proves on the CPU
@@ -44,6 +44,7 @@ from __future__ import annotations
 import atexit
 import calendar
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -57,10 +58,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+
+def _settings():
+    spec = importlib.util.spec_from_file_location("served_units_settings", Path(__file__).with_name("settings.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+env = _settings().get
 REPO = Path.cwd()
 PT = REPO / "benchmarks/served_units/prove_time.sh"
-OUT = Path(os.environ.get("RESEARCH_RUN_DIR", "/tmp/served-units-window")) / "out"
-PAGE = os.sysconf("SC_PAGE_SIZE")
+OUT = Path(env("RESEARCH_RUN_DIR")) / "out"
 GB = 1e9
 RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB
 #: a proved statement's files prove copies to $OUT/kept/NAME/, globs under its directory, for a verifier run elsewhere: its
@@ -68,13 +77,6 @@ RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processe
 #: restages it from the same commit and checks it against stage.json's circuit_sha512). WIN_KEEP_ALSO adds globs.
 KEEP = ("pub.bin", "stage.json", "pin.txt", "partition.json", "tables", "sessions/index.jsonl", "sessions/*/session.json",
         "sessions/*/circuit.rep*.bin", "sessions/*/verifier.json")
-
-
-def env(k: str, default: str | None = None) -> str:
-    v = os.environ.get(k, default)
-    if v is None:
-        raise SystemExit(f"window.py: set {k}")
-    return v
 
 
 def log(msg: str) -> None:
@@ -123,17 +125,9 @@ def key() -> str:
 
 
 def procs() -> dict[int, tuple[int, int]]:
-    """Every process: pid -> (ppid, RSS bytes)."""
-    t = {}
-    for p in os.listdir("/proc"):
-        if p.isdigit():
-            try:
-                stat = Path(f"/proc/{p}/stat").read_text()
-                ppid = int(stat[stat.rindex(")") + 2:].split()[1])
-                t[int(p)] = (ppid, int(Path(f"/proc/{p}/statm").read_text().split()[1]) * PAGE)
-            except (OSError, ValueError, IndexError):
-                pass
-    return t
+    """Every process: pid -> (ppid, RSS bytes), from one `ps`, which passes over a process that exits while it reads."""
+    out = subprocess.run(["ps", "-e", "-o", "pid=,ppid=,rss="], capture_output=True, text=True, check=True).stdout
+    return {int(pid): (int(ppid), int(rss) * 1024) for pid, ppid, rss in (ln.split() for ln in out.splitlines())}
 
 
 def tree(root: int, t: dict[int, tuple[int, int]]) -> list[int]:
@@ -150,28 +144,23 @@ def tree(root: int, t: dict[int, tuple[int, int]]) -> list[int]:
 
 
 def du(path: Path) -> int:
-    seen, n = set(), 0
-    for dirpath, _dirs, files in os.walk(path):
-        for f in files:
-            try:
-                st = os.lstat(os.path.join(dirpath, f))
-            except OSError:
-                continue
-            if (st.st_dev, st.st_ino) not in seen:
-                seen.add((st.st_dev, st.st_ino))
-                n += st.st_blocks * 512
-    return n
+    """The bytes `path` holds, each hard-linked file once (GNU du), less what is removed while du reads: du reports such a
+    file on stderr and exits 1, and its total stands."""
+    r = subprocess.run(["du", "-s", "-B1", str(path)], capture_output=True, text=True)
+    if not r.stdout.strip():
+        raise RuntimeError(f"du {path}: {r.stderr.strip()}")
+    return int(r.stdout.split()[0])
 
 
 def limits(mem_default: str) -> tuple[float, list[int]]:
     cpus = sorted(os.sched_getaffinity(0))
     if len(cpus) > int(env("WIN_CPUS")):
         raise SystemExit(f"window.py: {len(cpus)} CPUs in the job's affinity, more than WIN_CPUS={env('WIN_CPUS')}: run under taskset -c")
-    if os.nice(0) < int(env("WIN_NICE", "0")):
+    if os.nice(0) < int(env("WIN_NICE")):
         raise SystemExit(f"window.py: niceness {os.nice(0)}, below WIN_NICE={env('WIN_NICE')}: run under nice -n {env('WIN_NICE')}")
     if not env("FLOCK_WORK").startswith(("/workspace/tmp/", RAM)):
         raise SystemExit(f"window.py: FLOCK_WORK {env('FLOCK_WORK')} is under neither /workspace/tmp/ nor {RAM}")
-    return float(env("WIN_MEM_GB", mem_default)) * GB, cpus
+    return float(env("WIN_MEM_GB") or mem_default) * GB, cpus
 
 
 def until() -> float:
@@ -211,29 +200,29 @@ def stop(jobs: list[Job]) -> None:
             os.killpg(j.proc.pid, signal.SIGKILL)
             log(f"stopped {j.label}")
         except ProcessLookupError:
-            pass
+            log(f"{j.label}: no process left in its group")
 
 
 def kill(job: Job, why: str) -> None:
     job.killed = why
     try:
         os.killpg(job.proc.pid, signal.SIGKILL)
+        log(f"killed {job.label}: {why}")
     except ProcessLookupError:
-        pass
-    log(f"killed {job.label}: {why}")
+        log(f"{job.label} had already exited when {why}")
 
 
 def stage(units: list[Unit]) -> int:
     mem, cpus = limits("600")
     disk_cap, deadline = float(env("WIN_DISK_GB")) * GB, until()
-    slow, backfill = float(env("WIN_SLOW", "1.3")), float(env("WIN_BACKFILL_GB", "8")) * GB
-    reserve, disk_backfill = float(env("WIN_FREE_GB", "50")) * GB, float(env("WIN_BACKFILL_DISK_GB", "0")) * GB
+    slow, backfill = float(env("WIN_SLOW")), float(env("WIN_BACKFILL_GB")) * GB
+    reserve, disk_backfill = float(env("WIN_FREE_GB")) * GB, float(env("WIN_BACKFILL_DISK_GB")) * GB
     fw = Path(env("FLOCK_WORK"))
     in_ram = str(fw).startswith(RAM)
-    peer = int(env("WIN_MEM_PEER", "") or 0)
+    peer = int(env("WIN_MEM_PEER") or 0)
     fw.mkdir(parents=True, exist_ok=True)
     k, free = key(), shutil.disk_usage(fw).free
-    if env("WIN_DEVICE", "gpu") == "gpu" and "SM" not in os.environ:
+    if env("WIN_DEVICE") == "gpu" and not env("SM"):
         raise SystemExit("window.py: set SM, the GPUs' compute capability the prover is built for (90 for H200, 120 for RTX PRO 6000)")
     if free < reserve + 20 * GB:
         raise SystemExit(f"window.py: {free / GB:.0f} GB free under {fw}, under WIN_FREE_GB={reserve / GB:.0f} plus the build's 20")
@@ -251,7 +240,7 @@ def stage(units: list[Unit]) -> int:
     if (fw / "flock-gpu-link/flock/target/release/flock-circuit").exists():
         log("prover already built under FLOCK_WORK: no build")
     else:
-        running.append(Job("build", start("build", ["STEPS=build", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}"], OUT / "build",
+        running.append(Job("build", start("build", ["STEPS=build", f"PT_DEVICE={env('WIN_DEVICE')}"], OUT / "build",
                                           {"FLOCK_WORK": str(fw)}), time.time(), rss=16 * GB, disk=20 * GB))
     pending = [(u, n) for u in units for n in u.ns]
     atexit.register(stop, running)
@@ -359,18 +348,15 @@ def statements_run() -> list[tuple[str, str, float, bool]]:
     rows = []
     for s in sorted(OUT.glob("gpu*/out/[cg]pu/*/start")):
         d, done = s.parent, s.parent / "done"
-        try:
-            t0 = float(s.read_text())
-            t1, fin = (float(done.read_text()), True) if done.exists() else (time.time(), False)
-        except ValueError:
-            continue
-        rows.append((d.name, d.parts[-4], t1 - t0, fin))
+        t0, t1 = s.read_text().strip(), done.read_text().strip() if done.exists() else ""
+        if t0:
+            rows.append((d.name, d.parts[-4], (float(t1) if t1 else time.time()) - float(t0), bool(t1)))
     return rows
 
 
 def keep(fw: Path, k: str, kept: set[str]) -> None:
     """Each finished statement not yet in `kept`: its KEEP files, and WIN_KEEP_ALSO's globs, copied to $OUT/kept/NAME/."""
-    globs = KEEP + tuple(filter(None, env("WIN_KEEP_ALSO", "").split(":")))
+    globs = KEEP + tuple(filter(None, env("WIN_KEEP_ALSO").split(":")))
     for done in sorted(OUT.glob("gpu*/out/[cg]pu/*/done")):
         nm = done.parent.name
         if nm in kept:
@@ -390,18 +376,18 @@ def keep(fw: Path, k: str, kept: set[str]) -> None:
 def prove(units: list[Unit]) -> int:
     mem, cpus = limits("268")
     fw, k = Path(env("FLOCK_WORK")), key()
-    ngpu, dev_mib = int(env("WIN_GPUS", "8")), float(env("WIN_DEV_GIB", "45")) * 1024
-    on_gpu = env("WIN_DEVICE", "gpu") == "gpu"
+    ngpu, dev_mib = int(env("WIN_GPUS")), float(env("WIN_DEV_GIB")) * 1024
+    on_gpu = env("WIN_DEVICE") == "gpu"
     if on_gpu and not shutil.which("nvidia-smi"):
         raise SystemExit("window.py: no nvidia-smi on PATH, so no device-memory limit: prove on a GPU node, or WIN_DEVICE=cpu")
-    for also in filter(None, env("WIN_ALSO", "").split(":")):
+    for also in filter(None, env("WIN_ALSO").split(":")):
         link_also(fw, Path(also))
     binary = fw / "flock-gpu-link/flock/target/release/flock-circuit"
     if not binary.exists():
         log(f"no prover at {binary}: building it inside the window")
-        subprocess.run(["bash", str(PT), "STEPS=build", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}"], cwd=REPO,
+        subprocess.run(["bash", str(PT), "STEPS=build", f"PT_DEVICE={env('WIN_DEVICE')}"], cwd=REPO,
                        env={**os.environ, "FLOCK_WORK": str(fw), "RESEARCH_RUN_DIR": str(OUT / "build")}, check=True)
-    measured, floor = read_seconds(env("WIN_SECONDS", "")), float(env("WIN_UNMEASURED_S", "900"))
+    measured, floor = read_seconds(env("WIN_SECONDS")), float(env("WIN_UNMEASURED_S"))
     staged = []
     for u in units:
         ns = [n for n in u.ns if (fw / "data" / f"{name(u.unit, n)}-{k}" / ".done").exists()]
@@ -409,7 +395,7 @@ def prove(units: list[Unit]) -> int:
             est, fresh = 0.0, False
             for n in ns:
                 r = json.loads((fw / "data" / f"{name(u.unit, n)}-{k}" / "stage.json").read_text())
-                model = 10 + 3 * r["circuit_bytes"] / GB + (int(env("WARM", "1")) + int(env("RUNS", "1"))) * \
+                model = 10 + 3 * r["circuit_bytes"] / GB + (int(env("WARM")) + int(env("RUNS"))) * \
                     (4 + 2 ** max(r["k_log"] - 23, 0))
                 s, fin = measured.get(name(u.unit, n), (0.0, False))
                 est += s if fin else max(s, floor) if measured else model
@@ -435,7 +421,7 @@ def prove(units: list[Unit]) -> int:
     for items in groups:
         items.sort(key=lambda x: (not x[3], -x[2]))
     scratch = Path(tempfile.mkdtemp(prefix="window-bin-"))
-    path = os.environ["PATH"]
+    path = env("PATH")
     if not shutil.which("gpu-lease"):
         (scratch / "gpu-lease").symlink_to(REPO / "tools/research/src/research/pods/sh/gpu_lease.sh")
         path = f"{scratch}:{path}"
@@ -446,13 +432,13 @@ def prove(units: list[Unit]) -> int:
         if not items:
             continue
         units_arg = " ".join(f"{u.unit}@{','.join(ns)}" for u, ns, *_x in items)
-        lease = int(env("LEASE_MIN", "30"))
+        lease = int(env("LEASE_MIN"))
         cores = ",".join(map(str, cpus[g * per:(g + 1) * per]))
         log(f"group {g}: {len(items)} types ({sum(x[3] for x in items)} unmeasured, first), estimated "
             f"{sum(x[2] for x in items) / 60:.1f} min, lease {lease} min, cores {cores}")
-        p = start(f"gpu group {g}", ["STEPS=prove", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}", f"PT_UNITS={units_arg}", f"LEASE_MIN={lease}",
-                                     f"VCPUS={env('VCPUS', '2')}", f"WARM={env('WARM', '1')}", f"RUNS={env('RUNS', '1')}"],
-                  OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO", "servedcard")},
+        p = start(f"gpu group {g}", ["STEPS=prove", f"PT_DEVICE={env('WIN_DEVICE')}", f"PT_UNITS={units_arg}", f"LEASE_MIN={lease}",
+                                     f"VCPUS={env('VCPUS')}", f"WARM={env('WARM')}", f"RUNS={env('RUNS')}"],
+                  OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO")},
                   prefix=["taskset", "-c", cores])
         jobs.append(Job(f"gpu{g}", p, time.time()))
     kept: set[str] = set()
@@ -469,7 +455,7 @@ def prove(units: list[Unit]) -> int:
             log(f"kept {len(kept)} statements' files in out/kept ({du(OUT / 'kept') / GB:.2f} GB); {sum(f for *_x, f in ran)} "
                 f"of {len(ran)} started statements finished (out/seconds.tsv)")
         finally:
-            if env("WIN_KEEP", "0") != "1":
+            if env("WIN_KEEP") != "1":
                 freed = du(fw)
                 shutil.rmtree(fw, ignore_errors=True)
                 log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
@@ -508,7 +494,7 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path |
     """Until every group exits: kill a group's prover past dev_mib on its GPU, and the largest of our processes past
     0.97 x mem, counting a FLOCK_WORK in RAM (`ram`, its statements and the sessions written beside them) with them.
     Device memory unread for 30 s in a row kills every prover, since the limit can't be held. `tick` runs each round."""
-    blind, held, last = 0, du(ram) if ram else 0, time.time()
+    blind, held, last, unread = 0, du(ram) if ram else 0, time.time(), set()
     while any(j.proc.poll() is None for j in jobs):
         if tick:
             tick()
@@ -522,8 +508,8 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path |
                 q = subprocess.run(["nvidia-smi", "--query-gpu=uuid,memory.used", "--format=csv,noheader,nounits"],
                                    capture_output=True, text=True, timeout=10)
                 used = dict(ln.replace(" ", "").split(",") for ln in q.stdout.splitlines() if "," in ln)
-            except (subprocess.TimeoutExpired, OSError):
-                pass
+            except (subprocess.TimeoutExpired, OSError) as e:
+                log(f"nvidia-smi unread ({type(e).__name__}): no device memory this round")
             blind = 0 if used else blind + 1
             if blind == 15:
                 log("device memory unread for 30 s: killing every prover")
@@ -532,8 +518,11 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path |
             for p in tree(j.proc.pid, t) if not j.gpu else ():
                 try:
                     m = re.search(rb"(?:^|\0)GPU_LEASE_UUID=([^\0]+)", Path(f"/proc/{p}/environ").read_bytes())
-                except OSError:
-                    m = None
+                except OSError as e:
+                    if p not in unread:
+                        log(f"{j.label}: pid {p}'s environment unread ({e.strerror}), passed over")
+                    unread.add(p)
+                    continue
                 if m:
                     j.gpu = m[1].decode().split(",")[0]
                     log(f"{j.label} holds {j.gpu}")
@@ -545,8 +534,8 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path |
                         if b"\0prove\0" in Path(f"/proc/{p}/cmdline").read_bytes():
                             os.kill(p, signal.SIGKILL)
                             log(f"killed {j.label}'s prover pid {p}: {mib:.0f} MiB on {j.gpu}, over {dev_mib:.0f}")
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        log(f"{j.label}: pid {p} not killed ({e.strerror}): it exited since the scan")
         total = sum(t[p][1] for p in ours) + held
         if total > 0.97 * mem:
             big = max((p for p in ours if t[p][1] > GB), key=lambda p: t[p][1], default=None)
