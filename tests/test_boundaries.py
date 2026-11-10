@@ -5,8 +5,9 @@
     workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
     (ml.protocols) on the catalog and their protocols;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
-    ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
+    ``ALLOWED``, and no third-party package;  until a protocol's verifier is its Lean, its Python verifier and each
+    device load and reach only the places the listing (``tests/import_order.toml``) froze for them in ``trusted``, the
+    soundness path, which only shrinks;  ml never imports core;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
@@ -16,10 +17,10 @@
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
-a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The trees in ``SEPARATE``
-have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.  No other
-file under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
-string (`RUN_TIME_READ`, matched in the text, f-strings too).
+a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The directories of the
+listing's ``distribution`` have import roots of their own, and only the rule that ml never imports core reads them; it
+reads ml's tests too.  No other file under ``verity/``, tests included, reads another distribution at run time: its package
+data or a module named in a string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
@@ -140,7 +141,7 @@ DEPENDENCIES = {"numpy"}
 NUMPY_FREE = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
               "verity/claims", "verity/hardware")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
-#: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
+#: ml builds on no verifier: what a verifier's Python loads never runs the other way.  The files of
 #: ``verity/ml/`` that import core anyway
 #: (globs from ``verity/``), each with why.
 ML_IMPORTS_CORE = {
@@ -171,27 +172,6 @@ ML_IMPORTS_CORE = {
                                 "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
                                 "`active`, `served_rows`, ...)",
 }
-#: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
-#: verifier, and ml's Python mirrors it.  Until a protocol's verifier is its Lean (the switch procedure,
-#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it when they were frozen here,
-#: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
-CORE_ML_EDGES = {
-    "core.protocols.profile": {"ml.circuits"},
-    "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
-    "core.protocols.pous": {"ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
-    "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
-}
-#: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
-#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen
-#: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier becomes its Lean.  The rest of ml (the
-#: catalog, the kernels, the protocols' circuit builders, Flock's prover, the private circuits) is not on it.
-SOUNDNESS_PATH = {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"}
-#: What a test that refuses a new core -> ml edge says.
-LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rules\", \"Lean is the definition "
-                  "and the verifier of record\"): state it in Lean and import nothing from verity.ml")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units, the
 #: trees each of whose Python files (tests included) is checked, its Lean packages and its analysis (Security's Flock and
@@ -475,48 +455,6 @@ def _reached(allowed: dict[str, set[str]], units: Iterable[str]) -> set[str]:
             reached.add(v)
             todo.append(v)
     return reached
-
-
-def _core_reach_in_ml(allowed: dict[str, set[str]]) -> set[str]:
-    """The ml units the core units of ``allowed`` reach, directly or through one another."""
-    return {u for u in _reached(allowed, [u for u in allowed if u.startswith("core.")]) if u.startswith("ml.")}
-
-
-def _core_ml_growth(allowed: dict[str, set[str]]) -> list[str]:
-    """What ``allowed`` adds to core's frozen reach into ml: each core unit's ml edges beyond ``CORE_ML_EDGES``, and ml
-    units reached off ``SOUNDNESS_PATH`` (through a new core edge, or a new edge out of a unit on the path)."""
-    grown = [f"{u} -> {v}" for u in sorted(allowed) if u.startswith("core.")
-             for v in sorted(allowed[u]) if v.startswith("ml.") and v not in CORE_ML_EDGES.get(u, set())]
-    return grown + [f"core reaches {v}, off SOUNDNESS_PATH" for v in sorted(_core_reach_in_ml(allowed) - SOUNDNESS_PATH)]
-
-
-def test_core_gains_no_edge_into_ml() -> None:
-    """No core unit gains an ml edge, and core's reach into ml doesn't grow: the edges only shrink, each
-    with its protocol's switch to Lean."""
-    grown = _core_ml_growth(ALLOWED)
-    assert not grown, f"{grown}: {LEAN_OF_RECORD}"
-
-
-def test_core_ml_growth_is_refused() -> None:
-    """The check above isn't vacuous: an added edge from a core unit, or from an ml unit on the soundness path, is growth."""
-    assert _core_ml_growth({**ALLOWED, "core.protocols.pous": ALLOWED["core.protocols.pous"] | {"ml.private_circuits"}}) == [
-        "core.protocols.pous -> ml.private_circuits", "core reaches ml.private_circuits, off SOUNDNESS_PATH"]
-    assert _core_ml_growth({**ALLOWED, "core.claims": {"ml.crypto"}}) == ["core.claims -> ml.crypto"]
-    assert _core_ml_growth({**ALLOWED, "ml.crypto": {"ml.private_circuits"}}) == [
-        "core reaches ml.private_circuits, off SOUNDNESS_PATH"]
-
-
-def test_core_ml_edges_shrink_with_allowed() -> None:
-    """``CORE_ML_EDGES`` and ``SOUNDNESS_PATH`` shrink with ``ALLOWED``, so an edge it drops can't come back.  With the
-    test above, ``SOUNDNESS_PATH`` is exactly what ``ALLOWED`` lets core reach in ml."""
-    dropped = [f"{u} -> {v}" for u, vs in sorted(CORE_ML_EDGES.items()) for v in sorted(vs - ALLOWED.get(u, set()))]
-    assert not dropped, f"ALLOWED no longer has {dropped}: remove them from CORE_ML_EDGES too"
-    ml = _core_reach_in_ml(ALLOWED)
-    assert ml >= SOUNDNESS_PATH, (f"core no longer reaches {sorted(SOUNDNESS_PATH - ml)} in ml: remove them from "
-                                  "SOUNDNESS_PATH and from AGENTS.md's list of the soundness path")
-    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    missing = [u for u in sorted(SOUNDNESS_PATH) if f"`{u}`" not in agents]
-    assert not missing, f"AGENTS.md doesn't name {missing}, which core's Python verifiers read"
 
 
 def _covered(rel: str, globs: Iterable[str]) -> bool:
