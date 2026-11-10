@@ -372,3 +372,30 @@ def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged
         IR.history(rec, [BT.name(RUN, PROMPT, OUTPUTS, SPANS, LAYER)], 2, C, {}, {})
     with pytest.raises(ValueError, match="under another domain"):
         IR.history(rec, [NAMES[0]], 4, C, {}, {})
+
+
+def test_an_interior_whose_history_names_a_table_round_1_did_not_serve_under_its_name_is_refused():
+    """An interior built, and its `history` taken, against a copy of round 1's record whose port for a drawn span's
+    table names another table's root: the prover's strings, the interior's `history` and its supplied reads all agree
+    on that table (`history.roots_of` and R7 pass), but the boundary registration the stream holds names another root
+    for the port, so the stream refuses the interior (`interior-table`). The honest interior registers
+    (`test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them`)."""
+    tables = _tables()
+    stream, reg, first, rec = _first(tables)
+    drawn = [tables[u] for u in first.units]
+    other = HT.HistoryTable(PROGRAM, drawn[1].value, 2, CAP)
+    rows = np.array(drawn[1].rows)
+    rows[1, 0] ^= 1
+    other.append(rows, drawn[1].salts)
+    forged = {**rec, "roots": [{**r, "root": other.root.hex()} if r["port"] == other.value else r for r in rec["roots"]]}
+    it = _interior(reg, first, forged, [drawn[0], other])
+    hist = _history(forged, first, it)
+    assert HT.roots_of(it.leaf_layer, hist)[other.value] == (other.root, drawn[1].domain.domain_id) and \
+        other.root != drawn[1].root
+    assert not S.tables_served(rec, [(n, *rd) for n, rd in HT.roots_of(it.leaf_layer, hist).items()])
+    with pytest.raises(S.Refused) as refused:
+        IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                    supplied=IR.sources(LINKS, Q, [NAMES[u] for u in first.units]),
+                    schemas=IR.link_schemas(MEMBER, LINKS))
+    assert refused.value.verdict.codes == ("interior-table",)
+    assert refused.value.verdict.detail == {"interior-table": {"tables": [other.value]}}
