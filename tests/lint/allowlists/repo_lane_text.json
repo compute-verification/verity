@@ -1,13 +1,6 @@
 {
   "rule": "lane text in prose (tests/lint/test_repo_lane_text.py)",
   "entries": [
-    {"file": "infra/control/agent_watch.sh", "count": 1},
-    {"file": "infra/control/top_watch.py", "count": 5},
-    {"file": "infra/cursor/README.md", "count": 1},
-    {"file": "infra/cursor/launch_coordinator.py", "count": 2},
-    {"file": "infra/ops/tests/test_top_watch.py", "count": 1},
-    {"file": "infra/ops/verity_ops/agent_watch.py", "count": 1},
-    {"file": "infra/ops/verity_ops/deploy.py", "count": 1},
-    {"file": "tools/research/src/research/auto.py", "count": 1}
+
   ]
 }

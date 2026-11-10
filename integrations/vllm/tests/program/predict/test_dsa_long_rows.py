@@ -53,6 +53,8 @@ BIT = Value(1)
 LONG = ("DsaTopKMask_v1", "DsaButterflySettings_v1", "DsaButterflyRows_v1", "DsaButterflyRowsPad_v1")
 #: the relation form's calls, which no Program makes
 RELATION = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1")
+#: the mask class G's batched form calls, a row's own keys among its block's (`vllm_dsa.long_row_blocks`)
+COUNTED = "DsaTopKMaskCounted_v1"
 CTX131K = os.environ.get("VERITY_VLLM_CTX131K", "")
 
 
@@ -74,6 +76,11 @@ def phi(tmp_path) -> Phi:
 
 def _families(nodes) -> Counter:
     return Counter(n.fn.id.split("{", 1)[0] for n in nodes)
+
+
+def _members(nodes, family: str) -> int:
+    """The calls of `family` among `nodes`, a batch's once per member."""
+    return sum(n.n if n.form == "batch" else 1 for n in nodes if n.fn.id.startswith(family + "{"))
 
 
 def _calls(r, family: str) -> list[tuple[int, object]]:
@@ -291,7 +298,8 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     c = compile_steps(reg, advice, ingress)
     long, short = c.requests
     assert (long.LP, long.T, long.chunks, short.LP, short.chunks) == (10, 2, (6, 4), 3, ())
-    sigs = sorted((_families(p.fn.body.nodes)["DsaTopKMask_v1"], str(p.fn.signature()[1])) for p in c.programs.values())
+    assert not any(_families(p.fn.body.nodes)["DsaTopKMask_v1"] for p in c.programs.values()), "the batched form's mask is counted"
+    sigs = sorted((_members(p.fn.body.nodes, COUNTED), str(p.fn.signature()[1])) for p in c.programs.values())
     rule = Array(1, Value(1))
     assert sigs == [(0, str(TupleT(Array(2, I32), rule))), (3 * 8, str(TupleT(Array(3, I32), rule)))], \
         "rows 4..11 of the long one, at each indexer layer; each Program's length rule last"
@@ -368,8 +376,57 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
     assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [f"request[{rids[3][0]}].prompt"]
     for p, pos in zip(prog, ({4, 5, 6}, {4, 5}, set(), {6})):
-        assert _families(p[0].fn.body.nodes)["DsaTopKMask_v1"] == 3 * len(pos) if 0 in p else not pos
-        assert 1 not in p or _families(p[1].fn.body.nodes)["DsaTopKMask_v1"] == 0
+        assert _members(p[0].fn.body.nodes, COUNTED) == 3 * len(pos) if 0 in p else not pos
+        assert 1 not in p or _members(p[1].fn.body.nodes, COUNTED) == 0
+
+
+@pytest.mark.slow
+def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path):
+    """Class G as served, the prefix cache off, its long-prefill threshold cut to 4 (about 6 s): a 10-token prompt prefilled 4, 4
+    and 2 rows a step, then decoded twice, its rows past INDEX_TOPK from position 4, in three Commit windows whose two edges fall
+    inside the prompt.  Each window compiles: the first leaves the request mid-prompt with its latent rows, index-K slots and
+    scales as out-ports, the second carries it in at 4 positions and out at 8, the third carries it in and finishes it, and the
+    three windows' calls are the whole window's, each window selecting the top-k of the rows it computes past INDEX_TOPK.  A
+    request left mid-prompt has no `edge.last`.  What no cheaper test can: that a served class G prefill, the 131,072-token
+    prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
+    doesn't commit the edge."""
+    from verity.ml.circuits.types import field_types
+    from verity_vllm.pipeline import edge as E
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import Registered, compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 4, "max_num_batched_tokens": 16}, model={"hf_config": hf})
+    assert reg.phi.engine["enable_prefix_caching"] is False
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    a = WA.RequestAdvice("a", 10, 3, "length")
+    steps = [_step((0, 10, s, n)) for s, n in ((0, 4), (4, 4), (8, 2), (10, 1), (11, 1))]
+    windows = (WA.Advice((a,), tuple(steps[:1]), ()), WA.Advice((a,), tuple(steps[1:2]), (), (WA.Carried(0, 4, 0, ((0, 4),)),)),
+               WA.Advice((a,), tuple(steps[2:]), (0,) * 3, (WA.Carried(0, 8, 0, ((0, 8),)),)))
+    assert WA.follows(*windows[:2]) == WA.follows(*windows[1:]) == [(0, 0)]
+    ingress = {"a": {**GREEDY, "max_tokens": 3, "prompt": list(range(1, 11))}}
+    cs = [compile_steps(reg, adv, ingress) for adv in (WA.Advice((a,), tuple(steps), (0,) * 3), *windows)]
+    units = [u for c in cs for u in c.requests]
+    assert [(u.LP, u.C, u.carried_in, u.carried_out, u.edge) for u in units] == [
+        (10, 0, False, False, ()), (10, 0, False, True, ("prefix", "prefix_ik", "prefix_iks")),
+        (10, 4, True, True, ("prefix", "prefix_ik", "prefix_iks")), (10, 8, True, False, ())]
+    assert units[0].chunks == (4, 4, 2) and units[0].T == units[3].T == 2
+
+    def calls(c) -> list[str]:
+        (p,) = c.programs.values()
+        return [n.fn.id for n in p.fn.body.nodes if not n.fn.id.startswith(("Const", "StopCheck_v1"))]
+
+    assert calls(cs[0]) == calls(cs[1]) + calls(cs[2]) + calls(cs[3])
+    assert [_members(next(iter(c.programs.values())).fn.body.nodes, COUNTED) for c in cs] == [3 * 8, 0, 3 * 4, 3 * 4]
+    wls = [c.workload for c in cs]
+    assert wls[1].edge.outs == wls[2].edge.ins and wls[2].edge.outs == wls[3].edge.ins and not wls[3].edge.outs
+    assert [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [["prefix", "prefix_ik", "prefix_iks"]]
+    assert wls[2].ports == wls[3].ports == ("edge.kv", "edge.ik", "edge.iks")
+    assert [[t.leaves for t in field_types(dict(wls[w].fn.signature()[0])["edge.kv"])] for w in (2, 3)] == [
+        [4 * 4 * 576], [4 * 8 * 576]], "every layer's latent rows so far"
+    for adv, wl in zip(windows, wls[1:]):
+        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
 
 
 @pytest.mark.slow
@@ -393,7 +450,7 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.LP, u.T, u.chunks) == (10, 2, (6, 4))
-    assert _families(c.programs[u.digest].fn.body.nodes)["DsaTopKMask_v1"] == 3 * 8
+    assert _members(c.programs[u.digest].fn.body.nodes, COUNTED) == 3 * 8
     s = c.summary()
     (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
     assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [6, 4]
@@ -411,7 +468,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     """Class G at its served limits (`CLASS_G_SERVED`): one greedy request of KEYS prompt tokens (the served max_model_len unless
     stated) and one output, which its prefill's last row samples (no decode position: T 0), its prompt prefilled alone in chunks
     of the long-prefill threshold, its last row of KEYS keys. The step compiler plans it and builds its request Program on the meta device, every row past
-    INDEX_TOPK (2,048) in the mask form at its class: no `run` input, its one check its length rule, one DsaTopKMask per full indexer layer and row
+    INDEX_TOPK (2,048) in the mask form at its class: no `run` input, its one check its length rule, one DsaTopKMaskCounted per full indexer layer and row
     past INDEX_TOPK (in the last layer only its last chunk's: the rest are dead units, `prune`), at most KEYS / INDEX_TOPK classes. What no cheaper test can: that a request at the served limit compiles, at
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
     positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
@@ -429,7 +486,10 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     (prog,) = c.programs.values()
     assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0])
     assert prog.fn.signature()[1] == TupleT(Array(1, I32), Array(1, BIT)), "its sample, then its length rule"
-    masks = Counter(n.fn.bindings["N"] for n in prog.fn.body.nodes if n.fn.id.startswith("DsaTopKMask_v1{"))
+    masks = Counter()
+    for n in prog.fn.body.nodes:
+        if n.fn.id.startswith(COUNTED + "{"):
+            masks[n.fn.bindings["N"]] += n.n if n.form == "batch" else 1
     long, last = max(LP - topk, 0), LP - CH * ((LP - 1) // CH)
     dead = long - min(last, long) if hf["indexer_types"][int(layers) - 1] == "full" else 0
     assert sum(masks.values()) == full * long - dead

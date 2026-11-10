@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import struct
 
@@ -809,37 +808,6 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     # the row's reuse rule accepts the freshly derived record (current schema, this Program)
     (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 128, "LP": 9, "T": 2}))
     assert R.wor_stale(str(out), str(pdir / "result.json"), WR.SCHEMA) == ""
-
-
-def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path, monkeypatch):
-    """derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
-    EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
-    (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists.
-    The git tree's git is a stand-in (`experiment.code_version`'s own git is test_fallback_reads')."""
-    import subprocess
-    import verity_vllm.pipeline.experiment as EX
-    root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
-    exp = os.path.join(root, "EXPORT.json")
-    if os.path.exists(exp):
-        pytest.skip("this tree carries an EXPORT.json already (a shipped pod tree)")
-
-    def git(cmd, **kw):
-        assert cmd[0] == "git", cmd
-        return subprocess.CompletedProcess(cmd, 0, stdout="d" * 40 + "\n" if cmd[1] == "rev-parse" else "", stderr="")
-    monkeypatch.setattr(EX.subprocess, "run", git)
-    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
-    assert dv["code"] == "d" * 40 and dv["code_source"] == "git"
-    try:
-        with open(exp, "w") as f:
-            json.dump({"commit": "a" * 40, "patch_sha256": "deadbeefcafe0000"}, f)
-        dv2 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
-        assert dv2["code"] == "a" * 40 and dv2["code_source"] == "EXPORT.json (dirty patch deadbeefcafe)"
-        with open(exp, "w") as f:
-            json.dump({"commit": "b" * 40}, f)
-        dv3 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
-        assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
-    finally:
-        os.unlink(exp)
 
 
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):

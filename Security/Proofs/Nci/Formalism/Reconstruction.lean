@@ -23,8 +23,8 @@ namespace Nci.Formalism
 open Finset
 open Verity (Circuit RegisteredCircuit)
 
-theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S) (a : C.Transcript)
-    (l : List (Fin C.N)) (hl : l.Pairwise (· < ·)) (hlS : ∀ g ∈ l, g ∈ S) (y : C.Transcript)
+theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S) (a : C.Trace)
+    (l : List (Fin C.N)) (hl : l.Pairwise (· < ·)) (hlS : ∀ g ∈ l, g ∈ S) (y : C.Trace)
     (hy : ∀ v, v ∈ C.into S ∨ (v ∈ S ∧ v ∉ l) → y v = C.eval a v) :
     ∀ v ∈ S, l.foldl (fun y g => Function.update y g (C.op g y)) y v = C.eval a v := by
   induction l generalizing y with
@@ -71,7 +71,7 @@ theorem mem_inputs_of_mem_θ {d : RegisteredCircuit} {v : Fin d.D.N} (hθ : v �
 
 /-- **Reconstruction**: for a set of gates `S` and any `x` that holds the values of `in(S)`, the reconstruction of `S`
 from `x` evaluates `|S|` gates, one each, and holds every value `S` computes. -/
-theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Transcript) (hS : GateSet C S)
+theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Trace) (hS : GateSet C S)
     (hx : AgreesOn C x (C.eval a) (C.into S)) :
     (S.sort (· ≤ ·)).length = S.card ∧ AgreesOn C (reconstruct C S x) (C.eval a) S := by
   refine ⟨Finset.length_sort _, ?_⟩

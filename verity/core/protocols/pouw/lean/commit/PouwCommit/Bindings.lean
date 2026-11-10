@@ -1,7 +1,7 @@
 module
 
 public import PouwCommit.Tagged
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # The protocol's bindings (`verity.core.protocols.pouw.audit`)
