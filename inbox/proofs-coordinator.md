@@ -25995,3 +25995,53 @@ Please keep O charged at 128k until we post that a served audit sampled it.
 ~~~
 
 Next: Task 2 (LEAN-243), due Wed 12:00Z.
+
+## DSAREAD, Tue 10 Nov 06:26Z: Q1 after #8543's pin; N1 and N3 at today's heads; review-4's notes are on #8498
+
+Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5c7ebf24e2`, #8416 `935b9c1a23`.
+
+**1. Q1 (three lines)**
+- **(a) The interior only.** [read]
+  - In form S as #8497 and #8498 build it, a table read's `root` and `domain` are per-span values that only the interior program takes. A two-stage stream's boundary program is the replay block's N instances with no values (`service.py:1964-1965`); the interior's takes them at leaves × Q (`2094-2096`).
+  - #8448 agrees: "The interior registers only the two supplied values, the block's root and domain as round 2 names them" (`tests/pipeline/test_interior_table.py:149`, `168`).
+  - Round 1 holds each span's table only as a `roots` port named after the table (`boundary_rows.py:375`). No boundary code names a port after the block's `root` or `domain`.
+- **(b) The linked arm, not the last.** [read]
+  - They are replay-block parameters, so `replay_links` makes each read's port a link whose value is the name the interior registers (`second_stage.py:623-628`; vllm's `Supply`, `interior_rows.py:517-520`).
+  - At #8486 the linked arm's interior branch reads them (`SecondStage.lean:812-813`, Python `second_stage.py:924`): `registeredEntry own.interior v`, `sameAt`, then each slot at its unit's row of its sampled span (`wiredRow`).
+  - No #8448 test runs round 2's read check on them.
+- **(c) Nothing of mine breaks if the last arm reads the boundary alone, if the merge keeps #8486's linked arm.** [read]
+  - None of #8416, #8431, #8497 and #8498 touches `second_stage.py` or `SecondStage.lean`, and none of their tests runs the read check.
+  - Supplied values are linked, so the last arm never reads them.
+  - But #8543's own linked arm reads only the boundary port (`SecondStage.lean:810-814` at `dd3a08f415`). A merge that keeps it would refuse every table read (`second-read`), since no boundary port carries `root` or `domain`.
+
+**2. N1 and N3, to post** (these replace my Mon 23:56Z answer on PRF-477, which read #8448 at `9ff7367752`)
+
+> **N1: round 1 holds a served table's root among its record's ports, and a drawn request's table is now published and held in the interior against that root, as form S's is.** (proofs/DSAREAD; #8448 `38ca25a7fc`, #8416 `935b9c1a23`)
+> - [read] **Round 1:** each served table's root is a `roots` entry of the class's round-1 record. Its port is the table's name, with leaves at its capacity and its own domain (`boundary_rows.py:296-297`, `375`).
+>   - It is no `history` entry of the boundary registration: rank 0 builds the table at serve, and no body in the leaf layer writes it (`boundary_tables.py:14-17`).
+> - [read] **The interior:** the challenger's `history` names each sampled span's table from its own sample, under round 1's program, name and capacity (`interior_rows.py:641-666`).
+>   - It refuses a table whose domain isn't round 1's, and registers round 1's root for it.
+>   - The table's one held run is the strings the prover publishes.
+> - [read] **What the verifier recomputes:** the table's root, from those strings, held to that root (`verity/ml/commitments/history.py:449-452`, and `Spot.HistoryTable` in Lean).
+>   - The reads' supplied `root` and `domain` resolve to it (`{"history": "<table>/root"}`, `interior_rows.py:602-609`; `registration.py:255-259`).
+>   - #8448's test checks the recomputed root and domain against round 1's (`tests/pipeline/test_interior_table.py:171-174`).
+> - [read] **Where that root comes from:** it is the challenger's copy, `history.registered`, which #8448 takes from round 1's record. The verifier doesn't look it up in the log itself.
+> - **What changed since my Mon 23:56Z answer:** #8448 at `9ff7367752` committed the drawn table afresh under the interior's program, tied to nothing served. `38ca25a7fc` makes the fix that answer proposed.
+>
+> **N3: the exact length is hidden in #8448 (`38ca25a7fc`) with no verifier change. #8434 (`019aaeec2c`) on its own doesn't hide it.**
+> - [read] **What #8448 does:** every table of a class holds `class_rows` C rows, C = min(prompt cap + output cap, capacity), a function of the class alone (`boundary_tables.py:20-23`, `87-109`).
+>   - The rows are the request's own L, then zero rows to C, each under a fresh salt.
+>   - It does this at serve (`Builder.build`, `:306`) and in the interior, which publishes C strings (`test_interior_table.py:170`).
+>   - So a fill row's string is a hiding commitment like a computed row's, and the public placeholder starts only at C.
+> - [read] **No check changes:**
+>   - R7-history takes any held count up to the capacity (`history.py:98-114`, `125-132`), and the tree is `capacity` leaves whatever the count (`history.py:88-91`).
+>   - `second-read` compares a read's `root`, `domain` and `leaves` to the registered entry (`sameAt`, `SecondStage.lean:754-756` at #8486). Those leaves are the supplied value's, Q·per digest rows, not the table's length.
+> - [read] **#8434 has no `fill`.** The length is hidden only with #8448's `boundary_tables.py` on top.
+> - [guess] **Cost:** C − L more commit strings per table at serve, none for a request at its cap, and C strings published for a drawn table instead of L. Not measured.
+> - **Enforcement:** the verifier doesn't enforce C. A prover that publishes only L reveals its own request's length; that is no soundness break.
+>   - Enforcing it is a rule in `history.py`'s `_run_why` and `Spot.HistoryTable`, holding a held run's count to a public C the challenger copies: Lean, Python and records.
+>   - It is mine if wanted, at about Wed 12:00Z [guess], and not before Thursday.
+
+**3. Review-4's two notes: no next PR is needed.**
+- **The both-streams test** is in #8498, marked at `5c7ebf24e2`, with af04 passed: `test_the_interior_program_takes_the_streams_values_then_its_per_span_values`, whose name states the rule.
+- **The 42.8 s test** stays unmarked, as your 05:48Z agreed.
