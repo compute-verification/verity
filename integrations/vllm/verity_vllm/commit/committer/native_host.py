@@ -791,36 +791,12 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self._gpu_t: dict[str, float] = {"leaf_ms": 0.0, "tree_ms": 0.0}
         if gpu_tree:
             self.name = f"{self.name}_gputree"
-<<<<<<< 99c8914848
-            self.chunk = GPU_CHUNK_BYTES
-        self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
-        if commit_scheme not in (None, scheme.NAME):
-            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
-                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
-                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
-            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
-            self.name = f"{self.name}+{step_rows.NAME}"
+        self.name = f"{self.name}+{step_rows.NAME}"
         self.program_digest = program_digest or (step_rows.run_program_digest(run_id) if self.rows else
                                                  hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest())
-        # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
-        # host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
-||||||| merged common ancestors
-            self.chunk = GPU_CHUNK_BYTES
-        self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
-        if commit_scheme not in (None, scheme.NAME):
-            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
-                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
-                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
-            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
-            self.name = f"{self.name}+{step_rows.NAME}"
-        # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
-        # host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
-=======
-        self.name = f"{self.name}+{step_rows.NAME}"
         # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none", and the offline core
         # (no engine, no device) keeps them on host.  Host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable
         # D2H is ~1 GB/s and synchronous)
->>>>>>> 7af4d24fca3e
         self.retain_pinned = settings.VERITY_RETAIN_PINNED
         self.retain = r if (r := settings.VERITY_RETAIN) is not None else ("device" if engine is not None else "host") if retain_values else "none"
         if self.retain not in RETAIN_MODES:
@@ -1000,15 +976,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
-<<<<<<< 99c8914848
         if self.rows:
             return step_rows.ctx_digest(self.run_id, step)
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx(step)).digest()
-||||||| merged common ancestors
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx(step)).digest()
-=======
         return hashlib.sha256(f"{self.run_id}/step={step}".encode()).digest()
->>>>>>> 7af4d24fca3e
 
     def _select_modules(self) -> list[tuple[str, Any]]:
         out = []

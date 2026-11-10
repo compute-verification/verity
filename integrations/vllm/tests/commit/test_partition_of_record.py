@@ -9,6 +9,7 @@ import re
 import pytest
 
 from verity_vllm.commit.partition import partition_of_record, program_digests, require_partition, word_check_refusal
+from verity_vllm.pipeline import research_tools
 from verity_vllm.query.compose import _with_partitions
 from verity_vllm.query.required import Q_MODULE_BODY_ID, Q_WORD_ID, QUERY_OF_RECORD, partition_of
 
@@ -106,4 +107,4 @@ def test_every_entry_point_records_the_query_of_record():
     from verity_vllm.pipeline.row import _Row
     import dataclasses
     row_default = next(f.default for f in dataclasses.fields(_Row) if f.name == "query")
-    assert QUERY_OF_RECORD == Q_WORD_ID == attempt_provenance.DEFAULT_QUERY == row_default == row_records.QUERY_OF_RECORD
+    assert QUERY_OF_RECORD == Q_WORD_ID == research_tools.DEFAULT_QUERY == attempt_provenance.DEFAULT_QUERY == row_default == row_records.QUERY_OF_RECORD
