@@ -2,34 +2,51 @@ module
 
 public import Properties.Nci
 public import Properties.Nci.Baseline
+public import NciCheck.DefinitionDigest
 public import Flock.TemplateQuery
 public import Spot.Wires
-public import NciCheck.DefinitionDigest
 
 /-!
-# What the record form's acceptance must mean (LEAN-238): a draft, never elaborated
+# What accepting an execution phase's circuit record means
 
-Half done, stopped at 08:19Z on 10 Nov: this file has not been through `lean_changed.py --try` once, it is in no root of
-`Security/Properties/lakefile.toml`, and nothing here is proved. It records the statement as it stood, so the next worker
-starts from it and not from the sources.
+An execution phase's Program is a population of template instances: its root's nodes are calls and batches of
+templates, and every unit's parameters are input gates of its own. Which unit feeds which, and which rows hold
+registered data, are declarations of the phase's circuit record. A check of such a record against the inference-only
+policy is taken here through `Form`, the functions it exports, so the statements hold a check to them before it is
+written and read the same on any check that exports them.
 
-The form (training's `NciCheck/Record.lean`, TRN-76, not on `main`) is taken through `Form`, the functions it must
-export. The record's circuit is the population Program's gates with every wired reader leaf replaced by the writer gates
-whose bits it reads (`Lands`), θ the unwired leaves of the rows the form holds (`Form.heldBy`), and the inference blocks
-the slots (`Form.slotOf`).
+**The record's circuit** (`Served`). Its gates are the Program's gates that no wire covers; a gate that read a wired
+input leaf reads instead the writer's gates whose bits that leaf holds, a writer's pass-through of its own wired input
+followed in turn (`Lands`). Its registered inputs θ are the leaves of the rows the check holds (`Form.held`), and its
+inference blocks are the slots (`Form.slot`): a block is a set of units, and a root node that batches the units of
+several slots lies in several blocks. A record lays out a circuit only where every unit's rows are its own input
+gates (`OwnRows`) and every wire lands whole (`Aligned`: a writer's leaf lies inside one leaf of the row that reads it).
+`Spot.Wires.check` compares a wire's two rows in words alone, so a check that stops there leaves a 16-bit reader leaf
+free to read sixteen gates of 16 bits through a writer that passes one-bit leaves on.
 
-* `Complies`: acceptance gives a circuit the record lays out, and on every such circuit the rate rule
-  (`Nci.CompliesRate`). No premise.
-* `Provenance`: every row the form holds is a read or a root of a parameter the log's first record and the run's own
-  register under one root, or an opened port of a reader whose closure digest is a pin. No premise.
-* `DigestPins`: lemma (i). Two descriptors that give one Definition one closure digest decode it to the same gates, or
-  two byte strings the two digests hashed collide under SHA-512. No assumption: the collision is in the conclusion.
-* `PinnedOpens`: how (ii), PRF-458's P1, enters: as the premise `Opens P₀ k₀` at the reference Definition, proofs' to
-  state and prove, carried to the record's reader by `DigestPins`.
+**The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
+lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
+it complies (`Nci.CompliesRate`). It follows from four statements about the check, `Owns`, `LaidOut`, `Counts` and
+`Rates` (`Proofs.Properties.Nci.Record`).
 
-Not settled, each the form's draft to answer: whether `j`'s `program` is the descriptor's text; how the trusted input
-names the run (`TrustedRun` follows v0: by digest); how the run's record names the record's bytes (`RunNames` guesses
-canonical JSON); who holds an opening's verdict to 1.
+**Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
+row the check holds is a registered read or a table read of a parameter that the log's first record registers under
+the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is the verifier's
+own, never the record's: its Definition's closure digest (`NciCheck.DefinitionDigest.closureDigest`) and its ports by
+role, so that an opening's key is never a row it registers.
+
+**A pin fixes the Definition** (`DigestPins`): two Program texts that give a Definition one closure digest decode it
+to the same Definition, callees and all (`Same`), or two of the byte strings the two digests hashed (`Hashed`) differ
+and have one SHA-512. The collision is among those strings and no others: over all byte strings one exists by
+counting, and a statement that offered it would say nothing.
+
+**What a pinned reader opens** (`PinnedOpens`): a statement about a pinned Definition that reads only the Definition
+(`OfDefinition`), held of a reference Program's copy, holds of the reader of every opened row the check holds under
+that pin, up to such a collision. It follows from `DigestPins` and `Provenance`.
+
+What these do not say: that a unit's verdict output is 1 (a statement about the committed values, the proof block's);
+that equal roots hold equal rows, or that the data the log's first record registers was public
+(`Nci.Assumptions.ThetaRegistered`).
 -/
 
 @[expose] public section
@@ -39,17 +56,12 @@ namespace NciCheck.Properties.Record
 open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node)
 open Flock.TemplateQuery (TRange)
-open NciCheck.Baseline (getD strAt digest)
+open NciCheck.Baseline (getD strAt digest lastWith)
 open NciCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-! ## The interface -/
 
-/-- What the form computes of a record, all `rate` reads: the greatest block's gates and fresh bits. -/
-structure Summary where
-  gates : ℕ
-  fresh : ℕ
-
-/-- A reader row: its template's descriptor id, the unit of that template (counted as the wires count), the
+/-- A reader row: its template's descriptor id, the unit of that template (counted as the wires count units), the
 parameter, and the row of the parameter's cut. -/
 structure Row where
   tid : String
@@ -57,31 +69,54 @@ structure Row where
   port : String
   row : ℕ
 
-/-- A pinned reader, the verifier's own and never the record's: its Definition's closure digest, the parameters an
-opening registers (never the key), the parameters that take the table's root and domain id, and the return field that
-is the verdict. -/
+/-- A pinned reader of a table opening, the verifier's own: its Definition's closure digest, and its ports by role.
+`key` is the parameter that says which row is opened, `opened` the parameters an opening registers (the row, its salt
+and its path, never the key), `root` and `domain` the parameters that take the table's root and domain id, and
+`verdict` the output row that holds the verdict. -/
 structure Pin where
   digest : String
+  key : String
   opened : List String
   root : String
   domain : String
-  verdict : ℕ
+  verdict : String
 
-/-- Why the form holds a row in θ: it reads the registered parameter `param`; it holds `param`'s table's root or domain
-id; or it is an opened port of an opening of `param`'s table by a pinned reader. -/
+/-- Why the check holds a row in θ: it is a registered read of the parameter `param`; a table read of the root
+(`root`), else the domain id, of the table `name` over `param`; or a port of an opening of that table by a reader
+pinned by `pin`. -/
 inductive Held where
   | read (param : String)
-  | root (param : String)
-  | opened (param : String) (pin : Pin)
+  | table (name param : String) (root : Bool)
+  | opened (name param : String) (pin : Pin)
 
-/-- The functions the form exports. `summarize pins j trusted` with `j = {program, record, table}` and
-`trusted = {log, run}`; `rate s Γ num den` writes `complies`. -/
+/-- An instance's fields: the Program's text, the record's text, `Γ`, `α = num / den`, and the pins. -/
+structure Instance where
+  program : String
+  record : String
+  gamma : ℕ
+  num : ℕ
+  den : ℕ
+  pins : List Pin
+
+/-- What the rate rule reads of a record: a block's gates, and the most fresh bits a block reads. -/
+structure Summary where
+  gates : ℕ
+  fresh : ℕ
+
+/-- The functions a check of a circuit record exports. `read j tr` reads the instance `j` and the trusted input `tr`
+(the registration log and the digest of the run's own record), or refuses. Of a record it has read: `inst` is the
+instance's fields, `wiring` the record's wires as `Spot.Wires.check` takes them, `slot tid u` the block of unit `u` of
+template `tid`, `held r` whether row `r` counts as θ and why, and `summarize` the summary. `rate Γ num den s` is the
+rate rule on a summary, `none` where it complies. -/
 structure Form where
-  wiringOf : Prog → Json → Except String Spot.Wires.Wiring
-  slotOf : Json → String → ℕ → Option ℕ
-  heldBy : List Pin → Json → Json → Row → Option Held
-  summarize : List Pin → Json → Json → Except String Summary
-  rate : Summary → ℕ → ℕ → ℕ → Json
+  Case : Type
+  read : Json → Json → Except String Case
+  inst : Case → Instance
+  wiring : Case → Spot.Wires.Wiring
+  slot : Case → String → ℕ → Option ℕ
+  held : Case → Row → Option Held
+  summarize : Case → Summary
+  rate : ℕ → ℕ → ℕ → Summary → Option String
 
 /-! ## The record's circuit -/
 
@@ -92,7 +127,8 @@ def UnitAt (P : Prog) (rs : Array TRange) (tid : String) (u : ℕ) (sc : Scope) 
     u = ((rs.extract 0 i).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + m ∧
     sc = P.child P.rootScope rs[i]!.node m
 
-/-- The bit at which leaf `l` starts in a row whose leaves have the widths `ws`. -/
+/-- The bit at which leaf `l` starts in a row whose leaves have the widths `ws`: a row is its leaves' bits, in leaf
+order. -/
 def bitAt (ws : Array ℕ) (l : ℕ) : ℕ := (ws.extract 0 l).foldl (· + ·) 0
 
 /-- Row `row` of parameter `i` cut `k` ways: its first leaf and its leaves' widths. -/
@@ -100,10 +136,10 @@ def inRow (d : Defn) (i k row : ℕ) : ℕ × Array ℕ :=
   (row * (d.params[i]!.2.leaves / k),
     d.params[i]!.2.widths.extract (row * (d.params[i]!.2.leaves / k)) ((row + 1) * (d.params[i]!.2.leaves / k)))
 
-/-- A return type's fields, as `interface.layout` takes them. -/
+/-- A return type's fields, each one output row: a tuple's or a record's fields, else the type itself. -/
 def fieldsOf : Ty → Array Ty
-  | .tuple fs => fs
-  | .record fs => fs.map (·.2)
+  | .tuple fs => if fs.isEmpty then #[.tuple fs] else fs
+  | .record fs => if fs.isEmpty then #[.record fs] else fs.map (·.2)
   | t => #[t]
 
 /-- Output row `o<f>`: its first leaf and its leaves' widths. -/
@@ -125,17 +161,34 @@ def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 
+/-- Leaf `l` of the reader row `r` is Program gate `g`, at bits `[lo, hi)` of the row. -/
+def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l g lo hi : ℕ) : Prop :=
+  ∃ sc, UnitAt P rs r.tid r.unit sc ∧ InLeaf P sc (W.cutsOf r.tid r.port) r.port r.row l g lo hi
+
+/-- **Every unit's rows are its own input gates**: a leaf of a reader row is an input gate, and no gate is a leaf of
+two rows, or two leaves of one. -/
+def OwnRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
+  (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
+      ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∧
+    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' → r = r' ∧ l = l'
+
 /-- A wire covers Program gate `g`: it is a leaf of a reader row that has a writer. -/
 def Wired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g : ℕ) : Prop :=
-  ∃ tid u port row sc l lo hi, (S.writerOf tid u port row).isSome ∧ UnitAt P rs tid u sc ∧
-    InLeaf P sc (W.cutsOf tid port) port row l g lo hi
+  ∃ r l lo hi, (S.writerOf r.tid r.unit r.port r.row).isSome ∧ RowLeaf P rs W r l g lo hi
+
+/-- Leaf `l'` of the output row that the reader row `r` is wired to is Program gate `g'`, at bits `[lo', hi')`. -/
+def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row) (l' g' lo' hi' : ℕ) : Prop :=
+  ∃ wt wu out sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) ∧ 0 ≤ wu ∧
+    UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' out l' g' lo' hi'
+
+/-- **Every wire lands whole**: each leaf of a writer's output row lies inside one leaf of the row that reads it. -/
+def Aligned (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
+  ∀ r l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' → ∃ l g lo hi, RowLeaf P rs W r l g lo hi ∧ lo ≤ lo' ∧ hi' ≤ hi
 
 /-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. A wired
-leaf past its writer's bits (the row's zero padding) reads nothing. -/
+leaf past its writer's bits, the row's zero padding, reads nothing. -/
 def Feeds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g' g : ℕ) : Prop :=
-  ∃ tid u port row wt wu out sc sc' l l' lo hi lo' hi',
-    S.writerOf tid u port row = some (wt, wu, out) ∧ 0 ≤ wu ∧ UnitAt P rs tid u sc ∧ UnitAt P rs wt wu.toNat sc' ∧
-    InLeaf P sc (W.cutsOf tid port) port row l g lo hi ∧ OutLeaf P sc' out l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi
+  ∃ r l l' lo hi lo' hi', RowLeaf P rs W r l g lo hi ∧ WriterLeaf P rs S r l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi
 
 /-- Where a read of Program gate `o` lands: `o` itself when no wire covers it, else through the wires, a writer's
 pass-through of its own wired input followed in turn. -/
@@ -144,8 +197,8 @@ inductive Lands (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot
   | wire (o g a : ℕ) : Feeds P rs W S g o → Lands P rs W S g a → Lands P rs W S o a
 
 /-- `D` is the wired circuit: its gates are the Program's gates no wire covers, gate `x` the Program's `at_ x`, with
-that gate's width and kind, reading where its operands land. As `NciCheck.Properties.LaysOut`, operations and outputs
-are free. -/
+that gate's width and kind, reading where its operands land. As in `NciCheck.Properties.LaysOut`, operations and
+outputs are free. -/
 def LaysOut (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (D : Verity.Circuit)
     (at_ : Fin D.N → ℕ) : Prop :=
   Function.Injective at_ ∧ (∀ g, (∃ x, at_ x = g) ↔ g < gates P ∧ ¬ Wired P rs W S g) ∧
@@ -156,8 +209,7 @@ def LaysOut (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wir
 /-- θ is the gates of the rows `held` holds. -/
 def Names (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (held : Row → Bool) {D : Verity.Circuit}
     (at_ : Fin D.N → ℕ) (θ : Finset (Fin D.N)) : Prop :=
-  ∀ x, x ∈ θ ↔ ∃ r sc l lo hi, held r = true ∧ UnitAt P rs r.tid r.unit sc ∧
-    InLeaf P sc (W.cutsOf r.tid r.port) r.port r.row l (at_ x) lo hi
+  ∀ x, x ∈ θ ↔ ∃ r l lo hi, held r = true ∧ RowLeaf P rs W r l (at_ x) lo hi
 
 /-- The blocks are the slots: a computed gate lies in a unit, and its block is that unit's slot. -/
 def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ) {D : Verity.Circuit} (at_ : Fin D.N → ℕ)
@@ -165,73 +217,105 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
   ∀ x, D.isInput x = false → ∃ tid u sc s, UnitAt P rs tid u sc ∧ sc.off ≤ at_ x ∧
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
-/-- `d` is the record's circuit as the form reads it: its wiring passes `Spot.Wires.check`, its templates are the
-Program's root nodes (`Flock.TemplateQuery.evaluate`), and `d` is the wired circuit with θ the held rows and `𝓘` the
-slots. -/
-def Served (F : Form) (pins : List Pin) (P : Prog) (record trusted : Json) (d : Verity.RegisteredCircuit) : Prop :=
-  ∃ W S rs, ∃ at_ : Fin d.D.N → ℕ, F.wiringOf P record = .ok W ∧ Spot.Wires.check W = .ok S ∧
-    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs ∧
-    LaysOut P rs W S d.D at_ ∧ Names P rs W (fun r => (F.heldBy pins record trusted r).isSome) at_ d.θ ∧
-    Divides P rs (F.slotOf record) at_ d.𝓘
+/-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes; the record's wiring passes
+`Spot.Wires.check` and its templates are the Program's root nodes (`Flock.TemplateQuery.evaluate`); every unit's rows
+are its own input gates and every wire lands whole; and `d` is the wired circuit, θ the rows the check holds and `𝓘`
+the slots. -/
+def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
+  ∃ (P : Prog) (S : Spot.Wires.Summary) (rs : Array TRange) (at_ : Fin d.D.N → ℕ),
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧ Spot.Wires.check (F.wiring c) = .ok S ∧
+    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
+      ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
+    OwnRows P rs (F.wiring c) ∧ Aligned P rs (F.wiring c) S ∧ LaysOut P rs (F.wiring c) S d.D at_ ∧
+    Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
 
-/-! ## The property -/
+/-! ## The rate rule -/
 
-/-- The form accepts `j` and `trusted` at the verifier's own pins, `Γ` and `α = num / den`, on the Program `P` that
-`j`'s `program` decodes to. -/
-def Accepts (F : Form) (pins : List Pin) (Γ num den : ℕ) (P : Prog) (text : String) (j trusted : Json) : Prop :=
-  strAt j "program" = some text ∧ Flock.Program.decode text.toUTF8 = .ok P ∧
-    ∃ s, F.summarize pins j trusted = .ok s ∧ getD (F.rate s Γ num den) "complies" = .bool true
+/-- The record `c` carries the instance `j`'s own fields: the Program's and the record's texts, `gamma` a natural, and
+`alpha` a pair of naturals `[num, den]` with `den > 0`. -/
+def Carries (F : Form) (j : Json) (c : F.Case) : Prop :=
+  j.getObjVal? "program" = .ok (.str (F.inst c).program) ∧ j.getObjVal? "record" = .ok (.str (F.inst c).record) ∧
+    (∃ v, j.getObjVal? "gamma" = .ok v ∧ natOf? v = some (F.inst c).gamma) ∧
+    (∃ a b, j.getObjVal? "alpha" = .ok (.arr #[a, b]) ∧ natOf? a = some (F.inst c).num ∧
+      natOf? b = some (F.inst c).den) ∧ 0 < (F.inst c).den
 
-/-- **The form's acceptance gives the rate rule on the served record's circuit.** The record lays out a circuit, and
-every circuit it lays out meets the policy block by block at `Γ` and `α`, so it complies. -/
+/-- The check accepts the instance `j` and the trusted input `tr`, reading the record `c`: it reads them, and the
+rate rule complies on the record's summary at the instance's `Γ` and `α`. -/
+def Accepts (F : Form) (j tr : Json) (c : F.Case) : Prop :=
+  F.read j tr = .ok c ∧ F.rate (F.inst c).gamma (F.inst c).num (F.inst c).den (F.summarize c) = none
+
+/-- **A record the check reads carries its instance's fields.** -/
+def Owns (F : Form) : Prop :=
+  ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → Carries F j c
+
+/-- **A record the check reads lays out a circuit.** -/
+def LaidOut (F : Form) : Prop :=
+  ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∃ d, Served F c d
+
+/-- **The summary counts every block.** In every circuit a record the check reads lays out, each block reads at most
+the summary's fresh bits, and has the summary's gates or none. -/
+def Counts (F : Form) : Prop :=
+  ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∀ d, Served F c d → ∀ u,
+    Nci.novelReads d (d.𝓘.gates u) ≤ (F.summarize c).fresh ∧
+      (d.D.size (d.𝓘.gates u) = (F.summarize c).gates ∨ d.𝓘.gates u = ∅)
+
+/-- **The rate rule on a summary**: where it complies, a block's gates are at most `Γ` and its fresh bits at most
+`num / den` times its gates. -/
+def Rates (F : Form) : Prop :=
+  ∀ (Γ num den : ℕ) (s : Summary), F.rate Γ num den s = none → s.gates ≤ Γ ∧ s.fresh * den ≤ num * s.gates
+
+/-- **Accepting a record gives the rate rule on its circuit.** Where the check accepts, the record carries the
+instance's fields and lays out a circuit, and every circuit it lays out meets the policy block by block at the
+instance's `Γ` and `α = num / den`, so it complies. -/
 def Complies (F : Form) : Prop :=
-  ∀ (pins : List Pin) (Γ num den : ℕ) (P : Prog) (text : String) (j trusted : Json),
-    Accepts F pins Γ num den P text j trusted →
-    (∃ d, Served F pins P (getD j "record") trusted d) ∧
-      ∀ d, Served F pins P (getD j "record") trusted d →
-        (∀ u, Meets d d.𝓘 Γ ((num : ℝ) / den) u) ∧ Nci.CompliesRate Γ ((num : ℝ) / den) d
+  ∀ (j tr : Json) (c : F.Case), Accepts F j tr c →
+    Carries F j c ∧ (∃ d, Served F c d) ∧
+      ∀ d, Served F c d →
+        (∀ u, Meets d d.𝓘 (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) u) ∧
+          Nci.CompliesRate (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) d
 
-/-- `p` is θ: the log's first record and the run's own register it under one root (training's `isTheta`). -/
+/-! ## Provenance -/
+
+/-- The registered parameter `p` is θ: the log's first record registers a value of its name (its last entry of that
+name) under the root the run's own record commits `p` under. -/
 def IsTheta (log : Array Json) (run : Json) (p : String) : Prop :=
-  0 < log.size ∧ ∃ R, strAt (getD (getD log[0]! "window") "registered_roots") p = some R ∧
+  0 < log.size ∧ ∃ e R, lastWith log[0]! "registered" "value" p = some e ∧ strAt e "root" = some R ∧
     strAt (getD (getD run "window") "registered_roots") p = some R
 
-/-- The trusted input holds the chained log `log` and names `run`, one of its records, by its digest. -/
+/-- The trusted input `tr` holds the registration log `log`, in R6's chain (`Chained`), and names `run`, one of its
+records, by its digest. -/
 def TrustedRun (tr : Json) (log : Array Json) (run : Json) : Prop :=
-  getD tr "log" = .arr log ∧ Chained log ∧ ∃ n < log.size, log[n]! = run ∧ ∃ r, digest run = .ok r ∧ strAt tr "run" = some r
+  getD tr "log" = .arr log ∧ Chained log ∧
+    ∃ n < log.size, log[n]! = run ∧ ∃ r, digest run = .ok r ∧ strAt tr "run" = some r
 
-/-- The run's record names the Program and the record by their SHA-512. -/
-def RunNames (run : Json) (P : Prog) (record : Json) : Prop :=
-  strAt run "program" = some (Flock.hexOf P.sha512) ∧ ∃ s, Flock.canon record = .ok s ∧
-    strAt (getD run "window") "circuit" = some (Flock.hexOf (Flock.Sha512.hash s.toUTF8))
+/-- The run's record names the Program `P` and the record's text by their SHA-512s. -/
+def RunNames (run : Json) (P : Prog) (record : String) : Prop :=
+  strAt run "program" = some (Flock.hexOf P.sha512) ∧
+    strAt (getD run "window") "circuit" = some (Flock.hexOf (Flock.Sha512.hash record.toUTF8))
 
-/-- The reason the form gives for holding row `r` is good against the log, the run and the pins. An opened port is one
-the pin lists, of a reader whose closure digest in the Program's descriptor `pj` is the pin's, with its root and domain
-ports holding the table's. -/
-def Good (F : Form) (pins : List Pin) (pj record trusted : Json) (log : Array Json) (run : Json) (r : Row) :
-    Held → Prop
+/-- The reason the check gives for holding row `r` of the record `c` is good, against the log, the run and the
+Program's descriptor `pj`. A read's parameter is θ. An opened port is one its pin lists, the pin is the instance's,
+the reader's closure digest in `pj` is the pin's, and the same unit's root and domain ports, by the pin's roles, are
+table reads of the same table's root and domain id. -/
+def Good (F : Form) (c : F.Case) (pj : Json) (log : Array Json) (run : Json) (r : Row) : Held → Prop
   | .read p => IsTheta log run p
-  | .root p => IsTheta log run p
-  | .opened p pin => IsTheta log run p ∧ pin ∈ pins ∧ closureDigest pj r.tid = .ok pin.digest ∧
-      r.port ∈ pin.opened ∧ F.heldBy pins record trusted ⟨r.tid, r.unit, pin.root, 0⟩ = some (.root p) ∧
-      F.heldBy pins record trusted ⟨r.tid, r.unit, pin.domain, 0⟩ = some (.root p)
+  | .table _ p _ => IsTheta log run p
+  | .opened name p pin => IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin.digest ∧
+      r.port ∈ pin.opened ∧
+      (∀ row < (F.wiring c).cutsOf r.tid pin.root,
+        F.held c ⟨r.tid, r.unit, pin.root, row⟩ = some (.table name p true)) ∧
+      ∀ row < (F.wiring c).cutsOf r.tid pin.domain,
+        F.held c ⟨r.tid, r.unit, pin.domain, row⟩ = some (.table name p false)
 
-/-- **Every row the form holds is registered.** On acceptance the trusted input's run names this Program and record,
-and each held row's reason is `Good`. -/
+/-- **Every row the check holds is registered.** For a record the check reads, the trusted input's run names its
+Program and its text, and each held row's reason is `Good`. -/
 def Provenance (F : Form) : Prop :=
-  ∀ (pins : List Pin) (Γ num den : ℕ) (P : Prog) (text : String) (pj j trusted : Json),
-    Accepts F pins Γ num den P text j trusted → Flock.JsonParse.parse text = .ok pj →
-    ∃ log run, TrustedRun trusted log run ∧ RunNames run P (getD j "record") ∧
-      ∀ r h, F.heldBy pins (getD j "record") trusted r = some h →
-        Good F pins pj (getD j "record") trusted log run r h
+  ∀ (j tr : Json) (c : F.Case) (P : Prog) (pj : Json), F.read j tr = .ok c →
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → Flock.JsonParse.parse (F.inst c).program = .ok pj →
+    ∃ log run, TrustedRun tr log run ∧ RunNames run P (F.inst c).record ∧
+      ∀ r h, F.held c r = some h → Good F c pj log run r h
 
-/-! ## Lemma (i): the closure digest pins the decoded Definition
-
-Stated on `NciCheck.DefinitionDigest`'s `canonicalEntry`, `definitionDigest` and `closureDigest`. -/
-
-/-- `j` is the descriptor the bytes `b` hold, as `Flock.Program.decode` parses them. -/
-def Descriptor (b : ByteArray) (j : Json) : Prop :=
-  ∃ text, String.fromUTF8? b = some text ∧ Flock.JsonParse.parse text = .ok j
+/-! ## A pin fixes the Definition -/
 
 /-- A descriptor's interning table `k`, as `closureDigest` reads it. -/
 def tab (j : Json) (k : String) : Array Json := match j.getObjValD k with
@@ -254,14 +338,18 @@ inductive Reaches (j : Json) (key : String) : String → Prop
       ((n.getObjValD "fn").getNat?.toOption.bind fun i => (tab j "callees")[i]?) = some (.str c) → Reaches j key c
 
 /-- The byte strings `key`'s closure digest in `j` hashes: the canonical entry of each Definition `key` reaches, and
-maps of those Definitions' ids to their digests. Finitely many, so a collision among them is not for free. -/
+the object that maps exactly those Definitions' ids to their digests. -/
 def Hashed (j : Json) (key : String) (x : ByteArray) : Prop :=
   (∃ k e s, Reaches j key k ∧ canonicalEntry (tab j "callees") (tab j "types") (entry j k) = .ok e ∧
       Flock.canon e = .ok s ∧ x = s.toUTF8) ∨
     ∃ (seen : List (String × Json)) (s : String),
-      (∀ p ∈ seen, Reaches j key p.1 ∧
-        ∃ d, definitionDigest (tab j "callees") (tab j "types") (entry j p.1) = .ok d ∧ p.2 = .str d) ∧
+      (∀ k, Reaches j key k ↔ ∃ p ∈ seen, p.1 = k) ∧
+      (∀ p ∈ seen, ∃ d, definitionDigest (tab j "callees") (tab j "types") (entry j p.1) = .ok d ∧ p.2 = .str d) ∧
       Flock.canon (Json.mkObj seen) = .ok s ∧ x = s.toUTF8
+
+/-- Two of the byte strings that `key`'s closure digests in `j` and in `j'` hash differ and have one SHA-512. -/
+def Collides (j j' : Json) (key : String) : Prop :=
+  ∃ x x', Hashed j key x ∧ Hashed j' key x' ∧ x ≠ x' ∧ Flock.Sha512.hash x = Flock.Sha512.hash x'
 
 /-- Definition `k` of `P` and `k'` of `P'` are one Definition: one descriptor id, kind, signature and count, and, node
 by node, one body whose callees are one Definition in turn. Only a callee's place in each decoder's order may differ. -/
@@ -271,37 +359,38 @@ inductive Same (P P' : Prog) : ℕ → ℕ → Prop
       d.binding = d'.binding → d.gates = d'.gates → d.paramLeaves = d'.paramLeaves → d.outLeaves = d'.outLeaves →
       d.body.params = d'.body.params → d.body.retType = d'.body.retType → d.body.ret = d'.body.ret →
       d.body.offsets = d'.body.offsets → d.body.nodes.size = d'.body.nodes.size →
-      (∀ n < d.body.nodes.size, ({ d.body.nodes[n]! with fn := 0 } : Node) = { d'.body.nodes[n]! with fn := 0 } ∧
-        Same P P' d.body.nodes[n]!.fn d'.body.nodes[n]!.fn) →
+      (∀ n < d.body.nodes.size, ({ d.body.nodes[n]! with fn := 0 } : Node) = { d'.body.nodes[n]! with fn := 0 }) →
+      (∀ n < d.body.nodes.size, Same P P' d.body.nodes[n]!.fn d'.body.nodes[n]!.fn) →
       Same P P' k k'
 
-/-- **Lemma (i).** Two Program files that give `key` one closure digest decode it to the same Definition, callees and
-all, or two byte strings the two digests hashed are different and have one SHA-512. -/
+/-- **The closure digest pins the decoded Definition.** Two Program texts that give `key` one closure digest decode it
+to the same Definition, callees and all, or two byte strings the two digests hashed differ and have one SHA-512. -/
 def DigestPins : Prop :=
-  ∀ (b b' : ByteArray) (j j' : Json) (P P' : Prog) (key h : String) (k k' : ℕ),
-    Flock.Program.decode b = .ok P → Flock.Program.decode b' = .ok P' → Descriptor b j → Descriptor b' j' →
-    closureDigest j key = .ok h → closureDigest j' key = .ok h → P.index[key]? = some k → P'.index[key]? = some k' →
-    Same P P' k k' ∨
-      ∃ x x', Hashed j key x ∧ Hashed j' key x' ∧ x ≠ x' ∧ Flock.Sha512.hash x = Flock.Sha512.hash x'
+  ∀ (text text' : String) (j j' : Json) (P P' : Prog) (key h : String) (k k' : ℕ),
+    Flock.Program.decode text.toUTF8 = .ok P → Flock.Program.decode text'.toUTF8 = .ok P' →
+    Flock.JsonParse.parse text = .ok j → Flock.JsonParse.parse text' = .ok j' →
+    closureDigest j key = .ok h → closureDigest j' key = .ok h →
+    P.index[key]? = some k → P'.index[key]? = some k' →
+    Same P P' k k' ∨ Collides j j' key
 
-/-! ## How (ii) enters -/
+/-! ## What a pinned reader opens -/
 
-/-- `Opens` reads only a Definition's gates: it holds of one Definition in any Program. -/
-def OfGates (Opens : Prog → ℕ → Prop) : Prop :=
-  ∀ P P' k k', Same P P' k k' → Opens P k → Opens P' k'
+/-- `Opens` reads only the Definition: it holds of one Definition in any Program. -/
+def OfDefinition (Opens : Pin → Prog → ℕ → Prop) : Prop :=
+  ∀ pin P P' k k', Same P P' k k' → Opens pin P k → Opens pin P' k'
 
-/-- **A held opening's reader is the reference Definition.** `Opens` is proofs' statement that a reader's verdict is 1
-only when its ports open (PRF-458's P1), an open premise held at the reference Definition `key` of `P₀`, whose closure
-digest is the pin's. Then the reader of every opened port the form holds under that pin satisfies it in the record's
-own Program, or two byte strings the two digests hashed collide. -/
+/-- **The reader of a held opening is the pinned Definition.** `Opens pin P k` is a statement about Definition `k` of
+`P` with the pin's roles: that its verdict is 1 only when its opened ports open to the root on its root port, at its
+key. Let it read only the Definition, and hold of `key` in a reference Program whose closure digest of `key` is the
+pin's. Then it holds of the reader `key` of every opened row the check holds under that pin, in the instance's own
+Program, or two byte strings the two closure digests hashed differ and have one SHA-512. -/
 def PinnedOpens (F : Form) : Prop :=
-  ∀ (Opens : Prog → ℕ → Prop) (b₀ : ByteArray) (j₀ : Json) (P₀ : Prog) (key : String) (k₀ : ℕ) (pin : Pin),
-    OfGates Opens → Flock.Program.decode b₀ = .ok P₀ → Descriptor b₀ j₀ → closureDigest j₀ key = .ok pin.digest →
-    P₀.index[key]? = some k₀ → Opens P₀ k₀ →
-    ∀ (pins : List Pin) (Γ num den : ℕ) (P : Prog) (text : String) (pj j trusted : Json) (r : Row) (p : String),
-      Accepts F pins Γ num den P text j trusted → Flock.JsonParse.parse text = .ok pj → r.tid = key →
-      F.heldBy pins (getD j "record") trusted r = some (.opened p pin) →
-      (∃ k, P.index[key]? = some k ∧ Opens P k) ∨
-        ∃ x x', Hashed j₀ key x ∧ Hashed pj key x' ∧ x ≠ x' ∧ Flock.Sha512.hash x = Flock.Sha512.hash x'
+  ∀ (Opens : Pin → Prog → ℕ → Prop) (text₀ : String) (j₀ : Json) (P₀ : Prog) (k₀ : ℕ) (key : String) (pin : Pin),
+    OfDefinition Opens → Flock.Program.decode text₀.toUTF8 = .ok P₀ → Flock.JsonParse.parse text₀ = .ok j₀ →
+    closureDigest j₀ key = .ok pin.digest → P₀.index[key]? = some k₀ → Opens pin P₀ k₀ →
+    ∀ (j tr : Json) (c : F.Case) (P : Prog) (pj : Json) (r : Row) (name p : String), F.read j tr = .ok c →
+      Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → Flock.JsonParse.parse (F.inst c).program = .ok pj →
+      r.tid = key → F.held c r = some (.opened name p pin) →
+      (∀ k, P.index[key]? = some k → Opens pin P k) ∨ Collides j₀ pj key
 
 end NciCheck.Properties.Record
