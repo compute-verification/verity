@@ -33612,3 +33612,65 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 **One line for Daniel, if you carry it** [guess]: may the committed form's binding terms rest on an adaptive birthday premise (S1) at its binding finder? With it and a cap of about \(2^{87}\) on the analysis extractor, \(2^{-61.0}\) holds at \(T = 2^{80}\) at every deployed \(k\). Without it, the best is route 3's \(2^{-54.8}\), which meets \(2^{-53.4}\) only.
 
 **Runs:** none. I launched nothing after `ceff` [read: this session's commands].
+
+## SPOTCROSS, Tue 10 Nov 21:48Z: #8339 holds `main` `2b869ed35db5` at `3aae525e59ee1274164dfcb75d059b272380e6e6`; no old verdict carries, so all six suites and the guard run again (`d576`, `9e11`, both cpu-11)
+
+**Not ready to mark yet.** The line you asked for comes when both runs have passed.
+
+**The merge**
+
+- [run] #8339's head is `3aae525e59ee1274164dfcb75d059b272380e6e6`: `f0453a514e148ac4c717d46a62d9f3857af8588f` merged with `origin/main` `2b869ed35db5d0efdb844a5f684e6fecbe658114`, which I fetched and read at 21:40:39Z (still the tip at 21:47Z). One merge commit, no file stopped, a fast-forward push at 21:40:41Z.
+- [run] The tree is `main`'s but for the one line of `fixtures/artifacts.json`; `pins.py --stale` exits 0.
+
+**Before the push**
+
+- [run] `research queue status`: #8339 "waiting: not marked ready at f0453a51".
+- [run] `next` (`15ab284aa5d5`) and the five `queue/*` refs on origin (`2abf8cd91f3c`, `386b87f432d6`, `b74cd808b922`, `f59d5c2031fa`, `fc8a752a2e3f`): none holds the old head, none is under it, and none has a member naming #8339.
+- [read] CI-489, its eight newest comments (20:49Z to 21:35Z): nothing changes Rule 1 and none names #8339 or #8139. Two concern proofs: top (20:49Z) lists #8512 and #8527 among marked changes over an hour without a verdict, and says a mark's check waits about an hour for a slot.
+- [read] My mailbox's newest entry is yours of 19:59Z. I pushed nothing to #8139.
+- [run] `AGENTS.md` is the same at `5482988e3496` and at `2b869ed35db5`, so I did not reread it.
+
+**The guard's closure: your scan is right, so the guard runs again**
+
+- [run] `module_keys.keys` on `Security/Proofs` with the two modules as extra targets (headers only, no build, 3 s).
+- [run] `Proofs.Flock.SamplingGeneric.TwoAt`: 1,612 modules in its closure, 1,621 input files. `main`'s move changes one of them, `DrawOkJson.lean`, and TwoAt's compile loads it.
+- [run] The shortest chain: TwoAt → TwoCode → TwoDeployed → `Proofs.Flock.Masked` → `Claims.KS.ZkExtend` → ZkUntrim → ZkTauSlot → RepDistZ → `Soundness.Discharge.ZkExec.Shape` → ZkLink → `ZkLink.DrawOkJson`.
+- [run] `Proofs.Flock.SpotFlock.Code`: 610 modules, 618 input files, none changed. `Sampled/Deployed.lean` is in neither closure.
+
+**The six suites: none carries, all six run again**
+
+- [run] `suites.py` with the six named, `--changed f0453a514e14… --quick --list` at the new head: "touches 6". The change between the two heads is `main`'s move alone.
+- [run] Files of `main`'s move under each suite's declared inputs, Markdown left out:
+
+| Suite | Files | Where |
+|---|---|---|
+| `verity-numerical` | 34 | `integrations/vllm` 12, `verity/ml/definitions` 22 |
+| `benchmarks/route_capture` | 27 | `integrations/vllm` 5, `verity/ml/definitions` 22 |
+| `verity-vllm` | 34 | `integrations/vllm` 12, `verity/ml/definitions` 22 |
+| `research` | 38 | those 34 and `tools/research` 4 |
+| `repository` | 70 | it keys on the whole tree |
+| `verity-graph` | 70 | it keys on the whole tree |
+
+- [run] One correction to your step 3a: `--changed <the tip I merged> --quick` is not empty. `fixtures` is an input of these six, so it selects exactly them ("touches 6" by `--list`). That command is run (a).
+
+**The old runs, which I read myself now; both are at `f0453a514e14` and neither carries**
+
+- [run] `r20261110-191513-caf6`: "6 suites: 6 passed (0 cached), 0 failed", rc 0.
+- [run] `r20261110-191834-3ddc`: `benchmarks/two_stage` 9 passed, 3 skipped; the fetched fixture's sha256 is `c5716deffbe5…`; "Build completed successfully (10899 jobs)"; the guard's test "3 passed in 2193.87s"; rc 0.
+
+**The runs at `3aae525e59ee`** ([run] each one's `job.json` names that commit; both wait for a slot at 21:47Z)
+
+| | Run | Node | What | ETA |
+|---|---|---|---|---|
+| a | `r20261110-214339-d576` | vy-nebius-cpu-11 | `suites.py --changed 2b869ed35db5d0efdb844a5f684e6fecbe658114 --quick`: the six | about 22:45Z [guess] |
+| b | `r20261110-214445-9e11` | vy-nebius-cpu-11 | `suites.py benchmarks/two_stage --quick`, the fixture's sha256, `guard_node.py --pytest`, as `3ddc` | about 23:30Z [guess] |
+
+- [read] The launcher expects a slot in about 36 min for (a) and 39 min for (b): 9 and 10 runs wait ahead.
+- [guess] After its slot, (a) takes about 21 min as `caf6` did, and (b) about 61 min as `3ddc` did (the build about 23 min, the guard's three tests 37 min).
+- [guess] (b) is later if cpu-11's `build` Lean tree is colder than cpu-6's was. If `guard_node.py` exits 2 there (no slot, tree or kept dependencies), I launch it again on cpu-6 and say so.
+
+**Also done**
+
+- [run] #8339's title and body are replaced (21:46Z), as your 19:59Z entry said. The title is "Two-stage guard: the fixture exported again at main's guard, with the rows its Held reads". The body names the new head, both merges and all four runs.
+
+**Not done:** no mark. If `main` moves again I do not merge; I report what the move touches of TwoAt's and Code's closures and of the six suites' inputs.
