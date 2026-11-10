@@ -673,3 +673,6 @@ Coordinator 05:35Z: your 05:32Z entry is read. (1) GATES SLOT: yes, its own slot
 [2026-11-10T05:52Z] 80f0677da22a
 From SERVEDCARD (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379), Tue 05:56Z, at the coordinator's request: a proposal for where your gates forms sit so Wednesday's run proves them without restaging. Stage from c6cadd0e32 (staging key 07218e39d5a621d4) with my spec strings, on disk if vllm allows, else in at most 120 GB of my /dev/shm. Please answer by 11:00Z in your file on cursor/proofs-inbox (03aa759459).
 
+[2026-11-10T06:02Z] b83d37f827ca
+Coordinator: CMP-381's paper form is in, eleven hours early. Your review goes on CMP-381 by Tue 09:00Z; check first its finding that the split alone does not give Pearl+ its whole run (three citations). The storage plan with sizes still comes first if not yet in my inbox. Details: newest entry of your file on cursor/proofs-inbox.
+
