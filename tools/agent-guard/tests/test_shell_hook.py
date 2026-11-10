@@ -1,5 +1,7 @@
 """`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
+import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -206,6 +208,10 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
               "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
     meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    for command in ("cd tools/research && python -m pytest -x", "cd t && uv run pytest tests; echo done"):
+        advice = re.search(r"`(research run --on auto -- [^`]+)`", answer(command, **gate)["agent_message"]).group(1)
+        assert advice.startswith("research run --on auto -- bash -lc ") and verdict(advice, **gate) == "allow", \
+            f"the advice for a compound command passes the hook: {advice}"
     for command in always:
         out = answer(command, **gate)
         assert out["permission"] == "deny", command
@@ -328,6 +334,52 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
     assert "and one more" in hook("ls", W, box)["user_message"]
 
 
+def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
+    """One branch held every message for three hours while each `send` said only "pushed". `status` and a later `send` say a
+    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send` says a
+    target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
+    origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    W = "bc-33333333-3333-4333-8333-333333333333"
+
+    def tool(*args, inbox=tmp_path / "unused", poll="30"):
+        return subprocess.run([sys.executable, INBOX_TOOL, *args], env={**env, "AGENT_INBOX": str(inbox), "AGENT_INBOX_POLL_S": poll},
+                              capture_output=True, text=True)
+
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
+    assert "FINISHED or IDLE" in sent.stdout and "resume it with Task" in sent.stdout   # MEMPOOL: a finished target never pulls
+    fresh = tool("status", W, "--repo", str(coord))
+    assert fresh.returncode == 0 and "within its hook's poll interval" in fresh.stdout
+    spec = importlib.util.spec_from_file_location("inbox_tool", INBOX_TOOL)
+    sys.path.insert(0, str(INBOX_TOOL.parent))
+    try:
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+    finally:
+        sys.path.remove(str(INBOX_TOOL.parent))
+    for k, v in GIT_ENV.items():
+        monkeypatch.setenv(k, v)
+    old = "[2026-01-01T00:00Z] abcdefabcdef\nthe 04:33Z heads-up\n\n"
+    inbox.commit(coord, W, old, inbox.tip(coord, W), "an old message")
+    stale = tool("status", W, "--repo", str(coord))
+    assert stale.returncode == 1 and "NOT DELIVERED" in stale.stdout and "2026-01-01T00:00Z" in stale.stdout
+    assert "resumed with Task" in stale.stdout
+    again = tool("send", W, "--text", "one more", "--repo", str(coord))
+    assert again.returncode == 0 and "NOT DELIVERED YET: 1 message(s)" in again.stderr
+    box = tmp_path / "worker-inbox"
+    assert tool("pull", W, "--repo", str(worker), inbox=box).returncode == 0
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    off = tool("check", W, inbox=tmp_path / "quiet-inbox")
+    assert off.returncode == 1 and "NOT POLLING" in off.stdout and f"inbox/{W}" in off.stdout
+    (box / f"{W}.polled").touch()
+    assert tool("check", W, inbox=box).returncode == 0
+    assert "AGENT_INBOX_POLL_S is off" in tool("check", W, inbox=box, poll="off").stdout
+
+
 def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp_path):
     def ask(every):
         out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "command": "ls",
@@ -341,6 +393,23 @@ def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp
     assert ask("30") == {"permission": "allow"} and mark.exists() and (tmp_path / "bc-w.pull.log").exists()
     os.utime(mark, (10**10, 10**10))
     assert ask("30") == {"permission": "allow"} and mark.stat().st_mtime == 10**10, "polled again within the interval"
+
+
+def test_the_pull_runs_from_the_checkout_under_a_root_that_is_not_one(tmp_path):
+    """A Task-launched cloud agent's workspace root is /agent, its checkout /agent/repos/verity: a pull from the root itself
+    fails in git, so that agent's messages never arrive."""
+    (tmp_path / "agent/repos/verity/.git").mkdir(parents=True)
+    (tmp_path / "ws/.git").mkdir(parents=True)
+
+    def checkout(root, cwd):
+        return subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import shell_hook; "
+                               "print(shell_hook.checkout(*sys.argv[2:]))", str(HOOK.parent), root, cwd],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    assert checkout(str(tmp_path / "agent"), "/tmp") == str(tmp_path / "agent/repos/verity")
+    assert checkout(str(tmp_path / "ws"), "/tmp") == str(tmp_path / "ws")
+    assert checkout(str(tmp_path / "empty"), "/tmp") == "/tmp"
+    assert checkout("", "/tmp") == "/tmp"
 
 
 def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):

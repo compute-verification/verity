@@ -877,6 +877,20 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert "pass --custody-ttl" in capsys.readouterr().err
 
 
+def test_a_run_longer_than_the_custody_cap_takes_a_key_at_the_cap_and_is_told_the_repair(capsys):
+    """network-accounting's 30 h run of record: the refusal told it to pass a ttl past the cap (`--custody-ttl 31h`), which the cap
+    refuses too. A key at the cap is accepted with the repair named, and every refusal names it."""
+    assert cli._custody_ttl_problem("24h", ["--timeout", "108000"]) is None
+    assert "research data custody RUN --publish" in cli._custody_ttl_warning("24h", ["--timeout", "108000"])
+    assert cli._custody_ttl_warning("24h", ["--timeout", "3600"]) is None
+    for ttl in (None, "12h", "34h"):
+        why = cli._custody_ttl_problem(ttl, ["--timeout", "108000"])
+        assert "--custody-ttl 24h" in why and "research data custody RUN --publish" in why and "31h" not in why, why
+    assert "--custody-ttl 24h" in cli._custody_ttl_problem(None, ["--timeout", "84600"]), "never a suggestion past the cap"
+    assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "108000", "--", "true"]) == 2
+    assert "--custody-ttl 24h" in capsys.readouterr().err
+
+
 def test_an_explicit_custody_key_the_run_outlives_is_refused(capsys):
     """A bare ``--custody-ttl`` is seconds, so ``600`` beside a ``--max-min 180`` launch minted a 10-minute key whose upload
     would fail hours later; the launch is refused, naming a lifetime that outlasts the run."""

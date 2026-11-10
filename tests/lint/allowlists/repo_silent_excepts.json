@@ -300,7 +300,7 @@
     {"file": "tools/verity/check/plan.py", "count": 2},
     {"file": "tools/verity/check/post_train.py", "count": 5},
     {"file": "tools/verity/check/preflight.py", "count": 3},
-    {"file": "tools/verity/check/slot.py", "count": 19},
+    {"file": "tools/verity/check/slot.py", "count": 18},
     {"file": "tools/verity/check/spans.py", "count": 2},
     {"file": "tools/verity/check/suites.py", "count": 18},
     {"file": "tools/verity/check/tests/test_check.py", "count": 1},
