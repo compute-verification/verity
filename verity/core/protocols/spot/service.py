@@ -1473,6 +1473,12 @@ class Fleet:
                 self._streams[j]._halt(d["ok"]["cause"])
 
 
+def _stream_values(values: Sequence[Any]) -> tuple[Any, ...]:
+    """A stream's values as tuples, each width a tuple where it is a leaf type's shape."""
+    return tuple(tuple(tuple(x) if isinstance(x, list) else x for x in v) if isinstance(v, (list, tuple)) else v
+                 for v in values)
+
+
 class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
@@ -1519,8 +1525,9 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each), which a registration registers as its
-    program's (R7); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
+    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
+    supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network certifier's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
     templates', one range each, in the window's order, and it is each registration's population program, a registration
@@ -1534,14 +1541,19 @@ class Stream:
     template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
     registration is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
     interior registration (`interior_program`), a second `select` on it is the second stage, and `deliver` and
-    `outcome` take that sample (the module docstring). A window's `values` are then the interior's.
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's, and so are its
+    `span_values`, `(name, leaves, width)` each in `values`' form with `leaves` a sampled span's: the interior program
+    over a replay sample of Q takes each at `leaves * Q`, after `values`, since under a rate sampling design Q is what the
+    first stage's coins chose (a table read's supplied root, one `Digest` a sampled span, say); the stream's digest names
+    them.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
-                 values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
+                 values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
+                 replay: SpecializedDefinition | None = None, program: Program | None = None,
+                 span_values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
@@ -1571,12 +1583,15 @@ class Stream:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
         if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
             raise ValueError(NO_OWN_COINS)
-        values = tuple(tuple(v) if isinstance(v, (list, tuple)) else v for v in values)
+        values, span_values = _stream_values(values), _stream_values(span_values)
         if values and isinstance(unit, SpecializedDefinition):
             raise ValueError("a stream of one template's instances takes no values: a window with values is a mixed "
                              "population of its templates (give its unit as a sequence of them)")
-        if values:
-            P.mixed_population_program([(u, 1) for u in units], values=values)
+        if span_values and (isinstance(unit, SpecializedDefinition) or replay is None):
+            raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
+                             "sequence of templates and its replay block")
+        if values or span_values:
+            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1605,13 +1620,14 @@ class Stream:
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
-        self.rounds, self.values, self.program = rounds, values, program
+        self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {}),
+                               **({"span_values": [list(v) for v in span_values]} if span_values else {}),
                                **({"program": P.program_digest(program)} if program is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
@@ -2070,11 +2086,14 @@ class Stream:
     def interior_program(self, q: int) -> Program:
         """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
         population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
-        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`)."""
+        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`), then its
+        `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
             return P.population_program(self.unit, q * self.n_rho)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)], values=self.values)
+        spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
+        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+                                          values=self.values + spans)
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its registration's order and token and its token; for a two-stage design's
