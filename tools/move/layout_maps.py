@@ -167,6 +167,9 @@ EXCEPT = [
      "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
     ("examples/h200/e2e_h200/served_weights.py", "benchmarks/torch_gpu/p2_stage/served_weights.py",
      "the served weights' reader goes beside the GPU stage that reads it; the demo's other files stay"),
+    ("examples/h200/interfaces/", "benchmarks/one_stage/interfaces/",
+     "the drawn-unit replay bundle and the block record, with their schemas, fixtures and suite, go beside the one-stage "
+     "audit, their main reader, which is live; the demo's other files stay"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -179,6 +182,7 @@ EXCEPT_MOVE = {
     "verity/core/devices/memory_challenger/": "pous",
     "verity/core/protocols/remote_bandwidth/": "poub",
     "examples/h200/e2e_h200/served_weights.py": "archive",
+    "examples/h200/interfaces/": "archive",
 }
 #: components the layout gives a directory that stay where they are: {component id: why}
 KEEP = {
@@ -386,6 +390,13 @@ def excepted(p):
     return (None, None, None) if best is None else (best[0], best[1] + p[len(best[0]):], EXCEPT_MOVE.get(best[0]))
 
 
+def own_row(p):
+    """`p`'s EXCEPT row where that row is one a map always writes for itself, else None: a file's own row, or the row
+    of a directory that leaves an archived directory, which then still goes to `archive/` as one row."""
+    k, _, move = excepted(p)
+    return k if k is not None and (k == p or move == "archive") else None
+
+
 def kept(p):
     """Whether a path row of `KEEP` (a file, or a directory ending in "/") holds `p`."""
     return any(holds(k, p) for k in KEEP if "/" in k)
@@ -548,10 +559,11 @@ def plan(data, owner, say, suites=()):
 def compress(mine, tracked_dirs, own=()):
     """The rows of one map: `mine` is {old file: new file}; `tracked_dirs` is {directory: (files in it, subdirectories)}
     over every tracked file. A directory is one row where every tracked file under it is the map's and keeps its path
-    below it; otherwise its files are rows and its subdirectories are looked at in turn. A file of `own` is always a row
-    of its own and its directory may still be one row: the longest row wins."""
+    below it; otherwise its files are rows and its subdirectories are looked at in turn. A path of `own` (a file, or a
+    directory ending in "/") is always written by itself and the directory that holds it may still be one row: the
+    longest row wins."""
     whole = {}
-    own = {p for p in own if p in mine}
+    own = {k for k in own if any(holds(k, p) for p in mine)}
 
     def walk(d):
         files, subs = tracked_dirs[d]
@@ -564,7 +576,8 @@ def compress(mine, tracked_dirs, own=()):
             target.add(None if new is None or posixpath.basename(new) != f else posixpath.dirname(new))
         for s in subs:
             n = walk(f"{d}/{s}" if d else s)
-            target.add(None if n is None or posixpath.basename(n) != s else posixpath.dirname(n))
+            if (f"{d}/{s}/" if d else f"{s}/") not in own:
+                target.add(None if n is None or posixpath.basename(n) != s else posixpath.dirname(n))
         whole[d] = target.pop() if len(target) == 1 else None
         return whole[d]
     walk("")
@@ -582,7 +595,11 @@ def compress(mine, tracked_dirs, own=()):
         for s in subs:
             emit(f"{d}/{s}" if d else s)
     emit("")
-    rows.update((p, mine[p]) for p in own)
+    for k in own:
+        if k.endswith("/"):
+            emit(k[:-1])
+        else:
+            rows[k] = mine[k]
     return rows
 
 
@@ -622,7 +639,7 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
             # new directory that holds every file of the old one but the archived, where that is narrower than a
             # top-level directory;
             # else, in the one map, as where its package goes, each such reference acknowledged in `[split]`.
-            rest = [p for p in mine if not dest[p][0].startswith("archive/") and excepted(p)[0] != p]
+            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None]
             whole = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in rest}
             common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in rest or mine])
             if len(whole) == 1 and (n := next(iter(whole))) is not None:
@@ -798,7 +815,7 @@ def main():
             mine = {p: n for p, (n, _, m) in dest.items() if m == move}
             if not mine:
                 die(f"{move}: no file")
-            rows = compress(mine, tracked_dirs, [p for p in mine if excepted(p)[0] == p])
+            rows = compress(mine, tracked_dirs, {own_row(p) for p in mine} - {None})
             # the archive speaks for no directory
             tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows, emptied, one)
             for k, n in (agree or {}).items():         # a directory a move's map speaks for reads the same in the one map

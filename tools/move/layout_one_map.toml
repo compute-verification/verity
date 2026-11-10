@@ -1,5 +1,5 @@
 # The layout move of the whole layout: what `tools/move/layout.py --map tools/move/layout_one_map.toml` moves and
-# rewrites. 3546 files in 510 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
+# rewrites. 3546 files in 511 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
 # this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -55,6 +55,9 @@
 #   of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`.
 # - `examples/h200/e2e_h200/served_weights.py` to `benchmarks/torch_gpu/p2_stage/served_weights.py`: the served
 #   weights' reader goes beside the GPU stage that reads it; the demo's other files stay.
+# - `examples/h200/interfaces/` to `benchmarks/one_stage/interfaces/`: the drawn-unit replay bundle and the block
+#   record, with their schemas, fixtures and suite, go beside the one-stage audit, their main reader, which is live;
+#   the demo's other files stay.
 # - `verity/core/protocols/pous/wipe_stream.c` to `verity/protocols/pous/verifier/wipe_stream.c`: the streamed wipe's
 #   native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file beside itself;
 #   the rule parts the two (`device/wipe_stream.c`).
@@ -117,6 +120,7 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "examples/dither_full_util/" = "workloads/dither_full_util/"
 "examples/h200/" = "archive/examples/h200/"
 "examples/h200/e2e_h200/served_weights.py" = "benchmarks/torch_gpu/p2_stage/served_weights.py"
+"examples/h200/interfaces/" = "benchmarks/one_stage/interfaces/"
 "examples/lifecycle/" = "workloads/lifecycle/"
 "examples/onsite_served/" = "workloads/onsite_served/"
 "examples/vllm/" = "workloads/vllm/"
@@ -715,6 +719,7 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "examples/README.md: examples" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 "examples/README.md: verity/core/protocols" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 "examples/h200/e2e_h200/served_weights.py: examples/h200" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
+"examples/h200/interfaces/pyproject.toml: verity/ml/circuits" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 "examples/lifecycle/README.md: verity/ml/flock" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 "integrations/vllm/pyproject.toml: verity/ml/circuits" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
 "integrations/vllm/pyproject.toml: verity/ml/definitions" = "found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, where its package goes, and part of the directory goes elsewhere"
@@ -935,6 +940,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "examples.dither_full_util" = "workloads.dither_full_util"
 "examples.h200" = "archive.examples.h200"
 "examples.h200.e2e_h200.served_weights" = "benchmarks.torch_gpu.p2_stage.served_weights"
+"examples.h200.interfaces" = "benchmarks.one_stage.interfaces"
 "examples.lifecycle" = "workloads.lifecycle"
 "examples.onsite_served" = "workloads.onsite_served"
 "examples.vllm" = "workloads.vllm"
