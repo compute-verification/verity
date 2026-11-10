@@ -42,8 +42,13 @@ gates) and to @compute-accounting (PoUW's work, coin flow, `TS`).
 
 ## Generated files
 
-A generated file is its generator's: change the generator and run it, never the file. `Accounting/Headline/` and
-`Accounting/HeadlineDc/` are written by the headline exporter (`benchmarks/pouw/lean_headline.py`,
-`benchmarks/pouw/lean_headline_dc.py`), and `Accounting/Sheets/` is what the machine model prints
-(`machine-model --device DEVICE sheet --lean`, `benchmarks/pouw/machine_model/`); each generator's tests hold the files
-to its output. `Security/README.md` lists every program that writes Lean under `Security/`.
+A generated file is its generator's: change the generator and run it, never the file.
+
+- `Accounting/Headline/` and `Accounting/HeadlineDc/` are compute-research's. Its headline exporter
+  (`benchmarks/pouw/lean_headline.py`, `benchmarks/pouw/lean_headline_dc.py`) writes the instances there, which import
+  the `Encoding.lean` beside them.
+- `Accounting/Sheets/` is what the machine model prints (`machine-model --device DEVICE sheet --lean`,
+  `benchmarks/pouw/machine_model/`).
+
+Each generator's tests hold the files to its output. `Security/README.md` lists every program that writes Lean under
+`Security/`.
