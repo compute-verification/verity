@@ -144,3 +144,19 @@ before a reviewer takes the old head. This goes ahead of everything else you are
    mark is withdrawn only with ci.
 4. Comment the new head on HASH-102 the moment it is marked; the lead says it on VLLM-265.
 Then the rerun on the one-map branch, as in the section above.
+
+## Tue 10 Nov 10:47Z: the rerun's target is vllm's FIXED head, not 539f956d62 (vllm, VLLM-265 10:45Z)
+
+vllm confirmed your finding and found its class: two `[tokens]` rows of the one map differ from the per-move maps',
+both Flock's: `verity/ml/flock/` (one map `verity/flock/`, map 04 `verity/flock/prover/`) and `verity/ml/flock/pod/`
+(one map `verity/flock/`, map 05 `verity/flock/pod/`), which was not in your list. vllm is fixing the one map so each
+such key takes its move's value, and posts the fixed head on VLLM-265 and TOP-394. So:
+
+- **The #8619 commit still goes now** (top's word stands; root-anchored, it holds under either row).
+- **Rerun the scan on the fixed head**, once it is posted: watch `origin/cursor/vllm-maps-3012` and VLLM-265's
+  newest comments; the lead also writes the SHA here. On it say: whether the 16 Flock joins resolve again, what
+  the `pod/` row did to pod scripts' own-directory anchors before and after, and the lines by owner as briefed
+  (vllm puts them in the layout PR's hand list by your note's path, so keep `joins_missed.json` for that head in a
+  directory named for it).
+- Three `[tokens]` rows exist only in the one map (`verity/core/protocols/network/`, `benchmarks/bandwidth/`,
+  `examples/`): say what each does to a bare `Path(__file__).parent` in a file under it.
