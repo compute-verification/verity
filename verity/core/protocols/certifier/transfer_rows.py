@@ -30,7 +30,7 @@ sent or received, which the prover holds.
     transfer digest = tagged_sha512(TRANSFER_TAG, H)
 
 and its certificate is `Issuer.sign`'s of the transfer digest: the certifier's message for the link-window in its
-session (`certificate.certificate_message`), so it verifies for that link, direction and window alone. The warden's
+session (`certificate.certificate_message`), so it verifies for that link, direction and window alone. The network certifier's
 cells digest and the record digest of a link-window are under other tags, so none verifies as another.
 
 **The kinds** (`KINDS`) and their directions: ``load`` (ingress: the registered parameters' leaves the load connection

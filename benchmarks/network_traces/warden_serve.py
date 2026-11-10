@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active network certifier (`verity.core.protocols.certifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -480,7 +480,7 @@ class Publisher:
         self.keep(record, grid)
 
     def withhold(self, record: Record, grid: GridParams) -> None:
-        """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
+        """The network certifier's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
@@ -656,7 +656,7 @@ class PublisherProcess:
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
     def withhold(self, record: Record, grid: GridParams) -> None:
-        """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
+        """The network certifier's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
     def close(self) -> list:

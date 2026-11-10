@@ -1,13 +1,13 @@
 """The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the
 network certifier's
-cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
+cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the network certifier's root and decided by
 the verifier on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
 alone. An honest link is tied, and `Ties`, the tie, its stream and the release, gives the verdict only on its own link
 and stream; the verifier's registered reads name every port of the statement, as Flock's Lean verifier requires
 (`Registered.checkComplete`, which the stand-in mirrors); a carried field count, a forged advice and the swapped split
 are refused, as are an output 0 or rows under fresh salts, an outcome on another
 advice, in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
-requests otherwise than the warden cuts them, a row that isn't the warden's, a head of another window, an advice whose
+requests otherwise than the network certifier cuts them, a row that isn't the network certifier's, a head of another window, an advice whose
 `received` isn't the release's, and an unpinned size class. Nothing in `verity` but the tie service builds the
 verdict."""
 
@@ -137,7 +137,7 @@ def test_an_honest_link_is_tied(tmp_path):
 
 def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
     """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
-    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
+    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the network certifier's
     root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at
     ``pub``."""
@@ -165,7 +165,7 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
 
 def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_path, monkeypatch):
     """The ``o0`` row is read off the verifier's known root of output words 1, and the ``pub`` row off its known root
-    of its own lanes under their public salts: the forged advice's proof of window 0, on the warden's rows and the
+    of its own lanes under their public salts: the forged advice's proof of window 0, on the network certifier's rows and the
     verifier's own lanes, fails ``o0``'s read at the bucket IoTieRequest refuses, whatever word it delivers, and a
     proof whose ``pub`` and ``o0`` rows are committed under fresh salts fails ``pub``'s."""
     forged, advice = _advice((5, 45, 5)), _advice(SPAN)
@@ -312,8 +312,8 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_advice_refuses_every_wi
                                      TS.AdvisedProfile(2, FRAMING[:39], 0), TS.AdvisedProfile(2, FRAMING, 1)],
                          ids=["framing", "short-framing", "own"])
 def test_a_profile_that_frames_requests_otherwise_than_the_warden_refuses_every_window(tmp_path, profile):
-    """The tie reads the profile's framing: under one that isn't the warden's cut at B for the advice's prompt
-    lengths, or that names an own frame, which the warden's ingress has none of, every window is refused."""
+    """The tie reads the profile's framing: under one that isn't the network certifier's cut at B for the advice's prompt
+    lengths, or that names an own frame, which the network certifier's ingress has none of, every window is refused."""
     run, advice = Run(tmp_path), _advice(SPAN)
     assert run.link(advice) == [True, True]
     assert run.verdict(advice, profile).accepted == (False, False)

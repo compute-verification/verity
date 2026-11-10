@@ -13,9 +13,9 @@ import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
 /-!
-# The warden's code is the client view
+# The network certifier's code is the client view
 
-The warden's code on a lane emits, cell by cell, what the client view gives for the lane's first late cell
+The network certifier's code on a lane emits, cell by cell, what the client view gives for the lane's first late cell
 (`certifierLane_eq`): its data cells and padding before it, the fail cell, padding after. So the code's output is the
 client view of the schedule, the data and the fail cells (`certifierCode_eq`), which `Tap` reads the network certifier's
 cells from.
