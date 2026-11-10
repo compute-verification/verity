@@ -809,7 +809,6 @@ def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
     os.utime(store / "keys" / "torn.json", (1, 1))
     (store / "keys" / "gone.json").symlink_to(store / "keys" / "no-such-entry")     # listed, then gone: a build removed it
     assert LA.LakeArtifacts(store, cap=30).prune() == 2
-    (store / "keys" / "gone.json").unlink()
     assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["0.olean", "2.olean"], \
         "written first and used last, 0 stays; 2 stays for the later entry that names it too"
     assert sorted(f.name for f in (store / "keys").iterdir()) == ["0.json", "also.json"], \

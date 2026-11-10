@@ -1382,10 +1382,8 @@ class LakeArtifacts:
             try:
                 at = e.stat().st_mtime
                 doc = json.loads(e.read_text())
-            except FileNotFoundError:
-                continue                                # `module_keys.entry` removed it since, which this lock doesn't hold off
-            except ValueError:
-                e.unlink(missing_ok=True)               # damaged on disk, as `module_keys.entry` takes it
+            except (FileNotFoundError, ValueError):     # gone since it was listed (`module_keys.entry` removes one under
+                e.unlink(missing_ok=True)               # the tree's lock, not this one), or damaged on disk, as it takes it
                 continue
             names = doc.get("digests") if isinstance(doc, dict) else None
             for a in names if isinstance(names, dict) else ():
@@ -1400,11 +1398,7 @@ class LakeArtifacts:
             own, n, horizon = own - size, n + 1, mtime
         for e in [*(self.store / MK.INDEX).glob("*.json"), *(self.store / "outputs").glob("*/*.json"),
                   *(self.store / MK.UNSTORED).glob("*.json")]:
-            try:
-                old = e.stat().st_mtime <= horizon
-            except FileNotFoundError:
-                continue
-            if old:
+            if e.stat().st_mtime <= horizon:
                 e.unlink(missing_ok=True)
         return n
 

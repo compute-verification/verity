@@ -762,10 +762,14 @@ def rules() -> str:
 
 
 def unstored(store: Path, key: str) -> Path | None:
-    """``store``'s record that the module compiled under ``key`` could not be indexed, when it stands (`rules`)."""
+    """``store``'s record that the module compiled under ``key`` could not be indexed, when it stands (`rules`). A damaged
+    one is removed where it is read."""
+    if not (f := unstored_path(store, key)).is_file():
+        return None
     try:
-        doc = json.loads((f := unstored_path(store, key)).read_text())
-    except (OSError, ValueError):
+        doc = json.loads(f.read_text())
+    except ValueError:
+        f.unlink(missing_ok=True)
         return None
     return f if isinstance(doc, dict) and doc.get("by") == rules() else None
 

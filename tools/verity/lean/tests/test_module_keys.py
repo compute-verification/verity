@@ -801,6 +801,17 @@ def test_a_module_the_cache_could_not_index_is_left_to_lake_with_every_module_ab
     assert (why["took"], why["left"]) == ({MK.ABSENT: 2}, 0) and not traces["R.B"].exists() and not traces["R.C"].exists()
 
 
+def test_a_damaged_record_that_a_module_could_not_be_indexed_is_removed_where_it_is_read(tmp_path):
+    key = C.digest(b"a key")
+    marker = MK.unstored_path(tmp_path, key)
+    assert MK.unstored(tmp_path, key) is None, "none was written"
+    marker.parent.mkdir()
+    marker.write_text(json.dumps({"module": "R.B", "scope": "r", "why": "", "by": MK.rules()}))
+    assert MK.unstored(tmp_path, key) == marker
+    marker.write_text('{"module": "R.B", "sco')
+    assert MK.unstored(tmp_path, key) is None and not marker.exists()
+
+
 def test_an_entry_of_another_schema_is_never_staged(tmp_path):
     """An entry written under an earlier schema has no `schema` of this one: were its key ever computed again, it would
     still not be read."""
