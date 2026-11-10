@@ -91,6 +91,7 @@ untraced = [
     "tests/test_pythonpath.py",
     "tests/test_queue.py",
     "tests/test_queue_drive.py",
+    "tests/test_queue_moves_carry.py",
     "tests/test_queue_open.py",
     "tests/test_queue_ported.py",
     "tests/test_record_driver.py",

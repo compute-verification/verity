@@ -86,7 +86,8 @@ def jobs(monkeypatch, tmp_path) -> list[Job]:
     started: list[Job] = []
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
 
-    def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None) -> dict:
+    def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None,
+               source: Path | None = None) -> dict:
         d = Path(tempfile.mkdtemp(prefix="train-", dir=tmp_path / D.LAUNCHES))
         started.append(Job(argv, Path(repo), env, d))
         return {"dir": str(d), "pid": os.getpid()}
@@ -235,7 +236,8 @@ def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_th
     gate.touch()
     procs, fake = [], D.detach
 
-    def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None) -> dict:
+    def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None,
+               source: Path | None = None) -> dict:
         rec = fake(repo, argv, env, script)
         procs.append(jobs[-1].start(gate))
         return rec
