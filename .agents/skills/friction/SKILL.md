@@ -139,10 +139,9 @@ Landing:
 
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
   feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
-  and `noqa` count, `tests/lint/`'s lists, each changed file's lint). Outside the integration it checks each landing's
-  changed Python after it lands, ringing its owner, never reverting. Fix the code, never the list: a rename moves its
-  entries (`--move OLD NEW`), an environment read goes through the area's settings registry, and a swallowing handler
-  re-raises, records the outcome, or narrows.
+  and `noqa` count, `tests/lint/`'s lists, each landing's changed Python, checked after it lands, ringing its owner,
+  never reverting). Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
+  goes through the area's settings registry, and a swallowing handler re-raises, records the outcome, or narrows.
 
 Protocols and claims:
 
@@ -160,15 +159,13 @@ Protocols and claims:
 - Network accounting is two things for each execution block. First, its consistency with the network certificates: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from the sampled proofs, its transfers' covert capacity, in three terms reported apart: side channels, the timing
-  channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
+  channel (which the network certifier mostly fixes) and what the sampled proofs fail to check;
   at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
-  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024
-  is the one-hash rule's exception for transport only: a cableless remote party's, its secret always XORed with a
-  SHA-512 one and never on pair links (`ind-cca/ml-kem-1024`).
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
@@ -201,10 +198,7 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- Sampling is one design, two-stage in general: serving commits the replay blocks' boundaries, the first stage samples
-  replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
-  Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
-  (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
+- Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts

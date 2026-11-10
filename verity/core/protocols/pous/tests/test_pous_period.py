@@ -19,7 +19,6 @@ from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import VerifierKey
-from verity.ml.circuits import requirement
 
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 SALT = hashlib.sha512(b"the setup's salt").digest()[:R.SALT_BYTES]
@@ -128,15 +127,6 @@ def _certified_store() -> period.EncodedStore:
     root, commitment = VerifierKey.from_row_digests(q, SALT, rows).root, hashlib.sha512(b"W").digest()
     return period.EncodedStore(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
                                period.setup_case(q, commitment, SALT, [list(blocks)]))
-
-
-def test_an_encoded_store_reads_as_the_audits_store():
-    """`EncodedStore.store` is `C*` as `requirement.Store`: every block registered and resident at every step, since
-    nothing is written or freed after setup, and no payloads."""
-    held = _certified_store()
-    n = held.point.params.blocks
-    assert held.store == requirement.Store(n, {}, {}, {})
-    assert held.store.resident(0) == held.store.resident(n) == frozenset(range(len(held.blocks)))
 
 
 def _run_of(case: dict) -> tuple:

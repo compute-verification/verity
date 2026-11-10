@@ -9,16 +9,8 @@ the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`
 
 Key (what may share an engine) = sha256 of
   * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
-<<<<<<< 99c8914848
-    plus Verity core, `source_identity.closure()`), so an edited pod tree is a different key ("hot" never executes stale code),
-  * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
-||||||| merged common ancestors
-    plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
-  * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
-=======
     plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
   * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so) by sha256,
->>>>>>> 7af4d24fca3e
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
     the per-job VERITY_TIMELINE / VERITY_FOOTPRINT, CUDA_*, HF_*),
   * the engine-shaping arguments: the workload file's engine-relevant blocks (case / model, its `engine` block, execution), --checkpoints
