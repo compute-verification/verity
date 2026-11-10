@@ -93,15 +93,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-<<<<<<< ours
-export SampledProofs (jsonStrIs)
-||||||| base
-/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
-check that compares with it can't be proved. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
-=======
 export Spot (jsonStrIs)
->>>>>>> theirs
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
@@ -176,19 +168,9 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-<<<<<<< ours
 /-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
-(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
-weights' root a live H1 window's open root binds). -/
-||||||| base
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
-(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
-weights' root a live H1 window's open root binds). -/
-=======
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an execution phase's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 execution phase's open root binds). -/
->>>>>>> theirs
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
   (PouwCommit.foldRoots tag roots).extract 0 keep
 
