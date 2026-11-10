@@ -52,7 +52,7 @@ import Mathlib.Topology.Sheaves.Init
 # The table read's net, part by part: what each part's net must compute
 
 A read unit's gates (`Accounting.ReadUnit.GatesRefine`) are `EmbeddingRead_v1{V, H}`'s rows, which
-`verity/ml/commitments/gates/embedding.py` composes from four parts' nets. Each part is built here over the verifier's
+`verity/commitments/gates/embedding.py` composes from four parts' nets. Each part is built here over the verifier's
 builder (`Flock.HmNets`: forms over committed bits, a row a committed product), and each part's statement says what its
 net computes whenever its rows hold (`FlockSoundness.Discharge.Hm.Sound`), against `Hash`'s definitions at SHA-512
 (`Verity.sha512`):

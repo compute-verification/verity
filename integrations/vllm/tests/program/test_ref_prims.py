@@ -1,4 +1,4 @@
-"""The reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
+"""The reference-mode kinds of `verity/definitions/registry/ref_prims.py`.
 
 Three layers, kept separate (semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
@@ -30,14 +30,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as R
-from verity.ml.definitions.numerics import ref_prims_twins
+from verity.circuits import codec
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.program import Program
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.numerics import ref_prims_twins
 
 torch = pytest.importorskip("torch")
 F = torch.nn.functional
@@ -761,7 +761,7 @@ def test_codec_roundtrip_and_lazy_gather_f32():
     assert dec.gates == prog.circuit.root.gates
     # the on-demand f32 gather family resolves through the extended lazy table even for a vocab never built here
     p = codec._lookup_primitive(REGISTRY, "GatherF32x12345_v1")
-    assert p.id == "GatherF32x12345_v1" and p.params[1][1] == __import__("verity.ml.circuits.types", fromlist=["Array"]).Array(12345, P.F32)
+    assert p.id == "GatherF32x12345_v1" and p.params[1][1] == __import__("verity.circuits.types", fromlist=["Array"]).Array(12345, P.F32)
     prog2 = Program(bind(_ST, FN=bind(R.EmbeddingRef, V=9, H=3, DT="f32")))
     desc2 = codec.encode_program(prog2)
     assert codec.decode_program(desc2, REGISTRY).gates == prog2.circuit.root.gates

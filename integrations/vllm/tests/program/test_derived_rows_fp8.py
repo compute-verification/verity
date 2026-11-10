@@ -1,5 +1,5 @@
 """The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
-`scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`verity/ml/definitions/registry/fp8.py`) and the saved H100 kernel
+`scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`verity/definitions/registry/fp8.py`) and the saved H100 kernel
 words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise `_C.cutlass_scaled_mm`, on an H100).
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""
 from __future__ import annotations
@@ -13,9 +13,9 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind
-from verity.ml.definitions.numerics import derived_rows as D
-from verity.ml.definitions.registry import fp8 as F
+from verity.circuits import Program, bind
+from verity.definitions.numerics import derived_rows as D
+from verity.definitions.registry import fp8 as F
 
 from tests.program.test_fp8 import _evaluate_returns
 
@@ -33,7 +33,7 @@ def _rand_e4m3(rng, n: int, p_zero: float = 0.1, p_sub: float = 0.1) -> np.ndarr
 # ------------------------------------------------------------------------------------------------------------ the k32 step
 
 def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulators() -> None:
-    from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
+    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
 
     rng = np.random.default_rng(7)
     n = 4000
@@ -50,7 +50,7 @@ def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulato
 
 def test_tc_dot32_e4m3_cancellation_and_subnormal_accumulators() -> None:
     """The 14-bit adder's truncation of the ACCUMULATOR (`acc + 0 != acc`) and the denormalisation path below 2^-126."""
-    from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
+    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
 
     rng = np.random.default_rng(3)
     n = 2000

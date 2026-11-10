@@ -8,17 +8,17 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import Program
+from verity.circuits import Program
 from verity_vllm.program import workload as W
-from verity.ml.circuits.codec import encode_program
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.definitions.registry import b1, lifted as L
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import REGISTRY, bind
+from verity.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from tests.program import test_lifted_mixed as PM
 from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, SMS, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from tests.program.test_lifted_tiny_padrev import padrev_live_ref
 from tests.program.test_serve3 import Y_RAW
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 
 I32 = Value(32)
 
@@ -29,7 +29,7 @@ def component():
 
 
 def _weights_type():
-    from verity.ml.definitions.registry.b1 import weights_type  # the TINY weights Record
+    from verity.definitions.registry.b1 import weights_type  # the TINY weights Record
     return weights_type(TINY)
 
 
@@ -175,9 +175,9 @@ def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_it
 # live_count_hook takes one cap PER REQUEST and refuses a served-length out_r by name: the single-cap call below is REFUSED by name
 # (the accepted outcome); the per-request test after it
 def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap_or_refuses_by_name(component, component_small):
-    from verity.ml.circuits.defs import Builder, composite
-    from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits.defs import Builder, composite
+    from verity.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.circuits.types import Tuple
     reqs = _mixed_requests(component, component_small)
     wl = lifted_compose.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=0)
@@ -211,9 +211,9 @@ def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap
 
 
 def _padrev_mixed_s2():
-    from verity.ml.circuits.defs import composite
-    from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.ml.circuits.types import Tuple
+    from verity.circuits.defs import composite
+    from verity.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.circuits.types import Tuple
 
     @composite("PadrevMixedS2", 1, ["WL", "EOS", "CAPS", "ARR", "LAG", "H"],
                lambda S: (S.WL.signature()[0], Tuple(S.WL.signature()[1], Array(S.H, Value(L.N_LIVE_BITS + 1)), Array(S.H, Value(L.SPLITS_BITS + 1)))),
@@ -253,7 +253,7 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
     want = [sum(ref[rid][t - a] for rid, a, c in zip(("A", "B"), arrivals, caps) if 0 <= t - a < c) for t in range(H)]
     assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want and all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
     assert max(want) == 2 and 0 in want   # both live somewhere; A's window outlives both its stop and B's cap, so some step has no live request
-    from verity.ml.definitions.registry.topp_geometry import splits_for
+    from verity.definitions.registry.topp_geometry import splits_for
     for t in range(H):
         if want[t] == 0:
             assert L.is_bot(L.SPLITS_BITS, S_t[t]), t

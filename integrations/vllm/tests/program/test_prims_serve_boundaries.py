@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REG = "verity.ml.definitions.registry"
+REG = "verity.definitions.registry"
 REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
@@ -21,9 +21,9 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_chec
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.ml.definitions.evidence"
+EVIDENCE = "verity.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
 EXCEPTIONS: dict[tuple[str, str], str] = {}
 
@@ -54,11 +54,11 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
-                "verity.ml.definitions")
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
+                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
+                "verity.definitions")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 
 def _allowed(mod: str) -> bool:

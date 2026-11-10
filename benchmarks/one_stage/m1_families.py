@@ -13,7 +13,7 @@ templates past the row itself: ``units``), and for each ``--also`` Definition (`
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload integrations/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
-    PYTHONPATH=...:<tree>/verity/ml/flock/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
+    PYTHONPATH=...:<tree>/verity/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
       [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
 from __future__ import annotations
@@ -27,14 +27,14 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from verity.ml.windows.interface import K_MAX
+from verity.windows.interface import K_MAX
 
 #: the statement limit the brief measures against
 LIMIT_LOG = 26
 
 
 def _leaf_cost(fn, IL) -> dict:
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     C = Circuit()
     params, _ret = fn.signature()
@@ -52,9 +52,9 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
     informational, as the census's are)."""
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.census import PRODUCTS, _rule, family
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.program import is_input
+    from verity.definitions.circuits.census import PRODUCTS, _rule, family
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.program import is_input
 
     if fn.id in memo:
         return memo[fn.id]

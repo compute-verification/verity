@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.core.protocols.certifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.certifier.verifier.advice`) for a served run, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -23,7 +23,7 @@ the first step, in which the engine emitted it (the step's clock reading): with 
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
 The advice is not published: its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
-hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
+hm96-sha512 rows under `verity.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
 the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
@@ -65,8 +65,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.core.protocols.certifier.advice as I1
-from verity.ml.circuits.codec import canonical_json
+import verity.protocols.certifier.verifier.advice as I1
+from verity.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 

@@ -7,7 +7,7 @@ The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     nvidia-smi driver, compute capability and `multi_processor_count` against `--min-driver`, `--want-cc`, `--want-sms`.
   binary   the SASS and PTX the installed `_vllm_fa2_C` carries (cuobjdump): a cubin for this arch, or the driver's JIT of compute_80 PTX.
-  mufu     `verity/ml/definitions/numerics/cuda/mufu_probe.cu` built two ways, as PTX for compute_80 (JIT-compiled by the driver, as FA2
+  mufu     `benchmarks/definitions/numerics/cuda/mufu_probe.cu` built two ways, as PTX for compute_80 (JIT-compiled by the driver, as FA2
            is) and natively for this arch: each build's ex2 / rcp tables against core's library tables (sha256), and `verify` of the
            pinned tables and reduction rule (FRAC_MODE 4) on all 2^32 inputs.
   launch   the kernel of every case (torch.profiler): `Flash_fwd_kernel_traits<D, kBlockM, kBlockN, kNWarps, ...>` against kBlockM 64 and
@@ -55,7 +55,7 @@ RECORD = "fa2_target_capture.json"
 HDIMS = (64, 96, 128, 256)
 KBLOCK_M = 64
 REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
-MUFU_SRC = REPO_ROOT / "verity/ml/definitions/numerics/cuda/mufu_probe.cu"
+MUFU_SRC = REPO_ROOT / "benchmarks/definitions/numerics/cuda/mufu_probe.cu"
 #: (heads, KV heads, head dim) of the pinned checkpoints whose attention is plain FA2 (`engine/profiles/hf_configs`; Gemma-2's softcap and
 #: window launch another kernel instantiation)
 MODELS = {"smollm2-135m": (9, 3, 64), "smollm2-360m": (15, 5, 64), "pythia-160m": (12, 12, 64), "qwen2.5-0.5b": (14, 2, 64),
@@ -137,8 +137,8 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.ml.circuits import library as L
-    from verity.ml.definitions.numerics import fa2_relation
+    from verity.definitions.circuits import library as L
+    from verity.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
     ref = work / "pinned_tables.bin"
@@ -229,7 +229,7 @@ _TRAITS = re.compile(r"Flash_fwd_kernel_traits<(\d+), (\d+), (\d+), (\d+),")
 
 
 def launch_geometry(names: list[str], D: int) -> dict[str, Any]:
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     tiles = sorted({tuple(int(x) for x in m.groups()) for n in names for m in [_TRAITS.search(n)] if m})
     want = (D, KBLOCK_M, b1.fa2_kblock_n(D), 4)
@@ -253,9 +253,9 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     """One head of `Attention_v2{..., DOT=HopperBF16WgmmaDot16_v1, INV=Fa2InvSum_v1}` restated over the registered primitives by the
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
-    from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import prims as P
 
     def E(prim, *a):
         return int(evaluate(prim, *a)[0])
@@ -313,13 +313,13 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
-    from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
+    from verity.definitions.numerics import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import fa2_check_inf as F2
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import fa2_check_inf as F2
+    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
