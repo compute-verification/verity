@@ -53,7 +53,8 @@ from verity.core.protocols.spot import parties as SPP
 from verity.ml.circuits.types import Array, Value
 from verity.settings import REGISTRY as VERITY_SETTINGS
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
+ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/core/protocols/onsite", ROOT / "verity/core/protocols/remote"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
@@ -433,12 +434,12 @@ class RejectingPort(D.ProtocolPort):
     accepted = R.REJECT
 
 
-def port(name: str, product: R.Product, seen: collections.Counter, serve: tuple[str, ...] = ("serve",),
-         package: str | None = None) -> D.ProtocolPort:
-    """`name serve` (or `name SERVE`) of the Lake package in `package` (default `name`), on the product's cases and,
-    one sample in ten, any JSON line."""
+def port(name: str, product: R.Product, seen: collections.Counter, package: Path,
+         serve: tuple[str, ...] = ("serve",)) -> D.ProtocolPort:
+    """`name serve` (or `name SERVE`) of the Lake package in `package`, on the product's cases and, one sample in ten,
+    any JSON line."""
     return RejectingPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                         package=PROTOCOLS / (package or name), serve=serve, need_rejects=False)
+                         package=package, serve=serve, need_rejects=False)
 
 
 def ids(product: R.Product) -> str:
@@ -446,12 +447,20 @@ def ids(product: R.Product) -> str:
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
+<<<<<<< HEAD
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
 REMOTE = port("remote", R.REMOTE, SEEN["remote"])
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
 #: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
 #: no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], serve=(ids(R.ONSITE), "serve"), package="onsite")}
+=======
+ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
+REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
+#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
+PRODUCT = {p.id: port("product", p, SEEN[n], ONSITE_PACKAGE, serve=(ids(p), "serve"))
+           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
+>>>>>>> fa1fc89f64f1
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
@@ -880,6 +889,7 @@ def test_onsite_agrees(onsite_server, recorded):
                                                        "two records", "one store", "two stores"))
 
 
+<<<<<<< HEAD
 @pytest.mark.slow
 def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
     """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
@@ -898,6 +908,13 @@ def test_product_names_only_the_composites():
     gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
     and the wipe (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
+=======
+def test_product_names_only_the_two_composites():
+    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
+    configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
+    and refuses every other set of their subprotocols and the wipe (exit 64)."""
+    exe = D.build(ONSITE_PACKAGE, "product")
+>>>>>>> fa1fc89f64f1
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
@@ -983,7 +1000,7 @@ def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded)
     is undecided, under a commitment that binds their digests."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
-        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
+        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=ONSITE_PACKAGE), examples=1000,
               server=onsite_server)
     assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
     parts = R.ONSITE.verdicts(e.value.input)
