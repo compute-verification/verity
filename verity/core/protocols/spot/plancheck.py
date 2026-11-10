@@ -91,13 +91,18 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
 
 def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
         served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
-        search: Mapping[str, int] | None = SEARCH) -> dict:
+        search: Mapping[str, int] | None = SEARCH, fanout: int = 1) -> dict:
     """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Point`): its `replay_blocks`
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
     rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
-    and serving `served` bits rounded up; with `served` alone, the capped sets' form, the requests reading in each
-    replay block serve at most that many bits together.  Lean searches θ from `theta` unless `search` is None."""
+    and serving `served` bits rounded up, so it refuses a `fanout` above 1 (`ValueError`); with `served` alone, the
+    capped sets' form, the requests reading in each replay block serve at most `fanout` (the class's `N`, the replay
+    grain's fan-out, `partition.fanout`) times that many bits together.  Lean searches θ from `theta` unless `search`
+    is None."""
+    if not (isinstance(fanout, int) and fanout >= 1) or (union and fanout > 1):
+        raise ValueError(f"a fan-out is a whole number at least 1, and the patterns' form reads each request in one "
+                         f"replay block, so it needs fan-out 1, not {fanout}")
     cells = list(cells)
     strata = sorted({c.stratum for c in cells})
     parts = []
@@ -109,7 +114,7 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
         parts.append([[str(math.ceil(n)), str(b)] for b, n in sorted(widths.items())])
     one = {"count": str(math.ceil(replay_blocks)),
            "cells": [{"k": str(math.floor(k[t])), "parts": ps} for t, ps in zip(strata, parts)],
-           "reads": parts if union else [], "N": "0" if served is None else "1"}
+           "reads": parts if union else [], "N": "0" if served is None else str(fanout)}
     form = "sets" if served is None else "patterns" if union else "capped"
     out = {"kind": "two", "form": form, "q": _q(min(exact(q), Fraction(q))), "theta": _q(Fraction(f"{theta:.6g}")),
            "delta": _q(exact(delta)), "S": "0" if served is None else str(math.ceil(served)), "p": str(p),

@@ -127,6 +127,21 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
     assert math.log2(count) <= found[0] <= zero[0] * (1 + 1e-9), (count, found, zero)
 
 
+def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
+    """A replay grain of fan-out F (`partition.fanout`) is a capped point whose class's N is F: Lean certifies it as the
+    point capped at F S with N = 1, at least log2 of that capped count by enumeration and more than at F = 1.  The
+    patterns' form, each request reading in one replay block, refuses F > 1, and the sets' form reads no N."""
+    cells, k = SMALL[1]
+    one, three = (P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=f) for f in (1, 3))
+    assert one["classes"][0]["N"] == "1" and three["classes"][0]["N"] == "3"
+    (b1, _), (b3, _), (b9, _) = P.check([one, three, P.two(cells, k, 2, .9, .3, 9, theta=1.0)])
+    assert b3 == b9 > b1 and math.log2(_admissible_count(cells, k, 2, .9, .3, 9, union=False)) <= b3
+    assert P.two(cells, k, 2, .9, .3, theta=1.0, fanout=3)["classes"][0]["N"] == "0"
+    for bad in ({"union": True, "fanout": 2}, {"fanout": 0}, {"fanout": 1.5}):
+        with pytest.raises(ValueError, match="fan-out"):
+            P.two(cells, k, 2, .9, .3, 3, **bad)
+
+
 def test_a_two_stage_point_out_of_range_is_refused():
     d = P.two([Cell(3, 2)], {0: 1}, 2, .5, .1, theta=1.0, search=None)
     assert P.check([d | {"q": "3/2"}, d | {"delta": "0/1"}]) == [(None, 1), (None, 1)]
