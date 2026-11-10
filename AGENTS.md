@@ -8,8 +8,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 ## Map and commands
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
-  owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
-  - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
+  owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
+  - `verity/core/`: the verifiers, trusted code. `verity/protocols/` holds the integrity profile (`profile`) and one
     package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), PoUB over a node's registered store and
     network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
     policy (`network/nci/`) is Lean only. `claims` holds the security claims'
@@ -25,9 +25,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
     can't affect soundness.
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
-- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+- `adapters/`: one directory per serving stack, holding only what attaches Verity to it. `adapters/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
+- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -146,7 +146,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
-  never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
+  never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
   before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
   sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
@@ -219,8 +219,8 @@ rule for each case: the team skill's Landing.
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `Security/`: Flock's
-  executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
+  `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
