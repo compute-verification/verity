@@ -5,7 +5,7 @@
 * every unit of a V = 64 row has a Boolean version whose word view is the unit, and its gates on the twin's inputs for the
   unit (`numerics.topp_stage_twins`) compute the twin's words, which the word unit computes (`test_topp_stages`);
 * at the served vocabulary every unit's Boolean version, at every split count, has rows a proof block holds
-  (`interface.check_proof_block`), and every Definition its body Calls is Boolean.
+  (`interface.check_proof_block`) and fits one Flock block, and every Definition its body Calls is Boolean.
 """
 from __future__ import annotations
 
@@ -91,8 +91,9 @@ def test_each_new_boolean_version_is_the_one_its_word_resolves_to():
 def test_each_unit_on_bits_computes_the_twin_s_words_on_its_inputs():
     """Every unit of a V = 64 row, on bits: its Boolean version's word view is the unit, and its gates, evaluated bit-sliced on
     the twin's inputs for the unit on the four rows of `test_topp_stages` (ties, -inf and NaN lanes, temperature 0, 0.7 and 1,
-    four split counts), compute the twin's words, which are the word unit's.  Minutes, all of them the gates of the row's units:
-    nothing short of evaluating them holds σ's Boolean versions to the words the row commits."""
+    four split counts), compute the twin's words, which are the word unit's.  Most of a minute, all of it the gates of the
+    row's 536 units of 61 Definitions: nothing short of evaluating them holds σ's Boolean versions to the words the row
+    commits, and a smaller row has no select chunk of two lanes."""
     V = 64
     lgs, opss, outss = [], [], []
     for kind, temp, top_p, at in ROWS:
@@ -114,13 +115,19 @@ def test_each_unit_on_bits_computes_the_twin_s_words_on_its_inputs():
     assert bad == []
 
 
-def test_each_served_unit_on_bits_has_rows_a_proof_block_holds():
+@pytest.mark.slow
+def test_each_served_unit_on_bits_fits_a_proof_block():
     """At GLM-5.3's vocabulary, each of the 85 unit Definitions (every split count's) has a Boolean version whose body Calls
-    only Boolean Definitions, with the word unit's rows, which a proof block holds."""
+    only Boolean Definitions, on the word unit's rows, which a proof block holds (`interface.check_proof_block`), and whose
+    ANDs and ports, read off the Definition, leave its unit inside one Flock block (`verity_flock.circuit.unit_block`).  Most
+    of a minute, all of it the served bodies: a block's size is its served statics', which no smaller binding has."""
+    from verity_flock import circuit as FC
+
     units = {descriptor_id(u.defn): u.defn for u in T.plan(SERVED_V)}
     assert len(units) == 85
     for t, d in units.items():
         b = BB.boolean_version(d)
         assert descriptor_id(word_of(b)) == t and all(BL.is_boolean(n.fn) for n in b.body.nodes), t
-        assert IF.check_proof_block(b) == IF.check_proof_block(d) <= IF.K_MAX, t
-        assert IF.unit_rows(b) == IF.unit_rows(d), t
+        assert IF.check_proof_block(b) == IF.check_proof_block(d) <= IF.K_MAX and IF.unit_rows(b) == IF.unit_rows(d), t
+        block = FC.unit_block(b)
+        assert FC.past_block(block) is None and block["k_log"] <= IF.K_MAX, (t, block)
