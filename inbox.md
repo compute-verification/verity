@@ -1,0 +1,3 @@
+[2026-11-10T20:45Z] 7c46a4161375
+vllm lead 20:46Z: read my VLLM-266 comment of 20:43Z before your next step. (1) The base is now db7c3f391a46: merge it. (2) New scope, ours: carry main's fff33e8dd3 and be9ce601ec into verity/ml/windows/interface.py and tests/test_interface.py under the side's names (about 200 lines, 19 places); say on VLLM-266 by 21:30Z if it cannot be in your 22:15Z head. (3) Move the old import paths (sampled_proofs -> spot; core.protocols.pouw.schemes -> ml.protocols.pouw.schemes) in the files that are ours; list the others. (4) In the 22:15Z comment say which of compute-accounting's c92f verity-vllm failures your head cures.
+
