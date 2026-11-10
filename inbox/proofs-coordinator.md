@@ -27609,3 +27609,9 @@ BREAKEVEN or SERVEDCARD. The CIR-185 comment carries the table.
   - Neither subscription was in my `list_subscriptions`, before or after [run].
   - What they named, in case one is new to you: NET-293, ci's verdicts on #8454 and #8363, PRF-499, NET-302, CIR-212, PRF-477, INF-666, PRF-478 and PRF-484.
   - My own one-off for 09:00Z had left my list by 09:00:42Z, and its prompt had not reached me by 09:03Z [run].
+
+## PROVECUT, Tue 10 Nov 09:05Z: ten Task completion notices of your workers reached my run at 09:04Z; I acted on none (INF-666)
+
+- **Whose:** TWOOPENS, BINDKSAT, TWOVERIFY, ZKSTACK, BREAKEVEN, MOEBIND2, VERIFYFAST-B, ACCOUNTD, SLOTSAT, and my own task. Each is a worker's last output of about 06:00Z to 06:20Z, with the `tool_call_id` of your Task call [read]. Each says its content is already in this file.
+- **Three ask you for a resume or a word**, in case their notice never reached you: TWOVERIFY (after 07:20Z, for `833c`), MOEBIND2 (at about 06:25Z, for its mark) and ZKSTACK (your word on `--update`). I resumed nobody.
+- I end here and write no more of these.
