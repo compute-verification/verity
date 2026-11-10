@@ -7,13 +7,13 @@ public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Partition
 public import Definitions.InferenceOnly
-public import Definitions.InferenceOnly.Dampener
+public import Definitions.InferenceOnly.Slowdown
 public import Definitions.InferenceOnly.Reads
 public import Definitions.InferenceOnly.Assumptions.Threads
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.InferenceOnly.Assumptions.Activations
 public import Definitions.InferenceOnly.Assumptions.Layered
-public import Definitions.InferenceOnly.Assumptions.Dampener
+public import Definitions.InferenceOnly.Assumptions.Slowdown
 public import Definitions.InferenceOnly.Assumptions.Training
 public import Definitions.InferenceOnly.Assumptions.PackedTraining
 public import Definitions.InferenceOnly.Support
@@ -47,7 +47,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace InferenceOnly.Guarantees
 
-open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Dampener
+open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Slowdown
 
 /-- **`ThreadedTraining`'s and `ThreadedTrainingOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`,
 `b_w = b_a = 1/2`, `κ = 1`, `r = d = Toy.D` through the containment of the toy in itself, the threading `T1` and
@@ -194,20 +194,20 @@ def LayeredTraining_nontrivial : Prop :=
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) (1 - 0) (0 + 0 * 0) * D.D.size D.D.computed)
 
-/-- **`DampenerThreaded`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b_w = b_a = 1/2`, the
+/-- **`SlowdownThreaded`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b_w = b_a = 1/2`, the
 threading `T1` at `(dd, e) = (1, 0)`, `κ = 1`, monitored compute `C = 2` all certified (`W = 2`), no unmonitored
 compute or fault, one counted multiplication (`M = 1`, the declared one), one server, `F = 2`, `H = L = R = 1`. -/
-def DampenerThreaded_honest : Prop :=
+def SlowdownThreaded_honest : Prop :=
   CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
     T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧
     (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.WindowLength (1 / 2) 2 1 1 ∧
     ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
     Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
 
-/-- **`DampenerThreaded` without `WindowsHold`**: at the threading `T0`, with no state (`R = 0`) and no rate (`F = 0`),
+/-- **`SlowdownThreaded` without `WindowsHold`**: at the threading `T0`, with no state (`R = 0`) and no rate (`F = 0`),
 one counted multiplication in the residual (`W = 0`, `M = M_r = 1`) is held by no window, and the efficiency `1`
 exceeds the bound `0`. -/
-def DampenerThreaded_nontrivial : Prop :=
+def SlowdownThreaded_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 / 2 ∧
     (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
@@ -222,18 +222,18 @@ def DampenerThreaded_nontrivial : Prop :=
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
-/-- **`DampenerThreadedSlots`' premises hold together**: `DampenerThreaded_honest`'s instance, the weight in its own
+/-- **`SlowdownThreadedSlots`' premises hold together**: `SlowdownThreaded_honest`'s instance, the weight in its own
 parameter slot (`σ1`). -/
-def DampenerThreadedSlots_honest : Prop :=
+def SlowdownThreadedSlots_honest : Prop :=
   CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
     T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) ∧
     (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.WindowLength (1 / 2) 2 1 1 ∧
     ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
     Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
 
-/-- **`DampenerThreadedSlots` without `WindowsHold`**: `DampenerThreaded_nontrivial`'s instance, at `T0`'s one parameter
+/-- **`SlowdownThreadedSlots` without `WindowsHold`**: `SlowdownThreaded_nontrivial`'s instance, at `T0`'s one parameter
 slot (`σ0`). -/
-def DampenerThreadedSlots_nontrivial : Prop :=
+def SlowdownThreadedSlots_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 / 2 ∧
     (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
@@ -362,11 +362,11 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (freshInput D {v} : ℝ)))
 
-/-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
+/-- **`SlowdownRemote`'s premises hold together** at `SlowdownThreaded_honest`'s declaration, threading and charges,
 over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
 of it certified (`W = 2`), no incorrect proof block, so that every detection holds at `q = 1` and the residual is `0`, and
 one counted multiplication, the declared one. -/
-def DampenerRemote_honest : Prop :=
+def SlowdownRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
     (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
     Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
@@ -377,11 +377,11 @@ def DampenerRemote_honest : Prop :=
     (∀ ω, Assumptions.ResidualAtMost 0 2 2 0 2 (wrongCapacity OneWindow.cap (OneWindow.right ω))
       (∑ b ∈ OneWindow.bad ω, OneWindow.time b))
 
-/-- **`DampenerRemote` without PoUW's soundness**: the window's certificate is wrong at every outcome, so the residual
+/-- **`SlowdownRemote` without PoUW's soundness**: the window's certificate is wrong at every outcome, so the residual
 holds its capacity, `M_r = 2` counted multiplications at the threading `T0`, all of `C = 2` certified, `κ = 2`, `ε' = 1/2`
 and `θ = 1/4`. The efficiency `1` exceeds the bound `ε' + θ = 3/4` at every outcome, so the event has probability `0`,
 below `1 − δ = 1`. -/
-def DampenerRemote_nontrivial : Prop :=
+def SlowdownRemote_nontrivial : Prop :=
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ i, 0 ≤ OneWindow.cap i) ∧ Assumptions.WithinCompute OneWindow.cap 2 ∧
     ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.wrong 0 ∧
     (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 2 ∧
@@ -406,7 +406,7 @@ def DampenerRemote_nontrivial : Prop :=
               (1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
             declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0 ∧
-        remoteDampener 1 (unregisteredShare 2 0)
+        remoteSlowdown 1 (unregisteredShare 2 0)
             ((1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
               declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) ≤

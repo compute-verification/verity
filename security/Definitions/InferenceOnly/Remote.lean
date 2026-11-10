@@ -1,6 +1,6 @@
 module
 
-public import Definitions.InferenceOnly.Dampener
+public import Definitions.InferenceOnly.Slowdown
 public import Definitions.Core.Prob
 
 /-!
@@ -25,13 +25,13 @@ PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that
 of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
 residual read there is `r̂ + ε_W W_cert/C`.
 
-`remoteDampener` is the hardware multiple the bound gives, as `tiers.evaluate` computes `dampener` and `fit.dampener`
+`remoteSlowdown` is the hardware multiple the bound gives, as `tiers.evaluate` computes `dampener` and `fit.dampener`
 computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Dampener
+namespace InferenceOnly.Slowdown
 
 /-- **The capacity of the windows whose certificates are wrong**: `∑_{i : wrong i} c_i`, window `i` of `N` having
 capacity `c_i`. -/
@@ -61,6 +61,6 @@ noncomputable def hardwareMultiple (mfu κ M C U : ℝ) : ℝ := max 1 (mfu / ef
 /-- **The dampener** `ρ = max(1, 1/(s + x/MFU₀))` (`tiers.evaluate`'s `dampener`; `fit.dampener` at `s = 0`, where it
 is `max(1, MFU₀/x)`): unmonitored compute, the share `s`, trains like the unconstrained developer, at `MFU₀`, and the
 other terms `x` are counted at peak. -/
-noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
+noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
 
-end InferenceOnly.Dampener
+end InferenceOnly.Slowdown

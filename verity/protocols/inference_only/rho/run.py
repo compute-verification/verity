@@ -239,7 +239,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"`T_0 / (MFU₀ Φ_total)`, the reference's own time). **Inference overhead:** {inference(s)}."),
            "",
            (f"The slowdown is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
-            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the unregistered leaves `s` "
+            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteSlowdown`), with the unregistered leaves `s` "
             f"training like the reference and the rest `x` counted at capacity. It comes from the padded size ratio "
             f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each server block "
             f"padded to capacity. A bound counts each uncertified or unregistered gate at `ω_max / s_×` with "
