@@ -21,36 +21,14 @@ of its width (or the run holds a collision), the verifier's view of it is ⊥, a
   `CollisionStep` (a named assumption: two strings that climb to one position give a collision among the run's hashed
   strings), an accepted opening is the view, and a slot a long value climbs to is ⊥, or the run holds a collision.
   `optCorrect_of_opened`, `opened_of_optCorrect`: a unit's proof holds exactly when the unit is correct in the view.
-<<<<<<< ours
   `long_value_incorrect`: the writer and every reader of a long value's slot are incorrect.
 * **⊥ is weakly dominated by a short incorrect value.** `incorrect_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose incorrect units are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
+  of every ⊥ gives an assignment whose incorrect proof blocks are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
   budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is incorrect
   (`mem_optIncorrect_of_read_none`, `mem_optIncorrect_of_write_none`).
-||||||| base
-  `long_value_wrong`: the writer and every reader of a long value's slot are wrong.
-* **⊥ is weakly dominated by a short wrong value.** `wrong_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose wrong units are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
-  budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is wrong
-  (`mem_optWrong_of_read_none`, `mem_optWrong_of_write_none`).
-=======
-  `long_value_wrong`: the writer and every reader of a long value's slot are wrong.
-* **⊥ is weakly dominated by a short wrong value.** `wrong_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose incorrect proof blocks are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
-  budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is wrong
-  (`mem_optWrong_of_read_none`, `mem_optWrong_of_write_none`).
->>>>>>> theirs
 * **T1–T4 over `Option V`.** `liftFns f` applies `f` when every read holds a value and writes ⊥ otherwise; a unit
-<<<<<<< ours
   correct over `Option V` is correct under it (`incorrect_lift_subset`), so the population theorems hold over `Option V`
-  with the incorrect units of `optIncorrect`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
-||||||| base
-  correct over `Option V` is correct under it (`wrong_lift_subset`), so the population theorems hold over `Option V`
-  with the wrong units of `optWrong`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
-=======
-  correct over `Option V` is correct under it (`wrong_lift_subset`), so the population theorems hold over `Option V`
-  with the incorrect proof blocks of `optWrong`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
->>>>>>> theirs
+  with the incorrect proof blocks of `optIncorrect`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
   `opt_eq_honest_off_down`), the egress count with `|V| + 1` for `|V|` (`card_optEgress_le`, `card_optEgressAt_le`,
   `card_optEgressAt_le_reach`), leakage beyond the honest egress (`opt_card_leak_le_coneEgress`,
   `opt_card_leak_le_reach`), and the skipped work (`opt_skipped_work_le_wt`, `opt_skipped_work_le_wt_of_luck`). The
@@ -296,16 +274,8 @@ theorem skipsLucky_lift {V : Type} {f : P.Fns V} {honest : S → V} {σ : S → 
   fun u hu hr hc => hl u hu hr
     (P.optCorrect_of_correct_lift (fun r => by rw [hr r.1 r.2]; rfl) hc)
 
-<<<<<<< ours
-/-- **The skipped work over `Option V`**: at most `F · wt(incorrect)` plus the lucky work, the incorrect units those of
+/-- **The skipped work over `Option V`**: at most `F · wt(incorrect)` plus the lucky work, the incorrect proof blocks those of
 `optIncorrect`, the readers and writers of ⊥ among them. -/
-||||||| base
-/-- **The skipped work over `Option V`**: at most `F · wt(wrong)` plus the lucky work, the wrong units those of
-`optWrong`, the readers and writers of ⊥ among them. -/
-=======
-/-- **The skipped work over `Option V`**: at most `F · wt(wrong)` plus the lucky work, the incorrect proof blocks those of
-`optWrong`, the readers and writers of ⊥ among them. -/
->>>>>>> theirs
 theorem opt_skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = some (a s)) {K L : Finset U} (hl : P.OptSkipsLucky f honest σ K L) (wt : U → ℕ)

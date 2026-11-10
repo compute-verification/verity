@@ -10,7 +10,6 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 # Skippable work: what the incorrect proof blocks' cones and luck bound
 
 A run commits `σ` while computing only the units `K`; the units it skips are `univ \ K`. A skipped unit can be correct
-<<<<<<< ours
 for three reasons: it is downstream of an incorrect proof block (its inputs are garbage the prover chose, which may make
 it easy, as `A = −b` zeroes a product), it was copied from a unit computing the same thing on the same inputs, or luck.
 
@@ -19,47 +18,16 @@ it easy, as `A = −b` zeroes a product), it was copied from a unit computing th
   proof blocks' cone read exactly their honest inputs (`eq_honest_off_down`), which is where the per-unit premise
   applies.
 * `skipped_work_le`: so the skipped work is at most `|incorrect| · F` plus the lucky work, `F` bounding the work of any
-||||||| base
-for three reasons: it is downstream of a faulty proof block (its inputs are garbage the prover chose, which may make it
-easy, as `A = −b` zeroes a product), it was copied from a unit computing the same thing on the same inputs, or luck.
-
-* `skipped_sub`, **the population's part**: in a checked population, every skipped unit is downstream of a faulty
-  proof block or lucky (`SkipsLucky`: a skipped unit correct on honest inputs is lucky). Units outside the faulty proof
-  blocks' cone read exactly their honest inputs (`eq_honest_off_down`), which is where the per-unit premise applies.
-* `skipped_work_le`: so the skipped work is at most `|wrong| · F` plus the lucky work, `F` bounding the work of any
-=======
-for three reasons: it is downstream of an incorrect proof block (its inputs are garbage the prover chose, which may make it
-easy, as `A = −b` zeroes a product), it was copied from a unit computing the same thing on the same inputs, or luck.
-
-* `skipped_sub`, **the population's part**: in a checked population, every skipped unit is downstream of an incorrect
-  proof block or lucky (`SkipsLucky`: a skipped unit correct on honest inputs is lucky). Units outside the incorrect proof
-  blocks' cone read exactly their honest inputs (`eq_honest_off_down`), which is where the per-unit premise applies.
-* `skipped_work_le`: so the skipped work is at most `|wrong| · F` plus the lucky work, `F` bounding the work of any
->>>>>>> theirs
   unit's downstream cone, which the verifier computes from the public dataflow.
 * `skipped_work_le_of_luck`: if the lucky work is at most a `p = num/den` share of the skipped work plus a slack, the
   skipped work `W` satisfies `(den − num) · W ≤ den · (m F + slack)`, that is `W ≤ (m F + slack) / (1 − p)`:
   compute-accounting's `F m / (1 − p) + slack`.
 * `skipped_work_le_wt`, `skipped_work_le_wt_of_luck`: the same with every cone at most `F` times its root's weight, so
-<<<<<<< ours
   the bound reads the incorrect proof blocks' weight, which weighted sampling bounds:
   `W ≤ (F · wt(B) + slack) / (1 − p)`.
-||||||| base
-  the bound reads the faulty proof blocks' weight, which weighted sampling bounds: `W ≤ (F · wt(B) + slack) / (1 − p)`.
-=======
-  the bound reads the incorrect proof blocks' weight, which weighted sampling bounds: `W ≤ (F · wt(B) + slack) / (1 − p)`.
->>>>>>> theirs
 * `twin_copy`, **why luck needs distinct units**: two units computing the same function of the same input: the run
-<<<<<<< ours
   that computes one and copies it has no incorrect proof block, and every hardness premise must count the copy as luck.
   The premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
-||||||| base
-  that computes one and copies it has no faulty proof block, and every hardness premise must count the copy as luck. The
-  premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
-=======
-  that computes one and copies it has no incorrect proof block, and every hardness premise must count the copy as luck. The
-  premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
->>>>>>> theirs
   (a coin per unit), not the population's.
 -/
 

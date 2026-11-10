@@ -18,16 +18,8 @@ for every such program, at the cones over its honest runs (`downOver C`, `C` a s
 program, no larger than the padding's cones, and no obliviousness assumed.
 
 * `eq_honest_off_downOver`: off the writes of the cone over `C`, a run shows the honest values.
-<<<<<<< ours
 * `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **the uniform form for a program**: at most `m` incorrect
   proof blocks and every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
-||||||| base
-* `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **the uniform form for a program**: at most `m` faulty proof
-  blocks and every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
-=======
-* `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **the uniform form for a program**: at most `m` incorrect proof
-  blocks and every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
->>>>>>> theirs
 * `skipped_work_le_wt_over`, **T4 for a program**: every cone over `C` at most `F` times its root's weight gives skipped
   work at most `F · wt(incorrect)` plus the lucky work.
 
@@ -120,19 +112,9 @@ theorem card_leak_le_coneOver [Fintype U] [Fintype V] [DecidableEq V] (hsa : D.S
         rw [card_product, card_univ, Fintype.card_fun, Fintype.card_coe]
     _ = _ := by rw [mul_sum]
 
-<<<<<<< ours
 /-- **The uniform form for a program**: in a time-ordered, single-assignment, address-closed trace, at most `m`
 incorrect proof blocks and every unit's cone egress over the honest runs `C` at most `E` give
 `#honest · C(|U|, m) · |V| ^ (m E)` egress values. Obliviousness is not assumed. -/
-||||||| base
-/-- **The uniform form for a program**: in a time-ordered, single-assignment, address-closed trace, at most `m` faulty
-proof blocks and every unit's cone egress over the honest runs `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)`
-egress values. Obliviousness is not assumed. -/
-=======
-/-- **The uniform form for a program**: in a time-ordered, single-assignment, address-closed trace, at most `m` incorrect
-proof blocks and every unit's cone egress over the honest runs `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)`
-egress values. Obliviousness is not assumed. -/
->>>>>>> theirs
 theorem card_leak_le_coneEgressOver [Fintype U] [Fintype V] [DecidableEq V] [Nonempty V]
     (hsa : D.SingleAssignment) (hac : D.AddressClosed) {step : U → ℕ} (ht : D.TimeOrdered step)
     (C : Set (S → V)) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
