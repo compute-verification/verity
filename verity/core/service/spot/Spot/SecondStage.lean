@@ -43,8 +43,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
     and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
-    population's `r` each), or, where the interior registration registers a value of the link's name, that value,
-    never the boundary port, each slot of replay block `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
+    population's `r` each), or, where the interior registration registers a value of the link's name (one the boundary
+    registration's record has no port or value of: `second-interior-names`), that value, each slot of replay block
+    `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
     value's leaves the `Q` sampled blocks' `r` each); for a port a wire names, its writer's output port of the
     interior record, each slot of replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the
     port's leaves the writer's `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only
@@ -86,6 +87,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   (`window.replay_sample`, which the proof server writes) is not the verifier's own, `S`, in its order
   (`interiorOrderOk`). The record then states that its blocks are `S`'s, block `S[i]`'s cell `off_t + i·n_t`, rather
   than leaving it to convention. It is checked before any statement is read, and fails the check whatever else does.
+* **The registrations' names**: `second-interior-names` when the interior registration registers a value of a name the
+  boundary registration's record has, a port or a registered value (`namesOk`). Each name is then one registration's,
+  so the interior's value of a name never stands in for one round 1 committed. It is checked with the interior record's
+  order.
 * **The schedule**: `second-schedule` when the boundary registration's record commits a schedule (`window.schedule`)
   that is no schedule of its replay blocks (`Schedule.failure`): runs of positions of its requests that cover the
   replay blocks in order, and each request's positions in order. A record that commits none passes. It is checked
@@ -157,6 +162,10 @@ def WIRES_WHY : String :=
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+
+def NAMES_WHY : String :=
+  "the interior registration registers a value of a name the boundary registration's record has, a port or a " ++
+  "registered value"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -805,9 +814,9 @@ def wiredRow (p : Part) (r : Rows) (u : Nat) : Option Nat := do
 
 /-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
 boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its cell's replay block's
-(`linkedRow`), or, where the interior registration registers a value of the link's name, only that value and never the
-boundary port, of its rows' `per` a sampled block, each slot only its unit's row of its cell's (`wiredRow`); a port a
-wire names, only its writer's output port of the interior record, of the writer's units a
+(`linkedRow`), or, where the interior registration registers a value of the link's name, one the boundary registration's
+record has no port or value of (`namesOk`), only that value, of its rows' `per` a sampled block, each slot only its
+unit's row of its cell's (`wiredRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
 the interior record, each slot only its own first row, or a value either registration registers, never a boundary
 port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
@@ -1014,11 +1023,22 @@ def interiorOrderOk (own : Own) : Bool :=
   | .arr bs => bs.toList.map nat? == own.sample.toList.map some
   | _ => false
 
+/-- **The registrations' names**: no value the interior registration registers (its `registered` entries' values) is
+of a name the boundary registration's record has, a port (`Record.byPort`) or a registered value (`registeredEntry`), so
+each name a session reads is one registration's. -/
+def namesOk (own : Own) : Bool :=
+  (match getD own.interior "registered" with | .arr es => es | _ => #[]).all fun e =>
+    match getD e "value" with
+    | .str v => !(Record.byPort own.boundary).any (·.1 == v) && (registeredEntry own.boundary v).isNone
+    | _ => true
+
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
-`second-schedule` where the schedule the boundary registration's record commits is not one of its replay blocks
-(`Schedule.failure`). -/
+`second-interior-names` unless no value the interior registration registers is of a name the boundary registration's
+record has (`namesOk`), then `second-schedule` where the schedule the boundary registration's record commits is not one
+of its replay blocks (`Schedule.failure`). -/
 def interiorFailures (own : Own) : List (String × Json) :=
   (if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]) ++
+    (if namesOk own then [] else [("second-interior-names", Json.str NAMES_WHY)]) ++
     match Schedule.failure own.boundary with
     | some why => [("second-schedule", Json.str why)]
     | none => []
@@ -1156,7 +1176,16 @@ theorem orderFailures_nil {ps : Array Part} {ss : List Json} (h : orderFailures 
 /-- With no `second-interior-order`, the interior record names the replay sample in its order. -/
 theorem interiorFailures_nil {own : Own} (h : interiorFailures own = []) : interiorOrderOk own = true := by
   unfold interiorFailures at h
-  have h := (List.append_eq_nil_iff.1 h).1
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1
+  split at h
+  · assumption
+  · simp at h
+
+/-- With no `second-interior-names`, no value the interior registration registers is of a name the boundary
+registration's record has. -/
+theorem interiorFailures_names {own : Own} (h : interiorFailures own = []) : namesOk own = true := by
+  unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).2
   split at h
   · assumption
   · simp at h
