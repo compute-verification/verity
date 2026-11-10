@@ -20,7 +20,6 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
-
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain

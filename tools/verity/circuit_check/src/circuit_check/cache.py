@@ -137,8 +137,8 @@ Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.js
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 
 A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, and, for reads of what the registries registered, every module
-the registries import (`registry_inputs`).
+the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
+(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -2544,10 +2544,27 @@ def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
             probes |= got[2]
     # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
     out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
-                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
+                           "probes": sorted(probed(root, (p for p in probes - files if p not in ("", ".") and not p.startswith("<")))
+                                            - files),
                            "registry": any(reads.get(k) for k in _REGISTRY)}
     if libs := reads.get("libs"):
         out["untracked"] = sorted(libs)
+    return out
+
+
+def probed(root: Path, probes: Iterable[str]) -> set[str]:
+    """Each of ``probes`` as the first of its ancestors that is no directory of the tree (`visible`'s), or as itself: nothing is
+    under a path that is no directory, so that path's kind holds the kind of every path under it, and changes when one is
+    there (a check asks for a ``digests`` pin of every Definition it checks, ``pins/digests/<id>.json``, while there is no
+    ``pins/digests``)."""
+    v = visible(root)
+    out: set[str] = set()
+    with internal():
+        for p in probes:
+            i = p.find("/")
+            while i > 0 and (p[:i] in v[1] if v is not None else (root / p[:i]).is_dir()):
+                i = p.find("/", i + 1)
+            out.add(p[:i] if i > 0 else p)
     return out
 
 
@@ -2717,5 +2734,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
-           "modules_since", "pin_files", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
+           "modules_since", "pin_files", "probed", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
            "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]

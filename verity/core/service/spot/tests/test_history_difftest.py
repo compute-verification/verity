@@ -456,3 +456,76 @@ def test_refused_roots(pieces, name, j):
     assert pieces.call("history_roots", j)[0] == "reject"
     with pytest.raises(ValueError):
         _py_roots(j)
+
+
+def _window(table: H.HistoryTable, seed: int = 0, n: int = 4) -> tuple:
+    """``n`` units of ``Gemm_v2{K=16, N=8}``, two a member, their outputs appended to ``table`` as history table
+    ``latent``'s next rows after those it holds of earlier windows, committed as `ml.windows` commits a window: -> the
+    circuit record, the verifier's window and the members' public bodies."""
+    import numpy as np
+
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.windows import interface as I
+
+    g8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
+    gid, at, rng = descriptor_id(g8), len(table.rows), np.random.default_rng(seed)
+
+    def bf16(a):
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    x, w = bf16(rng.standard_normal((n, 16))), bf16(rng.standard_normal((n, 8, 16)) / 4)
+    y = np.asarray(evaluate_batch(g8, x, w, kernel="reference"), dtype=np.uint16).reshape(n, 8)
+    table.append(y)
+    runs = ([{"start": 0, "count": at, "held": "latent", "row": 0}] if at else []) + [
+        {"start": at, "count": n, "writer": gid, "out": "o0", "radix": [n], "base": 0, "step": [1]}]
+    history = I.History("latent", "program", gid, "o0", 8, tuple(runs), table.leaves)
+    win = I.Window(I.Circuit("history", ((g8, n),), registered=I.Registered({}, histories=(history,))), "ab" * 64,
+                   {"law": "stratified", "k": 2}, 2, registered={"latent": table})
+    win.record(g8, [x, w], [y])
+    c = win.close(salt_key=bytes(32))
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    return doc, win.window, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
+
+
+def _window_roots(window: tuple, root: str, held: dict | None = None) -> dict:
+    """The piece's input for a window's history table as the served audit hands it to the verifier of record
+    (`ml.windows.history.params`), under the window's leaf layer, the window registering ``root``."""
+    from verity.ml.windows import history as HW, rows as CS
+    doc, mine, publics = window
+    return {"leaf_layer": CS.leaf_layer(publics), **HW.params(doc, mine, publics, HW.pins(doc, {"latent": root}), held)}
+
+
+def test_roots_of_a_windows_history_table(pieces):
+    """A served window's history table (`ml.windows.history.params`): the first window's root from its writer's bodies,
+    and a later window's from its own and the rows it holds of the first, are the table's, in the Lean and its mirror
+    alike."""
+    table = H.HistoryTable("program", "latent", 8, 16)
+    j = _window_roots(_window(table), table.root.hex())
+    want = {"roots": {"latent": {"domain": table.domain.domain_id.hex(), "root": table.root.hex()}}}
+    assert _call(pieces, "history_roots", j) == want == _py_roots(j)
+    first = list(table.bcs)
+    j = _window_roots(_window(table, seed=1), table.root.hex(), {"latent": first})
+    assert j["held"] == {"latent": {"latent": _hex_of(first)}}
+    want = {"roots": {"latent": {"domain": table.domain.domain_id.hex(), "root": table.root.hex()}}}
+    assert _call(pieces, "history_roots", j) == want == _py_roots(j)
+
+
+def test_a_wrong_root_of_a_windows_history_table_is_refused(pieces):
+    """The root a served window registers for its history table is refused, by the Lean and its mirror alike, where it
+    isn't the one over the table's strings: the root over the same rows in another order, the root with a bit flipped,
+    a later window registering the earlier one's root, and a later window's root over held rows in another order."""
+    import numpy as np
+    table = H.HistoryTable("program", "latent", 8, 16)
+    one = _window(table)
+    first, root = list(table.bcs), table.root.hex()
+    other = H.HistoryTable("program", "latent", 8, 16)
+    other.append(np.stack(table.rows[::-1]), table.salts[::-1])
+    two = _window(table, seed=1)
+    for j in (_window_roots(one, other.root.hex()), _window_roots(one, root[:-1] + format(int(root[-1], 16) ^ 1, "x")),
+              _window_roots(two, root, {"latent": first}), _window_roots(two, table.root.hex(), {"latent": first[::-1]})):
+        assert pieces.call("history_roots", j)[0] == "reject"
+        with pytest.raises(ValueError, match="not the table's root"):
+            _py_roots(j)
