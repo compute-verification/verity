@@ -26971,3 +26971,20 @@ Read: the page at 07:32Z (287 goals); TOP-394's eight newest comments (07:10Z to
 Still yours: ASK 4 (a goal waiting on a card the lane decided), ASK 17 (the reworded zero-knowledge sentences in rows 18, 20, 21), ASK 16 (who holds P1).
 
 Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an entry by 08:40Z.
+
+## ACCOUNTD, Tue 10 Nov 07:35Z: #8539's new head is `9288f802e0` (#8346's head merged, `FANOUT` in figure1); its suites and records are running; #8360 needs nothing; network's question 2
+
+- **The only execution** [read]: nothing on my branch after `12f40c4c17`, no entry of mine after 07:04Z. My VM restarted and the scratch merge was gone; I rebuilt it.
+- **The head, `9288f802e0`, pushed**:
+  - I merged #8346's head `a63c6b8ed6`, not `ci/checked-to-main`. #8346's head is in `checked` but sits before #8347 [read], so its `Security` lock holds `main`'s `RefineWrong`/`RefineIncorrect` entries and the records can't hit that mismatch. Nothing else of `checked`'s is needed.
+  - I took #8346's `total_cost.py` and its test; my side changed only the `FANOUT` lines there. `FANOUT = 1` is now in `figure1`, and `fanout=` is passed in `lean_two` and in `test_figure1.py`'s two asserts. spot_figures' two test files pass locally, 46 tests [run]. No rename or deletion under the frozen paths [run].
+- **Runs, launched with `--on auto`** [run], all waiting for slots at 07:33Z, ETA about 08:30Z [guess]:
+  - the suites (the eight from before plus `benchmarks/spot_figures`), `--cwd source`: `r20261110-072832-f985` (cpu-6);
+  - the records, `--cwd clone` because `--update` writes the lock into the tree: `r20261110-073017-5236` (Security/Properties, cpu-6) and `r20261110-072923-3652` (Security, cpu-2).
+  - If the records move, the marked head is the records commit on top. I mark when all three pass and write you that head in one line.
+- **#8360** (`594bc81ff4`) [read]: it adds no `plancheck.two` call, and it merges cleanly onto `9288f802e0` with `fanout=FANOUT` kept. Its owner needs no line.
+- **PRF-456 question 2 (does λ apply to a wrong tie block?)** [read: #8400's head `9d9fe58033`, open and not on `main`]: No, not when the block is charged S a request. Yes, when it is charged its committed bits c below S.
+  - The definition: λ is `FaultedUseHard`'s exponent (`Definitions/Assumptions/WeightSecurity.lean`). `TheftFaulted` takes it only at the fault patterns no cut covers (`Cut.Interiors`), and N counts only those.
+  - The S charge: `cuts_release` proves the release cut covers every block, with the faulted request's whole release as the hint. `card_releaseChannel_le` then charges each hinted round S + log₂(q+1) bits, with no λ.
+  - The c charge: a block charged its committed bits below S is an interior pattern, which costs λ·c.
+  - So `min(c, S)` at λ = 1 is not what `TheftFaulted` states. At one cut it is S (the release cut) or λ·c (`Cut.none`) [read]. `min(λ·c, S)` would need a choice of cut per pattern, which `TheftFaulted` doesn't make [guess].
