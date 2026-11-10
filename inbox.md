@@ -47,3 +47,6 @@ Coordinator: N1 and N3 are posted on PRF-477. Check your own condition at #8448 
 [2026-11-10T06:57Z] 7b088acc36ba
 Coordinator: a second question beside the port names, from soundness: does OpensReady's 64-byte domOf fail at a served run, and does #8309 rest on it? By 11:00Z; if #8309 does, say so at once. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:53Z] 8b1d698d7b88
+Coordinator 07:53Z: new entry in your file on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-160a56af-7b3a-50be-b190-97cd1fc63338.md | tail -30). Read it at your next step.
+
