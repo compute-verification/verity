@@ -17,8 +17,10 @@ RANGES = {
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The index units at small statics (a first block and one from AT, the merge of one list and of three), and the long row
-    over three blocks of 4 keys, two reads of a 16-row table."""
+    """The index units at small statics (a first block and one from AT, the merge of one list and of three, chunks of two of
+    four slots and of five, a slot of four and of five), the long row over three blocks of 4 keys, two reads of a 16-row
+    table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the merge
+    and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.commitments.gates.embedding import read
     from verity.ml.definitions.registry import dsa_topk_reads as R
@@ -28,6 +30,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaMaskPositions_v1-at", lambda: bind(R.DsaMaskPositions, N=6, AT=8, K=4)),
         ("DsaPositionsMerge_v1", lambda: bind(R.DsaPositionsMerge, M=1, K=4)),
         ("DsaPositionsMerge_v1-blocks", lambda: bind(R.DsaPositionsMerge, M=3, K=4)),
+        ("DsaPositionsMerge_v1-served", lambda: bind(R.DsaPositionsMerge, M=8, K=2048)),
+        ("DsaPositionsChunk_v1", lambda: bind(R.DsaPositionsChunk, K=4, W=2)),
+        ("DsaPositionsChunk_v1-odd", lambda: bind(R.DsaPositionsChunk, K=5, W=2)),
+        ("DsaPositionsChunk_v1-served", lambda: bind(R.DsaPositionsChunk, K=2048, W=R.CHUNK)),
+        ("DsaPositionsSlot_v1", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
+        ("DsaPositionsSlot_v1-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
+        ("DsaPositionsSlot_v1-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
         ("DsaTopKReadRows_v1", lambda: bind(R.DsaTopKReadRows, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))),
     ]
 

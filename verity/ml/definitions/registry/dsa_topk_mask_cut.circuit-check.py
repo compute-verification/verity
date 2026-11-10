@@ -10,11 +10,17 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     and a last one of 6): the first block's count at round 0 (reaching `DsaRowValid_v1` and `DsaTopKDigitOneHot_v1{K=0}`) and
     the second's at rounds 1 and 3 (`DsaRowValidFrom_v1`, the prefix compare), each with `DsaTopKPopCount_v1`; the picks of
     rounds 0, 1 and 3 over both blocks' counts (TOPK a constant, then read, and the last round's key and r per block; at M = 2
-    each is under `targets.MAX_GATES`); each block's mask unit (reaching `DsaTopKKeyCompare_v1` and `DsaRadixTies_v1`)."""
+    each is under `targets.MAX_GATES`); each block's mask unit (reaching `DsaTopKKeyCompare_v1` and `DsaRadixTies_v1`).  And
+    the picks the cut serves, each round's over 8 blocks' counts at TOPK 2,048 (`plan(131072, 2048)`), over `MAX_GATES` and
+    each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk_mask_cut as X
 
     return [
+        ("DsaTopKDigitPick_v1-served-0", lambda: bind(X.DsaTopKDigitPick, M=8, K=0, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-1", lambda: bind(X.DsaTopKDigitPick, M=8, K=1, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-2", lambda: bind(X.DsaTopKDigitPick, M=8, K=2, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-3", lambda: bind(X.DsaTopKDigitPick, M=8, K=3, TOPK=2048)),
         ("DsaTopKDigitCount_v1", lambda: bind(X.DsaTopKDigitCount, N=8, AT=0, K=0)),
         ("DsaTopKDigitCount_v1-at", lambda: bind(X.DsaTopKDigitCount, N=6, AT=8, K=1)),
         ("DsaTopKDigitCount_v1-last", lambda: bind(X.DsaTopKDigitCount, N=6, AT=8, K=3)),

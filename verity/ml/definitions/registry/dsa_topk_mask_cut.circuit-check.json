@@ -60,5 +60,19 @@
    "and": 7,
    "type": "1b941b8a9843edefe008201b6ec850f8becf31cde0341c079b0b151db354045311fc33cafb014c5dc3a300643a04b335dabd7d873032f4bd2dd76147ad56d891"
   }
+ },
+ "digests": {
+  "DsaTopKDigitPick_v1{M=8,K=0,TOPK=2048}": {
+   "sha512": "62ee0156106ddd535e1b0dda2fafb75f63b8a2d23fbdc36928c2587c6f71bbec7c2d8933920d950547a12976266888ceab1f4c0c4f6daeb99339f33c72ceec2e"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=1,TOPK=2048}": {
+   "sha512": "265669875fd3af2df72166883aaa22ed6ba8954c6040eb96986f33b188cc9b59c36a8c525ad14d1cb9bffe50b205c9684bf512ca551d56a9e87f7d68cfb41a6b"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=2,TOPK=2048}": {
+   "sha512": "0f24d3e861945dea400d9c0464bac490f8ef80baeed2a01eaf537c9f82258fc37cf1663c3330de4ecd4c51bc78f60de93285be66646445cbeecfe1964de0874a"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=3,TOPK=2048}": {
+   "sha512": "da68b058203ff17541fe5f40a5f88d285874f26414227c4f1f8682ab977161ab4a0a5ec17952f495f83f5d72ce42ee839f17ca811d7d297fddd2b1643209776f"
+  }
  }
 }

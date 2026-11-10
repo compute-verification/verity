@@ -39,7 +39,7 @@ the Program's reference (``twin`` null).
 A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
 (``structural``, `verity_flock.read_tmpl`, so ``flock-read-tmpl`` is built first). Its inputs are honest reads of one table of
-V ranks whose first L hold drawn rows and every later one the zero row under the zero salt, as a history table pads to its
+V ranks whose first L hold filled rows and every later one the zero row under the zero salt, as a history table pads to its
 capacity; each read's row and verdict are held to the table's (``twin``). Beside the circuit it writes the template and its
 layout mode (``unit.tmpl``, ``unit.layout``), which ``flock-tmpl-unit`` places as the prover's ``--tmpl-unit`` rows.
 
@@ -73,6 +73,9 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     table-read  `READS`: EmbeddingRead_v1{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
+    dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
+                each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
+    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -100,7 +103,7 @@ from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
-from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity.ml.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
 from verity.ml.definitions.registry import boolean_fp8 as BF
 
 
@@ -166,11 +169,28 @@ def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
     return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
 
 
+def _dsa_index_rows(S: dict, n: int, rng: np.random.Generator):
+    """A merge's slots (positions below N, a tenth of them any u32, as a slot unit's bound sees them) and an index below the
+    unit's count, one word pair a port: a chunk's (slots, c) when S has W, a slot's (slots, j) else; the twin `dsa_topk_reads`'
+    `chunk` or `slot`."""
+    K, N, W = S["K"], S["N"], S.get("W")
+    slots = np.where(rng.random((n, K)) < 0.9, rng.integers(0, N, (n, K)), rng.integers(0, 1 << 32, (n, K))).astype(np.uint32)
+    idx = rng.integers(0, -(-K // W) if W else K, n).astype(np.uint32)
+    twin = [dsa_topk_reads.chunk(s.tolist(), int(i), W) if W else [dsa_topk_reads.slot(s.tolist(), int(i), N)]
+            for s, i in zip(slots, idx)]
+    return {"slots": np.stack([words(s) for s in slots]), "i": idx.view("<u2").reshape(n, 2)}, \
+        np.stack([words(np.array(t, np.uint32)) for t in twin])
+
+
 UNITS: dict[str, Unit] = {
     "fp8-coord": Unit(lambda S: bind(BF.ScaledMmFp8BlockCoordinateV2, K=S["K"], G=S["G"]),
                       (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_draw, {"K": 6144, "G": 128}),
     "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
                      (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_draw, {"K": 2048}),
+    "dsa-chunk": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsChunk, K=S["K"], W=S["W"]),
+                      (("slots", SEG, ("slots",)), ("i", SEG, ("c",))), _dsa_index_rows, {"K": 2048, "W": 32, "N": 1 << 17}),
+    "dsa-slot": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsSlot, K=S["K"], N=S["N"]),
+                     (("slots", SEG, ("slots",)), ("i", SEG, ("j",))), _dsa_index_rows, {"K": 32, "N": 1 << 17}),
 }
 
 
@@ -367,8 +387,8 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
 
 def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
     """``n`` honest reads of one table, a proof block each, on the verifier's read template, as stage.json's record. The
-    table has V ranks of H words: its first L rows drawn under drawn salts, every later rank the zero row under the zero salt
-    (the history table's placeholder), its tokens drawn below L; each read's row and verdict are held to the table's."""
+    table has V ranks of H words: its first L rows filled at random under random salts, every later rank the zero row under the
+    zero salt (the history table's placeholder), its tokens random below L; each read's row and verdict are held to the table's."""
     from verity.ml.commitments import row_table
     from verity.ml.commitments.gates import embedding as E
     from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -393,7 +413,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
              for t, p in ((t, tab.path(t)) for t in toks)]
     rows = {r: np.stack([np.packbits(np.array(E.arguments(V, *c)[g], np.uint8), bitorder="little").view("<u2") for c in cases])
             for g, (r, *_x) in enumerate(in_rows)}
-    t_draw = time.time() - t0
+    t_rows = time.time() - t0
     st = CS.UnitStager(fn, "unit/table-read", in_rows, out_rows, circuit=out / "circuit.txt", layout=READ_LAYOUT,
                        structural=True)
     t_built = time.time() - t0
@@ -414,7 +434,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
             "twin": {"agrees": True, "instances": n, "first": int(h[0, 0])},
-            "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
+            "seconds": {"rows": round(t_rows, 1), "built": round(t_built - t_rows, 1),
                         "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
             "maxrss_gb": gb()}
 
