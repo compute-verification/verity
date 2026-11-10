@@ -46,12 +46,12 @@ policy is not yet a subprotocol of the composites.
 
 ## The vLLM integration
 
-[`integrations/vllm`](integrations/vllm/README.md) attaches Verity to vLLM. It builds each served workload's circuit
+[`adapters/vllm`](adapters/vllm/README.md) attaches Verity to vLLM. It builds each served workload's circuit
 from vLLM's own code and the model's checkpoint, checks it against what vLLM served, and commits the values while
 serving through an OpenAI-compatible endpoint. Verity itself knows nothing of models: the integration hands it a
 circuit, its values and their commitments ([ARCHITECTURE.md](ARCHITECTURE.md), "Integrations").
 
-A workload of record ([`manifests/records.json`](integrations/vllm/manifests/records.json)) pins the circuit that vLLM's
+A workload of record ([`manifests/records.json`](adapters/vllm/manifests/records.json)) pins the circuit that vLLM's
 code gives for one model, precision, parallelism and batch shape, with every rank's circuit digests. Its record, which
 `verity-vllm records show WORKLOAD` prints, holds three results, and `verity-vllm records publish` refuses a record in
 which any of them failed:

@@ -43,9 +43,9 @@ UNITS = {
     "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
     "verity/core/protocols/pouw/tests/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
-    "integrations/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
+    "adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
-    "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
         "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
     "verity/ml/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",

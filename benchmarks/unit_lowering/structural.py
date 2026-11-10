@@ -43,7 +43,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-VLLM = ROOT / "integrations" / "vllm"
+VLLM = ROOT / "adapters" / "vllm"
 H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 #: the zero binding: a tile's, which has no leaf Program (the guard's pins are under it), or a lane's or combine's under
 #: ``--bind zero``, a file no verifier holds a Program and partition for

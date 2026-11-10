@@ -46,7 +46,7 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
-Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `integrations/vllm/`; this
+Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds what is the demo's own: its placement and its commands.
 
 ## The onsite protocol on the same run
@@ -69,7 +69,7 @@ doesn't control.
 
 ## Workload and placement
 
-- The workload: the integration's one (`integrations/vllm/workloads/`) that `placement.toml`'s `row` names, with its
+- The workload: the integration's one (`adapters/vllm/workloads/`) that `placement.toml`'s `row` names, with its
   requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
   fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the workload's Build of record,
   which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
@@ -98,5 +98,5 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
-The scripts reach the integration by `PYTHONPATH`, which holds the tree and `integrations/vllm`, and run
-`verity_vllm.pipeline.cli` and the integration's tools from `integrations/vllm/`.
+The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
+`verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.

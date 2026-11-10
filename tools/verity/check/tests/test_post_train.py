@@ -389,7 +389,7 @@ def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
         monkeypatch.setattr(PT.subprocess, "run", lambda argv, **_k: subprocess.CompletedProcess(argv, rc, out, ""))
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n")
     assert PT.untouched(ROOT, "HEAD^1")
-    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  integrations/vllm  not cached\n")
+    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  adapters/vllm  not cached\n")
     assert not PT.untouched(ROOT, "HEAD^1")
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n", rc=2)
     assert not PT.untouched(ROOT, "HEAD^1")

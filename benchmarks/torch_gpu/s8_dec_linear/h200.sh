@@ -24,7 +24,7 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 STEPS=${STEPS:-bench,scale,run}; SCALE_BATCHES=${SCALE_BATCHES:-1,1024,2048,4096,16384,65536}
 export O D PY S STEPS SCALE_BATCHES PATH=$CUDA/bin:$PATH TRITON_CACHE_DIR=$S/triton \
-  PYTHONPATH=$PWD:$PWD/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}
+  PYTHONPATH=$PWD:$PWD/adapters/vllm${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"

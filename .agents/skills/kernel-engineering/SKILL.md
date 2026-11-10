@@ -53,7 +53,7 @@ message, never an edit in their tree.
 - **The kernel:** a directory under `benchmarks/pouw/` like `pearl_c_sm120/` (`run.py` with `Dev` and `Pipeline`,
   `fixture.py`, `build.sh`, its sources, a harness arm against `arm.py`'s contract). Where serving kernels finally live is
   compute-accounting's call; the loader keys on digests, so a later move is cheap.
-- **The vLLM executor:** `integrations/vllm`.
+- **The vLLM executor:** `adapters/vllm`.
 - **Shared tables** (scheme names, hashing formats, schedules, step groups, kernel variants) are defined once, in
   `verity.core.protocols.pouw.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
 

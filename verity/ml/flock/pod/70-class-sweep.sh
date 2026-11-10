@@ -82,7 +82,7 @@ if [ -z "${PYBIN:-}" ]; then
   [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
   PYBIN=$W/py/bin/python3
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src
 # the challengers' Lean, where this pod serves sessions (not a staging run, nor a prover whose verifier is another pod's)
 if [ "$FLOCK_CHALLENGER" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ -z "${FC_VERIFIERS:-}" ]; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=$PYBIN CHALLENGER_WORK=$O/challenger-build

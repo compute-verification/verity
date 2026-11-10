@@ -25,10 +25,10 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed"
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/examples/vllm/workloads
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/examples/vllm/workloads
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-llama1b-commit}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
-if grep -q staged_sources "$TREE/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+if grep -q staged_sources "$TREE/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then
   export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
@@ -39,7 +39,7 @@ rs keep "$ROOT" --owner @vllm --expires 14d --priority high \
 row() {  # NAME ARGS...: one `verity-vllm row run` of the workload dir, its output in $OUT/NAME.out
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
-  (cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" "$@") \
+  (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" "$@") \
     > "$OUT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
