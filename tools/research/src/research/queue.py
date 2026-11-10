@@ -151,6 +151,12 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    agreement and every disagreement (parts missing in the executor and tasks
                                                    only it ran among them), and whether the newest 3 agree fully, none
                                                    incomplete: the gate for `executor = "on"` (`research.executor`)
+    research queue map-moves HEAD... [--jobs N] [--tip REF] [--out FILE]
+                                                   each old head's own change once it has crossed the moves REF (default
+                                                   origin/main) has and it lacks, as `tools/move/restack.py` carries it
+                                                   (`map_moves`), N heads at a time, as JSON by `mapped_key`: copied into
+                                                   `mapped-changes.d/` beside the verified queue's loop's cache, it spares the
+                                                   loop's threads the work, each head running every move's script on a whole tree
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -1396,7 +1402,7 @@ class StoreLabels:
     def ready(self, pr: int, head: str) -> bool:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
         given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue, at that head and at
-        a new one whose own change is the same (`_counted`), until the owner marks it again (an ejection kept in the ejecting
+        each new one that takes its labels (`_counted`), until the owner marks it again (an ejection kept in the ejecting
         VM's state would be lost to drive, which re-admits)."""
         labs = sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts)
         self._newest[(pr, head)] = labs[-1] if labs else None
