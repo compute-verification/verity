@@ -250,18 +250,20 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
-    from verity_vllm.engine import rope_cache
-    eng.rope_cache = rope_cache.install(model)
-    if eng.rope_cache is not None:
-        print(f"[engine] {rope_cache.ENV}: {json.dumps(eng.rope_cache)}", flush=True)
+    if model is not None:  # the fused rope patches the in-process model's layers; a tensor-parallel world's are in its ranks
+        from verity_vllm.engine import rope_cache
+        eng.rope_cache = rope_cache.install(model)
+        if eng.rope_cache is not None:
+            print(f"[engine] {rope_cache.ENV}: {json.dumps(eng.rope_cache)}", flush=True)
     from verity_vllm.engine import int8_credited_env
     eng.credited_read = int8_credited_env.install(eng, engine_env.int8_credited_read())
     if eng.credited_read is not None:
         print(f"[engine] {int8_credited_env.ENV}: {json.dumps(eng.credited_read)}", flush=True)
-    from verity_vllm.engine import int8_producers
-    eng.fused_producers = int8_producers.install(model)
-    if eng.fused_producers is not None:
-        print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
+    if model is not None:  # as the fused rope: the producers are patched on the in-process model's layers
+        from verity_vllm.engine import int8_producers
+        eng.fused_producers = int8_producers.install(model)
+        if eng.fused_producers is not None:
+            print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
     return eng
 
 
