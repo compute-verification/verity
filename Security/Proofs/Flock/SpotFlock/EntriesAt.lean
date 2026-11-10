@@ -205,7 +205,7 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
         | some ro =>
         simp only [hri, hf, hpop, hro, Bool.and_eq_true] at hm
         have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hri]
-        have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hri, hvl]
+        have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hri, ← hvl]
         rw [hRI, hRK]
         refine ⟨entryOf (0, k, b), ?_, hs hm.1⟩
         show recKeyAt own.boundary (.port v) = _
