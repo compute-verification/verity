@@ -82,14 +82,36 @@ def rust_inputs(files: list[str]) -> list[str]:
             or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
 
 
+class _Named(ast.NodeTransformer):
+    """A value with each name of a literal assigned before it as that literal."""
+
+    def __init__(self, known: dict[str, object]):
+        self.known = known
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        return ast.Constant(self.known[node.id]) if node.id in self.known else node
+
+
 def suites_literals(root: Path, files: list[str], *names: str) -> dict[str, object]:
-    """The module-level literals ``names`` as suites.py's source writes them, read without running it (those it lacks left out)."""
+    """The module-level literals ``names`` as suites.py's source writes them, read without running it (those it lacks left out),
+    a name of a literal assigned before one read as that literal."""
     out: dict[str, object] = {}
     if SUITES not in files:
         return out
+    known: dict[str, object] = {}
     for node in ast.parse((root / SUITES).read_text()).body:
-        if isinstance(node, ast.Assign) and (hit := [t.id for t in node.targets if isinstance(t, ast.Name) and t.id in names]):
-            out[hit[0]] = ast.literal_eval(node.value)
+        if not isinstance(node, ast.Assign) or not (targets := [t.id for t in node.targets if isinstance(t, ast.Name)]):
+            continue
+        hit = [t for t in targets if t in names]
+        try:
+            value = ast.literal_eval(_Named(known).visit(node.value))
+        except (ValueError, TypeError):
+            if hit:
+                raise
+            continue
+        known.update(dict.fromkeys(targets, value))
+        if hit:
+            out[hit[0]] = value
     return out
 
 
@@ -100,8 +122,8 @@ def after_lean(root: Path, files: list[str]) -> list[str]:
 
 def lean_suites(root: Path, files: list[str]) -> list[str]:
     """The suites the lean-suites tasks run, each by its name or path: `after_lean` where the tree has the verifier lean-build
-    builds (`executables`), none where it hasn't, as check runs them with the rest of the suites there.  The test-file family
-    lists none of their test files, so each runs once, after the build it needs."""
+    builds (`executables`), none where it hasn't, as check runs them with the rest of the suites there.  The suite and
+    test-file families list none of them, so each runs once, after the build it needs."""
     return after_lean(root, files) if executables(root, files) else []
 
 

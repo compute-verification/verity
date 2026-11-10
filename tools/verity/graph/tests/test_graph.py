@@ -255,6 +255,21 @@ def test_the_tables_are_checked(tmp_path):
         graph.listing(toy_tree(tmp_path / "c"), listers={**LISTERS, "gone": toy})
 
 
+def test_a_family_its_table_unlists_is_listed_only_when_named_or_read(tmp_path):
+    """`listed = false` keeps a family out of the listing made without `--family`: naming it lists it, and so does a listed
+    task that reads one of its tasks, as `--family` lists what its tasks read; `listed` is a boolean."""
+    root = toy_tree(tmp_path / "a", SPEC.replace("[family.toy]\n", "[family.toy]\nlisted = false\n"))
+    assert [t["id"] for t in graph.listing(root, listers=LISTERS)["tasks"]] == ["other:x"]
+    assert [t["id"] for t in graph.listing(root, {"toy"}, listers=LISTERS)["tasks"]] == ["toy-b:b", "toy:a"]
+
+    def reader(root, files):
+        return [{"id": "other:x", "inputs": ["lib/x.lean"], "vars": {"flavor": "plain"}, "reads": [{"task": "toy:a", "output": "o"}]}]
+    got = graph.listing(root, listers={**LISTERS, "other": reader})["tasks"]
+    assert [t["id"] for t in got] == ["other:x", "toy-b:b", "toy:a"]
+    with pytest.raises(graph.GraphError, match="`listed` is a bool"):
+        graph.spec(toy_tree(tmp_path / "b", SPEC.replace("[family.toy]\n", "[family.toy]\nlisted = 'no'\n")))
+
+
 def test_a_kind_needs_its_runner(tree):
     (tree / graph.RUNNERS / "toy_b.py").unlink()
     git(tree, "commit", "-qam", "no runner")
@@ -267,6 +282,7 @@ def test_the_real_tables_parse():
     from verity_graph import ROOT, families
 
     s = graph.spec(ROOT)
-    assert {"test-file", "lean-module", "lean-lock", "circuit-binding", "build"} <= set(s["family"])
+    assert {"suite", "lean-package", "test-file", "circuit-binding", "build"} <= set(s["family"])
+    assert [n for n, t in s["family"].items() if not t["listed"]] == ["test-file"], "the suite family runs its files"
     assert set(s["env"]) == {"py", "lean", "rust"}
     assert set(families.listers()) <= set(s["family"]), "every lister in families/ has its table"

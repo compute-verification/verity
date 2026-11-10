@@ -1,7 +1,8 @@
 # `verity graph`
 
-The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+The check as a graph of tasks that depends only on the commit: each suite, each Lake package's audit, each circuit-check
+binding and each of check's build steps a task. An executor runs any part of it with one result cache, one artifact store and
+one event stream; drive only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
@@ -17,7 +18,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
 ~~~
 
-`--family F` keeps family F's tasks and every task they read, transitively. Usage errors and a tree that makes no graph exit 2.
+`--family F` keeps family F's tasks and every task they read, transitively. A family whose table says `listed = false`
+(test-file, one task per test file, whose files the suite family runs) is listed only when `--family` names it or a listed task
+reads one of its tasks. Usage errors and a tree that makes no graph exit 2.
 
 ## Rules
 
@@ -38,11 +41,13 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
+| `verity_graph/families/suite.py`, `runners/suite.py` | the suite family (below); `runners/lean_suites.py` runs its suites with `suite.suites` |
+| `verity_graph/families/lean_package.py`, `runners/lean_package.py` | the lean-package family (below) |
 | `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
 | `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
-In a module's name a family's or kind's `-` is written `_`: family `test-file` is `families/test_file.py`, kind
+In a module's name a family's or kind's `-` is written `_`: family `lean-package` is `families/lean_package.py`, kind
 `circuit-binding` is `runners/circuit_binding.py`. Both registries find their modules themselves, so a new family adds its
 lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits nothing else.
 
@@ -52,12 +57,14 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 {"schema": "verity-graph/v2", "commit": "<sha>",
  "envs": {"py": {"spec": ["pyproject.toml", "uv.lock"], "digest": "sha512:<hex>"}, "lean": {...}, "rust": {...}},
  "files": {"<path>": "sha512:<hex>"},
- "tasks": [{"id": "lean-module:Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "kind": "lean-module",
-            "about": "compile and kernel-replay one module", "env": "lean", "argv": ["verity", "graph", "run", "<id>"],
-            "vars": {}, "inputs": ["Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "..."],
-            "reads": [{"task": "lean-module:...", "output": "olean"}],
-            "outputs": [{"name": "olean", "path": "out/AccTies.olean"}],
-            "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "priority": 251, "key": null}]}
+ "tasks": [{"id": "lean-suites:verity-flock:1/6", "kind": "lean-suites",
+            "about": "suites.py --lean-built on part 1 of 6 of verity-flock's test files (one in 6, by path)", "env": "py",
+            "argv": ["verity", "graph", "run", "<id>"],
+            "vars": {"suites": "verity-flock", "files": "1/6", "bin": "verity/core/service/flock/.lake/build/bin"},
+            "inputs": ["...", "verity/ml/flock/pyproject.toml", "..."],
+            "reads": [{"task": "lean-build:verity/core/service/flock", "output": "flock-firewall"}, "..."],
+            "outputs": [{"name": "report", "path": "suites-lean.json"}],
+            "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 60}, "timeout_s": 14400, "priority": 1, "key": null}]}
 ~~~
 
 - The same bytes on any machine for one commit: no timings, store reads, environment or machine state. `--json` prints
@@ -78,16 +85,16 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - `key` is set when the task reads no artifact; otherwise it is `null`, and the executor computes it once the reads' digests
   exist.
 - `priority` is how many reads the longest chain of them through the task makes, the tasks that wait on it one after another
-  and those it waits on so (`graph.priorities`): the Lean modules under a lock and the lock itself have the graph's highest,
-  and a task that reads nothing and that nothing reads has 0. Of the queued tasks of submissions it ranks alike, an executor
+  and those it waits on so (`graph.priorities`): lean-build and the tasks that read what it built, and the circuit catalog and
+  its bindings, rank above the rest, and a task that reads nothing and that nothing reads has 0. Of the queued tasks of submissions it ranks alike, an executor
   claims one of the highest `priority` first, ahead of any order of its own (`timeout_s`, ids), so a chain never waits behind
   the tasks off it. In a task's graph (`graph.task_graph`), which holds none of the tasks that read it, a priority counts the
   chains that graph holds.
 
 ### Packed
 
-Most of a listing's bytes are paths and ids it repeats: the test files of a suite share most of their thousands of inputs,
-and a Lean module reads the `olean` and `axioms` of each of the hundreds of modules its compile loads.
+Most of a listing's bytes are paths it repeats: each lean-suites task's inputs are the whole tree, and the suites, the Lake
+packages' audits and the circuit-check bindings share most of their thousands of inputs.
 `verity graph --json --packed` prints the listing as `verity-graph/v2-packed` (`graph.pack`), the same document but for
 each task's `inputs` and `reads`: its inputs are runs of indices into `files`' paths in order, and its reads, under each
 output name it reads, runs of indices into `tasks`. A run is two integers, how far past the previous run's end it starts
@@ -204,6 +211,32 @@ and for `check_build.sh` any failing exit whose log shows no refused patch and n
 lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
 the executor's check (`research.drive.SLIM_STEPS`).
 
+## The suite family
+
+`suite:SUITE` is `suites.py SUITE --json suites.json --logs ... --timeouts --jobs N --mem-gb G` (`runners/suite.py`), check's
+pytest step on one suite, for each suite `suites.discover` finds but the build family's lean-suites (`build.lean_suites`: in a
+tree with the Lean verifier, `suites.AFTER_LEAN`); `suite:SUITE:K/M` is part K of M of one that declares
+`[tool.verity.tests] parts`, by test id (`--files K/M`). Its vars are `suites`, the suite's name, and `suite`, its directory.
+Its inputs are what suites.py keys the suite on: its directory but the suites nested in it, its workspace dependencies'
+directories (or their `exports`) and its declared `inputs` (`test_file.whole`, as `suites.inputs_of` less `suites.dropped`),
+without their `*.md` unless the suite lists a `.md`; and `suites.RUNNER` and `suites.STORE_READS`, read from suites.py's
+source. A suite that declares `parallel` asks the family's slot, another one core and its `worker_gb` (`suites.TEST_PROCESS_GB`
+undeclared), at its `timeout_s`, else the family's. Its status is the lean-suites runner's: a fail names each failed suite with
+its failed tests (`detail.failed`), and a suite not run, a kill or a usage error is an error. A fail on nothing but its tests
+names them as a test file's result does too (`detail.failed_tests`, relative to `suite`).
+
+## The lean-package family
+
+`lean-package:PKG` is `tools/verity/lean/lean_audit.py --out WORK/lean-audit --package PKG` (`runners/lean_package.py`), check's
+lean-audit step on one shard's share, for each audited Lake package (`lean_audit.packages`), with lake through elan and the
+audit's cache and dependency store where check keeps them. It regenerates no record, as a shard's audit doesn't
+(`tools/verity/check/tasks.py`'s `REGENERATE`), so a lock that doesn't match its package fails it. Its inputs are
+`lean_audit.inputs`, read from the listed tree: the package's own files, those of the packages its manifest requires by path and
+of those its `proved_in` names with theirs, and the auditor's. A package under `Security`, or requiring one there by path, asks
+32 cores and 128 GB (`families/lean_package.py`'s `SECURITY`, tasks/v1's `LEAN_SLOT`), the rest the family's slot. Its output
+is the audit's `audit.json`; a fail names each package's failures (`detail.failures`), and a report missing, a kill, or failures
+that are all a dependency the audit couldn't fetch (`lean_audit.transient`) are an error.
+
 ## Writing a family
 
 A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
@@ -212,7 +245,8 @@ template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars
 input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
-whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.
+whole tree's invariants (`tests/test_invariants.py`) cover it once it lists. A table's `listed = false` keeps its family out
+of the listing `verity graph` makes without `--family`.
 
 A runner returns `{"status": "pass"|"fail"|"error", "detail": {...}, "undeclared_reads": [...]}` (the last two optional) and
 runs its commands through `runners.call(argv, work, cwd)`, which logs them and stops them at the task's timeout.
@@ -226,10 +260,7 @@ Each but 5 has a test: `test_invariants.py` on the whole tree (slow), `test_grap
 2. It opens nothing outside the tree but the interpreter's own files (an audit hook on `open`, `os.listdir`, `os.scandir`).
 3. Keys reproduce `tests/key_vectors.json`.
 4. No `owner` field.
-5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
-   its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
-   module). It is measured on an idle machine (`verity graph --json` and `ported_listing.py` under `getrusage`), not in a
-   suite: on a node at load 160 the same listing takes twice the CPU seconds it takes idle (72 against 36), so a suite run
-   beside other work fails it whatever the tree.
+5. It lists the whole graph in under 60 CPU seconds of one core. It is measured on an idle machine (`verity graph --json`
+   under `getrusage`), not in a suite, since a loaded machine's CPU seconds for one listing are not an idle one's.
 6. Errors never become results; a fail is never retried.
 7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.

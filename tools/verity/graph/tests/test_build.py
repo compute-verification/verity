@@ -19,7 +19,8 @@ import pytest
 
 from verity_graph import ROOT, contract, graph, runners
 from verity_graph.families import build
-from verity_graph.runners import flock_circuit_build, flock_rust_tests, lean_agreement, lean_build, lean_suites, lean_unit_cut
+from verity_graph.runners import (flock_circuit_build, flock_rust_tests, lean_agreement, lean_build, lean_suites, lean_unit_cut,
+                                  suite)
 
 spec = importlib.util.spec_from_file_location("graph_check", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
@@ -83,7 +84,7 @@ def test_lean_suites_is_check_s_lean_suites_step_a_suite_or_a_part_a_task(doc):
 
 
 def test_a_part_s_files_are_every_mth_by_path_whatever_this_machine_measured():
-    """The runner hands suites.py a timing record with none of a split suite's files (`lean_suites.TIMINGS`), so the partition
+    """The runner hands suites.py a timing record with none of a split suite's files (`suite.TIMINGS`), so the partition
     packs equal costs by path: part K holds files K, K+M, ..., the same on every machine, and the M parts hold each file once."""
     files = [f"s/tests/test_{c}.py" for c in "kjihgfedcba"]
     parts = CHECK.SUITES.partition(files, {}, 4)
@@ -104,7 +105,7 @@ def test_the_runners_run_what_check_runs():
     assert next(j for j in CHECK.JOBS if j.name == "flock-circuit-build").halts_on in flock_circuit_build.FAILS
     assert f'print(f"{lean_agreement.CANNOT} {{why}}"' in (ROOT / lean_agreement.CHECK).read_text()
     assert (ROOT / flock_circuit_build.SCRIPT).is_file() and (ROOT / lean_agreement.PIN).is_file()
-    assert f'print(f"\\n{lean_suites.WROTE} ' in (ROOT / lean_suites.SUITES).read_text()
+    assert f'print(f"\\n{suite.WROTE} ' in (ROOT / suite.SUITES).read_text()
 
 
 def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tmp_path, monkeypatch):
@@ -121,7 +122,7 @@ def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tm
         assert cwd == ROOT
         seen.append(argv)
         return 1
-    for m in (flock_rust_tests, lean_unit_cut, lean_suites):
+    for m in (flock_rust_tests, lean_unit_cut, suite):
         monkeypatch.setattr(m, "call", call)
     monkeypatch.setattr(lean_suites, "place", lambda task, work: None)          # no executable put in this tree
     rust = check["flock-rust-tests"]
@@ -143,11 +144,11 @@ def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tm
         (bash, c, mine), = seen
         seen.clear()
         assert [bash, c] == check["lean-suites"][:2] and mine.startswith(lean_build.ELAN)
-        part = ["--files", t["vars"]["files"], "--timings", str(out / lean_suites.TIMINGS)] if "files" in t["vars"] else []
+        part = ["--files", t["vars"]["files"], "--timings", str(out / suite.TIMINGS)] if "files" in t["vars"] else []
         assert shlex.split(mine.removeprefix(lean_build.ELAN)) == [
             *words[:2], t["vars"]["suites"], *words[2 + n:jobs], "--mem-gb", str(t["resources"]["mem_gb"]), *part], \
             "check's words to its --jobs on the task's suite; then the task's memory, where check gives its slot's share, and its part"
-    assert json.loads((out / lean_suites.TIMINGS).read_text()) == {"verity-flock": {}}
+    assert json.loads((out / suite.TIMINGS).read_text()) == {"verity-flock": {}}
 
 
 AUDIT = """
@@ -244,7 +245,7 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
         (root / p).parent.mkdir(parents=True, exist_ok=True)
         (root / p).write_text(text)
         (root / p).chmod(0o755)
-    for m in (lean_build, flock_circuit_build, lean_agreement, flock_rust_tests, lean_unit_cut, lean_suites):
+    for m in (lean_build, flock_circuit_build, lean_agreement, flock_rust_tests, lean_unit_cut, lean_suites, suite):
         monkeypatch.setattr(m, "ROOT", root)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))                        # no elan or cargo of the machine's
     monkeypatch.setenv("PATH", str(root / "bin"), prepend=os.pathsep)
@@ -440,7 +441,7 @@ def test_lean_suites(tmp_path, monkeypatch, how, status):
     in the tree (over another build's there); a suite that failed is named with its failed tests, and a suite the report lacks,
     one that failed on nothing its row names (a kill) and a usage error are no result.  A part's task runs `--files K/M` on a
     timing record that holds none of its suites' files, and its report's rows, of the suite's part, are the suite's."""
-    root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
+    root = _tree(tmp_path, monkeypatch, {suite.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
                                          **({"pkg/bin/flock-verify": "fv-old"} if how == "pass old" else {})})
     (tmp_path / "how").write_text(how.removesuffix(" old"))
     monkeypatch.setenv("HOW", str(tmp_path / "how"))

@@ -24,6 +24,8 @@ TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", 
                "key")
 CORE_FIELDS = ("priority", "key")
 FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resources": dict, "timeout_s": int}
+#: a table's fields it may leave out, each with its default
+FAMILY_OPTIONAL = {"listed": (bool, True)}
 RESOURCES = ("cores", "mem_gb", "disk_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
 LOG = "task.log"
@@ -93,8 +95,12 @@ def spec(root: Path) -> dict:
         for f, ty in FAMILY_FIELDS.items():
             if not isinstance(t.get(f), ty):
                 raise GraphError(f"{SPEC}: [family.{name}] needs `{f}` ({ty.__name__})")
-        if extra := set(t) - set(FAMILY_FIELDS):
-            raise GraphError(f"{SPEC}: [family.{name}] fields {', '.join(sorted(extra))}: it has {', '.join(FAMILY_FIELDS)}")
+        for f, (ty, default) in FAMILY_OPTIONAL.items():
+            if not isinstance(t.setdefault(f, default), ty):
+                raise GraphError(f"{SPEC}: [family.{name}]'s `{f}` is a {ty.__name__}")
+        if extra := set(t) - set(FAMILY_FIELDS) - set(FAMILY_OPTIONAL):
+            raise GraphError(f"{SPEC}: [family.{name}] fields {', '.join(sorted(extra))}: it has "
+                             f"{', '.join([*FAMILY_FIELDS, *FAMILY_OPTIONAL])}")
         if not t["kinds"] or t["env"] not in envs:
             raise GraphError(f"{SPEC}: [family.{name}] needs a kind and an env of [env.*]")
         _resources(f"[family.{name}]", t["resources"])
@@ -279,8 +285,9 @@ def _misread(t: dict, by: dict) -> None:
 
 
 def listing(root: Path, only: set[str] | None = None, listers: dict | None = None) -> dict:
-    """The graph/v2 document of the tree at ``root``: every family's tasks, or with ``only`` those families' and every task
-    they read, transitively.  ``listers`` ({family: tasks(root, files)}) defaults to `families.listers()`."""
+    """The graph/v2 document of the tree at ``root``: every family's tasks but those of a table with `listed = false`, or with
+    ``only`` those families' and every task they read, transitively.  ``listers`` ({family: tasks(root, files)}) defaults to
+    `families.listers()`."""
     root = Path(root)
     s = spec(root)
     fams = s["family"]
@@ -292,7 +299,7 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
     files = tracked(root)
     have = set(files)
     tasks: dict[str, dict] = {}
-    todo = sorted(fams if only is None else only)
+    todo = sorted(only if only is not None else (n for n, t in fams.items() if t["listed"]))
     listed: set[str] = set()
     while todo:
         name = todo.pop(0)
