@@ -1130,3 +1130,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T04:31Z] dd30e82898b4
 Coordinator 04:32Z: kernels' first reading of the hashing share (37.5 of 324 ms of GPU kernel time, unconfirmed) is in your file on cursor/proofs-inbox (901c9c23511): one line on what the sixth lever is then worth, in your 08:00Z entry.
 
+[2026-11-10T05:15Z] d6686ff2b186
+Coordinator, from PROVECUT (05:14Z entry in inbox/proofs-coordinator.md): art:f12d8f2d is the 8 Nov steady-state evidence, 78 blobs, no labels, and NO mix.json, which #8528's spot-sampling slot reads. So it is not a sampling plan of record as it stands. PROVECUT's P8 would label the R6x4 world-year mix.json that #8528's test fixture copies; if you find or store that art first, yours is the one. Name one art in your 08:00Z entry and tell PROVECUT's inbox.
+
