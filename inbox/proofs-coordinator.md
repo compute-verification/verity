@@ -29901,3 +29901,34 @@ proofs, Tue 10 Nov 9:32 AM PST (17:32Z), to infra. **We withdraw INF-677: releas
 - a MaskBlock at 93 GB (12 minutes, 11.1 GB);
 - a MaskPositions at 195 GB (19.5 minutes, 8.1 GB).
 So three at a time still fit a 755 GB node, and the 48 take about 8 hours and about 0.45 TB of disk [guess: the other 45 priced like those three].
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 17:36Z: the statement's setup at the fixed nets is one composition, `setup_x` (its units come from its header, and Flock's links check `HmLinks.check` never runs in this witness), building in `cadc`; a META leaf-scheme bug fixed
+
+1. **The verdicts.**
+   - `e2c3` at `7027dce9d3`: Inputs exit 0 in 950 s at the no-program statement, 17 theorems on the three axioms [run]. Partition failed: `canonFuel` was imported privately [run]. I fixed it at `7cbe60b062` and cancelled `e2c3` at about 17:22Z, because its Setup try could not pass with Partition broken.
+   - `4633` at `a167264432`: Partition exit 0 in 183 s, its 3 theorems (`program_hex`, `cpo_part`, `canon_part`) on the three axioms [run]. I cancelled it at 17:31Z after 9 min, superseded by item 2.
+   - Neither holds a slot now. `r20261110-173217-cadc` holds one `proofs` slot on cpu-12.
+2. **A correction to the statement [read].**
+   - META's leaf scheme (`lsM`) had `leafSchemeHm96`'s salt source, but `Tags.circuit` pins `leafSchemeHm96Os`. The setup needs META's leaf scheme and the pinned one to have one canonical text (`hc1`, `hc2`), so the statement as of `7c72` could never pass its setup.
+   - Fixed at `77899bd824`, key order kept for `parse_meta`. `7c72`'s walks don't read that literal, so its verdicts stand.
+3. **Step 3 is one composition [read; building in `cadc`].**
+   - `Texts.lean` discharges every text premise of `setup_stX`, because each value holds only integers (`IntJ`):
+     - `hc1` and `hc2`: META's and the pinned leaf scheme have one text (`ls_arr`);
+     - `hu1` and `hu2`: `units_arr`, with `classOfB_isEmpty` (the class is a SHA-512, so not empty);
+     - `hd`, `hd2`, `hid` and the hello.
+   - `SetupAt.lean` holds `setup_rX` (`Read.setup` under `setupTables_X`'s premises) and `setup_x (hn : FixedNetsBuild) (hr : r.Plain) : Read.setup (ins r).read = .ok (tabAt r)`. `setup_x` takes the nets' premises from `fixedNets_parse`, `sha_lines` and `hm_lines`, as Concrete's `Live.lean` does.
+4. **The clause** is in the docstrings of Bytes, Inputs, Setup and SetupAt (`606efe5986`): the statement's units come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness.
+   - [read] With no program, `HmOut.checkPublic`'s finding match takes its last branch, and META has no `links` key, so neither `deriveTemplateUnits` nor `HmLinks.check` runs.
+   - Bytes' old line said "the partition's units", which was wrong; that line is now the clause.
+5. **The axiom probe's friction note** is in my lane note (`lanes/proofs/20261109T2105Z-checkpoint-twowitness.md`). The tool is unchanged.
+6. **The run.** `r20261110-173217-cadc` on cpu-12 at `84d0ac371c` tries Texts, Setup and SetupAt. The docstring commit after it changes no proof. ETA about 20:00Z [guess]: File rebuilds (47 min), then Setup's walks, then Sizes and Inputs as SetupAt's dependencies.
+7. **Head** `606efe5986` on `cursor/proofs-twowitness-0d28`, pushed. Nothing marked or landed.
+8. **What (A) still needs, in order:**
+   1. `cadc`'s verdicts: Texts' kernel proofs, Setup's three walks, `setup_x`.
+   2. Step 4: the walk of `Ins.setup` at `ins r`, as Concrete's `setup_W`. It covers `checkRegistered`, `noIdentifier`, `Registered.checkFull`, `RecSetup.checks` with the partition, `Zk.shapeOk` (Δ through `oA` and `oB`), `RecCoins.check`, `RecVStar.checkPubRows` and `ProvedScope.drawLaw`. With `setupOf_some` it gives `setupOf true (x r) = some (tabAt r)`, and from it C's facts: the header, the draw and the registered read-back, and `Stmt.checked`.
+   3. `zkOk (x r)`, `templateOk` (a `Desc.parseStmt` walk), and the Ref's `scope`.
+   4. A records run and `--siblings`.
+   - Dates unchanged: (A) Wed 11 Nov 18:00Z, (D) Fri 13 Nov 12:00Z. On track if Step 4's walk takes at most two node iterations [guess].
+9. **For PRF-460, ready to paste:**
+
+   > PRF-460 TWOWITNESS 17:36Z: the statement's setup at the fixed nets is now one composition, `setup_x` (its units come from its header, and Flock's links check `HmLinks.check` never runs in this witness). It is building in `r20261110-173217-cadc`, ETA about 20:00Z. A statement bug is fixed: META's leaf scheme is now the one `Tags.circuit` pins. Next: the `Ins.setup` walk, then `zkOk`, `templateOk` and the scope check. Dates unchanged: (A) Wed 11 Nov 18:00Z, (D) Fri 13 Nov 12:00Z.
