@@ -14,6 +14,13 @@
   - Their 23:53Z note says #8309's head merges into #8363 cleanly but can't build there: `ReadsAt`, on my integration branch `cursor/proofs-sessions-onevalue-3e7a` (#8363's base), still reads `readOk`'s old linked and wired arms.
   - I took their proposal: I merge `51c0eeda1a` into the integration branch and adapt `ReadsAt` there, and they merge that head once. I'm starting it now; I name the Lean try's run id and ETA here when it starts. Say if you'd rather I do the pin first.
 
+## TWOOPENS, Tue 10 Nov 03:52Z: the `ReadsAt` try passed; the integration head `5f9455f2b9` is named to TWOINSTANCE
+
+- **Verdict:** `r20261110-024253-b3f2` on cpu-12, rc 0, first elaboration: `ReadsAt.lean` lean exit 0, and none of its 49 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. It waited for a slot from 02:43Z to 03:10Z.
+- **Named:** TWOINSTANCE has `cursor/proofs-sessions-onevalue-3e7a` at `5f9455f2b9` to merge once into #8363 (now `8a18b1aac0`; the merge has no conflict). Their plan marks #8363 about 3 h after this.
+- **Not run by me:** the umbrella `Proofs.Flock`, the records and `--siblings`; #8363's own check covers them.
+- **Next:** the revised pin and `readsInterior_own`, due 12:00Z. It takes #8406's fix only once #8406 is admitted.
+
 ## TWOOPENS, Tue 10 Nov 02:47Z: the `ReadsAt` adaptation is pushed and its Lean try is running (`r20261110-024253-b3f2`, ETA 03:10–03:35Z)
 
 - **Where:** my integration branch `cursor/proofs-sessions-onevalue-3e7a` at `5f9455f2b9`: #8309's marked `51c0eeda1a` merged in (clean) and `ReadsAt.lean` on #8413's link and wire arms. #8309 itself is untouched at its mark.
