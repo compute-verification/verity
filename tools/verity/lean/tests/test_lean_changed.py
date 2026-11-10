@@ -926,10 +926,9 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
     (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
     (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
     (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
-    olean = tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB / "Proofs" / "Y.olean"
-    olean.parent.mkdir(parents=True)
-    olean.write_bytes(b"olean")
+    olean = module(tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB, "Proofs/Y").with_suffix(".olean")
     os.utime(olean, (2_000_000_000.0,) * 2)
+    os.utime(olean.with_name("Y.olean.hash"), (2_000_000_000.0,) * 2)
     ran = []
 
     def run(argv, cwd):
@@ -950,6 +949,44 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
         "no check without --siblings"
     with pytest.raises(SystemExit):
         LC.main(["--records", "Sec", "--siblings"])
+
+
+def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_built_before_it(trying, tmp_path, monkeypatch):
+    """INF-667 on a slot tree. `Sec/Proofs` requires `Sec` by path; every module was built, then a sync brought a move of
+    names in `Sec` that rewrote `Defs/Rows.lean`, and no build since has needed `Proofs.Y`, whose source didn't change.
+    Its product loads `Defs.Rows` as it was before the move, so the stub leaves it out, the try passes, and its line
+    counts what it left unchecked. A clash the stub does report still fails the try."""
+    tree, calls = trying
+    sec, proofs, then = tree / "Sec", tree / "Sec" / "Proofs", 1_000_000_000.0
+    (proofs / "Flock").mkdir(parents=True)
+    (sec / "Defs").mkdir()
+    (proofs / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+    (sec / "lakefile.toml").write_text('name = "s"\n\n[[lean_lib]]\nname = "Defs"\n')
+    for rel, text in {"Proofs/Flock/X.lean": "module\n", "Proofs/Y.lean": "module\npublic import Defs.Rows\n",
+                      "Proofs/Z.lean": "module\n", "Defs/Rows.lean": "module\n"}.items():
+        (sec / rel).write_text(text)
+        os.utime(sec / rel, (then,) * 2)
+    for lib, name in ((proofs / LC.SIBLINGS.LIB, "Proofs/Y"), (proofs / LC.SIBLINGS.LIB, "Proofs/Z"), (sec / LC.SIBLINGS.LIB, "Defs/Rows")):
+        os.utime(module(lib, name).with_suffix(".olean"), (then + 100,) * 2)
+    os.utime(sec / "Defs" / "Rows.lean", (then + 200,) * 2)
+    stubs, clash = [], []
+
+    def run(argv, cwd):
+        stubs.append(Path(argv[-1]).read_text())
+        return (1, clash[0], 2.0, 700) if clash else (0, "", 2.0, 700)
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
+    assert stubs == ["module\n\npublic import Proofs.Flock.X\npublic import Proofs.Z\n"], "Proofs.Y is not imported"
+    assert any("declares a name it does (1 imported in 2 s, peak 700 MB); 1 unchecked, not built since their sources or "
+               "imports changed, in their package or one it requires: Proofs.Y" in s for s in said), said
+    assert (proofs / LC.SIBLINGS.LIB / "Proofs" / "Y.olean").is_file(), "its product stays for Lake to rebuild or replay"
+    clash.append("error: import Proofs.Z failed, environment already contains 'f' from Proofs.Flock.X\n")
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
+    assert any("siblings: Proofs.Flock.X and Proofs.Z both declare 'f'" in s and "; 1 unchecked" in s for s in said), said
 
 
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):

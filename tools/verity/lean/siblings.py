@@ -10,9 +10,25 @@ duplicate name as it imports, before it elaborates anything, and its refusal nam
 The stub reads FILE's build through a `--setup` file (its `importArts`, as Lake hands a module its imports) and the rest
 from LEAN_PATH. It is a `module` with `public import`s, as a package root is, when FILE and every sibling are modules,
 else a plain file. A package's modules are its `[[lean_lib]]`s' files (the library's name or under it) and its
-`[[lean_exe]]`s' roots, under its `srcDir` (`modules.package_modules`); a module counts as built when its `.olean` is
-newer than its source and than the sources of the package's modules it imports, directly or through others (an import
-from another package is taken as built). One that isn't is listed as unchecked.
+`[[lean_exe]]`s' roots, under its `srcDir` (`modules.package_modules`).
+
+A sibling the stub imports is built: Lean loads its `.olean` and, through the imports that file names, the `.olean` of
+every module it was built against, whatever the sources say now. A tree keeps the products of every branch built there,
+and Lake rebuilds only what a target imports, so a product can be older than its source (names moved out of a module
+nothing imports since), or have no source at all (`lean_changed.sync` unlinks a source and leaves `.lake`, since Lake
+replays the product when a branch brings the source back). The stub must load neither: beside the module the names moved
+into, the old product declares them a second time, a clash that is in no source. So a module counts as built (`plan`)
+only when it has its `.olean` and the trace Lake takes it as built by, that `.olean` is at least as new as its own
+source and the source of every module it imports, directly or through others, in its package or in any package its
+package requires by path (`workspace`), each of those has its `.olean` and trace too, and none of them is a name that
+some package of the workspace holds a product of with no source. One that isn't is listed as unchecked, with the count.
+Modification times carry this because whatever changes a source in a tree writes it then (`sync` rewrites only the
+files whose content differs, git a checkout's), after every product the tree held: a product at least as new as every
+source it was built from was built from them as they are, and so, when it was built, was each module it loads. They err
+only towards unchecked: a source written back as it was built from, or an import whose change Lake found no reason to
+rebuild its importers for, leaves a build that is current unchecked until Lake next rebuilds it. A module of a fetched
+dependency (`.lake/packages`) is taken as built: its sources change only with the manifest, and its products with
+them.
 
 It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
@@ -61,7 +77,8 @@ class Plan(NamedTuple):
     is_module: bool
     #: the built modules of the package that don't import FILE, other executables' roots aside
     siblings: list[str]
-    #: the package's other modules that don't import FILE, not built or built before a change, other executables' roots aside
+    #: the package's other modules that don't import FILE, each not built, built before a source it imports changed (in
+    #: any package of the workspace), or importing a product with no trace or no source; other executables' roots aside
     unchecked: list[str]
 
 
@@ -125,18 +142,73 @@ def _header(f: Path):
     return H.header(f.read_text(errors="replace"))
 
 
+def workspace(pkg: Path) -> list[Path]:
+    """``pkg`` and then each package it requires by path, as its `lake-manifest.json` lists them (Lake's flat list, the
+    ones its requirements require among them): the packages whose modules one of ``pkg``'s can import, the fetched
+    dependencies aside. A package with no manifest, or one that can't be read, requires none."""
+    out = [pkg.resolve()]
+    try:
+        listed = json.loads((pkg / "lake-manifest.json").read_text()).get("packages")
+    except (OSError, ValueError, AttributeError):
+        return out
+    for d in listed if isinstance(listed, list) else []:
+        if isinstance(d, dict) and d.get("type") == "path" and isinstance(d.get("dir"), str) \
+                and (q := (pkg / d["dir"]).resolve()) not in out and q.is_dir():
+            out.append(q)
+    return out
+
+
+def products(lib: Path) -> dict[str, bool]:
+    """{module: whether its trace is beside it} for each `.olean` under ``lib`` (a package's `LIB`). Lake rebuilds a module
+    that has no trace, which `lean_changed.py`'s `repair` and `clashed` drop to have one rebuilt; its `.olean` stays until
+    then."""
+    out = {}
+    for d, _, names in os.walk(lib):
+        have, at = set(names), Path(d).relative_to(lib)
+        for stem in (n.removesuffix(".olean") for n in names if n.endswith(".olean")):
+            out[(at / stem).as_posix().replace("/", ".")] = f"{stem}.trace" in have
+    return out
+
+
+#: the time of a source no build is at least as new as: what stands for a module whose build must not be loaded
+NEVER = float("inf")
+
+
 def plan(pkg: Path, rel: str) -> Plan | str:
-    """What the stub imports for FILE (``rel``, from ``pkg``), or why there is no check."""
-    mods = modules(pkg)
+    """What the stub imports for FILE (``rel``, from ``pkg``), or why there is no check. A sibling is built, and so
+    imported, only when no `.olean` it loads is older than its source or has none (the module's docstring); the others
+    are unchecked."""
+    mods, root = modules(pkg), pkg.resolve()
     path = (pkg / rel).resolve()
     if (mod := next((m for m, f in mods.items() if f == path), None)) is None:
         return (f"{rel} is not a module of its package's libraries or executables" if source_dir(pkg) else
                 "its package has no lakefile.toml to read its libraries from")
-    headers = {m: _header(f) for m, f in mods.items()}
-    imports = {m: [i.module for i in h.imports if i.module in mods] if h else [] for m, h in headers.items()}
+    #: {module: (its source, its package's `LIB`)} over the workspace: each package's modules, and whatever else it holds
+    #: both a product and a source of; FILE's package's first where two packages hold one name
+    at: dict[str, tuple[Path, Path]] = {}
+    #: the modules some package of the workspace holds a product of and no source for
+    lost: set[str] = set()
+    have: dict[Path, dict[str, bool]] = {}
+    for q in workspace(pkg):
+        lib, src, listed = q / LIB, (source_dir(q) or (q, None))[0], mods if q == root else modules(q)
+        have[lib] = products(lib)
+        for m, f in listed.items():
+            at.setdefault(m, (f, lib))
+        for m in have[lib].keys() - listed.keys():
+            if (f := src.joinpath(*m.split(".")).with_suffix(".lean")).is_file():
+                at.setdefault(m, (f, lib))
+            else:
+                lost.add(m)
+    headers: dict[str, object] = {}
+
+    def imports(m: str) -> list[str]:
+        if m not in headers:
+            headers[m] = _header(at[m][0])
+        return [i.module for i in headers[m].imports] if headers[m] else []
+
     importers: dict[str, list[str]] = {}
-    for m, ims in imports.items():
-        for i in ims:
+    for m in mods:
+        for i in imports(m):
             importers.setdefault(i, []).append(m)
     above, todo = {mod}, [mod]
     while todo:
@@ -146,17 +218,33 @@ def plan(pkg: Path, rel: str) -> Plan | str:
                 todo.append(m)
     newest: dict[str, float] = {}
 
+    def own(m: str) -> float:
+        """When ``m``'s source was written; `NEVER` when its build must not be loaded: it has no `.olean` or no trace, or
+        some package holds a product of its name with no source, which Lean could load in its place."""
+        f, lib = at[m]
+        return f.stat().st_mtime if have[lib].get(m) and m not in lost else NEVER
+
     def latest(m: str) -> float:
-        if m not in newest:
-            newest[m] = 0.0
-            newest[m] = max([mods[m].stat().st_mtime, *(latest(i) for i in imports[m])])
+        """The newest of the sources a build of ``m`` loads the products of: its own (`own`) and that of each module of
+        the workspace it imports, directly or through others; `NEVER` when an import names a product with no source.
+        Each module once, on a stack of its own: an import chain is longer than Python recurses."""
+        stack, path = [] if m in newest else [(m, iter(imports(m)))], {m}
+        while stack:
+            top, rest = stack[-1]
+            if (i := next((i for i in rest if i in at and i not in newest and i not in path), None)) is not None:
+                stack.append((i, iter(imports(i))))
+                path.add(i)
+                continue
+            newest[top] = max([own(top), *(newest.get(i, 0.0) if i in at else NEVER if i in lost else 0.0
+                                           for i in imports(top))])
+            path.discard(top)
+            stack.pop()
         return newest[m]
 
     built, unchecked = [], []
-    lib = pkg / LIB
     for m in sorted(set(mods) - above - (executables(pkg) - {mod})):
-        olean = lib.joinpath(*m.split(".")).with_suffix(".olean")
-        (built if olean.is_file() and olean.stat().st_mtime >= latest(m) else unchecked).append(m)
+        olean = at[m][1].joinpath(*m.split(".")).with_suffix(".olean")
+        (built if latest(m) < NEVER and olean.stat().st_mtime >= newest[m] else unchecked).append(m)
     return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked)
 
 
@@ -217,7 +305,8 @@ def _listed(names: list[str]) -> str:
 def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tuple[int, str]:
     """(the try's status, the check's line) from the stub's ``rc`` and ``output``."""
     cost = f"{len(p.siblings)} imported in {seconds:.0f} s, peak {peak_mb} MB"
-    left = f"; unchecked, not built since their sources or imports changed: {_listed(p.unchecked)}" if p.unchecked else ""
+    left = (f"; {len(p.unchecked)} unchecked, not built since their sources or imports changed, in their package or one "
+            f"it requires: {_listed(p.unchecked)}") if p.unchecked else ""
     if rc == 0:
         return 0, f"siblings: no built module of its package that doesn't import {p.module} declares a name it does ({cost}){left}"
     if m := CLASH.search(output):
@@ -227,8 +316,9 @@ def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tupl
             return 1, (f"siblings: {p.module} and {other} both declare '{name}', which Lean refuses when it imports both, "
                        f"as the package's root does: rename one ({cost}){left}")
         return 1, (f"siblings: {refused} and {earlier} both declare '{name}', neither of them {p.module}: a clash already "
-                   f"in the package, or a build of one older than an import from another package (`lake build +{refused} "
-                   f"+{earlier}` and try again); {p.module}'s own names are unchecked ({cost}){left}")
+                   f"in the sources, since every build the stub loaded is at least as new as the sources it was built "
+                   f"from, so a root that imports both refuses them too: rename one; {p.module}'s own names are "
+                   f"unchecked ({cost}){left}")
     return rc or 1, f"siblings: the stub that imports {p.module} beside them failed (its output above) ({cost}){left}"
 
 

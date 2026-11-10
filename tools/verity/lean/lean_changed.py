@@ -17,7 +17,9 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
 `sorryAx` among them, or says none do), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
-status it takes); when that status is an import clash (an
+status it takes: its stub imports no module whose build, or the build of anything it imports in any package of the
+closure, is older than its source or has none, as a tree synced across a move of names holds, and counts those it
+left out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
@@ -235,7 +237,11 @@ def requirers(pkg: str, pkgs: list[str]) -> list[str]:
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
-    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written."""
+    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
+    A file whose content is the checkout's is left as it is, so a source's modification time is when its content last
+    changed here, which `siblings.plan` compares a build with. The product of a source it unlinks, or rewrites, stays: a
+    tree serves several branches, Lake replays the product when a branch brings that source back, and neither Lake nor a
+    sibling check's stub loads one older than its source or without one (`siblings.py`)."""
     tracked, n = set(files), 0
     for p in pkgs:
         for d, dirs, names in os.walk(tree / p):
