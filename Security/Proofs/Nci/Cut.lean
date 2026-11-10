@@ -47,19 +47,18 @@ share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, 
 `HE` and `HEShared` put those bounds on `Π(k)`, and `b ≤ b_y` from (E) (`le_bY`, `alpha_le_of_exports`), into
 `Bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
 
-**Over a set of blocks.** `counts_on` is steps 1 to 4 with the cap on a set `G` of blocks only, each block of `G` under
-its own, and the entries of all the blocks together at most a total `T`. The split MACs and the leaving gates are
-entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block
-(`card_held_sq_le`), so they need the cap on `G` alone and count only the pairs of a block of `G` and an output with a
-wire in it (`outOn`). An output with wires in two blocks of `G` counts once for each: nothing here bounds `N` with the
+**Over a set of blocks.** `counts_on` is steps 1 to 4 with the fresh-input budget on a set `G` of blocks only, each
+block of `G` under its own, and the entries of all the blocks together at most a total `T`. The split MACs and the
+leaving gates are entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block
+(`card_held_sq_le`), so they need the budget on `G` alone and count only the pairs of a block of `G` and an output with
+a wire in it (`outOn`). An output with wires in two blocks of `G` counts once for each: nothing here bounds `N` with the
 distinct outputs in the pairs' place. The pairs are at most the output wires in the blocks of `G` (`wiresOn`),
-themselves at most `O` (`outOn_le_wiresOn`, `wiresOn_le`). The MACs a block outside `G` holds are counted apart, at
-most its gates (`sum_card_inBlock_le`), and `T` is over every block, those outside `G` too.
-Those are the MACs each of whose gates is in the block (`card_whole_eq`). `counts` is `counts_on` at every block.
-`bound_on_caps` is step 5 on those counts, with `S = ∑ Π(κ u)` over `G` for `m Π(k)` (`real_step_on`). Under (H) at
-each block's own cap and its own `β_x`, and (E), `bound_on_rows` puts `κ u² / (4 β_w β_x u)` for each `Π(κ u)`;
-`bound_on_caps_he` is it at one `β_x`, and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one
-cap.
+themselves at most `O` (`outOn_le_wiresOn`, `wiresOn_le`). The MACs a block outside `G` holds are counted apart, at most
+its gates (`sum_card_inBlock_le`), and `T` is over every block, those outside `G` too. Those are the MACs each of whose
+gates is in the block (`card_whole_eq`). `counts` is `counts_on` at every block. `bound_on_budgets` is step 5 on those
+counts, with `S = ∑ Π(κ u)` over `G` for `m Π(k)` (`real_step_on`). Under (H) at each block's own budget and its own
+`β_x`, and (E), `bound_on_rows` puts `κ u² / (4 β_w β_x u)` for each `Π(κ u)`; `bound_on_budgets_he` is it at one `β_x`,
+and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one budget.
 -/
 
 @[expose] public section
@@ -454,7 +453,7 @@ theorem bY_nonneg {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) : 0 
 and all the blocks together at most `T`. `V` counts the MACs a block of `G` holds, `F` the pairs of a block of `G` and
 an output it feeds, and `E` the pairs of a block of `G` and an output in its `E(block)`. A split MAC and a gate leaving
 a block are entries of the block reading them, in `G` or not, so both are counted against `T`; the MACs a block outside
-`G` holds are counted apart, with no cap on what it reads. -/
+`G` holds are counted apart, with no budget on what it reads. -/
 theorem counts_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (κ : Fin m → ℕ)
     (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
@@ -498,7 +497,7 @@ theorem counts_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircu
       exact h ⟨P.gates u, mem_filter.2 ⟨mem_univ _, P.gates_subset_computed u, card_pos.1 (Nat.pos_of_ne_zero hu)⟩⟩
 
 /-- Steps 1 to 4, as counts: `V` unsplit MACs, `F` pairs of a block and an output it feeds, and `E` pairs of a block
-and an output in its `E(block)`. `counts_on` at every block, each under the one cap `k`, `m k` entries in all. -/
+and an output in its `E(block)`. `counts_on` at every block, each under the one budget `k`, `m k` entries in all. -/
 theorem counts {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {k : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (hk : ReadsAtMost d P k) :
     ∃ V F E : ℕ, W.N ≤ m * k + V ∧ V ^ 2 ≤ m * piMax d W k * F ∧ F ≤ W.O + E ∧ W.bY * E ≤ m * k ∧
@@ -517,7 +516,7 @@ theorem sqrt_add_le {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) : √(a + b) ≤ �
   rw [Real.sqrt_le_left (add_nonneg (Real.sqrt_nonneg a) (Real.sqrt_nonneg b))]
   nlinarith [Real.sq_sqrt ha, Real.sq_sqrt hb, mul_nonneg (Real.sqrt_nonneg a) (Real.sqrt_nonneg b)]
 
-/-- **Step 5.** The counts give the bound: `g` blocks under the cap, `T` entries in all. -/
+/-- **Step 5.** The counts give the bound: `g` blocks under the budget, `T` entries in all. -/
 theorem real_step_on {N V g T P O E b : ℝ} (hg : 0 ≤ g) (hP : 0 ≤ P) (hO : 0 ≤ O) (hE : 0 ≤ E) (hN : N ≤ T + V)
     (hV : V ^ 2 ≤ g * P * (O + E)) (hbE : b * E ≤ T) (hb : E = 0 ∨ 0 < b) :
     N ≤ T + √(P * g * O) + √(P * g * (T / b)) := by
@@ -537,7 +536,7 @@ theorem real_step_on {N V g T P O E b : ℝ} (hg : 0 ≤ g) (hP : 0 ≤ P) (hO :
   have h3 : √(g * P * O) = √(P * g * O) := by rw [mul_comm g P]
   linarith
 
-/-- **Step 5** at every block: `m` blocks under the cap `k`, `m k` entries in all. -/
+/-- **Step 5** at every block: `m` blocks under the budget `k`, `m k` entries in all. -/
 theorem real_step {N V m k P O E b : ℝ} (hm : 0 ≤ m) (hP : 0 ≤ P) (hO : 0 ≤ O) (hE : 0 ≤ E)
     (hN : N ≤ m * k + V) (hV : V ^ 2 ≤ m * P * (O + E)) (hbE : b * E ≤ m * k) (hb : E = 0 ∨ 0 < b) :
     N ≤ m * (k + √(k * P / b)) + √(P * m * O) := by
@@ -556,11 +555,11 @@ theorem Bound : Guarantees.Bound := by
   unfold alpha
   exact real_step (Nat.cast_nonneg m) (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg E) hN' hV' hbE hE'
 
-/-- **The bound over a set of blocks, each under its own cap.** Block `u` of `G` reads at most `κ u` gates outside `θ`
-and all the blocks together, those outside `G` too, at most `T`. With `S = ∑_{u ∈ G} Π(κ u)`: `N` is at most the MACs
-the blocks outside `G` hold, plus `T + √(S O_G) + √(S T / b_y)`, with `O_G` the pairs of a block of `G` and an output
-with a wire in it (`outOn`), at most `O`. -/
-theorem bound_on_caps {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {T : ℕ} (W : Work d.D ι)
+/-- **The bound over a set of blocks, each under its own budget.** Block `u` of `G` reads at most `κ u` gates outside
+`θ` and all the blocks together, those outside `G` too, at most `T`. With `S = ∑_{u ∈ G} Π(κ u)`: `N` is at most the
+MACs the blocks outside `G` hold, plus `T + √(S O_G) + √(S T / b_y)`, with `O_G` the pairs of a block of `G` and an
+output with a wire in it (`outOn`), at most `O`. -/
+theorem bound_on_budgets {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (κ : Fin m → ℕ)
     (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
     (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
@@ -592,7 +591,7 @@ theorem bound_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircui
       √(piMax d W k * G.card * (T / W.bY)) := by
   have h : (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T +
       √((∑ _u ∈ G, piMax d W k : ℕ) * outOn P W G) + √((∑ _u ∈ G, piMax d W k : ℕ) * (T / W.bY)) :=
-    bound_on_caps W P G (fun _ => k) hk hT
+    bound_on_budgets W P G (fun _ => k) hk hT
   have hs : ((∑ _u ∈ G, piMax d W k : ℕ) : ℝ) = piMax d W k * G.card := by
     rw [sum_const, smul_eq_mul, Nat.cast_mul]
     exact mul_comm _ _
@@ -928,8 +927,8 @@ theorem HE : Guarantees.HE := by
     sqrt_scaled hk2] at hs
   exact ⟨hN, hs⟩
 
-/-- `CountHE` is `HE` at the verdict's partition into `B ≤ n` blocks, whose read cap is `IsCK.reads`; both bounds grow
-with the number of blocks. -/
+/-- `CountHE` is `HE` at the verdict's partition into `B ≤ n` blocks, whose fresh-input budget is `IsCK.reads`; both
+bounds grow with the number of blocks. -/
 theorem CountHE : Guarantees.CountHE := by
   intro ι V _ _ _ d W val c k n βw βx b hw hx hb hval hshare hH hE hcomp
   obtain ⟨B, hBn, P, hP⟩ := hcomp
@@ -972,7 +971,7 @@ theorem HEShared : Guarantees.HEShared := by
     2 * (1 - 1 / ω) * ((k / 2) ^ 2 * (W.O * W.N / q)) by ring, Real.sqrt_mul hF, sqrt_scaled hk2, ← shareF] at hs
   exact ⟨hN, hs⟩
 
-/-- **The bound over a set of blocks, under (H) and (E).** `HE`'s premises on the values, with (H) at the cap `k` of
+/-- **The bound over a set of blocks, under (H) and (E).** `HE`'s premises on the values, with (H) at the budget `k` of
 the blocks of `G` and (E) at `b > 0`; all the blocks together read at most `T` gates outside `θ`. `N` is at most the
 MACs the blocks outside `G` hold, plus `T + (k/2) √(|G| O_G / (β_w β_x)) + (k/2) √(|G| T / (β_w β_x b))`, with `O_G`
 the pairs of a block of `G` and an output with a wire in it (`outOn`), at most `O`. At every block and `T = m k` it
@@ -1004,12 +1003,12 @@ theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] 
       _ = (k / 2) ^ 2 * (G.card * T / (βw * βx * b)) := by ring
   linarith [bound_on W P G hk hT]
 
-/-- **The bound over a set of blocks, (H) at each block's own cap and its own `β_x`.** `HE`'s premises on the values
-and (E) at `b > 0`; each block `u` of `G` takes (H) at its own cap `κ u` and its own `β_x u`, so
+/-- **The bound over a set of blocks, (H) at each block's own budget and its own `β_x`.** `HE`'s premises on the values
+and (E) at `b > 0`; each block `u` of `G` takes (H) at its own budget `κ u` and its own `β_x u`, so
 `Π(κ u) ≤ κ u² / (4 β_w β_x u)`; all the blocks together, those outside `G` too, read at most `T` gates outside `θ`.
 With `Q` at least the sum over `G` of `κ u² / (β_w β_x u)`: `N` is at most the MACs the blocks outside `G` hold, plus
 `T + ½ √(Q O_G) + ½ √(Q T / b)`, with `O_G` the pairs of a block of `G` and an output with a wire in it (`outOn`), at
-most `O`. No block's cap or cost is another's. -/
+most `O`. No block's budget or cost is another's. -/
 theorem bound_on_rows {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
     {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw b Q : ℝ} (P : Partition d.D m)
     (G : Finset (Fin m)) (κ : Fin m → ℕ) (βx : Fin m → ℝ) (hw : 0 < βw) (hx : ∀ u ∈ G, 0 < βx u) (hb : 0 < b)
@@ -1040,13 +1039,13 @@ theorem bound_on_rows {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V
     calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) * (T / W.bY)
         ≤ Q / 4 * (T / b) := mul_le_mul hS (div_bY_le W hb hT0 hE) (div_nonneg hT0 (bY_nonneg W)) hQ0
       _ = (1 / 2) ^ 2 * (Q * T / b) := by ring
-  linarith [bound_on_caps W P G κ hκ hT]
+  linarith [bound_on_budgets W P G κ hκ hT]
 
-/-- **The bound over a set of blocks, each under its own cap, under (H) and (E).** `bound_on_rows` at one `β_x`: with
+/-- **The bound over a set of blocks, each under its own budget, under (H) and (E).** `bound_on_rows` at one `β_x`: with
 `Q = ∑_{u ∈ G} (κ u)²`, `N` is at most the MACs the blocks outside `G` hold, plus
-`T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x b))`. (H) at a cap gives it at every smaller one, so (H) at the
-largest `κ u` is enough; at one cap `k` on `G`, `Q = |G| k²` and it is `bound_on_he`. -/
-theorem bound_on_caps_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
+`T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x b))`. (H) at a budget gives it at every smaller one, so (H) at the
+largest `κ u` is enough; at one budget `k` on `G`, `Q = |G| k²` and it is `bound_on_he`. -/
+theorem bound_on_budgets_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
     {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw βx b : ℝ} (P : Partition d.D m)
     (G : Finset (Fin m)) (κ : Fin m → ℕ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
     (hshare : NoSharedPair W val) (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] (κ u))
