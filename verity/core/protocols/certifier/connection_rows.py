@@ -62,6 +62,11 @@ first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`. `check_reg
 the head is the execution phase's, it lists the schedule's tables and no other, each one's domain, rows and layout
 are the ones the schedule's parameters give, and its one certificate verifies under the network certifier's key in the
 session over the head's digest.
+
+**The port** (`port`) is the verifier's own `--registered` port of the proof blocks that read a table, one a row: proof
+block `reads_from + j` reads row j, so the head the verifier checked fixes every read. The lengths row's proof block
+(`verity.ml.protocols.certifier.lengths_row`) reads the fails table's row j through one and commits the row it
+returns as a read of the lengths table's row j through the other.
 """
 
 from __future__ import annotations
@@ -82,6 +87,8 @@ from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certifica
                                                          _u)
 from verity.core.protocols.certifier.warden import Released, WardenParams
 from verity.core.protocols.certifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 DOMAIN_TAG = "verity-network-certifier/connection-rows-domain/v1"
 HEAD_TAG = "verity-network-certifier/connection-rows/v1"
@@ -371,3 +378,15 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
         raise ValueError("the registration's certificate doesn't verify under the network certifier's key in the "
                          "session")
     return head, domains
+
+
+def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:
+    """The verifier's own `--registered` port of a population of one proof block a row of the head's table `table`:
+    proof block `reads_from + j` reads row j, a slot stride's every slot, held or not, so the head alone fixes its
+    reads. ValueError for a table the head doesn't list."""
+    if table not in [e.name for e in head.tables]:
+        raise ValueError(f"the head lists {[e.name for e in head.tables]}, not a table {table!r}")
+    e = head.table(table)
+    entry = {"leaves": e.rows, "words": e.row_bytes * 8 // WORD_BITS, "word_bits": WORD_BITS, "domain": e.domain.hex()}
+    return produced.port(value_name(head.link, table, head.window), entry, e.root.hex(), list(range(e.rows)), SCHEMA) | \
+        ({G.READS_FROM: int(reads_from)} if reads_from else {})
