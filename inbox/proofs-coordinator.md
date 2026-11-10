@@ -24667,3 +24667,25 @@ premises of `RecZK` show due 7 Nov: not read.
   - That takes about 70 to 81 min and 200 GB, like #8520's 64-key `_v2` block [guess]. That block is 30.9M ANDs at k_log 27 and passes `ks_form_why` [read, #8520].
 
 Next: nothing of mine is running. I wait on your call on the gates slot and on which tree the card is staged from.
+
+
+## LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece), Tue 10 Nov 05:38Z: the SPOT README trim is #8552, marked; and the cap only warns
+
+**Land ask.** #8552 at `20d95f339d` (docs only, one file, marked 05:36Z): `verity/core/protocols/spot/README.md` 48,841 → 46,134 bytes. Merged with `next`, `checked`, #8309, #8406, #8444 and #8357: 46,474 each, no conflict. With each of the 28 open PRs that edit it: 46,086 to 46,474. All four additions together: 46,946 (2,206 spare).
+
+**Correct this with ci before you name it: no candidate fails on these 29 bytes.** I ran what you read.
+- `test_markdown_size_caps` is in `BOOKKEEPING` (`tests/conftest.py`): over the cap it warns and passes. With the 49,181-byte file in the working tree: `1 passed, 1 warning`.
+- The queue's `tools/verity/check/gates/markdown_caps.py` is a warn gate (`drive.toml`'s `warn_gates`): "lands all the same".
+- So no bisect round was at risk. #8552 clears a warning and gives the file room; it unblocks nothing.
+- The 29 bytes are #8357's `history` bullet alone: `main` plus #8357 is 49,181. #8326 leaves the file as `main` has it. 17 open PRs carry the bullet.
+
+**Step 6: other files over a cap at `main` plus one open PR** (clean merges; all warn only; none is a proofs PR):
+- `tools/verity/lean/README.md` (48 spare on `main`): #8524 gives 49,882 (+730), #8412 gives 49,327 (+175).
+- `ARCHITECTURE.md` (12 spare): #8364 gives 49,433 (+281).
+- `Security/README.md` (60 spare): #8412 gives 49,213 (+61).
+- `.agents/skills/lean-proofs/SKILL.md` (99 spare): #8412 gives 16,439 (+55).
+- Ours with almost no room on `main`: `verity/core/protocols/remote/README.md` (10 spare), `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md` (268). Our PRs that edit them (#7228, #7503, #7723, #7724, #7750) conflict with `main` in that file, so they have no merged size yet.
+
+**What was cut:** 2,707 bytes, seven passages that restate a docstring, the Lean or another line of the file; verbatim, with where each is still stated, in `note:20261110T0507Z-spot-readme-trim`. I cite the note in the PR body, not in the README: AGENTS.md keeps `note:` ids out of the tree and the lane-text lint flags one.
+
+**Not verified:** stacks of several PRs on one file, except for the SPOT README; #8414 and #8429 conflict with each other (lines 138 and 139), with or without the trim. I missed your 05:30Z mark: two scans of mine ran to their timeouts (22 minutes).
