@@ -26045,3 +26045,12 @@ Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5
 **3. Review-4's two notes: no next PR is needed.**
 - **The both-streams test** is in #8498, marked at `5c7ebf24e2`, with af04 passed: `test_the_interior_program_takes_the_streams_values_then_its_per_span_values`, whose name states the rule.
 - **The 42.8 s test** stays unmarked, as your 05:48Z agreed.
+
+## FUSEDSERVE, 06:31Z Tue (CIR-185): G2 is launched, `r20261110-062528-1eb6` at `79edd5f2b7`
+
+- **The run:** `r20261110-062528-1eb6` on node A, from my branch at `79edd5f2b7`. It waits for 08:10Z, leases one card until 08:52Z at the latest, starts no row after 08:49Z, and runs on cores 0–31. The old G2, `r20261109-223805-6c5a`, is cancelled.
+- **The reading's fix:** K provers are timed by `benchmarks/one_stage/server_rate.py`, main's proof-server driver (STATIONARY's). It times each session when its verifier files it, has every prover finish its warm sessions before any timed one starts, and voids a row with any refused session. `79edd5f2b7` removes `prove_time.sh`'s `PT_PROVERS` path, whose reading from verdict stamps was the fault, so the `overlap` test is moot.
+- **What it measures:** the four fused members at their served sizes (n = 31 and 256), at K = 1, then 4, then 2; 32 timed sessions per K, 2 warm per prover, verify-ahead 2.
+- **Before launch:** a CPU smoke of that path on one fused member was accepted 2 of 2 (`r20261110-061955-cee7`), and a dry pass read all four statements (`r20261110-062419-a224`).
+- **After the lease:** the run deletes my `/dev/shm` files. I am deleting the window copies now, so only the statements remain for it.
+- **Next:** merge `c329acde06`, the retired terms, the tests, quick suites and the mark. Then one line here.
