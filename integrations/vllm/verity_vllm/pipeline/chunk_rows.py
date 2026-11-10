@@ -80,8 +80,9 @@ def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, 
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or
     ``in<g>.<s>`` for its row s when cut, a ``bits`` template's ``INDEX_ROWS`` row in `INDEX_SCHEMA`. The one exception is a
-    ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
-    packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
+    ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then
+    ``sw[c]``, v2), then the v2 output row ``o0``: each operand packed with its scale in one row is the layout serving
+    commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each.  Under ``table_reads`` (the partition
     file's ``dsa_table_reads``) a ``TABLE_ROWS`` template's output rows are row-seg, its history table's leaves."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
