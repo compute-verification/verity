@@ -12,11 +12,13 @@ version, whose MUFU is gates:
   computes the word Definition's words;
 * a partition that says ``zk`` and names a template whose statement is the lookup-slots form is refused by name, with the
   tables and the Boolean version to name; the same file without ``zk`` is not, and neither is the Boolean version;
-* staged, each ``_v2`` is one flat net that `ks_form_why` takes under either layout of its reads, and each word unit in
-  lookup slots is the form it refuses, which `zk_refusal` says of the same template without staging it."""
+* staged as its statement says, each ``_v2`` is one flat net that `ks_form_why` takes, and each word unit in lookup slots
+  is the form it refuses, which `zk_refusal` says of the same template without staging it."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
+
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -165,6 +167,9 @@ def test_a_partition_for_zk_sessions_refuses_a_slots_form_template_by_name():
                   {**partition, "templates": [SPL.P8, SPL.part(16), SPL.C3], "chunk_cap": {**SPL.CAPS, SPL.part(16): 3}}):
         with pytest.raises(LookupError, match="no rows of SparseMlaSplitPart_v1{T=8,"):
             SRW.population({}, other, "00" * 64)
+    window = SimpleNamespace(members=[], law="stratified:1", query={"name": SRW.TEMPLATE_QUERIES[0]}, row_tables=(), work_table=None,
+                             partition={}, partition_digest="00" * 64, population=0)
+    assert SRW.partition_doc(window, partition)["zk"] is True and "zk" not in SRW.partition_doc(window, {**partition, "zk": False})
 
 
 @pytest.mark.parametrize("family", FAMILIES)
