@@ -17,7 +17,9 @@ nothing to either gate and prints no number.
 `--from RUN` reads the verifier's record of a run in the store: a gate run's fire run (its host run's `verifier.json`)
 or a run of `remote_session/run.sh` that held the verifier. The number is the verifier's alone: nothing the prover
 recorded is read, so the session is named by its index (`--session K`, where the run holds several) and not by what
-the prover says it did. A withdrawn run is refused before any of it is fetched.
+the prover says it did. A withdrawn run is refused before any of it is fetched. The text says whether the verifier ran
+on the auditor's verifier host, what the store was bound to, that a share of 1 or more certifies nothing, and, of a
+run this command's `--loopback` left, that it was one.
 
 `--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
@@ -53,9 +55,10 @@ REFERENCES = HERE / "references.json"
 #: a store's block, `remote_bandwidth`'s
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
-RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json"]
+RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json"]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
+NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: the wipe run's label states its bound in words
 WIPE = re.compile(r"foreign <= ([\d,]+) bits\b.*\bM = ([\d,]+) B\b")
 #: minutes the node run waits for a launched run's record: the fire run's own bound and its publish
@@ -154,11 +157,22 @@ def session(record: Path, k: int | None) -> dict:
             "model": binding.get("name") if binding.get("bound") is True else None}
 
 
-def document(s: dict, commit: str | None, run: str | None, *, loopback: bool) -> dict:
+def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None) -> dict:
     """The printed document of session `s` (`session`), before its references: the number, its unit, the commit the
-    session ran from and its run, then what it was measured on."""
-    return {"value": s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
+    session ran from and its run, then what it was measured on. `host_run` is the auditor's verifier host's run that
+    held the verifier, None for a verifier that ran anywhere else."""
+    return {"value": s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback, "host_run": host_run,
             **{k: v for k, v in s.items() if k != "value"}}
+
+
+def looped(tree: Path) -> bool:
+    """Whether the run whose records are under `tree` is this command's own loopback, as the document it left says."""
+    try:
+        return json.loads((tree / "out" / "memory.json").read_text()).get("loopback") is True
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, AttributeError) as e:
+        raise Unreadable(f"the run's out/memory.json doesn't read as this command's document ({type(e).__name__}: {e})") from e
 
 
 def from_run(store, run: str, k: int | None) -> dict:
@@ -167,12 +181,13 @@ def from_run(store, run: str, k: int | None) -> dict:
     if attempt is None:
         raise Unreadable(f"{run} is not in the evidence store this machine reads")
     tree = store.files(run, RECORDS)
-    verifier = None if tree is None else tree / "out" / "verifier.json"
+    verifier, host = (None if tree is None else tree / "out" / "verifier.json"), None
     if tree is not None and not verifier.is_file() and (named := tree / "out" / "host-run.txt").is_file():
-        verifier = tree / "out" / "host" / named.read_text().strip() / "out" / "verifier.json"
+        host = named.read_text().strip()
+        verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
         raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(session(verifier, k), commit_of(attempt), run, loopback=False)
+    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree), host_run=host)
 
 
 def cores() -> tuple[str, str]:
@@ -298,12 +313,16 @@ def text(doc: dict) -> str:
              f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")]
     if doc["loopback"]:
         lines.append(f"  {LOOPBACK}")
+    elif doc["value"] >= 1:
+        lines.append(f"  {NOTHING}")
     verdict = ("accepted by the Lean verifier" if doc.get("verdict") == "lean"
                else "accepted (its record names no Lean verdict)")
+    where = ("" if doc["loopback"] else f", on the auditor's verifier host (its run {doc['host_run']})" if doc.get("host_run")
+             else ", its verifier not on the auditor's verifier host")
     lines.append(f"  session {doc['session']} of {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: "
-                 f"{verdict}")
-    whole = doc.get("node_gpu_bytes")
-    lines.append(f"  store: {_gb(doc['store_bytes'])}"
+                 f"{verdict}{where}")
+    whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
+    lines.append("  store: " + (f"{doc['store_bytes']:,} bytes, a test store" if doc["loopback"] else _gb(doc["store_bytes"]))
                  + (f", {doc['store_bytes'] / whole:.3f} of the node's {_gb(whole)} of GPU memory" if whole else "")
                  + (f", bound to {doc['model']}'s pinned checkpoint" if doc.get("model") else ", bound to no checkpoint"))
     for r in doc["beside"]:

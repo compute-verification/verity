@@ -28,7 +28,9 @@ verity bench memory --loopback                both processes on this machine, on
   `--dry-run` sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
   `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
-  run is refused before any of it is fetched.
+  run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
+  auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to, that a
+  share of 1 or more certifies nothing, and, of a run `--loopback` left, that it was a loopback.
 - **`--loopback`** runs `remote_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
   store of 64 blocks. No node is audited, so it certifies nothing, and both its text and its JSON say so. It builds the
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.

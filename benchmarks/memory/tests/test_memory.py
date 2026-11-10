@@ -113,11 +113,13 @@ def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_an
     text, doc, _ = printed(capsys)
     assert text[0] == ("memory: 0.156 of the node's memory read rate is left uncertified by this session, at the data "
                        "sheet's read bandwidth (2.0000 TB/s)")
-    assert text[1] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[1] == (f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier, its verifier not on the "
+                       f"auditor's verifier host")
     assert text[2] == "  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory, bound to no checkpoint"
     assert list(doc)[:4] == ["value", "unit", "commit", "run"]
     assert (doc["value"], doc["unit"], doc["commit"], doc["run"]) == (0.15625, M.UNIT, COMMIT, RUN)
-    assert doc["loopback"] is False and not any("loopback" in line for line in text)
+    assert doc["loopback"] is False and doc["host_run"] is None
+    assert not any("loopback" in line or "certifies nothing" in line for line in text)
 
 
 def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_path):
@@ -183,7 +185,8 @@ def test_a_gate_runs_number_is_read_from_the_host_run_its_fire_run_names(store, 
                      "out/host/v2/out/verifier.json": a_record(a_session(gamma=0.625), binding=binding)})
     assert bench(store, "--from", FIRE) == 0
     text, doc, _ = printed(capsys)
-    assert doc["value"] == 0.625 and doc["model"] == "SOME_ROLE"
+    assert doc["value"] == 0.625 and doc["model"] == "SOME_ROLE" and doc["host_run"] == "v2"
+    assert text[1].endswith("accepted by the Lean verifier, on the auditor's verifier host (its run v2)")
     assert text[2].endswith("bound to SOME_ROLE's pinned checkpoint")
 
 
@@ -192,8 +195,39 @@ def test_a_binding_that_did_not_bind_and_a_record_with_no_lean_verdict_are_said(
     store.add(RUN, {"out/verifier.json": record}, dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1] == f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted (its record names no Lean verdict)"
+    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted (its record names no Lean verdict)")
     assert text[2].endswith("bound to no checkpoint") and doc["model"] is None and doc["commit"] == f"{COMMIT}-dirty"
+
+
+@pytest.mark.parametrize("gamma", [1.0, 1.25])
+def test_a_share_of_one_or_more_says_it_certifies_nothing(store, capsys, gamma):
+    """An accepted session whose ledger leaves the whole read rate uncertified has a number, and the text says what it
+    is worth."""
+    store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=gamma))})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[1] == f"  {M.NOTHING}" and "certifies nothing" in text[1] and doc["value"] == gamma
+
+
+def test_a_recorded_loopback_is_printed_as_one(store, capsys):
+    """A run this command's `--loopback` left holds its document, which says so: read back with `--from`, it is still
+    a loopback, in the text and in the JSON, with no node's memory beside its test store."""
+    store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.5), blocks=64),
+                    "out/memory.json": {"value": 0.5, "loopback": True}})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[1] == f"  {M.LOOPBACK}" and doc["loopback"] is True
+    assert text[2] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
+
+
+@pytest.mark.parametrize("body", ["{", "[1]", "7"])
+def test_a_run_whose_own_document_cannot_be_read_is_not_printed(store, capsys, body):
+    """Whether the run was a loopback is then unknown, so nothing is printed as a node's number."""
+    store.add(RUN, {"out/verifier.json": a_record(a_session()), "out/memory.json": body})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and "out/memory.json doesn't read as this command's document" in err
 
 
 def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsys):
@@ -263,6 +297,7 @@ def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_n
     assert text[0].startswith("memory: 7.500 of the node's memory read rate")
     assert text[1] == f"  {M.LOOPBACK}" and "certifies nothing" in text[1]
     assert text[2] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint", "no node's memory beside a test store"
     assert (doc["loopback"], doc["value"], doc["commit"], doc["run"]) == (True, 7.5, COMMIT, None)
 
 
