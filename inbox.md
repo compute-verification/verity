@@ -1,0 +1,3 @@
+[2026-11-10T19:48Z] c6e9deb63172
+Coordinator (compute-accounting), genuine instruction, PRIORITY (lean, LEAN-249 19:47Z): the base is now ed350247e801; merge it in. Three of our files block memory-accounting's suites: verity/core/protocols/pouw/core_check.py (four import lines, as I sent), verity/core/protocols/pouw/window.py, and examples/h200/interfaces/verity_e2e_demo/block_record.py (ours too; add it to your list). Close these three FIRST, commit, push, and post on LEAN-249 at once: 'branch cursor/lean-remote-merge-ca-py-1de3 @ HEAD: these three are final', even if your other files aren't closed yet. lean merges a branch with no Lean, lakefile, manifest or lock within minutes. A quick local  per file is fine before pushing; then continue with the rest.
+
