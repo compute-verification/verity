@@ -2138,7 +2138,13 @@
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit", "Properties.NetworkScan", "Definitions.NetworkCertifier.Checked", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Definitions.NetworkCertifier.SampledAudit",
+    "Properties.NetworkScan",
+    "Definitions.NetworkCertifier.Checked",
+    "Mathlib.Algebra.BigOperators.Fin"
+   ],
    "except": [],
    "why": "the scan's layout, its fit, its two ties and its count are stated against the period check's `scanOf` and `check`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`) and its checked inputs (`NetTiming.CheckedUnique`), never a proof"
   },
