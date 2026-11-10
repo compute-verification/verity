@@ -274,3 +274,32 @@ stages some `_v1` census types as a `_v2` form). #8664 lands together with the f
 - **The four fields in `server_rate.py`:** nothing in the tree writes them (`main` and `c6cadd0e32`), and #8581 is
   closed. The lead asked proofs whether SERVEDCARD still lands them. If not by Wed 11 Nov 20:00Z, the lead tells you
   here to open #8581's commit again as a new pull request on the moved `main`. Do nothing on it before that.
+
+## Tue 10 Nov 17:08Z: LABEL NOW; open the script's commit again after the layout; rows 3 and 5 are yours too
+
+This replaces "label nothing yet" and the last bullet of the 17:00Z section.
+
+1. **Label now** (benchmarks, HASH-98 17:01Z). Checked by the lead: `main` has no `verity bench prove`, and #8575's
+   reader lists a labelled run with no server report as left out (`prove_records.py:168`), so a label breaks nothing.
+   - For each art whose rows all pass every check and that the reader reads: label **the art and its run**
+     `run_of_record prove-glm53-flock-steady --by kernels --ref HASH-98` (#8664 reads the art's `rate.json` first).
+   - One-prover arts first: rows 4, 6, 7, 8 (the repeat, 588192b9…, never the first), 9, 10, 11, 12, 14. Then the
+     2- and 4-prover arts that pass every check: the reader prices only rows at its `--provers` count.
+   - Not row 8's first art, and not `gq` (another tree, no `stage.word`, thirds rising): name both as unlabelled.
+   - Read each back (`research data labels TARGET --remote`: none LOCAL ONLY) and post the list on HASH-98 in one
+     comment. benchmarks marks #8664 with them as its evidence. Label each later row the checkpoint it passes.
+2. **The four fields: the commit is kernels' to land** (proofs, HASH-98 17:02Z, as the script's owner: "land that
+   commit as it is, after the layout is on `main`"). When top posts the base commit on TOP-394 (about 19:15Z): a new
+   branch from the moved `main`, `0a85da0af964` carried across with nothing else, its suites in one named run, a new
+   pull request (`research queue open --issue HASH-98`; the body quotes proofs' word), and its number on HASH-98.
+   Mark nothing: the lead marks. Until it lands a run may send the script from that commit as an input; change no
+   queued link for it.
+3. **Row 13:** `stage.py`'s `census_leaves` is proofs' to change; it names the commit on HASH-98 by Wed 04:00Z, else
+   row 13 has no row this window. Do not patch the stager.
+4. **Rows 3 and 5 (26.06% and 10.60%) need `rate.json` rows.** They are steady today only through proof server
+   reports, which #8664 no longer reads; once it lands, rows 1, 2, 4 and 6 to 14 price at most 53.60% [the lead's
+   sum of benchmarks' shares]. The lead asked proofs for their spec, pin and commit (HASH-98, 17:06Z). When they
+   stage, they go right after rows 1 and 2, one prover first. Rows 29 and 33 (0.20%) the same way, last.
+5. **Cover for row 13, on card 5 now:** row 16, `ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}` (0.68%; proofs'
+   pin `332a01187371d5ed`, the form check accepts), and row 15, `SparseMlaCombine_v1{NSPLIT=5,DV=64,…}` (0.75%; no
+   pin of proofs': if it does not stage, say so and go on). With rows 3 and 5 in, they pass 90% without row 13.
