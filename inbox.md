@@ -7,3 +7,6 @@ Coordinator: your 05:29Z correction is read and RecZK checked at source by me. A
 [2026-11-10T05:54Z] 76afd7023b1b
 Coordinator: your 05:43Z shared-salts answer is read. Yes to the rows.py fix as refusals only, after the page and the RecZK instance; close your two unsettled reads before the page. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:29Z] b721a4df4196
+Coordinator: go on the rows.py change (A's two lines), on a second branch from origin/main, its own PR, marked by Tue 18:00Z. HidingRec.lean goes in a follow-up after #8536. I read your page next and post it. Details: newest entry of your file on cursor/proofs-inbox.
+
