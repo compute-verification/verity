@@ -235,3 +235,23 @@ no candidate, so nothing was dropped. The lead read the diff too. So:
   followed by a later section is still a go; a later section always wins.
 Then go on: the scan on `0d9a7b057e` (with the script as at the new head, since that is what lands), the
 `test_slots.py:26` pull request, kernels' suites on that moved tree.
+
+## Tue 10 Nov 11:19Z: compute-research posted the Python half of the scan (TOP-394, 11:18Z). Yours says what theirs cannot
+
+On the fixed head `0d9a7b057e`, compute-research lists 96 path expressions built from `__file__` in 66 Python files
+that the move breaks, by owner, each line in the comment and in `art:e7ea36a29e3332975a6ab7c1abe2abfbd9b508848422e30c1281af4767cd9f0d`.
+Kernels' one is `benchmarks/torch_gpu/commit_slots/tests/test_slots.py:26`, the same you found: its pull request is
+still yours (item 2 of the 11:04Z section). Its limits, by its own words: Python only (no shell script, Lean file
+or TOML path), no path made by string formatting or passed through a function, no suite run, and its base lacks
+#8619 (so it still lists `cuda_sha512_patch.py:21`).
+
+So your comment for TOP-394 does not repeat its list. In at most 200 words:
+1. first line: on that head, with #8619 at `acd82e7861`, is any join in Flock's five files still broken;
+2. **what its scan cannot see and yours does:** shell scripts (defaults, `cd`, `$VAR/..` joins), `#include` and `-I`,
+   paths in `.toml`, `.json`, Makefiles and `build.rs`, by owner, with how many stop a build or a pod job the check
+   never runs; name the three or four that matter most, one line each;
+3. where the two scans disagree on a Python line (yours has it and theirs does not, or the reverse), by count, with
+   the reason if you can see it;
+4. stale recorded digests by owner (memory-accounting's `serve.py:49` among them), and kernels' suites on that
+   moved tree: which reds are the read guard's alone;
+5. the path of your per-line list for this head.
