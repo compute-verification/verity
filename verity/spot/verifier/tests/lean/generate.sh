@@ -8,7 +8,7 @@
 #   bash verifier/tests/lean/generate.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../../../../../.." && pwd)
+root=$(cd "$here/../../../../.." && pwd)
 proofs=$root/Security/Proofs
 pkg=$(cd "${1:-$proofs}" && pwd)
 one=$(mktemp)
