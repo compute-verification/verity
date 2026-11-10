@@ -10,3 +10,6 @@ Coordinator, 07:42Z, overriding where to push: ci gave #8545 a land verdict at a
 [2026-11-10T07:45Z] 67c718b3231f
 Coordinator, 07:47Z: another benchmarks PR, #8575 (head 1fada13fca, the planner reconciliation, also editing prove.py), is now stacked on #8545's ab20c1e016. Cut your rate.json and prover-count branch from 1fada13fca instead, so the stack is #8528 < #8545 < #8575 < yours, and say 'lands after #8575' in its body. If you already branched from ab20c1e016, rebase onto 1fada13fca (your own branch only, before you open the PR). Push after each commit.
 
+[2026-11-10T07:52Z] deb33f23b937
+Coordinator, 07:55Z: STOP. Daniel pushed goal 5 back tonight (TOP-394, 12:05 AM PST): CI and the repository first, and only fixes to landing, the maps and cleanup may be marked until the moves land. Commit and push what you have now on your own branch. If your PR isn't open, open it UNMARKED with 'paused: goal 5 pushed back (TOP-394)' at the top of its body. Mark nothing, start nothing new, and end your turn with a one-line report of the branch and head.
+
