@@ -71,7 +71,7 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.engine.sampler_capture import CAPTURE
-from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import boundary_tables as BT, serving_rows as SRW
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.logits_capture import LogitsCapture
 
@@ -579,6 +579,18 @@ def _digest_words(b: bytes) -> np.ndarray:
     return np.concatenate([digest_words(b[i:i + 64]) for i in range(0, len(b), 64)])
 
 
+def kept_table(kept: BT.Served) -> HT.HistoryTable:
+    """The table `interior` opens for a drawn span, from what rank 0 kept of it (`boundary_tables.load`): its C rows
+    committed again under their kept salts, round 1's program, name, words and leaves, refused unless that is the entry
+    round 1 listed. On the node only, as the rows are."""
+    t = HT.HistoryTable(kept.program, kept.value, kept.words, kept.leaves)
+    n = len(kept.salts) // max(1, len(kept.rows))
+    t.append(kept.rows, [kept.salts[i * n:(i + 1) * n] for i in range(len(kept.rows))])
+    if t.entry() != kept.entry():
+        raise ValueError(f"{kept.value}: its kept rows and salts commit to another table than the one round 1 listed")
+    return t
+
+
 def table_reads(tc: HT.HistoryTable, toks: Sequence[int]) -> dict[str, dict[str, np.ndarray]]:
     """Reads of table ``tc`` (`history.HistoryTable`: as the serve built it, `boundary_tables.Kept.table`) at keys
     ``toks``, each in [0, its leaves), as `interior` takes a read member's rows and outputs: each key, the table's root and
@@ -693,7 +705,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     rows' device (`committed`), registered in place of committing the spans' rows, which it never reads. ``wires``: the
     replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers' output rows, which
     are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
-    table: the table round 1 served (`boundary_tables.Kept.table`), as round 1's record ``served`` registers it under its
+    table: the table round 1 served (`kept_table`, from `boundary_tables.load`), as round 1's record ``served`` registers it under its
     name, holding its class's ``positions`` strings (C, `boundary_tables.class_rows`). The interior commits none of them:
     every read must open its span's (`table_reads`), each read's ``root`` and ``domain`` rows are committed as the
     `supplied` values' rows, on the host, which its program takes (`table_values`: the stream is a window's, with them),
@@ -773,6 +785,6 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["HELD", "MOVED", "READ", "SUPPLIED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed", "gather",
-           "history", "interior", "interior_ports", "interior_run", "interior_window", "named", "pieces", "port_map",
-           "register", "sources", "span", "supplied", "table_reads", "table_values"]
+__all__ = ["HELD", "MOVED", "READ", "SUPPLIED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed",
+           "gather", "history", "interior", "interior_ports", "interior_run", "interior_window", "kept_table", "named",
+           "pieces", "port_map", "register", "sources", "span", "supplied", "table_reads", "table_values"]

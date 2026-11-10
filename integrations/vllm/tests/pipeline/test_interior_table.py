@@ -299,6 +299,19 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
         _interior(reg, first, rec, drawn, spans=spans, device=IR.DeviceCommit({}, {}, {}))
 
 
+def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
+    """`kept_table` commits a kept table's rows again under its kept salts (`boundary_tables.Served`, as `load` gives it) to
+    round 1's entry, and refuses a kept table whose rows commit to another."""
+    t = _tables()[0]
+    kept = BT.Served(**t.entry(), program=PROGRAM, rows=np.array(t.rows), salts=b"".join(t.salts))
+    again = IR.kept_table(kept)
+    assert again.entry() == t.entry() and again.bcs == t.bcs
+    rows = np.array(t.rows)
+    rows[0, 0] ^= 1
+    with pytest.raises(ValueError, match="commit to another table"):
+        IR.kept_table(replace(kept, rows=rows))
+
+
 def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged):
     """`history` names only tables round 1's record registers, under the domain of their words and leaves."""
     _stream, _reg, _first_, rec, _tables_ = staged
