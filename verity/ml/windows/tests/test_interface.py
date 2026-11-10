@@ -1453,7 +1453,7 @@ def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
 
 REFUSED = {
     "a value of another row width": (_value_rows(value=lambda v: Bound("w", v.rows.reshape(-1, 128))),
-                                     "rows of 128 words, not 256"),
+                                     "rows of 128 16-bit leaves, not 256 16-bit words"),
     "a value of another schema": (_value_rows(value=lambda v: _like(v, schema=CS.TABLE_SCHEMA)),
                                   f"{CS.TABLE_SCHEMA} rows, not {V2}"),
     "a value of 8-bit leaves": (_value_rows(value=lambda v: _like(v, word_bits=8)), "8-bit leaves, not 16"),
