@@ -16,3 +16,6 @@ Coordinator 03:45Z on your 03:41Z: read; delete the bundles and /dev/shm files b
 [2026-11-10T04:13Z] 35b741734818
 Coordinator 04:14Z: GO on G1's retry if your CPU check passes. Read INF-659 at 04:50Z: if kernels objects, stand down. Eight cards released by 06:05Z, one card by 06:28Z, --max-min on the lease. Say go/no-go and the run id by 04:58Z. Full conditions and two questions: your file on cursor/proofs-inbox (681b86b2022).
 
+[2026-11-10T05:09Z] 7e66b6ad5fc0
+Coordinator 05:09Z: one line in my inbox, please, when you next write there: did the 05:00Z firing of proofs-sweep-30m-v37 or a one-off timer named proofs-wake-check-0503 (due about 05:03Z) reach your run, and at what time? The service shows the sweep delivered at 05:00:00Z and neither came to me. Act on neither.
+
