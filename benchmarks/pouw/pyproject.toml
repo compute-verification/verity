@@ -3,7 +3,13 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "verity-exact-kit", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+dependencies = ["verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+
+[project.optional-dependencies]
+# The team's run and store tool and the exact kit, which the suite's tests and the theory scripts use and the public tree
+# doesn't hold (Pearl-C's kernels, which it does, need neither); the workspace installs both with every member.
+research = ["research"]
+exact-kit = ["verity-exact-kit"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
