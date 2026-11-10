@@ -21,8 +21,8 @@ of the period's game and not of a session, so they hold at a window as they do a
   uniform by A3 wherever the window's bytes are `m` frames.
 
 What is left is `windowSpotSound_assembled`'s hypotheses: the deployment's side (`WindowDeployed`, `WindowCovers`), the
-device's printed log and signatures, the window's bytes as whole frames, the openings' gaps and empty classes within
-the hiding term, that each round's reading picks only openings, and the members' steps (`MemberSteps`).
+device's printed log and signatures, the window's bytes as whole frames, that each round's reading picks only
+openings, and the members' steps off the openings' empty classes at their counts (`MemberSteps`).
 -/
 
 @[expose] public section
@@ -82,11 +82,10 @@ constructions with the binding's finders at the device's history `dev`, the wind
 the members' decoders `D` and the sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the
 window's bytes as `nc` frames' coins, with `S` covering the one-stage form, meets SPOT's target at composite `k`
 wherever, at each window of `S`: the device printed each play's log after the parameters (`hP`); its history at each
-play signed what the play's signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); over every member's
-stops the openings' gaps and empty classes are at most the hiding term (`hε`); each round's reading picks only
-openings (`hR`); and the members' steps hold (`hm`, `MemberSteps`) at accepted plays whose log v2 read is the
-device's, whose blobs sent hold each pinned table at its registered file and whose sample answers the strategy's
-`afterAt`. -/
+play signed what the play's signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); each round's reading
+picks only openings (`hR`); and the members' steps hold off the openings' empty classes at their counts (`hm`,
+`MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table at its
+registered file and whose sample answers the strategy's `afterAt`. -/
 theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
     (dev : Exchange → Properties.Challenger.History)
     (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
@@ -102,15 +101,6 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
     (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
     (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
-    (hε : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
-      windowErr V θ F c W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-        (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
-        (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun _ mPts q =>
-          openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-            openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool)) ≤
-        W.hidingTerm)
     (hR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) j pre fr, (rd W θ F c).round j pre fr →
       ∃ i s n, fr = .opening i s n)
     (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
@@ -119,8 +109,8 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
         (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
-        (fun _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
-        (fun _ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
+        (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
+        (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
   windowSpotSound_of_sample V k e rd (K.withBinding dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent)
@@ -129,6 +119,6 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
     (fun θ F W hW c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ
       (Binding.binds_of_prints V k dev θ (hP θ F W hW)) (hS θ F W hW c))
     (fun θ F W _ c σ => prob_not_sampledDigest_le V k θ F c σ (2 * V.cost θ F c σ + 2 * W.h))
-    hε hR hm
+    hR hm
 
 end Verity.Sampled
