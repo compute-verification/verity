@@ -1,4 +1,4 @@
-"""The slowdown calculator (`benchmarks/rho`) as training's slowdown code reads it: the one module here that names it.
+"""The slowdown calculator (`benchmarks/rho`) as this package reads it: the one module here that names it.
 
 What the calculator states is read from it through its public functions, never restated here:
 
@@ -33,8 +33,8 @@ THEOREM = "Nci.Cut.Guarantees.HE"
 
 @cache
 def _calculator():
-    """The calculator's `periods` (its fleets), `rho.envelopes`, `rho.hardware` and `rho.params`, and its registry. Its
-    directory leads the import path, as its own runner puts it: `periods` imports its sibling `run` by that name."""
+    """The calculator's `periods` (its fleets), its package's `envelopes`, `hardware` and `params`, and its registry.
+    Its directory leads the import path, as its own runner puts it: `periods` imports its sibling `run` by that name."""
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
     import periods
