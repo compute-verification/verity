@@ -1,3 +1,19 @@
 [2026-11-10T04:37Z] 71cad17f476d
 From the network-accounting coordinator, Mon 9 Nov 8:38 PM PST. One rule your brief left out: `/opt/cursor/artifacts/code-tour-author-handoff.md` is shared by every worker on this store. Write your own as `/opt/cursor/artifacts/code-tour-author-handoff-net199-onsitemain.md` and never the shared file. An earlier one of yours was saved beside it as `.onsite-staging-c107`.
 
+[2026-11-10T04:41Z] db0472ebd478
+From the network-accounting coordinator, Mon 9 Nov 8:41 PM PST. **An addition to job 1, and it comes first: item (f), a comment on NET-190 by Tue 10 Nov 6 PM PST.** Item 3 of your brief's "What changed" is overtaken: soundness answered (its comment on TOP-394 of Mon 8:35 PM PST; read it), and I corrected myself there at 8:41 PM PST.
+
+**What soundness said.** The onsite theorem's deployed instance covers `main`'s `Core.Onsite`, not a new composite. On `main` (7af4d24fca, `verity/core/protocols/onsite/CoreOnsite.lean`) it lists seven: the network certifier's period, inference only, PoUS's run, PoUW's period (`verity/pouw/period/v1`), the P2 session, SPOT (`verity/sampled-proofs/v1`) and the wipe, with ties `[Core.Remote.windows, store]`. The copy on `remote` and on your staged tree is older: the v1 audit, `[store]` only. Soundness: "the port should take main's". And: every PoUW window names the run's record as its Commit record; nothing holds PoUW's committed weights to the record's; so it needs no stratified per-member draw and does not wait for PRF-490's gate.
+
+**So point 4 of your NET-190 comment is true of the staged tree and false of `main`**, and I repeated it on TOP-394. Say so in item (f).
+
+**Item (f): what one serve from `main` needs to write all seven cases of `main`'s `Core.Onsite`.** Read, do not run; tag each line [read].
+1. **Per component:** the case, which stage of the driver writes it today (file and line), and what is missing. Memory's three are memory-accounting's and vllm's to produce: list only what the driver and `PRODUCT=onsite` already do for them.
+2. **The window tie without the value tie.** Your point 3 says H1 names R as a window's Commit record only under `H1_TIE` (`served_verdicts.sh:210-215`), and `H1_TIE` also registers W's tables in R and so demands the stratified draw. Soundness says the composite's tie needs only the name. Can the driver name R as each window's Commit record without registering W's tables, so that `subset:1` or one statement still accepts? What changes (`serve_tie`, `served_cases.py:231-233`, the preflight at :1456-1461), whose files they are, and whether R can exist before the window commits. If it cannot be done, say why in the protocol's terms, not the script's.
+3. **Why remote's own demo accepts and ours did not.** Remote's run of record composes `verity/remote/v1` under `PEARLPLUS_TIE`, whose preflight demands the same stratified draw. Is that draw one statement on `remote` and several members only once the scan's units share the window? Name the exact thing that made Monday's window several-member.
+4. **Which PoUW component.** `main`'s onsite lists `verity/pouw/period/v1`; `remote`'s composite of record is `verity/remote/v1` with `verity/pouw/pearl-plus/v1` and the ties `run` and the window record (`CoreRemote.lean`, namespace `V1`), and `remote` took the period's composite out. I asked soundness which one onsite lists after the merge. Lay out what the serve needs under each answer.
+5. **The port.** What in the staged groups changes when `CoreOnsite.lean` and `CoreComposites.lean` are `main`'s: `verity/remote-network-no-pouw/v0` (does it stay as Monday's composite, for the restated record only?), the site difftest's cases, `config.py:61-64`.
+
+Then job 1's items (a) to (e) as briefed, in the NET-199 comment. If the two comments cannot both be in by Tue 6 PM PST, item (f) wins.
+
