@@ -66,3 +66,15 @@ Unchanged: the session sizing by 12:00Z (I reply to compute-accounting by 18:00Z
 
 1. **For kernels' 5b (HASH-98).** kernels measures Flock at steady state on the four types STATIONARY could not hold: gq-k6144, fi-linear-k2048, fi-linear-k6144, mla-split-part (on `main`: `benchmarks/served_units/stage.py` units `gq`, `fi`, `fi:K=6144`, `mla-split-part`, all `_v1` word templates). I promised on HASH-98, by Tue 18:00Z, the template and statics the final card PROVES for each of the four, so they measure the blocks we prove. Write me, by Tue 12:00Z: for each, the name and statics on #8359's cut (the `_v2` Boolean version or not; inline reads or slots), the stage command at #8359's head, and whether the per-expert cut removes or resizes any of them.
 2. **vllm-v2names (PRF-477, 03:16Z)**, for your partition: the five names are the right set; each `_v1` becomes `_v2` at the same statics (`FlashInferFp8Linear` and `FlashInferFp8Quant1x128` at K = 6144, 2048, 1536, 256; `MoeRouterSigmoidBias` and its Slots at E=256, TOPK=8, SCALE=2.5, KERNEL="block"; `DsaIndexerQ` at H=32, D=128, ROPE=64). On `main` only `FlashInferFp8Linear_v2{K=256,N=1}` is in a partition file (`glm53_all_families_tp8_step16.json`). `chunk_rows.reads` on `main` lays these reads inline under either name; the slots form came from `compose_circuit.py --reads slots` (#8438, #8359's first cut). vllm's T2 (`cursor/vllm-v2names-4d8a`): `serving_rows.population` refuses a slots-form name for a partition file that says "zk": true; pushed Tue 08:00Z, marked Tue 18:00Z. Still slots for GLM-5.3: `SparseMlaSplitPart_v1` at T >= BN and `SparseMlaHeadBlock_v1` at a whole key block (circuits, CIR-210).
+
+## Coordinator, Tue 10 Nov 04:20Z: one short brief by 06:00Z, ahead of the 12:00Z session sizing
+
+compute-research has four idle worker slots and offers to draft **the one-stage audit's split of a stratum across statements** (what 7b's whole Pearl+ run and goal 5 wait on), with proofs' review. I am saying yes, and **you review**. By **06:00Z**, in my inbox, a block I can paste on TOP-394 (under 200 words, each line read, run or guess):
+
+1. **Where** the one-stage plan assigns a stratum's drawn units to statements, sessions and tables today: file and function, on `main`.
+2. **The limits it must respect:** 2^35 bits a table, one table a session for a closure draw, and whatever else you read for CMP-370.
+3. **What the split must hold fixed** so the Lean verifier and the sampled guarantee still cover it: the draw fixed before the split; each statement's units a function of the public Program and the draw; no unit in two statements or none; the coverage count per stratum. Say which of these a check enforces today and which is new.
+4. **What may not change without Daniel:** any locked statement. If the split needs one restated, say which.
+5. **Done when:** one sentence a reviewer can check (for example: a stratum of N drawn units over the table limit proves as ⌈…⌉ sessions and Lean accepts each, on a named run).
+
+Also say whether your 12:00Z sizing already covers part of this, so their worker doesn't redo it.
