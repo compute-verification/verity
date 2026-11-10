@@ -126,3 +126,13 @@ vllm's run ended at 07:02Z, an hour early (INF-659, vllm's lead at 07:08Z: no le
 - Then the 10:30 to 11:55Z hour takes what is next: `gq` with 2 and 4 provers if `gq` ran now, or `fi` K6144 with one
   prover if that fits 85 minutes better. Your call, by what fits; say which on HASH-98.
 - If `gq` cannot start by about 07:25Z, leave tonight alone and keep the 10:30Z plan.
+
+## Tue 10 Nov 07:31Z: two rules from infra, for every worker (INF-666, INF-671)
+
+1. **Every resume replaces your VM, so unpushed work is gone.** Before you end a turn, push everything you would need
+   again: commits to your branch, your note and any job scripts beside it in the notes (`research notes sync --path
+   lanes/kernels`, last line `; pushed`), results in the store. Keep nothing only in `/tmp`, your home directory or an
+   uncommitted file. Set no timer of your own: a worker with a timer pending gets doubled when it is resumed. When you
+   wait, end your turn naming the run; the lead resumes you.
+2. **Never list command lines, even filtered:** no `ps ... args`, `ps -ef`, `ps aux`, `pgrep -af` or `pgrep -a`. The
+   exec daemon's arguments hold tokens. To find a process use `pgrep -f PATTERN` (pids only), and kill by pid.
