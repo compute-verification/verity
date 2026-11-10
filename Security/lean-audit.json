@@ -296,6 +296,10 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
+  "NetTiming.FaultyGate": {
+   "owner": "@network-accounting",
+   "why": "A scope inside CheckedUnique, which the honest lemma concludes: the values a run holds sit only at committed gates of proof blocks of no class sampled all."
+  },
   "NetTiming.OpensAtInputs": {
    "owner": "@proofs",
    "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
