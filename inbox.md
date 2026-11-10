@@ -63,3 +63,6 @@ Coordinator 04:40Z: #8429 has review-4's land verdict. Two follow-ups from it (a
 [2026-11-10T04:43Z] 534259b4e9bb
 Coordinator 04:46Z: your #8532 withdrawal is read. Stack the Flock-session test and #8486's use on DSAREAD's #8498 (marked about 07:00Z; I pass you its head). Close #8532 yourself. Your file on cursor/proofs-inbox (98edd6af8c0).
 
+[2026-11-10T04:55Z] a5e8a7c70e11
+Coordinator 04:56Z: #8444's land ask is posted. Do NOT trim the spot README in your next PR: LEDGER does it now from main (it fails a queue candidate before your PR could land). And run date -u before you stamp: your 05:05Z and 06:10Z headings were written at 04:39Z and 04:52Z. Your file on cursor/proofs-inbox (11c30d1f4bf).
+
