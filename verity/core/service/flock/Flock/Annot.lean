@@ -2,4 +2,4 @@ module
 
 public import Circuits.Annot
 
-/-! Re-exports `Circuits.Annot`, for the modules that import it as `Flock.Annot`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

@@ -2,4 +2,4 @@ module
 
 public import Base.JsonParse
 
-/-! Re-exports `Base.JsonParse`, for the modules that import it as `Flock.JsonParse`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

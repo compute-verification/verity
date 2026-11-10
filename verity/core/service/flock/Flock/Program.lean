@@ -2,4 +2,4 @@ module
 
 public import Circuits.Program
 
-/-! Re-exports `Circuits.Program`, for the modules that import it as `Flock.Program`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

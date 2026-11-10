@@ -2,4 +2,4 @@ module
 
 public import Circuits.Gate
 
-/-! Re-exports `Circuits.Gate`, for the modules that import it as `Flock.Gate`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

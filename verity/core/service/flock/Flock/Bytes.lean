@@ -2,4 +2,4 @@ module
 
 public import Base.Bytes
 
-/-! Re-exports `Base.Bytes`, for the modules that import it as `Flock.Bytes`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

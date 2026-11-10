@@ -2,4 +2,4 @@ module
 
 public import Circuits.Partition
 
-/-! Re-exports `Circuits.Partition`, for the modules that import it as `Flock.Partition`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

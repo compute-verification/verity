@@ -2,4 +2,4 @@ module
 
 public import Circuits.Qword
 
-/-! Re-exports `Circuits.Qword`, for the modules that import it as `Flock.Qword`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

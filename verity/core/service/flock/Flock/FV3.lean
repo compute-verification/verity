@@ -2,4 +2,4 @@ module
 
 public import Commitments.FV3
 
-/-! Re-exports `Commitments.FV3`, for the modules that import it as `Flock.FV3`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

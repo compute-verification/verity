@@ -2,4 +2,4 @@ module
 
 public import Base.Canon
 
-/-! Re-exports `Base.Canon`, for the modules that import it as `Flock.Canon`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

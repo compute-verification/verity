@@ -2,4 +2,4 @@ module
 
 public import Circuits.AnnotExpand
 
-/-! Re-exports `Circuits.AnnotExpand`, for the modules that import it as `Flock.AnnotExpand`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/

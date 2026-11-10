@@ -2,4 +2,4 @@ module
 
 public import Base.Sizes
 
-/-! Re-exports `Base.Sizes`, for the modules that import it as `Flock.Sizes`. -/
+/-! A re-export: this module moved to a base package, and its importers still name it here. -/
