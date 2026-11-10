@@ -12,9 +12,11 @@
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
   mask's settings over the history and a zero pad) with every ok 1, at small statics over three blocks, and ok 0 at a slot whose
   opening is not the table's;
-* `cut` counts its units at the served statics, and malformed bindings are refused;
-* every unit of the cut at every served class has the rows Flock's composer proves, and the index's units and the read pass
-  the window builder's `interface.check_proof_block`.
+* `cut` counts its units at the served statics, the mask whole a unit up to `WHOLE_MAX` keys with each block's mask an
+  output, and malformed bindings are refused;
+* every unit of the cut at every served class has the rows Flock's composer proves and passes the window builder's
+  `interface.check_proof_block`, each mask in u16 words (`dsa_topk_mask_cut.words`), which a block's positions read whatever
+  the bits past its keys are.
 """
 from __future__ import annotations
 
@@ -67,8 +69,12 @@ def _masks(rng: random.Random, N: int, K: int, R_: int, most: int | None = None)
     return out
 
 
-def _positions(N: int, AT: int, K: int, masks: list[list[int]]) -> tuple[list[list[int]], list[int]]:
-    got = np.asarray(BS.evaluate_bits(bind(R.DsaMaskPositions, N=N, AT=AT, K=K), np.asarray(masks, dtype=np.uint8)))
+def _positions(N: int, AT: int, K: int, masks: list[list[int]], rng: random.Random | None = None
+               ) -> tuple[list[list[int]], list[int]]:
+    """The masks through `DsaMaskPositions_v1`, each in its u16 words: the bits past N 0, or random with ``rng``."""
+    pad = [[rng.getrandbits(1) if rng else 0 for _ in range(X.wide(N) - N)] for _ in masks]
+    got = np.asarray(BS.evaluate_bits(bind(R.DsaMaskPositions, N=N, AT=AT, K=K),
+                                      np.asarray([m + p for m, p in zip(masks, pad)], dtype=np.uint8)))
     got = got.reshape(len(masks), -1)
     return [_words(g[:32 * K], 32) for g in got], [_words(g[32 * K:], 32)[0] for g in got]
 
@@ -90,10 +96,13 @@ def _digest(t: Traced) -> str:
     return h.hexdigest()
 
 
-@pytest.mark.parametrize("N,AT,K", [(8, 0, 4), (6, 8, 4), (5, 3, 1), (16, 16, 16), (12, 1 << 17, 4), (2, 0, 2)])
+@pytest.mark.parametrize("N,AT,K", [(8, 0, 4), (6, 8, 4), (5, 3, 1), (16, 16, 16), (12, 1 << 17, 4), (2, 0, 2), (21, 0, 8)])
 def test_a_blocks_positions_are_its_twin_and_its_members_in_order(N, AT, K) -> None:
-    masks = _masks(random.Random(N * 1000 + AT + K), N, K, 40)
-    pos, counts = _positions(N, AT, K, masks)
+    """Its mask's words past N bits are random: the block ignores them."""
+    rng = random.Random(N * 1000 + AT + K)
+    masks = _masks(rng, N, K, 40)
+    pos, counts = _positions(N, AT, K, masks, rng)
+    assert (pos, counts) == _positions(N, AT, K, masks)
     for m, p, c in zip(masks, pos, counts):
         want = tuple(M.butterfly_apply(M.butterfly_settings(m, K), list(range(AT, AT + N)), K, 0)), sum(m)
         assert (tuple(p), c) == want, (m, p, c)
@@ -310,9 +319,12 @@ def test_the_cut_counts_its_units() -> None:
         t = bind(R.DsaTopKReadRows, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK, READ=READ)
         cut = dict(R.cut(t))
         bl = X.blocks(N, SERVED_TOPK, R.BLOCK)
-        mask = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=SERVED_TOPK)
+        whole = bind(X.DsaTopKMaskWhole, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK)
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
-        assert (mask in cut) == (N <= X.WHOLE_MAX)
+        assert (whole in cut) == (N <= X.WHOLE_MAX) and bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=SERVED_TOPK) not in cut
+        if N <= X.WHOLE_MAX:
+            _, ret = whole.signature()
+            assert [f.leaves for f in ret.fields] == [X.wide(hi - lo) for lo, hi in bl]
         assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
         assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 64
         assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
@@ -365,14 +377,19 @@ def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -
     assert max(k["DsaPositionsMerge_v1"]) <= 26
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="the mask's units and DsaMaskPositions_v1 take or give Boolean ports `interface.layout` doesn't lay "
-                          "out as rows: a mask, Array<N, BIT>, is one N-bit word, and a digit prefix or a rank of 8, 12 or "
-                          "24 bits isn't whole u16 words")
+#: the mask's units and the block positions, each with the least k_log their rows allow over the served classes: a block's
+#: scores, 64 KiB at 16,384 keys, are most of a unit's rows, and the whole mask's are up to WHOLE_MAX keys, 2^27 from 24,576
+MASK_UNITS = {"DsaTopKMaskWhole_v1": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v1": {23, 24},
+              "DsaTopKMaskBlock_v1": {23, 24, 25, 26}, "DsaMaskPositions_v1": {23}}
+
+
 def test_the_mask_units_pass_the_window_builders_proof_block_check() -> None:
-    for b, us in _served_units().items():
-        for u in us if b not in INDEX_UNITS else ():
-            IF.check_proof_block(u)
+    """`interface.check_proof_block` passes the mask's units and the block positions at every served class: each mask a
+    `dsa_topk_mask_cut.words` port, and each prefix and r whole u16 words, so `interface.layout` lays every port out."""
+    units = _served_units()
+    assert set(units) == set(INDEX_UNITS) | set(MASK_UNITS)
+    k = {b: {IF.check_proof_block(u) for u in units[b]} for b in MASK_UNITS}
+    assert k == MASK_UNITS, k
 
 
 def test_the_long_row_is_typed_by_its_read_and_malformed_bindings_are_refused() -> None:
