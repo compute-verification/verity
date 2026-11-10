@@ -20136,7 +20136,7 @@
    }
   },
   "PouwCheck.Credit": {
-   "digest": "9b0d530987ee9a7ebfef4d997bfe166d030352330a9baa9cefa00c5d8a81b3a7",
+   "digest": "a4f0c2cf6cdfad41fe4d9e1e0e33d4379b680dcd18127094f6ac3535dd7a9e70",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -20210,7 +20210,7 @@
     "PouwCheck.Credit.OTHER_WEIGHTS": "a30230fb307ac8e627a9995cbd6565e1be7889dd360687a12242f800140ee74e",
     "PouwCheck.Credit.PERIOD_KEYS": "8d390339adfa6b7dc69581142642ced8463a246eac176543a23bddddcb450b09",
     "PouwCheck.Credit.PERIOD_PIN_FIELD": "184d1f33f416b8f4b3ce581d4f6ee2467ec2d09068d5ef9108cfa338baeb237a",
-    "PouwCheck.Credit.PINNED_MODELS": "fdd22de85540790146f622e64fbdee134473bb4cc07295e6f43bb85131cb3163",
+    "PouwCheck.Credit.PINNED_MODELS": "da23deb5aae861dde822f7a580b666df048c7392b629c450849f5f76f16820f7",
     "PouwCheck.Credit.PROOFS_FORM": "a34c3d753408e12158333176c2b653925193f364e9db1ec632e5c020fdffdb95",
     "PouwCheck.Credit.PROOF_KEYS": "3b4668e1aed14a578d01d42565b991e0578fdf218d009bc7c54498faa3920569",
     "PouwCheck.Credit.PeriodCredit": "5a4e13fded73d44a26bddce9e57cf7c8ed82ba483d749db640d0be8a71395583",
