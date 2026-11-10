@@ -22,10 +22,10 @@ first; any other `queue/*` branch is no candidate, and is logged once (`ignore`)
 the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
-no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
+no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`landing.RATCHET_STEP`: it judges
 each merge against its first parent, which a task keyed by its inputs can't) or off the gate in policy.toml at the candidate,
 so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
-allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
+allowance of that policy covers passed (`Landing._task_allowed`); else a failed or blocked task is fail,
 each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
 (result/v1's `failed_tests` and those graph2's verdict names of it, or what a task's own fault names: `_fault_tests`) and its
 key and failing tests in its base's graph as graph2 listed it, where there are (`Failed.base_key`, `Failed.base_tests`),
@@ -45,8 +45,8 @@ It is pending while its base's check isn't listed, or, with a failure, while gra
 graph it listed of the base can't be read, or a task there hasn't ended, unless it or what it reads there ended in an infra
 error (`World._base`): no failure is the candidate's own, so none ejects or bisects, until the base's keys say.  The loop
 enqueues such a base's check again each `BASE_RETRY_S` while a candidate waits on it for want of its graph or of graph2's
-word on it, and rings `CI` and `drive.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed
-(`verdict`, else its `ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`drive.gating`)
+word on it, and rings `CI` and `landing.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed
+(`verdict`, else its `ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`landing.gating`)
 or a kind of task on the merge gate its base's graph lists, unless that kind's job went to another kind (`World._gone`), and
 failing nothing of its own, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where
 it has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
@@ -80,8 +80,8 @@ before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `
 starts the run beside its check; with `records` (a member changes Lean, a lock or a spec) it starts the candidate's records
 run instead (`vqueue_records.start`: drive's lock run, on drive's machines, on its tree), logged (`regenerate`), and its check
 waits.  Every check starts at one seam (`Loop._enqueue`: the enqueue, its line and the run beside it).
-Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
-(`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
+Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
+(`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
 Regenerate starts the candidate's records run again and logs it.  Commit starts the check of a candidate whose records run
 passed: on it as built when the run regenerated nothing (`vqueue_records.commit`); else on the records commit of what it
 regenerated, made on top of it in drive's lock commit's form, which the merge gate vouches for, and pushed: a candidate on the
@@ -97,10 +97,10 @@ Retry enqueues again (graph2 lists a check whose listing failed, reruns what end
 infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a task still runs, or
 one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun runs the keys afresh
 (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without graph2's `rerun` it is
-logged `absent`, and counts as done.  Ring tells whom it names (`to`), else `drive.INFRA` (or its `pr`'s owner), once a
+logged `absent`, and counts as done.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner), once a
 candidate and why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads
 infra in the same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word
-on it is rung to `CI` and `drive.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and
+on it is rung to `CI` and `landing.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and
 when graph2 still hasn't listed it or said `BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is
 held on because graph2's verdict and the loop's reading disagree on it, there or at its base, is rung to `CI` with both keys
 and both readings, and a listing the loop read that isn't graph2's with both, once each (`Loop._disputes`).  Red tells
@@ -145,15 +145,16 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue, vqueue_records
-from .drive import (CI, JOB_OF_KIND, LOCK_SUBJECT, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating,
-                    merge_thread_post)
-from .drive import INFRA as INFRA_HANDLE
+from .landing import (CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Landing, cancel_runs, gating,
+                      merge_thread_post)
+from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files, flags_at,
                     label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
                     unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
                      Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
+from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
@@ -199,7 +200,7 @@ BASE_COMING = (UNLISTED, BASE_UNSAID)
 BASE_RETRY_S, BASE_RING_S = 15 * 60, 30 * 60
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
-#: a lock commit's trailer naming the files it regenerated (`drive.lock_message`, which post_train reads alike)
+#: a lock commit's trailer naming the files it regenerated (`vqueue_records.lock_message`, which post_train reads alike)
 REGENERATED_RE = re.compile(r"^Regenerated: \S", re.M)
 #: the most first-parent commits a candidate's walk reads above its base
 WALK = 64
@@ -226,7 +227,7 @@ def branch(sha: str) -> str:
 
 def records_commit(commit: str, parents: str, body: str) -> bool:
     """Whether ``commit`` (its ``parents`` as `%P` gives them, its message ``body``) is a lock commit in drive's form, as a
-    candidate's records commit is (`vqueue_records.commit`): one parent, and `drive.lock_message`'s subject and
+    candidate's records commit is (`vqueue_records.commit`): one parent, and `vqueue_records.lock_message`'s subject and
     `Regenerated:` files."""
     return len(parents.split()) == 1 and body.startswith(LOCK_SUBJECT) and bool(REGENERATED_RE.search(body))
 
@@ -478,7 +479,7 @@ class Relisted:
 @dataclass
 class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
-    ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
+    ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`landing.gating`) that no
     task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed, and
     `kind K` of each kind of task its base's graph lists that it lists none of (`World._gone`), ``waits_on`` the base whose
     check its verdict waits on and why, where the loop acts on it (`BaseWait`), ``disputed`` what it is held on: the tasks
@@ -591,8 +592,8 @@ class World:
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
         self._prs: dict[int, PR] | None = None
-        self._driver: Driver | None = None
-        self._slim: Driver | None = None
+        self._driver: Landing | None = None
+        self._slim: Landing | None = None
         self._main: str | None = None
         #: while a snapshot reads the candidates' verdicts (`Loop.snapshot`), graph2's verdict of each sha read (`_verdict_of`)
         #: and the graph graph2 listed of each check read (`_listing`)
@@ -761,7 +762,7 @@ class World:
         return {ref.removeprefix(f"{NS}/queue/"): sha for ref, sha in (line.split() for line in out.splitlines())}
 
     def members(self, sha: str, base: str, prs: Iterable[int], heads: Iterable[str]) -> list[Member]:
-        """Candidate ``sha``'s members as `Driver._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
+        """Candidate ``sha``'s members as `Landing._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
         line above ``base``, while they are the PRs ``prs`` at ``heads`` as built; else those, without their merges."""
         prs, heads = list(prs), list(heads)
         if (walked := self._walk(sha, base)) is not None and [(m.pr, m.head) for m in walked] == list(zip(prs, heads)):
@@ -950,8 +951,8 @@ class World:
         return None
 
     def _allowed(self, sha: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
-        """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name, as drive's
-        `executor = "on"` path reads them (`Driver._task_units`, `Driver._task_allowed`): drive takes each as passed."""
+        """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name
+        (`Landing._task_units`, `Landing._task_allowed`): each is taken as passed."""
         out = set()
         for i in ids:
             if states[i][0] == FAIL:
@@ -1158,8 +1159,8 @@ class World:
         self.push(sha, "refs/heads/main", base)
 
     def on_main(self, sha: str, base: str, members: list[Member], told: list[str]) -> None:
-        """What drive does once ``members`` are on `main` at ``sha`` from ``base`` (`Driver._on_main`); ``told``, the stacked
-        PRs whose owners were told, is drive's list it extends as it tells."""
+        """What follows ``members`` reaching `main` at ``sha`` from ``base`` (`Landing._on_main`); ``told``, the stacked PRs
+        whose owners were told, is the list it extends as it tells."""
         self.driver()._on_main({"told": told, "stale_closed": self.q.load_state().get("drive", {}).get("stale_closed", {})},
                                members, base, sha, "")
 
@@ -1187,8 +1188,8 @@ class World:
         return {t["id"]: t for t in got[1]["tasks"]} if got else {}
 
     def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
-        """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
-        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+        """The handles owning tasks ``ids`` of ``sha``'s graph, the owners of what failed: a test file's suite's in the registry
+        (`Landing._path_owner`), else its job's in ci.toml at ``sha`` (`Landing._step_owner`)."""
         by, d, out = self._tasks(sha), self.driver(), []
         for i in ids:
             if (t := by.get(i)) is None:
@@ -1209,13 +1210,13 @@ class World:
         """``text`` posted to ``to`` in the merge thread, as drive posts."""
         return bool(self.post(f"{' '.join(to)} vqueue: {text}", to))
 
-    def driver(self) -> Driver:
+    def driver(self) -> Landing:
         if self._driver is None:
-            self._driver = Driver(self.q, on="", post=self.post, now=self.now)
+            self._driver = Landing(self.q, on="", post=self.post, now=self.now)
         return self._driver
 
-    def slim_driver(self) -> Driver:
-        """The Driver the run beside each check and each records run are launched and judged with (`vqueue_slim`,
+    def slim_driver(self) -> Landing:
+        """The `Landing` the run beside each check and each records run are launched and judged with (`vqueue_slim`,
         `vqueue_records`), on ``on``'s machines, else drive's: drive.toml's `on` at `main` when first asked, as its
         `warn_steps`, which no check that gates is judged on.  It outlives the ticks, as `vqueue_slim.judge` and
         `vqueue_records.judge` expect."""
@@ -1226,7 +1227,7 @@ class World:
                                  "beside a candidate's check or records run can launch: name them there or with --on "
                                  "(--no-slim runs only with --shadow or --dry-run, and --no-records checks a Lean candidate "
                                  "with no records run first)")
-            self._slim = Driver(self.q, on=on, post=self.post, now=self.now, warn_steps=flags.warn_steps)
+            self._slim = Landing(self.q, on=on, post=self.post, now=self.now, warn_steps=flags.warn_steps)
         return self._slim
 
 
@@ -1242,8 +1243,8 @@ def _tests(doc: object) -> frozenset[str]:
 
 
 def _job(t: dict, tasks: dict[str, dict]) -> str:
-    """The job of check's that graph task ``t`` of ``tasks`` stands for (`drive.JOB_OF_KIND`, else its kind): a test file that
-    reads what lean-build built is of a suite check runs after lean-build (`drive.SUITES_KIND`), on its outputs."""
+    """The job of check's that graph task ``t`` of ``tasks`` stands for (`landing.JOB_OF_KIND`, else its kind): a test file that
+    reads what lean-build built is of a suite check runs after lean-build (`landing.SUITES_KIND`), on its outputs."""
     if t["kind"] == "test-file" and any(isinstance(r, dict) and (tasks.get(r.get("task")) or {}).get("kind") == "lean-build"
                                         for r in t.get("reads") or ()):
         return SUITES_KIND
@@ -1939,7 +1940,7 @@ class Loop:
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
         """Tell what drive tells of the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
-        `drive.bookkeeping_told`'s text and handles), once a records commit: logged, and only logged with --shadow."""
+        `vqueue_records.bookkeeping_told`'s text and handles), once a records commit: logged, and only logged with --shadow."""
         if told is None or any(r.get("posting") == "bookkeeping" and r.get("sha") == tip for r in t.past.of("posting")):
             return []
         text, to = told[0], tuple(f"@{h}" for h in told[1])
@@ -2145,7 +2146,7 @@ class Loop:
         priority unless it was enqueued less than `BASE_RETRY_S` ago, here or by its build or a retry where it is a candidate
         (`Past.base_enqueues`), so again each `BASE_RETRY_S` while one waits on it: graph2 lists a check whose listing failed
         again, resumes a cancelled one, and leaves one it is listing or has listed as it is.  One that fails to enqueue is
-        enqueued by the next tick.  `CI` and `drive.INFRA` are rung, naming it and the candidates on it, once a base and why
+        enqueued by the next tick.  `CI` and `landing.INFRA` are rung, naming it and the candidates on it, once a base and why
         (`Past.rung`): at once when its listing failed or its graph can't be read, and when graph2 still hasn't listed it or
         said `BASE_RING_S` after it was first asked for (`BASE_COMING`); none where the check gates (`CHECK_GATE`), since no
         candidate waits on it there.  Nothing is ejected or bisected on its account: its candidates wait, for as long as
@@ -2176,7 +2177,7 @@ class Loop:
         return recs
 
     def _ring_base(self, t: Tick, base: str, wait: BaseWait, why: str, cands: list[Candidate], first: float | None) -> dict:
-        """Ring `CI` and `drive.INFRA` that ``cands`` wait on ``base``'s check (`_bases`), keyed by ``why``: a post that fails
+        """Ring `CI` and `landing.INFRA` that ``cands`` wait on ``base``'s check (`_bases`), keyed by ``why``: a post that fails
         is rung again by the next tick."""
         since = (f", {int(self.now() - first) // 60} min after it was first asked for" if wait.why in BASE_COMING and first
                  else "")

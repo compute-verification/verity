@@ -1,9 +1,8 @@
 """`research.vqueue_records`: the records run of a verified-queue candidate with a member that changes Lean, a lock or a spec,
-before its check, launched as drive launches its lock run (`Driver.launch_locks`) and judged as drive judges it
-(`Driver._lock_outcome`, `Driver._resend_locks`), and the records commit of what it regenerated, in drive's lock commit's form
-(`drive.lock_message`)
-and vouched for by the merge gate (`merge.regenerated_parent`), on drive's own fakes: `Harness`'s launches, run states,
-evidence and clock, and `_live_run`'s run dir, whose Lean report holds each package's report as lean_audit.py writes it."""
+before its check, launched as a lock run (`Landing.launch_locks`) and judged as one (`lock_outcome`, `resend_locks`), and the
+records commit of what it regenerated, a lock commit (`lock_message`) vouched for by the merge gate
+(`merge.regenerated_parent`), on `test_landing`'s fakes: `Harness`'s launches, run states, evidence and clock, and
+`_live_run`'s run dir, whose Lean report holds each package's report as lean_audit.py writes it."""
 from __future__ import annotations
 
 import json
@@ -12,12 +11,11 @@ import re
 import pytest
 
 from research import merge
-from research.drive import CI, LAUNCH_LOST_S, LEAN_STEP, LOCK_SUBJECT, NOT_STARTED, lock_message
-from research.queue import Member
+from research.landing import CI, LAUNCH_LOST_S, LEAN_STEP, NOT_STARTED
 from research.vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
-from research.vqueue_records import commit, judge, start
+from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, start
+from test_landing import Harness, _live_run, _steps_run
 from test_queue import World, _git
-from test_queue_drive import Harness, _live_run, _steps_run
 
 #: the candidate's lock: two guarantees and a named assumption, each with its owner, and a guarantee with none
 LOCKED = {"guarantees": {"T": {"owner": "@proofs"}, "U": {"owner": "@memory-accounting"}, "V": {}},
@@ -34,7 +32,7 @@ def world(tmp_path):
 
 
 def _harness(world: World, monkeypatch, files: dict | None = None) -> tuple[Harness, str]:
-    """Drive's harness, and candidate ``sha`` (``files``, else `CHANGE`, one commit above `main`) in the queue's clone."""
+    """`Harness`, and candidate ``sha`` (``files``, else `CHANGE`, one commit above `main`) in the queue's clone."""
     h = Harness(world, monkeypatch)
     h.q._clone()
     sha = world.change(files or CHANGE)
@@ -72,9 +70,9 @@ def _vouched(h: Harness, made: str, rid: str) -> str | None:
 # -- start
 
 
-def test_start_launches_drives_lock_run_on_the_candidate_on_drives_machines_and_keeps_its_record(world, monkeypatch):
-    """The records run is drive's lock run (`launch_locks`: train.sh's `--deferred lean-audit` at the after-landing rank), on
-    the candidate's own tree and drive's machines; its record is drive's (`_started`) with the candidate and when it
+def test_start_launches_a_lock_run_on_the_candidate_on_the_queues_machines_and_keeps_its_record(world, monkeypatch):
+    """The records run is a lock run (`launch_locks`: train.sh's `--deferred lean-audit` at the after-landing rank), on the
+    candidate's own tree and the queue's machines; its record is a launch's (`_started`) with the candidate and when it
     launched."""
     h, sha = _harness(world, monkeypatch)
     asked, launch = [], h.d.launch_locks
@@ -87,7 +85,8 @@ def test_start_launches_drives_lock_run_on_the_candidate_on_drives_machines_and_
                     f"{sha[:12]}: {rid}" for x in world.logs), world.logs
 
 
-def test_start_launches_nothing_in_a_dry_run_and_none_without_drives_machines_or_when_it_registered_no_run(world, monkeypatch):
+def test_start_launches_nothing_in_a_dry_run_and_none_without_the_queues_machines_or_when_it_registered_no_run(world,
+                                                                                                                 monkeypatch):
     h, sha = _harness(world, monkeypatch)
     h.d.dry_run = True
     assert start(h.d, sha) is None and h.launched == []
@@ -96,7 +95,7 @@ def test_start_launches_nothing_in_a_dry_run_and_none_without_drives_machines_or
     h.d.launch_locks = lambda repo, tip, machines: ([], "train: no slot")
     assert start(h.d, sha) is None and any(x.endswith("registered no run: train: no slot") for x in world.logs)
     h.d.on = ""
-    with pytest.raises(ValueError, match="drive's machines"):
+    with pytest.raises(ValueError, match="the queue's machines"):
         start(h.d, sha)
 
 
@@ -139,8 +138,8 @@ def test_a_records_run_that_exited_0_without_passing_lean_audit_fails(world, mon
 
 
 def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_resend_failing_refuses(world, monkeypatch):
-    """Killed (or lost, or out of disk or memory) is its machine's fault, as drive's lock run's is: it is launched again once,
-    on drive's other machines, and is pending; its resend failing too refuses."""
+    """Killed (or lost, or out of disk or memory) is its machine's fault (`machine_fault`): it is launched again once, on the
+    queue's other machines, and is pending; its resend failing too refuses."""
     h, sha = _harness(world, monkeypatch)
     h.d.on = "m1,m2"
     rec = start(h.d, sha)
@@ -186,8 +185,8 @@ def test_a_passed_records_run_whose_report_cant_be_read_yet_is_pending_with_why_
 
 
 def test_a_passed_records_run_that_regenerated_nothing_passes_and_makes_no_records_commit(world, monkeypatch):
-    """Its candidate's records were fresh: no commit is made, and the loop checks the candidate as built, as drive's lock run
-    that regenerated nothing leaves `checked`'s tip as it is (`Driver._locks`)."""
+    """Its candidate's records were fresh (`regenerated_locks` finds none): no commit is made, and the loop checks the
+    candidate as built."""
     h, sha = _harness(world, monkeypatch)
     rec = start(h.d, sha)
     (rid,) = rec["ids"]
@@ -262,10 +261,10 @@ def test_a_records_commit_is_held_while_a_lock_whose_owners_it_names_cant_be_rea
 # -- commit
 
 
-def test_the_records_commit_is_drives_lock_commit_on_the_candidate_which_the_merge_gate_vouches_for(world, monkeypatch):
-    """The records the run regenerated, committed on top of the candidate as drive commits its lock run's (`lock_message`,
-    `queue.IDENTITY`), in a scratch index: the clone's checkout, index and refs stay as they are.  The gate vouches for it
-    against the run, post_train reads its trailers, and drive reverts it with the PRs its subject names (`_lock_commits`)."""
+def test_the_records_commit_is_a_lock_commit_on_the_candidate_which_the_merge_gate_vouches_for(world, monkeypatch):
+    """The records the run regenerated, committed on top of the candidate as a lock commit (`lock_message`, `queue.IDENTITY`),
+    in a scratch index: the clone's checkout, index and refs stay as they are.  The gate vouches for it against the run, and
+    post_train reads its trailers."""
     h, sha = _harness(world, monkeypatch)
     rid = start(h.d, sha)["ids"][0]
     _passes(h, rid, sha)
@@ -283,11 +282,9 @@ def test_the_records_commit_is_drives_lock_commit_on_the_candidate_which_the_mer
     assert _git(wd, "log", "-1", "--format=%an <%ae>", made) == "research queue <queue@research.invalid>"
     assert _vouched(h, made, rid) == rid
     assert (_git(wd, "rev-parse", "HEAD"), _git(wd, "status", "--porcelain"), _git(wd, "for-each-ref")) == (head, status, refs)
-    assert h.d._lock_commits(f"{sha}^", made, [Member(1, sha, "lane-1", sha)]) == [made]
-    assert h.d._lock_commits(f"{sha}^", made, [Member(3, sha, "lane-3", sha)]) == []
 
 
-def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_as_drives_does(world, monkeypatch):
+def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_and_tells_its_owners(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
     rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
@@ -304,13 +301,15 @@ def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_as_dr
     assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, warned, files).strip(), body
     assert f"  {warned[0]}\n" in body and _vouched(h, made, rid) == rid
     assert told == (f"the lock run {rid} of `queue/{sha[:12]}` {sha[:12]} repaired bookkeeping that #1 brought, in "
-                    f"{made[:12]}, each a warning for the next PR to fix: {warned[0]}", ("lean",))      # as drive tells it
+                    f"{made[:12]}, each a warning for the next PR to fix: {warned[0]}", ("lean",))
 
 
 def test_a_records_commit_is_held_while_its_records_cant_be_read_or_the_gate_wont_vouch_and_none_is_made_of_the_same(world,
                                                                                                                  monkeypatch):
     """Held, with why, in words that stay the same tick to tick (the loop rings each once); records the candidate holds
     already make no commit, as none regenerated makes none."""
+    import research.vqueue_records as R
+
     h, sha = _harness(world, monkeypatch)
     rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
@@ -322,7 +321,7 @@ def test_a_records_commit_is_held_while_its_records_cant_be_read_or_the_gate_won
     _passes(h, rid3 := start(h.d, sha)["ids"][0], f"{'0' * 40}")          # it ran on another tree
     got = commit(h.d, sha, rid3, (1,))
     assert isinstance(got, str) and got.startswith("the merge gate refuses its lock commit"), got
-    monkeypatch.setattr(h.d, "_locks", lambda rid, scratch: ({}, f"its regenerated lock records can't be read: OSError: [Errno "
-                                                                 f"28] No space left on device: '{scratch / rid / 'pkg'}'"))
+    monkeypatch.setattr(R, "regenerated_locks", lambda driver, rid, scratch: (
+        {}, f"its regenerated lock records can't be read: OSError: [Errno 28] No space left on device: '{scratch / rid / 'pkg'}'"))
     got = commit(h.d, sha, rid, (1,))
     assert got == commit(h.d, sha, rid, (1,)) and got.endswith(f"device: '<scratch>/{rid}/pkg'"), got   # rung once, not each tick

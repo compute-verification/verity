@@ -59,6 +59,7 @@ untraced = [
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
+    "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -219,6 +220,7 @@ paths = ["tools/verity/check/gates/markdown_caps.py"]
 tests = [
     "tests/test_cores.py",
     "tests/test_jobuser.py",
+    "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_remote_preflight.py",

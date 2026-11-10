@@ -6,12 +6,10 @@ its failure names the one landing it implicates once `main` passed that step bef
 `FIX_FORWARD_S` after; several implicated are each rung, and none is reverted."""
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import re
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
@@ -20,18 +18,15 @@ import pytest
 import research.drive as D
 import research.queue as Q
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
+from research.drive import AFTER_LANDING, SIGTERM_RC
+from research.landing import AFTER_LANDING_OPTIONAL
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
+from test_landing import GATED_TREE, POLICY_TOML, _failed_run, _killed_run, _main, _move_main, _steps_run
 from test_queue import World, _git
-from test_queue_drive import Harness, _failed_run, _killed_run, _steps_run, _tip
+from test_queue_drive import Harness, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
-#: a ci.toml with a job for each after-landing step, and drive's policy taking circuit-check off the merge gate as in the tree
-CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in AFTER_LANDING)
-POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
-#: the files `_move_main` writes for a tree declaring `CI_TOML` under `POLICY_TOML`
-GATED_TREE = {"tools/verity/check/ci.toml": CI_TOML, "tools/verity/check/policy.toml": POLICY_TOML}
 
 
 def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
@@ -121,15 +116,6 @@ class Review(Harness):
 
 def _subject(world: World, ref: str) -> str:
     return _git(world.origin, "log", "-1", "--format=%s", ref)
-
-
-def _main(world: World) -> str:
-    return _git(world.origin, "rev-parse", "main")
-
-
-def _move_main(world: World, files: dict[str, str]) -> None:
-    """A commit onto `main` that isn't a landing of drive's (the lander's `research merge`), so the next sync rebuilds `next`."""
-    _git(world.dev, "push", "-q", "origin", f"{world.change(files)}:refs/heads/main")
 
 
 def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(world, monkeypatch):
@@ -282,7 +268,8 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
     """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
     its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
     or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
-    from research.drive import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
+    from research.drive import AUTO_PLAN, PLAN_JOB, planned
+    from research.landing import DETACH_JOB
 
     repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
     for d in (repo, out, job, bin_):
@@ -1796,8 +1783,8 @@ def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main
 
 def _detached(h: Review, tmp_path, locks: bool = False, post: bool = False) -> list[str]:
     """``h``'s lock runs (``locks``) and after-landing runs (``post``) launched as train.sh is: detached, the launch returning at
-    once with no run ids (`drive.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
-    what its train.sh has printed (`drive.launched`): unset while it runs, its run ids, or [] once it exited without them."""
+    once with no run ids (`landing.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
+    what its train.sh has printed (`landing.launched`): unset while it runs, its run ids, or [] once it exited without them."""
     starts, h.printed = [], {}
 
     def start(repo, commit, machine, *a, **kw):
@@ -1886,7 +1873,7 @@ def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_
 def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_bound_registered_no_run(world, monkeypatch, tmp_path):
     """A shard's launch record holds no launch time of its own: without the run's, a train.sh that hung before printing its run
     ids would leave the run launching for good, and nothing would land."""
-    from research.drive import LAUNCH_LOST_S
+    from research.landing import LAUNCH_LOST_S
 
     h = Review(world, monkeypatch, baseline=False)
     h.d.after_landing_shards = 2
@@ -1910,78 +1897,10 @@ def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_boun
     assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
 
 
-def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
-    """`detach`'s job, with a stand-in for train.sh that prints its `RUN` line only once the test lets it."""
-    from research.drive import LAUNCHES, detach, launched
-
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    gate, rid = tmp_path / "gate", "r20261026-093000-abcd"
-    os.mkfifo(gate)
-    job = detach(tmp_path, ["sh", "-c", f'echo "train: abc on m1"; cat "$1" > /dev/null; echo "RUN {rid}"', "sh", str(gate)],
-                 dict(os.environ))
-    assert job["dir"].startswith(str(tmp_path / LAUNCHES)) and launched(job)[0] is None
-    with open(gate, "w"):
-        pass
-    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
-        os.waitpid(job["pid"], 0)
-    assert launched(job) == ([rid], f"train: abc on m1\nRUN {rid}")
-    job = detach(tmp_path, ["sh", "-c", "echo 'train: no run launched' >&2; exit 1"], dict(os.environ))
-    with contextlib.suppress(ChildProcessError):
-        os.waitpid(job["pid"], 0)
-    assert launched(job) == ([], "train: no run launched") and (Path(job["dir"]) / "rc").read_text() == "1\n"
-    gone = subprocess.Popen(["true"])
-    gone.wait()
-    (Path(job["dir"]) / "rc").unlink()
-    assert launched({**job, "pid": gone.pid})[0] == []
-
-
-def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeypatch):
-    """Bash reads a script as it runs, and a later tick resets and checks out the queue's clone, so
-    a train.sh that `main` changed meanwhile would change under a running launch.  It runs a copy in its launch directory, from
-    the clone, and a rewrite of the clone's train.sh doesn't reach it."""
-    from research.drive import LAUNCHES, launched, train_launch
-
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    repo, gate, rid = tmp_path / "clone", tmp_path / "gate", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
-    script.parent.mkdir(parents=True)
-    script.write_text(f'echo "train: $0 in $PWD"\ncat {gate} > /dev/null\necho "RUN {rid}"\n')
-    os.mkfifo(gate)
-    job = train_launch(repo, "c0ffee", "m1", False, deferred=LEAN_STEP, detached=True)
-    copy = Path(job["dir"]) / "train.sh"
-    assert job["dir"].startswith(str(tmp_path / LAUNCHES)) and copy.read_text() == script.read_text()
-    with open(script, "w") as f:                                           # in place, as a checkout of a changed train.sh
-        f.write('echo "RUN r20261026-093000-ffff"\n' * 8)
-    with open(gate, "w"):
-        pass
-    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
-        os.waitpid(job["pid"], 0)
-    ids, tail = launched(job)
-    assert ids == [rid] and f"train: {copy} in {repo}" in tail, tail
-
-
-def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone(tmp_path, monkeypatch):
-    """The loop launches with its own train.sh (`script_from`): a copy of that one runs, in the clone, the clone's ignored."""
-    from research.drive import launched, train_launch
-
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
-    for path, text in ((script, 'echo "RUN r20261026-093000-ffff"\n'), (own, f'echo "train: own in $PWD"\necho "RUN {rid}"\n')):
-        path.parent.mkdir(parents=True)
-        path.write_text(text)
-    job = train_launch(repo, "c0ffee", "m1", False, deferred=LEAN_STEP, detached=True, script_from=own)
-    assert (Path(job["dir"]) / "train.sh").read_text() == own.read_text()
-    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
-        os.waitpid(job["pid"], 0)
-    ids, tail = launched(job)
-    assert ids == [rid] and f"train: own in {repo}" in tail, tail
-
-
 def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world, monkeypatch, capsys):
     """`research queue eject N` of a PR not on `next`, run off drive, would rebuild every member of `next` ("kept 0, merged
     N") and force-push it, which only drive's tick does: it records the ejection, and drive's next tick syncs."""
-    import research.drive as D
+    import research.landing as L
     from research.cli import main as research_main
 
     h = Review(world, monkeypatch)
@@ -1991,7 +1910,7 @@ def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world,
     h.tick()
     one = h.q.chain()[0].commit
     monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
-    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    monkeypatch.setattr(L, "merge_thread_post", lambda *a, **k: True)
     monkeypatch.delenv("RESEARCH_DRIVE")
     refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
     before = refs()

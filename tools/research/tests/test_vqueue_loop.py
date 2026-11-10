@@ -16,11 +16,12 @@ import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
 from research import vqueue, vqueue_records, vqueue_slim
-from research.drive import PREFLIGHT, lock_message
 from research.executor import GRAPH_V2, Executor, FileTransport
+from research.landing import PREFLIGHT
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, RecordsRun, Red,
                              Rerun, Retry, Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
+from research.vqueue_records import lock_message
 from test_queue import World as Origin, _git
 
 T0 = 1_900_000_000.0
@@ -1451,7 +1452,7 @@ def _red_on_a_moved_main(env: Env, shadow: bool = False) -> tuple[Loop, str, str
 def test_a_failure_on_a_base_graph2_hasnt_listed_waits_and_the_base_is_enqueued_again_and_rung_within_the_hour_once(env):
     """Whose a failure is, the base's keys tell: on a base whose check isn't listed the candidate is pending and nobody is
     blamed, the loop enqueues `ready:<base>`, again each `BASE_RETRY_S` while it stays unlisted, and rings `CI` and
-    `drive.INFRA` once, `BASE_RING_S` after it first asked for it; listed, a failure at the base's key is inherited and the candidate
+    `landing.INFRA` once, `BASE_RING_S` after it first asked for it; listed, a failure at the base's key is inherited and the candidate
     lands."""
     loop, main, sha, one, red = _red_on_a_moved_main(env)
     w = loop.world
@@ -1486,7 +1487,7 @@ def test_a_failure_on_a_base_whose_listing_failed_or_can_t_be_read_waits_and_the
         env, why, shadow):
     """A base whose listing failed, or whose graph can't be read, has no keys to say whose a failure is: the candidate is
     pending and nobody is blamed (were each failure its own, a red `main` would eject each PR built on it), the loop enqueues
-    `ready:<base>` again each `BASE_RETRY_S`, and rings `CI` and `drive.INFRA` at once, naming it, once a base and why (with
+    `ready:<base>` again each `BASE_RETRY_S`, and rings `CI` and `landing.INFRA` at once, naming it, once a base and why (with
     --shadow, logged only).  Listed again, a failure at the base's key is inherited and the candidate lands."""
     loop, main, sha, one, red = _red_on_a_moved_main(env, shadow)
     w = loop.world
@@ -1595,7 +1596,7 @@ def test_a_failure_waits_for_its_task_s_result_at_the_base_whatever_else_there_e
 
 
 def test_a_graph_lacking_a_job_main_waits_for_is_list_failed_marked_with_it_so_it_is_retried_and_rung(env):
-    """drive's `executor = "on"` path promotes nothing whose graph lacks a job `main` waits for (`drive.gating`): a candidate
+    """drive's `executor = "on"` path promotes nothing whose graph lacks a job `main` waits for (`landing.gating`): a candidate
     whose every task passed is list-failed then, its mark naming the jobs, and the policy retries and rings it."""
     env.gates = ["pytest", "lean-audit"]
     env.put(1, {"a.txt": "1\n"})
@@ -1728,7 +1729,7 @@ reason = "red until its fix lands"
 
 def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_as_drive_reads_it_until_it_expires(env):
     """drive's `executor = "on"` path takes a failed task whose every red record an unexpired allowance of the checked commit's
-    policy covers as passed (`Driver._task_units`, `Driver._task_allowed`), and so does the verdict."""
+    policy covers as passed (`Landing._task_units`, `Landing._task_allowed`), and so does the verdict."""
     env.put(1, {"a.txt": "1\n", "tools/verity/check/policy.toml": ALLOWED})
     loop = env.loop(vqueue.decide)
     (built,) = loop.tick()
@@ -1881,7 +1882,7 @@ def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_acro
     for n in range(1, 5):
         env.put(n, {f"{n}.txt": f"{n}\n"})
     slim = Slim()
-    dry = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, dry_run=True)    # its world has no Driver: a start raises
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, dry_run=True)    # its world has no Landing: a start raises
     assert dry.tick() == [] and slim.started == [] and any(x.startswith("would build") for x in env.out)
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=3)
     loop.world.slim_driver = lambda: "drive"
@@ -1917,7 +1918,7 @@ def test_a_candidate_on_main_s_chain_the_log_holds_no_start_of_starts_its_run_be
     (two,) = plain.tick()                                           # on `one`, with no run beside its check
     assert two["base"] == one["sha"]
     judged = len(slim.judged)
-    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Driver: a start or judge raises
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Landing: a start or judge raises
     assert dry.tick() == [] and len(slim.started) == 1 and len(slim.judged) == judged
     assert "beside: pending" in "\n".join(env.out)
     (started,) = loop.tick()
@@ -2270,8 +2271,8 @@ def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_read
 class Records:
     """`research.vqueue_records`'s functions, faked: each start registers a records run on its candidate (``regen-N``), judged
     as ``verdicts`` says (pending unless it names it), a verdict other than pending kept in its record, with the run that
-    passed, as `judge` keeps it; a commit commits ``files`` on top of the candidate in the clone ``repo`` in drive's lock
-    commit's form (`drive.lock_message`), at ``dated`` if set (else now), kept in ``made``, with ``told`` (what is told of the
+    passed, as `judge` keeps it; a commit commits ``files`` on top of the candidate in the clone ``repo`` as a lock commit
+    (`vqueue_records.lock_message`), at ``dated`` if set (else now), kept in ``made``, with ``told`` (what is told of the
     bookkeeping its run repaired), makes none when ``files`` is empty (its run regenerated nothing), or says why not
     (``held``).  With ``launching``, a start is a detached launch, pending until ``registered`` names the run ids it printed
     for its sha."""
@@ -2654,14 +2655,13 @@ def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env)
 
 
 @pytest.mark.parametrize("changes", [False, True])
-def test_end_to_end_on_drives_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes):
-    """The real `vqueue_records` on a real Driver, drive's fakes only where it reaches a machine (the launch, the runs' states,
-    their evidence and run dirs): drive's lock run runs on the Lean candidate's tree before its check and regenerates `pkg`'s
-    records, and its records commit, drive's lock commit the merge gate vouches for, is checked and lands in the candidate's
-    place.  When the regenerated records change guarantee T's statement, they land all the same, nobody rung or ejected, and
+def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes):
+    """The real `vqueue_records` on a real Landing, faked only where it reaches a machine (the launch, the runs' states, their
+    evidence and run dirs): a lock run runs on the Lean candidate's tree before its check and regenerates `pkg`'s records, and
+    its records commit, a lock commit the merge gate vouches for, is checked and lands in the candidate's place.  When the regenerated records change guarantee T's statement, they land all the same, nobody rung or ejected, and
     the records commit names the change with T's owner in the candidate's lock, as the spec DM shows it once it lands."""
-    from research.drive import LEAN_STEP, Driver
-    from test_queue_drive import _live_run, _steps_run
+    from research.landing import LEAN_STEP, Landing
+    from test_landing import _live_run, _steps_run
 
     main = env.main()
     lock = {"guarantees": {"T": {"owner": "@proofs"}}, "reads": {}}
@@ -2674,7 +2674,7 @@ def test_end_to_end_on_drives_lock_run_its_records_commit_lands_naming_each_stat
         states[rid := f"r20261109-0000{len(launched):02d}-abcd"] = ("running", None, None)
         return [rid], ""
 
-    d = Driver(loop.world.q, on="m1", launch=launch, states=lambda repo, ids: {i: states[i] for i in ids},
+    d = Landing(loop.world.q, on="m1", launch=launch, states=lambda repo, ids: {i: states[i] for i in ids},
                post=lambda text, to=(): True, now=lambda: env.clock, cancel=lambda repo, ids, reason: None,
                evidence=lambda repo, ids: evidence)
     loop.world.q.store, loop.world.slim_driver = env.o.store, lambda: d
@@ -2800,8 +2800,8 @@ def _row(*tests: str, beyond: bool = False) -> dict:
 
 
 class Runs:
-    """Drive's launches, run states and evidence, faked under the real `research.vqueue_slim` on ``loop``'s own Driver, its
-    machines `--on`'s: each launch is run `c-N`, running until `end` writes its run dir as a check's shard leaves it."""
+    """Launches, run states and evidence, faked under the real `research.vqueue_slim` on ``loop``'s own Landing, its machines
+    `--on`'s: each launch is run `c-N`, running until `end` writes its run dir as a check's shard leaves it."""
 
     def __init__(self, env: Env, loop: Loop, monkeypatch, on: str = "m1,m2,m3"):
         monkeypatch.setattr(M, "required_steps", lambda *a, **k: {})
@@ -2820,7 +2820,7 @@ class Runs:
     def end(self, sha: str, shard: int = 0, step: str = "", log: str = "", rows: tuple[dict, ...] = ()) -> None:
         """The three shards of the newest check of ``sha`` ended, each step passed but ``step`` in shard ``shard``, which
         failed with ``log`` and, of a step that runs suites, the suites.json ``rows``."""
-        from research.drive import LIVE
+        from research.landing import LIVE
 
         for k, n in enumerate([n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-3:], 1):
             (d := self.tmp / f"c-{n}").mkdir(parents=True)
@@ -2845,10 +2845,10 @@ def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Run
 @pytest.mark.parametrize("graph2", ["pending", "fail", "pass"])
 def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatever_graph2_says_and_the_two_are_compared(
         env, monkeypatch, graph2):
-    """The check that gates is drive's after-landing run of the candidate, every step as three shards, a machine each; graph2's
+    """The check that gates is the after-landing run of the candidate, every step as three shards, a machine each; graph2's
     check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances once every
     shard passed, and once both ended one line says whether they agree."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     main = env.main()
     env.put(1, {"a.txt": "1\n"})

@@ -1,10 +1,10 @@
-"""`research.vqueue_slim`: the run beside each candidate of the verified queue of what graph2 doesn't check, launched as drive
-launches its run beside the executor's check (`Driver._start_slim`) and judged as drive judges it (`Driver._follow_slim`), on
-drive's own fakes: `Harness`'s launches, run states, evidence and clock, `_slim`'s ended run, and the lint log drive names a
-culprit by.  Pending while it launches or runs, infra when it registered no run, never ran, was lost or was killed, fail on a
-step on the gate it failed, pass on every one it passed; each failure keyed by the content the step reads at the candidate
-and at its base, so `vqueue.decide` takes one its base fails too as inherited; `combine`'s table; and the check that gates:
-drive's after-landing run as shards, judged on the steps `main` waits for at the base, each failure by the tests it names."""
+"""`research.vqueue_slim`: the run beside each candidate of the verified queue of what graph2 doesn't check, launched and read
+through `research.landing`, on its fakes (`test_landing`): `Harness`'s launches, run states, evidence and clock, `_slim`'s
+ended run, and a lint log whose failure names its paths.  Pending while it launches or runs, infra when it registered no run,
+never ran, was lost or was killed, fail on a step on the gate it failed, pass on every one it passed; each failure keyed by
+the content the step reads at the candidate and at its base, so `vqueue.decide` takes one its base fails too as inherited;
+`combine`'s table; and the check that gates: the after-landing run as shards, judged on the steps `main` waits for at the
+base, each failure by the tests it names."""
 from __future__ import annotations
 
 import json
@@ -14,21 +14,18 @@ from pathlib import Path
 import pytest
 
 from research import merge
-from research.drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, shard_machines,
-                            step_paths, step_records, touches)
+from research.landing import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, shard_machines,
+                              step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
 from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
                                   step_test, unnamed)
-from test_drive_executor import PREFLIGHTS, _slim
-from test_drive_policy import _policy
-from test_drive_review import GATED_TREE, _main, _move_main
+from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _policy, _slim
 from test_queue import World, _git
-from test_queue_drive import LINT_LOG, Harness
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
 OFF = ("circuit-check", "ratchet-gate")
-#: what drive's naming finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
+#: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
 BUILD_SRC = ('VERIFIER = "verity/ml/flock/verifier"\nLEAN = "verity/core/service/flock"\n'
@@ -56,7 +53,7 @@ def world(tmp_path):
     return World(tmp_path)
 
 
-class Drive(Harness):
+class Beside(Harness):
     """`Harness`, whose launch of a run beside a check gives ``got`` when it is set: a detached launch's record, or the ids and
     tail of a train.sh that printed none."""
     got: dict | tuple[list[str], str] | None = None
@@ -69,22 +66,22 @@ class Drive(Harness):
 
 
 def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple[str, ...] = OFF, tree: dict | None = None,
-             change: dict | None = None, **kw) -> tuple[Drive, str, str, list]:
-    """Drive's harness on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
+             change: dict | None = None, **kw) -> tuple[Beside, str, str, list]:
+    """`Beside` on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
     (``change``, else f.txt) in the queue's clone, and the bases and commits lean-agreement's check asked of
     (`merge.required_steps`), which finds it changed with ``agreement``."""
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
-    h = Drive(world, monkeypatch, **kw)
+    h = Beside(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{sha}")
     return h, base, sha, asked
 
 
-def _failed(h: Drive, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
+def _failed(h: Beside, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
     """The `Failed` of ``step`` failed at candidate ``sha`` on ``base``: keyed by the content it reads at each, its one test
     the step's."""
     return Failed(f"step {step}", key(h.q.workdir, sha, step), inputs, key(h.q.workdir, base, step), frozenset({step_test(step)}))
@@ -110,28 +107,20 @@ def _down(rid: str, sha: str, why: str) -> Verdict:
 
 
 @pytest.mark.parametrize("agreement", [False, True])
-def test_start_launches_what_drive_launches_beside_the_executors_check_with_main_below_as_its_verified(world, monkeypatch,
-                                                                                                      agreement):
-    """The candidate's run is drive's: the steps and keywords `Driver._start_slim` launches for it with ``base`` as the verified
-    `main`, lean-agreement only when what it checks changed between them, and drive's record of it, with ``base``."""
+def test_start_launches_the_steps_beside_the_executors_check_with_main_below_as_its_base(world, monkeypatch, agreement):
+    """The candidate's run: the steps it sends with `Landing.beside_args`' keywords, ``base`` the `main` below it, lean-agreement
+    only when what it checks changed between them, and its record, with ``base``."""
     h, base, sha, asked = _harness(world, monkeypatch, agreement)
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
-    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True, "train_from": OWN_TRAIN})]
+    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_regenerate": True,
+                                                "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
     assert any(x == f"research queue vqueue: train.sh {sha[:12]} m1 --deferred {','.join(steps)} --base {base[:12]}"
                + (" --agreement" if agreement else "") + f" --no-regenerate beside candidate {sha[:12]}'s check: r-post-0"
                for x in world.logs), world.logs
-    pl = {"verified": base}
-    h.d._start_slim({}, pl, sha, False)
-    assert h.posted[1] == (sha, ",".join(steps), {k: v for k, v in h.posted[0][2].items() if k != "train_from"}), \
-        "drive's own launch of the same run, from the clone's train.sh"
-    assert pl["slim"]["ratchet_base"] == base
-    assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
-        {k: v for k, v in rec.items() if k not in ("ids", "base")}
 
 
 def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_puts_in_the_record(world, monkeypatch, tmp_path):
@@ -201,12 +190,12 @@ def test_a_dry_run_or_a_shadow_queue_launches_nothing(world, monkeypatch, how):
                for x in world.logs), world.logs
 
 
-def test_start_needs_drives_machines(world, monkeypatch):
-    """The loop's Driver is built with no machines unless it is given drive.toml's `on`, and a train.sh with none registers
+def test_start_needs_the_queues_machines(world, monkeypatch):
+    """The loop's Landing is built with no machines unless it is given drive.toml's `on`, and a train.sh with none registers
     nothing: `start` says so rather than launch it."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on = ""
-    with pytest.raises(ValueError, match="build the Driver with drive.toml's `on`"):
+    with pytest.raises(ValueError, match="build the Landing with drive.toml's `on`"):
         start(h.d, sha, base)
     assert h.posted == []
 
@@ -223,7 +212,7 @@ def test_judge_is_pending_while_the_run_runs(world, monkeypatch, state):
 
 
 def test_judge_reads_the_runs_state_afresh_each_call(world, monkeypatch, tmp_path):
-    """The loop's Driver outlives its ticks, and `Driver._states` reads each run once a tick: `judge` reads it every call."""
+    """The loop's Landing outlives its ticks: `judge` reads each run's state every call."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
     assert judge(h.d, rec) == Verdict(PENDING)
@@ -239,8 +228,8 @@ def test_a_run_that_passed_every_step_it_judges_passes(world, monkeypatch, tmp_p
     assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS, "passed": list(PREFLIGHTS)}
 
 
-def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_culprit_by(world, monkeypatch, tmp_path):
-    """No graph/v2 task runs the preflights: a failed one fails the candidate, its `Failed` holding what drive's naming finds
+def test_a_failed_preflight_fails_the_candidate_with_the_paths_its_failure_names(world, monkeypatch, tmp_path):
+    """No graph/v2 task runs the preflights: a failed one fails the candidate, its `Failed` holding the paths its failure names
     (`step_paths`), the paths the suspects are the members whose changes meet."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
@@ -250,24 +239,23 @@ def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_c
     assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "preflight-lints", LINT_PATHS),), ended=True)
 
 
-def test_a_failures_absolute_paths_meet_the_files_drive_matches_them_to(world, monkeypatch, tmp_path):
-    """A traceback's frame is an absolute path, which drive matches to a landing's file it ends in (`touches`): the `Failed`'s
-    inputs meet the same files."""
+def test_a_failures_absolute_paths_meet_the_files_they_end_in_under_a_directory(world, monkeypatch, tmp_path):
+    """A traceback's frame is an absolute path, which meets a landing's file it ends in under a directory: the `Failed`'s
+    inputs meet those files, the test its failure names, and no other."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
-    d = _slim(h, tmp_path, preflight_lints='FAILED tests/test_x.py::test_y - KeyError\n  File "/x/site/pkg/conftest.py", line 3\n')
-    (st,) = [st for st in step_records(d) if st["status"] == "failed"]
+    _slim(h, tmp_path, preflight_lints='FAILED tests/test_x.py::test_y - KeyError\n  File "/x/site/pkg/conftest.py", line 3\n')
     (failed,) = judge(h.d, rec).failed
-    for files in ({"pkg/conftest.py"}, {"site/pkg/conftest.py"}, {"x/site/pkg/conftest.py"}, {"conftest.py"},
-                  {"other/pkg/conftest.py"}, {"tests/test_x.py"}, {"tests/test_z.py"}):
-        assert meets(files, failed.inputs) is bool(touches(files, step_paths(d, st))), files
-    assert meets({"pkg/conftest.py"}, failed.inputs) and not meets({"conftest.py"}, failed.inputs)
+    for files, met in (({"pkg/conftest.py"}, True), ({"site/pkg/conftest.py"}, True), ({"x/site/pkg/conftest.py"}, True),
+                       ({"conftest.py"}, False), ({"other/pkg/conftest.py"}, False), ({"tests/test_x.py"}, True),
+                       ({"tests/test_z.py"}, False)):
+        assert meets(files, failed.inputs) is met, files
 
 
 @pytest.mark.parametrize("off_gate", [OFF, ("circuit-check",)])
 def test_a_red_ratchet_gate_fails_the_candidate_only_on_the_gate(world, monkeypatch, tmp_path, off_gate):
-    """ratchet-gate is off the gate in the tree, so its red holds no candidate, as it holds no `main` in drive; on the gate,
-    the candidate's own policy.toml says so, it fails it."""
+    """ratchet-gate is off the gate in the tree, so its red holds no candidate; on the gate, the candidate's own policy.toml
+    says so, it fails it."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=off_gate)
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, ratchet_gate="  merge 1 (0123456789ab): failed: grows p01.json 2 -> 3 entries\n")
@@ -349,7 +337,7 @@ def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, 
     assert judge(h.d, saved) == got == judge(h.d, rec)
 
 
-def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
+def test_start_and_judge_write_nothing_to_the_queues_state_and_tell_and_stop_nothing(world, monkeypatch, tmp_path):
     h, base, sha, _ = _harness(world, monkeypatch)
     before = h.q.load_state()
     rec = start(h.d, sha, base)
@@ -381,16 +369,17 @@ def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatc
 
 
 @pytest.mark.parametrize("agreement", [False, True])
-def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_shard_a_launch(world, monkeypatch, agreement):
-    """The check that gates is drive's after-landing run of the candidate above ``base``: every step sent, with the keywords
-    drive gives its own, `--shard K/N` on shard K's machines, the record holding each shard's run ids and its ``gate``."""
+def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_a_launch(world, monkeypatch, agreement):
+    """The check that gates is the after-landing run of the candidate above ``base``: every step sent, with
+    `Landing.beside_args`' keywords, `--shard K/N` on shard K's machines, the record holding each shard's run ids and its
+    ``gate``."""
     h, base, sha, _ = _harness(world, monkeypatch, agreement)
     h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_postland
     h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     rec = start(h.d, sha, base, shards=3)
-    kw = h.d._postland_args({"verified": base}, sha, False)[0]
-    assert kw == {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False, "no_regenerate": True}
+    kw = h.d.beside_args(sha, base)[0]
+    assert kw == {"base": base, "agreement": agreement, "no_regenerate": True}
     assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
     assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
     assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],

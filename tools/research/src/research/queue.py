@@ -2426,7 +2426,7 @@ class Queue:
 
     def _launch_restack(self, head: str, mv: Move, of: str, tries: int = 1, since: float | None = None) -> bool:
         """Start `restack.py HEAD --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
-        branch's copy run in the clone, in the background (`RESTACK_JOB`, `drive.detach`), unless this sync starts none or
+        branch's copy run in the clone, in the background (`RESTACK_JOB`, `landing.detach`), unless this sync starts none or
         `restack_jobs` run: whether it started.  It runs the move's base's `tools/move/` scripts, which `_regenerated` held to
         the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
         key = f"{head}:{mv.commit}"
@@ -2436,7 +2436,7 @@ class Queue:
         if script.returncode:
             self._restacks[key] = {"why": f"`{self.into}` has no {RESTACK}"}
             return False
-        from .drive import LAUNCHES, detach
+        from .landing import LAUNCHES, detach
 
         root = Path(tempfile.gettempdir()) / LAUNCHES
         root.mkdir(parents=True, exist_ok=True)
@@ -2460,7 +2460,7 @@ class Queue:
 
     def _restacking_why(self, key: str, mv: Move) -> str:
         """Why the PR whose restack is ``key`` waits off `next` (`RESTACKING`)."""
-        from .drive import _hhmm
+        from .landing import _hhmm
 
         what = f"{RESTACKING} {mv.commit[:12]} ({mv.map})"
         if job := self._restacking.get(key):
@@ -2776,7 +2776,7 @@ class Queue:
         """A hand ejection's notice, posted as ``by`` in the merge thread to `CI` and the lane that owns ``p`` (only a handle's
         holder may post as it).  Drive's
         own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
-        from .drive import CI, _merge_thread, merge_thread_post
+        from .landing import CI, _merge_thread, merge_thread_post
 
         owner = self.handle(p)
         to = tuple(dict.fromkeys((CI, *([f"@{owner}"] if owner else []))))
@@ -3400,7 +3400,7 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str, bool] | None:
     and why its results don't read when it exited 0; whether something else interrupted it: an exit of `RESTACK_INTERRUPTED`,
     or its process gone with no exit written, a restart of the pod).  None while it runs, up to `RESTACK_LOST_S` after its
     start."""
-    from .drive import _job_end
+    from .landing import _job_end
 
     if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
         return None
@@ -5603,8 +5603,8 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     waits for no tick, takes no lock of drive's and writes nothing of drive's state, and drive's next tick takes `main` there as
     verified (`Driver._main_moved`), so the review landing lands on it.  Refused without `--by ci`, off drive
     (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod), for --steps that leave out a step on the merge gate
-    at SHA (`drive.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
-    from .drive import AFTER_LANDING, gating
+    at SHA (`landing.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
+    from .landing import AFTER_LANDING, gating
 
     if _who(by) != "ci":
         raise QueueError(f"baseline: a green `main` is recorded only with --by ci, not --by {by}")
@@ -5627,7 +5627,8 @@ def promote(q: Queue, states: Callable[[Path, list[str]], dict] | None = None,
     gate there, as drive's tick judges it (`Driver.not_promotable`), the way `baseline` moves it (`_move_main`): `main` moves
     within minutes of the run's end, not at drive's next tick.  Nothing to do without such a run, while it runs, once it failed
     on the gate, or when `main` holds its tip; a loop on drive's host runs it (`/data/infra/drive.sh queue promote`)."""
-    from .drive import Driver, evidence as run_evidence, run_states
+    from .drive import Driver
+    from .landing import evidence as run_evidence, run_states
 
     if not (run := ((q.load_state().get("drive") or {}).get("postland") or {}).get("run")):
         print("research queue: promote: no after-landing run in drive's state: nothing to move")

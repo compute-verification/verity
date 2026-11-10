@@ -10,11 +10,12 @@ import json
 import pytest
 
 import research.drive as D
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, TAIL
+from research.drive import AFTER_LANDING, TAIL
+from research.landing import AFTER_LANDING_OPTIONAL
 from research.queue import DriveFlags, QueueError
 from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings, _subject
 from test_queue import World, _git
-from test_queue_drive import _failed_run, _steps_run
+from test_landing import _failed_run, _shard, _steps_run
 
 #: the steps `main` waits for under `GATED_TREE`
 GATED = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and s != "circuit-check"]
@@ -372,62 +373,27 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
-def _shard(tmp_path, rid: str, steps: dict[str, str], live: dict[str, str] | None = None, preflight: bool = False,
-           state: str = "running"):
-    """A shard's run dir: ``steps`` ended in its steps.jsonl, and its live record (`LIVE`, the check's ``state``) naming the
-    preflight's steps, those and ``live``'s, still to end (pending, running); with ``preflight``, the preflight's alone, its
-    groups not yet planned."""
-    from research.drive import LIVE, PREFLIGHT
-
-    d = _steps_run(tmp_path, rid, steps)
-    planned = {s: "running" if preflight else "passed" for s in PREFLIGHT} | ({} if preflight else {**steps, **(live or {})})
-    (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": state,
-                                      "steps": [{"step": s, "state": v} for s, v in planned.items()]}))
-    return d
-
-
 def _part(suite: str, k: int, status: str = "passed") -> dict:
     """``suite``'s row of its part K of 3 by test id, as suites.py reports it."""
     return {"name": suite, "suite": suite, "status": status, "failed_tests": ["tests/test_x.py::test_y"] * (status == "failed"),
             "part": {"ks": [k], "m": 3, "digest": "d", "by": "id"}}
 
 
-def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_holds_it_passed_it(tmp_path):
-    """A sharded after-landing run's shards hold parts of one step (lean-audit's packages, lean-suites' suites, lean-build beside
-    them): it passed once every shard that holds it passed it (or skipped it, or failed it only on what an allowance covers),
-    none having it still to run by its live record, so another shard's pass doesn't pass a part that runs on, failed or was
-    stopped; a twin's pass passes it for its shard, and twins' other words rank whatever their order (`RANK`); a step an ended
-    check never started was stopped; and nothing passed while a shard's plan isn't known.  A suite in parts passed once every
-    part of one partition did."""
-    from research.drive import PREFLIGHT, shard_ended, shard_passed, shard_steps, suite_passed
+def test_a_step_an_ended_shard_ran_or_never_started_has_ended_and_a_suite_in_parts_passed_once_every_part_of_one_partition_did(
+        tmp_path):
+    """`shard_ended`: a step every shard holding it ran to an end, or an ended check never started; `suite_passed`: a suite in
+    parts passed once every part of one partition did."""
+    from research.drive import shard_ended, suite_passed
+    from research.landing import PREFLIGHT, shard_steps
 
     one = _shard(tmp_path, "r1", {"lean-build": "passed", "lean-suites": "passed", "pytest": "passed"})
     two = _shard(tmp_path, "r2", {"lean-build": "passed"}, {"lean-suites": "running", "lean-agreement": "pending"})
-    view = shard_steps([[one], [two]], [True, False])
-    assert view[1] == {**dict.fromkeys(PREFLIGHT, "passed"), "lean-build": "passed", "lean-suites": None, "lean-agreement": None}
-    assert shard_passed(view) == shard_ended(view) == {*PREFLIGHT, "lean-build", "pytest"}
-
-    failed, stopped, skipped = (shard_steps([[one], [_shard(tmp_path / s, "r2", {"lean-suites": s})]], [True, False])
-                                for s in ("failed", "stopped", "skipped"))
-    assert "lean-suites" not in shard_passed(failed) and "lean-suites" in shard_passed(failed, {"lean-suites"})
-    assert "lean-suites" not in shard_passed(stopped, {"lean-suites"}) and "lean-suites" in shard_ended(stopped)
-    assert "lean-suites" in shard_passed(skipped)
-    twins = [_shard(tmp_path / "t", "r2", {"lean-suites": "stopped"}), _shard(tmp_path / "t", "r2b", {"lean-suites": "passed"})]
-    assert "lean-suites" in shard_passed(shard_steps([[one], twins], [True, False])), "a twin's pass passes its shard"
-    twins[1] = _shard(tmp_path / "u", "r2b", {}, {"lean-suites": "running"})
-    assert shard_steps([[one], twins], [True, False])[1]["lean-suites"] is None, "one twin still runs it"
-    for a, b in (("stopped", "failed"), ("failed", "stopped"), ("skipped", "stopped"), ("stopped", "skipped")):
-        pair = [_shard(tmp_path / f"{a}-{b}", "r2", {"lean-suites": a}), _shard(tmp_path / f"{a}-{b}", "r2b", {"lean-suites": b})]
-        assert shard_steps([[one], pair], [True, False])[1]["lean-suites"] == ("failed" if "failed" in (a, b) else "skipped")
+    assert shard_ended(shard_steps([[one], [two]], [True, False])) == {*PREFLIGHT, "lean-build", "pytest"}
+    stopped = shard_steps([[one], [_shard(tmp_path / "stopped", "r2", {"lean-suites": "stopped"})]], [True, False])
+    assert "lean-suites" in shard_ended(stopped)
     closed = shard_steps([[one], [_shard(tmp_path / "c", "r2", {"lean-build": "failed"}, {"lean-suites": "pending"}, state="failed")]],
                          [True, False])
-    assert closed[1]["lean-suites"] == "stopped", "its group stopped on lean-build's failure: it never starts"
-    assert "lean-suites" in shard_ended(closed) and "lean-suites" not in shard_passed(closed, {"lean-suites"})
-
-    early, bare = _shard(tmp_path / "e", "r2", {}, preflight=True), _steps_run(tmp_path / "b", "r2", {"lean-build": "passed"})
-    assert shard_steps([[one], [early]], [True, False]) is None and shard_steps([[one], [bare]], [True, False]) is None
-    assert shard_steps([[one], [bare]], [True, True])[1] == {"lean-build": "passed"}, "a twin exited 0: its steps.jsonl"
-    assert shard_steps([[bare]], [False]) == [{"lean-build": "passed"}], "an unsharded run: its steps.jsonl"
+    assert "lean-suites" in shard_ended(closed)
 
     assert suite_passed([{"name": "s", "status": "passed"}]) and suite_passed([_part("s", 3), _part("s", 1), _part("s", 2)])
     assert not suite_passed([_part("s", 1), _part("s", 3)]) and not suite_passed([_part("s", 1), _part("s", 2, "failed"), _part("s", 3)])
