@@ -1,7 +1,8 @@
-"""v2_case.py: sampled proofs v2's case of a served window from its kept files, in a5's form: one statement for a
-window of one member, per member for several. The rebuild reads what a served run's ``m0/compose.log``
-(``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as `composite.py` reads
-it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out."""
+"""v2_case.py: sampled proofs v2's case of a served window from its kept files, in a5's form: one member's statement,
+its public file named by the kept file's digest, and no case for a window of several. The rebuild reads what a served
+run's ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private
+as `composite.py` reads it, or, with no case or a blob with no file, only ``missing.json``, which `composite.py`
+leaves out."""
 
 from __future__ import annotations
 
@@ -47,17 +48,17 @@ def test_a_template_composed_from_no_input_set_is_not_rebuilt(tmp_path):
 
 
 def _window(w: Path, RP, members: list[dict], drawn: list[int], pins: dict | None,
-            per_block: dict | None = None) -> list[str]:
-    """A kept window of ``members`` (a5's ``summary.json``'s, with ``pins`` its ``circuits`` and ``per_block`` their
-    units a proof block, where it names one; ``pins`` None: no summary), each template's circuit file in its first
-    member's directory, its META at two units a proof block, a session per ``drawn`` member; its sessions' names."""
+            meta: dict | None = None) -> list[str]:
+    """A kept window of ``members`` (a5's ``summary.json``'s, with ``pins`` its ``circuits``; ``pins`` None: no
+    summary), each template's circuit file in its first member's directory with ``meta`` its META, a session per
+    ``drawn`` member; its sessions' names."""
     for m in members:
         d = w / f"m{m['k']}"
         d.mkdir(parents=True)
         (d / f"pub-{m['n']}.bin").write_bytes(d.name.encode())
     for t in dict.fromkeys(m["template"] for m in members):
         (w / f"m{next(m['k'] for m in members if m['template'] == t)}" / "circuit.txt").write_text(
-            f'FLOCK\nMETA {{"vus_per_block": 2}}\n{t}\'s gates')
+            f"FLOCK\nMETA {json.dumps(meta or {})}\n{t}'s gates")
     names = [f"s{k}" for k in drawn]
     for k in drawn:
         s = w / f"session-m{k}" / "sessions" / "a"
@@ -68,54 +69,63 @@ def _window(w: Path, RP, members: list[dict], drawn: list[int], pins: dict | Non
                                              "params": {}}))
     (w / "partition.json").write_text('{"rule": "r"}')
     if pins is not None:
-        (w / "summary.json").write_text(json.dumps({"members": members, "circuits": {
-            t: {"pin": p, **({"vus_per_block": per_block[t]} if t in (per_block or {}) else {})} for t, p in pins.items()}}))
+        (w / "summary.json").write_text(json.dumps({"members": members,
+                                                    "circuits": {t: {"pin": p} for t, p in pins.items()}}))
     return names
 
 
-def test_a_window_of_several_members_is_the_per_member_case(tmp_path, RP):
-    """A window whose summary lists several members gets a5's per-member case (`a5.v2_proof`): every member, the
-    undrawn too, with its units, its template's pin, its template's units a proof block (the summary's, else its
-    circuit file's META) and its kept registered file; a statement a drawn member on its template's circuit file, kept
-    in the template's first member's directory, under the evidence's sessions in order."""
-    w = tmp_path / "window"
+def test_a_window_of_several_members_has_no_v2_case_and_leaves_only_missing(tmp_path, RP):
+    """v2 reads one member's statement and refuses a windowed registration, so a window whose summary lists several
+    members gets no case, whichever of them were sampled: only ``missing.json`` saying so, which `composite.py` leaves
+    out."""
+    w, out = tmp_path / "window", tmp_path / "v2"
     members = [{"k": 0, "template": "t", "n": 2, "base": 0}, {"k": 1, "template": "t", "n": 3, "base": 2},
                {"k": 2, "template": "u", "n": 1, "base": 5}]
-    pins = {"t": "aa" * 64, "u": "bb" * 64}
-    names = _window(w, RP, members, [1, 2], pins, per_block={"t": 4})
-    (w / "m2" / "registered.json").write_text('{"ports": {}}')
-    v2, how, n = V.case(w, tmp_path / "scratch")
-    assert (how, n) == ("m0: kept; m2: kept", 2)
-    assert v2["params"] == {"partition": {"rule": "r"}, "proofs": {"members": {
-        "m0": {"circuit": pins["t"], "registered": None, "units": [[0, 2]], "vus_per_block": 4},
-        "m1": {"circuit": pins["t"], "registered": None, "units": [[2, 5]], "vus_per_block": 4},
-        "m2": {"circuit": pins["u"], "registered": {"ports": {}}, "units": [[5, 6]], "vus_per_block": 2}}}}
-    e = json.loads(bytes.fromhex(v2["evidence"]))
-    assert [(st["member"], [x["name"] for x in st["sessions"]]) for st in e["proofs"]["statements"]] == [
-        ("m1", names[:1]), ("m2", names[1:])]
-    assert v2["blobs"] == [str(w / f) for f in ("m0/circuit.txt", "m1/pub-3.bin", "session-m1/sessions/a/session.json",
-                                                "m2/circuit.txt", "m2/pub-1.bin", "session-m2/sessions/a/session.json")]
+    _window(w, RP, members, [1], {"t": "aa" * 64, "u": "bb" * 64})
+    v2, why, n = V.case(w, tmp_path / "scratch")
+    assert (v2, n) == (None, 0) and "this window has 3 members" in why
+    assert V.write(out, v2, why) == []
+    assert [f.name for f in out.iterdir()] == ["missing.json"]
+    assert json.loads((out / "missing.json").read_text()) == {"protocol": V.ID, "why": why}
+    assert C.case_dirs([out]) == []
+    assert V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch")]) == 2
 
 
 @pytest.mark.parametrize("summary", [True, False])
 def test_a_window_of_one_member_is_the_one_statement_case(tmp_path, RP, summary):
     """A window of one member, listed by its summary or, with none, ``m0`` alone with its pin its ``compose.log``'s, gets
-    the one-statement form."""
+    v2's one statement: ``proofs`` exactly the pin, the kept public file's digest and the registered file, which v2's
+    Lean reads, and the sessions under the evidence's names."""
     w, pin = tmp_path / "window", V.compose_command(LOG.read_text())["pin"]
     names = _window(w, RP, [{"k": 0, "template": "t", "n": 4, "base": 0}], [0], {"t": pin} if summary else None)
     if not summary:
         shutil.copy(LOG, w / "m0" / "compose.log")
     v2, how, n = V.case(w, tmp_path / "scratch")
     assert (how, n) == ("kept", 1)
-    assert v2["params"]["proofs"] == {"circuit": pin, "registered": None}
+    assert v2["params"] == {"partition": {"rule": "r"}, "proofs": {
+        "circuit": pin, "public": V.PF.file_sha512(w / "m0" / "pub-4.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(v2["evidence"]))
-    assert e["proofs"]["public"] == V.PF.file_sha512(w / "m0" / "pub-4.bin")
-    assert [x["name"] for x in e["proofs"]["sessions"]] == names
+    assert list(e["proofs"]) == ["sessions"] and [x["name"] for x in e["proofs"]["sessions"]] == names
+    assert v2["blobs"] == [str(w / f) for f in ("m0/circuit.txt", "m0/pub-4.bin", "session-m0/sessions/a/session.json")]
+
+
+def test_the_one_statement_names_the_members_registered_file_and_the_tables_its_circuit_looks_up(tmp_path, RP):
+    """A member reading registered values has the verifier's kept ``registered.json`` as the case's ``registered``, and
+    the blobs end with the lookup tables its circuit's META names, no other file of ``tables/``."""
+    w, table = tmp_path / "window", next(iter(V.PF.MUFU_SHA512))
+    _window(w, RP, [{"k": 0, "template": "t", "n": 4, "base": 0}], [0], {"t": "aa" * 64}, meta={"lookups": {table: 1}})
+    (w / "m0" / "registered.json").write_text('{"ports": {}}')
+    (w / "m0" / "tables").mkdir()
+    for name in (table, "other"):
+        (w / "m0" / "tables" / f"{name}.u32").write_bytes(b"\0" * 4)
+    v2, _, _ = V.case(w, tmp_path / "scratch")
+    assert v2["params"]["proofs"]["registered"] == {"ports": {}}
+    assert v2["blobs"][-1] == str(w / "m0" / "tables" / f"{table}.u32") and len(v2["blobs"]) == 4
 
 
 def _v2(tmp_path: Path, blobs: list[Path]) -> dict:
     return {"blobs": [str(b) for b in blobs], "commitment": b"registration".hex(), "evidence": b'{"proofs":{}}'.hex(),
-            "params": {"proofs": {"circuit": "00" * 64, "registered": None}}}
+            "params": {"proofs": {"circuit": "00" * 64, "public": "11" * 64, "registered": None}}}
 
 
 def test_a_case_with_its_blobs_is_written_private(tmp_path):
