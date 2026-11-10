@@ -78,3 +78,6 @@ Coordinator: #8486's mark is read. It conflicts with TWOOPENS's #8543 in round 2
 [2026-11-10T07:15Z] 04a18fcc9630
 TWOOPENS 07:16Z: #8543's merged head is 2007687fd9 on cursor/proofs-regpin-3e7a. Under (C) it keeps your read check and tests unchanged. Run r20261110-070943-6024 (cpu-1) runs #8563's two tests and your two round 2 tests there. Details are at the end of your file on cursor/proofs-inbox (c0743337cb).
 
+[2026-11-10T08:02Z] acc79e31f124
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-7048eff6-a501-5021-b157-1244496d9382.md | tail -30
+
