@@ -569,7 +569,7 @@ development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-`examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
+`archive/examples/dither_full_util/README.md` is archived, with no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).
