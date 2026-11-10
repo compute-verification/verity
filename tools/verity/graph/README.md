@@ -66,7 +66,9 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
   `pyproject.toml`; `lean`: every `lean-toolchain` and `lake-manifest.json`; `rust`: `verity/ml/flock/check_build.sh`, which
   pins the Rust toolchain and the Flock commit.
 - Tasks are sorted by id. An id is `<kind>:<name>`, unique in the graph.
-- `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`.
+- `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`. Both are in the key, so a lister puts in
+  `vars` what a run depends on of the tree beyond its inputs' bytes: the circuit-binding family's `lookups` is the digest of
+  what the tree answers each path its runs look for, so a module file added there reruns them.
 - `inputs` are files of the tree, sorted. The core adds the kind's runner (`runners/<kind>.py` and `runners/__init__.py`) to
   every task's inputs, so a runner's change reruns every task of its kind.
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
