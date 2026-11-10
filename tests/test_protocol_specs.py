@@ -11,7 +11,7 @@ from test_repository import ROOT, _tracked
 
 #: Specs that stay: {PROTOCOL.md: why}.
 KEPT = {
-    "verity/core/protocols/bandwidth/PROTOCOL.md": "experimental: the bandwidth audit over PoUS's store has no Lean verifier",
+    "archive/verity/core/protocols/bandwidth/PROTOCOL.md": "experimental: the bandwidth audit over PoUS's store has no Lean verifier",
     "verity/protocols/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
     "verity/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",

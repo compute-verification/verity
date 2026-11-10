@@ -34,7 +34,7 @@ with the same toolkit at the same path and the same host compiler (a `research r
 - `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
-  The served path and `examples/h200` load through it.
+  The served path and `archive/examples/h200` load through it.
 - `units/`: the H200 demo's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
   helpers over every operand word and holds each kernel's words to its twin's, on an H200 or an RTX PRO 6000.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`

@@ -44,7 +44,7 @@ from verity.protocols.certifier.verifier import audit, lean_audit
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
+BLOCK_SCHEMA = HERE.parents[1] / "archive" / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 
 
 def _load(name: str):

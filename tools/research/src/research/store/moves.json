@@ -2502,6 +2502,30 @@
       "paths": {
         "verity/ml/definitions/numerics/cuda/": "benchmarks/definitions/numerics/cuda/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/bandwidth/gpu.py": "archive/benchmarks/bandwidth/gpu.py",
+        "benchmarks/bandwidth/pyproject.toml": "archive/benchmarks/bandwidth/pyproject.toml",
+        "benchmarks/bandwidth/reference.py": "archive/benchmarks/bandwidth/reference.py",
+        "benchmarks/bandwidth/run.sh": "archive/benchmarks/bandwidth/run.sh",
+        "benchmarks/bandwidth/run_stream.sh": "archive/benchmarks/bandwidth/run_stream.sh",
+        "benchmarks/bandwidth/stream.cu": "archive/benchmarks/bandwidth/stream.cu",
+        "benchmarks/bandwidth/stream.py": "archive/benchmarks/bandwidth/stream.py",
+        "benchmarks/bandwidth/stream_host.cpp": "archive/benchmarks/bandwidth/stream_host.cpp",
+        "benchmarks/bandwidth/summarize.py": "archive/benchmarks/bandwidth/summarize.py",
+        "benchmarks/bandwidth/tagger.cu": "archive/benchmarks/bandwidth/tagger.cu",
+        "benchmarks/bandwidth/tests/": "archive/benchmarks/bandwidth/tests/",
+        "benchmarks/network_traces/demo_chain.sh": "archive/benchmarks/network_traces/demo_chain.sh",
+        "benchmarks/network_traces/demo_endpoint.py": "archive/benchmarks/network_traces/demo_endpoint.py",
+        "benchmarks/network_traces/tests/test_demo_endpoint.py": "archive/benchmarks/network_traces/tests/test_demo_endpoint.py",
+        "benchmarks/pous/hbm_audit/": "archive/benchmarks/pous/hbm_audit/",
+        "benchmarks/resource_accounting/": "archive/benchmarks/resource_accounting/",
+        "examples/h200/": "archive/examples/h200/",
+        "verity/core/protocols/bandwidth/": "archive/verity/core/protocols/bandwidth/",
+        "verity/core/protocols/pous/period_reports.py": "archive/verity/core/protocols/pous/period_reports.py",
+        "verity/core/protocols/pous/tests/test_pous_period_reports.py": "archive/verity/core/protocols/pous/tests/test_pous_period_reports.py"
+      }
     }
   ]
 }

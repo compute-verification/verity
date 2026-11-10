@@ -20,7 +20,7 @@ untraced = [
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/flock/verifier/interface",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
-          "verity/core/protocols/bandwidth",
+          "archive/verity/core/protocols/bandwidth",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
           "verity/core/devices/__init__.py",
           "verity/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
@@ -44,7 +44,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/engine/hooks.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's leg
-          "benchmarks/one_stage/served_verdicts.py", "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+          "benchmarks/one_stage/served_verdicts.py", "archive/examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py",
           "verity/protocols/pouw/verifier/coins.py", "verity/protocols/pouw/verifier/core_check.py",
           "verity/spot/verifier/one_stage/registration.py",

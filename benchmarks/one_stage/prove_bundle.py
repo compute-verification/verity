@@ -1,4 +1,4 @@
-"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each sampled member's units in
+"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `archive/examples/h200/interfaces`) proved: each sampled member's units in
 one Flock `prove --zk` session (SPOT[Flock]'s proof server; behind the Lean ZK server under ``--firewall``, the core
 protocols' path), served the bundle's own sample, and decided by Lean's `verify --zk`,
 the verifier; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "examples" / "h200" / "interfaces"),
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "archive" / "examples" / "h200" / "interfaces"),
                 str(REPO / "verity" / "flock" / "agreement")]
 
 import a0  # noqa: E402

@@ -643,7 +643,7 @@ KNOWN: dict[str, str] = {
     "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
-    "benchmarks/bandwidth/gpu.py::Commitment":
+    "archive/benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
@@ -722,7 +722,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "benchmarks/resource_accounting/joint.py::Challenger":
+    "archive/benchmarks/resource_accounting/joint.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (memory-accounting)",
     "verity/protocols/inference_only/rho/rho/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
@@ -750,10 +750,10 @@ KNOWN: dict[str, str] = {
     "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
     "demos/lifecycle/onsite.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
-    "examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
-    "examples/h200/e2e_h200/window.py::Window":
+    "archive/examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
+    "archive/examples/h200/e2e_h200/window.py::Window":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
-    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
+    "archive/examples/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
     "workloads/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (top)",
@@ -811,13 +811,13 @@ KNOWN: dict[str, str] = {
         "homonym, a link's online state: rename (network-accounting)",
     "verity/core/devices/memory_challenger/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Opening":
+    "archive/verity/core/protocols/bandwidth/audit.py::Opening":
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Store":
+    "archive/verity/core/protocols/bandwidth/audit.py::Store":
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Verdict":
+    "archive/verity/core/protocols/bandwidth/audit.py::Verdict":
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Window":
+    "archive/verity/core/protocols/bandwidth/audit.py::Window":
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/protocols/certifier/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
