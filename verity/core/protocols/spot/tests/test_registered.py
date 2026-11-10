@@ -877,6 +877,7 @@ def _history(body_flip: bool = False) -> tuple[dict, str, str]:
             HT.leaf_layer(digests), root)
 
 
+@pytest.mark.slow
 def test_a_history_source_is_the_root_the_verifier_computes():
     """A supplied value's source `{"history": "H/root"}` is the root the verifier computes for table H from its writer's
     public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
@@ -928,19 +929,19 @@ def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
     other = {**hist, "registered": {"k_hist": "11" * 64}}
     seen = []
     monkeypatch.setattr(V, "lean", lambda piece, args: seen.append((piece, args)) or {"refused": "the spy's"})
-    p, q, law, ports = check["program"], check["query"], check["law"], check["ports"]
-    interior = {"program": p, "query": q, "law": law, "copies": (ports, leaf, (), [], None, None, None, None, None, None,
+    p, q, design, ports = check["program"], check["query"], check["law"], check["ports"]
+    interior = {"program": p, "query": q, "law": design, "copies": (ports, leaf, (), [], None, None, None, None, None, None,
                                                                  None),
                 "history": other, "replay": p, "values": [], "record": rec, "received": "r", "read": b"", "coins": None,
                 "proved_units": None, "instances": None, "served": None, "session_roots": None}
     for it, want in ((None, None), (interior, other)):
-        got = V.run({}, rec, p, q, law, check["scheme"], ports, leaf, (), [], None, None, {}, [], [], "c", "r", b"", None,
+        got = V.run({}, rec, p, q, design, check["scheme"], ports, leaf, (), [], None, None, {}, [], [], "c", "r", b"", None,
                     [], {}, [], {}, 0.5, history=hist, interior=it)
         assert not got.ok and got.codes == (V.DISAGREE,)
         [(piece, args)] = seen
         seen.clear()
         assert piece == "run" and args["params"]["history"] == hist
-        params = V._params(p, q, law, check["scheme"], ports, leaf, (), [], None, None, None, history=hist)
+        params = V._params(p, q, design, check["scheme"], ports, leaf, (), [], None, None, None, history=hist)
         assert args["params"] == params
         assert (args.get("interior") or {}).get("params", {}).get("history") == want
 
