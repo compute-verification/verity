@@ -2011,6 +2011,23 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
+def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
+    """Daniel's page decided something no option names (card ee27f7dd): `otherwise` records it, with his words and
+    `page`, and never as the lane's own provisional decision."""
+    route.resolve = True
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
+                                  {"choice": "otherwise", "note": "both, in order", "page": True})
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--on-page")
+    assert route.requests[-1][2] == {"choice": "a", "page": True}
+    sent = len(route.requests)
+    for extra, why in ((["--note", " "], "needs --note"), (["--note", "x" * 1001], "1 to 1000"),
+                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note")):
+        rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", *extra)
+        assert rc == 2 and why in err, (extra, err)
+    assert len(route.requests) == sent
+
+
 def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registry, capsys):
     rc, out, _ = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--note", "revising the page")
     assert rc == 0 and out == "pending 2026-09-30T23:00:00Z False\n"

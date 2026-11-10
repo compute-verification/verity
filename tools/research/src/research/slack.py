@@ -4048,6 +4048,10 @@ def card_page(api: Slack, reg: dict, out: dict) -> str | None:
     return next((u for m in api.paged("conversations.replies", "messages", channel=ch, ts=out["ts"]) if (u := page_link(m))), None)
 
 
+#: the choice that records a decision outside a card's options; the site takes it only with a note this long at most
+OTHERWISE, OTHERWISE_NOTE_MAX = "otherwise", 1000
+
+
 def card_differs(out: dict, page: dict) -> str | None:
     """What the card says, when its answered page says otherwise: one of the two is decided and the other isn't, the page is
     Daniel's own Decision while the card's choice is the lane's or the default's, or the card's choice is an option letter
@@ -4208,9 +4212,17 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         path = "/" + urllib.parse.quote(str(ns.id), safe="")
         if ns.verb == "resolve":
             if not ns.choice:
-                raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread")
+                raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread, or `otherwise` "
+                                 "with --note saying what he decided instead")
             provisional = ns.provisional or (ns.note or "").startswith("Provisionally accepted")
-            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {})}
+            if ns.choice == OTHERWISE and not 1 <= len((ns.note or "").strip()) <= OTHERWISE_NOTE_MAX:
+                raise SlackError(f"ask-daniel resolve --choice otherwise needs --note: what Daniel decided instead, in 1 to "
+                                 f"{OTHERWISE_NOTE_MAX} characters")
+            if ns.choice == OTHERWISE and provisional:
+                raise SlackError("ask-daniel resolve --choice otherwise is Daniel's word, never provisional: a lane decides only "
+                                 "among its card's options")
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {}),
+                    **({"page": True} if ns.on_page else {})}
             if ns.dry_run:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
@@ -4530,7 +4542,12 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
-    p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
+    p.add_argument("--choice", default=None, metavar="VALUE",
+                   help="resolve: the option Daniel chose in the thread, or `otherwise` (with --note: what he decided "
+                        "instead), which also replaces a lane's provisional decision")
+    p.add_argument("--on-page", action="store_true",
+                   help="resolve: Daniel said it on the card's page, not in its thread (`status` names a card that differs "
+                        "from its page: record the page with `--choice otherwise --on-page --note ...`)")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "
