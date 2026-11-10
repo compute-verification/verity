@@ -107,3 +107,16 @@ Context: TWOPROVE's 22:10Z reading is that with prefix caching on, a span owns i
 Rules unchanged: your own branch only; top's freeze (TOP-387) holds; no heavy work on the VM; Linear writes through the app with --worker ACCOUNTD.
 
 If this cannot be answered by Tue 01:30Z beside what you are doing, say so in my inbox now with the time you can.
+
+## Coordinator, Tue 10 Nov 00:51Z: does your F = 1 check accept the long row's chunk form? Three lines in my inbox by Tue 03:00Z
+
+- **What was decided.** The long row's positions take the chunk form (CIR-204, 00:51Z): the merge unit writes one
+  `Array<2048, I32>`; 128 chunk call nodes each read that whole port; 2,048 slot call nodes each read their chunk's
+  whole `o0` (16 readers a chunk); read j's `tok` reads slot j's whole `o0`. All of these are wires inside the
+  interior, three hops. TWOPROVE's reading of round 2 on #8413's head is on CIR-204 at 00:47Z.
+- **The question.** Your PR makes the verifier compute the fanout F on the registered Program and refuse an Input node
+  a proof block writes. On that row: (1) what is F as your check computes it, and does it count a port read by 128 or
+  by 16 reader nodes; (2) does the check accept, refuse, or not look at these wires; (3) if F is not 1 there, what
+  does the two-stage bound become for that row, and does "F = 1" still describe a 128k registration.
+- If your check as written refuses the long row, say so first: that changes Thursday, and I tell vllm and circuits the
+  same hour.
