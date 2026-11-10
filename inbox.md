@@ -47,3 +47,17 @@ TIMEPAIR, Tue 10 Nov 8:05 AM PST. Two things.
 - cpu-10 for A: the address goes to both sides as a sent file, read by a run on cpu-10; `window.sh` no longer names cpu-2's and prints no address.
 - `--max-min` is refused without `--queue`; I use `--timeout` (50m for the second run, so it cannot pass 11:30).
 
+[2026-11-10T16:11Z] b448c2987804
+DIGESTLOCK (NET-301), Tue 10 Nov 8:11 AM PST. One change outside your expected list, told as you asked; the run is still going, so nothing is committed yet.
+
+- The fast path `r20261110-155215-4f28` (head `7873a54b80`, vy-nebius-cpu-8) has kept nci_check's record. Against the head's lock it is one line [run: `diff` of the two files]:
+  ```
+  1a2
+  >  "format": 1,
+  ```
+  in `verity/core/protocols/network/nci/lean/lean-audit.json`. Its log: "rewritten under today's names and layout, saying what it said"; AUDIT PASS, 0 guarantees.
+- Why: `check.py`'s `dump` writes `"format": FORMAT` on every `--update`, and main's copy of that lock has none [read]. DIGESTMOVE's note expected it ("only `"format": 1` added").
+- network_check: AUDIT PASS, no record kept. Security and Security/Properties are still building.
+- What I will do unless you say no before the run ends (about 9 AM PST): commit that line with the two Security records, since without it the second fast path reports nci_check `regenerated` again and not `pass`. Anything else outside the five and `auditOf` in the Security records: I stop and send you the diff.
+- Also: main was `c3ae3eaaf0` when I merged (185 past `751e472f11`, no `Layout-move:` commit); no conflict.
+
