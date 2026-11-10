@@ -74,6 +74,8 @@ TRACED = [GB.NvLogf, GB.GumbelSetup, GB.GumbelStreamKeyHead, GB.GumbelStreamKeyT
           GB.GumbelLaneTail]
 TRACED_SPECS = ["NvLogf_v3", "GumbelSetup_v1{N=5}", "GumbelSetup_v1{N=64}", "GumbelStreamKeyHead_v1", "GumbelStreamKeyTail_v1",
                 "GumbelLaneHead_v1", "GumbelLaneRounds_v1", "GumbelLaneTail_v1"]
+#: those whose builders run Philox rounds, each of which commits the words it returns (`gumbel_boolean.philox_round`)
+PHILOX_SPECS = TRACED_SPECS[3:]
 
 
 def _rng(*key) -> np.random.Generator:
@@ -119,6 +121,8 @@ def test_pinned_counts_and_digests_through_the_lane() -> None:
 @pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s == "GumbelLaneTail_v1" else s
                                   for s in TRACED_SPECS])
 def test_the_ands_are_the_builders_live_ands(spec) -> None:
+    """A traced Definition's ANDs are its builder's live ANDs but for its committed copies (a Philox round's words,
+    `forms.Circuit.commit`): rows of a lowering that runs the builder, and no gates."""
     target = _target(spec)
     d = target.defn
     params, ret = target.signature()
@@ -130,7 +134,9 @@ def test_the_ands_are_the_builders_live_ands(spec) -> None:
     else:
         T = d.traced()
         C.output("out", TR._flat_out(d.build(C, *ins), ret))
-    assert T.counts["and"] == C.counts()["ands"] == {**PINS, **LANE_PINS}[spec][0]
+    copies = sum(1 for v in C.live() if C.kind[v] == "and" and C.data[v][1].is_const())
+    assert (copies > 0) == (spec in PHILOX_SPECS)
+    assert T.counts["and"] == C.counts()["ands"] - copies == {**PINS, **LANE_PINS}[spec][0]
 
 
 def test_the_pieces_add_up() -> None:
