@@ -32610,3 +32610,124 @@ Until you say, my branch has none of them.
 **Runs on the tip, in flight:** `r20261110-202005-cd1d` (the 32 builds with `FlockZkServer` and `FlockRec`, and three copy-and-builds through the helper: `flock-verify`, `core-firewall`, and `flock-verify` as `hidden_zk/job.sh` leaves it), `r20261110-202059-dabe` (`check.py --build --update` on `core_circuits` and `core_commitments` for their `dependencies` records, then `check.py --build` on the eleven small packages), `r20261110-202245-f334` (`suites.py --changed e7b03e4a6c89 --quick`: 90 suites touched, listed locally), `r20261110-202700-4b44` (the small checks on (A)'s tree).
 
 **`main`** is still `5482988e3496`, 59 commits past my base, none under `verity/core/service/flock`, `verity/core/primitives`, `verity/core/difftest` or `verity/core/attest` (`git diff --stat`, I ran it).
+
+## LEAN-238 MOEBIND2, Tue 10 Nov 20:33Z: six answers. P1 stays about the circuit file and D stays a separate premise; no statement holds an opening's verdict to 1; no Lean on main parses the record's slots or held rows; nothing holds padding bits to zero; nothing refuses two parameters of one name; training's `is_boolean` fact does not reproduce on main
+
+I read your 16:42Z, 19:08Z and 20:03Z entries, `main`'s AGENTS.md at `5482988e3496`, and lean's comments on LEAN-238, taken as data [read]. bc id `bc-93dc3cc9-7bbd-5350-98cf-fc002d789da1`. Lines are at `origin/main` `5482988e3496` unless I name another commit. I changed no file of the tree, opened no PR and pushed to no PR's branch. The one run is a script under `/tmp` [run].
+
+### 1. P1 and part D (text to paste on LEAN-238)
+
+**For Daniel first: stating P1 about the Program's own Definition would change what `Accounting.SecurityProofs.TableReadBinding` says and rests on.**
+- #8565 lists that guarantee; #8565 is open and not on `main`, and `main` lists no P1 statement [read: `Security/lean-audit.json`].
+- Today the guarantee is about the parsed circuit file. Stated about the Program's Definition, it would rest on the circuit file computing that Definition. AGENTS.md's design rules call that completeness: never proved, never an assumption, never a gap [read]. So the form question is Daniel's.
+
+**Answer: P1 is not stated about the Program's Definition, and D stays a separate premise.** Nor does D carry P1 to the Program's Definition: it carries P1 from the builder's net to the registered circuit file.
+- **What P1 is about** [read]:
+  - `read_of_check` (`Security/Proofs/Accounting/ReadUnit/Check.lean:138`) and `gatesRefine_of_vals` (`Tie.lean:260`) take a `Flock.Circuit` whose template `Flock.ReadNet.check V H` accepts (`verity/core/service/flock/Flock/ReadNet/Template.lean:226`).
+  - The check compares the file's template to `readTmpl V H` (`:212`), the builder's net written in Lean.
+- **Nothing on `main` ties a decoded Program's Definition to that file** [read].
+  - Flock links the two only by META `program_digests` and the unit's template id (`HmRow.circuitTemplate`, `Flock/HmRow.lean:1179`).
+  - Flock says the lowering is not checked (`HmRow.lean:1184-1187`, `Flock/With/Setup.lean:596`).
+  - `Spot.Bits.check` (`Spot/Bits.lean:773`) holds a file's layout to its template's Definition: its rows to the parameters' words, never its gates. It runs nowhere (item 4).
+- **Where D stands** [read]:
+  - On `main`, the check and its theorem are proved (above).
+  - Open: the check runs in no verifier. Only `flock-read-tmpl` calls it (`Flock/ReadTmplCmd.lean:31`, `:42`); `FlockVerify`, `HmRow` and `Spot` don't [read: grep]. PRF-458's part D says it "changes the verifier's code, needs a difftest, and needs @soundness to say where the registration's descriptor lives". None of the three is done.
+  - Open: `TableReadBinding` is on #8565 (`cursor/proofs-moebind2-26ad`, head `38e2f7d067`), open with review-4's land verdict and not on `main` [run: `gh pr view`]. Its honest witness takes `Accounting.ReadUnit.ExpertReadAccepted`: open, @proofs, PRF-458, due 2026-11-30 in #8565's lock [read].
+- **Date** [read]: PRF-458 is due Thu 12 Nov on Linear. The verifier hook has no branch and no date; it is not started, so its date is yours to set.
+- **A form that needs no lowering** [guess]: state `Opens` about the circuit file that is registered for the pinned Definition (its META `program_digests` naming that Definition) and that `ReadNet.check` accepts. P1 then applies as proved, and the property ties the pin to that file rather than to the Definition's semantics.
+
+### 2. An opening's verdict held to 1
+
+**None: no Lean statement on `main` says an accepted SPOT audit holds an opening's verdict output to 1** [read].
+- **Where the verifier reads a registered read's outputs** [read]:
+  - It never reads them: a unit's outputs are hidden, committed rows (`HmOut`, `Flock/HmRow.lean:1612-1619`).
+  - A registration fixes a row's value only through known content. SPOT's zero-knowledge audit reads that (`Spot/OneStageZk.lean:418-426`): `Flock.Registered.knownOf`, `checkKnownAll`, then `Flock.KnownRead.check` on each statement. That is an executable check with no SPOT property stated.
+  - Nothing on `main` registers an opening's verdict row at known content. The known rows the integrations write are PoUW's (`integrations/vllm/verity_vllm/protocols/pouw/h1/drawn.py:610`).
+- **The nearest statement** is `Accounting.SecurityProofs.TS.HeldSessionSound : Accounting.Guarantees.TS.HeldSessionSound` (`Security/Proofs/Accounting/TS/Session/Held/Guarantees.lean`, with its tie lemmas in `Known.lean`) [read].
+  - It is proved and listed, owned by @proofs, and unwitnessed [read: the lock].
+  - It concludes, for PoUW's TS session, that a checked unit's `ok` rows are the registered word 1 (`checkKnownAll`). It covers PoUW's units, not SPOT's readers.
+  - Its open premises are `Accounting.Assumptions.TS.OkRealizes`, `TS.WindowDesign`, `Flock.SoundAtBridge.RowsSession.CR`, `RowsSession.ServedRegistered` and `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`.
+- **The read unit's own verdict** [read]:
+  - `Accounting.ReadUnit.RegisteredRows.ok_eq` (`Security/Definitions/Accounting/ReadUnit.lean:178-185`) is a definition, and no statement on `main` concludes it.
+  - On #8565, `TableReadBinding` takes it only inside ε's hypothesis, `Claims.Pr (acc ∧ drawn ∧ ¬(Correct ∧ RegisteredRows …)) ≤ ε`.
+- **Not usable** [read]: Flock's pinned outputs hold bits to 0, not 1 (`HmOut.checkPinned`, `HmRow.lean:1686`; `sat_pinned`, `Security/Proofs/Flock/Soundness/Discharge/HiddenExec/PinnedOne.lean:105`). They are refused for a template statement (`HmRow.lean:1696`).
+- **Carrier** [guess]: PRF-458. The statement would be `HeldSessionSound`'s counterpart for SPOT readers: `RegisteredRows.ok_eq` at a drawn reader whose verdict row the registered reads hold at known content 1. It needs the served record to register those rows. That is training's or the integration's work, and nothing does it today.
+
+### 3. A parser of the record's slots and held rows
+
+**None on `origin/main`: no Lean of SPOT's, or anyone's, parses a circuit record's slots or held rows** [read: grep for `gridsOf`, `rowKind`, `fillAt`, `heldAt`, `blocks.inference` and `registered.openings`].
+- **Where they are** [read]: on `cursor/inference-only-record-form-0063` at `c160047484`, in `verity/core/protocols/network/nci/lean/NciCheck/Record.lean` (package `nci_check`, namespace `NciCheck.Record`).
+  - Slots: `gridOf` (700), `merged` (715), `gridsOf` (723, which reads `blocks.inference`) and `Case.slot` (990).
+  - Held rows: `readOf` (569), `inputsOf` (593, which reads `registered.{params, tables, reads, roots, openings}`), `fillAt` (956), `Case.rowKind` (986) and `Case.heldAt` (1004).
+  - `finish` (1019) and `read` (1038) run them.
+  - Each is a top-level `def` in `@[expose] public section` (209): none is `private`, none is inside another function.
+- **To name them from another package** [read]: that file lands on `main`, and the property imports `NciCheck.Record`. `Security/Properties/lakefile.toml` already requires `nci_check` (lines 33-35).
+- **Two catches** [read]:
+  - They don't read the text alone. `gridsOf ts doc` and `inputsOf ts W wired doc` take the templates `ts` from `templatesOf P doc` (402), so they need the decoded Program. lean's `Readers.slot : Json → …` and `declared : Json → Row → …` would need a Program argument.
+  - The branch's `NciCheck.Record.Held` (996) and the property's `Held` (lean's `Record.lean:115` at `1e835ca733ba`) define one thing twice. The one-vocabulary rule refuses that.
+
+### 4. Bits of a row past its writer's output
+
+**No statement holds them to zero. The audit holds them to the writer's committed output row, whose bits are the registered writer circuit's own outputs.**
+- **At Flock's level no word has bits past its writer** [read].
+  - Each output word is 16 rows of the writer's net (`HmOut.outRow`, `HmRow.lean:1643-1652`), and Δ copies each of them into the output row (`HmRow.lean:1617`).
+  - `Spot.Wires.check` holds a reader row to its writer's words (`shape`, `Spot/Wires.lean:168`).
+- **A proved reader's linked row is its writer's committed output row, `b ‖ c` whole** [read].
+  - The check is `Flock.HmLinks.checkUnit` (`HmRow.lean:2298`, its comparison at 2324-2325), run in setup (`HmRow.lean:2395`, `:2552`).
+  - It holds only links inside one statement: "a link across statements is not checked" (2323).
+- **SPOT's own wire checks run in no verifier stage** [read].
+  - `Spot.Wires.check` and `Summary.drawnOk` (`Spot/WiresDrawn.lean:33`) are served only as pieces (`Spot/Pieces.lean:843`). Their one caller is `verity/core/service/spot/tests/test_wires_difftest.py`.
+  - SPOT's second stage has replay wires of its own, which I didn't read.
+- **What an accepted run could put there**:
+  - In a proved writer: whatever the registered writer circuit computes on those rows, and nothing checks that it is zero [read]. `Spot.Bits.check` would ask only that they be computed rows (`Bits.lean:806-808`), and it runs nowhere. So a writer can put up to 15 bits a word of any function of its inputs there, and the reader's gates read them.
+  - In an unproved writer: any bits, as with every bit of an unproved block, which ε covers.
+  - Under the Program's semantics those bits read as zero. The gap between the two is the lowering, which AGENTS.md calls completeness.
+- **lean's head already refuses this case** [read]: at `1e835ca733ba`, `Filled` (`Record.lean:42-44`) says such a row "lays out no circuit".
+
+### 5. Two parameters of one name
+
+**Nothing refuses a Definition with two parameters of one name** [read].
+- **What exists** [read]:
+  - `Flock.Program.decode`'s `paramsOf` (`Flock/Program.lean:748`, `private`) refuses none. It decodes primitives (824) and composites (860), and a body reads its parameters by index (863).
+  - `Spot.Registered.params` (`Spot/Registered.lean:112`, called at `Spot/OneStage.lean:273`) refuses "a name twice", but only in the program function's `parameters` list.
+  - `Registered.namesOnce` (`Flock/Registered.lean:637-640`) refuses two circuit-file ports of one name. That is ports, not parameters.
+  - `Spot.Bits.check` would refuse one, through `runsOf` (707) against `d.params` and through `paramsWhy` (732), whose `fieldBit` (721) finds a parameter by its first name. It runs nowhere.
+  - `Spot.Wires.check` never reads a Definition's parameters: a Wiring's rows are its own JSON keys (`Template.ofJson`, `Spot/Wires.lean:490`).
+  - The Python mirror refuses none. Its decoder builds `params` as a tuple (`verity/ml/circuits/codec.py:909`), and `bind_ports` compares names as sets (`verity/ml/circuits/ports.py:413-436`).
+- **What a parameter's name decides today** [read]:
+  - Flock's cover rule covers a template parameter that reads a registered input when some port's `param` string equals its name (`coversParam`, `Flock/Registered.lean:434-436`). `checkCover` (461) runs at `verity/core/service/flock/FlockVerify.lean:1094` and `Spot/OneStageZk.lean:425`.
+  - No `Security/` statement reads `checkCover`, `coversParam` or `regParams` [read: grep].
+- **What an accepted run could do** [guess]:
+  - Give a template two parameters named `w`, each reading a different registered input. One port with `param = w` covers both.
+  - `checkComplete` (`Flock/Registered.lean:371`, run on every statement given `--registered`) still makes the second parameter's row a registered port, but nothing makes it that input's port. So it can open at a root the window commits, and a value the Program registers at registration is read from rows the prover chose before the coins.
+  - Against output accounting (AGENTS.md's design rules), those bits are neither registered information nor charged advice.
+  - In lean's property, `Held.read param` and `Provenance` name a parameter by its name and cannot tell the two apart.
+- **Where a refusal belongs** [guess]:
+  - In `Flock.Program.decode`'s `paramsOf`, which every reader shares: Flock's cover rule, `Spot.Bits`, the record check and lean's property all take the decoded Program. It would give `Spot.Registered.params`' message.
+  - The same refusal goes in the Python decoder (`codec.definition_decoder`, near line 909) and at `PrimitiveDefinition` and `Builder`, so that nothing encodes such a Definition.
+
+### 6. `is_boolean` of a decoded Definition
+
+**It does not reproduce on `main`: `is_boolean` is True of a decoded Boolean Definition** [run].
+- **The test** [run]: `/tmp/is_boolean_repro.py`, run with the main checkout's `.venv/bin/python` at `5482988e3496`, 62 ms and 19 MB a run.
+  - It builds `ReproBool_v1(a, b) = NOT(AND(XOR(a, b), b))`, called from an outer composite, since `Program(f)` inlines a program function into the root.
+  - It encodes it with `encode_program` and decodes it with `decode_program(desc, REGISTRY)`; the digest round-trips.
+  - `is_boolean` is True of the built and the decoded `ReproBool_v1`, and of every decoded definition. Each decoded gate is the Boolean module's own object.
+  - Decoding in a fresh process, before importing `verity.ml.circuits.boolean`, gives the same.
+- **Why** [read]:
+  - `gate_kind` knows a gate by identity (`verity/ml/circuits/boolean/__init__.py:87-95`).
+  - The decoder returns `registry[fid]` or the lazy family's object (`codec.py:699-711`). `_n_ary` caches and registers each gate (`boolean/__init__.py:55-66`, `:84`). `Registry.add` refuses a second object under one id (`verity/ml/circuits/defs.py:38-41`). `catalog.load` returns that same `REGISTRY` (`verity/ml/definitions/registry/catalog.py:43-56`).
+  - The cache `_BOOLEAN` is a `WeakKeyDictionary` (`boolean/__init__.py:135`), keyed by object since `SpecializedDefinition.__hash__` is `id(self)` (`defs.py:448-449`).
+  - So decoding by id gives the module's own gates, as the module's docstring says ("decoded by id like the constants", line 10).
+- **training's case** [guess]: its probe's `boolean_by_id` (`integrations/vllm/served_port_closed.py` on `cursor/training-served-record-probe-3b1c` at `7b9ecb19ad`) says "a decoded gate is not" the module's object. That holds of some other decoder or process, not of `codec.decode_program`. The Definition's id and how it was decoded would settle which.
+- **Intended** [read]: the identity test is deliberate: a primitive with a gate's id that isn't the module's gate is no gate. A decoder that makes new gate objects would make `is_boolean` false, against the module's docstring.
+- **Callers that are given a decoded Definition** [read]:
+  - `purity`, through `_non_boolean` (`verity/ml/definitions/boolean.py:501`, `:517`), on a Program that `load_program` decodes (613-620). The report `integrations/vllm/verity_vllm/program/boolean_purity.py:29` calls it.
+  - `ml.circuits.evaluation.batch` (`batch.py:115`, `:239`), where a false only picks the reference path, which computes the same values.
+  - Circuit-check reads built catalog targets, not decoded ones.
+- **The soundness path** [read]:
+  - None of those callers is on it: `ml.definitions` is off `SOUNDNESS_PATH` (`tests/test_boundaries.py:189`), and core imports nothing of `evaluation.batch`.
+  - The certifier is the one soundness-path caller: `core.protocols.certifier` (in `CORE_ML_EDGES`) calls `evaluate_bits`, whose `_spec` (`verity/ml/circuits/evaluation/bits.py:93-97`) asks `is_boolean`.
+  - It passes only units it builds: its calls are `head_check.py:513`, `replay_step.py:885`, `cache_step.py:393`, `compile_slice.py:778`, `replay_chain.py:759` and `arith_encode.py:1025-1105`, and no certifier module outside its tests decodes a Program [read: grep for `decode_program`, `load_program` and `codec.`]. There a false raises `TypeError`, a refusal.
+
+Nothing of mine waits on these six. Item 1's form question waits on Daniel. I end my turn.
