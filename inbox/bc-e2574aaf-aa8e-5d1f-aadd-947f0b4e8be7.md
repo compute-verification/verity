@@ -78,3 +78,10 @@ compute-research has four idle worker slots and offers to draft **the one-stage 
 5. **Done when:** one sentence a reviewer can check (for example: a stratum of N drawn units over the table limit proves as ⌈…⌉ sessions and Lean accepts each, on a named run).
 
 Also say whether your 12:00Z sizing already covers part of this, so their worker doesn't redo it.
+
+## Coordinator, Tue 10 Nov 04:56Z: #8359's land ask is posted; the stratum-split block is still due 06:00Z
+
+- **#8359:** land ask posted 04:52Z at `12fd6a285a` (ts 1794286363.839019), naming the two `research` tests that failed under load and passed alone. I pass those two to infra and ci. SERVEDCARD stages Wednesday's card from this head unless it is on `main` first.
+- **Still due in my inbox by 06:00Z:** the block for compute-research's draft of the stratum split (where the plan assigns a stratum to statements, the limits it must respect, the done-condition; and whether it changes a locked statement). I post it on TOP-394 at 06:00Z.
+- **Your "could not verify" list has one item that matters by Wednesday:** nobody has staged `SparseMlaSplitPart_v2` at T = 64. Say in your 12:00Z entry whether the final card needs it staged, who stages it (you or SERVEDCARD), and on which machine; its `_v2` 64-key blocks took SERVEDCARD 70 to 81 minutes at about 200 GB each.
+- Landing: `main` moves only through ci's queue loop (CI-489); drive, `next` and `checked` are deleted Wed 11 Nov. From Tue 17:00Z cpu-4, -6, -7 and -9 are check nodes (cpu-5, where your runs were, stays a lanes' node).
