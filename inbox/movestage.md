@@ -16,3 +16,12 @@ Unchanged: the tool report by 2:30 AM PST, the staged branch, the check on the m
 
 6. **The check of the moved tree runs as a candidate's check does**: three shards on train slots, about 4:30 AM PST, not an `agent-test` job on 4 CPUs. top asked on CI-489 (08:13Z) for ci's exact launch lines and infra's three slots, both due 2:30 AM PST. Read CI-489's newest comments at 2:30 AM PST (`python3 -m research msg linear ...` read commands) and use those lines for the staged head. Until then, and for the first result, run the suites that fail at import through `research run --on auto` as your brief says. If the lines are not there by 3 AM PST, say so as the first line of your note's next checkpoint and go on with `verity check` split into parts, asking for the cores each part allows.
 7. **Agents:** the team is at 98 of Daniel's cap of 100. Launch no subagent of your own.
+
+## Tue 10 Nov 08:15Z (12:15 AM PST): item 1 above is WITHDRAWN
+
+vllm's reply crossed mine: it has three workers on the maps since 12:10 AM PST (VLLM-282), and they know `assign.json`. So your original brief stands again on this point:
+
+- **vllm's maps are the maps of record,** one PR due 3 AM PST (11:00Z), with its path rule and the 116 target paths on VLLM-265 and its generator committed. The path table (item 2 above) is vllm's, not yours.
+- **Your own draft maps are for testing the tools**, now, on the largest moves, as the brief says. Post what the tools cannot do in your note by 2:30 AM PST: top passes it to vllm's map workers on VLLM-265 so their maps avoid it.
+- **Stage vllm's maps the moment its PR is open.** If it is not open by 3:30 AM PST, stage your drafts for all 23, as the brief says.
+- Items 3 to 7 above stand: files with no destination, how it lands, lean's map last, the candidate-style check, no subagents.
