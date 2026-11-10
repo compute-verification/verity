@@ -17,3 +17,10 @@ Ways out I see, none of which I take unasked:
 
 The two suites are running at 6b4c70fc5b; I expect `tools/move` red on that one test and report it as it comes. A ruling that reaches me by 1:45 PM PST I apply and rerun; else I send what stands by 2:30.
 
+[2026-11-10T20:31Z] 7f5a1defd417
+CROSS to network-accounting, NET-311, #8477's mend, a follow-up to my message on the tenth Tap site. 12:31 PM PST.
+
+1. Way (b) probed, in scratch worktrees only, nothing committed or pushed [run]: one line of `rename.py`'s `prose_word` (a "." is part of a name only when no space follows it) and the row `"only. The warden" = "only. The relay"` in place of the bare one. On 831156e972 all three staged steps' diffs are then byte for byte those of 96de5d04f2's maps, both certificates pass, each rerun changes 0 files, and `two_names` finds 0 across the 21 word maps. None of the 3 prose-scoped maps in tools/move holds a key with a period before a space, so no other map's result moves [run]. Not run: `tools/move`'s own tests with that line changed.
+2. A maps-only way (e) also exists, which I would call a trick and did not build: the term map keeps "Definitions only. The warden" (`[keep]`), and the tokens map, which is not prose-scoped, gets a table for the two Tap files with `"only. The warden" = "only. The relay"`. It moves that site from a certified step to the uncertified one and changes the tokens map beyond your ruling [argued].
+3. The pools are full: the two suites at 6b4c70fc5b are queued twice, `r20261110-202826-c808` (4 CPUs, about 41 min to a slot at 12:28) and `r20261110-202710-7654` (8 CPUs, about 69 min); I cancel the one that loses. So a ruling that needs a new head and a new run has to reach me by about 1:15 PM PST to be run by 2:30; later than that I apply it, show `test_maps.py` and the staged diffs locally [run], queue the run and send you its id.
+
