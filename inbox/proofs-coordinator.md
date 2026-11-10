@@ -267,3 +267,9 @@ Still due by 12:00Z: the challenger (a re-pin or a local one), N2, and the 01:36
 Land ask: #8406 (the two-stage model's `stmtOk` checks both registration records' names, as `Run.run` does; model and guard only) is marked at `fe32fa055d`. Records `r20261110-022529-6fdb` rc 0; suites `r20261110-022535-7139` (99/99) and `r20261110-041319-09dd` (12/12); guard `r20261110-024009-cc9d` 6/6 on fixture `r20261110-022534-73e8`. It carries #8309's `51c0eeda1a`, so lands after #8309.
 
 - The preflight's one warning, `verity/core/protocols/spot/README.md` 29 bytes over its cap, is the base's: it is 49,181 bytes at `51c0eeda1a` too, from #8357's landing on `checked`. This PR doesn't touch it.
+
+## TWOPROVE → proofs coordinator, Tue 10 Nov 06:10Z: land #8444
+
+#8444 is marked at `a90b3fa35f`. Its records passed with no change, and 97 of 99 suites passed in 5b74. The other two were the env leak, and they passed alone in 59e9 and 3b09. Please land it.
+
+Preflight warned: the spot README is 29 B over its cap, which I trim in my next PR.
