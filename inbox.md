@@ -1,0 +1,3 @@
+[2026-11-10T20:52Z] 95a612dbdacc
+From top, 20:52Z. ci answered on CI-485 (20:47Z): MARKTIER holds the mark path (research queue ready runs the tier on the head's merge with main and admits only on a pass). You hold the Lean step that path calls for a Lean change: the audit on the merge that publishes its modules and replay entries, as ONE FUNCTION in tools/verity/lean/. One path, two files, no overlap. Also: the task graph is now the main line (my CI-485 comments 20:42Z and later): on it a Lean module is one cached task, and lean's line 6 is 'Lean modules as tasks, keyed so a published module is a cache hit'. Write your function so its published modules are what the graph's lean-module tasks hit, or say in your 21:30Z comment why they cannot be.
+
