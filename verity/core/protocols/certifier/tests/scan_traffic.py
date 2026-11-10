@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, network_certifier as W
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.grid import Certifier, BlockGrid
 
 
@@ -21,7 +21,7 @@ class Served:
     execution phase), each connection's admission bucket and response ids (ordinal q = k + 1), and the network
     certifier's `fails` frames and the `fails` records its grid closed."""
 
-    params: W.WardenParams
+    params: W.NetworkCertifierParams
     ingress: tuple[BlockGrid, ...]
     egress: tuple[BlockGrid, ...]
     admitted: tuple[int, ...]
@@ -34,18 +34,18 @@ class Served:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The network certifier's registered ingress and egress rows, bucket by bucket (`warden_rows.window_rows`)."""
+        """The network certifier's registered ingress and egress rows, bucket by bucket (`network_certifier_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
 
-def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
     there by its egress; a connection of `late` gets no byte from its server, so the network certifier fails it late at
     its first egress cell), and the network certifier ticks both links and `fails` for `windows` execution phases as
-    `Warden._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
+    `NetworkCertifier._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
     `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
@@ -55,7 +55,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
         fails.append(frame)
         failed.enqueue(frame)
 
-    warden = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
+    network_certifier = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
     conns = []
     for k, (a, xs) in enumerate(zip(arrivals, responses, strict=True)):
         c = W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
@@ -77,9 +77,9 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None and c.failed is None:
-                for frame in W.Warden._ingress(warden, c, t):
+                for frame in W.NetworkCertifier._ingress(network_certifier, c, t):
                     grids[0].enqueue(frame)
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.NetworkCertifier._egress(network_certifier, c, t):
                 grids[1].enqueue(frame)
         active = [c for c in active if c.ended is None]
         for grid in grids:

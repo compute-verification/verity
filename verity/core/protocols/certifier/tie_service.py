@@ -3,12 +3,12 @@
 certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
 
-**What is committed** is the network certifier's own (`warden_rows`): an ingress execution phase's T bucket rows, row t
+**What is committed** is the network certifier's own (`network_certifier_rows`): an ingress execution phase's T bucket rows, row t
 bucket t's S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under
 the network certifier's fresh salt in its `frame-v3-sha512` tree under the network certifier's domain
-(`warden_rows.domain`: the session, the link, ingress and the window), whose root the network certifier's signed head
-names (`warden_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
-`warden_rows.check_registration` reads off the network certifier's signed registration); the rows and their salts are
+(`network_certifier_rows.domain`: the session, the link, ingress and the window), whose root the network certifier's signed head
+names (`network_certifier_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
+`network_certifier_rows.check_registration` reads off the network certifier's signed registration); the rows and their salts are
 the prover's, which the network certifier hands it privately, and the challenger and the verifier see the root. A
 registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
 registration's order (`IngressTie.register`), and T proof blocks, proof block t bucket row t. Selection is `All`.
@@ -17,7 +17,7 @@ registration's order (`IngressTie.register`), and T proof blocks, proof block t 
 `io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
 Definition by circuit-check (`gate`, as `head_check.gate` holds the head check), with one output bit, IoTieRequest's.
 Its witness row is the bucket row itself, which the proof system's registered read holds to the network certifier's root
-(`warden_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
+(`network_certifier_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
 so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
 accepted (`proved`).
 
@@ -75,9 +75,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_request as Q
-from verity.core.protocols.certifier import service as SVC, warden_rows as WR
+from verity.core.protocols.certifier import service as SVC, network_certifier_rows as WR
 from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.network_certifier import NetworkCertifierParams
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, produced, proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
@@ -109,7 +109,7 @@ PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
     S.Public("window", "structure", "provenance: the ingress link-window's index, held to the registration's order"),
     S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L·R cells each"),
-    S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`warden_rows.domain`), which binds the session, the "
+    S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`network_certifier_rows.domain`), which binds the session, the "
              "link, ingress and the window"),
     S.Public(VALUE, "commitment", "the warden's salted root over the window's bucket rows, its signed head's"),
     S.Public("shape", "structure", "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a "
@@ -154,7 +154,7 @@ _PROOF_UNIT = _unit(_expanded)
 
 
 def request_cells(prompt_len: int, B: int) -> int:
-    """The network certifier's request cells of an id request of a `prompt_len`-token prompt (`warden.cells`' cut, which
+    """The network certifier's request cells of an id request of a `prompt_len`-token prompt (`network_certifier.cells`' cut, which
     `io_request.carries` reads)."""
     return len(Q.carries(prompt_len, B)) - 1
 
@@ -304,18 +304,18 @@ def window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
 @dataclass(frozen=True)
 class IngressTie:
     """The ingress tie on one link, every field public: the link, the network certifier's schedule
-    (`warden.WardenParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
+    (`network_certifier.NetworkCertifierParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
     certifier's domains, and the proof deadline in seconds."""
 
     link: str
-    params: WardenParams
+    params: NetworkCertifierParams
     session: bytes
     proof_deadline: float | None = None
 
     def __post_init__(self) -> None:
-        if type(self.params) is not WardenParams or not (isinstance(self.link, str) and self.link) or \
+        if type(self.params) is not NetworkCertifierParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a warden.WardenParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a warden.NetworkCertifierParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property
@@ -375,7 +375,7 @@ class IngressTie:
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:
-        """The network certifier's domain of the ingress execution phase's T rows (`warden_rows.domain`)."""
+        """The network certifier's domain of the ingress execution phase's T rows (`network_certifier_rows.domain`)."""
         return WR.domain(self.params, self.session, self.link, Direction.INGRESS, window)
 
     def ports(self, window: int) -> dict[str, dict[str, Any]]:
@@ -397,7 +397,7 @@ class IngressTie:
 
     def registration(self, head: WR.CellsHead, previous: str | None = None) -> dict[str, Any]:
         """One-stage's record of the execution phase: the network certifier's root of its rows, from its head
-        (`warden_rows.check_registration`'s, the network certifier's signed registration as the challenger reads it),
+        (`network_certifier_rows.check_registration`'s, the network certifier's signed registration as the challenger reads it),
         and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
         self._held(head)
         roots = [{"port": VALUE, "root": head.root.hex(), **self.ports(head.window)[VALUE]}]
@@ -438,7 +438,7 @@ class IngressTie:
                    reads_from: int = 0) -> dict[str, Any] | None:
         """The verifier's own `--registered` file, which names every port of the statement (C-Flock's
         `Registered.checkComplete`): unit `reads_from + t`'s ``wit`` row reads row t of the network certifier's root
-        (`warden_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
+        (`network_certifier_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
         known content on its own `lanes` (`known`), each named with its rows and salts (`KNOWN_KEY`), from which the
         Lean verifier recomputes its root. None where `known` is."""
         self._held(head)

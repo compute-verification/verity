@@ -15,7 +15,7 @@ Its two lemmas:
 
 * honest: `linkWindowAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a network certifier
+  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_certifier`, that on a network certifier
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
@@ -126,7 +126,7 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
 
 theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
   cases hk : c.kind with
-  | warden => simp only [WindowSynced, hk]
+  | networkCertifier => simp only [WindowSynced, hk]
   | plain | served =>
     simp only [synced, hk] at h
     simp only [WindowSynced, hk]
@@ -201,7 +201,7 @@ theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := 
 
 theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
   cases hk : c.kind with
-  | warden => simp only [synced, hk]
+  | networkCertifier => simp only [synced, hk]
   | plain | served =>
     simp only [WindowSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
@@ -317,9 +317,9 @@ theorem linkWindowAcceptMeans_honest :
 /-- **An honest network certifier link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a network certifier link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
-theorem linkWindowAcceptMeans_honest_warden :
+theorem linkWindowAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
-      c.kind = .warden w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
+      c.kind = .networkCertifier w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
       CertifierSigned c k → WindowProved c → WindowOpened c →
       (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
   intro c w N W H toy I seed k hk hmake hkey ⟨hpub, hsize, hall⟩ hp ho
@@ -363,7 +363,7 @@ def unproved (w : ByteArray) : Case where
   session := .empty
   egress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
-  kind := .warden w
+  kind := .networkCertifier w
 
 /-- **No verifier that accepts every link-window has `LinkWindowAcceptMeans`' property** (its nontrivial lemma): such a
 verifier accepts a network certifier link-window with no findings (`unproved`), which isn't `WindowProved`. -/

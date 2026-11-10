@@ -99,7 +99,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   device : Dev
   /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
   records of the period's windows -/
-  run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
+  run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
   /-- the network certifier runs its code (`tapCode`) on its host: `trusted-host`, the trust the network audit rests
   on. Its records are what `window_le`'s per-window bound comes from; deriving `window_le` from `PeriodLeakAccepted`
   at this deployed period and this premise, not at the period of no windows, is the follow-up. -/

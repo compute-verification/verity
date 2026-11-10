@@ -12,7 +12,7 @@ import pytest
 
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import transfer_rows as TR
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 

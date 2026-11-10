@@ -77,7 +77,7 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     (`window_rows.state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts,
     slot k's the ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row
     there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the network certifier's
-    registered ingress rows ``ingress`` (a row a bucket, `warden_rows.window_rows`) from the empty state at bucket 0 to
+    registered ingress rows ``ingress`` (a row a bucket, `network_certifier_rows.window_rows`) from the empty state at bucket 0 to
     the window's last row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses
     the rows."""
     scan, n = cls.scan, t0 + cls.buckets - 1

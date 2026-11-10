@@ -76,7 +76,7 @@ else:
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
     assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
@@ -112,7 +112,7 @@ def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_
     plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
     a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
                                 "--requests", "4", "--height", "10"])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     doc = SS.plan(a, json.dumps(ps).encode())
     assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes {a.minutes} --requests 4 "
@@ -211,7 +211,7 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
     assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path, monkeypatch):
     """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
     holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
@@ -413,7 +413,7 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
+def test_chain_runs_chain_records_network_certifier_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')

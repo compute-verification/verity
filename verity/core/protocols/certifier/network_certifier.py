@@ -5,7 +5,7 @@ The network certifier runs on an auditor host (`trusted-host`; co-located with t
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content: no tokenizer, API, request or stop string is the network certifier's. The one addition is
 the release order on the server's copy of an HTTP request (`release`): what the network certifier decides is the framing
-and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
+and the timing, both public functions of the schedule (`NetworkCertifierParams`), and it certifies every cell it sends with the
 certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
@@ -55,7 +55,7 @@ reasons show only at an egress slot, so the server, which controls whether and w
 at most (cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
 `slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
 
-**The pacer** (`Warden(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop leaves
+**The pacer** (`NetworkCertifier(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
 moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
 connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
@@ -72,7 +72,7 @@ own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as o
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
 So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The
 third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
-(`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
+(`NetworkCertifierParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's, every `FAIL` has its one reason, and no connection failed.
 
 `PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and
@@ -112,8 +112,8 @@ WRITE_BACKLOG = 1 << 22
 
 
 @dataclass(frozen=True)
-class WardenParams:
-    """The schedule's public parameters, fixed before the run (`WardenParams.digest` binds them)."""
+class NetworkCertifierParams:
+    """The schedule's public parameters, fixed before the run (`NetworkCertifierParams.digest` binds them)."""
 
     cell_bytes: int = 256  # B
     slots: int = 4  # r: a connection's cells a bucket, each way
@@ -284,7 +284,7 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
     return c.pad
 
 
-class Warden:
+class NetworkCertifier:
     """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
     `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
     whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair.
@@ -306,7 +306,7 @@ class Warden:
       network certifier on an injected clock writes each bucket on its loop;
     - `until(predicate)` waits until the network certifier's state satisfies it, for a caller that drives a `VirtualClock`."""
 
-    def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
+    def __init__(self, params: NetworkCertifierParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[BlockGrid, GridParams], None] | None = None,
@@ -349,7 +349,7 @@ class Warden:
         self.ticks = 0
         self._changed = asyncio.Event()
 
-    async def until(self, predicate: Callable[[Warden], bool]) -> None:
+    async def until(self, predicate: Callable[[NetworkCertifier], bool]) -> None:
         while not predicate(self):
             self._changed.clear()
             await self._changed.wait()
@@ -637,7 +637,7 @@ class Warden:
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
+def audit(params: NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
           fails: Sequence[BlockGrid]) -> dict:
     """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network certifier
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in

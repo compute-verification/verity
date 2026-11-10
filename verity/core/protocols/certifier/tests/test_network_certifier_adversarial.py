@@ -1,4 +1,4 @@
-"""Adversarial cases against the active network certifier (`warden`, the byte-only relay). The network certifier closes
+"""Adversarial cases against the active network certifier (`network_certifier`, the byte-only relay). The network certifier closes
 the egress base and the fail reason as channels, and the first two cases and the regression after them pin that.
 
 The network certifier's own tests show the honest path: the egress cells, their sizes and buckets are a function of
@@ -31,13 +31,13 @@ from __future__ import annotations
 import asyncio
 
 from verity.core.protocols.certifier.active import PAD, VirtualClock
-from verity.core.protocols.certifier.warden import DATA, FAIL, Warden, audit, cells
-from verity.core.protocols.certifier.tests.test_network_certifier_warden import (
+from verity.core.protocols.certifier.network_certifier import DATA, FAIL, NetworkCertifier, audit, cells
+from verity.core.protocols.certifier.tests.test_network_certifier import (
     B, D, EOF, P, PARAMS, R, TAU, Client, Server, ServerConn, expected_egress, reasons, records, request, run)
 
 
-def _verdict(warden):
-    return audit(PARAMS, *records(warden))
+def _verdict(network_certifier):
+    return audit(PARAMS, *records(network_certifier))
 
 
 # --- the egress base: s + D, whatever the server's connect (CLOSED) ---------------------------------------------------
@@ -63,10 +63,10 @@ def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admissio
             conn.fed, conn.eof = len(b"hi"), True  # so `settle` sees the read complete
             return conn.reader, conn
 
-        warden = Warden(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
-        running = asyncio.create_task(warden.run())
-        client = Client(warden, cells(request(5), B))  # one-cell request, fully buffered at once
-        await warden.until(lambda w: w.ordinals == 1)
+        network_certifier = NetworkCertifier(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(network_certifier.run())
+        client = Client(network_certifier, cells(request(5), B))  # one-cell request, fully buffered at once
+        await network_certifier.until(lambda w: w.ordinals == 1)
 
         def settle(w):  # unlike the harness's, this does not block on the server connecting
             for c in w.active:
@@ -79,13 +79,13 @@ def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admissio
         for t in range(PARAMS.window):
             if t == connect_at:
                 gate.set()
-                await warden.until(lambda w: all(c.server is not None for c in w.active))
-            await warden.until(settle)
+                await network_certifier.until(lambda w: all(c.server is not None for c in w.active))
+            await network_certifier.until(settle)
             clock.advance(t * TAU)
-            await warden.until(lambda w, t=t: w.ticks > t)
+            await network_certifier.until(lambda w, t=t: w.ticks > t)
         await running
         await client.task
-        return warden, client
+        return network_certifier, client
 
     (one_w, one_c), (two_w, two_c), (late_w, late_c) = (asyncio.run(go(t)) for t in (1, 2, 4))
     assert {w.log[0]["admitted"] for w in (one_w, two_w, late_w)} == {0}  # the same admission s
@@ -139,12 +139,12 @@ def test_the_server_chooses_which_egress_cell_a_connection_fails_at():
     This is the fail-closed term: one of cells+1 outcomes a connection, log2(cells+1) bit (≈12 at egress_cells=4096)."""
     seen = {}
     for i in (0, 2, 5):
-        warden, (client,), _ = run([[(0, b"a" * (i * P))]], {0: [cells(request(5), B)]})
-        assert warden.log[0]["failed"] == "late" and warden.log[0]["failed_at"] == i
+        network_certifier, (client,), _ = run([[(0, b"a" * (i * P))]], {0: [cells(request(5), B)]})
+        assert network_certifier.log[0]["failed"] == "late" and network_certifier.log[0]["failed_at"] == i
         assert [(t, k) for t, k, _ in client.cells()] == expected_egress(0, i + 1, FAIL)  # i DATA, then FAIL
         assert bytes(client.shim().data) == b"a" * (i * P)  # the client reads i cells, then the fail
         seen[i] = b"".join(d for _, d in client.writes)
-        assert not _verdict(warden)["accepted"]
+        assert not _verdict(network_certifier)["accepted"]
     assert len(set(seen.values())) == 3  # distinct outcomes
 
 
@@ -162,8 +162,8 @@ def test_the_cell_kinds_and_buckets_dont_move_with_the_servers_send_timing():
     burst = [(0, resp[:3]), (D - 1, resp[3:]), (D - 1, EOF)]
     shapes = []
     for answer in (atonce, trickle, burst):
-        warden, (client,), _ = run([answer], {2: [cells(request(30), B)]})
-        assert warden.log[0]["failed"] is None, answer
+        network_certifier, (client,), _ = run([answer], {2: [cells(request(30), B)]})
+        assert network_certifier.log[0]["failed"] is None, answer
         shapes.append([(t, k) for t, k, _ in client.cells()])
         assert bytes(client.shim().data) == resp
     assert all(s == shapes[0] for s in shapes)  # 0 bit from timing
