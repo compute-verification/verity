@@ -22,6 +22,14 @@ path = "../../primitives/commitments"
 [[lean_lib]]
 name = "Flock"
 
+# the ZK server (`Flock.Firewall` and the modules under it), above Flock alone
+[[lean_lib]]
+name = "FlockZkServer"
+
+# the recursion (`Flock.Rec*`), above Flock alone and the ZK server
+[[lean_lib]]
+name = "FlockRec"
+
 [[lean_lib]]
 name = "VStar"
 

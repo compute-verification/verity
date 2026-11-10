@@ -3,6 +3,8 @@
  "roots": [
   "Flock",
   "FlockVerify",
+  "FlockZkServer",
+  "FlockRec",
   "Flock.Test.JsonParse",
   "Flock.Test.Full",
   "Flock.Test.Labels",
