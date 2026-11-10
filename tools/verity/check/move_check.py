@@ -61,7 +61,10 @@ Every path git sees changed must be one of:
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
   the directory is now below the row's): the directory itself (`verity/ml/flock/`, also as a pathlib chain or a quoted
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
-  follows only its own move. `--json` lists under `rules` the paths each kind of row took (`tokens`);
+  follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
+  `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
+  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. `--json` lists under
+  `rules` the paths each of these took (`tokens`, `prefixes`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -163,6 +166,8 @@ REQUIRE_PATH = re.compile(r"^\s*(path\s*=|require\s)")
 LAYOUT_LINE = re.compile(r"^Layout-move: (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
 #: what a line goes on to name below a directory: `/tests/test_x.py`
 BELOW = re.compile(r"(?:/[\w.\-]+)*")
+#: the one prefix `_paths_pattern` reads as the root: a variable holding the checkout
+CHECKOUT = re.compile(r"(?<![\w.\-/$])\$\{?\w+\}?/")
 MANIFEST_PATH_KEYS = {"type", "scope", "name", "manifestFile", "inherited", "dir", "configFile"}
 HUNK_LINES = 8
 
@@ -1016,7 +1021,8 @@ def layout_maps(base: Tree, head: str, cwd: str | None) -> list[dict]:
 
 class Rows:
     """What the move's maps (`layout_maps`) say beyond the renames, read for a line nothing else explains and never added to
-    the path map, so no rename is paired and no anchor recounted by it.
+    the path map, so no rename is paired and no anchor recounted by it; and for such a line, a moved path after each
+    prefix the mover reads as the root (`pattern`).
 
     `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
     directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
@@ -1039,31 +1045,36 @@ class Rows:
 
     @functools.cached_property
     def pattern(self) -> re.Pattern:
-        """`_paths_pattern` over the moved paths and the split directories, also after the `<root>/` of a relative path
-        `resolve_relative` read."""
+        """`_paths_pattern` over the moved paths and the split directories, after whatever `tools/move/layout.py` reads as
+        the root (its `ROOT_PREFIX`, the `<root>/` of a relative path `resolve_relative` read among them, and a shell
+        variable's default, `${DEFS:-verity/x.json}`)."""
+        L = _rename().L
+        root = "|".join((L.ROOT_PREFIX, L.SH_DEFAULT.pattern.removesuffix(r"\Z")))
         keys = sorted({*self.pmap, *self.tokens}, key=len, reverse=True)
-        return re.compile(r"(?:(?<![\w.\-/])|(?<=^/)|(?<=<root>/)|(?<![\w.\-/$])(\$\{?\w+\}?/))(" + "|".join(map(re.escape, keys))
-                          + r")(?![\w.\-])", re.M)
+        return re.compile(rf"(?:(?<![\w.\-/])|(?<=^/)|({root}))(" + "|".join(map(re.escape, keys)) + r")(?![\w.\-])", re.M)
 
-    def references(self, text: str) -> list[tuple[int, int, str, str, bool]]:
-        """Each moved path and each reference to a split directory in ``text``: (start, end, what it becomes, the rule that
-        reads it or "" for a moved path, whether it must change: a relative path, which names its place)."""
+    def references(self, text: str, resolved: bool = False) -> list[tuple[int, int, str, tuple[str, ...], bool]]:
+        """Each moved path and each reference to a split directory in ``text``: (start, end, what it becomes, the rules
+        that read it beyond `_paths_pattern`'s moved path, whether it must change: in ``resolved`` text, a relative path
+        `resolve_relative` read, which names its place)."""
         out = []
         for m in self.pattern.finditer(text):
-            key, must = m[2], m[1] is None and text.endswith("<root>/", 0, m.start(2))
+            key, must = m[2], resolved and text.endswith("<root>/", 0, m.start(2))
+            plain = m[1] is None or must or ((c := CHECKOUT.match(text, m.start(1))) is not None and c.end() == m.end(1))
+            rules = () if plain else ("prefixes",)
             if key in self.pmap:
-                out.append((m.start(2), m.end(2), self.pmap[key], "", must))
+                out.append((m.start(2), m.end(2), self.pmap[key], rules, must))
                 continue
             below = key + BELOW.match(text, m.end(2))[0].rstrip(".")
             if below == key or not (below in self.base.set or self.base.has_dir(below)):
-                out.append((m.start(2), m.end(2), self.tokens[key], "tokens", must))
+                out.append((m.start(2), m.end(2), self.tokens[key], ("tokens", *rules), must))
         return out
 
-    def reads(self, old: str, new: str, pair=None) -> set[str]:
+    def reads(self, old: str, new: str, pair=None, resolved: bool = False) -> set[str]:
         """The rules by which the line ``new`` is ``old`` with each reference rewritten or left, or (``pair``) what `pair`
         takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is not these rows' to say."""
-        refs = self.references(old) if self.tokens else []
-        rules = {r for _, _, _, r, _ in refs if r}
+        refs = self.references(old, resolved) if self.pmap or self.tokens else []
+        rules = {r for _, _, _, rs, _ in refs for r in rs}
         if not rules or not (either(old, new, refs) or (pair and pair(rewritten(old, refs), new))):
             return set()
         return rules
@@ -1550,8 +1561,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         name = posixpath.basename(new)
         took: set[str] = set()                              # the maps' rows this path's edit needed (`Rows`)
 
-        def by_rows(x: str, y: str, pair=None) -> bool:
-            took.update(r := rows.reads(x, y, pair))
+        def by_rows(x: str, y: str, pair=None, resolved: bool = False) -> bool:
+            took.update(r := rows.reads(x, y, pair, resolved))
             return bool(r)
         if st == "A" and name in LAKE_COPIES:
             d = posixpath.dirname(new)
@@ -1645,7 +1656,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             def left(i: int, y: str) -> bool:
                 return (partly(n0[i], y, pmap) or placed(n0[i], y, old, new, pmap, B, binds)
                         or (under is not None and manifest_pin(at_base[i], y, under, B, H, pmap))
-                        or by_rows(resolve_relative(al[i], old, {}) if rel else n0[i], y, pair))
+                        or by_rows(resolve_relative(al[i], old, {}) if rel else n0[i], y, pair, rel))
             h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block, left=left)
             why = h and ("relative path now resolves elsewhere" if same else "edit beyond moved paths and module names", h)
             if why and not same and old == new and name == "lakefile.toml":

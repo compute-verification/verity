@@ -1527,3 +1527,29 @@ def test_the_tokens_rows_are_read_only_from_the_map_a_commit_of_the_range_names(
     """Without the `Layout-move:` line no map says where the split directory's references go, as before."""
     r = _flock(tmp_path, message="move")
     assert {f["path"] for f in r["refusals"]} == set(FLOCK_MOVED) and r["rules"] == {}
+
+
+ROOTED = ('export PYTHONPATH=<tree>:<tree>/protocols/pous/src\n'
+          'T=${TESTS:-protocols/pous/tests/test_x.py}\n'
+          'cp -r "$T/wt-$c/protocols/pous/live" .\n'
+          'REPLAY=${REPLAY:-$ROOT/protocols/pous/replay.py}\n'
+          "echo '{r}/protocols/pous/python' ~/verity/protocols/pous /workspace/protocols/pous\n")
+
+
+def test_a_moved_path_after_what_the_mover_reads_as_the_root_is_certified(tmp_path):
+    """`tools/move/layout.py` rewrites a moved path after each prefix it reads as the root (its `ROOT_PREFIX`: `<tree>/`,
+    `$T/wt-$c/`, `{r}/`, `~/verity/`, `/workspace/`) and as a shell variable's default, and the check reads a line nothing
+    else explains by the same pattern. A moved path inside a longer one, or after a word's `-`, is still not the move's."""
+    for case, miss in (("taken", ""), ("inside", "OUT=$W/x/protocols/pous\n"), ("word", "OUT=wt-protocols/pous\n")):
+        run = ROOTED + "echo done\n" + miss
+        repo, base = _repo(tmp_path / case, {**BASE_FILES, "run.sh": run})
+        _move(repo, "protocols/pous", "security_proofs/pous")
+        _write(repo, {"run.sh": run.replace("protocols/pous", "security_proofs/pous")})
+        r = _check(repo, base)
+        if not miss:
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"prefixes": ["run.sh"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == "run.sh" and f["hunk"].splitlines()[1:] == ["-" + miss.strip(), "+" + miss.strip().replace(
+                "protocols/pous", "security_proofs/pous")] and r["rules"] == {}, case
