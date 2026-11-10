@@ -23,24 +23,34 @@
 # records follow in a commit of their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 # prints.
 
+# The difftest's names, which no other package spells: its modules (`BaselineDifftestMain` has no declaration of its own
+# name, so the word is certified by the path it renames) and its Python files.
 [words]
+"BaselineDifftest" = "ThetaDifftest"
 "baseline_difftest_vectors" = "theta_difftest_vectors"
 "nci_baseline_difftest" = "nci_theta_difftest"
 
 # The policy's own files, then the files that cite its names: the remote protocol's statements and proofs, the Lake
-# packages' module lists and locks, the verifier-cost benchmark, vLLM's registration log, the lints' allowlists and two
-# READMEs.
+# packages' module lists, the proofs package's lock, the verifier-cost benchmark, vLLM's registration log, the lints'
+# allowlists and two READMEs.
 [[words_in]]
 files = ["Security/Definitions/Nci*", "Security/Properties/Nci*", "Security/Proofs/Nci*", "Security/Proofs/Properties/Nci*",
          "verity/core/protocols/network/nci/**", "verity/core/protocols/network/tests/**",
          "Security/Properties/Remote.lean", "Security/Proofs/Properties/Remote.lean",
          "Security/Proofs/Properties/Remote/Honest.lean", "Security/Properties/lakefile.toml",
-         "Security/Proofs/lakefile.toml", "Security/lean-audit.json", "Security/Properties/lean-audit.json",
-         "Security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md", "benchmarks/verifier_cost/nci_glm.py",
-         "integrations/vllm/tests/pipeline/test_registration_log.py",
+         "Security/Proofs/lakefile.toml", "Security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md",
+         "benchmarks/verifier_cost/nci_glm.py", "integrations/vllm/tests/pipeline/test_registration_log.py",
          "integrations/vllm/verity_vllm/pipeline/registration_log.py", "tests/lint/allowlists/*.json",
          "verity/core/protocols/composition/README.md", "verity/core/protocols/remote/README.md"]
-words = { "Baseline" = "Theta", "BaselineSteps" = "ThetaSteps", "BaselineProvenance" = "ThetaProvenance", "BaselineDifftest" = "ThetaDifftest", "BaselineDifftestMain" = "ThetaDifftestMain", "baseline_desc" = "theta_desc" }
+words = { "Baseline" = "Theta", "BaselineSteps" = "ThetaSteps", "BaselineProvenance" = "ThetaProvenance", "baseline_desc" = "theta_desc" }
+
+# The two locks whose records read Core's `Verity.Registration.Theta`: there the names are spelled with what they stand
+# under, since a word is certified only to a word that no file it is applied in spells. The Lean files are those that
+# declare `NciCheck.Baseline` and `BaselineProvenance`, by the directories that hold them.
+[[words_in]]
+files = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "Security/Properties/Nci/*.lean",
+         "verity/core/protocols/network/nci/lean/NciCheck/*.lean"]
+words = { "NciCheck.Baseline" = "NciCheck.Theta", "BaselineProvenance" = "ThetaProvenance", "Nci.Baseline" = "Nci.Theta", "Assumptions.Baseline" = "Assumptions.Theta", "Assumptions/Baseline" = "Assumptions/Theta" }
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms

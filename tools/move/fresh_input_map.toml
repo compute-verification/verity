@@ -5,7 +5,9 @@
 #   one part of (`novelReads_piece`, `le_novelInfo_iff`, `novelWidthExact`, `novelWidth_sum`).
 # - `Novel` becomes `Fresh`: the namespace `NciCheck.Properties.SecurityProofs.Novel` and its module
 #   `Security/Proofs/Properties/Nci/Novel.lean`, and the statements `NovelExact` and `NovelWidthExact`.
-# - `novelExact_of` becomes `freshExact_of`, and the summary's field `novel_eq` `fresh_eq`.
+# - `novelExact_of` becomes `freshExact_of`, and the theorem `novel_eq` of the check's proofs `fresh_eq`, a whole word
+#   held to those proofs: Core's `fresh_eq_external_add_produced` spells the new word as one part of its name, and a word
+#   that renames a part is certified only to a word the tree spells nowhere.
 # What stays:
 # - C-Flock's novel basis (`NovelBasis` and its files, upstream's `NovelPolynomialBasis`, and `novelCoeffs` and the
 #   names beside it, which no row reaches), another thing ([keep], [keep_paths]).
@@ -23,8 +25,11 @@
 "novelInfo" = "freshInfo"
 "novelWidth" = "freshWidth"
 "novelExact" = "freshExact"
-"novel_eq" = "fresh_eq"
 "Novel" = "Fresh"
+
+[[words_in]]
+files = ["Security/Proofs/Properties/Nci*"]
+words = { "novel_eq" = "fresh_eq" }
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
