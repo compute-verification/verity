@@ -12,7 +12,9 @@ multi-line key's lines too).
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
 lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a
+`preToolUse` event's for the Shell tool (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key
+names go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -55,7 +57,7 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S
+from settings import INBOX, INBOX_POLL_S, record_event
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -540,11 +542,14 @@ def main() -> int:
     raw = sys.stdin.read()
     try:
         event = json.loads(raw)
-        command = event.get("command") or ""
+        shell = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+        command = event.get("command") or shell.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
         root = next(iter(event.get("workspace_roots") or []), "")
-        cwd = event.get("cwd") or root or os.getcwd()
+        cwd = event.get("cwd") or shell.get("cwd") or root or os.getcwd()
+        record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
+        record_event("shell_hook.py", raw)
         command, conversation, cwd, root = raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)

@@ -4,12 +4,24 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 BOOT = ROOT / "tools/agent-guard/boot.sh"
 GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+sys.path.insert(0, str(BOOT.parent))
+import inbox  # noqa: E402
+
+sys.path.remove(str(BOOT.parent))
+
+
+def cursor_reads(path: Path) -> dict:
+    """A hooks.json boot wrote, as Cursor reads it (comments stripped), which must be what its JSON says."""
+    text = path.read_text()
+    assert inbox.as_cursor_reads(text) == json.loads(text), f"Cursor strips a `/*` or `//` in {path} as a comment"
+    return json.loads(text)
 
 
 def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_one(tmp_path):
@@ -39,7 +51,8 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
 
     p = boot()
     assert p.returncode == 0 and "wrote" in p.stdout, (p.stdout, p.stderr)
-    (entry,) = json.loads((tmp_path / "ws/.cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
+    hooks = cursor_reads(tmp_path / "ws/.cursor/hooks.json")["hooks"]
+    (entry,) = hooks["beforeShellExecution"]
     assert entry == {"command": f"python3 {tmp_path / 'opt'}/shell_hook.py", "timeout": 10, "failClosed": True}
     assert git("status", "--porcelain") == ""
     hook = subprocess.run(entry["command"].split(), input=json.dumps({"hook_event_name": "beforeShellExecution",
@@ -97,9 +110,9 @@ def test_boot_puts_the_hook_at_a_task_launched_agents_root_above_its_checkout(tm
     assert p.returncode == 0 and f"wrote {tmp_path / 'agent'}/.cursor/hooks.json" in p.stdout, (p.stdout, p.stderr)
     assert not (tmp_path / "absent").exists()
     assert json.loads((tmp_path / "ws/.cursor/hooks.json").read_text()) == json.loads((ROOT / ".cursor/hooks.json").read_text())
-    hooks = json.loads((tmp_path / "agent/.cursor/hooks.json").read_text())["hooks"]
+    hooks = cursor_reads(tmp_path / "agent/.cursor/hooks.json")["hooks"]
     (entry,) = hooks["beforeShellExecution"]
-    assert entry["failClosed"] is True
+    assert entry["failClosed"] is True and entry["command"].endswith(" guard shell_hook.py")
     assert [h["matcher"] for h in hooks["preToolUse"]] == ["Task", "CallDynamicTool", "^MCP:"]
 
     def verdict():
