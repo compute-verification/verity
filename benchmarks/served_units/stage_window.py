@@ -49,6 +49,17 @@ def pick(members: list[dict], proj: str, n: int, swap: int | None) -> int:
                      f"(sizes: {sorted({int(m['n']) for m in members if kind(m['template'])})})")
 
 
+def public_body(d: Path, k: int, pub: Path) -> str:
+    """The SHA-512 of the staged public file ``pub``'s body (after its header line), refused unless that body is member ``k``'s
+    in window ``d``: its ``m<k>-public.bin``, with the ``public_sha512`` its window.json record states."""
+    body = pub.read_bytes().split(b"\n", 1)[1]
+    public = hashlib.sha512(body).hexdigest()
+    want = json.loads((d / "window.json").read_text())["members"][k].get("public_sha512")
+    if body != (d / f"m{k}-public.bin").read_bytes() or public != want:
+        raise SystemExit(f"stage_window.py: member {k}'s public body {public[:16]} is not the window's ({str(want)[:16]})")
+    return public
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("window")
@@ -84,11 +95,7 @@ def main() -> None:
     got = FI.flock_input_files(d, k, FI.flock_circuit((out / "circuit.txt").read_bytes()), out)
     os.replace(got["pub"], out / "pub.bin")
     os.replace(got["inst"], out / "inst.bin")
-    body = (out / "pub.bin").read_bytes().split(b"\n", 1)[1]
-    public = hashlib.sha512(body).hexdigest()
-    want = json.loads((d / "window.json").read_text())["members"][k].get("public_sha512")
-    if body != (d / f"m{k}-public.bin").read_bytes() or public != want:
-        raise SystemExit(f"stage_window.py: member {k}'s public body {public[:16]} is not the window's ({str(want)[:16]})")
+    public = public_body(d, k, out / "pub.bin")
     (out / "pin.txt").write_text(got["circuit_sha512"])
     S = spec_statics(t)
     meta, layers = st.meta, nets(st.low)
