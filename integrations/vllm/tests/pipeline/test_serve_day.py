@@ -4,6 +4,7 @@ anything serves; under ``--h1-window-commit`` the window log registers the decla
 another program is refused at its close. Without ``--day`` every byte is as before."""
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -92,7 +93,7 @@ def test_serve_openai_declares_the_day_in_the_registration_log_before_the_model_
     composite, log = seen["log"]
     entry = G.Declaration(2, AUDITED, ("t0", "t1"), ST.genesis("onsite"))
     assert composite == "onsite" and log == [entry]
-    assert G.check(ST.Auditor(), composite, log).view().declared(2) == entry.declared()
+    assert G.check(ST.Auditor(), composite, log).view().declared(2) == dataclasses.replace(entry, previous="")
     assert seen["file"] == {"day": 2, "program": AUDITED, "blocks": ["t0", "t1"],
                             "declaration": G.Declaration(2, AUDITED, ("t0", "t1")).digest(),
                             "log": str(tmp_path / "log.json"), "head": entry.digest(), "declared": "now", "file": SD.FILE,
@@ -129,7 +130,7 @@ def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_a
     composite, entries = G.log_of(json.loads(log.read_text()))
     assert second.declared == "now" and entries[1].previous == first.head and second.digest == SD.named(entries[1])
     view = G.check(ST.Auditor(), composite, entries).view()
-    assert (view.declared(0)["program"], view.declared(1)["program"]) == (AUDITED, OTHER)
+    assert (view.declared(0).program, view.declared(1).program) == (AUDITED, OTHER)
     wrong = tmp_path / "remote.json"
     wrong.write_text(json.dumps(G.params("remote", ST.Auditor())))
     with pytest.raises(cli.UsageError, match="the log is onsite's, not --day-params' remote's"):
