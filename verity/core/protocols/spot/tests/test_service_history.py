@@ -64,6 +64,7 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
     for cls, rounds in ((FC.Stream, 30), (_Whole, 6)):
         given.clear()
         stream = _stream(cls)
+        stream.open()
         stream._log, stream._entries, stream._rule_entries = _Counted(), _Counted(), _Counted()
         prev = None
         for i in range(rounds):

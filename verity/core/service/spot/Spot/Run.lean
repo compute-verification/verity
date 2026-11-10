@@ -6,8 +6,10 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
-  whose strata or table don't apply), then R1–R7 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
-  that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
+  whose strata or table don't apply), the window's seed salt read from the challenger's log (`seedSaltOf`: `seed-salt`
+  where its evidence doesn't read, or is missing on a window), then R1–R7 (`Registration.check`) against the
+  challenger's copies and that salt under the sampling design the rule names over that population
+  (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -25,16 +27,18 @@ check the stream ran on it, in the stream's order.
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
-  `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
-  coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
+  public-items rule on the interior values, the population (else `interior-population`), its window's seed salt from
+  its own evidence on its copies' window (`seed-salt`), R1–R7 against its copies and that salt under `subset:Q·n` (all
+  of them committed), `population-order`, and its receipt; and `second`: the second stage on its own coins
+  (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links, which the verifier derives from the replay
-  block's Definition in the challenger's program (`SecondStage.replayLinks`), as its `statements` check
+  interior registration, the second stage's cells and the design's links and wires and the rows their units read, which
+  the verifier derives from the replay block's Definition in the challenger's program (`SecondStage.replayLinks`,
+  `SecondStage.replayWires`, `SecondStage.replayRows`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -71,8 +75,9 @@ the interior values, the record and its place in the log, the second stage's coi
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
-auditor's params name them (`templateCircuits`). The design's links are the verifier's own, from the replay block's
-Definition in the boundary program (`SecondStage.replayLinks`), and never part of it. -/
+auditor's params name them (`templateCircuits`), and the evidence of its window's seed salt. The design's links and
+wires and their rows are the verifier's own, from the replay block's Definition in the boundary program
+(`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`), and never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -87,6 +92,8 @@ structure Interior where
   sessionRoots : Json
   statements : Option (Array Json) := none
   circuits : Array (String × String × Json × Json) := #[]
+  /-- the evidence of the interior's window's seed salt (`seedSaltOf`); null only when its verifier holds no window -/
+  seedSalt : Json := Json.null
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -109,6 +116,8 @@ structure Input where
   served : Json
   sessionRoots : Json
   coins : Json := Json.null
+  /-- the evidence of the window's seed salt (`seedSaltOf`); null only when the verifier holds no window -/
+  seedSalt : Json := Json.null
   interior : Option Interior := none
 
 private def refused (step : String) (codes : Array String) : Json :=
@@ -162,6 +171,18 @@ def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) 
   | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
   | _, _ => false
 
+/-- The window's seed salt the run reads from the challenger's log, lowercase hex: from `evidence`, in its coins' form
+with the salt's segment (`Challenger.seedSaltIn`), on the verifier's window `window`. A run reads the challenger's
+coins, so a verifier holding a window reads its salt or refuses: null evidence is never a window without a salt. None
+only when the verifier holds no window and the evidence is null, and no salt but a refusal when the evidence doesn't
+read or the verifier holds no window for it. Never one of the copies. -/
+def seedSaltOf (evidence : Json) (window : Option String) : Except String (Option String) :=
+  match evidence, window with
+  | .null, none => .ok none
+  | .null, some _ => .error "missing: the verifier names a window root, and the run carries no evidence of its seed salt"
+  | _, none => .error "a seed salt is read on the window's session: it needs the window's open root (window_root)"
+  | ev, some w => (some ∘ Flock.hexOf) <$> Challenger.seedSaltIn ev w
+
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
 the registration's own ports at their own roots under a two-stage rule. -/
 private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
@@ -191,7 +212,8 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
-  let codes := Registration.check it.record v
+  let .ok salt := seedSaltOf it.seedSalt v.windowRoot | return .error ("interiors", #["seed-salt"])
+  let codes := Registration.check it.record v salt
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
@@ -224,8 +246,11 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         drawn := (Draw.proved draw).map Int.toNat,
         links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
         reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
-        refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r) }
+        refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
+        wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
+        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
+      (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
@@ -242,7 +267,8 @@ def run (i : Input) : V Json := do
   let law ← rule.lawOver n
   let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
   let v := { v with law, workTable }
-  let codes := Registration.check i.record v
+  let .ok salt := seedSaltOf i.seedSalt v.windowRoot | return refused "register" #["seed-salt"]
+  let codes := Registration.check i.record v salt
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli law then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]

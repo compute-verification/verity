@@ -40,7 +40,7 @@ VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
-    (f"population:{P.template_id(PAIR)}", "a template's stratum")))
+    (f"population:{P.template_id(PAIR)}", "a template's stratum"))) + (FC.SEED_ITEM,)
 #: K of the N proof blocks, an eighth of however many the window registers
 RULE = S.Law("work-rate:1/8")
 SPEC = S.Spec(VALUES, RULE, S.Check((P.program_digest(Program(PAIR)),), QUERY, proof_deadline=60.0), PUBLIC,
