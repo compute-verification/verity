@@ -96,8 +96,8 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
       (windowSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
     (hCov : WindowCovers V k S)
     (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω → ℕ →
-        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+      (W.extend (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω →
+        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
     (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)

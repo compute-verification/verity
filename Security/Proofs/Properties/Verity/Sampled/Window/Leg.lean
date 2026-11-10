@@ -75,8 +75,8 @@ theorem windowSpotSound_of_logged (rd : WindowReadings) (K : WindowConstructions
       (hC θ F W hW) (hDec θ F W hW)
 
 /-- **SPOT's leg over a window of several members, a member at a time**: `windowSpotSound_of_logged` with the
-decoders' premise at each member's session (`MemberDecodes`), at any invariant `I` of the position a member's session
-starts at. At each window of `S`, each commitment and each strategy: the coin map's premise over the window
+decoders' premise at each member's session (`MemberDecodes`), at any invariant `I` of the position the members'
+traces end at and the position a member's session starts at. At each window of `S`, each commitment and each strategy: the coin map's premise over the window
 (`WindowCouples`), and for each member with a proof block in the sample, in the members' order, its session's trace
 from where the one before it ended writes a transcript flock-verify `--zk` accepts at the member's `own`, wherever a
 tape through the trace's end plays a play v2's sampled verdict accepts that misses nowhere and `P` and `Q` hold of; a
@@ -95,7 +95,8 @@ theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstruction
     (BL : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → WindowLinkHold)
     (B : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → WindowRoundHold)
     (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (M W θ F c σ).widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+      (W.extend (M W θ F c σ).widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
+        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (ha : ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)),
       prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
         ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
@@ -149,8 +150,8 @@ theorem windowSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
     (hCov : WindowCovers V k S) (P : Exchange → Prop)
     (Q : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (windowSampleMaps e V rd label after κ W θ F c σ).widening).L.Ω → ℕ →
-        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+      (W.extend (windowSampleMaps e V rd label after κ W θ F c σ).widening).L.Ω →
+        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hκ : ∀ θ F W, S θ F = some W → ∀ H : (Fin nc → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ W ω)) = avg H)
     (ha : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
