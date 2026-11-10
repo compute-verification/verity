@@ -54,7 +54,7 @@ of its sample (`PouwWindow.Lanes.checkFull`: every unit of a non-empty populatio
 from the verifier's own `own`, every circuit port's row that `own` names read through `own`'s port at its one position,
 and only the rows, salts and paths the registrants committed come from them. It takes `CheckedSessionSound`'s
 hypotheses at each session as named premises, Flock's collision bounds and the window's sampling design
-(`Accounting.Premises.TS.SessionsCR`, `WindowLaws`), but port uniqueness and the `ok` port, which that acceptance gives
+(`Accounting.Premises.TS.SessionsCR`, `WindowDesigns`), but port uniqueness and the `ok` port, which that acceptance gives
 (the known-read check's names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the
 sample check gives, and registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the
 one-read check give, and two named premises: the
@@ -129,8 +129,8 @@ cell it is, at the registrants' commit-time openings), its relation the unit's s
 inputs `pub` and the receipt the combine's committed row decodes to (`Accounting.TS.Lanes.receiptOf`), or a clash of two
 of the sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`):
 given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses as the named premises
-`Accounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `Accounting.Premises.TS.WindowLaws` (the window's sampling design
-`Accounting.Assumptions.TS.WindowLaw` at each statement), and
+`Accounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `Accounting.Premises.TS.WindowDesigns` (the window's sampling design
+`Accounting.Assumptions.TS.WindowDesign` at each statement), and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
 `δ ≥ 0`), the 33 circuits computing
 their pieces' compositions on bits, at their port rows through the layout's decodes at
@@ -164,7 +164,7 @@ def LeafLanesSound : Prop :=
     (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
     Accounting.Premises.TS.SessionsCR sess →
-    Accounting.Premises.TS.WindowLaws sess out →
+    Accounting.Premises.TS.WindowDesigns sess out →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →

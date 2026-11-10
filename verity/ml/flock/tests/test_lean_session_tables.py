@@ -113,9 +113,11 @@ def verdicts(rope, tmp_path_factory):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["honest", "a missing root", "a short y", "swapped files", "swapped files and digests"])
 def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
-    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's law."""
+    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's law; its
+    verdict names the two tables it set the session up as (``session_tables``)."""
     v = verdicts[name]
     assert not v["accepted"] and v["why"] == SUBSET, v["why"]
+    assert v["session_tables"] == 2, v
 
 
 @pytest.mark.slow
@@ -136,6 +138,7 @@ def test_another_table_count_is_refused(rope, tmp_path):
         shutil.copy(s / f"circuit-00.rep{r}.bin", s / f"circuit.rep{r}.bin")
     [v] = _verify(rope, 1, s)
     assert not v["accepted"] and v["why"].startswith("S2/R7"), v["why"]
+    assert v["session_tables"] == 1, v
 
 
 @pytest.mark.slow
@@ -161,7 +164,6 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 
 def _program(path: Path, d: int) -> Path:
     """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import subcircuit_templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program
@@ -196,7 +198,7 @@ def plain(rope, program, tmp_path_factory):
 
 #: the fixture's statement, a selftest build's on seed coins: `verify` refuses it once every check has passed
 SELFTEST = (f"refused: {STATEMENT}, a selftest build's statement, whose coins the prover injected: verify takes only "
-            "verity/flock-circuit and verity/flock-circuit+plain-leaves")
+            "verity/flock-circuit, verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl")
 
 
 @pytest.mark.slow

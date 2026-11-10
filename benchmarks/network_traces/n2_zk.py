@@ -87,8 +87,8 @@ from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
-from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot import service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
 #: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the sample of record's
@@ -348,7 +348,7 @@ def _one_stage():
     import a0
     import a8
     import numpy as np
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
@@ -619,7 +619,7 @@ def prove(a) -> int:
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": cs.DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
-                  "verifier of record (sampled_proofs verifier.coins), read only after the period's commitment; not "
+                  "verifier of record (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     if warden:
         summary["warden_run"] = members["honest"].plan["warden_run"]

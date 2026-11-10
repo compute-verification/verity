@@ -18,7 +18,7 @@ from research.cli import main
 
 SCOPE = "/user.slice/user-1001.slice/user@1001.service/app.slice/cluster-r1.scope"
 SESSION = "/user.slice/user-1001.slice/session-197561.scope"
-#: vy-nebius-2's /run/gpu-lease/0.owner on 6 Oct, its run renamed r1
+#: a vy-nebius-2 /run/gpu-lease/0.owner, its run renamed r1
 OWNER = ("pid=40 run=r1 who=bc-1beaff8e uuid=GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f since=2026-10-06T16:46:00Z "
          "until=2026-10-06T17:11:00Z mem=1544G timed=1 scope=gpu-lease-40 cmd=env VY_PROVERS_CPUS=160-175 vy-provers taskset -c 160-175")
 FENCE = "pid=70 run=- who=kubernetes uuid=- since=2026-10-06T11:53:08Z until=2026-10-07T11:53:08Z cmd=n1-lease-fence: not in node 1's lease pool (n1_lease.py)"

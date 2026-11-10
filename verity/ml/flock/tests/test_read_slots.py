@@ -4,13 +4,17 @@ compute what the flat circuit does on every lane, and a flipped unit row fails i
 input once, each from a port of its width, each stage reading only earlier stages and slots; a cap on a net's ANDs cuts the
 same unit into more stages, none past the cap, computing the same; `net_rows` is every net's laid-out rows, and `ands_cap` the
 most ANDs a slot holds (at the SparseMlaSplitPart T=64 unit's ports: 11,534,336 in 2^24); the automatic caps cut a unit whose
-AND chain overflows its slot into nets of the next slot down, and keep a split no cap shrinks; a unit reading no slot table
-isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
-the output words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
+AND chain overflows its slot into nets of the next slot down, keep a split no cap shrinks, and cut no more nets than keep the
+statement within the device prover's slot types (its `FC_MAX_TYPES`); a unit reading no slot table isn't split. Through
+`UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when the output words
+aren't a power of two times 16 bits), its slot types are its nets, its tables and the three fixed ones, and its staged
+outputs are the IR reference's."""
 from __future__ import annotations
 
 import itertools
 import json
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -39,11 +43,18 @@ def _units(n_in: int, n_out: int) -> IL.Units:
                     out_src=[[("ret", o) for o in range(n_out)]], signature=(), gates=[], arg_gates=[], ret_gates=[])
 
 
-def _sigmoid(C: gf2.Circuit, reads: bool = True, chain: int = 0) -> None:
-    """``chain``: that many more ANDs on the inputs, one after another, the last one XORed into ``out2``'s low bit."""
+def _sigmoid(C: gf2.Circuit, reads: bool = True, chain: int = 0, tail: int = 0) -> None:
+    """``chain``: that many more ANDs on the inputs, one after another, the last one XORed into ``out2``'s low bit; ``tail``:
+    that many on the RCP read's value and the inputs, the last one XORed into ``out0``'s low bit (they fill the last stage)."""
     w = [C.input(nm, 16) for nm in IN]
     x, y = w[0] + w[1], w[2] + w[3]
     r = IL.PIECES["MufuRcpFtz_v1"](C, IL.PIECES["F32AddFtz_v1"](C, IL.PIECES["MufuEx2Ftz_v1"](C, x), y)) if reads else x
+    if tail:
+        gs = r + x + y + [a ^ b for a, b in zip(r, x)]
+        t = gs[0]
+        for i, j in itertools.islice(itertools.combinations(range(len(gs)), 2), tail):
+            t = C.AND(t ^ gs[i], gs[j])
+        r = [r[0] ^ t] + r[1:]
     C.output("out0", r[:16])
     C.output("out1", r[16:])
     o = [C.AND(a, b) for a, b in zip(x[:16], y[16:])]
@@ -193,6 +204,34 @@ def test_the_automatic_caps_keep_a_split_no_cap_shrinks(split):
         RS.split(C, IN, OUT, "unit/read-slots-bad", SimpleNamespace(id="toy"), _units(4, 3), stage_ands="smallest")
 
 
+def test_the_automatic_caps_keep_a_statement_within_the_gpu_provers_slot_types(monkeypatch):
+    C = gf2.Circuit()
+    _sigmoid(C, tail=3800)
+    whole = RS.split(C, IN, OUT, "unit/read-slots-tail", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=None)
+    free = RS.split(C, IN, OUT, "unit/read-slots-tail", SimpleNamespace(id="toy"), _units(4, 3))
+    tables = len({t for _g, t, _s in whole.reads})
+    assert len(_nets(free)) > len(_nets(whole)) and _cells(free) < _cells(whole)
+    assert RS.FIXED_TYPES + tables + len(_nets(free)) <= RS.GPU_SLOT_TYPES
+    monkeypatch.setattr(RS, "GPU_SLOT_TYPES", RS.FIXED_TYPES + tables + len(_nets(whole)))
+    low = RS.split(C, IN, OUT, "unit/read-slots-tail", SimpleNamespace(id="toy"), _units(4, 3))
+    assert len(_nets(low)) == len(_nets(whole)) and _cells(low) == _cells(whole)
+    _check_wires(low)
+    rng = np.random.default_rng(17)
+    xs = EDGES + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    ys = EDGES[::-1] + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    got, _cut, ok = low.evaluate(_flat(xs, ys))
+    want, _cut, _ok = whole.evaluate(_flat(xs, ys))
+    assert ok == (1 << len(xs)) - 1 and np.array_equal(got, want)
+
+
+def test_the_gpu_slot_types_are_the_device_provers():
+    root = Path(RS.__file__).resolve().parents[2]
+    held = {re.search(r"const FC_MAX_TYPES: usize = (\d+);", (root / "live/src/gpu_circuit.rs").read_text())[1],
+            re.search(r"#define FC_MAX_TYPES (\d+)", (root / "cuda/prove_circuit.cuh").read_text())[1],
+            re.search(r"st\.circuit\.types\.len\(\) > (\d+)", (root / "live/src/bin/flock-circuit.rs").read_text())[1]}
+    assert held == {str(RS.GPU_SLOT_TYPES)}
+
+
 def test_a_unit_reading_no_slot_table_is_not_split():
     C = gf2.Circuit()
     _sigmoid(C, reads=False)
@@ -225,6 +264,7 @@ def test_a_stager_puts_the_reads_in_slots_and_stages_the_reference(outputs, tmp_
     assert m["out_net_ports"] == ([[0, j] for j in range(words)] if outputs == 3 else list(range(words)))
     unit = next(r for r in m["ranges"] if r.get("net") == "unit")
     assert unit.get("packed") is True
+    assert len({r["net"] for r in m["ranges"]}) == RS.FIXED_TYPES + 1 + len(st.low.tail.stages) + len(m["lookups"])
     rng = np.random.default_rng(outputs)
     a = np.array(EDGES[:8] + [int(v) for v in rng.integers(0, 1 << 32, 8, dtype=np.uint64)], np.uint64)
     b = rng.integers(0, 1 << 32, len(a), dtype=np.uint64)

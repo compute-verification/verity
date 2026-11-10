@@ -68,7 +68,7 @@ theorem endToEnd : Pouw.Guarantees.EndToEnd := by
 theorem gap0_lt_one : Params.gap0 < 1 := by unfold Params.gap0; norm_num
 
 /-- **(d″)** Milestone resource exhaustion for `D1.m1` at `g = 1 − (1 − g₀)/Ω_max`. -/
-theorem milestoneExhaustion : Pinned.MilestoneExhaustion := by
+theorem milestoneExhaustion : GameStatements.MilestoneExhaustion := by
   intro CM Wref Ωmax ε hΩ hW hTT U hU T hT q hq A hA t εs hεs
   exact endToEnd D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 Ωmax ε gap0_lt_one hΩ hW hTT
     U hU T hT q hq A hA t εs hεs

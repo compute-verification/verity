@@ -382,9 +382,9 @@ theorem pooledCovers : PooledCovers := by
     simpa using this
 
 theorem pooledCoversSession : PooledCoversSession :=
-  fun n _ _ _ _ D ω δ b h => pooledCovers n (fun t => D.size t ω) (fun t => D.draws t ω) δ b h
+  fun n _ _ _ _ D ω δ b h => pooledCovers n (fun t => D.size t ω) (fun t => D.samples t ω) δ b h
 
-theorem line_wrong {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
+theorem line_incorrect {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
     {rates : Line.Rates} {l : Line.Line} (h : Line.line gs per blocks bb cb nb ws δ rates = .ok l) :
     ∃ b, Pooled.pooled ws δ = .ok b ∧ l.wrong = b.wrong := by
   unfold Line.line at h
@@ -403,7 +403,7 @@ theorem line_wrong {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws : Arr
 
 theorem lineCoversSession : LineCoversSession := by
   intro n _ _ _ _ D ω δ _ _ _ _ _ _ _ l h
-  obtain ⟨b, hb, hw⟩ := line_wrong h
+  obtain ⟨b, hb, hw⟩ := line_incorrect h
   rw [hw]
   exact pooledCoversSession n _ _ _ _ D ω δ b hb
 

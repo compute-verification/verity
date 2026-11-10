@@ -7,7 +7,8 @@
                               a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
-                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``)
+                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
+                              family's struct budget, ``struct_max_gates``: {family: gates}, `checks.struct_budget`)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),

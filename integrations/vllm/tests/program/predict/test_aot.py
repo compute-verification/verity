@@ -128,7 +128,7 @@ def test_a_predicted_rows_workload_is_one_gm01_verifies_by_its_descriptor(tmp_pa
     from verity_vllm.pipeline.global_program import request_id_of
     phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
                       for i, (lp, cap) in enumerate([(5, 3), (7, 2)])])
-    wl, p = A.write_workload(phi, {}, {}, str(tmp_path)), tmp_path / "workload_program.json"
+    wl, p = A.write_workload(phi, {}, str(tmp_path)), tmp_path / "workload_program.json"
     g = from_gprog(str(p))
     assert g["workload_digest"] == wl.digest == S.predict_workload(phi)["digest"]
     dv = g["gprog_artifact"]["digest_verification"]

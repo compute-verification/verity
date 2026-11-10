@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -74,7 +74,7 @@ open scoped ENNReal
 theorem Pr_eq_toReal_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.Pr p = (prCoin p).toReal := by
   classical
   rw [prCoin_eq_card, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 2
 
 /-- A sampling design's miss probability, in the claims' terms, is its escape. -/

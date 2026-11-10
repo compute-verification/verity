@@ -5,6 +5,7 @@
 // lane challenge recorded, the lane phase's hiding step after the last lane fold and before the code switch, and level
 // 0's queries recorded.
 #pragma once
+#include "async_copies.cuh"
 
 // The prover's level-0 hiding for one opening: the witness's lanes, every lane's padding (lanes + 4 lanes of t_pad words,
 // lane-major) and the 4 extra lanes (L words each), on the device; the repetition whose pair this opening folds; what the lane
@@ -120,7 +121,7 @@ inline int lf_zk_lane_phase(FsChallenger& ch, LigZk& zk, F256Ext* d_f, const F25
     lf_zk_sums_partial<<<blocks, LF_TPB>>>(d_b, R0, R1, n, d_p0, d_p2);
     lf_msg_combine<<<1, LF_TPB>>>(d_p0, d_p2, blocks, d_out2);
     LFCK(cudaGetLastError());
-    LFCK(cudaMemcpy(h, d_out2, sizeof(h), cudaMemcpyDeviceToHost));
+    LFCK(hc_get(h, d_out2, sizeof(h))); LFCK(hc_wait());
     zk.e[0] = h[0];
     zk.e[1] = h[1];
     if (zk.tamper == 4) zk.e[0].c0.lo ^= 1;
@@ -135,7 +136,7 @@ inline int lf_zk_lane_phase(FsChallenger& ch, LigZk& zk, F256Ext* d_f, const F25
     lf_zk_blind_partial<<<blocks, LF_TPB>>>(d_f, d_b, R0, R1, zk.rho[0], zk.rho[1], n, zk.tamper == 1, d_p0, d_p2);
     lf_msg_combine<<<1, LF_TPB>>>(d_p0, d_p2, blocks, d_out2);
     LFCK(cudaGetLastError());
-    LFCK(cudaMemcpy(h, d_out2, sizeof(h), cudaMemcpyDeviceToHost));
+    LFCK(hc_get(h, d_out2, sizeof(h))); LFCK(hc_wait());
     zk.t_prime = h[0];
     if (zk.tamper == 2) zk.t_prime.c0.lo ^= 1;
     ch.observe_label(LF_ZK_CLOSE, sizeof(LF_ZK_CLOSE) - 1);
@@ -144,12 +145,12 @@ inline int lf_zk_lane_phase(FsChallenger& ch, LigZk& zk, F256Ext* d_f, const F25
     F256Ext *d_r, *d_ybar;
     LFCK(A.alloc((void**)&d_r, std::max(k, 1) * sizeof(F256Ext)));
     LFCK(A.alloc((void**)&d_ybar, std::max(zk.t_pad, 1) * sizeof(F256Ext)));
-    LFCK(cudaMemcpy(d_r, zk.challenges.data(), k * sizeof(F256Ext), cudaMemcpyHostToDevice));
+    LFCK(hc_put(d_r, zk.challenges.data(), k * sizeof(F256Ext)));
     lf_zk_ybar<<<(unsigned)((zk.t_pad + LF_TPB - 1) / LF_TPB), LF_TPB, zk.lanes * sizeof(F256Ext)>>>(
         zk.d_pads, zk.lanes, zk.t_pad, zk.rep, d_r, k, zk.rho[0], zk.rho[1], d_ybar);
     LFCK(cudaGetLastError());
     zk.ybar.resize(zk.t_pad);
-    LFCK(cudaMemcpy(zk.ybar.data(), d_ybar, zk.t_pad * sizeof(F256Ext), cudaMemcpyDeviceToHost));
+    LFCK(hc_get(zk.ybar.data(), d_ybar, zk.t_pad * sizeof(F256Ext))); LFCK(hc_wait());
     LFCK(A.release(d_r));
     LFCK(A.release(d_ybar));
     if (zk.tamper == 3) zk.ybar[0].c0.lo ^= 1;

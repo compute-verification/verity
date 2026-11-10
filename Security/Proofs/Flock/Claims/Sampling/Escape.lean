@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -85,7 +85,7 @@ theorem Pr_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type
 theorem Pr_and_prod {α β : Type} [Fintype α] [Fintype β] (p : α → Prop) (q : β → Prop) :
     Pr (fun s : α × β => p s.1 ∧ q s.2) = Pr p * Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [div_mul_div_comm, Fintype.card_prod, Nat.cast_mul]
   congr 1
   rw [← Nat.cast_mul, ← card_product]
@@ -176,7 +176,7 @@ theorem stratum_miss_eq (n k o : ℕ) (B : Finset ℕ) :
   · have hE : IsEmpty {S : Finset (Fin n) // S.card = k} :=
       ⟨fun S => by have := S.1.card_le_univ; rw [Fintype.card_fin, S.2] at this; omega⟩
     rw [Nat.choose_eq_zero_of_lt hk, Nat.cast_zero, div_zero]
-    unfold Pr
+    unfold Pr Claims.prUniform
     rw [Fintype.card_eq_zero, Nat.cast_zero, div_zero]
 
 /-- The coins of independent uniform subsets of consecutive strata `(n_s, k_s)`: a `k_s`-subset of each. -/
@@ -202,7 +202,7 @@ theorem strataPa_eq_Pr : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ)
     strataPa ss o B = Pr (fun ω : StrataΩ ss => Disjoint (strataDraw ss o ω) B)
   | [], o, B => by
     rw [strataPa]
-    unfold Pr
+    unfold Pr Claims.prUniform
     simp only [strataDraw, disjoint_empty_left]
     rw [filter_true_of_mem fun _ _ => trivial, card_univ,
       div_self (Nat.cast_ne_zero.2 (Fintype.card_ne_zero (α := Unit)))]
@@ -234,7 +234,7 @@ theorem OneStage.Pa_all (ns : List ℕ) {B : Finset ℕ} (hB : B ⊆ range ns.su
   have hiff : Disjoint (range ns.sum) B ↔ B = ∅ :=
     ⟨fun h => disjoint_self_iff_empty _ |>.1 (h.mono_left hB), fun h => h ▸ disjoint_empty_right _⟩
   rw [OneStage.Pa]
-  unfold Pr
+  unfold Pr Claims.prUniform
   by_cases hB0 : B = ∅ <;> simp [hB0, hiff]
 
 /-- **The uniform `K`-subset misses `B`** with probability `P_a(B) = C(N − |B|, K)/C(N, K)`. -/

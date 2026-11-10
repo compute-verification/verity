@@ -38,6 +38,8 @@ KNOWN = {
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    # PoUB's memory-map/v1 builder (`record`), which lays a map out from a vLLM Program's KV rows: `map_case` builds with it
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.commit_map"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
     ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity.ml.definitions.registry"),

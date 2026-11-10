@@ -1,10 +1,9 @@
-"""`research agents quiet`: which worker agents have gone quiet: no commit, no file change and no live process for hours (INF-55 h).
+"""`research agents quiet`: which worker agents have gone quiet: no commit, no file change and no live process for hours.
 
     research agents quiet [--hours 2] [--repo DIR] [--branch NAME ...] [--json]
 
 A worker that stops (its VM's kernel OOM-killed its processes, or it wedged) still shows RUNNING in Cursor, and its transcript and
-resume are closed to its coordinator while it does: circuits' IR-typing worker made no commit for four hours on 17-18 Oct before
-anyone noticed. Each git worktree of `--repo` (default: this checkout's), where a coordinator's local workers each work, is read
+resume are closed to its coordinator while it does, so it can go hours without a commit before anyone notices. Each git worktree of `--repo` (default: this checkout's), where a coordinator's local workers each work, is read
 for its HEAD commit's time, the newest mtime among the files `git status` lists as changed, and the processes whose cwd is in it.
 A worktree with no such process whose newest commit or change is older than `--hours` is QUIET. `--branch NAME` (a worker on a VM of
 its own) reads the time of origin/NAME's newest commit (a fetch), and is QUIET past `--hours` the same way. A coordinator runs it

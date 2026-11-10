@@ -147,6 +147,31 @@ def gates (d : Desc) (rs : Array TRange) (i : Nat) : Option (Nat × Nat) := do
   let g := d.gates t
   return (off + m * g, off + m * g + g)
 
+/-- Every unit's `gates`, unit by unit, or the first unit that has none. The reference `unitGates` is held to: each unit
+here walks its template and every earlier root node's (`Desc.gates`), so it costs the population times the description. -/
+def unitGatesRef (d : Desc) (rs : Array TRange) : Except Nat (Array (Nat × Nat)) :=
+  (Array.range (population rs)).mapM fun u => match gates d rs u with
+    | some g => .ok g
+    | none => .error u
+
+/-- Whether `rs` are contiguous from unit 0 in order, as `evaluate` gives them: each range starts where the last ended. -/
+def contiguous (rs : Array TRange) : Bool :=
+  (rs.foldl (fun (ok, at_) r => (ok && r.first == at_, at_ + r.count)) (true, 0)).1
+
+/-- `unitGatesRef`, a range at a time: the root body's node offsets and each range's instance gates once, then
+`off + m·g` per member, so it costs the root body and the ranges' templates once plus a constant a unit. Ranges that
+aren't `contiguous`, or a root that isn't a definition, take `unitGatesRef`. -/
+def unitGates (d : Desc) (rs : Array TRange) : Except Nat (Array (Nat × Nat)) :=
+  match d.def? d.root with
+  | some root =>
+    if !contiguous rs then unitGatesRef d rs else
+    let offs := root.nodes.foldl (fun (a : Array Nat) x => a.push (a.back! + x.members * d.gates (d.callees.getD x.fn ""))) #[0]
+    .ok <| rs.foldl (init := #[]) fun acc r =>
+      let off := offs[min r.node root.nodes.size]!
+      let g := d.gates r.template
+      (List.range r.count).foldl (fun acc m => acc.push (off + m * g, off + m * g + g)) acc
+  | none => unitGatesRef d rs
+
 /-- The templates a template query names, when `(name, version)` is one: its parameters checked as core's `validate` does. -/
 def templatesOf (name : String) (version : Nat) (params : Json) : Option (V (Array String)) :=
   let keys := match params with

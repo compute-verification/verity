@@ -64,7 +64,9 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                   f"telemetry {_hsrc.telemetry_path}", flush=True)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
     if args.memory_map:
+        from verity_vllm import protocols
         from verity_vllm.acquire.sources import kv_slots_source
+        protocols.driver("remote-bandwidth", "commit_map")
         kv_slots_source.attach(com)
     # the MoE block source stages six planes per MoE layer
     # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest

@@ -10,7 +10,7 @@ session, and `benchmarks/live_challenger/coin_link.py` runs it on the challenger
 
 ### The path
 
-The challenger (`sampled_proofs.remote`, served by `serve.py`) and the link run on one auditor host, the device that
+The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor host, the device that
 runs the server's network certifier (`trusted-host`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
@@ -78,7 +78,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 ### What it rests on
 
 The challenger's premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock`, named in
-`verity/core/protocols/sampled_proofs/README.md`.
+`verity/core/protocols/spot/README.md`.
 Here the challenger and the link are one device, the trusted host: the coins cross only its loopback until the link
 releases them, and the link's ticks read the host's monotonic clock, which the challenger's release log reads too (RP8).
 

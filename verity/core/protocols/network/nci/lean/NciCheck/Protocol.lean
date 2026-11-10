@@ -19,7 +19,7 @@ and reads no coins: it answers from the declared circuit, the declared division 
 registered information it is handed, and is never undecided.
 
 Its case splits the check's instance and trusted input as sampled proofs' one-stage audit splits its own
-(`SampledProofs.OneStage`):
+(`Spot.OneStage`):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `alpha` (`α` as `[num, den]`), `gamma`
   (`Γ`), `log` (the deployment's registration records before the run's own, oldest first, each one's `previous` the

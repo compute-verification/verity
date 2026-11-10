@@ -31,10 +31,10 @@ Each figure the tensor's clock moves, at 1830 MHz and then at 1980 MHz: the `s8`
 The tensor-duty sweep (`benchmarks/tensor_duty/`) is the 1830 MHz reading's falsification test: a run above
 132 · 4096 · 1830 · 10⁶ = 9.894 · 10¹⁴ `s8` MACs a second over the host's wall clock refutes it. Throughput rests on
 the host's wall clock alone; the GPU's own timers (clock64, the global timer, CUDA events) are diagnostics. Its run
-art:f1bb35d70476, with the SM clock locked at 1980 MHz and power at the board's 700 W maximum, over zero, constant,
-uniform and random operands (`s8` on `wgmma` and `mma.sync`, `e4m3` on `wgmma`) and tensor duty cycles from 50% to
-100% (1% steps above 90%, the rest idle or FP32 work), read at most 988.59 · 10¹² `s8` MACs a second: 0.99915 of the
-1830 MHz rate and 0.92346 of the 1980 MHz one, and under the 1830 MHz rate at the host stamps' millisecond resolution.
+(`verity bench tensor_duty`), with the SM clock locked at 1980 MHz and power at the board's 700 W maximum, over zero,
+constant, uniform and random operands (`s8` on `wgmma` and `mma.sync`, `e4m3` on `wgmma`) and tensor duty cycles from
+50% to 100% (1% steps above 90%, the rest idle or FP32 work), passes only while every point reads under the 1830 MHz
+rate at the host stamps' millisecond resolution.
 DMMA keeps the 1980 MHz the data sheet quotes its FP64 tensor peak at, through its weight.
 
 **Stores** (32-bit words): the register file, 64 Ki registers an SM, plus the uniform registers and the predicates

@@ -3,17 +3,17 @@ tests/program/test_dsa_topk.py holds equal to them.
 
     DsaTopKOneHot_v1{N}           (idx: 32 bits) -> N bits: bit j is idx == j (unsigned); traced, no word Definition
     DsaTopKVerdict_v1{N,TOPK}     (members: N bits, scores: N x 32 bits) -> bit; traced, no word Definition
-    DsaTopKOrder_v2{N,TOPK}       (scores: N x 32 bits, order: TOPK x 32 bits) -> bit; word view DsaTopKOrder_v1
     DsaTopKAscending_v1{TOPK}     (order: TOPK x 32 bits) -> bit: each slot below the next (unsigned); traced, no word Definition
-    DsaTopKLongRow_v2{N,TOPK}     (scores: N x 32 bits, order: TOPK x 32 bits) -> bit: DsaTopKOrder_v2 AND DsaTopKAscending_v1;
-                                  word view DsaTopKLongRow_v1
+    DsaTopKLongRow_v2{N,TOPK}     (scores: N x 32 bits, order: TOPK x 32 bits) -> bit: the selection (`_selection`) AND
+                                  DsaTopKAscending_v1; word view DsaTopKLongRow_v1
     Xor3x16_v2, Xor3x32_v2        (a, b, c: 16 or 32 bits) -> 16 or 32 bits; word views their _v1
     DsaWaksmanSwap_v2{W,E}        (s: bit, a, b: W x E bits) -> 2 x W x E bits; word view DsaWaksmanSwap_v1
     DsaWaksmanPick_v2{W,E}        (s: bit, a, b: W x E bits) -> W x E bits; word view DsaWaksmanPick_v1
     DsaWaksmanRows_v2{N,K,W,E}    (sw: bits, rows: N x W x E bits) -> K x W x E bits; word view DsaWaksmanRows_v1
     DsaWaksmanOrder_v2{N,TOPK}    (sw: bits) -> TOPK x 32 bits; word view DsaWaksmanOrder_v1
 
-`DsaTopKOrder_v2` is the selection relation in gates.  Each slot's index is decoded to N bits (`DsaTopKOneHot`, one AND per
+`_selection` is the selection relation in gates, `DsaTopKLongRow_v2`'s first half and no Definition of its own: alone it accepts
+any permutation of the top set, log2(TOPK!) free bits a row, so only the ascending check beside it makes a check bit.  Each slot's index is decoded to N bits (`DsaTopKOneHot`, one AND per
 output past a shared decoder of about sqrt(N) gates, the index's 32 - b high bits required zero, b = ceil(log2 N)), and the slots'
 decodings XORed (one `Xor<TOPK>` per key, no AND) into m_j, the parity of #{s : order[s] = j}.  Then `DsaTopKVerdict`: the
 popcount of m is TOPK (an adder tree), and the least member under the tie rule precedes the first non-member (two tournaments
@@ -27,7 +27,7 @@ exactly when each precedes every non-member.  A slot past N, a negative one or a
 one AND a payload bit a switch.  `DsaWaksmanOrder_v2` is the same network over the indices' constant bits.
 
 Cost at GLM-5.3's statics (TOPK 2048, rows of kv_lora 512 + rope 64 = 576 bf16; two-input ANDs counted over the
-bodies): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and
+bodies): the selection at N=2049 is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and
 2,150 more a key; `DsaWaksmanRows_v2{N=2049,K=2048,W=576,E=16}` is 20,493 switches x 9,216 bits = 188,863,488 and
 `DsaWaksmanOrder_v2{N=2049}` 655,776.  A decode step past an I2048 prompt routes and checks the order on the 21 indexer layers and
 reads its rows on all 78 (the mux it replaces, `Embedding_v2` per slot, was about N + 30 an output bit: 3.06T a step).
@@ -151,16 +151,14 @@ def _sig_order(S):
     return (("scores", Array(S.N, F32)), ("order", Array(S.TOPK, I32))), BIT
 
 
-def _order(B, S, scores, order):
-    """`DsaTopKOrder_v1` on bits: each slot's `DsaTopKOneHot_v1{N}`, the slots' decodings XORed per key (`Xor<TOPK>`), and
-    `DsaTopKVerdict_v1{N,TOPK}` over the parities and the scores."""
+def _selection(B, S, scores, order):
+    """1 when ``order`` is a permutation of the top-TOPK set of ``scores`` (`dsa_topk.order_ok`): each slot's
+    `DsaTopKOneHot_v1{N}`, the slots' decodings XORed per key (`Xor<TOPK>`), and `DsaTopKVerdict_v1{N,TOPK}` over the parities
+    and the scores."""
     T.check_statics(S.N, S.TOPK)
     hits = B.batch(bind(DsaTopKOneHot, N=S.N), order, axes=(0,))
     members = hits[0] if S.TOPK == 1 else B.batch(BL.xor_gate(S.TOPK), hits, axes=(1,))
     return B.call(bind(DsaTopKVerdict, N=S.N, TOPK=S.TOPK), Coll(Array(S.N, BIT), members.refs), scores)
-
-
-DsaTopKOrderV2 = EW.on_bits("DsaTopKOrder", 2, ["N", "TOPK"], _sig_order, _order, T.DsaTopKOrder)
 
 
 def _ascending(S):
@@ -175,8 +173,8 @@ DsaTopKAscending = EW.specialized("DsaTopKAscending", 1, ["TOPK"], _ascending, l
 
 
 def _long_row(B, S, scores, order):
-    """`DsaTopKLongRow_v1` on bits: `DsaTopKOrder_v2` and `DsaTopKAscending_v1{TOPK}`, ANDed."""
-    ok = B.call(bind(DsaTopKOrderV2, N=S.N, TOPK=S.TOPK), scores, order)
+    """`DsaTopKLongRow_v1` on bits: `_selection` and `DsaTopKAscending_v1{TOPK}`, ANDed."""
+    ok = _selection(B, S, scores, order)
     asc = B.call(bind(DsaTopKAscending, TOPK=S.TOPK), order)
     return B.call(BL.AND, Coll(Array(2, BIT), concat([ok.refs, asc.refs])))
 
@@ -248,6 +246,6 @@ def _net_order(B, S, sw):
 
 DsaWaksmanOrderV2 = EW.on_bits("DsaWaksmanOrder", 2, ["N", "TOPK"], _sig_net_order, _net_order, T.DsaWaksmanOrder)
 
-BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKOrderV2, DsaTopKAscending, DsaTopKLongRowV2, Xor3x16, Xor3x32,
+BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKAscending, DsaTopKLongRowV2, Xor3x16, Xor3x32,
                     DsaWaksmanSwapV2, DsaWaksmanPickV2,
                     DsaWaksmanRowsV2, DsaWaksmanOrderV2]

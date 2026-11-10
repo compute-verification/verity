@@ -39,6 +39,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # Chip programs: congruence, replay from a trace, and counting
@@ -203,7 +204,7 @@ theorem card_line_le {X Y : Type} [Fintype X] [DecidableEq X] [Fintype Y] (x₀ 
 theorem pr_le_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) [DecidablePred P] (d m : ℕ) (hd : d ≠ 0)
     (h : (Finset.univ.filter P).card * d ≤ m * Fintype.card Ω) : pr P ≤ (m : ℝ≥0∞) / d := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable]
   refine ENNReal.div_le_of_le_mul ?_
   have hd' : (d : ℝ≥0∞) ≠ 0 := by simp [hd]
@@ -214,13 +215,13 @@ theorem pr_le_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) [DecidablePred 
 
 theorem pr_mono {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} (h : ∀ x, P x → Q x) : pr P ≤ pr Q := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   gcongr
   exact h _
 
 theorem pr_or_le {Ω : Type} [Fintype Ω] (P Q : Ω → Prop) : pr (fun x => P x ∨ Q x) ≤ pr P + pr Q := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, ← ENNReal.add_div]
   gcongr
   calc (((Finset.univ.filter (fun x => P x ∨ Q x)).card : ℕ) : ℝ≥0∞)
@@ -232,7 +233,7 @@ theorem pr_or_le {Ω : Type} [Fintype Ω] (P Q : Ω → Prop) : pr (fun x => P x
 theorem pr_exists_le {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω → Prop) :
     pr (fun x => ∃ i, P i x) ≤ ∑ i, pr (P i) := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, ← ENNReal.sum_div]
   gcongr
   calc (((Finset.univ.filter (fun x => ∃ i, P i x)).card : ℕ) : ℝ≥0∞)

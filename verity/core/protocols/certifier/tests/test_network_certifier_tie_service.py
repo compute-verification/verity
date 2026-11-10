@@ -25,8 +25,8 @@ from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_
     tie_service as TS, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import registered as G, registration as R
 
 import standin
 
@@ -404,4 +404,4 @@ def test_only_the_tie_service_builds_an_ingress_tie_verdict():
             if (isinstance(f, ast.Name) and f.id == "IoTieVerdict") or \
                     (isinstance(f, ast.Attribute) and f.attr == "IoTieVerdict"):
                 builders.add(path.relative_to(root).as_posix())
-    assert builders == {"core/protocols/certifier/tie_service.py"}
+    assert builders == {Path(TS.__file__).resolve().relative_to(root).as_posix()}

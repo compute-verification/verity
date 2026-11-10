@@ -59,7 +59,7 @@ theorem OC.eval_log {α : Type} (H : Msg → Msg) (c : OC α) : ∀ p ∈ (c.eva
 
 /-- The rounds keep both logs evaluations of `H`. -/
 theorem stepWith_logs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (∀ p ∈ t.pLog, H p.1 = p.2) → (∀ p ∈ t.vLog, H p.1 = p.2) →
         (∀ p ∈ (stepWith H P x ω vnext n hist as t).pLog, H p.1 = p.2) ∧
           (∀ p ∈ (stepWith H P x ω vnext n hist as t).vLog, H p.1 = p.2) := by

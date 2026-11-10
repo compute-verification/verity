@@ -25,8 +25,8 @@ from typing import Any, Callable, Iterator
 
 from verity.ml.circuits.codec import canonical_json, program_digest
 from verity.ml.circuits.program import Program
-from verity.core.protocols.sampled_proofs.one_stage import verifier as V
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot.one_stage import verifier as V
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 PURE = ("check", "check_public", "select", "audit_record")
 

@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Flock.Game.Seq
+public import Definitions.Flock.Game
 public import Proofs.Flock.Soundness.ExtractAcc
-public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
@@ -10,7 +10,6 @@ import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.EReal.Inv
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Extract
-import Proofs.Flock.Soundness.Game.Expect
 meta import Lean.Meta.Tactic.NormCast
 
 /-!

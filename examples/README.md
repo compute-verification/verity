@@ -24,8 +24,8 @@ Remote accepts only when all three accept over one commitment that binds them, e
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
 the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
-Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only demo that steps through the whole remote composite, on CPU with a
+yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet. `lifecycle/` is the
+only demo that steps through the whole remote composite, on CPU with a
 stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
 sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
@@ -91,8 +91,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
   Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
   on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
-  subprotocols), the memory wipe (onsite's) and the bandwidth audit over PoUS's store (neither composite's yet), exist
-  here as a skeleton on fixture coins, not as runs, and nothing claims them.
+  subprotocols) and the memory wipe (onsite's) exist here as a skeleton on fixture coins, not as runs, and nothing
+  claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`

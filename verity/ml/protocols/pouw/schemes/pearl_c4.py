@@ -1136,7 +1136,7 @@ class PearlC4:
         self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
         self.certificate = Certificate(
             conjecture="tt-out/fp4-sm120",
-            gamma0=None,
+            gap0=None,
             omega=Fraction(1),
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility",
                     "live-verifier"),
@@ -1164,7 +1164,7 @@ class PearlC4:
         if self.contrast:
             self.certificate = Certificate(
                 conjecture="none: a contrast line outside Pearl-C4's claimed domain (NVFP4 only)",
-                gamma0=None,
+                gap0=None,
                 omega=Fraction(1),
                 claims=(),
                 hypotheses=(),

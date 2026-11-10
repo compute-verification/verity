@@ -12,7 +12,7 @@ set_option Elab.async false
 
 `Binding.HmRows.enc` is the byte string `HmRowComputes` says a row's `hm96` slot commits to: for port `p`'s row of
 `words` u16 words, the circuit's `sha512x3` slots hash `rowPrefix words` and the row's `2 · words` bytes at
-`Typed.msgCol` ([e2e-hm]'s `Discharge.Hm.port_commit`). The layout's values carry their width (`BitVal`), so one
+`Typed.msgCol` (`Discharge.Hm.port_commit`). The layout's values carry their width (`BitVal`), so one
 injective `enc` recovers each port's words from its value:
 
 * `rowEnc`: `rowPrefix w ‖ bytes` for a value of `16 w` bits with nothing set past them (`RowShaped`), and a longer code
@@ -275,7 +275,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {rowW : Fin c.ports.s
 
 /-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places**: at a sampled proof block `u`'s site, the value a
 message holds at row port `q` of unit `u'`, `16 · words` bits (`rowW q`), has `rowEnc` the row prefix of `words` and the
-`2 · words` bytes the witness holds at the unit's VU's message columns (`Typed.msgCol`) in its block: [e2e-hm]'s
+`2 · words` bytes the witness holds at the unit's VU's message columns (`Typed.msgCol`) in its block: `Discharge.Hm`'s
 `port_commit` row, with the block's bits at the site. -/
 theorem keyRow_enc (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) {S : Finset (Fin n)} {R : Reg} {u : Fin n}
     (hu : u ∈ S) (M : Binding.Msg plan tab S R u) (u' : Fin n) (q : Fin c.ports.size) {words : ℕ}

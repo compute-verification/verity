@@ -30,11 +30,11 @@ theorem rebuild_term_le (Q : ℕ) (hQ : Q ≤ 2 ^ 128) :
     norm_num
     omega
   have hb1 : (((nPos (2 ^ 9) Q) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) ≤ 2 ^ 572 :=
-    calc (((nPos (2 ^ 9) Q) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) ≤ (((2 ^ 138) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) := by
-          gcongr
+    calc (((nPos (2 ^ 9) Q) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) ≤ (((2 ^ 138) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) :=
+          Nat.pow_le_pow_left (Nat.mul_le_mul (Nat.mul_le_mul (Nat.pow_le_pow_left hnp 2) le_rfl) le_rfl) _
       _ = 2 ^ 572 := by rw [← pow_mul, ← pow_add, ← pow_succ, ← pow_mul]
   have hb2 : ((nPos (2 ^ 9) Q) ^ 2 : ℕ) ≤ 2 ^ 276 :=
-    calc ((nPos (2 ^ 9) Q) ^ 2 : ℕ) ≤ (2 ^ 138) ^ 2 := by gcongr
+    calc ((nPos (2 ^ 9) Q) ^ 2 : ℕ) ≤ (2 ^ 138) ^ 2 := Nat.pow_le_pow_left hnp 2
       _ = 2 ^ 276 := by rw [← pow_mul]
   have hc1 : ((((nPos (2 ^ 9) Q) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) : ℝ≥0∞) ≤ (2 : ℝ≥0∞) ^ 572 := by
     have h : (((2 ^ 572 : ℕ)) : ℝ≥0∞) = (2 : ℝ≥0∞) ^ 572 := by rw [Nat.cast_pow, Nat.cast_ofNat]

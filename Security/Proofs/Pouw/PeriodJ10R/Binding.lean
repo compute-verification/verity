@@ -12,12 +12,12 @@ public import Definitions.Accounting.Guarantees.PeriodBinding
 # A sampled layer's binding from its hashed openings
 
 The reduction behind binding's premise at a sampled window's proofs whose openings are frame-v3-sha512 paths
-(`Accounting.TS.HashedOpenings`), for any `DrawnLayer`, at J10-R's (`tileLayer`), and at every period's
+(`Accounting.TS.HashedOpenings`), for any `SampledLayer`, at J10-R's (`tileLayer`), and at every period's
 (`Declared.periodLayer`) as the guarantee `Pouw.SecurityProofs.PeriodBindingPerProver`, with its two witnesses. The
 open terms are explicit.
 
 * **A fork is a break, an unverified opening or a split** (`fork_cases`). Two accepted openings of one position
-  `ℓ ∈ L` to different values on a run `x` and on its continuation from `ℓ`'s cut (`DrawnLayer.Forked`), each
+  `ℓ ∈ L` to different values on a run `x` and on its continuation from `ℓ`'s cut (`SampledLayer.Forked`), each
   `Verified` at one verifier, root and rank (no `Split`), have different rows, since a row decodes to the value it
   opens; so the two checks hashed a SHA-512 collision (`Hash.SecurityProofs.RowBinding`), which the fork finder
   outputs (`HashedOpenings.Finds`).
@@ -27,7 +27,7 @@ open terms are explicit.
   `Pr[Unverified at ℓ]` once per position.
 * **Binding** (`movedIn_le`, `movedIn_le_sqrt`). With `κ` the last two terms, `BindingOfECR` gives
   `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(finder) + κ)`, and under `ecr/sha-512` at the finder's `q` calls
-  `DrawnBindingOfFork` gives `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`.
+  `SampledBindingOfFork` gives `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`.
 * **At J10-R** (`tile_binding`): `tileLayer`'s `BindingAt` at that bound, the binding premise of
   `H1J10RCheckedCreditPeriod`, for any relation and rightness, since `MovedIn` reads neither.
 * **At every period** (`Pouw.SecurityProofs.PeriodBindingPerProver`, `Pouw.Guarantees.PeriodBindingPerProver`): the
@@ -49,7 +49,7 @@ open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 section Layer
 
 variable {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type}
-  (hl : HashedOpenings C B S m s Q Pos V) (pf : DrawnLayer C B S m s J Q Pos V)
+  (hl : HashedOpenings C B S m s Q Pos V) (pf : SampledLayer C B S m s J Q Pos V)
 
 omit [Fintype C] [Fintype B] in
 /-- **A fork at `ℓ ∈ L` is a break the fork finder outputs, an unverified opening on either run, or a split.** -/
@@ -160,7 +160,7 @@ theorem movedIn_le [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.
     (hl.finder pf H L q) _ δ' hL hδ (forked_le hl pf H L q)
 
 /-- **Binding under `ecr/sha-512` at the fork finder's `q` calls**: `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`, `κ` the
-unverified and split terms (`DrawnBindingOfFork` at `forked_le`). -/
+unverified and split terms (`SampledBindingOfFork` at `forked_le`). -/
 theorem movedIn_le_sqrt [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest)
     (L : Finset Pos) (q : ℕ) (w : Fin S) (hL : ∀ j k, pf.pos w j k ∈ L)
     (hcr : Claims.ExpectedCR (fun u => (H u).bytes) (hl.finder pf H L q)) :
@@ -178,7 +178,7 @@ theorem movedIn_le_sqrt [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : 
     have := hcr
     unfold Claims.ExpectedCR at this
     rwa [hEx] at this
-  have hsq := Accounting.SecurityProofs.TS.DrawnBindingOfFork C B S m s pf w L hL
+  have hsq := Accounting.SecurityProofs.TS.SampledBindingOfFork C B S m s pf w L hL
   have hΦ := (forked_le hl pf H L q).trans (add_le_add hP le_rfl)
   calc prob (fun x => pf.MovedIn x w) = √(prob (fun x => pf.MovedIn x w) ^ 2) := (Real.sqrt_sq (prob_nonneg _)).symm
     _ ≤ √((L.card : ℝ) ^ 2 * (q / 2 ^ (256 : ℝ) + (2 * ∑ ℓ ∈ L, prob (fun x => hl.Unverified pf H x ℓ) +
@@ -227,18 +227,18 @@ open Accounting.Compose.PeriodBinding
 
 theorem oneProb_zero {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [Finset.filter_false_of_mem fun ω _ => h ω, Finset.card_empty, Nat.cast_zero, zero_div]
 
 theorem oneProb_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
 theorem oneProb_pos {Ω : Type} [Fintype Ω] {p : Ω → Prop} (ω : Ω) (h : p ω) : 0 < prob p := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   exact div_pos (Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨ω, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩⟩))
     (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 
@@ -294,7 +294,7 @@ theorem one_split (v : OneCoins → Bool) (p : OneCoins × OneCoins) :
 /-- Under `acceptAllOutcomes` a position's committed value is the same on every path. -/
 theorem acceptAll_committed (x x' : OneCoins) (ℓ : Fin 1 × ℕ) :
     acceptAllLayer.committed x ℓ = acceptAllLayer.committed x' ℓ := by
-  unfold DrawnLayer.committed
+  unfold SampledLayer.committed
   exact plural_of_sp _ _ (funext fun z => (onePeriod_cont acceptAllOutcomes ℓ x z).trans
     (onePeriod_cont acceptAllOutcomes ℓ x' z).symm)
 
@@ -311,7 +311,7 @@ theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
 
 /-- Under `honestOutcomes` every position a tile reads is committed to `false`. -/
 theorem honest_committed (x : OneCoins) (w : Fin 1) : honestLayer.committed x (w, 0) = false := by
-  unfold DrawnLayer.committed
+  unfold SampledLayer.committed
   refine Accounting.SecurityProofs.TS.FixedMeets.plural_of_val _ _ (fun _ => false) (fun y v => ⟨?_, ?_⟩) x
     fun _ => rfl
   · rintro ⟨_, _, _, -, -, hv⟩

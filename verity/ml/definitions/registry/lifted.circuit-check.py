@@ -6,11 +6,11 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
+    """This module's Definitions in tiny whole-model configurations (`verity.ml.definitions.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
-    from circuit_check.targets import TINY
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import b1, lifted
+    from verity.ml.definitions.tiny import TINY
 
     lifted_profile = {"GEMM": b1.GEMM_AMPERE, "ATTENTION": b1.ATTENTION_FA2, "NORM": b1.norm_bundle(TINY)}
     return [

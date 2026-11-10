@@ -44,8 +44,8 @@ open scoped ENNReal NNReal
 /-! ## Without `--zk` -/
 
 /-- **`ε_table ≤ 2^{−205}` without `--zk`**: at every `fast100` schedule and every shape of a planned table. -/
-theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
-    tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) :=
+theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : FlockSoundness.Accounting.Stmt)
+    (hst : st.InRangeWide) : tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) :=
   tableError_le_205_wide hs st hst
 
 /-! ## With `--zk` -/
@@ -107,8 +107,9 @@ theorem m1_check_zk (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
   · exact m1_check_zk_34_35 m (by omega) h2
 
 /-- `padRepError ≤ padRepUp` at any schedule of two levels or more. -/
-theorem padRepError_le_of (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
-    (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok) :
+theorem padRepError_le_of (s : Schedule) (st : FlockSoundness.Accounting.Stmt) (hst : st.InRange) (t e : ℕ)
+    (sbar : ℚ) (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar)
+    (hok : ∀ l ∈ s.levels, l.Ok) :
     padRepError s st t e ≤ (padRepUp s t e sbar : ℝ) := by
   obtain ⟨m, k0, levels, ext⟩ := s
   rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩

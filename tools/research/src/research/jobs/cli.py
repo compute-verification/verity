@@ -17,7 +17,7 @@ The tokens: `research jobs` uses `$JOBS_TOKEN`, else ~/.research/jobs/token (the
 `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
 with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
 the job asks for a pod whose lease has that long left plus the lease margin (`min_lease_s`), so no check starts on a pod that
-ends before it can finish.  A check asks for AVX-512 only when the tree says so, as #440's preflight decides it: the change
+ends before it can finish.  A check asks for AVX-512 only when the tree says so, as preflight.py decides it: the change
 touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'s rustflags match preflight.py's AVX512 pattern
 (read from the commit, never run).  Today's pin is `x86-64-v3`, which needs none.
 
@@ -114,7 +114,7 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
     return h.hexdigest()
 
 
-#: preflight.py's AVX512 (#440), for a tree from before it
+#: preflight.py's AVX512, for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
 UPSTREAM = "verity/ml/flock/verifier/upstream.json"
 

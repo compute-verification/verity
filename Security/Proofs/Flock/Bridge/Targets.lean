@@ -68,7 +68,7 @@ opens its wire's position under `Cm` and `roots`, and whose evaluation is `κ`'s
 reads, is not faulty in `witDep C Cm H roots Xr` at the statement at constants `κ`, under any design `r` and strata
 `ns` of the population. -/
 def FaultyRightTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
@@ -81,20 +81,20 @@ def FaultyRightTarget : Prop :=
 
 /-- `partOf P κ ns` has one slot per unit, at strata that sum to `n`. -/
 def PartBlocksTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (ns : List ℕ), ns.sum = n → (partOf P κ ns).blocks.length = n
 
 /-- **The Pa lemma**: on `partOf P κ ns`, at strata that sum to `n`, the one-stage design `r` misses a set `B` of
 population slots with its own miss on the strata `ns`, `r.Pa ns B`; under `subset kd`, `C(n − |B|, kd)/C(n, kd)`. -/
 def PaTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (ns : List ℕ), ns.sum = n → ∀ (r : Claims.Sampling.OneStage) (B : Finset ℕ), B ⊆ Finset.range n →
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns B
 
 /-- **Outside `RelS` is a count**: under `subset kd`, at `δ = C(n − K₀, kd)/C(n, kd)`, `1 ≤ kd ≤ n`, a witness outside
 `RelS` has at least `min K₀ (n − kd + 1)` faulty population slots, slots below `n`, whatever the strata. -/
 def CountTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (ns : List ℕ), ns.sum = n →
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (ns : List ℕ), ns.sum = n →
     ∀ (kd K₀ : ℕ), 1 ≤ kd → kd ≤ n →
     ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (κ : Fin C.N → Option Bool)
       (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) (w : Claims.Sampling.Wit),
@@ -112,12 +112,12 @@ def AssemblyTarget : Prop :=
 /-- **rel_deploy**: at the deployed sampling record of a verifier's code whose layout is `commitDep`'s, and which
 parses `x` to `stmtOf` and partitions it to `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside
 the record's `R`. At the key program of a circuit in scope, the partition hypothesis holds where the deployed partition
-is `SampledProofs.FilePart.ofCircuit`'s blocks in the registration's strata (`Bridge.relDeploy_ofCircuit`, from
+is `Spot.FilePart.ofCircuit`'s blocks in the registration's strata (`Bridge.relDeploy_ofCircuit`, from
 `FilePartTarget` and the scope check's `unitLog ≤ 32`), which the v2 audit's population check
-(`SampledProofs.FilePart.check`, `Bridge.check_ok`) holds to the circuit file's units in order. -/
+(`Spot.FilePart.check`, `Bridge.check_ok`) holds to the circuit file's units in order. -/
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
-    {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage)
     (κ : Fin C.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),

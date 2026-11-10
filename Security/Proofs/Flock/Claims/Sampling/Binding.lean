@@ -92,7 +92,7 @@ theorem disagree_collision {H : Msg → Msg} {Cm : CommitmentScheme Bool} (hb : 
 
 theorem Pr_union_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   exact_mod_cast (Finset.card_le_card fun a ha => by

@@ -3,9 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
 /-!

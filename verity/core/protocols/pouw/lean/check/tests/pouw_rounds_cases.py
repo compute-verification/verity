@@ -40,7 +40,7 @@ from collections.abc import Callable
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.crypto import lms
 

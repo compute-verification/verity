@@ -27,11 +27,12 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
   every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
   and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
-* `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
-  model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
-  per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
-  coins flipped as the code samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
-  uniform bytes.
+* `EndToEndRing`, `EndToEndRingDeployed` and `DrawExact`, **in the ring model, with `ω` uniform**: P2's
+  square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random per-block keys (`p2ring`),
+  against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
+  samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
+  full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
+  `Security/Proofs/Pous/Lemmas/EndToEnd.lean`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
@@ -356,19 +357,5 @@ def EndToEndRingDeployed : Prop :=
     Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
-
-/-- **Non-vacuity in the ring model, with `ω` uniform: the honest full-state server passes P2's audit.** At the full
-state (`FULL = 2^19 · 16,448` bits, more than `S`), a responder that keeps all of `C` and answers each index from it
-with no query at all (`RingBounded 0 0 0`) is accepted by `seqAcceptsOn` with probability 1, for every `W`. -/
-def HonestPassesRing : Prop :=
-  S < FULL ∧ ∃ (A₁ : Preprocessor sch FULL) (A₂ : SeqResponderOn sch FULL 0 0 0),
-    ∀ W, pr (seqAcceptsOn sch 105 W A₁ A₂) = 1
-
-/-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
-`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the sample never fails (`ε_rs = 0`, `DrawExact`). -/
-def HonestPassesAccepts : Prop :=
-  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
-    pr (Passes session binding W A) = 1
 
 end Pous.EndToEnd

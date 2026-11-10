@@ -11,7 +11,7 @@ gates it reads, `in(R_b) = transfersInto b ∪ inputsRead b` (`into_eq`), two di
 computed, so never in a baseline. So `novelReads d R_b` is the width of `(transfersInto b ∪ inputsRead b) \ θ`
 (`novelReads_eq`): the bits on the wire into `b`, plus the width of the novel input gates `b` reads itself
 (`novelReads_eq_add`). In the Boolean profile, where every gate is one bit (`∀ g, d.D.w g = 1`, which
-`FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
+`Verity.Boolean.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
 `novelReads_eq_card_add`).
 
 So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `CompliesRate`'s condition on one IU, holds
@@ -147,7 +147,7 @@ theorem width_eq_card {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N
   simp [Circuit.width, hw]
 
 /-- A Boolean circuit's gates are one bit wide: the hypothesis of the Boolean forms below. -/
-theorem boolean_w (B : FlockSoundness.Audit.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
+theorem boolean_w (B : Verity.Boolean.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
 
 section RegisteredCircuit
 

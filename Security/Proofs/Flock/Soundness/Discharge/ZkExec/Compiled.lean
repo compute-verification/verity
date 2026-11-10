@@ -20,7 +20,7 @@ applies:
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
 The incorrect proof blocks are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
-named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, R11b at `--zk`), `hj : JointZC …`
+named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, the decoder premise at `--zk`), `hj : JointZC …`
 (`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit flips each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
@@ -82,7 +82,7 @@ noncomputable def simAuditZC (hdec : DecodesZK (repZ A Hs T) (outZ Hs T) (accZ T
     (simAuditZK (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N
       (fun S R pts r => ZkLink.allInh_repZCAt A Hs (T S R) pts r) hdec τ)
 
-variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
+variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 

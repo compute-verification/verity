@@ -4,7 +4,7 @@ public import Mathlib.Data.Finset.Sort
 public import Proofs.Flock.Verifier.Registered
 public import VStar.Stage
 public import Definitions.Flock.Audit.Law
-public import Definitions.Flock.Game.Prob
+public import Definitions.Flock.Game
 public import Mathlib.Algebra.Group.End
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real

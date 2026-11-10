@@ -9,6 +9,7 @@ public import Definitions.Core.PrivatePartition
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Boolean
 public import Definitions.Core.Game
+public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
@@ -22,6 +23,7 @@ public import Definitions.Core.Expand.Instances
 public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Site
 public import Definitions.Core.ValueSalts
+public import Definitions.Core.MemCheck
 
 /-!
 # Core: the model every area states its guarantees in
@@ -39,6 +41,7 @@ the ones here.
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
   (the registered hardware and its registration).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
+* Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
   model).
 

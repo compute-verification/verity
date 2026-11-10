@@ -7,7 +7,7 @@ public import Definitions.Core.Interaction
 /-!
 # A sampled window's openings as frame-v3-sha512 paths (trusted)
 
-`Drawn`'s openings with the hash underneath. A `DrawnLayer` compares the values accepted proofs open (`opened`) with no
+`Drawn`'s openings with the hash underneath. A `SampledLayer` compares the values accepted proofs open (`opened`) with no
 commitment under them. Here each position is an hm96 row (`Hash.RowLeaf`: `hm96-sha512/row-seg/v1` or
 `hm96-sha512/row/v2`) of a frame-v3-sha512 tree, and an accepted proof's opening of a slot is an hm96 opening of its
 position's leaf (the row's bits, its salt and the path's siblings), as Flock's knowledge extractor takes it from the
@@ -28,7 +28,7 @@ instance of record, one hash for the frame tree, the hm96 leaf and the row diges
   checks hashed, when there are. Its cost is `q`, the SHA-512 calls of the two runs (the prover's, the extractor's and
   the verifier's) and of the checks of their openings.
 
-Two accepted openings of one position on the two runs to different values (`DrawnLayer.Forked`), each `Verified` at one
+Two accepted openings of one position on the two runs to different values (`SampledLayer.Forked`), each `Verified` at one
 verifier, root and rank, have different rows, so their checks hashed a collision (`Hash.Guarantees.RowBinding`), which
 `finder` outputs. A fork escapes it only through an opening that isn't `Verified` or a `Split`. No premise of the
 credit guarantees rules either out yet: none ties a layer's `opened` to an opening of a committed leaf (the service's
@@ -59,7 +59,7 @@ structure HashedOpenings (C B : Type) (S m s : ℕ) (Q Pos V : Type) where
 namespace HashedOpenings
 
 variable {C B : Type} {S m s : ℕ} {J Q Pos V : Type} (hl : HashedOpenings C B S m s Q Pos V)
-  (pf : DrawnLayer C B S m s J Q Pos V)
+  (pf : SampledLayer C B S m s J Q Pos V)
 
 /-- What the check of the opening `o` of position `ℓ` on `x` hashed under `H`: the hm96 salt's and leaf's messages, the
 frame leaf's and the path's nodes', then the row digest's. -/

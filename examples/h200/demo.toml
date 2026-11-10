@@ -9,7 +9,7 @@
 # Lean verifier off the machines the prover runs.
 # Once a run of record of PoUS and the bandwidth audit on the H200 exists, its id joins `runs` and `protocol` becomes a
 # list with "pous" and "bandwidth".
-protocol = "sampled_proofs"
+protocol = "spot"
 workload = "none"              # the frozen MQA shape on seeded INT8 weights, not yet an integration
 level = 1
 

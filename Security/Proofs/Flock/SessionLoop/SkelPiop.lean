@@ -184,7 +184,7 @@ def skelProg (st : _root_.Flock.Setup) (k0 : ℕ) (cap : ByteArray) : TMW RecM U
 /-- **A schedule that returns is its recording's rounds**, round `0` replaced, from a rep's start. -/
 theorem rounds_run {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) :
-    ∃ t' rs k, (skelProg st k0 cap).run (Transcript.init #[] dom) (#[], 0) = .ok (((), t'), rs, k) ∧
+    ∃ t' rs k, (skelProg st k0 cap).run (Flock.Transcript.init #[] dom) (#[], 0) = .ok (((), t'), rs, k) ∧
       alg.size = rs.size ∧ ∀ jj, jj ≠ 0 → alg[jj]? = rs[jj]? := by
   unfold _root_.Flock.Firewall.Skeleton.rounds at h
   dsimp only at h
@@ -217,11 +217,11 @@ theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
   obtain ⟨n, hn⟩ : ∃ n, n = rs.size + piopNR st.m st.fold.kLog := ⟨_, rfl⟩
   have hS := _root_.Flock.Firewall.Finish.repPiop_rel (skelSim rs) (io := recAsks) (io' := skelIO rs n)
     (asksRel_skel rs n (by omega)) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap root0 #[] (fun _ => 0)
-  have hS' := ((skelSim rs).st Transcript).bind hS fun _ => ((skelSim rs).st Transcript).pure ()
-  obtain ⟨-, hwf, hy⟩ := hS' (Transcript.init #[] dom) (#[], 0) #[] ⟨rfl, by simp⟩ rfl _ _ hr
+  have hS' := ((skelSim rs).st Flock.Transcript).bind hS fun _ => ((skelSim rs).st Flock.Transcript).pure ()
+  obtain ⟨-, hwf, hy⟩ := hS' (Flock.Transcript.init #[] dom) (#[], 0) #[] ⟨rfl, by simp⟩ rfl _ _ hr
   obtain ⟨hy1, hyl⟩ := hy (List.prefix_refl _)
   have hY : ((((repPiop (skelIO rs n) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap root0 #[]
-      fun _ => 0) >>= fun _ => pure ()) : TMW PS Unit).run (Transcript.init #[] dom)).go #[] =
+      fun _ => 0) >>= fun _ => pure ()) : TMW PS Unit).run (Flock.Transcript.init #[] dom)).go #[] =
       (.ok ((), t'), ⟨recLog rs⟩) :=
     Prod.ext hy1 (Array.ext' hyl)
   obtain ⟨res, t₂, L₂, hrep, hpure⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hY
@@ -230,9 +230,9 @@ theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
   obtain ⟨⟨zp, zc⟩, t₁, L₁, hz, hrest⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hrep
   obtain ⟨res₁, t₁', L₁', e₁, hL₁, hP₁⟩ :=
     zerocheckCut_bodies (skelCoin rs) n hm st.digest cap root0 (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0)
-      (fun _ => 0) (Transcript.init #[] dom) #[] (by unfold piopNR at hn; simp only [Array.size_empty]; omega)
+      (fun _ => 0) (Flock.Transcript.init #[] dom) #[] (by unfold piopNR at hn; simp only [Array.size_empty]; omega)
   change ((FlockComplete.zerocheckCut (asksCut (skelCoin rs) n) st.m st.digest cap root0
-    (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) fun _ => 0).run (Transcript.init #[] dom)).go #[] = _ at hz
+    (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) fun _ => 0).run (Flock.Transcript.init #[] dom)).go #[] = _ at hz
   rw [hz] at e₁
   simp only [Prod.mk.injEq, Except.ok.injEq] at e₁
   obtain ⟨⟨-, rfl⟩, rfl⟩ := e₁
@@ -253,7 +253,7 @@ theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
   obtain ⟨⟨-, -⟩, rfl⟩ := e₂
   have hL₂₂ : L₂' = L₂ := congrArg Prod.snd hrest₂
   have hlog : recLog rs = (List.range (piopNR st.m st.fold.kLog)).map
-      (piopBody (Transcript.init #[] dom).pending.data.toList st.m st.fold.kLog st.digest cap root0
+      (piopBody (Flock.Transcript.init #[] dom).pending.data.toList st.m st.fold.kLog st.digest cap root0
         (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) fun _ => 0) := by
     have e : recLog rs = L₂'.toList := by rw [hL₂₂, hL₂]
     rw [e, hL₂', hL₁, hP₁, ← piopBodies_eq]

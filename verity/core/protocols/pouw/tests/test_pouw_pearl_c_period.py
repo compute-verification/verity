@@ -18,7 +18,7 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 

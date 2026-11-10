@@ -61,7 +61,7 @@ open FlockDeploy (Coin Final Ins)
 is refused). -/
 theorem stepWith_acc_last {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → Claims.OC Out) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Trace),
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vn f hist as t).out = .acc →
       ∃ a, (Claims.stepWith H P x ω vn f hist as t).msgs.getLast? = some (a, .acc)
   | 0, _, _, _, h => by simp [Claims.stepWith] at h

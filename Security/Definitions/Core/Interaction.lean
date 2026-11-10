@@ -2,6 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Core.Hash
+public import Definitions.Core.Uniform
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
@@ -110,7 +111,7 @@ structure Verifier (Coin : Type) where
   next : Msg → List Msg → List Coin → OC Out
 
 /-- A run: the messages `(a_j, b_j)`, each party's `H` calls, and the decision. -/
-structure Trace where
+structure Transcript where
   msgs : List (Msg × Out)
   pLog : List (Msg × Msg)
   vLog : List (Msg × Msg)
@@ -121,19 +122,19 @@ structure Seen where
   msgs : List (Msg × Out)
   out : Out
 
-def Trace.seen (t : Trace) : Seen := ⟨t.msgs, t.out⟩
+def Transcript.seen (t : Transcript) : Seen := ⟨t.msgs, t.out⟩
 
 /-- Rounds against a verifier given by its next message `vnext` (from the prover's messages so far), from the history
 `hist` and the prover's messages `as`, with `n` rounds left. A verifier that has not decided when the rounds run out
 rejects. -/
 def stepWith {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ℕ → List (Msg × Msg) → List Msg → Trace → Trace
+    ℕ → List (Msg × Msg) → List Msg → Transcript → Transcript
   | 0, _, _, t => { t with out := .rej }
   | n + 1, hist, as, t =>
     let pa := (P.next x hist ω).eval H
     let as' := as ++ [pa.1]
     let vb := (vnext as').eval H
-    let t' : Trace := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
+    let t' : Transcript := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
     match vb.1 with
     | .msg m => stepWith H P x ω vnext n (hist ++ [(pa.1, m)]) as' t'
     | .acc => { t' with out := .acc }
@@ -173,14 +174,12 @@ def coinSeq {Coin : Type} [Inhabited Coin] {k : ℕ} (r : Fin k → Coin) (i : �
 
 /-- `run(P*, V, x)` at tape `ω` and coins `r`. -/
 def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (ω : Ω)
-    (r : Fin (V.k x) → Coin) : Trace :=
+    (r : Fin (V.k x) → Coin) : Transcript :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
-/-! ## Probability: uniform averages over finite coin spaces -/
+/-! ## Probability: uniform averages over finite coin spaces
 
-open Classical in
-noncomputable def Pr {α : Type} [Fintype α] (p : α → Prop) : ℝ :=
-  ((Finset.univ.filter p).card : ℝ) / Fintype.card α
+`Pr p` is in `Definitions/Core/Uniform.lean`. -/
 
 /-- The expectation of `f` under uniform coins. -/
 noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α
@@ -196,7 +195,7 @@ inductive RP (R α : Type) where
 
 /-- Run against `H` and the prover's runs `run`: the result, the SHA-512 calls (its own and every rerun's, both
 parties'), and the reruns. -/
-def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → α × ℕ × ℕ
+def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → α × ℕ × ℕ
   | .ret a => (a, 0, 0)
   | .hash q k =>
     let e := RP.eval H run (k (H q))
@@ -304,6 +303,15 @@ through `ecrBound` takes no hypothesis on `H`. The one break term the protocols'
 noncomputable def ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
   if ExpectedCR H F ∧ Ex (fun s => (F.cost s : ℝ)) ≤ q then ENNReal.ofReal (q / 2 ^ (256 : ℝ)) else ⊤
 
+open Classical in
+/-- **`cr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256.5`, the square root of the
+strict birthday bound at `q`, where the finder meets `StrictBirthday` and declares at most `q` SHA-512 calls on every
+coin, and `⊤` otherwise. `ecrBound`'s reading for `StrictBirthday`, under the root the birthday term takes
+(`√(γ·Pr[B])`): `√(F.Pr H) ≤ sbBound H F q` wherever it is finite, so a bound stated through it takes no hypothesis on
+`H`, and the reader computes `q` from the adversary, as for `ecrBound`. -/
+noncomputable def sbBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
+  if StrictBirthday H F ∧ ∀ s, (F.cost s : ℝ) ≤ q then ENNReal.ofReal (q / 2 ^ (256.5 : ℝ)) else ⊤
+
 /-- The first collision among the `(input, output)` pairs `l`: two different inputs with one output. -/
 def findColl : List (Msg × Msg) → Option (Msg × Msg)
   | [] => none
@@ -336,6 +344,18 @@ def B {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
 noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
+
+/-- **`B` declared at `q` SHA-512 calls**: `B`'s outcome, its cost the budget `q` for its two runs' whole SHA-512 work,
+the prover's own included, which the reader computes from the prover's time (`Claims.Sampling.KSAt`). -/
+def BAt {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
+    (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (q : ℕ) : Finder :=
+  { B H V P x hk with cost := fun _ => q }
+
+/-- The birthday term's number at the budget `q`: `sbBound` at `B` declared at `q`, `0` for a verifier that takes no
+rounds at `x` (as `PrB`). -/
+noncomputable def sbB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (q : ℕ) : ENNReal :=
+  if hk : 0 < V.k x then sbBound H (BAt H V P x hk q) q else 0
 
 /-- **The trusted base**: what the claims rest on that no Lean statement here can say. -/
 def trustedBase : List String :=
@@ -394,7 +414,7 @@ structure VStar (Θ : Type) where
   next : Msg → List Msg → Θ → OC Out
 
 /-- The honest prover `P(w)` at tape `ω` against `V*` at tape `θ`. -/
-def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Trace :=
+def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Transcript :=
   stepWith H P x ω (fun as => Vs.next x as θ) (Vs.k x) [] [] ⟨[], [], [], .rej⟩
 
 /-- A simulator program: it may call `H` and ask the verifier (black box) its answer to any prover messages. -/
@@ -521,10 +541,11 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
   as : List Msg
   r : Fin (V.k x) → Coin
 
-/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is established by
-a test against recorded sessions, not by a Lean proof, and none is expected: `check`'s `lean-agreement` job
-(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier
-(`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
+/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
+against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
+(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
+(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc
 

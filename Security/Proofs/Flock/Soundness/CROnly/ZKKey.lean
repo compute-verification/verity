@@ -9,7 +9,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.CROnly.Hm96Sha512
 import Proofs.Flock.Soundness.CROnly.ZK
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!

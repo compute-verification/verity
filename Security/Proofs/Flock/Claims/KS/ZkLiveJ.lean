@@ -36,8 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound from the live sessions' bound at the deployed tables

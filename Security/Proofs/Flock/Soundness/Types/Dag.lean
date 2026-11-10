@@ -39,13 +39,13 @@ open Flock Flock.DeriveAll Audit
 
 /-- Rows given as a function of the column, satisfied by column values `z`. -/
 def SatAt (R : ℕ → Option (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=
-  ∀ c r, R c = some r → z c = (xorSum r.1 z && xorSum r.2 z)
+  ∀ c r, R c = some r → z c = (Verity.Boolean.xorSum r.1 z && Verity.Boolean.xorSum r.2 z)
 
-theorem xorSum_nil {ι : Type} (v : ι → Bool) : xorSum ([] : List ι) v = false := rfl
+theorem xorSum_nil {ι : Type} (v : ι → Bool) : Verity.Boolean.xorSum ([] : List ι) v = false := rfl
 theorem xorSum_cons {ι : Type} (a : ι) (l : List ι) (v : ι → Bool) :
-    xorSum (a :: l) v = Bool.xor (v a) (xorSum l v) := rfl
+    Verity.Boolean.xorSum (a :: l) v = Bool.xor (v a) (Verity.Boolean.xorSum l v) := rfl
 
-theorem xorSum_perm {l m : List Nat} (h : l.Perm m) (v : ℕ → Bool) : xorSum l v = xorSum m v := by
+theorem xorSum_perm {l m : List Nat} (h : l.Perm m) (v : ℕ → Bool) : Verity.Boolean.xorSum l v = Verity.Boolean.xorSum m v := by
   induction h with
   | nil => rfl
   | cons x _ ih => rw [xorSum_cons, xorSum_cons, ih]
@@ -55,26 +55,26 @@ theorem xorSum_perm {l m : List Nat} (h : l.Perm m) (v : ℕ → Bool) : xorSum 
 /-! ## Column forms -/
 
 /-- A column form's value: its columns' XOR, and its constant. -/
-def cfVal (z : ℕ → Bool) (f : CF) : Bool := Bool.xor (xorSum f.1 z) (f.2 % 2 == 1)
+def cfVal (z : ℕ → Bool) (f : CF) : Bool := Bool.xor (Verity.Boolean.xorSum f.1 z) (f.2 % 2 == 1)
 
-theorem xorSum_xorCols (z : ℕ → Bool) : ∀ a b : List Nat, xorSum (xorCols a b) z = Bool.xor (xorSum a z) (xorSum b z)
-  | [], m => by simp [xorCols, xorSum]
-  | a :: l, [] => by simp [xorCols, xorSum]
+theorem xorSum_xorCols (z : ℕ → Bool) : ∀ a b : List Nat, Verity.Boolean.xorSum (xorCols a b) z = Bool.xor (Verity.Boolean.xorSum a z) (Verity.Boolean.xorSum b z)
+  | [], m => by simp [xorCols, Verity.Boolean.xorSum]
+  | a :: l, [] => by simp [xorCols, Verity.Boolean.xorSum]
   | a :: l, b :: m => by
     unfold xorCols
     split
     · rw [xorSum_cons, xorSum_xorCols z l (b :: m)]
       simp only [xorSum_cons]
-      cases z a <;> cases z b <;> cases xorSum l z <;> cases xorSum m z <;> rfl
+      cases z a <;> cases z b <;> cases Verity.Boolean.xorSum l z <;> cases Verity.Boolean.xorSum m z <;> rfl
     · split
       · rw [xorSum_cons, xorSum_xorCols z (a :: l) m]
         simp only [xorSum_cons]
-        cases z a <;> cases z b <;> cases xorSum l z <;> cases xorSum m z <;> rfl
+        cases z a <;> cases z b <;> cases Verity.Boolean.xorSum l z <;> cases Verity.Boolean.xorSum m z <;> rfl
       · have hab : a = b := by omega
         subst hab
         rw [xorSum_xorCols z l m]
         simp only [xorSum_cons]
-        cases z a <;> cases xorSum l z <;> cases xorSum m z <;> rfl
+        cases z a <;> cases Verity.Boolean.xorSum l z <;> cases Verity.Boolean.xorSum m z <;> rfl
 termination_by a b => a.length + b.length
 
 theorem mod2_xor (x y : Nat) : ((x + y) % 2 % 2 == 1) = Bool.xor (x % 2 == 1) (y % 2 == 1) := by
@@ -85,12 +85,12 @@ theorem cfVal_xorCF (z : ℕ → Bool) (a b : CF) : cfVal z (xorCF a b) = Bool.x
   unfold cfVal xorCF
   simp only
   rw [xorSum_xorCols, mod2_xor]
-  cases xorSum a.1 z <;> cases xorSum b.1 z <;> cases (a.2 % 2 == 1) <;> cases (b.2 % 2 == 1) <;> rfl
+  cases Verity.Boolean.xorSum a.1 z <;> cases Verity.Boolean.xorSum b.1 z <;> cases (a.2 % 2 == 1) <;> cases (b.2 % 2 == 1) <;> rfl
 
 theorem cfVal_foldl (z : ℕ → Bool) (wire : Array CF) :
     ∀ (l : List Nat) (acc : CF), cfVal z (l.foldl (fun acc w => xorCF acc (wire.getD w ([], 0))) acc) =
-      Bool.xor (cfVal z acc) (xorSum l fun w => cfVal z (wire.getD w ([], 0)))
-  | [], acc => by simp [xorSum]
+      Bool.xor (cfVal z acc) (Verity.Boolean.xorSum l fun w => cfVal z (wire.getD w ([], 0)))
+  | [], acc => by simp [Verity.Boolean.xorSum]
   | w :: l, acc => by
     rw [List.foldl_cons, cfVal_foldl z wire l, cfVal_xorCF, xorSum_cons, Bool.xor_assoc]
 
@@ -102,9 +102,9 @@ theorem cfVal_formOf (z : ℕ → Bool) (wire : Array CF) (f : Form) (hc : f.c �
   have : cfVal z ([], f.c % 2) = decide (f.c = 1) := by
     unfold cfVal; rcases Nat.lt_or_ge f.c 1 with h | h
     · have : f.c = 0 := by omega
-      simp [this, xorSum]
+      simp [this, Verity.Boolean.xorSum]
     · have : f.c = 1 := by omega
-      simp [this, xorSum]
+      simp [this, Verity.Boolean.xorSum]
   rw [this, Bool.xor_comm]
 
 theorem formOf_snd_lt (wire : Array CF) (f : Form) : (formOf wire f).2 < 2 := by
@@ -119,7 +119,7 @@ theorem formOf_snd_lt (wire : Array CF) (f : Form) : (formOf wire f).2 < 2 := by
 
 /-- A resolved row side, with the constant's column at 1, is worth its column form. -/
 theorem xorSum_resolve (z : ℕ → Bool) (k : Nat) (hk : z k = true) (f : CF) (hf : f.2 < 2) :
-    xorSum (resolve k (ent f)) z = cfVal z f := by
+    Verity.Boolean.xorSum (resolve k (ent f)) z = cfVal z f := by
   unfold resolve ent cfVal
   rcases (show f.2 = 0 ∨ f.2 = 1 by omega) with h | h
   · simp [h]
@@ -192,7 +192,7 @@ def Inv (z : ℕ → Bool) (wire : Array CF) (vals : List Bool) : Prop :=
 theorem cfVal_nil (z : ℕ → Bool) : cfVal z ([], 0) = false := rfl
 
 theorem cfVal_col (z : ℕ → Bool) (c : Nat) : cfVal z ([c], 0) = z c := by
-  simp [cfVal, xorSum]
+  simp [cfVal, Verity.Boolean.xorSum]
 
 theorem Inv.vals {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (h : Inv z wire vals) :
     (fun w => cfVal z (wire.getD w ([], 0))) = (vals.getD · false) := funext h.2
@@ -227,11 +227,11 @@ theorem Inv.formOf {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (h : 
 product row's with its table-direct side, each constant copy at 1, each binding copy equal to its source once the callee's
 constant is 1, and the layout's constant at 1. -/
 structure Facts (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) : Prop where
-  row : ∀ c r, k.rowIs c r = true → z c = (xorSum r.1 z && xorSum r.2 z)
+  row : ∀ c r, k.rowIs c r = true → z c = (Verity.Boolean.xorSum r.1 z && Verity.Boolean.xorSum r.2 z)
   prod : ∀ c a rec, k.prodIs c a rec = true →
-    z c = (xorSum a z && xorSum (readSide ((words rec.table).getD #[]) rec c) z)
+    z c = (Verity.Boolean.xorSum a z && Verity.Boolean.xorSum (readSide ((words rec.table).getD #[]) rec c) z)
   one : ∀ c, k.oneAt c = true → z c = true
-  bind : ∀ c src cb, k.bindAt c src cb = true → z cb = true → z c = xorSum src z
+  bind : ∀ c src cb, k.bindAt c src cb = true → z cb = true → z c = Verity.Boolean.xorSum src z
   const : z k.d.const = true
 
 theorem fullRow_of_uncovered {words : String → Option (Array Nat)} {d : D} {c : Nat}
@@ -295,10 +295,10 @@ theorem facts_inner {words : String → Option (Array Nat)} {d : D} {z : ℕ →
   prod c a rec h := hz c _ (prodIs_full words h).1
   one c h := by
     rw [hz c _ (oneAt_inner words h)]
-    simp [xorSum, h1]
+    simp [Verity.Boolean.xorSum, h1]
   bind c src cb h hcb := by
     rw [hz c _ (bindAt_inner words h)]
-    simp [xorSum, hcb]
+    simp [Verity.Boolean.xorSum, hcb]
   const := h1
 
 theorem facts_unit {words : String → Option (Array Nat)} {d : D} {one : Nat} {z : ℕ → Bool}
@@ -308,13 +308,13 @@ theorem facts_unit {words : String → Option (Array Nat)} {d : D} {one : Nat} {
   prod c a rec h := hz c _ (prodIs_unit words h one)
   one c h := by
     rw [hz c _ (oneAt_unit words h one)]
-    simp [xorSum, h1]
+    simp [Verity.Boolean.xorSum, h1]
   bind c src cb h _ := by
     rw [hz c _ (bindAt_unit words h one)]
     simp
   const := by
     rw [hz _ _ (oneAt_unit words hc one)]
-    simp [xorSum, h1]
+    simp [Verity.Boolean.xorSum, h1]
 
 /-! ## A layout's check, unfolded -/
 
@@ -448,11 +448,11 @@ theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ �
     · subst hc0
       rw [oneAt_inner words hone'] at hr
       cases hr
-      simp [xorSum]
+      simp [Verity.Boolean.xorSum]
     · have := rowIs_inner words (hins' i (by omega))
       rw [hic, hr] at this
       cases this
-      simp [xorSum]
+      simp [Verity.Boolean.xorSum]
     · split at hrow
       · rename_i rec hrec
         have hz := hf.prod _ _ _ hrow
@@ -488,7 +488,7 @@ theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ �
         rw [this]
         unfold formVal
         rw [hws, hc0]
-        simp [xorSum]
+        simp [Verity.Boolean.xorSum]
       · cases hbi
     · rw [hf.bind _ _ _ hbi hcb1, xorSum_resolve z _ hf.const _ (formOf_snd_lt _ _)]
       exact hinv.formOf _ (hargs i hi)
@@ -643,11 +643,11 @@ theorem chkDecode_spec (words : String → Option (Array Nat)) (k : Chk) (z : �
       rcases (show i = 0 ∨ i = 1 by omega) with rfl | rfl
       · rw [g0, cfVal_neg z f hf0]
         rcases hl with ⟨hl, rfl⟩ | hl
-        · rw [hl]; simp [cfVal, xorSum, bitsIdx]
+        · rw [hl]; simp [cfVal, Verity.Boolean.xorSum, bitsIdx]
         · rw [hl]; cases hc : cfVal z f <;> simp [bitsIdx, hc]
       · rw [g1]
         rcases hl with ⟨hl, rfl⟩ | hl
-        · rw [hl]; simp [cfVal, xorSum, bitsIdx]
+        · rw [hl]; simp [cfVal, Verity.Boolean.xorSum, bitsIdx]
         · rw [hl]; cases hc : cfVal z f <;> simp [bitsIdx, hc]
   · rename_i hs
     dsimp only at hd
@@ -695,8 +695,8 @@ theorem chkDecode_spec (words : String → Option (Array Nat)) (k : Chk) (z : �
 
 /-- The XOR of a one-hot family over a list without repeats is whether the hot index is in the list. -/
 theorem xorSum_onehot {v : ℕ → Bool} {x : Nat} (hv : ∀ l, v l = decide (x = l)) :
-    ∀ L : List Nat, L.Nodup → xorSum L v = decide (x ∈ L)
-  | [], _ => by simp [xorSum]
+    ∀ L : List Nat, L.Nodup → Verity.Boolean.xorSum L v = decide (x ∈ L)
+  | [], _ => by simp [Verity.Boolean.xorSum]
   | a :: L, hnd => by
     rw [xorSum_cons, xorSum_onehot hv L (List.nodup_cons.mp hnd).2, hv]
     by_cases hxa : x = a
@@ -707,11 +707,11 @@ theorem xorSum_onehot {v : ℕ → Bool} {x : Nat} (hv : ∀ l, v l = decide (x 
 
 /-- The XOR over `h < m` of `[x = h] ∧ q h` is `q x` when `x < m`. -/
 theorem xorSum_select {x m : Nat} (hx : x < m) (q : ℕ → Bool) :
-    xorSum (List.range m) (fun h => decide (x = h) && q h) = q x := by
-  have key : ∀ L : List Nat, L.Nodup → xorSum L (fun h => decide (x = h) && q h) = (decide (x ∈ L) && q x) := by
+    Verity.Boolean.xorSum (List.range m) (fun h => decide (x = h) && q h) = q x := by
+  have key : ∀ L : List Nat, L.Nodup → Verity.Boolean.xorSum L (fun h => decide (x = h) && q h) = (decide (x ∈ L) && q x) := by
     intro L
     induction L with
-    | nil => intro _; simp [xorSum]
+    | nil => intro _; simp [Verity.Boolean.xorSum]
     | cons a L ih =>
       intro hnd
       rw [xorSum_cons, ih (List.nodup_cons.mp hnd).2]
@@ -729,7 +729,7 @@ theorem prodRows_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ
     (rec : ReadRec) (hiM : Array CF) (nh : Nat) (hhi : ∀ a, (hiM.getD a ([], 0)).2 < 2) :
     ∀ cnt x refs refs', prodRows k rec hiM nh cnt x refs = some refs' →
       ∀ m < cnt, z (rec.prod0 + (x + m)) = (cfVal z (hiM.getD ((x + m) % nh) ([], 0)) &&
-        xorSum (readSide ((words rec.table).getD #[]) rec (rec.prod0 + (x + m))) z)
+        Verity.Boolean.xorSum (readSide ((words rec.table).getD #[]) rec (rec.prod0 + (x + m))) z)
   | 0, _, _, _, _ => fun m hm => absurd hm (Nat.not_lt_zero _)
   | cnt + 1, x, refs, refs', hp => by
     match refs, hp with
@@ -755,7 +755,7 @@ theorem prodRows_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ
 
 theorem outRows_spec (k : Chk) (z : ℕ → Bool) (words : String → Option (Array Nat)) (hf : Facts words k z)
     (rec : ReadRec) (ws : Array Nat) (kk nh : Nat) (q : ℕ → Bool)
-    (hq : ∀ j < kk, xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
+    (hq : ∀ j < kk, Verity.Boolean.xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
     (hconst : ∀ j, kk ≤ j → (∀ i < ws.size, (ws.getD i 0).testBit j = (ws.getD 0 0).testBit j) →
       (ws.getD 0 0).testBit j = q j) :
     ∀ cnt j refs acc outs refs', outRows k rec ws kk nh cnt j refs acc = some (outs, refs') →
@@ -783,7 +783,7 @@ theorem outRows_spec (k : Chk) (z : ℕ → Bool) (words : String → Option (Ar
               have hx : (acc.push ([col], 0)).getD acc.size ([], 0) = ([col], 0) := by simp [Array.getD]
               simp only [Nat.add_zero]
               rw [h2 acc.size (by simp), hx, cfVal_col, hz, hq j hj]
-              simp [xorSum, hf.const]
+              simp [Verity.Boolean.xorSum, hf.const]
             | succ m =>
               have := h3 m (by omega)
               simpa [Nat.add_assoc, Nat.add_comm 1 m] using this
@@ -805,7 +805,7 @@ theorem outRows_spec (k : Chk) (z : ℕ → Bool) (words : String → Option (Ar
                 ([], if (ws.getD 0 0).testBit j then 1 else 0) := by simp [Array.getD]
             simp only [Nat.add_zero]
             rw [h2 acc.size (by simp), hx, ← hc]
-            cases (ws.getD 0 0).testBit j <;> simp [cfVal, xorSum]
+            cases (ws.getD 0 0).testBit j <;> simp [cfVal, Verity.Boolean.xorSum]
           | succ m =>
             have := h3 m (by omega)
             simpa [Nat.add_assoc, Nat.add_comm 1 m] using this
@@ -816,7 +816,7 @@ theorem outRows_spec (k : Chk) (z : ℕ → Bool) (words : String → Option (Ar
 /-- The table-direct side's XOR, the low minterms one-hot at `lo`: bit `j` of word `h·2^lo + lo`. -/
 theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : Nat} (hlo : lo < 2 ^ r.lo)
     (hm : ∀ l, l < 2 ^ r.lo → z (r.loTop + l) = decide (lo = l)) {j h : Nat} (hh : h < 2 ^ (r.n - r.lo)) :
-    xorSum (readSide ws r (r.prod0 + j * 2 ^ (r.n - r.lo) + h)) z =
+    Verity.Boolean.xorSum (readSide ws r (r.prod0 + j * 2 ^ (r.n - r.lo) + h)) z =
       (ws.getD (h * 2 ^ r.lo + lo) 0).testBit j := by
   have hpos : 0 < 2 ^ (r.n - r.lo) := Nat.two_pow_pos _
   have e1 : (r.prod0 + j * 2 ^ (r.n - r.lo) + h - r.prod0) % 2 ^ (r.n - r.lo) = h := by
@@ -841,7 +841,7 @@ theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : 
     intro l hl
     have := List.mem_range.mp (List.mem_filter.mp hl).1
     simp [hm l this]
-  rw [xorSum_congr hsub]
+  rw [Verity.Boolean.xorSum_congr hsub]
   rw [xorSum_onehot (v := fun l => decide (lo = l)) (fun _ => rfl) _ (List.nodup_range.filter _)]
   simp [List.mem_filter, hlo]
 
@@ -849,9 +849,9 @@ theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : 
 theorem xorSum_outRow (r : ReadRec) {z : ℕ → Bool} (j : Nat) (q : ℕ → Bool) {hi : Nat}
     (hhi : hi < 2 ^ (r.n - r.lo))
     (hp : ∀ h < 2 ^ (r.n - r.lo), z (r.prod0 + j * 2 ^ (r.n - r.lo) + h) = (decide (hi = h) && q h)) :
-    xorSum ((List.range (2 ^ (r.n - r.lo))).map (r.prod0 + j * 2 ^ (r.n - r.lo) + ·)) z = q hi := by
+    Verity.Boolean.xorSum ((List.range (2 ^ (r.n - r.lo))).map (r.prod0 + j * 2 ^ (r.n - r.lo) + ·)) z = q hi := by
   rw [xorSum_map]
-  refine (xorSum_congr (w := fun h => decide (hi = h) && q h) fun h hh => ?_).trans (xorSum_select hhi q)
+  refine (Verity.Boolean.xorSum_congr (w := fun h => decide (hi = h) && q h) fun h hh => ?_).trans (xorSum_select hhi q)
   exact hp h (List.mem_range.mp hh)
 
 /-- **A read's product rows**: with its high minterms one-hot at `hiIdx` and its low minterms (its record's columns
@@ -865,7 +865,7 @@ theorem prod_sums (words : String → Option (Array Nat)) (k : Chk) (z : ℕ →
     (hhi2 : ∀ a, (hiM.getD a ([], 0)).2 < 2)
     (hlocols : ∀ l < 2 ^ lo, loM.getD l ([], 0) = ([rec.loTop + l], 0)) {kk : Nat} {refs refs' : List Ref}
     (hpr : prodRows k rec hiM (2 ^ (n - lo)) (kk * 2 ^ (n - lo)) 0 refs = some refs') :
-    ∀ j < kk, xorSum ((List.range (2 ^ (n - lo))).map (rec.prod0 + j * 2 ^ (n - lo) + ·)) z =
+    ∀ j < kk, Verity.Boolean.xorSum ((List.range (2 ^ (n - lo))).map (rec.prod0 + j * 2 ^ (n - lo) + ·)) z =
       (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j := by
   have hp := prodRows_spec words k z hf rec hiM _ hhi2 _ 0 _ refs' hpr
   have hloc : ∀ l, l < 2 ^ rec.lo → z (rec.loTop + l) = decide (loIdx = l) := by
@@ -955,7 +955,7 @@ theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ �
 
 theorem genOuts_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
     (rec : ReadRec) (ws : Array Nat) (vb kk nh : Nat) (q : ℕ → Bool)
-    (hq : ∀ j < kk, xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
+    (hq : ∀ j < kk, Verity.Boolean.xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
     (hconst : ∀ j, kk ≤ j → (∀ i < ws.size, (ws.getD i 0).testBit j = (ws.getD 0 0).testBit j) →
       (ws.getD 0 0).testBit j = q j)
     (h : genOuts k ws rec vb kk nh = true) : ∀ j < vb, z (k.d.outCols.getD j 0) = q j := by
@@ -968,12 +968,12 @@ theorem genOuts_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ 
     have hz := hf.row _ _ hjj
     simp only at hz
     rw [hz, hq j hjk]
-    simp [xorSum, hf.const]
+    simp [Verity.Boolean.xorSum, hf.const]
   · rename_i hjk
     simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, beq_iff_eq] at hjj
     obtain ⟨hall, hrow⟩ := hjj
     rw [hf.row _ _ hrow, ← hconst j (by omega) hall]
-    cases (ws.getD 0 0).testBit j <;> simp [xorSum, hf.const]
+    cases (ws.getD 0 0).testBit j <;> simp [Verity.Boolean.xorSum, hf.const]
 
 /-- **A generated read layout computes its table**: on column values that satisfy its rows as the verifier folds them,
 with its constant at 1, output bit `o` is bit `o` of the table's word that its input columns `0 … n − 1` index. -/

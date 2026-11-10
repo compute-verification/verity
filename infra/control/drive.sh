@@ -30,7 +30,8 @@
 # state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), but
 # `queue baseline SHA --by ci` and `queue promote` (a loop's, every minute or so), which fast-forward main and write nothing of
 # drive's, run beside a tick (`unlocked`), so main follows a passed after-landing run within minutes, and `drive.sh merge
-# ARGS` runs `research merge ARGS` (`--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
+# ARGS` runs `research merge ARGS` (`--push`) in the queue's clone on branch main, reset to origin's: $REPO is a blob:none
+# partial clone, where git fetches each object it lacks as a pack of its own. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next, and `checked` once infra adds it there (drive lands the reviewed
 # prefix on checked, fast-forwards main only to a checked commit whose after-landing run passed every step on the merge
 # gate, and merges a main pushed outside it into checked); `research` refuses those pushes anywhere else.
@@ -50,8 +51,10 @@ TICK=/root/drive-tick.lock
 # change once no process runs in it, so a few an hour stay a few GB.
 # RESEARCH_EXECUTOR_ENQUEUE is the task executor's enqueue command (infra/executor, on this pod), which `research executor
 # enqueue` runs with drive's --graph, --priority and --check (research imports nothing from infra/).
+# PYTHONUNBUFFERED: research writes to the loop's log through a pipe, where Python buffers a whole tick's lines until it ends,
+# so a running tick showed nothing of where it was.
 HELPER='!/data/infra/gh_app_token.sh git'
-export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
+export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 PYTHONUNBUFFERED=1 \
   RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp \
   TRAIN_TREES=$FAST/trains \
   RESEARCH_EXECUTOR_ENQUEUE="python3.12 /root/executor/infra/executor.py --db /root/executor/queue.db enqueue"
@@ -81,7 +84,8 @@ store_links() {
     rm -rf "$RESEARCH_STORE/$d.old"
   done
 }
-# origin's main in $REPO: `research merge` refuses any checkout but branch main; the tick and `queue` take a detached one,
+# origin's main in $REPO: `merge` puts it and the queue's clone, where `research merge` runs, on branch main, as `research merge`
+# refuses any other checkout (the next sync detaches the queue's clone again); the tick and `queue` take a detached one,
 # at the commit $DIR/deployed pins (`deploy`) when it names one, else at main's tip, so a landing of drive's own code changes what
 # drive runs only once it is deployed.  A pin $REPO can't find fails the tick rather than run another commit.
 checkout() {
@@ -92,7 +96,11 @@ checkout() {
       || git -C "$c" config credential.helper "$HELPER" || return 1
   done
   git -C "$REPO" fetch -q origin main || return 1
-  if [ "$1" = merge ]; then git -C "$REPO" checkout -q -f -B main FETCH_HEAD; return; fi
+  if [ "$1" = merge ]; then
+    git -C "$REPO" checkout -q -f -B main FETCH_HEAD && git -C "$FAST/queue-verity" fetch -q origin main \
+      && git -C "$FAST/queue-verity" checkout -q -f -B main FETCH_HEAD
+    return
+  fi
   pin=FETCH_HEAD
   if [ -e "$DIR/deployed" ]; then
     pin=$(grep -m1 -xE '[0-9a-f]{40}' "$DIR/deployed") \
@@ -116,7 +124,8 @@ deploy() {
   echo "$sha" > "$DIR/deployed.new" && mv "$DIR/deployed.new" "$DIR/deployed" && echo "drive: runs $sha from the next tick"
 }
 # Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and the queue
-# clone's worktree records of what is gone
+# clone's worktree records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the
+# blobs it lacks as a pack of its own, and git's auto maintenance never repacks a partial clone's such packs
 prune_trees() {
   used=$(for p in /proc/[0-9]*; do readlink "$p/cwd"; done 2>/dev/null | sort -u)
   for t in $(find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type d -name 'train-*' -mmin +60); do
@@ -125,6 +134,7 @@ prune_trees() {
     rm -rf -- "$t" "$t.log"
   done
   git -C "$FAST/queue-verity" worktree prune 2>/dev/null || true
+  [ "$(find "$REPO/.git/objects/pack" -name '*.pack' 2>/dev/null | wc -l)" -le 50 ] || git -C "$REPO" repack -a -d -q || true
 }
 locked() {
   exec 8> "$TICK"; flock 8
@@ -133,7 +143,8 @@ locked() {
   [ -n "${RESEARCH_AGENT_URL:-}" ] || RESEARCH_AGENT_URL=$(cat $DIR/agent-url 2>/dev/null); export RESEARCH_AGENT_URL
   GH_TOKEN=$(/data/infra/gh_app_token.sh --cached) || exit 1; export GH_TOKEN
   checkout "$1" || exit 1
-  cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
+  if [ "$1" = merge ]; then cd "$FAST/queue-verity"; else cd "$REPO"; fi || exit 1
+  RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
 # `queue baseline` and `queue promote` only fast-forward main, reading the queue's clone and drive's state and writing neither,
 # so they run beside a tick: no tick lock, and no checkout, which would change the code a running tick imports from $REPO

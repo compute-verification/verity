@@ -94,7 +94,7 @@ def test_a_run_fits_at_once_up_to_80_percent(tmp_path):
 
 
 def test_a_held_run_is_released_at_80_percent_with_no_lower_mark(tmp_path):
-    """vy-nebius-2, 18 Oct: retention gc stops at 75% and the disk sat at 76-80%; a release mark of 75% held runs forever."""
+    """Retention gc stops at 75%, so a disk can sit at 76-80%, where a release mark of 75% would hold runs forever."""
     sleeps, lines = [], []
     held = disk.hold(1000, tmp_path, usage=_disk([7.5, 7.2, 7.0]), sleep=sleeps.append, log=lines.append)
     assert held == 2 and sleeps == [disk.POLL_S] * 2, "8.5 and 8.2 TB are over 80%; 8.0 is not"

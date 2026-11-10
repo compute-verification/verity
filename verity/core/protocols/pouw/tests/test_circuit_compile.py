@@ -34,7 +34,7 @@ from verity.ml.protocols.pouw.circuit import compile as C
 from verity.ml.protocols.pouw.circuit import hashes as H
 from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.sampled_proofs.one_stage import partition as OP
+from verity.core.protocols.spot.one_stage import partition as OP
 
 V1, V8, V16, V32 = Value(1), Value(8), Value(16), Value(32)
 M32 = (1 << 32) - 1

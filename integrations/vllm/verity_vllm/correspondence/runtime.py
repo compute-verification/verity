@@ -11,7 +11,8 @@ view-of), and -- for a rank Program of a tensor-parallel world -- the rank coord
 
 Layout (two levels; a Call's record is the join): `occurrences[o]` is one lowered fx node (module, op, views, lifetime,
 collective); `calls[k]` is Call k (= node k of the program function's body, the same index `instances.json.gz` rows carry)
-with its occurrence, return slots and argument slots.  `load_correspondence(descriptor)` joins them into `CallCorrespondence`
+with its occurrence, return slots and argument slots; in a batched Program (`prune.BATCHED`) a batch node's is its members'
+(`{"members": [...]}`), which no reader takes yet (`records` refuses it).  `load_correspondence(descriptor)` joins them into `CallCorrespondence`
 records and answers `owning_module(call_id)`, `return_slot(call_id, port)`, `arg_slot(call_id, input_index)`, and the
 module-body partition `calls_of_module(path)` that `verity_vllm.query` consumes.  Stdlib plus `verity.ml.circuits.codec`'s `canonical_json`:
 imports without torch.
@@ -237,6 +238,8 @@ class RuntimeCorrespondence:
         rank = RankOccurrence(int(doc["rank"]["world"]), int(doc["rank"]["rank"])) if doc.get("rank") else None
         occs = doc["occurrences"]
         for k, c in enumerate(doc["calls"]):
+            if "members" in c:
+                raise ValueError(f"calls[{k}] is a batch's, its members' records (`prune.BATCHED`): no reader takes a batch's yet")
             o = occs[c["occ"]] if c.get("occ") is not None else None
             outs = (o or {}).get("outputs") or []
             ins = (o or {}).get("inputs") or []

@@ -11,7 +11,7 @@ claim fails is at most `a`'s error at the strategy (`Vocab.error`: its published
 its collision term, where its finder meets `FinderCR` and its forger `Unforgeable`). It is `Vocab.Target k a` without
 the commit phase's file check and `k`'s acceptance as a `same` composition, so each target follows from it, one family
 at every composite and subprotocol (`Vocab.sound_of`, in `Proofs.Properties.Verity.Subprotocols`; at remote's three,
-`Vocab.sampledProofsSound_of`, `pouwSound_of` and `inferenceOnlySound_of`).
+`Vocab.spotSound_of`, `pouwSound_of` and `inferenceOnlySound_of`).
 
 `SoundnessOfComponents` is `SoundnessOf` from those bounds: at every composite, each of its subprotocols' bound at its
 component gives `Vocab.SoundnessAt`, with the errors summed over the composite's subprotocols (`subprotocols k`). A

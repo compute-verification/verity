@@ -139,7 +139,8 @@ def wired(tmpls: list[str], caps: dict[str, int]):
 def test_a_row_holds_its_quantisation_once_and_n_coordinates_of_its_gemm():
     spec = descriptor_id(linear())
     assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(linear(1)), N), (descriptor_id(quant()), 1),
-                                        (descriptor_id(gemm(N)), 1), (descriptor_id(gemm(1)), N))
+                                        (descriptor_id(gemm(N)), 1), *((descriptor_id(gemm(c)), N // c) for c in (8, 4, 2)),
+                                        (descriptor_id(gemm(1)), N))
     t = SRW.template(TQ)
     assert (t.layout, t.word, t.packed) == ("part", descriptor_id(quant()), (16, 8, 32))
     assert SRW.part(descriptor_id(quant()), spec) == SRW.PARTS["FlashInferFp8Linear_v1"][0]

@@ -275,7 +275,14 @@ def check(fn: SpecializedDefinition) -> dict:
 def joined(entries: list[dict]) -> list[dict]:
     """``entries`` with each by-calls root's relied-on targets' verdicts joined to its own: a target none of ``entries`` is
     fails it with ``by-calls/callee-unchecked``, one that failed with ``by-calls/callee-failed`` (naming its failures); each
-    callee's row says ``verdict``.  Entries are copied, never changed."""
+    callee's row says ``verdict``.  A target's ``block/past-range`` failure that `block_held.HELD` holds is not a failure here,
+    as it isn't in `checks.summarize`.  Entries are copied, never changed."""
+    from .block_held import HELD
+
+    def counted(got: dict) -> list[dict]:
+        return [f for f in got.get("failures", [])
+                if (f.get("check"), f.get("code")) != ("block", "past-range") or f.get("definition") not in HELD]
+
     by: dict[str, dict] = {}
     for e in entries:
         for k in (e.get("definition"), e.get("target")):
@@ -296,8 +303,8 @@ def joined(entries: list[dict]) -> list[dict]:
                 continue
             if got is None:
                 verdict, what = "unchecked", f"{row['callee']}: its target {b} is not among this report's targets"
-            elif got.get("failures"):
-                names = [f.get("name", "") for f in got["failures"]]
+            elif bad := counted(got):
+                names = [f.get("name", "") for f in bad]
                 verdict, what = "failed", f"{row['callee']}: its target {b} fails: {'; '.join(names[:3])}"
             else:
                 verdict, what = "passed", None

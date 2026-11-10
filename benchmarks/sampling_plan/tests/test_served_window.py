@@ -61,10 +61,10 @@ def test_proving_only_picks_the_finest_rung_at_every_scope(out):
 
 
 def test_the_commitment_moves_the_work_optimum_coarser_as_the_period_grows(out):
-    """The scopes are the window and core's monitoring periods (`wipe_monitoring.PERIODS`); pooled over a longer one the
+    """The scopes are the window and core's monitoring periods (`reporting.PERIODS`); pooled over a longer one the
     work optimum is never finer, and from a week on it is coord in both views."""
     order = list(out["rungs"])
-    assert list(S.scopes()) == ["window"] + [name for name, _ in S.wipe_monitoring.PERIODS]
+    assert list(S.scopes()) == ["window"] + [name for name, _ in S.reporting.PERIODS]
     for h in S.readings():
         best = [order.index(_results(out, target="work", scope=s, h=h, scheme="hm96", weight=1.0)[0]["best_lean"])
                 for s in S.scopes()]

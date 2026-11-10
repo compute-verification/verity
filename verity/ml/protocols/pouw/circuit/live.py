@@ -82,7 +82,7 @@ reads only v2 (`credit.LIVE_FN`) up to T = `PIECE_ROWS`. v1 stays unchanged.
 
 **`PouwLiveRows_v1{T, R}`** is a round's live check cut by rows, for a T past `PIECE_ROWS`. v2 reads 3T + 3 rows, and
 Flock's composer lowers it as one unit inside its 2^27-bit block only up to T = 64 (T 128 takes a 2^28-bit block and T 512
-a 2^30-bit one: r20261027-194709-05e5), so its count can't grow with T. Piece j of round s reads R
+a 2^30-bit one), so its count can't grow with T. Piece j of round s reads R
 rows of round s's slot table, rows [base, base + R) with base = jR, the first R request headers and their public caps:
 
     PouwLiveRows_v1{T, R}   (slot: Array<R, U32>, req: Array<R, Array<5, U32>>, m: U32, s: U32, base: U32,

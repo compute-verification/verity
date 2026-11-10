@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.Custody
 public import Proofs.Flock.Soundness.Assumptions.CustodyZk
-public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Finders
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec

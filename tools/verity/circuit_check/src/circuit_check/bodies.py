@@ -285,11 +285,11 @@ class _Wide:
         if j < 0:
             j += self.n
         if not 0 <= j < self.n:
-            raise IndexError(j)
+            raise IndexError("tuple index out of range")
         for start, cnt, seq, lo in self.segs:
             if j < start + cnt:
                 return self.V[seq[lo + j - start]]
-        raise IndexError(j)
+        raise IndexError("tuple index out of range")
 
     def all(self) -> bool:
         return all(self.V[w] for _start, cnt, seq, lo in self.segs for w in seq[lo:lo + cnt])

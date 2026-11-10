@@ -5,11 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CompiledAlign
 import Proofs.Flock.Soundness.Extract
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
 /-!

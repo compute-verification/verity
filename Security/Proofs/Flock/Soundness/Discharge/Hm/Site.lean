@@ -1,5 +1,5 @@
 /-
-`HmRowComputes` at e2e-layout's rows (`keyedRowsOuts_computes`). At a sampled proof block's site in its table's accepted
+`HmRowComputes` at the keyed layout's rows (`keyedRowsOuts_computes`). At a sampled proof block's site in its table's accepted
 statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output (`bcCol`, the address the regions pin
 `Layout.bcAddr`) is the commit string of the row prefix and the bytes at the message columns, under the salt at `saltCol`
 (`bc_site_col`, `bc_site_commit`): `row_bc_setupH`, with each column in the block (`bcCol_lt`, `saltCol_lt`,
@@ -188,7 +188,7 @@ theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unit
 
 end Site
 
-/-! ## At e2e-layout's rows -/
+/-! ## At the keyed layout's rows -/
 
 section Keyed
 
@@ -202,7 +202,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   {popOf : Reg → Public}
 
-/-- **`HmRowComputes` at e2e-layout's rows** (`hHm` for `Layout.keyedRowsOuts` at `saltCol`): at every sampled proof block's
+/-- **`HmRowComputes` at the keyed layout's rows** (`hHm` for `Layout.keyedRowsOuts` at `saltCol`): at every sampled proof block's
 committed wire held by a row port `q` (each a `sha512/row/v1` row of `16 · words` bits in at least one chunk, `hv1`,
 which `Layout.scopeOk_ports` gives), in a satisfying witness of the unit's table, the `b ‖ c` at the port's `hm96`
 output is the commit string of the row's bytes (`rowEnc`) and the salt the witness holds at `saltCol`. -/

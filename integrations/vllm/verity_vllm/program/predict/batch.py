@@ -33,11 +33,9 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
-  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
-  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
-  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
-  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. A row past INDEX_TOPK
+  computes its selection from the request's own logits (`DsaTopKMask`, `DsaButterflySettings`), so it reads nothing of another's:
+  its rows in ascending index order, the row `VERITY_DSA_TOPK=canonical` serves (`dsa.Net` refuses an engine without it). A shared
   prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
   that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
   computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the
@@ -57,13 +55,15 @@ from typing import Any, Callable, Mapping
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS, rid_of_ids
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
 from .phi import Phi
 
-#: the request-local Input groups a request's own certified body fixes; any other request-local group is the batch's
-OWN_GROUPS = ("prompt", "seed")
+#: the request-local Input groups a request's own certified body fixes, with its seed rule's (`seed_rule.PARAMS`: its body's seed
+#: and id, and the window's public seed salt); any other request-local group is the batch's
+OWN_GROUPS = ("prompt", "seed", *SEED_PARAMS)
 #: the Input groups of a request's history (`build.build_program`'s C: every layer's rows of its first C positions, and a resumed
 #: request's last token), its own where R2 checks it (`workload_labels`)
 HISTORY_GROUPS = ("prefix", "prefix_ik", "prefix_iks", "last_token")
@@ -98,7 +98,7 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
     `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
-    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each
+    other request-local group (`splits`, an unchecked history, or one unknown here) `BATCH`. Its return: each
     request's outputs held by its index, then the edge it leaves field by field."""
     from verity_vllm.program.workload import edge_ports
     edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
@@ -120,10 +120,10 @@ def _workload(phi: Phi, shapes: list[tuple[int, int]], policy: dict) -> Any:
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    canon: dict = {}
-    pq = Phi.from_json({**phi.to_json(), "sampling": policy})
-    comps = {s: request_component(build_program(pq, "request", LP=s[0], T=s[1]), canon) for s in dict.fromkeys(shapes)}
-    reqs = [W.WorkloadRequest(request_id_of(i), i, LP, T + 1, i, comps[(LP, T)], T=T) for i, (LP, T) in enumerate(shapes)]
+    ids = [request_id_of(i) for i in range(len(shapes))]
+    pq = Phi.from_json({**phi.to_json(), "sampling": {**policy, "rid": rid_of_ids(ids)} if policy["kind"] == "stochastic" else policy})
+    comps = {s: request_component(build_program(pq, "request", LP=s[0], T=s[1])) for s in dict.fromkeys(shapes)}
+    reqs = [W.WorkloadRequest(ids[i], i, LP, T + 1, i, comps[(LP, T)], T=T) for i, (LP, T) in enumerate(shapes)]
     return W.WorkloadProgram(reqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 
@@ -274,7 +274,8 @@ def _unit(u: Any) -> tuple:
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
     """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
-    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` is `steps.plan_steps`.
+    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` plans a solo `Advice`
+    (`steps._replan`).
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
     for u in units:

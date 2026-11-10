@@ -107,8 +107,7 @@ def _named(name: str) -> list[dict]:
 
 
 def create_once(ns: Any) -> tuple[dict | None, int]:
-    """At most one pod per --name, whatever the create call says (retry loops made duplicates three times, 2026-09-26; red-team-
-    flock-2's pod-create.sh): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
+    """At most one pod per --name, whatever the create call says (a retry loop around a create makes duplicates): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
     after a failed create, a pod that appeared under the name anyway is the pod; only an explicit no-stock reply is exit 5 (try
     another spec), any other failure exit 2 (do not retry blindly).  Returns (pod, 0) or (None, exit code)."""
     import sys

@@ -29,16 +29,16 @@ import os
 import sys
 from pathlib import Path
 
-DOT = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 SPEC = "q-template-instance"
 
 
 def template():
-    """``GemmCoordinate_v2{K, DOT}``: the Definition each unit of the inner statement is one instance of."""
-    from circuit_check import targets as TG
+    """``GemmCoordinate_v2{K, DOT}`` at Hopper's step (`gemm.GEMM_HOPPER`): the Definition each unit of the inner statement is one
+    instance of."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
 
-    TG.load_registries()
-    return TG.definition(f"GemmCoordinate_v2{{K={int(os.environ['K'])},DOT={DOT}}}")
+    return bind(G.GemmCoordinate, K=int(os.environ["K"]), **G.GEMM_HOPPER)
 
 
 def population() -> int:
@@ -47,7 +47,7 @@ def population() -> int:
 
 
 def program():
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     return P.population_program(template(), population())
 
@@ -80,7 +80,7 @@ def partition(d: Path, prog=None) -> dict:
     binds exactly that partition and program and the population is the statement's ``N`` units, and at an ``N`` the
     verifier refuses (`rec_budget.inner`). ``prog``: the program (default `chain_program` under REC_LINKS=1, else
     `program`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_flock import rec_budget as RB
     from verity_flock import rec_live as RL
@@ -136,7 +136,7 @@ def chain_lanes(units, cl, tp, seed: str) -> tuple[list, list, list]:
 def stage_chain(d: Path) -> dict:
     """The wired inner statement (`chain_program`) staged into ``d`` with every instance's own rows, its links file and its
     partition's files; the staging's record."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits import partition_object as PO
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU

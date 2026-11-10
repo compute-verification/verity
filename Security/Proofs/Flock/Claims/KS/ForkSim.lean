@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 

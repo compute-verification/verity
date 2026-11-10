@@ -630,16 +630,34 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
-def module_files(files: list[str]) -> dict[str, str]:
-    """Each Lean module's file ({module: path}): a module is its file's path below its package's source directory, so it is
-    each dotted tail of a `.lean` path that no other file's path ends in."""
+def module_files(root: Path, files: list[str]) -> dict[str, list[tuple[str, str | None]]]:
+    """Each Lean module's files with their packages ({module: [(path, package directory)]}, one entry unless two packages
+    define the module). A module is its file's path below its package's source directory: the nearest `lakefile.toml` at or
+    above the file is its package, whose `srcDir` (its own directory by default) is that directory, so `Security/Proofs`'s
+    `Properties/X.lean` is `Proofs.Properties.X` beside `Security/Properties`'s `Properties.X`. A file under no
+    `lakefile.toml` is each dotted tail of its path that no other such file's path ends in, with no package. A test's
+    fixture is no package's module."""
+    lakes = {posixpath.dirname(p): posixpath.normpath(posixpath.join(posixpath.dirname(p),
+                                                                      tomllib.loads((root / p).read_text()).get("srcDir", ".")))
+             for p in files if posixpath.basename(p) == "lakefile.toml" and "/tests/fixtures/" not in f"/{p}"}
+    out: dict[str, list[tuple[str, str | None]]] = {}
     tails: dict[str, list[str]] = {}
     for p in files:
-        if p.endswith(".lean"):
+        if not p.endswith(".lean") or "/tests/fixtures/" in f"/{p}":
+            continue
+        pkg = posixpath.dirname(p)
+        while pkg not in lakes and pkg:
+            pkg = posixpath.dirname(pkg)
+        if pkg not in lakes:
             parts = p[:-len(".lean")].split("/")
             for i in range(len(parts)):
                 tails.setdefault(".".join(parts[i:]), []).append(p)
-    return {m: ps[0] for m, ps in tails.items() if len(ps) == 1}
+        elif not (rel := posixpath.relpath(p, lakes[pkg])).startswith("../"):
+            out.setdefault(rel[:-len(".lean")].replace("/", "."), []).append((p, pkg))
+    for m, ps in tails.items():
+        if len(ps) == 1:
+            out.setdefault(m, []).append((ps[0], None))
+    return out
 
 
 def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
@@ -648,19 +666,31 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
     under it is listed as its names in full instead, since `check.py --moved` reads no move under another move's new name
     that maps back elsewhere (its `move_errors`). A lock under a `tests/fixtures/` directory is a test's data, in whatever
-    form its test needs, and no package's record, so it is not read: `check.py --update --moved` re-records packages."""
+    form its test needs, and no package's record, so it is not read: `check.py --update --moved` re-records packages.
+
+    A module two packages define (`module_files`) is read from the lock's own package when that package is one of them;
+    otherwise every file defining it must rename the definition alike, and a map that renames it apart in them is refused
+    before any records run, naming the lock, the definition and each file's rename."""
     want: dict[str, str] = {}
-    where = module_files(files)
+    where = module_files(root, files)
     for p in files:
         if posixpath.basename(p) != POLICY or words.excluded(p) or "/tests/fixtures/" in f"/{p}":
             continue
         d = json.loads((root / p).read_text())
-        names = dict.fromkeys(d.get("guarantees", {}), p)
-        names |= {n: where.get(m, p) for m, g in d.get("reads", {}).items() for n in g.get("definitions", {})}
-        for n, f in sorted(names.items()):
-            if words.excluded(f):
-                continue
-            if (new := words.name(n, f)) != n and want.setdefault(n, new) != new:
+        own = posixpath.dirname(p)
+        names = {n: [p] for n in d.get("guarantees", {})}
+        for m, g in d.get("reads", {}).items():
+            fs = where.get(m, [])
+            fs = [f for f, pkg in fs if pkg == own] or [f for f, _ in fs] or [p]
+            names |= {n: fs for n in g.get("definitions", {})}
+        for n, fs in sorted(names.items()):
+            got = {f: n if words.excluded(f) else words.name(n, f) for f in fs}
+            if len(set(got.values())) > 1:
+                raise SystemExit(f"{p}: {n} is read from a module that {len(fs)} packages define, none of them this lock's, "
+                                 "and the map renames it apart in their files: "
+                                 + "; ".join(f"{f}: {new}" for f, new in sorted(got.items()))
+                                 + ". Rename it alike in each, or keep it in each")
+            if (new := got[fs[0]]) != n and want.setdefault(n, new) != new:
                 raise SystemExit(f"{n} is renamed {want[n]} in one lock and {new} in {p}")
     want = dict(sorted(want.items()))
     moves: dict[str, str] = {}

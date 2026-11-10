@@ -267,7 +267,7 @@ theorem Bound.innerFO_acc_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, dec
   constructor
   · intro h
     by_contra hk
-    simp [Bound.innerFO, hk, abortTrace] at h
+    simp [Bound.innerFO, hk, abortTranscript] at h
   · intro hk
     have hk' : (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).isSome = true ∧
         (dec H D x d.1 (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d)).out = .acc ∧

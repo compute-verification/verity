@@ -19,7 +19,7 @@ import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The recursive audit at candidate 3: its proof

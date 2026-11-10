@@ -24,11 +24,11 @@ it rests on no run and no `art:`, and the deployed premises are Layer 2's envelo
 The counter-examples, each on one server:
 * `Counter`: one gate reading only a registered input gate, computing one operation of weight 1, with the cap
   `q(c, 0) = 0` and `q(c, k) = c` for `k > 0`. A cap at `k = 0` says a block reading no unregistered bit computes
-  nothing, which this gate refutes. `P₂` puts its gate in the first of two units, and `away` sends its one inference
-  block to the second: a parent map that is no refinement.
+  nothing, which this gate refutes.
 * `Straddle`: gate 1 reads the registered gate 0 before the wipe and gate 2 reads gate 1 after it, and one operation is
   computed by gates 1 and 2. No block of one gate computes it, so the cap is `0`, and only the boundary term
-  `ω_max μ k_S` covers it.
+  `ω_max μ k_S` covers it. The serving block after the wipe, its own one inference block, leaves the operation: an
+  uncertified cap below its weight `1` fails there.
 * `Detached`: `Straddle` with gate 2 reading gate 0, so the operation takes in gate 1, which no gate of it reads.
 -/
 
@@ -119,12 +119,6 @@ abbrev J : Counted d.D where
 /-- A cap at `k = 0` says a block reading no unregistered bit computes nothing. -/
 noncomputable abbrev q : ℕ → ℕ → ℝ := fun c k => if k = 0 then 0 else c
 
-/-- Gate 1 in the first of two units. -/
-abbrev P₂ : Partition d.D 2 := ⟨![none, some 0], by decide⟩
-
-/-- A parent map sending `P`'s one unit to `P₂`'s second unit, which holds no gate. -/
-abbrev away : Fin 1 → Fin 2 := fun _ => 1
-
 end Counter
 
 namespace Straddle
@@ -149,6 +143,7 @@ abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩
 
 abbrev S : Finset (Fin 2) := {0, 1}
 
+/-- Each serving block is its own one inference block. -/
 abbrev r : P.Refines P := refl P
 
 /-- Gate 2's operation, computed by gates 1 and 2 and so split across the wipe, of weight 1. -/

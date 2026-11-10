@@ -6,7 +6,8 @@
 B is the verification overhead as a fraction of the plain workload's compute: GPU-seconds a plain GPU-second of the
 family, with every other resource converted at its price. Its parts:
 
-- the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
+- the PoUW transform, its honest overhead γ (honest over plain int8 less 1, the machine model's ratio on the family's
+  measured kernel);
 - commitment hashing, receipts and the noise's samples (`commit_gpu`'s measured fractions of plain prefill time);
 - sampling, B_s: proving, staging and verifying the sampled proof blocks under the fitted Flock cost model (cost-model/v1),
   as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least
@@ -94,8 +95,8 @@ class Family:
     """A GPU family's headline design, its price, and what eps_budget says of its P·V. Its filler sweep is
     `budget_fill.json` (`sweep`), the machine model's `eps --credit floor --operands free --q 1.22` on the design with
     `Design.with_fill` stacked on its own fillers; the sweep's ε_skip is the stored [skip] over the filled ♭ (decision
-    90). γ is honest over plain int8 a MMA on the measured kernel; past y = 0 the honest time is the machine model's
-    (modeled)."""
+    90). Its ratio 1 + γ is honest over plain int8 a MMA on the measured kernel; past y = 0 the honest time is the
+    machine model's (modeled)."""
     name: str
     device: str
     design: str
@@ -118,12 +119,12 @@ class Family:
     #: whole-model γ's change, dither-c against dither-c-peel in eps_budget (8B, floor credit; pv's γ is the TS model's)
     pv_noise: tuple[float, float] | None = None
     #: the next larger L's design on this device (machine model, measured kernels): (the headline's L, the larger L,
-    #: its core ε as a fraction, its γ)
+    #: its core ε as a fraction, its ratio 1 + γ)
     larger_l: tuple[int, int, float, float] | None = None
 
     @functools.cached_property
     def fill(self) -> dict[str, list[tuple[float, float, float, float, float]]]:
-        """Per filler mix, (y, γ, ε_skip, ε_machine, full checking's ε_luck) at each grid point, ε as fractions."""
+        """Per filler mix, (y, 1 + γ, ε_skip, ε_machine, full checking's ε_luck) at each grid point, ε as fractions."""
         return {m: [tuple(p) for p in pts] for m, pts in _fill_data()["families"][self.name]["curves"].items()}
 
     def mixes(self) -> list[str]:
@@ -185,6 +186,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
                 r = cmd._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
                                     "full")
                 flat = r["baseline"]["cycles_per_mma"]
+                # the point's "gamma" is the machine model's ratio, 1 + γ
                 pts.append([y, round(r["gamma"], 5), round(r["terms"]["skip"] * flat0 / flat, 7),
                             round(r["terms"]["machine"], 7), round(r["terms"]["luck"], 7)])
             curves[name] = pts
@@ -311,12 +313,12 @@ class Point:
     eps_luck: float
     eps_sample: float
     B: float
-    B_transform: float
+    B_transform: float     # the honest overhead γ
     B_hash: float
     B_sample: float
     draws: float
     cut: str
-    gamma: float
+    gamma: float           # the ratio honest over plain int8, 1 + γ
     sigma_w: float
 
     @property
@@ -487,7 +489,7 @@ def render(fams=FAMILIES, **kw) -> str:
         for regime in ALLOCATED:
             lines += [f"Regime `{regime}`:", "",
                       "| budget | config (mix, y, served) | ε | core | ε_skip | served | ε_machine | ε_luck | ε_sample | B "
-                      "| γ − 1 | hash + receipts + draws | B_s | draws a week | cut |",
+                      "| γ | hash + receipts + draws | B_s | draws a week | cut |",
                       "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
             alloc = allocation(f, regime=regime, **kw)
             rows = ([("today", t, [])] if regime == "plain" else []) + [(f"{m}× today", q, mg) for m, q, mg in alloc]

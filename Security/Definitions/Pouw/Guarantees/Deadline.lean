@@ -1,11 +1,11 @@
 module
 
+public import Definitions.Pouw.Assumptions.GameStatements
 public import Definitions.Pouw.Assumptions.Deadline
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.PearlC.Deadline
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-public import Definitions.Pouw.Assumptions.Pinned
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DeviceKernelWref
@@ -37,7 +37,7 @@ timed run and verifier's rule, and time meets the cost model through one named a
 
 namespace Pouw.Guarantees
 
-open Pouw.Pinned Finset
+open Pouw.GameStatements Finset
 
 /-- **Work between the salt and the deadline.** Under TT(g₀), the `Ω_max` bound and an honest clock, for every in-domain
 workload, adversary, timed run, deadline `td` and budget: if the run spends at most `T` after the salt's release `ts` and

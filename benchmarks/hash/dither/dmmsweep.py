@@ -28,16 +28,24 @@ import ctypes as C
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import torch
 import triton
 
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent / "exactlin")]
-import dither_a as DA  # noqa: E402
 import exactlin as X  # noqa: E402
 import kbench  # noqa: E402
 import kgate  # noqa: E402
+
+import dither_a as DA  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+    from contextlib import AbstractContextManager
+
+    from cuda.bindings.driver import CUfunction
 
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 LAYERS = 32
@@ -63,7 +71,7 @@ class Blocker:
     device's largest dynamic shared memory so no GEMM CTA shares its SM, parked until the item's kernels are done (a
     `set_stop` after them on the serving stream); the others exit at once."""
 
-    def __init__(self, q: int, d: int):
+    def __init__(self, q: int, d: int) -> None:
         from cuda.bindings import driver as cu
         from cuda.bindings import nvrtc
         self.cu, self.q, self.d = cu, q, d
@@ -92,18 +100,19 @@ class Blocker:
         self.held: set[int] = set()     # each item's count of held SMs
 
     @staticmethod
-    def _ok(res):
+    def _ok(res: Any) -> Any:
         err, *out = res if isinstance(res, tuple) else (res,)
         if int(err) != 0:
             raise RuntimeError(f"dmmsweep Blocker: {err!r}")
         return out[0] if len(out) == 1 else out
 
-    def _launch(self, fn, grid: int, smem: int, stream, args: tuple, types: tuple) -> None:
+    def _launch(self, fn: CUfunction, grid: int, smem: int, stream: torch.cuda.Stream, args: tuple,
+                types: tuple) -> None:
         self._ok(self.cu.cuLaunchKernel(fn, grid, 1, 1, 1, 1, 1, smem, self.cu.CUstream(stream.cuda_stream),
                                         (args, types), 0))
 
     @contextlib.contextmanager
-    def item(self):
+    def item(self) -> Iterator[None]:
         main = torch.cuda.current_stream()
         stop = self.flags.data_ptr()
         self.flags.zero_()
@@ -140,7 +149,7 @@ class GCfg(X.Cfg):
     """An exactlin Cfg and its tile group g (dither_a's ":gG"); equal tuples of other groups are other configs, so
     lists of them are deduplicated by text (`uniq`)."""
 
-    def __new__(cls, *a, g: int = 1):
+    def __new__(cls, *a, g: int = 1) -> GCfg:
         self = super().__new__(cls, *a)
         self.g = g
         return self
@@ -153,11 +162,12 @@ class GCfg(X.Cfg):
         return super().__str__() + (f":g{self.g}" if self.g > 1 else "")
 
 
-def uniq(cfgs) -> list:
+def uniq(cfgs: Iterable[X.Cfg]) -> list:
     return list({str(c): c for c in cfgs}.values())
 
 
-def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
+def gemm(cfg: X.Cfg, xq: torch.Tensor, sa: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, y: torch.Tensor,
+         zy: torch.Tensor, S: torch.Tensor, T: int, work: X.Workspace) -> None:
     """dither_a's `gemm` for one call at `cfg` (ZL 2, no dump: flags 0)."""
     M, k = xq.shape
     n = w.shape[0]
@@ -183,7 +193,7 @@ def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
 
 
 class Shape:
-    def __init__(self, n: int, k: int, m: int, t: int):
+    def __init__(self, n: int, k: int, m: int, t: int) -> None:
         e = kgate.E()
         self.n, self.k, self.m, self.t = n, k, m, t
         self.copies = kbench.copies_for(n, k)
@@ -204,18 +214,18 @@ class Shape:
         w, sw = self.ws[0]
         self.served_y_diff = kgate.diff(self.ref[0][0], e.dequantize(e.int_mm(self.xq, w), self.sa, sw))
 
-    def fn(self, cfg: X.Cfg):
+    def fn(self, cfg: X.Cfg) -> Callable[[], None]:
         work = kgate.work()
 
-        def f():
+        def f() -> None:
             for (w, sw), y, zy in zip(self.ws, self.ys, self.zys):
                 gemm(cfg, self.xq, self.sa, w, sw, y, zy, self.S, self.t, work)
         return f
 
-    def scaled_mm(self):
+    def scaled_mm(self) -> Callable[[], None]:
         work, cfg = kgate.work(), self.served
 
-        def f():
+        def f() -> None:
             for (w, sw), y in zip(self.ws, self.ys):
                 X.scaled_mm(self.xq, self.sa, w, sw, y, cfg, work)
         return f
@@ -243,8 +253,8 @@ def log(out: Path, rec: dict) -> None:
         f.write(json.dumps(rec) + "\n")
 
 
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None,
-          around=None) -> dict:
+def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock: Callable[[], int | None], phase: str,
+          extra: dict | None = None, around: Callable[[], AbstractContextManager[None]] | None = None) -> dict:
     fns, recs = {}, {}
     for cfg in cfgs:
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "t": shape.t, "cfg": str(cfg)}
@@ -280,7 +290,7 @@ def mmax_of(n: int, k: int, m: int) -> int | None:
     return next((mm for mm, _ in X.CONFIGS.get(X.arch(), {}).get((n, k), ()) if m <= mm), None)
 
 
-def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
+def best(med: dict, top: int, skip: tuple[str, ...] = ()) -> list[X.Cfg]:
     ranked = sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])
     return [GCfg.parse(c) for c, _ in ranked[:top]]
 

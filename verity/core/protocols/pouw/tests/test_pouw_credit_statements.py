@@ -9,7 +9,7 @@ SHA-512 of every file it was handed (the circuit file, the public file, the prog
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
 session sampled. `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
-verifier the files the prover proved against. `sampled_proofs/tests/test_proofs.py` holds the real verifier to
+verifier the files the prover proved against. `spot/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
 to `h1window.table_reads_file` byte for byte."""
 from __future__ import annotations
@@ -25,8 +25,8 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):

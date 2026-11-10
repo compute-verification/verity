@@ -16,7 +16,7 @@ session as deployed takes from here (`Live.deployed`). This file proves the thre
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset sampling design it is
   `Claims.Bridge.CustodyZkP.djPrinted` (`printedDraw_subset`). The session's sample file is the `.subset` print of the
   member's share of the window's sample under the verifier's law `L`, its `kd` units (`Live.dj`), and the bound comes
-  from v1's window check (`SampledProofs.OneStage.checkAt`); the print decodes to the sample it printed
+  from v1's window check (`Spot.OneStage.checkAt`); the print decodes to the sample it printed
   (`drawFileZK_printedDraw`, the subset sampling design's round trip `ZkLink.drawFileZK_of_toJson_subset`).
 * **`live-verifier` at the writer** (`recordCustodyZKJPLaw_deployed`): `RecordCustodyZKJPLaw` at the writer that keeps an
   accepted record (`Claims.Bridge.CustodyZkP.wrZP`), the printed subset sample file and its sampling design at every sample, at any
@@ -84,19 +84,19 @@ theorem drawSize_deployed (kd : ℕ) :
 /-- **The deployed session's sample**: the device's one-stage rounds (`Properties.Challenger.oneStageRounds`),
 `MAX_COINS` coins of `8 * COIN_BYTES` raw bits each. -/
 abbrev DeployedCoins : Type :=
-  Fin _root_.SampledProofs.Challenger.MAX_COINS → Fin (8 * _root_.SampledProofs.Challenger.COIN_BYTES) → Bool
+  Fin _root_.Spot.Challenger.MAX_COINS → Fin (8 * _root_.Spot.Challenger.COIN_BYTES) → Bool
 
 /-- The length of the deployed sample's one byte stream: the coins' bytes. -/
 abbrev deployedLb : Fin 1 → ℕ :=
-  fun _ => _root_.SampledProofs.Challenger.MAX_COINS * _root_.SampledProofs.Challenger.COIN_BYTES
+  fun _ => _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
 
 /-- **The deployed sample's bytes**: the coins' bytes in order, coin `c`'s byte `q` at `c * COIN_BYTES + q`
 (`coinBytes`). -/
 noncomputable abbrev deployedSrc : DeployedCoins → (i : Fin 1) → Fin (deployedLb i) → Fin 256 :=
-  coinBytes _root_.SampledProofs.Challenger.MAX_COINS _root_.SampledProofs.Challenger.COIN_BYTES
+  coinBytes _root_.Spot.Challenger.MAX_COINS _root_.Spot.Challenger.COIN_BYTES
 
 /-- **A3 at the deployed sample's bytes** (`Live.hA3`), with no premise (`uniformRandomBytes_coinBytes`). -/
 theorem uniformRandomBytes_deployed : Assumptions.UniformRandomBytes deployedLb deployedSrc :=
-  uniformRandomBytes_coinBytes _root_.SampledProofs.Challenger.MAX_COINS _root_.SampledProofs.Challenger.COIN_BYTES
+  uniformRandomBytes_coinBytes _root_.Spot.Challenger.MAX_COINS _root_.Spot.Challenger.COIN_BYTES
 
 end Verity.Sampled

@@ -606,7 +606,7 @@ def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: boo
     if not profile.batch_invariant:
         if eps_input:
             raise UnregisteredTarget("fused_add_rms_norm without batch invariance has no registered-epsilon twin of "
-                                     "RMSNormFusedCudaVector8_v1")
+                                     "RMSNormFusedCudaVector8_v3")
         return bind(CR.RMSNormFusedCudaVector8, N=int(N), EPS=EPS,
                     BLOCK=CR.launch_block(int(M), int(N), fused=True))
     if eps_input:

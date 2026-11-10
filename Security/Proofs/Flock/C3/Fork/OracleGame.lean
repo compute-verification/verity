@@ -1,12 +1,11 @@
 module
 
-public import Definitions.Flock.Game.Interleave
+public import Definitions.Flock.Game
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Piece (a), the oracle count: two interactions, each continued on its own

@@ -63,10 +63,12 @@ PACKAGE = "training_slowdown"
 DERIVE = "derive the step with step_program, the training-step frontend"
 #: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
 #: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
-#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K)
+#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K, or split-K over grid.z with a
+#: bf16 workspace, an f32 one or none)
 PRODUCTS = ("mm", "bmm")
 CELL = "LinearRef_v1"
-ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")
+ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1",
+        "CublasSplitKGemmBf16PartialsAligned_v1", "CublasSplitKGemmAligned_v1", "CublasSerialSplitKGemmAligned_v1")
 DIMS = ("batch", "m", "k", "n")
 PHASES = ("forward", "backward", "optimizer")
 
@@ -525,13 +527,17 @@ class Cells:
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
     """Each primitive's Boolean price, by id: its Boolean version (`definitions.boolean.boolean_version`) and that circuit's
-    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why."""
+    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why.
+    Inputs (`program.is_input`) are left out: they are bound, not computed, and `priced` counts no input class."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation.bits import compile as compile_bits
+    from verity.ml.circuits.program import is_input
     from verity.ml.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
+        if is_input(fn):
+            continue
         try:
             bv = boolean_version(fn)
         except Exception as e:  # noqa: BLE001  (named in the output: a primitive without a Boolean version is unpriced)

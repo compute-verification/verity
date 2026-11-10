@@ -8,7 +8,7 @@ from typing import Any, Mapping
 from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+from verity.core.protocols.spot.challenger import LiveRecord
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC

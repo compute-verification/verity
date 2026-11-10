@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pous.PeriodDeployed
+public import Proofs.Pous.Lemmas.PeriodDeployed
 public import Proofs.Pous.Period
 public import Proofs.Pous.P2.RingTrunc
 

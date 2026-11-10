@@ -404,7 +404,7 @@ theorem outerHolds_honest (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Bri
 theorem stepWith_length_ge {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → Claims.OC Out) (K : ℕ)
     (hvn : ∀ (as : List Msg) (a : Msg), as.length < K → ∃ m lo, (vn (as ++ [a])).eval H = (.msg m, lo)) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Trace), as.length = t.msgs.length →
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript), as.length = t.msgs.length →
       K ≤ t.msgs.length + f → K ≤ (Claims.stepWith H P x ω vn f hist as t).msgs.length
   | 0, _, _, t, _, hK => by simpa [Claims.stepWith] using hK
   | f + 1, hist, as, t, ha, hK => by

@@ -17,6 +17,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
+from verity_vllm.program.frontend.seed_rule import rid_of
 from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
@@ -151,7 +152,7 @@ def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("
         body, (s0, row0) = ingress[q.id], first[i]
         t = body["temperature"]
         policy = {"kind": "greedy"} if t == 0 else {"kind": "stochastic", "temperature": t, "top_p": body["top_p"], "top_k": 0,
-                                                    "seeded": True, "splits": body.get("splits", 32)}
+                                                    "seeded": True, "splits": body.get("splits", 32), "rid": rid_of(q.id)}
         units.append(Unit(i, "", q.prompt_len, q.output_len - 1, policy, None if t == 0 else seed_of(advice, body), s0, q.id,
                           C_of(advice, row0)))
     steps, discarded = [], []
@@ -377,10 +378,10 @@ def test_r1_a_composition_reading_another_requests_input_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, cross=True), plan)
 
 
-@pytest.mark.parametrize("group", ["schedule", "prefix", "prefix_ik", "prefix_iks", "last_token"])
+@pytest.mark.parametrize("group", ["prefix", "prefix_ik", "prefix_iks", "last_token"])
 def test_r1_a_batch_provenance_input_is_refused(group):
-    """A `schedule` Input is the batch's, and so is a history Input (`batch.HISTORY_GROUPS`) on a request whose history R2 didn't
-    check: neither a hit on its own tokens nor the state a window carries it in with."""
+    """A history Input (`batch.HISTORY_GROUPS`) is the batch's on a request whose history R2 didn't check: neither a hit on its
+    own tokens nor the state a window carries it in with."""
     adv, ing = _mixed()
     with pytest.raises(BatchDependent, match=rf"GP-01: the outputs of owner 0 read request\[r0\]\.{group} .* batch-derived"):
         check_compiled(None, adv, ing, _compile(adv, ing, groups=("weights", "prompt", group)), plan)
@@ -403,7 +404,7 @@ def test_workload_labels_by_provenance():
 
 def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p; an unseeded request's seed,
-    derived from its id and the window's coin, is the one it compiles to alone."""
+    derived from its id and the window's seed salt, is the one it compiles to alone."""
     from verity.ml.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
@@ -423,12 +424,12 @@ def test_compile_steps_passes_its_own_rule():
                for i, (lp, _, b) in enumerate(reqs)}
         return adv, ing
 
-    coin = bytes(range(64))
+    salt = bytes(range(64))
     for b1 in ({**greedy, "max_tokens": 2}, {**topp, "top_p": 1.0}, topp):
         adv, ing = session(b1)
-        c = steps.compile_steps(reg, adv, ing, coin=coin)
-        check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, coin=coin))
+        c = steps.compile_steps(reg, adv, ing, salt=salt)
+        check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, salt=salt))
         if b1["temperature"]:
             assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
-                                            "splits": registered_splits(RTX["num_sms"])}
-            assert c.requests[1].seed == derived(coin, "q1")
+                                            "splits": registered_splits(RTX["num_sms"]), "rid": 2}
+            assert c.requests[1].seed == derived(salt, "q1")

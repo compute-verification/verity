@@ -114,7 +114,7 @@ def test_a_queued_run_holds_its_cpu_allocation_through_custody_and_its_gpu_lease
 
 
 def test_a_direct_run_on_a_gpu_lease_host_gets_gpus_only_through_gpu_lease(tmp_path, monkeypatch):
-    """INF-55: where gpu-lease hands out every GPU, a run without --gpus sees CUDA_VISIBLE_DEVICES='' whatever its --env says, and
+    """Where gpu-lease hands out every GPU, a run without --gpus sees CUDA_VISIBLE_DEVICES='' whatever its --env says, and
     one with --gpus 2 runs under `gpu-lease 2 --wait`, which names its GPUs; the launch's answer says which."""
     monkeypatch.setenv("GPU_LEASE_HOST_FILE", str(tmp_path / "gpu-lease-host"))
     (tmp_path / "gpu-lease-host").write_text("")
@@ -159,7 +159,7 @@ def test_bad_schema_is_refused_without_side_effects(tmp_path):
 
 def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp_path, monkeypatch):
     """/etc/vy/runs-via-slot (cpu-1's, deploy.toml): the launcher starts a run only when its command is slot.py's (`python3
-    tools/verity/check/slot.py [OPTS] -- CMD`); three runs beside cpu-1's merge check took its slice from 586G to 647G (8 Oct)."""
+    tools/verity/check/slot.py [OPTS] -- CMD`), so no run beside cpu-1's merge check takes its slice's memory."""
     marker = tmp_path / "runs-via-slot"
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(marker))
     marker.write_text("")
@@ -175,7 +175,7 @@ def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp
 
 def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path, monkeypatch):
     """With /usr/local/lib/vy-monitoring/slot_only.py installed (deploy.toml, cpu-1), its `through_slot` judges the command: a lane
-    whose branch predates a rule change (proofs' C3 branches and the `env CHECK_SLOTS=` pool, 13 Oct) is held to the deployed rule."""
+    whose branch predates a rule change (such as the `env CHECK_SLOTS=` pool) is held to the deployed rule."""
     marker = tmp_path / "runs-via-slot"
     marker.write_text("")
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(marker))
@@ -194,7 +194,7 @@ def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path,
 
 
 def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, monkeypatch):
-    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else (INF-154), so the
+    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else, so the
     launcher refuses any other command before anything starts, a listed one with an extra argument or a wrapper among them, and a
     marker it can't read lets nothing through."""
     marker = tmp_path / "auditor"
@@ -315,7 +315,7 @@ def test_snapshot_identity_reaches_the_record(tmp_path):
 
 
 def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
-    """[R19 tele, F-r17-tp-06] a `--source` run executes from <root>/src/<sha>/, a `git archive` export with no .git: the workload's
+    """A `--source` run executes from <root>/src/<sha>/, a `git archive` export with no .git: the workload's
     source-identity precheck learns the tree's sha from RESEARCH_SOURCE_SHA (request.json remote.source_sha).  A run without a shipped
     tree does not carry the variable."""
     probe = "import os; print(os.environ.get('RESEARCH_SOURCE_SHA', '<unset>'))"
@@ -336,8 +336,8 @@ def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
 
 
 def test_pod_target_rereads_a_running_pod_whose_mapping_flaps(monkeypatch):
-    """RunPod's REST GET /pods/{id} intermittently answers a RUNNING pod with publicIp='' / portMappings=None (2026-09-22,
-    s00kzu0nisihgr: alternating answers within seconds while ssh worked).  pod_target re-reads before refusing; a mapping that never
+    """RunPod's REST GET /pods/{id} intermittently answers a RUNNING pod with publicIp='' / portMappings=None (alternating
+    answers within seconds while ssh works).  pod_target re-reads before refusing; a mapping that never
     appears is still refused by name."""
     from research.pods import runpod
 

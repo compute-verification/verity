@@ -30,7 +30,7 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 LAYER=${LAYER:-0}
 SRC=${SRC:-/workspace/tmp/p2-stage/stream-l$LAYER}

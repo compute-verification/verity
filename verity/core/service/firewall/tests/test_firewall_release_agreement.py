@@ -11,7 +11,7 @@ streams (`release::tests::drive`, with each line its damage rewrites as a `wait`
 each event its `appended` op writes as the ZK server writes it, which changes nothing Rust reads: an `open` without a
 null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the ZK server's own),
 `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 samples at seed 0, and
-`release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
+`release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64)."""
 
 from __future__ import annotations
 

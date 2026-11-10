@@ -4,8 +4,9 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
-(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
-protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), never this package's.
+(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
+serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
+protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.spot`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
@@ -58,14 +59,18 @@ from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 
-__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
+__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
+           "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings",
            "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
            "traced_as"]
 
 #: protocol -> its adapter module in this package
-ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
+ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
+#: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
+#: (``--remote-verifier``) and the Commit's memory map (``--memory-map``)
+DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
@@ -88,17 +93,29 @@ class Refused(ValueError):
         super().__init__("protocol options refused: " + "; ".join(self.reasons))
 
 
+def _imported(name: str, module: str, what: str) -> ModuleType:
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError as e:
+        here = e.name is not None and e.name.startswith(f"{__name__}.") and f"{module}.".startswith(f"{e.name}.")
+        why = "is not on this tree" if here else f"needs {e.name}, which is not installed"
+        raise Refused([f"{name}: its {what} {module} {why}"]) from e
+
+
 def adapter(name: str) -> ModuleType:
     """The adapter module of protocol ``name``; `Refused` when the protocol is unknown or its adapter cannot be imported
     on this tree (not landed yet, or its protocol package missing)."""
     if name not in ADAPTERS:
         raise Refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
-    module = f"{__name__}.{ADAPTERS[name]}"
-    try:
-        return importlib.import_module(module)
-    except ModuleNotFoundError as e:
-        why = "is not on this tree" if e.name == module else f"needs {e.name}, which is not installed"
-        raise Refused([f"{name}: its adapter {module} {why}"]) from e
+    return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
+
+
+def driver(name: str, part: str) -> ModuleType:
+    """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
+    be imported on this tree."""
+    if name not in DRIVERS:
+        raise Refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
+    return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
 
 
 def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
