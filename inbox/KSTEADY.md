@@ -314,7 +314,7 @@ This replaces "label nothing yet" and the last bullet of the 17:00Z section.
   `Goal proofs/spot-proof-server-steady-state`); its number and the run's verdict on HASH-98. The lead marks it.
   Do it between checkpoints of the runs; rows 1 and 2 and the labels come first.
 
-## Tue 10 Nov 18:34Z: rows 3 and 5 NOW, from proofs' fix commit; they are what the 90% rests on
+## Tue 10 Nov 18:25Z: rows 3 and 5 NOW, from proofs' fix commit; they are what the 90% rests on
 
 Rows 1 and 2 are read by the lead in their arts (121 of 121, every check true, proofs' pins, labelled): the goal's
 subgoal for today is marked done on them. By the lead's sum of benchmarks' shares your 25 one-prover types price
