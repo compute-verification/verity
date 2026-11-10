@@ -55,6 +55,7 @@ helper='!f() { echo username=x-access-token; echo "password=$SCRATCH"; }; f'
 "$REAL" config --global "url.https://x-access-token:$tok@github.com/.insteadOf" "https://github.com/"
 "$REAL" config --global "http.https://github.com/.extraheader" "AUTHORIZATION: basic $basic"
 "$REAL" config --global scratch.pat "$pat"
+"$REAL" config --global scratch.tok "$tok"
 "$REAL" config --global credential.helper "$helper"
 "$REAL" config scratch.port "http://host:8080"
 "$REAL" config --add scratch.multi "http://host:8080"
@@ -105,7 +106,7 @@ g var -l >"$t/out" 2>/dev/null
 check "var -l lists the configuration without one" '! secret "$t/out" && grep -q "^scratch.pat=\[REDACTED\]$" "$t/out"'
 check "a key keeps its URL" '[ "$(g config --get-regexp insteadof)" = "url.https://github.com/.insteadof https://github.com/" ]'
 check "an Authorization header keeps its scheme word" '[ "$(g config http.https://github.com/.extraheader)" = "AUTHORIZATION: basic [REDACTED]" ]'
-check "a token standing alone is replaced" '[ "$(g config --get scratch.pat)" = "[REDACTED]" ]'
+check "a token standing alone is replaced" '[ "$(g config --get scratch.pat) $(g config scratch.tok)" = "[REDACTED] [REDACTED]" ]'
 check "a credential helper reads as it is" '[ "$(g config --get credential.helper)" = "$helper" ]'
 check "and on a PATH without sed" '[ "$(PATH=/nonexistent "$G" config --get credential.helper)" = "$helper" ]'
 check "-z records that hold no credential come out byte for byte" \
