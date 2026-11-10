@@ -55,6 +55,10 @@ def o₀ : Hash.RowLeaf.Opening := ⟨List.replicate 16 false, List.replicate 19
 def V₀ : Hash.RowLeaf.Verifier :=
   Hash.EmbeddingRead.verifier ⟨d₀, 1, fun r => r⟩ Flock.Hm96.Default512.key.data.toList
 
+/-- The salt of ones as bytes. -/
+theorem salt_ones : bytesOf (List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true) = List.replicate 192 255 := by
+  decide +kernel
+
 /-- What the read's check and its table's check hash at index 0 (`Reads.hashedAt` with `H = G = SHA-512`). -/
 def L₀ : List Hash.Msg :=
   Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512 V₀ 0 op₀ ++

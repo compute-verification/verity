@@ -361,9 +361,6 @@ theorem okOf₀ : q₀.okOf tr₀ = true := by
 
 theorem hOf₀ : q₀.hOf tr₀ = [] := rfl
 
-theorem salt_ones : bytesOf (List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true) = List.replicate 192 255 := by
-  decide +kernel
-
 /-- The opening the read's gates hold: no row bits, the salt of ones on the constant, no siblings. -/
 theorem opening₀ : q₀.opening tr₀ = op₀ := by
   have hr : bits tr₀ q₀.row = [] := List.ofFn_eq_nil_iff.2 rfl
@@ -472,7 +469,7 @@ theorem drawnHashed₀ (ω : Unit) :
       L₀ := by
   have hr : R₀.reads = {()} := rfl
   unfold Reads.drawnHashed
-  simp only [hr, Finset.mem_univ, Finset.filter_True, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
+  simp only [hr, Finset.mem_univ, Finset.filter_true, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
   unfold Reads.hashedAt Reads.index
   rw [R₀_unit, R₀_port, R₀_domain, localEval₀, tokOf₀, opening₀, R₀_table, verifier₀]
