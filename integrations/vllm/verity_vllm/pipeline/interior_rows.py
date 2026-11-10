@@ -636,9 +636,11 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                 if not np.array_equal(d["rows"][p], data[j]["outs"][o][list(window.held_leaves(m, p))]):
                     raise ValueError(f"{m.template}: its replayed {p!r} rows are not the {o!r} rows of the "
                                      f"{window.members[j].template} units that write them, which the interior commits")
-                d["rows"][p] = CS.WIRED
         for k, (V, _H) in readers:
             IL.opened(window.members[k], data[k], cells[k], tcs, V)
+        for m, d in zip(window.members, data, strict=True):  # after the reads: a read's key may be a wired row
+            for p, _o, _ws in m.wired:
+                d["rows"][p] = CS.WIRED
         took = [np.asarray(data[k]["rows"][x.port], dtype=np.uint16) for x, k, _at in placed]
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
