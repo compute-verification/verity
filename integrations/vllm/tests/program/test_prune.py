@@ -105,7 +105,7 @@ def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
     `swapped` leaves it as it is rather than reading one."""
     from verity.ml.circuits.ops.prims import const
     c = const(16, 0)
-    body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
+    body = Body((), Array(4, c.ret), [BodyNode("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
     assert swapped(body) is body
 
 

@@ -180,8 +180,9 @@ def test_an_unexpected_failure_stops_the_writer_and_no_window_waits_on_it(tmp_pa
     with pytest.raises(OSError, match=r"2 of its 3 calls' prover state wasn't written: call 1: ValueError: a bug$"):
         w.wait(tmp_path / "w0")
     assert sorted(p.name for p in (tmp_path / "w0" / PV.CALLS).iterdir()) == ["0.npz"]
-    w._thread.join()
-    assert [(x.exc_type, x.thread.name) for x in raised] == [(ValueError, "h1-keep")]
+    for t in w._threads:
+        t.join()
+    assert [x.exc_type for x in raised] == [ValueError] and raised[0].thread in w._threads
     w.open(tmp_path / "w1")
     w.keep(tmp_path / "w1", 0, a, s_a, r)
     with pytest.raises(OSError, match=r"1 of its 1 calls' .* call 0: the writer stopped at call 1: ValueError: a bug$"):
