@@ -274,6 +274,11 @@ why = "the accounting PoUW needs"
 paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
 from = ["pouw"]
 
+[[needed]]
+why = "the ZK server's record as its Lean code runs it, stated and proved, which the recursive session's stop count is proved from"
+paths = ["Security/{Properties,Proofs/Properties}/Firewall.lean"]
+from = ["flock"]
+
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
 # matches.
