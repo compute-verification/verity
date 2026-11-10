@@ -18,8 +18,8 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/rate_squaring/ifma.sh`, with `BITS` and `C` | `ifma.c` on the host's CPUs, those of the affinity mask: each compiler's build gated against Python's `pow`, then timed on one thread, on one thread a physical core and on every CPU. It writes to `$RESEARCH_RUN_DIR/out`. |
 | `sq.cu`, with `sq_gate.py` and `sass_mix.py` | The squaring kernels, their gate and the opcode mix of a build, for a script that builds and gates `sq.cu` itself, as `benchmarks/word_codec/encode_rate.sh` does. |
 
-Nothing outside `benchmarks/` imports or runs this directory. PoUB's `timing.py` names `gamma.py` by its path once, for
-the host's core count.
+Nothing outside `benchmarks/` imports or runs this directory. PoUB's timing (`verity/protocols/poub/verifier/timing.py`)
+names `gamma.py` by its path once, for the host's core count.
 
 **Status: active.** `benchmarks/word_codec/encode_rate.sh` builds and runs `sq.cu`, `sq_gate.py` and `sass_mix.py`;
 `benchmarks/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD 6 form from `sq.cu`; and the audit's
