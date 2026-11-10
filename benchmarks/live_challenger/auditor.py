@@ -91,7 +91,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
   premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
   this auditor host) and `OneClock` (one clock for both, this host's), named in
-  `verity/core/protocols/sampled_proofs/README.md`.
+  `verity/core/protocols/spot/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).
@@ -272,7 +272,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
 which refuses a second signer, never sees two, and sessions run side by side. The ledger's reference check,
-`verify_ledger` and `verify_periods`, is `verity.core.protocols.sampled_proofs.challenger`'s, the verifier's own.
+`verify_ledger` and `verify_periods`, is `verity.core.protocols.spot.challenger`'s, the verifier's own.
 """
 from __future__ import annotations
 
@@ -303,7 +303,7 @@ HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 sys.path.insert(0, str(TREE))
 
-from verity.core.protocols.sampled_proofs.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
+from verity.core.protocols.spot.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
                                                              LEDGER_SCHEMA as SCHEMA, LEDGER_SCHEMA_V1 as SCHEMA_V1,
                                                              LEDGER_TAGS as TAGS, MAX_LEDGER_LINE, MAX_LEDGER_LINES,
                                                              MAX_PINS, PERIOD_KINDS, RESERVED, SESSION_KINDS,
@@ -2080,8 +2080,8 @@ def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threadin
 
 def record_of(out: Path):
     """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
-    from verity.core.protocols.sampled_proofs import challenger as C
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.spot import remote
     try:
         doc = json.loads((out / remote.RECORD).read_text())
         return C.ChallengerRecord.from_json(doc), doc
@@ -2108,8 +2108,8 @@ def await_commitment(host: Host, session: str, active: Callable[[str], bool],
 def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
     """(coins released by family, counted from the release log under the commitment the record signs; the record's leaf),
     each None when the session left no such file."""
-    from verity.core.protocols.sampled_proofs import challenger as C
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.spot import remote
     record, doc = record_of(out)
     if record is None:
         return None, None

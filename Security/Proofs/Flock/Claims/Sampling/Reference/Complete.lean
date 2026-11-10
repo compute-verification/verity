@@ -33,7 +33,7 @@ the statements of the sessions at `x`.
 
 namespace Claims.Sampling.Reference
 
-open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Claims Claims.Sampling Finset Properties.Spot Properties.Spot.SecurityProofs
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 

@@ -32,8 +32,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import remote
 
 TREE = Path(__file__).resolve().parents[3]
 

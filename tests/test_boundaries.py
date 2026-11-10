@@ -85,7 +85,7 @@ ALLOWED = {
     # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # Its challenger, ZK server, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
-    "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+    "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
@@ -100,20 +100,20 @@ ALLOWED = {
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof system's one challenger's (`sampled_proofs.challenger`).
+    # proof system's one challenger's (`spot.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
+                                        "core.protocols.spot", "core.protocols.pous", "core.wire",
                                         "core.deploy"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
+                            "ml.randomness", "core.protocols.profile", "core.protocols.spot"},
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
 }
@@ -163,7 +163,7 @@ ML_IMPORTS_CORE = {
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
-    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
+    "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},

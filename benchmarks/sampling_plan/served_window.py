@@ -49,9 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
 from verity.core.protocols.profile import WINDOW_DELTA
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
+from verity.core.protocols.spot.costfit import Fitted, fit
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
-from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
+from verity.core.protocols.spot.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, for_target, grain_costs, leak_count, loc_bits,
                                                            row_ands, sqrt_grain)
 
@@ -543,9 +543,9 @@ from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observati
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import WINDOW_DELTA
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
-from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
+from verity.core.protocols.spot.costfit import Fitted, fit
+from verity.core.protocols.spot.one_stage.partition import UNIT_CLASS_MAX
+from verity.core.protocols.spot.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 

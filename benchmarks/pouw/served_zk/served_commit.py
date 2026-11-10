@@ -1,5 +1,5 @@
 """A served audit execution phase's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, sampled and
-judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the sampled tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
@@ -138,12 +138,12 @@ from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_r
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
-from verity.core.protocols.sampled_proofs.one_stage import partition as PT
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as D
+from verity.core.protocols.spot.one_stage import partition as PT
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402

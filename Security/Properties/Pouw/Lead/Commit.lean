@@ -32,7 +32,7 @@ stated here against its functions, for every input.
 namespace Properties.Pouw.Lead.Commit
 
 open PouwCommit
-open SampledProofs.Challenger (LiveCommitment LiveOpening liveReason)
+open Spot.Challenger (LiveCommitment LiveOpening liveReason)
 
 /-! ## row-bound -/
 

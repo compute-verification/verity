@@ -140,7 +140,7 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 PERIOD_DIGEST = """
 import json, resource, sys, time
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
@@ -408,7 +408,7 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
-    from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+    from verity.core.protocols.spot.challenger import LiveRecord
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
                      "steps": steps, **kw}}
@@ -1433,7 +1433,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import remote
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -1684,7 +1684,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        from verity.core.protocols.sampled_proofs import remote
+        from verity.core.protocols.spot import remote
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()

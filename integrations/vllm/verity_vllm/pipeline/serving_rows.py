@@ -121,7 +121,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore

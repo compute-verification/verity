@@ -42,12 +42,12 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import weights as PW
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as DR
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -467,7 +467,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
 
 
 @lean
-def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
+def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
     same form is refused by name at its params, the reason remote's composite would give for a v1 case."""

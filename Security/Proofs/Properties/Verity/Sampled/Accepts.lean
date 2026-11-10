@@ -13,7 +13,7 @@ public import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 The decoders' premise of the logged coupling (`Decodes`) asks that on the joint law's support an accepted play is
 beside an outcome flock-verify `--zk` accepts (`LiveAcceptsZKP`), which judges the writer's transcript with `AcceptsZKP`.
-v2 judges the session's files on the blobs sent with `flock-verify --zk` as `SampledProofs.OneStageZk.run` runs it. They
+v2 judges the session's files on the blobs sent with `flock-verify --zk` as `Spot.OneStageZk.run` runs it. They
 are one check on one pair of byte strings, and the writer carries the acceptance to what it writes:
 
 * **v2's session is `--zk`'s** (`buildSessionOf_ok`, `sessionAt_ok`, `setupAt_ok`, `setup_eq`, `setupAt_setupOfP`):
@@ -77,10 +77,10 @@ theorem setup_if (tags : Flock.Tags) (cf pf : ByteArray) (coins : Flock.Coins) (
 theorem buildSessionOf_ok {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {count : ℕ} {draw partition : Option Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {r : Flock.SessionSpec × Array Flock.Stmt}
-    (h : _root_.SampledProofs.OneStageZk.buildSessionOf (Flock.ProvedScope.circuitOf tags cf tables) tags cf pf coins
+    (h : _root_.Spot.OneStageZk.buildSessionOf (Flock.ProvedScope.circuitOf tags cf tables) tags cf pf coins
       tables count draw partition program registered = .ok r) :
     Flock.Stmt.setupTables tags cf pf coins count tables draw partition program = .ok r := by
-  unfold _root_.SampledProofs.OneStageZk.buildSessionOf at h
+  unfold _root_.Spot.OneStageZk.buildSessionOf at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨r', hr, h⟩ := ebind_ok h
   rw [setup_if] at hr
@@ -89,12 +89,12 @@ theorem buildSessionOf_ok {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock
 
 /-- **The session `sessionAt` sets up** is `Stmt.setupTables`'s at `--zk`'s tags and coins, and every table passes
 `Zk.shapeOk`. -/
-theorem sessionAt_ok {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {draw : Option Json}
-    {r : Flock.SessionSpec × Array Flock.Stmt} (h : _root_.SampledProofs.OneStageZk.sessionAt W rd draw = .ok r) :
+theorem sessionAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
+    {r : Flock.SessionSpec × Array Flock.Stmt} (h : _root_.Spot.OneStageZk.sessionAt W rd draw = .ok r) :
     Flock.Stmt.setupTables (Flock.Witness.zkTags W) W.circuitFile W.publicFile (Flock.Witness.zkCoins W) W.count
         W.tables draw W.partition W.program = .ok r ∧
       r.2.forM Flock.Zk.shapeOk = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.sessionAt at h
+  unfold _root_.Spot.OneStageZk.sessionAt at h
   try dsimp only at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -106,18 +106,18 @@ theorem sessionAt_ok {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneSt
   exact ⟨buildSessionOf_ok hr, hs⟩
 
 /-- **`setupAt`'s session is `sessionAt`'s**, its tables' verifier-side setups `Setup.ofCircuit` of its statements. -/
-theorem setupAt_ok {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {draw : Option Json}
+theorem setupAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
-    (h : _root_.SampledProofs.OneStageZk.setupAt W rd draw = .ok (spec, tabs, x)) :
-    ∃ sts, _root_.SampledProofs.OneStageZk.sessionAt W rd draw = .ok (spec, sts) ∧
+    (h : _root_.Spot.OneStageZk.setupAt W rd draw = .ok (spec, tabs, x)) :
+    ∃ sts, _root_.Spot.OneStageZk.sessionAt W rd draw = .ok (spec, sts) ∧
       tabs = sts.map Flock.Setup.ofCircuit := by
-  unfold _root_.SampledProofs.OneStageZk.setupAt at h
+  unfold _root_.Spot.OneStageZk.setupAt at h
   obtain ⟨⟨spec', sts⟩, h1, h⟩ := ebind_ok h
   try dsimp only at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   cases h
   refine ⟨sts, ?_, rfl⟩
-  cases hs : _root_.SampledProofs.OneStageZk.sessionAt W rd draw with
+  cases hs : _root_.Spot.OneStageZk.sessionAt W rd draw with
   | error e => rw [hs] at h1; cases h1
   | ok b => rw [hs] at h1; cases h1; rfl
 
@@ -132,9 +132,9 @@ theorem setup_eq (W : Flock.Witness.Inputs) (record : String) :
 /-- **v2's session at a record's own sample is `--zk`'s**: where `setupAt` sets up `(spec, tabs)`, `Exec.setupOfP` at
 `--zk`'s inputs of v2's, with no public inputs, sets up `spec` with statements that each pass `Zk.shapeOk` and whose
 verifier-side setups are `tabs`. -/
-theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {record : String}
+theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {record : String}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
-    (h : _root_.SampledProofs.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, x)) :
+    (h : _root_.Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, x)) :
     ∃ sts, Exec.setupOfP (ZkExec.zkInputs (toExec W)) none record = .ok (spec, sts) ∧
       sts.forM Flock.Zk.shapeOk = .ok () ∧ tabs = sts.map Flock.Setup.ofCircuit := by
   obtain ⟨sts, hs, rfl⟩ := setupAt_ok h
@@ -154,14 +154,14 @@ theorem zkVerify_decode {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {r
 /-- **What v2's check verified is a transcript flock-verify `--zk` accepts** at v2's inputs: the record and the proof
 files of `V2Verified`, at the statement's tags and the circuit and public files v2 found on the blobs (`inputsOf`),
 with no public inputs, at the session `Exec.setupOfP` sets up there. -/
-theorem v2Verified_accepts {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.SampledProofs.OneStageZk.Evidence}
+theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
-    ∃ tags0 circuitB pubB sts, Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
+    ∃ tags0 circuitB pubB sts, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
-      Exec.setupOfP (ZkExec.zkInputs (toExec (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)))
+      Exec.setupOfP (ZkExec.zkInputs (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)))
         none record = .ok (spec, sts) ∧
-      AcceptsZKP (toExec (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) none
+      AcceptsZKP (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) none
         { record := record, proofs := proofs } := by
   obtain ⟨_, tags0, circuitB, pubB, _, -, ht, hc, hp, -, -, hst, -, hv⟩ := h
   obtain ⟨sts, hs, hshape, rfl⟩ := setupAt_setupOfP hst
@@ -210,13 +210,13 @@ theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hex
 
 /-- **v2 reads `A`'s files on the blobs sent**: under v2's parameters in what the prover sent (`ParamsAt`), the circuit
 and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and the lookup tables the blobs hold
-(`SampledProofs.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
+(`Spot.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
 structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   circuit : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile
   publicFile : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.pub "public file" = .ok b → b = A.I.publicFile
-  tables : TablesExtend A.I.tables (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
+  tables : TablesExtend A.I.tables (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -225,13 +225,13 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
 vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
-files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
+files as v2 reads them off the blobs (`Spot.OneStageZk.tablesOf`). -/
 structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
   circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
+  tables : ∀ F, (V.read θ F).tables = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
 
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
@@ -299,8 +299,8 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
 `tablesOf` finds each pinned MUFU table at the first blob whose SHA-512 is its pinned digest, which is a committed file
 wherever one is. -/
 theorem tablesOf_extends (F B : Array ByteArray) :
-    TablesExtend (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F))
-      (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray (F ++ B))) := by
+    TablesExtend (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F))
+      (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray (F ++ B))) := by
   refine extend_filterMap mufu_nodup (fun t x h => ?_) (fun t x h => ?_) (fun t x h => ?_)
   · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
     rfl
@@ -324,7 +324,7 @@ theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A 
     rw [hA.publicFile]
     exact get_named (hD.publicFile p (hθ ▸ hp)) hreg.2 hg
   tables := by
-    have h : A.I.tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) :=
+    have h : A.I.tables = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) :=
       (congrArg Verity.FileRead.tables hA.read).symm.trans (hD.tables F)
     rw [h, hs]
     exact tablesOf_extends F B
@@ -348,7 +348,7 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
   rw [hpp] at hp' hpart hprog
   obtain ⟨record, spec, tabs, rest, proofs, -, hrec, hpr, hver⟩ := sent_verified hv.2.1 hcase hacc
   obtain ⟨tags0, circuitB, pubB, sts, ht0, hc, hpb, hs, hat⟩ := v2Verified_accepts hver
-  have hz := zkInputs_toExec (W := _root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB
+  have hz := zkInputs_toExec (W := _root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB
       (_root_.Core.Blobs.ofArray o.sent.blobs)) (Option.some.inj (ht0.symm.trans hA.tags))
     (hF.circuit p hp' circuitB hc) (hF.publicFile p hp' pubB hpb) hA.count.symm hpart.symm hprog.symm hA.work
     hA.stratified hA.closure

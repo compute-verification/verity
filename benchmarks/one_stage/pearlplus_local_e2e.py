@@ -196,7 +196,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
-    from verity.core.protocols.sampled_proofs.one_stage import verifier as V
+    from verity.core.protocols.spot.one_stage import verifier as V
 
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
@@ -221,7 +221,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report: dict = {"gate": "benchmarks/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
-                                  "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
+                                  "spot": "registration.json chained after W, a records-audit summary tied to W "
                                                     "and a toy circuit record beside R, the period's circuit",
                                   "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
 
@@ -313,7 +313,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:
-        r = S.piece_row("work", piece.parent, sampled_proofs=audit, key_sha512=key_sha512, lane=LANE)
+        r = S.piece_row("work", piece.parent, spot=audit, key_sha512=key_sha512, lane=LANE)
         return {k: r.get(k) for k in ("protocol", "verdict", "why", "commitment", "quantity")} | {
             "profile": {k: ((r.get("answer") or {}).get("profile") or {}).get(k)
                         for k in ("lane", "period", "session", "draw_session", "source", "source_from")}}
@@ -329,7 +329,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.core.protocols.sampled_proofs.challenger import CoinError
+    from verity.core.protocols.spot.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)

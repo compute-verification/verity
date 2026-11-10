@@ -30,8 +30,8 @@ from verity.core.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.pouw.audit import hm96_salt
-from verity.core.protocols.sampled_proofs.one_stage import registered as CR
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registered as CR
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch

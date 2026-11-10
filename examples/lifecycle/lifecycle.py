@@ -48,9 +48,9 @@ from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send,
 from verity.core.protocols.pous import wipe_monitoring, wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
-from verity.core.protocols.sampled_proofs import parties
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
-from verity.core.protocols.sampled_proofs.one_stage import registered as R
+from verity.core.protocols.spot import parties
+from verity.core.protocols.spot.coins import OwnRandomness, draw_first
+from verity.core.protocols.spot.one_stage import registered as R
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -814,7 +814,7 @@ def coin_bytes(k: int, n: int) -> int:
 
 
 def draw(coins: bytes, blk: Block) -> list[int]:
-    """Sampled proofs' draw (`sampled_proofs.coins.draw_first`) on the verifier's live coins."""
+    """Sampled proofs' draw (`spot.coins.draw_first`) on the verifier's live coins."""
     buf = bytearray(coins)
 
     def read(n: int) -> bytes:
@@ -891,7 +891,7 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
 <<<<<<< HEAD
        "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
-"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
+"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`Spot.OneStage`)
 at onsite and sampled proofs (`SAMPLED`) at remote, the work PoUW's period in both, onsite's PoUB is the one over PoUS's
 P2 store, and onsite's memory challenger also runs a wipe."""
 SAMPLED = {"onsite": parties.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"], "remote": parties.COMPOSED}
@@ -900,7 +900,7 @@ remote's sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`, 
 audit)."""
 ||||||| merged common ancestors
        "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
-"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
+"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`Spot.OneStage`)
 in both, so is the work, PoUW's period, onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger
 also runs a wipe."""
 =======
@@ -924,7 +924,7 @@ def answer(protocol: str, verdict: str, commitment: str | None, reason: str | No
             "public": public if ok else None, "profile": profile if ok else None}
 
 
-def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]],
+def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]],
                    protocol: str = IDS["sampled-proofs"]) -> dict[str, Any]:
     """Sampled proofs' answer for the declaration, under the composite's id for it (`SAMPLED`): every sampled proof
     block's values check held."""
@@ -1415,7 +1415,7 @@ class Verifier:
         d, blk, proofs = self.declarations[k - 1], self.circuit[k - 1], self.parts[k]["proofs"]
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
         dk = Declaration(k, d["advice"], d["record"])
-        sp = sampled_proofs(dk, blk, self.draws[k], checks, SAMPLED[self.protocol])
+        sp = spot(dk, blk, self.draws[k], checks, SAMPLED[self.protocol])
         answers = {sp["protocol"]: sp, self.work: pouw_window(sp, blk, self.work),
                    IDS["inference-only"]: inference_only(dk, blk),
                    **self.answers(k, checks)}

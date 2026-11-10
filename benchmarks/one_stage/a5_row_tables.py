@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402

@@ -24,10 +24,10 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.sampled_proofs import challenger as LC
-from verity.core.protocols.sampled_proofs import remote as R
-from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as LC
+from verity.core.protocols.spot import remote as R
+from verity.core.protocols.spot.challenger import LiveOpening, LiveRecord
+from verity.core.protocols.spot.one_stage import registered as G
 from verity_vllm import protocols as PO
 from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
@@ -659,7 +659,7 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
     `reject`, its verdict naming the program it was handed and its registered finding the ports of the `--registered`
     file credit built that `opened` keeps, each at the root credit read from the window's entries. A statement on the
     live template's circuit file proves its round's proof block, the round its ``m@<s>`` port names, and opens every port."""
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     def run(proof, *, circuit_sha512, program, partition, registered):
         if circuit_sha512 == FILES[CR.LIVE]:
@@ -998,7 +998,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     evidence refuses the whole window. The closed period's credit
     (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())

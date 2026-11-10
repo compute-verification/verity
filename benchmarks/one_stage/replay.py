@@ -55,7 +55,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -1583,7 +1583,7 @@ SERVED_ZK_ERA = r'''
 import json, sys
 sys.path.insert(0, "benchmarks/pouw/served_zk")
 import served_commit as SC
-from verity.protocols.verification.sampled_proofs.one_stage import partition as PT
+from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
 params, levels = json.loads(sys.argv[1]), json.loads(sys.argv[2])
 t = SC.template(params["k"])

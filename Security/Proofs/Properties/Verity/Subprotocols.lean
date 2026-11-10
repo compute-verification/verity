@@ -80,7 +80,7 @@ public import Proofs.Core.Game.Prob
 `Verity.soundness_at_of_targets` takes each subprotocol's target at a composite `k` in the causal game (`Vocab.Target k
 a`). Each follows from its bound at its compiled component (`Vocab.ComponentBound k a`, `Properties.Verity.Subprotocols`)
 by monotonicity, since `Vocab.Verdict k a` includes `a`'s component's acceptance at `k`: one family over every composite
-and subprotocol (`Vocab.sound_of`), at remote's three `sampledProofsSound_of`, `pouwSound_of` and
+and subprotocol (`Vocab.sound_of`), at remote's three `spotSound_of`, `pouwSound_of` and
 `inferenceOnlySound_of`. So the union bound over a composite's subprotocols holds from their component-level bounds
 (`soundness_at_of_componentBounds`, `Verity.SoundnessOfComponents`), and a composite with one more subprotocol takes
 one more `sound_of` instance in it.
@@ -866,7 +866,7 @@ section
 variable {k : Verity.Registration.Composite}
 
 /-- **Sampled proofs' target from its component-level bound** -/
-theorem sampledProofsSound_of (h : V.ComponentBound k .sampled) : V.SampledProofsSound k := V.sound_of k .sampled h
+theorem spotSound_of (h : V.ComponentBound k .sampled) : V.SpotSound k := V.sound_of k .sampled h
 
 /-- **PoUW's target from its component-level bound** -/
 theorem pouwSound_of (h : V.ComponentBound k .pouw) : V.PouwSound k := V.sound_of k .pouw h
@@ -876,7 +876,7 @@ theorem inferenceOnlySound_of (h : V.ComponentBound k .inferenceOnly) : V.Infere
   V.sound_of k .inferenceOnly h
 
 /-- **At the honest deployment, sampled proofs**: `sound_of_honest` at `.sampled`. -/
-theorem sampledProofsSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F : Array ByteArray)
+theorem spotSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .sampled o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .sampled θ F c (V.honest θ F c) ∧
@@ -904,7 +904,7 @@ theorem inferenceOnlySound_of_honest (h : V.HonestHolds k .inferenceOnly) (θ : 
   V.sound_of_honest k .inferenceOnly h θ F c hreg
 
 /-- **Sampled proofs' target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.sampled`. -/
-theorem sampledProofsSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+theorem spotSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .sampled o) (hlt : V.error .sampled θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .sampled :=

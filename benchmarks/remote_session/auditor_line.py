@@ -158,8 +158,8 @@ from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
-from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.core.protocols.spot import challenger as Ch  # noqa: E402
+from verity.core.protocols.spot import remote  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}

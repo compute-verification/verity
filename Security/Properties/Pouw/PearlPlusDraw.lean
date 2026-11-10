@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Game.Defs
-public import Properties.SampledProofs.Draw
+public import Properties.Spot.Draw
 public import PouwPearlPlus
 public import Mathlib.Algebra.BigOperators.Fin
 
@@ -72,7 +72,7 @@ def CoinBytesGiveUniformTickets : Prop :=
   ∀ (tk : List ((ℕ × ℕ) × ℕ)) (t : ℕ) (E : (Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length) → Prop),
     _root_.Pouw.pr (fun g : Fin t → Fin (drawBytes tk) → Fin 256 =>
         ∃ c : Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length,
-          (∀ j, FlockSoundness.Randomness.uniformOn (ticketTotal tk) (Properties.SampledProofs.bytesOf (g j)) =
+          (∀ j, FlockSoundness.Randomness.uniformOn (ticketTotal tk) (Properties.Spot.bytesOf (g j)) =
             some (finSigmaFinEquiv (c j)).val) ∧ E c)
       ≤ _root_.Pouw.pr E
 

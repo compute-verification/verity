@@ -31,10 +31,10 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
 <<<<<<< ours
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) |
+| sampled proofs | `.sampled` | `Spot.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) |
 ||||||| base
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | the same |
+| sampled proofs | `.sampled` | `Spot.OneStage.protocol` (v1) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 =======
 | sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
@@ -125,7 +125,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   (`computed`), with no pricing.
 >>>>>>> theirs
 
-Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
@@ -224,7 +224,7 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
   | .remote, .pouw => some PouwCheck.PearlPlus.Protocol.protocol
 ||||||| base
-  | .remote, .sampled => some SampledProofs.OneStage.protocol
+  | .remote, .sampled => some Spot.OneStage.protocol
   | .remote, .pouw => some PouwCheck.Period.protocol
 =======
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
@@ -422,7 +422,7 @@ def treeCoins (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spec
 
 /-- **The specs the device samples a coin tree of**: a coin or more a round, and at most `maxTreeCoins` coins. The
 deployed device refuses every other spec: `LiveChallenger.sample_tree`
-(`verity/core/protocols/sampled_proofs/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
+(`verity/core/protocols/spot/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
 among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the device samples holds at most
 `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
@@ -457,7 +457,7 @@ the device refuses (a family with no coin left, a `Hello` whose spec it doesn't 
 its log holds `maxTreeLines` coin-tree lines (`treeLines`), no `i`-th tree, or `OpenTree.next`'s refusal) ends its
 releases, as a refused frame ends the challenger's session, and so does the prover's close. The output is the device's
 log. The two caps are the deployed device's own refusals (`LiveChallenger.sample_tree` and `LiveChallenger._tree_line`
-in `verity/core/protocols/sampled_proofs/challenger.py`), so a play here samples at most `maxLeaves` leaves.
+in `verity/core/protocols/spot/challenger.py`), so a play here samples at most `maxLeaves` leaves.
 
 The challenger refuses further frames this device serves (a spec past its other limits, a nonce or a root of another
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
@@ -934,7 +934,7 @@ noncomputable def fileFinder (θ : ByteArray) (F : Array ByteArray) : Claims.Fin
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`SampledProofs.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+(`Spot.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
 message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
 `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
 its finder outputs. -/
@@ -1005,7 +1005,7 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
-def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
+def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at onsite, at least `W` gates of the committed circuit computed after their window's coin; at
 remote, Pearl+'s, at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit its check published. -/

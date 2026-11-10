@@ -7,7 +7,7 @@ from __future__ import annotations
 import functools
 from typing import Any, Sequence
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 
 #: a request header's u32 fields: index, round, first slot, cap and prompt length
 HEADER = 5

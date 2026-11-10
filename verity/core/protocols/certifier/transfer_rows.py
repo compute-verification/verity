@@ -61,8 +61,8 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.core.protocols.certifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 TRANSFER_TAG = "verity-network-certifier/transfer/v1"
 REGISTRATION = "verity-network-certifier/transfer-registration/v1"

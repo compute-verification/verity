@@ -13,8 +13,8 @@
     "NciCheck.Protocol",
     "PouwCheck.Period",
     "PouwPearlPlus.Protocol",
-    "SampledProofs.OneStage",
-    "SampledProofs.OneStageZk",
+    "Spot.OneStage",
+    "Spot.OneStageZk",
     "VStarRecursive.Sampled"
    ],
    "except": [],

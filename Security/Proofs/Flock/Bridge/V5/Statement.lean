@@ -25,7 +25,7 @@ holds at every `own`:
   over `Partition.strata`, else `Draw.flockLaw`, as `OneStage.drawnFrom` samples, `Bridge.drawnFrom_drawnLaw`), and no
   Bernoulli law (`Bridge.NotBernoulli`). At `PopMatches` it is on those strata (`Bridge.LawOn` at `Bridge.nsOf`,
   `Bridge.lawOn_drawsUnder`): `subset kd` (`All` is `subset n`), or `stratified K` or `work K` over them. The verifier
-  samples under it from its own bytes (`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream), and `δ` is that
+  samples under it from its own bytes (`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream), and `δ` is that
   sampling design's own miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a
   parameter;
 * `live-verifier` at `own` and the sampling design (`Assumptions.Zk.RecordCustodyZKJPLaw`);
@@ -146,7 +146,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
           (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ)
           (XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
-      ENNReal.ofReal ((Properties.SampledProofs.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) +
+      ENNReal.ofReal ((Properties.Spot.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
@@ -268,7 +268,7 @@ def SampledKSLiveV5 : Prop :=
     -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
     -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
-    let r := Properties.SampledProofs.oneStageOf law
+    let r := Properties.Spot.oneStageOf law
     let ns := Bridge.nsOf desc qr
     let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs

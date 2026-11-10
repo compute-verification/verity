@@ -28,7 +28,7 @@ open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.B
 namespace Properties.Pouw.LiveSalt.Canon
 
 open Lean (Json)
-open SampledProofs.Challenger (familiesJson)
+open Spot.Challenger (familiesJson)
 
 /-! ## Sorting three keys in order -/
 

@@ -52,7 +52,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the execution phase's si
 **Live execution phases**.  The check item's optional ``coins`` is the execution phase's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded execution phase's noise is its scheme's
 derivation from the salt and the prover's roots.  A live execution phase's comes from the proof system's challenger
-(`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the execution phase's coins are the layout
+(`verity.core.protocols.spot.challenger`), whose first client this is: the execution phase's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
 Compose's `Declared.round` numbers them), all committed before the execution phase. Its sampling coin is a session of its own
 (`DRAW_FAMILIES`), opened withheld on the execution phase's sample root, so its coin root reaches the prover only after that root
@@ -78,7 +78,7 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512

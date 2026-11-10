@@ -143,7 +143,7 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     which stay last."""
     import shutil
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
 
     d, verify, doc = run
     (wfile := tmp_path / "w.json").write_text("{}")

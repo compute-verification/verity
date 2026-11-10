@@ -9,21 +9,21 @@ inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the 
 `nci_reference.check_baseline`, behind the protocol's decoders,
 <<<<<<< HEAD
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for remote's sampled proofs
-(`verity/sampled-proofs/v1`) `sampled_proofs`: its form's split over one-stage v2's audit
+(`verity/sampled-proofs/v1`) `spot`: its form's split over one-stage v2's audit
 (`verity/sampled-proofs/one-stage/v2`, one-stage v1 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads and
 its check on the cases whose challenger sampled no coin tree, v1's difftest's `check` at the challenger's coins on the
 verdicts of no session, and the recursive form refused where the case names none of its files; for onsite's
 sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`) its difftest's `answer`, `one_stage` behind the
-decoders `OneStage` reads (`verity/core/service/sampled_proofs/tests/test_difftest.py`); the wipe's
+decoders `OneStage` reads (`verity/core/service/spot/tests/test_difftest.py`); the wipe's
 ||||||| merged common ancestors
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit
 (`verity/sampled-proofs/one-stage/v1`) its difftest's `answer`, `one_stage` behind the decoders `OneStage` reads
-(`verity/core/service/sampled_proofs/tests/test_difftest.py`), the wipe's
+(`verity/core/service/spot/tests/test_difftest.py`), the wipe's
 =======
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
-`sampled_proofs`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
+`spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
-`verity/core/service/sampled_proofs/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
+`verity/core/service/spot/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
 recursive form refused where the case names none of its files, the wipe's
 >>>>>>> 705be2b532
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
@@ -65,9 +65,9 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.core.protocols.pouw import core_check, credit, period_check
-from verity.core.protocols.sampled_proofs import challenger as CH
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PROOFS
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot import challenger as CH
+from verity.core.protocols.spot.one_stage import proofs as PROOFS
+from verity.core.protocols.spot.one_stage import registration as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -89,7 +89,7 @@ def module(name: str, path: Path) -> ModuleType:
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
 #: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies draw audits.
-ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
+ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/spot/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
@@ -501,8 +501,8 @@ def _form_evidence(b: bytes) -> dict:
     raise Reject(f"the evidence's form {form} is not one-stage or recursive")
 
 
-def sampled_proofs(case: Any) -> dict:
-    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`SampledProofs.OneStageZk`,
+def spot(case: Any) -> dict:
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
     `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
     ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name and of any other form on the
     cases the mirror decides."""
@@ -525,18 +525,18 @@ def _period_answer(case: str) -> str:
 #: component's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 <<<<<<< HEAD
-#: Remote's integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or
+#: Remote's integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`) or
 #: the recursive audit, as the params' form names it; one-stage v1 refused.
-SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
-#: Onsite's integrity: the one-stage audit (`SampledProofs.OneStage`).
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
+#: Onsite's integrity: the one-stage audit (`Spot.OneStage`).
 ONE_STAGE_V1 = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 ||||||| merged common ancestors
-#: Integrity: the one-stage audit (`SampledProofs.OneStage`).
+#: Integrity: the one-stage audit (`Spot.OneStage`).
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 =======
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
+#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`) or the
 #: recursive audit, as the params' form names it; one-stage v1 refused.
-SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
 >>>>>>> 705be2b532
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")

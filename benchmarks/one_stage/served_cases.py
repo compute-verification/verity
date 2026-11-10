@@ -109,9 +109,9 @@ from typing import Any
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.one_stage import verifier as VF
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import verifier as VF
 from verity.ml.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]

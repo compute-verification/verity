@@ -172,7 +172,7 @@ from verity.core import site as ST  # noqa: E402
 from verity.core.protocols import registration as G  # noqa: E402
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
@@ -631,7 +631,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -904,7 +904,7 @@ def audit(a: argparse.Namespace) -> int:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.core.protocols.sampled_proofs import challenger as Ch, remote as SPR
+            from verity.core.protocols.spot import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:

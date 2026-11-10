@@ -127,7 +127,7 @@ def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
 
 
-def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() -> None:
+def test_remote_composes_spot_and_pouw_alone_its_other_legs_dropped() -> None:
     """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose to accept,
     the onsite legs named dropped, neither missing nor in the error sum; as onsite's the same legs are pending. A record
     of remote's that ran a leg remote drops, that names no product, or that names an unknown one is refused."""

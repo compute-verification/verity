@@ -58,7 +58,7 @@ from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)

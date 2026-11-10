@@ -14,7 +14,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # MAC's AND gates (the FP8 MoE coordinate's circuit-check pin).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/sampled_proofs", "verity/core/claims", "verity/core/protocols/pous",
+          "verity/core/protocols/spot", "verity/core/claims", "verity/core/protocols/pous",
           "verity/core/deploy", "verity/core/wire", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/census/adversary.json", "benchmarks/census/deployments.json", "benchmarks/census/hardware.json",

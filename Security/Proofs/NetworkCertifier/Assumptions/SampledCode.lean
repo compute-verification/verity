@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 /-!
 # The sampled verifier's code
 
-`SampledCodeRuns`, a named assumption: the sampled verifier the service runs (`verity/core/protocols/sampled_proofs`) is
+`SampledCodeRuns`, a named assumption: the sampled verifier the service runs (`verity/core/protocols/spot`) is
 the deployed sampling record at some `SamplingDeploy.Code` whose run meets the facts `Claims.Sampling.KS` takes of a
 record's run: its sample precedes the sessions (`DrawFixed`), each checked unit's session is a Flock run (`SessionRuns`)
 in Flock's masked scope (`SamplingDeploy.SessionsIn`), its slots are the sampling design's (`DrawSlots`), each session opens

@@ -19,7 +19,7 @@ from typing import Sequence
 import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 from verity_vllm.protocols.pouw.h1 import drawn as D
 
