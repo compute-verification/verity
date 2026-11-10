@@ -25,8 +25,10 @@
   forms, with the first tile and every ``--cross-check``-th after it, in the draw's order, replayed on the scalar reference
   too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s own verdict.
 - **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
-  its root, and each of the tile's words must be the unscale of the tile's checked U (`pearl_c_u.y`, the kernels'
-  epilogue), so the y that leaves the linear is the one the credited rows computed.
+  its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
+  the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of
+  the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
+  rows computed.
 
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one draw source ("The run's
 draw" below), drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
@@ -370,8 +372,12 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None, bool
 
 
 def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> str | None:
-    """The served y on an accepted tile: its real rows open against the call's y root, and each of their words is the unscale
-    of the tile's checked U at its row's and column's α (`pearl_c_u.y`, the kernels' epilogue)."""
+    """The served y on an accepted tile: its real rows open against the call's y root, each holds a word for every column
+    of the tile, and each of those words is the unscale of the tile's checked U at its row's and column's α (`pearl_c_u.y`,
+    the kernels' epilogue).  The opening binds a row's value and not how many words it has (an hm96 leaf takes a preimage
+    of any length), so a row is held to the tile's columns, ``width`` their end, before any of its words is read: one
+    that ends sooner is refused, as the Lean's `Rule.yReason` refuses it.  A row's words are its whole ones (the Lean's
+    `words32`)."""
     if p.scheme.commitment_hash != HM96 or p.scheme.forming != "v1":
         return f"y is checked under {HM96} and forming v1, not {p.scheme.name}"
     u, rec = p.epoch.workload.matmuls[pos], p.man["matmuls"][pos]
@@ -382,8 +388,12 @@ def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> st
             return "y opening"
     except ProtocolError:
         return "y opening"
+    width = max((j + 1 for j in tile.cols), default=0)
     for x, (o, urow) in enumerate(zip(opened, v.checked.u[:len(opened)], strict=True)):
-        words = np.frombuffer(opened_value(HM96, o.value), "<u4")
+        value = opened_value(HM96, o.value)
+        words = np.frombuffer(value, "<u4", len(value) // 4)
+        if len(words) < width:
+            return f"y[{tile.rows[x]}]: the opened row holds {len(words)} words, the tile's columns end at {width}"
         for z, j in enumerate(tile.cols):
             try:
                 want = PCU.y(urow[z], v.ops.a.alpha[x], v.ops.b.alpha[z]) << 16
