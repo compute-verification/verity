@@ -1390,6 +1390,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
             f"(`build_inputs` then compares it, and a lock run that rewrites it keeps no pass for its lock commit)")
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_two_locks_that_differ_only_in_records_give_the_same_facts_document_and_replay(tmp_path, sandboxed_node):
     """What a lock run rests on when it keeps a pass for the commit of its regenerated locks (`lean_audit.keep_regenerated`),

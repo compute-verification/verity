@@ -1471,15 +1471,17 @@ BUILT = ("sandbox", "build_threads", "staged", "sampled", "replay", "replay_cach
          "peak_gib", "facts_key")
 
 
-def stored_document(documents: Path, k: str, schema: str) -> Path | None:
-    """The facts document `check.py --facts-cache` stored in ``documents`` under the facts key ``k``, when its sidecar names
-    ``schema``, that key and the SHA-256 its bytes have (`check.py`'s `read_cached_facts`, without decoding it); else None."""
+def stored_document(documents: Path, k: str, schema: str) -> tuple[Path | None, str]:
+    """(The facts document `check.py --facts-cache` stored in ``documents`` under the facts key ``k``, "") when its sidecar
+    names ``schema``, that key and the SHA-256 its bytes have (`check.py`'s `read_cached_facts`, without decoding it); else
+    (None, why not)."""
     doc, side = documents / f"{k}.json.gz", documents / f"{k}.json"
     try:
         meta = json.loads(side.read_text())
-        return doc if meta.get("schema") == schema and meta.get("key") == k and _sha(doc) == meta.get("sha256") else None
-    except (OSError, ValueError, AttributeError):
-        return None
+        named = meta.get("schema") == schema and meta.get("key") == k and _sha(doc) == meta.get("sha256")
+    except (OSError, ValueError, AttributeError) as e:
+        return None, f"{type(e).__name__}: {e}"
+    return (doc, "") if named else (None, f"{side.name} names another schema, key or SHA-256 than {doc.name} has")
 
 
 def keep_regenerated(pkgs: list[str], files: list[str], keys: dict, reports: dict, regenerated: dict[str, str],
@@ -1508,26 +1510,28 @@ def keep_regenerated(pkgs: list[str], files: list[str], keys: dict, reports: dic
         return {}
     new = {p: components(p, files, FLAGS, locks) for p in pkgs}
     moved = [p for p in pkgs if key_of(new[p]) != keys[p]]
-    chk, same = lean_check(), {}
+    chk = lean_check()
 
     def same_build(p: str) -> bool:
-        if p not in same:
-            try:
-                same[p] = chk.build_inputs(chk.load(ROOT / p)) == chk.build_inputs(chk.load(Path(regenerated[p]).parent))
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                same[p] = False
-        return same[p]
+        """Whether ``p``'s regenerated lock gives every step before the judge what its lock gives; a lock that can't be
+        read, or has no `roots`, gives none of them anything."""
+        try:
+            return chk.build_inputs(chk.load(ROOT / p)) == chk.build_inputs(chk.load(Path(regenerated[p]).parent))
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return False
 
+    same = {p: same_build(p) for p in regenerated}
     todo: dict[str, Path] = {}
     for p in moved:
         rep = reports.get(p) or {}
+        doc, missing = stored_document(documents, str(rep.get("facts_key")), chk.FACTS_SCHEMA)
         if p not in audited:
             why = "this run reused its pass, so it has no facts of this run to judge from"
         elif rep.get("failures") != []:
             why = "its audit here did not pass"
-        elif not (doc := stored_document(documents, str(rep.get("facts_key")), chk.FACTS_SCHEMA)):
-            why = "its audit stored no facts document (" + str(rep.get("facts_cache") or "none under its `facts_key`") + ")"
-        elif differ := [d for d in read_packages(p) if d in regenerated and not same_build(d)]:
+        elif doc is None:
+            why = f"its audit stored no facts document to judge from ({rep.get('facts_cache') or missing})"
+        elif differ := [d for d in read_packages(p) if d in regenerated and not same[d]]:
             why = (f"the regenerated lock of {', '.join(differ)} changes what the build, the facts or the tests read "
                    f"(`check.py`'s `build_inputs`: a guarantee, a premise or an inline name it newly lists or drops)")
         else:
