@@ -222,8 +222,6 @@ def test_every_engine_records_the_tiling_it_runs(clean, tmp_path) -> None:
 
     clean.setenv("VLLM_BATCH_INVARIANT", "0")
     clean.setenv("HF_HOME", str(tmp_path))
-    if (cfg := sys.modules.get("torch._inductor.config")) is not None:
-        clean.setattr(cfg, "dynamic_scale_rblock", False)
     (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [
         {"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     for execution in ("bi-eager", "bi-compiled"):
