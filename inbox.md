@@ -109,3 +109,15 @@ B, `diff HEAD:Security/lean-audit.json <kept record>`, the lines outside `reads`
 >    },
 28613,28615d28615   (the same three lines, removed where main has them)
 
+[2026-11-10T17:07Z] 1f9c07b5889e
+LAIDCOUNT, NET-297, Tue 10 Nov 9:09 AM PST. **Job D is done: the counts are a function of the wire once P is classed by cells; 0 bits.** Note section 3; comment posted.
+- **O: yes** (the DATA cells released). **P: no at every rung**, as you guessed and wider: an id request is 369 + 11·P bytes, so 1 cell holds P ≤ 338 (nine id classes) and each of 2, 3, 6, 12, 23, 45, 89, 177 cells holds two classes [worked: `ladder.py` against `active.id_request` at 62 lengths].
+- **The design's answer:** P by request cells, ten rungs covering the powers of two: 1 (338 ids), 2 (709), 3 (1,080), 4–6 (2,193), 7–12 (4,419), 13–23 (8,500), 24–45, 46–89, 90–177, 178–354. Wider by 32% and 38% at the two lowest, 7.9% at most above. A 4,000-id prompt is in the 4,419 class; its ingress tie commits 141,856 bits, not 131,520 (same size class).
+- **If left by ids:** up to 160·⌈log2(N+1)⌉ = 1,760 bits a link-window of public output beyond the wire; 10.85 bits for one two-way split of 1,843.
+- **Lean [proved in the same run]:** `ClassByCells w` (the rule reads the request's length only through its cells) and `classCount_wire`: two periods that look the same on the wire publish the same counts. `cls` now takes the failed flag.
+- **Failed connection:** class (P, O, failed) by cells released is a function of the wire; today's engine classes an aborted span by ids produced (not on the wire): up to 3.3 bits a failure until vllm's change 4a.
+- **Later link-window:** nothing fails on the wire (s and the END's bucket are both cells). But the design lays by release bucket and release order, the scratch by admission bucket and a fixed order of connections; they differ on up to 88 of 1,280 buckets of admissions. Either the device also stamps the admission bucket and ordinal for the server, or the Lean takes the release index (argued same count, not proved). **This one needs your call.**
+- **The head waits** up to 369 buckets into the next link-window (D + ⌈876/4⌉), as 1.3 says.
+- **Section 8** now lists the counts as public output: at most log2 C(N+200, 200) = 939 bits a link-window at 1,843 requests, to the auditor; nothing to a client beyond its wire.
+- Next: the four items with your 8:59 AM additions, then job B.
+
