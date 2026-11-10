@@ -13,12 +13,12 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
 `run` keeps one server process open, feeds both sides every input the strategy samples, and fails with a `Mismatch` on the
-first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
-server that faults or dies, are differences too. A run is deterministic: Hypothesis samples from `seed` (`derandomize`, no
-example database, no deadline) and from its own constants alone (`_no_local_constants`), so `run(port, examples=N,
-seed=S)` finds the same minimal input again whatever modules the process has loaded, and `replay(port, value)` compares
-one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
-never answers hangs its test.
+first difference, shrunk by Hypothesis to a minimal input (as it was drawn under `shrink=False`); a reference that raises
+something it doesn't declare, and a server that faults or dies, are differences too. A run is deterministic: Hypothesis
+samples from `seed` (`derandomize`, no example database, no deadline) and from its own constants alone
+(`_no_local_constants`), so `run(port, examples=N, seed=S)` finds the same minimal input again whatever modules the
+process has loaded, and `replay(port, value)` compares one input. Nothing here reads a clock or times out
+(`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
 
 A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
 skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/core/protocols/pouw/verifier.py`). Either way the
@@ -68,8 +68,9 @@ class BuildError(Exception):
 
 
 class Mismatch(AssertionError):
-    """Lean and Python differ on `input` (the minimal one Hypothesis found): `lean` and `python` are each side's
-    `Outcome`, and `of_record` is the port's side of record, whose verdict the message holds the other to."""
+    """Lean and Python differ on `input` (the minimal one Hypothesis found, or the first of an unshrunk run): `lean` and
+    `python` are each side's `Outcome`, and `of_record` is the port's side of record, whose verdict the message holds the
+    other to."""
 
     def __init__(self, label: str, value: Any, lean: Outcome, python: Outcome, of_record: str = "python"):
         self.label, self.input, self.lean, self.python, self.of_record = label, value, lean, python, of_record
