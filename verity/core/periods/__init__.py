@@ -1,6 +1,6 @@
 """Ticks, spans of ticks and the monitoring period: the Python mirror of the code's `CoreProtocol.Period`
 (`verity/flock/verifier/interface/CoreProtocol/Period.lean`), which is the code's copy of
-`Security/Definitions/Core/Period.lean`. The difftest port `core-periods-difftest` holds this to that Lean. Stdlib only,
+`security/Definitions/Core/Period.lean`. The difftest port `core-periods-difftest` holds this to that Lean. Stdlib only,
 and it imports no other unit.
 
 - `TickSpan(start, len)`: the ticks ``[start, start + len)`` on the one clock (`OneClock`), ending at `stop`. `ticks` is

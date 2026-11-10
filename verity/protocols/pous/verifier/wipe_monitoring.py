@@ -62,7 +62,7 @@ DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10 ** 6))
 >>>>>>> 7af4d24fca3e
 FORMAT = "verity/wipe-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
-             "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
+             "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 CADENCE_S = 86400
 EGRESS = "wipe-egress/v1"
 HBM = "gpu-hbm"

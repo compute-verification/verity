@@ -113,7 +113,7 @@ the drawn calls' statements (``--statements``) and the window's live evidence (`
 the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
 >>>>>>> 7af4d24fca3e
-window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
+window meets the two premises of `security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s

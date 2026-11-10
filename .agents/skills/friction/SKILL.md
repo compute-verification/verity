@@ -188,7 +188,7 @@ Protocols and claims:
   channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
   at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
-  both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
   class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024

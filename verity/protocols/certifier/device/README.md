@@ -10,14 +10,14 @@ blocks it carried (the code's *link-window*). Its protocol, its Python and its R
 `verity/protocols/certifier/`. The auditor's checks of what it signs are in `verity/protocols/`.
 
 This package models the proxy. The relay form, `verity/protocols/certifier/verifier/warden.py`, is the one
-`benchmarks/network_traces/` runs, and it has no executable Lean yet. Its analysis is in `Security/`
-(`Security/Proofs/NetworkCertifier/Warden.lean`).
+`benchmarks/network_traces/` runs, and it has no executable Lean yet. Its analysis is in `security/`
+(`security/Proofs/NetworkCertifier/Warden.lean`).
 
 ## What is in it
 
 The package requires `certifier_program` (`verity/protocols/certifier/device/program/lean`), `network_check`
 (`verity/protocols/certifier/verifier/lean`), `core_world` (`verity/hardware/world`) and `lms`
-(`verity/commitments/lms/lean`). It requires no Mathlib and nothing of `Security/`.
+(`verity/commitments/lms/lean`). It requires no Mathlib and nothing of `security/`.
 
 | module | what it is | its Python reference (in `verity/protocols/certifier/`) |
 | --- | --- | --- |

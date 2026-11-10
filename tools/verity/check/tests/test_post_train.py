@@ -131,7 +131,7 @@ def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(
     _git(repo, "commit", "-q", "--allow-empty", "-m",
          "Lock records regenerated for #1\n\nChecked: r20261020-152946-96c9 (the lock run of `checked` x, passed by regenerating "
          "them)\n"
-         "Regenerated: Security/lean-audit.json")
+         "Regenerated: security/lean-audit.json")
     lock = _git(repo, "rev-parse", "HEAD")
     _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 later\n\nChecked: r20261020-152946-96c9 (copied)")
     later = _git(repo, "rev-parse", "HEAD")

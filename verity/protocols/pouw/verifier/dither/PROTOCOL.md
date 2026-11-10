@@ -411,7 +411,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
-  (`Security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
+  (`security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
   (`Accounting.Assumptions.Parties.WitnessPathPrivate`) discharges it in prose, with no Lean proof yet: private
   messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
   links, and the certifier sits on the server's own uplink.
@@ -584,7 +584,7 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 <<<<<<< 99c8914848
 - **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
   `verity.commitments.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
-  (`Security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
+  (`security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
   installed over the cable once per device, then a SHA-512 ratchet), and a remote party with no cable adds ML-KEM-1024,
   the one-hash rule's exception for transport, always XORed with the SHA-512 chain key's PRF output and never on pair
   links. The premise here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where

@@ -134,7 +134,7 @@ composition suite's difftest (`../../../composite/verifier/composition/tests/tes
 
 ## Properties
 
-A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
+A protocol's properties go in `security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
 port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
 `Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
@@ -150,8 +150,8 @@ round trips and refusals; `core-protocol-example` runs it.
 
 ## Periods (`CoreProtocol/Period.lean`)
 
-The code's copy of the spec's ticks, spans and monitoring period (`Security/Definitions/Core/Period.lean`), so a
-verifier reads them without requiring `Security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
+The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
+verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
 clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
 spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
 when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
