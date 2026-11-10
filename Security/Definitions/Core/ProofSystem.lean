@@ -20,7 +20,7 @@ interaction model (`Definitions/Core/Interaction.lean`, namespace `Claims`):
 * A knowledge error is `κ` plus collision terms (`KTerm`): a weight and a finder, under a square root or linear, priced
   by `StrictBirthday` or `ExpectedCR`. `KTerm.B` is `B`'s, the one `KS` has.
 * `KSOn` is knowledge soundness at a class; `WaldLe` and `RunsLe` bound the extractor's reruns, weighted and at most.
-* `ProofSystem` is what an inner brings, and `ZkSystem` what an outer adds: a masked prover, simulators with their
+* `ProofSystem` is what an inner brings, and `ZkProofSystem` what an outer adds: a masked prover, simulators with their
   errors, the hiding they rest on, and each statement's public shape, which fixes the extractor's coins and bounds the
   errors (`ByShape`).
 
@@ -320,7 +320,7 @@ tape at each statement (`Pz`, over `kZK x` rounds); its simulators at each attem
 errors `εzk t δ₁` and `γzk t` wherever its commitments hide up to `δ₁` (`Hides`); and each statement's public shape: its
 extractor's coins (`CS`) and its errors' bounds (`κS`, the terms' weights `wS`, `NS`, `MS`, `εzkS`, `γzkS`), which
 `ByShape` asks the statement's to meet. -/
-structure ZkSystem (Coin W : Type) extends ProofSystem Coin W where
+structure ZkProofSystem (Coin W : Type) extends ProofSystem Coin W where
   kZK : Msg → ℕ
   Nonce : Msg → Type
   Rest : Msg → Type
@@ -343,28 +343,28 @@ structure ZkSystem (Coin W : Type) extends ProofSystem Coin W where
   εzkS : ℕ → ℝ≥0 → Shape → ℝ
   γzkS : ℕ → Shape → ℝ
 
-attribute [instance] ZkSystem.nonceFin ZkSystem.nonceNe ZkSystem.restFin ZkSystem.restNe
+attribute [instance] ZkProofSystem.nonceFin ZkProofSystem.nonceNe ZkProofSystem.restFin ZkProofSystem.restNe
 
-namespace ZkSystem
+namespace ZkProofSystem
 
 variable {Coin W : Type}
 
 /-- **Zero knowledge** against malicious verifiers, statement by statement: at every attempt budget `t ≥ 1` and wherever
 the commitments hide up to `δ₁`, `Sim t` simulates the masked prover at each statement within `εzk t δ₁`, plus `γzk t`
 times the probability that `Fork` finds a collision. -/
-def ZK (H : Msg → Msg) (O : ZkSystem Coin W) : Prop :=
+def ZK (H : Msg → Msg) (O : ZkProofSystem Coin W) : Prop :=
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, O.Hides H δ₁ → ∀ x₀,
     ZKmalR H O.kZK (fun w => O.Pz w x₀) (fun x w => x = x₀ ∧ O.R x w) (O.Sim t) (O.εzk t δ₁) (O.γzk t)
 
 /-- **The public shape fixes the extractor's coins and bounds the errors**: at every statement, the extractor's coins
 are its shape's, and the knowledge error, each collision term's weight, the reruns and the simulation errors are at most
 its shape's. So an outer statement chosen after the inner coins has errors and extractor coins its shape fixes. -/
-def ByShape (O : ZkSystem Coin W) : Prop :=
+def ByShape (O : ZkProofSystem Coin W) : Prop :=
   ∀ x, (∀ H, (O.E H).C x = O.CS (O.shape x)) ∧ O.κ x ≤ O.κS (O.shape x) ∧
     List.Forall₂ (fun (τ : KTerm Coin O.V) w => τ.w x ≤ w) O.terms (O.wS (O.shape x)) ∧
     O.N x ≤ O.NS (O.shape x) ∧ O.M x ≤ O.MS (O.shape x) ∧
     (∀ t δ₁, O.εzk t δ₁ x ≤ O.εzkS t δ₁ (O.shape x)) ∧ ∀ t, O.γzk t x ≤ O.γzkS t (O.shape x)
 
-end ZkSystem
+end ZkProofSystem
 
 end Verity
