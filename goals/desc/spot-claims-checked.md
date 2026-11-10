@@ -1,0 +1,1 @@
+Each number and claim in the SPOT post is traced to a run, a stored result or a Lean statement, or it is corrected. A ledger of the headline's claims and $19$ secondary ones was written on Mon 9 Nov, and it marks the $10\%$ sentence and the theorem sentence as not yet true as worded. One @proofs worker updates it each day until Fri 13 Nov and writes up what each lead must fix.

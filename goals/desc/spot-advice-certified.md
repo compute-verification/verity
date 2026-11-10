@@ -1,0 +1,1 @@
+A served GLM-5.3 run with the real network certifier stamping arrivals shows the scheduler's advice at $0$ bits. So far that is shown only with prefix caching off, and the post serves with caching on. Nobody at @proofs holds the run with caching on.

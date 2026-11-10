@@ -1,0 +1,1 @@
+The deployed zero-knowledge server gives a dishonest prover no way to pass witness bits to the auditor through what it releases. Two closures are on main: the server answers no first-level draw before every table's witness is in, and it picks every public commitment's salts from a key of its own. Nobody is on the remaining changes until the SPOT post is out on **Mon 16 Nov**.
