@@ -122,10 +122,30 @@ def test_an_imported_module_outside_the_inputs_is_named(repo: Path) -> None:
         ("old/lib/deep.py", "new/elsewhere/deep.py", "old/lib/mod.py", "new/elsewhere")]
 
 
-def test_an_imported_module_sent_to_archive_is_counted_apart(repo: Path) -> None:
+def test_an_archived_module_a_test_that_stays_imports_is_named_once(repo: Path) -> None:
     rows = PARTS.replace("new/elsewhere/deep.py", "archive/old/lib/deep.py")
     r = suites(repo, ROOTS + "[paths]\n" + rows + '[tokens]\n"old/lib/" = "new/lib/"\n')
-    assert (r["inputs"], r["archived_imports"]) == ([], 1)
+    assert r["inputs"] == []
+    assert [(x["module"], x["imported_by"], x["suites"]) for x in r["loads_archive"]] == [
+        ("old/lib/deep.py", "old/lib/mod.py", ["old/pkg/pyproject.toml"])]
+
+
+def test_a_test_file_goes_to_archive_with_the_code_it_tests(repo: Path) -> None:
+    for name, text in {"old/lib/extra.py": "", "old/pkg/tool.py": "",
+                       "old/pkg/tests/test_extra.py": "from old.lib import extra\n\n\ndef test_extra():\n    assert extra\n",
+                       "old/pkg/tests/test_tool.py": 'TOOL = "tool.py"                # run by path\n\n\ndef test_tool():\n    pass\n'}.items():
+        (repo / name).write_text(text)
+    for args in (["add", "-A"], ["commit", "-q", "-m", "more"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, env={**os.environ, **ENV})
+    tests = ('"old/pkg/tests/test_extra.py" = "archive/old/pkg/tests/test_extra.py"\n'
+             '"old/pkg/tests/test_tool.py" = "archive/old/pkg/tests/test_tool.py"\n')
+    code = '"old/lib/extra.py" = "archive/old/lib/extra.py"\n"old/pkg/tool.py" = "archive/old/pkg/tool.py"\n'
+    r = suites(repo, WHOLE + tests + code)
+    assert (r["orphans"], r["parted"], r["inputs"], r["loads_archive"]) == ([], [], [], [])
+    assert [x["test"] for x in r["archived_with_code"]] == ["old/pkg/tests/test_extra.py", "old/pkg/tests/test_tool.py"]
+    r = suites(repo, WHOLE + tests)                                 # archived alone: the code they test stays
+    assert r["orphans"] == [] and r["archived_with_code"] == []
+    assert [x["lands"] for x in r["parted"]] == ["archive/old/pkg/tests/test_extra.py", "archive/old/pkg/tests/test_tool.py"]
 
 
 def test_a_directory_emptied_by_file_rows_is_counted_until_a_tokens_row_names_it(repo: Path) -> None:

@@ -14,7 +14,16 @@ nothing, and exits 1, naming the paths, when after the maps:
    through the modules they import, that its inputs cover today (`tools/verity/check/suites.py`'s `inputs_of`: its
    directory, its workspace dependencies' directories, the paths `[tool.verity.tests] inputs` declares) and that lands
    outside them. An input is read as `layout.py` rewrites it: a file's row, a directory's row or `[tokens]` row, else
-   unchanged. A module that goes to `archive/` is counted apart and does not fail: the move retires it.
+   unchanged.
+
+**Archive wins.** A test file goes to `archive/` with the code it tests, and a suite that stays never loads `archive/`.
+So a test file the maps archive is in no suite and parted from none (`tests/test_repository.py` exempts `archive/`
+once the move's pull request adds it to `UNSUITED_TEST_DIRS`), provided the maps archive code it tests: a module it
+imports, or one of its suite's whose name it holds. One archived alone fails, under 2. And under 3, a module that goes
+to `archive/` while a test that stays still imports it fails, named once with the file that imports it.
+
+Rows decide 1 and 2. 3 is decided by rows only where one new directory holds all of an input's files; elsewhere the
+suite's inputs need an edit after the move, and the check prints the directories they would need.
 
 With no map it checks REF's tree as it is, which passes all three. Imports are read from the source (`import`, `from`),
 resolved under the first map's `[roots] old`; a module loaded by path or by name at run time is not seen."""
@@ -39,6 +48,7 @@ DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 #: test files that were never part of `check` (`tests/test_repository.py`'s `UNSUITED_TEST_DIRS`), as REF names them
 UNSUITED = re.compile(r"^UNSUITED_TEST_DIRS\s*=\s*\(([^)]*)\)", re.M)
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
+ARCHIVE = "archive/"
 
 
 def is_test(p: str) -> bool:
@@ -87,7 +97,7 @@ class Imports:
                 base = node.module or ""
                 if node.level:
                     base = ".".join([*pkg[: len(pkg) - node.level + 1], *([base] if base else [])])
-                names = [f"{base}.{a.name}" for a in node.names] + [base]
+                names = [f"{base}.{a.name}" for a in node.names]       # a name that is no module resolves to `base`
             else:
                 continue
             out |= {r for n in names if (r := self.resolve(n)) and r != f}
@@ -120,22 +130,36 @@ def check(m: Moved) -> dict:
                 if d.strip(" \"'")]
     unsuited = [(m.directory(d.rstrip("/")) or d.rstrip("/")) + "/" for d in unsuited]
 
+    imports = Imports(m)
+    archived = {f for f in m.files if m.new[f].startswith(ARCHIVE) and not f.startswith(ARCHIVE)}
+    code = {f for f in archived if f.endswith(".py") and not is_test(f) and posixpath.basename(f) != "conftest.py"}
+
+    def with_its_code(test: str, suite: str) -> bool:
+        """Whether the maps archive code this archived test file tests."""
+        if imports.direct(test) & code:
+            return True
+        text, base = m.read(test) or "", posixpath.dirname(suite) or "."
+        return any(under(g, base) and re.search(rf"(?<![\w.]){re.escape(posixpath.basename(g)[:-3])}(?!\w)", text) for g in code)
+
     orphans = []
     after = [t for p in suites for t in paths(p, m.new[p])]
     for f in tests:
         new = m.new[f]
-        if (is_test(f) and not any(under(new, t) for t in after) and not new.startswith(tuple(unsuited))
+        if (is_test(f) and not any(under(new, t) for t in after) and not new.startswith((ARCHIVE, *unsuited))
                 and DEFINES_A_TEST.search(m.read(f) or "")):
             orphans.append({"test": f, "lands": new})
 
-    parted, collects = [], defaultdict(list)
+    parted, collects, with_code = [], defaultdict(list), []
     for f in tests:
         owners = [p for p in suites if any(under(f, t) for t in paths(p, p))]
         if not owners:
             continue
         p = max(owners, key=lambda q: len(posixpath.dirname(q)))        # the innermost suite collects it
-        collects[p].append(f)
         want = posixpath.normpath(posixpath.join(posixpath.dirname(m.new[p]), posixpath.relpath(f, posixpath.dirname(p) or ".")))
+        if f in archived and (p in archived or with_its_code(f, p)):
+            with_code.append({"suite": p, "test": f, "lands": m.new[f]})
+            continue
+        collects[p].append(f)
         if m.new[f] != want:
             parted.append({"suite": p, "suite_lands": m.new[p], "test": f, "lands": m.new[f], "with_its_suite": want})
 
@@ -183,23 +207,27 @@ def check(m: Moved) -> dict:
             return posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
         return m.directory(path) or path
 
-    imports, lost, archived = Imports(m), [], 0
+    lost, loads = [], {}
     for p in sorted(suites) if m.layouts else ():
+        if p in archived:
+            continue
         inputs = inputs_of(p)
         now = [(posixpath.dirname(m.new[p]) or "." if why == "its directory" else reads(path)) for why, path in inputs]
         for f, importer in sorted(imports.reach(collects[p]).items()):
+            if f in archived:
+                if importer not in archived:            # an archived module's own imports are not a suite's
+                    loads.setdefault(f, {"module": f, "lands": m.new[f], "imported_by": importer, "suites": []})["suites"].append(p)
+                continue
             why, path = next(((w, path) for w, path in inputs if under(f, path)), (None, None))
             if why is None or any(under(m.new[f], n) for n in now):
-                continue
-            if m.new[f].startswith("archive/"):
-                archived += 1
                 continue
             rest = f[len(path):] if path != "." else "/" + f
             lost.append({"suite": p, "suite_lands": m.new[p], "module": f, "lands": m.new[f], "imported_by": importer,
                          "covered_today_by": why,
                          "holds_it_after": m.new[f][: -len(rest)] if m.new[f].endswith(rest) and len(rest) < len(m.new[f])
                          else posixpath.dirname(m.new[f])})
-    return {"orphans": orphans, "parted": parted, "inputs": lost, "archived_imports": archived}
+    return {"orphans": orphans, "parted": parted, "inputs": lost, "loads_archive": sorted(loads.values(), key=lambda x: x["module"]),
+            "archived_with_code": with_code}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,7 +247,8 @@ def main(argv: list[str] | None = None) -> int:
     suites_hit = {x["suite"] for x in r["inputs"]}
     print(f"suite check of {len(a.maps)} map(s) on {m.ref[:12]}: {len(r['orphans'])} test files in no suite, "
           f"{len(r['parted'])} parted from their suite, {len(r['inputs'])} imported modules outside the inputs of "
-          f"{len(suites_hit)} suites ({r['archived_imports']} more imports go to archive/)")
+          f"{len(suites_hit)} suites, {len(r['loads_archive'])} archived modules a test that stays imports "
+          f"({len(r['archived_with_code'])} test files go to archive/ with their code)")
 
     def show(title: str, groups: dict[str, list[str]]) -> None:
         for head, lines in sorted(groups.items()):
@@ -242,12 +271,15 @@ def main(argv: list[str] | None = None) -> int:
         by[f"{x['suite']} -> {x['suite_lands']}"].append(f"{x['module']} -> {x['lands']} (imported by {x['imported_by']}; today "
                                                          f"under {x['covered_today_by']})")
     show("outside the inputs of", by)
+    for x in r["loads_archive"]:
+        print(f"  goes to archive/ and is still imported: {x['module']} (by {x['imported_by']}; the tests of {len(x['suites'])} "
+              f"suite{'s' if len(x['suites']) != 1 else ''} reach it)")
     needs = defaultdict(set)
     for x in r["inputs"]:
         needs[x["suite_lands"]].add(x["holds_it_after"])
     for suite, dirs in sorted(needs.items()):
         print(f"  {suite}: its inputs would also need {', '.join(sorted(dirs))}")
-    return 1 if r["orphans"] or r["parted"] or r["inputs"] else 0
+    return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] else 0
 
 
 if __name__ == "__main__":
