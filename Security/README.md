@@ -570,7 +570,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
-  (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
+  (`verity/protocols/poub/verifier`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 
 ## Building and checking

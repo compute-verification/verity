@@ -71,8 +71,8 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import audit, codec
-from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
+from verity.protocols.poub.verifier import audit, codec
+from verity.protocols.poub.verifier.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
 from verity.definitions.circuits import requirement
 
 LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)

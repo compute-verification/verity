@@ -48,7 +48,7 @@ trap 'rm -rf "$T"' EXIT
 cat > "$T/check.py" <<'EOF'
 import json, sys
 from pathlib import Path
-from verity.core.protocols.remote_bandwidth import store
+from verity.protocols.poub.verifier import store
 
 
 def main() -> int:

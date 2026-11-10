@@ -162,7 +162,7 @@
   "verity/ml/circuits/requirement_units/__init__.py",
   "verity/definitions/commitments/gates/attest.circuit-check.py",
   "verity/ml/commitments/gates/attest/__init__.py",
-  "verity/ml/commitments/gates/block_check.circuit-check.py",
+  "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py",
   "verity/ml/commitments/gates/block_check/__init__.py",
   "verity/ml/commitments/gates/embedding.circuit-check.py",
   "verity/ml/commitments/gates/embedding/__init__.py",

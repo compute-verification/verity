@@ -23,11 +23,11 @@ from verity.protocols.pous.verifier import period as pous
 from verity.protocols.pous.verifier import run as RUN
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes import p2 as P2
-from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_lean
+from verity.protocols.poub.verifier import p2, p2_case, p2_lean
 from verity.ml.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[5]
-BANDWIDTH = ROOT / "verity/core/protocols/remote_bandwidth"
+BANDWIDTH = ROOT / "verity/protocols/poub/verifier"
 POUS_K = 8
 """Rounds of PoUS's audit: the composition reads only the component's answer, so its case is kept small (the hook's
 own point is `pous_check`'s difftest's)."""

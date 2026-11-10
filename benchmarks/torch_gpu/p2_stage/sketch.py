@@ -1,6 +1,6 @@
 """PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
-§11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
+§11 of `verity/protocols/poub/verifier`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
@@ -45,8 +45,8 @@ import numpy as np
 import torch
 from verity_config.settings import of
 
-from verity.core.protocols.remote_bandwidth import p2
-from verity.core.protocols.remote_bandwidth import receipts as R
+from verity.protocols.poub.verifier import p2
+from verity.protocols.poub.verifier import receipts as R
 from verity.definitions.kernels import SHA512
 
 settings = of(__file__)

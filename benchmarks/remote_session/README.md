@@ -1,6 +1,6 @@
 # benchmarks/remote_session
 
-The session harness of PoUB (`verity/core/protocols/remote_bandwidth`), not the remote
+The session harness of PoUB (`verity/protocols/poub/verifier`), not the remote
 protocol's demo, which is `verity demo vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
@@ -15,7 +15,7 @@ side a machine: `ROLE=verifier` on a machine the developer doesn't control and `
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
 - `verifier_process.py`: the verifier's process, which these scripts and live_verifier's host run:
-  `verity/core/protocols/remote_bandwidth/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
+  `verity/protocols/poub/verifier/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
   verify a served or gate session's signatures are checked with and the live challenger's `serve.py`. That verifier
   runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
   a run where the two differ; `wire.py` beside it frames the messages between the two processes.
