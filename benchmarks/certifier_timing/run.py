@@ -156,10 +156,18 @@ def launch_commands(launch: dict, base_s: float, interval_ms: int) -> tuple[list
     return setup, ["tc", "qdisc", "del", "dev", dev, "root"]
 
 
+def base_time(opening_s: float, now_s: float, interval_ms: int) -> float:
+    """A launch schedule's base time: the gate's opening at `opening_s`, moved back by whole intervals to between one
+    and two before `now_s`. The schedule is the same from any of its openings, and an I225 refuses one that is still
+    to come."""
+    return opening_s - (math.floor((opening_s - now_s) * 1000 / interval_ms) + 2) * interval_ms / 1000
+
+
 def _launch(cfg: dict) -> list[str]:
-    """Set the case's launch gate, its first opening `after_ms` past the origin's release time; the command that
-    removes it."""
-    base = cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000
+    """Set the case's launch gate, which opens `after_ms` past each release time from the origin's on; the command
+    that removes it."""
+    base = base_time(cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000, time.monotonic(),
+                     cfg["interval_ms"])
     if cfg["launch"]["mode"] != "gate":
         base += time.clock_gettime(CLOCK_TAI) - time.monotonic()
     setup, remove = launch_commands(cfg["launch"], base, cfg["interval_ms"])

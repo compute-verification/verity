@@ -367,6 +367,10 @@ def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
                         "delta", "200000", *offload, "skip_sock_check"]
     with pytest.raises(ValueError, match="open for part of an interval"):
         bench.launch_commands(launch | {"open_ms": 100.0}, 0.0, 100)
+    # its base time is one of the gate's openings, already past whenever the case sets it
+    for now in (994.0, 1000.0, 1000.07, 1003.33):
+        base = bench.base_time(1000.07, now, 100)
+        assert 0.1 <= now - base < 0.2 + 1e-9 and round((1000.07 - base) * 10, 6) == round((1000.07 - base) * 10)
     with pytest.raises(bench.argparse.ArgumentTypeError):
         bench._launch_arg("eth1,20,5,offload")
     # the server aims at when the gate lets the bytes go, the pacer keeps its own offset
