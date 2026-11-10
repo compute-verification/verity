@@ -334,6 +334,8 @@ SHELL_READS = {"read", "mapfile", "readarray"}
 INTERPRETER = re.compile(r"python[\d.]*|perl|ruby")
 CODE_OPTION = re.compile(r"-\w*[ce]")
 CODE_READS = re.compile(r"open\(|read|print|cat")
+#: perl's and ruby's option that edits the files in place, alone or after `-p`, `-n` and the like: nothing is printed
+IN_PLACE = re.compile(r"-[lnpaw0-9]*i(\.\w+|~)?")
 #: what a file's name, written out or as a glob, says it holds
 SECRET_FILES = {"a private key": ("*.pem", "*.key", "id_rsa*", "id_ed25519*", "id_ecdsa*"),
                 "an env or credentials file": ("*.env", ".netrc", "credentials", "credentials.*")}
@@ -369,8 +371,9 @@ def secret_file(path: str) -> str | None:
 def tracked(path: str, where: str) -> bool:
     """Whether `path`, read from the directory `where` on this machine, names only files whose bytes are the ones git has
     committed there: every agent can read those already (`git show`). A glob is expanded as the shell would expand it, and one
-    changed file, untracked file or link among its matches keeps the refusal."""
-    files = glob.glob(os.path.join(where, path))
+    changed file, untracked file or link among its matches keeps the refusal; so does a glob over more than two levels of
+    directories, which could walk a whole disk."""
+    files = glob.glob(os.path.join(where, path)) if len(re.findall(r"[^/]*[*?\[][^/]*/", path)) <= 2 else []
     if not files or not all(os.path.isfile(f) for f in files):
         return False
     there = os.path.dirname(files[0])
@@ -431,12 +434,14 @@ def key_printed(args: list[str], inputs: list[str]) -> list[str] | None:
     return [args[i + 1] for i, a in enumerate(args[:-1]) if a == "-in"] or inputs
 
 
-def code_printed(args: list[str], inputs: list[str]) -> list[str] | None:
+def code_printed(interpreter: str, args: list[str], inputs: list[str]) -> list[str] | None:
     """The files the code of `python -c CODE`, `perl -e CODE` or `ruby -e CODE` could print, or None: when CODE opens, reads or
     prints (CODE_READS), or perl's `-p` prints each line for it, the path-like words of its string literals, the arguments
-    after it and its input."""
+    after it and its input. `perl -pi -e CODE FILE` edits FILE in place (IN_PLACE) and prints nothing."""
     at = next((i for i, a in enumerate(args[:-1]) if CODE_OPTION.fullmatch(a)), None)
     if at is None or not (CODE_READS.search(args[at + 1]) or "p" in args[at]):
+        return None
+    if not interpreter.startswith("python") and any(IN_PLACE.fullmatch(a) for a in args[:at]):
         return None
     literals = [w for quoted in re.findall(r"""['"]([^'"]+)['"]""", args[at + 1]) for w in quoted.split() if re.search(r"[/.]", w)]
     return literals + args[at + 2:] + inputs
@@ -495,7 +500,7 @@ def secret_read(text: str, where: str | None = None) -> tuple[str, str, str] | N
         elif name in PRINTERS:
             files = files_printed(name, args, inputs)
         else:
-            files = code_printed(args, inputs) if name else None
+            files = code_printed(name, args, inputs) if name else None
         keys = files if name.startswith("openssl") else None   # the file an openssl key command names is a key, whatever its name
         if files is not None and at < len(words):        # `find -exec READER {} +` reads what find names, `xargs READER` what is piped in
             files = files + (words[:at] if "{}" in args else []) + (upstream if "xargs" in map(os.path.basename, words[:at]) else [])

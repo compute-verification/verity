@@ -176,6 +176,8 @@ REFUSED = [
     "ssh n1 \"python3 -c 'print(open(\\\"/etc/vy/env/r2.env\\\").read())'\"",
     "perl -pe 's/=.*//' x.env",
     "perl -ne 'print if /KEY/' /etc/vy/env/research.env",
+    "perl -Mstrict -ne 'print' x.env",                    # a module whose name holds an `i`, not perl's -i
+    "python3 -i -c \"print(open('x.env').read())\"",    # python's -i is interactive, not in place
     "ruby -e 'puts File.read(\"credentials.json\")'",
     # a copy between machines by way of the transcript
     "research pods ssh vy-nebius-2 -- 'cat ~/.ssh/vy-cluster' | research pods ssh vy-nebius-3 -- 'umask 077; cat > ~/.ssh/vy-cluster'",
@@ -324,6 +326,9 @@ ALLOWED = [
     "python3 script.py --key key.pem",
     "python3 -m pytest tests/test_secret_files.py -q",
     "perl -pi -e 's/^FOO=.*/FOO=2/' x.env",
+    "perl -i -pe 's/^FOO=.*/FOO=2/' x.env",
+    "perl -i.bak -ne 'print unless /^OLD=/' /etc/vy/env/root.env",
+    "ruby -i -pe '$_.sub!(/^FOO=.*/, \"FOO=2\")' x.env",
     "docker run python cat /etc/hostname",
     "gh pr diff 8496",
     "git diff HEAD~1 -- x.env",
@@ -416,7 +421,7 @@ def checkout(tmp_path, monkeypatch):
     link."""
     for name, value in GIT_ENV.items():
         monkeypatch.setenv(name, value)
-    for name in ("conf/env/a.env", "conf/env/b.env", "conf/settings.key", "changed.env", "sub/c.env"):
+    for name in ("conf/env/a.env", "conf/env/b.env", "conf/settings.key", "changed.env", "sub/c.env", "deep/x/y/d.env"):
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text("NAME=value\n")
     (tmp_path / "link.env").symlink_to(tmp_path / "outside.txt")
@@ -434,6 +439,8 @@ TRACKED = [
     "cat conf/env/a.env conf/env/b.env",
     "cat {here}/conf/env/a.env",
     "cat conf/env/*.env",
+    "cat */env/[ab].env",
+    "cat deep/*/*/d.env",
     "head -3 conf/settings.key",
     "grep -n NAME conf/env/a.env | head -3",
     "sort conf/env/a.env | uniq -c",
@@ -461,6 +468,7 @@ NOT_TRACKED = [
     "cat conf/env/a.env untracked.env",
     "cat *.env",
     "cat conf/*.key conf/env/*.key",
+    "cat */*/*/*.env",                                    # matches only deep/x/y/d.env, but is too wide a glob to expand
     "openssl pkey -in conf/env/new.key",
     "for f in conf/env/a.env untracked.env; do cat $f; done",
     "cat conf/env/a.env; cd sub; cat ../changed.env",
