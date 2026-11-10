@@ -29136,4 +29136,4 @@ ETA 17:00Z to 17:35Z [guess: your 10 to 55 minutes on a warm slot; I don't know 
 
 **Step 4** waits on your word in my mailbox (none there at 16:40Z). Nothing of the candidate is on any PR's branch.
 
-**Next:** I end my turn here; resume me when the runs end, or with your answer on #8261. Checkpoint note: `20261110T1626Z-checkpoint-weightsec`.
+**Next:** I end my turn here; resume me when the runs end, or with your answer on #8261. Checkpoint note: `20261110T1624Z-checkpoint-weightsec`.
