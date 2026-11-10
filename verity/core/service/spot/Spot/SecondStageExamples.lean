@@ -324,6 +324,12 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
 private def exBothRegistering : Own :=
   { exRegistering with boundary := exOwn.boundary.setObjVal! "registered" (getD exRegistering.interior "registered") }
 
+/-- `exOwn`, the interior registration registering a value of the boundary's port `bx`'s name beside `w2`. -/
+private def exRegisteringBx : Own :=
+  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
+      Json.mkObj [("value", "bx"), ("root", exRoot 5), ("domain", exRoot 6), ("leaves", Lean.toJson (4 : Nat))],
+      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+
 -- the reads that rest on the interior's own values, which the attached record names (`interiorReads`, `attach`): a
 -- value only the interior registers; not an own port's, a linked port's, or a value the boundary registers too
 #guard jeq (.arr (interiorReads exRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]))
@@ -336,13 +342,9 @@ private def exBothRegistering : Own :=
 -- one of the boundary's ports' names, is refused, whatever the statements read (`second-interior-names`)
 #guard (exCheck true (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-interior-names"]
-#guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering
-#guard !namesOk { exRegistering with interior := exInterior.setObjVal! "registered" (Json.arr #[
-  Json.mkObj [("value", "bx"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))]]) }
-#guard (exCheck true (exReported "w2" 9 { exRegistering with interior := exRegistering.interior.setObjVal! "registered"
-    (Json.arr #[Json.mkObj [("value", "bx"), ("root", exRoot 5), ("domain", exRoot 6), ("leaves", Lean.toJson (4 : Nat))],
-      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) })
-  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-interior-names"]
+#guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering && !namesOk exRegisteringBx
+#guard (exCheck true (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-interior-names"]
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
   (.arr #[Json.mkObj [("value", "w2")]])
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null
