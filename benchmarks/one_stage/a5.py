@@ -1056,7 +1056,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     iface = served / "circuit.json"
     iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
     if not plain(a):
+        t = time.time()
         checks["registered_fixed"] = complete_members(rec, mine, files, publics, reads, members)
+        summary["staging"]["registered_fixed_s"] = round(time.time() - t, 1)
         summary["checks_before_draw"]["registered_fixed"] = checks["registered_fixed"]["ok"]
         if not checks["registered_fixed"]["ok"]:
             summary["checks"] = checks
