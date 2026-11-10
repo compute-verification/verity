@@ -32118,3 +32118,35 @@ Runs up, each launched with `research run --on auto --cwd source` at `f0453a514e
 - `r20261110-191834-3ddc`, vy-nebius-cpu-6: the suite `benchmarks/two_stage`, then `guard_node.py --pytest`. So far [run 19:46Z]: the fixture came by its id (1 blob, 5.1 MB), the suite passed (9 passed, 3 skipped), and `lake build` of the guard's two modules is at 10,152 of 10,899. The test itself takes about 35 min. ETA about 20:45Z to 21:05Z [guess].
 
 The VM restarted again at 19:02Z; I recreated the worktrees from origin and nothing was lost. I am `bc-620a35fa-6df3-5b43-9c93-59767f937835`.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 19:54Z: (A)'s last setup facts are written (InstanceStmt/Scope.lean) and four node failures fixed; r20261110-195244-97c4 tries the whole chain, ETA about 21:45Z
+
+Head `eaf5ecbf45` on `cursor/proofs-twowitness-0d28`, pushed. Nothing landed, no file moved; the freeze check prints nothing [run].
+
+**Verdicts** (cpu-12, `lean_changed.py --try`) [run]:
+- `r20261110-181723-3020` at `9ecb41c6fb`: Setup exit 1. Two walks were stuck. `load_pubX` stopped at `!(cO …).classSha.isEmpty`, because no rule exposed `cO`'s class digest. `checkPartition_X` stopped at the digest comparison, because `partText` reaches `canon` through `canonFuel 0` and the walker leaves anything that reaches a blocked constant to rules.
+- `r20261110-185731-46ed` at `79fd0f41ac`: Decode exit 1, for three reasons. `DecState` is private to `Flock.Program`. `bodyBad_one`'s `simp` ran out of heartbeats with Mathlib's simp set. Without the `DecState` lemmas the walk was stuck. Setup and SetupAt then failed on that dependency.
+- `r20261110-190937-b385` at `85fc1d2c37`: InsSetup exit 1 on the same dependency. `EndToEndRegistered/Nontrivial` exit 0: all 20 theorems use only the three allowed axioms, so the extended walker still passes Concrete's `File`, `Inputs`, `Public` and `Setup`.
+- `r20261110-194149-c8ec` at `de1b3485b0`: exit 1 after 147 s, on one error only, `bodyBad_one`'s closing `rfl`. It was stuck at `Stream.next? (toStream #[0])`. In a module file, `ToStream (Array α)` (marked `no_expose`) and `Array.toSubarray` show no body without `import all`. A local module-mode probe confirms that `import all Init.Data.Stream` and `import all Init.Data.Array.Subarray` are both needed. Everything else in Decode elaborated, including the walk `decode_prog`.
+
+**Fixed since**, each from those logs:
+- Decode: `DecState` through `open private` (as `SecondWitness.lean` does for `Spot.Draw`); `bodyBad_one` by a pinned `simp only` of core lemmas (from `simp?` on the probe); the two `import all` lines.
+- Setup: the rules `cO_classSha`, `cO_meta`, and `partDigest_hex` (from `partHex_eq`), in the `loadPublic`, partition, template, links and setup walks.
+
+**New: `InstanceStmt/Scope.lean`**, the rest of (A)'s setup facts, each over `FixedNetsBuild` and `r.Plain`. It has not run on a node yet.
+- `scopeCheck_x : FlockDeploy.scopeCheck true (x r) = true`, mirroring Concrete's `concreteStmt_scope`.
+- `zkOk_x : SpotFlock.zkOk (x r) = true`.
+- `templateOk_x : h.xS₀ 0 = x r → SpotFlock.templateOk h 0 = true`. This is TWOINSTANCE's `Ref.tmpl` field as it stands.
+- `stmtOf_x : SpotFlock.stmtOf (x r) = cF`.
+- `sessionOk_x : h.xS₀ 0 = x r → SpotFlock.sessionOk h 0 (x r) = true`. This is D's `sess` field.
+
+With `setupOf_x` (InsSetup; D's `setup` field follows from it) and `hiddenOf_x` (Inputs), these are all of (A)'s Flock setup facts.
+
+**Running:** `r20261110-195244-97c4` on cpu-12, the try of `Scope.lean`. Its dependency build covers Decode, Setup, SetupAt and InsSetup. ETA about 21:45Z [guess].
+
+**(A) still needs, in order:**
+1. That run's chain passing; I fix forward whatever it names.
+2. `checkPartition_X`'s `trace` removed, then a records run and `--siblings`.
+3. An open question for you: whether TWOINSTANCE's `Ref.scope` field is mine. It is `Code.scopeOk (bitsProgs (ms2 x)) (membersPart (ms2 x)) ⟨part2 x, design1, [1]⟩ = true`, and it is not in (A)'s list [read]. The kernel alone won't close it. `Bits.keyProg` sorts with `List.mergeSort`, which the kernel rejects even on a literal list [run]. It also reads the `while` loop `lastLe` and `Index.of`'s HashMaps [read]. A route: rewrite with `List.mergeSort_of_pairwise` (the outputs are already ascending) and Keys.lean's `lastLe_spec`/`lastLe_eq`, then let the kernel finish [guess].
+
+**Dates:** (A) by Thu 12 Nov 18:00Z holds if this run's chain passes within two rounds of fixes [guess]; if not, I say so by Wed 18:00Z in an entry heading. (D) stays Fri 13 Nov 12:00Z.
