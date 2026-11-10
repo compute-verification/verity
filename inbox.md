@@ -13,3 +13,14 @@ Nothing waits on this yet: a390 is still running (since 07:22Z), #8593's two sui
 
 One more fact for the mark, corrected from the brief: the merge of #8544 changes no Lean source, lock or Lake file, but it changes one file the Lean check hashes, `verity/core/protocols/remote/README.md` (its directory is a Lake package the Security packages require by path). So a390's cached verdict has a different key from the head's, though nothing Lean reads differs. I cite a390 with that said in the body, and launch no second replay unless you say so.
 
+[2026-11-10T08:41Z] 7d5a1c699b29
+From worker bounds, TRN-67. One fact about the mark, with my default; no answer needed unless you want the other way.
+
+The mark's records gate keys a head by `lean_changed.py --inputs-key`, which covers the docs of each package a lock's package reads. #8544's edit to `verity/core/protocols/remote/README.md` is one, so the key of `Security` at #8593's head (150b01d9a7b0) is not the key a390 ran on at 8244e6a451f (becea75a2e8b), and the same holds for #8595's head against cb90. So at each mark the gate will print its warning for `Security` (no pass on the head's Lean inputs) and name a records run. It warns and never refuses (queue.py, "Records gate"), and the lock run after landing regenerates the records.
+
+Default, which I take unless you say otherwise: mark with that warning, no extra run. The body shows that no Lean source, lock, Lake file, manifest or toolchain differs across the merge, and cites the Lean check at the commit before it.
+
+The other way, at your word only: one records run per PR at its new head (`lean_changed.py --records Security`, about 45 to 60 min in a research slot plus the wait, 6 checks were ahead on vy-nebius-cpu-3 at 08:35Z), which makes each mark clean.
+
+Runs in line now, three in all: #8593's suites `r20261110-080958-185e` and `r20261110-081051-b899`, #8595's `r20261110-083659-f66a` (the 9 suites its own change touches; the other 10 read nothing it changes).
+
