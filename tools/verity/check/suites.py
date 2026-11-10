@@ -108,8 +108,8 @@ whole suite that collects none fails. Its key is the suite's with the part (`par
 keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, runs Lake with its local
 artifact cache off (`UNCACHED_ENV`: in the verifier's `lake build` and in every suite's tests, so what they test was compiled
 from the tree), and names what failed that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal
-that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes
-of runs that finished.
+that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job, which first imports every pass the commit's
+recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak

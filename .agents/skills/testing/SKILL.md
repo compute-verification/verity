@@ -48,7 +48,8 @@ A pass is cached under a hash of the suite's inputs (its directory, its workspac
 the lock and installed distributions, the environment), uncommitted edits included; a passing test is also cached alone,
 under its module's key, which leaves out the test modules it can't reach (`suites.py`'s docstring has both keys). So a
 test depends on another test module only by importing or naming it, never through what that module does at import. The
-nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
+nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts, among every pass the commit's
+recorded checks hold, which it imports first. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
 
 A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add

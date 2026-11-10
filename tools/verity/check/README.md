@@ -55,8 +55,9 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some
-part reads something it doesn't declare, and the fix goes in the check.
+the same way, each keyed on what it reads. A nightly uncached run, which compiles what it tests and first imports every pass
+the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
+and the fix goes in the check.
 
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
