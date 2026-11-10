@@ -463,7 +463,7 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
         return tmp_path / p / ".lake" / "build" / "lib" / "lean" / MK.path_of(m, ".olean")
 
     mathlib = tmp_path / "r" / ".lake" / "packages" / "mathlib" / ".lake" / "build" / "lib" / "lean" / "Mathlib.olean"
-    right = {"D.X": lib("d", "D.X"), "R.A": lib("r", "R.A"), "Mathlib": mathlib, "Init": Path("/elan/lib/lean/Init.olean")}
+    right = {"D.X": lib("d", "D.X"), "R.A": lib("r", "R.A"), "Mathlib": mathlib}
     assert MK.indexable("R", keyed, pkgs, owners) == "no setup.json"
     _setup(root, "R", "r", right)
     assert MK.indexable("R", keyed, pkgs, owners) is None
@@ -476,6 +476,36 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert owners[str(lib("r", "D.X").parent)] == "r" and owners[str(mathlib.parent)] is None, "one lookup a directory"
     _setup(root, "R", "d", right)
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
+
+
+def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_pins_them(tmp_path):
+    """A key names the fetched packages by its root's pins. A package required by path is compiled again by a build of
+    each root that requires it, over that root's packages: `r`'s modules by a build of `p`, which requires `r`. That
+    compile is one of what `r`'s key names only when `p` has `r`'s toolchain and pins every package `r` fetches as `r`
+    does; Lake lists no module of the toolchain, so a module read anywhere else is refused."""
+    root = _workspace(tmp_path)
+    pkgs = MK.workspace(root)[0]
+    keyed = MK.keys(root)
+    mine = {"D.X": tmp_path / "d/.lake/build/lib/lean/D/X.olean", "R.A": root / ".lake/build/lib/lean/R/A.olean"}
+
+    def other(entries: list[dict], toolchain: str = TOOLCHAIN, package: str = "mathlib") -> str | None:
+        _write(tmp_path, {"p/lake-manifest.json": json.dumps({"name": "p", "packagesDir": "elsewhere", "packages": entries}),
+                          "p/lean-toolchain": toolchain})
+        _setup(root, "R", "r", mine | {"Mathlib": tmp_path / "p/.lake/packages" / package / ".lake/build/lib/lean/Mathlib.olean"})
+        return MK.indexable("R", keyed, pkgs)
+
+    same = {"type": "git", "name": "mathlib", "rev": "abc"}
+    more = [{"type": "path", "name": "r", "dir": "../r"}, {"type": "git", "name": "«doc-gen4»", "rev": "1"}]
+    assert other([same | {"inherited": True}, *more]) is None, "whether a root requires a package itself is in no key"
+    assert "pins mathlib otherwise than" in other([same | {"rev": "abd"}, *more])
+    assert "pins mathlib otherwise than" in other(more)
+    assert "has another toolchain than" in other([same, *more], "leanprover/lean4:v4.35.0\n")
+    assert "does not fetch doc-gen4, which a compile read under" in other([same, *more], package="doc-gen4")
+    (tmp_path / "p/lean-toolchain").unlink()
+    assert "p has no keys" in MK.indexable("R", keyed, pkgs)
+    _setup(root, "R", "r", mine | {"Mathlib": root / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean",
+                                    "Init": Path("/elan/lib/lean/Init.olean")})
+    assert MK.indexable("R", keyed, pkgs) == "/elan/lib/lean is in no root's fetched packages"
 
 
 def test_a_module_file_is_indexed_where_lake_handed_its_compile_the_modules_lean_loads(tmp_path):

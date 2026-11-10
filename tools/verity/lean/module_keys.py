@@ -585,6 +585,47 @@ def _strings(j) -> list[str]:
     return [s for v in (j.values() if isinstance(j, dict) else j if isinstance(j, list) else ()) for s in _strings(v)]
 
 
+#: in `indexable`'s ``owners``, before why a directory's modules were not read as the key names them; no package's name
+REFUSED = "\0"
+
+
+def _fetches(root: Path) -> tuple[str, dict[str, dict]] | None:
+    """(the digest of ``root``'s toolchain file, {a fetched package's directory under its packages: its entry as a key
+    takes it (`pins`)}); None for a root that has no keys (`env_parts`). Lake checks a package out under its name
+    unescaped."""
+    if isinstance(env_parts(root), str):
+        return None
+    pinned = pins(json.loads((root / MANIFEST).read_text()))["fetched"]
+    return digest(root / TOOLCHAIN), {str(e.get("name")).replace("«", "").replace("»", ""): e for e in pinned}
+
+
+def pinned_as(root: Path, here: Path) -> str | None:
+    """Why a compile that read a module's `.olean` in ``here``, a directory no package of the workspace builds, did not
+    read what a key of ``root`` names; or None. A key names the fetched packages by ``root``'s pins, not by their bytes,
+    and a package required by path is compiled again by a build of each root that requires it, over that root's fetched
+    packages: Security's modules by Security/Proofs' build, last, so that is the compile `put` finds in Security's tree.
+    Its outputs are a compile of what ``root``'s key names when ``here`` is in the packages of a root that has
+    ``root``'s toolchain and pins every package ``root`` fetches as ``root`` does, the one read among them. The
+    toolchain's own modules are not listed in a `setup.json`, so a directory in no root's packages is refused. ``here``
+    is read as Lake wrote it, `<a root>/.lake/packages/<package>/...`, whatever links it goes through: Lake checks out
+    there what that root pins."""
+    parts = here.parts
+    at = next((i for i in range(len(parts) - 3, -1, -1) if parts[i:i + 2] == (".lake", "packages")), None)
+    if at is None:
+        return f"{here} is in no root's fetched packages"
+    other, pkg = Path(*parts[:at]), parts[at + 2]
+    mine, theirs = _fetches(root), _fetches(other)
+    if mine is None or theirs is None:
+        return f"{root if mine is None else other} has no keys, and a compile read {pkg} under {other}"
+    if pkg not in mine[1]:
+        return f"{root} does not fetch {pkg}, which a compile read under {other}"
+    if mine[0] != theirs[0]:
+        return f"{other} has another toolchain than {root}"
+    if differ := sorted(n for n, e in mine[1].items() if theirs[1].get(n) != e):
+        return f"{other}, where a compile read {pkg}, pins {differ[0]} otherwise than {root}"
+    return None
+
+
 def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict[str, str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
@@ -593,9 +634,10 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
     `Lake/Build/Module.lean`): every module a legacy file imports, transitively, and of a `module` file's imports
     those its own imports and their `public import`s reach, with all that a `meta import` or an `import all` needs
     below them. What an import of a `module` file imports privately is not among them, and the key doesn't read it.
-    ``owners`` holds, for one build's calls, the package whose build holds each directory an `.olean` is in: a module
-    lists up to every module it imports transitively, Mathlib's included, thousands of paths in a few hundred
-    directories."""
+    Every other module there is a fetched package's, read where the key's root pins it (`pinned_as`, ``pkgs[0]`` being
+    the root's package). ``owners`` holds, for one build's calls, the package whose build holds each directory an
+    `.olean` is in, and of any other directory why it is refused (`REFUSED`): a module lists up to every module it
+    imports transitively, Mathlib's included, thousands of paths in a few hundred directories."""
     k = keyed[mod]
     try:
         setup = json.loads((k.package.build() / "ir" / path_of(mod, ".setup.json")).read_text())
@@ -619,7 +661,11 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
         if d not in owners:
             here = Path(d).resolve()
             owners[d] = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
-        if (owner := owners[d]) is not None:
+            if owners[d] is None and (why := pinned_as(pkgs[0].dir, Path(os.path.normpath(d)))):
+                owners[d] = REFUSED + why
+        if (owner := owners[d]) is not None and owner.startswith(REFUSED):
+            return owner.removeprefix(REFUSED)
+        if owner is not None:
             built[name(i)] = owner
     want = set(loads(mod, keyed))
     if set(built) != want:
