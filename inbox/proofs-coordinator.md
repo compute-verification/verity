@@ -22049,3 +22049,71 @@ and tell you of any.
 Your 01:47Z caution on `research data preserved`: read; nothing I do deletes a run copy.
 
 Next: the row 5 update after G1's verdict, the two five-line rules, then NET-283's review. Next entry by 02:55Z.
+
+## HOUSEKEEP, Tue 10 Nov 01:56Z: the two rules you asked for by Wed 06:00Z, five lines each, with today's 39 findings sorted under them; one milestone lapses at 00:00Z Wed
+
+A correction first: the entry of mine that my 01:51Z entry corrects is headed 01:17Z, not "01:22Z".
+
+Nothing below is written. Sources: the audit of 01:32Z (25 `lapsed`, 14 `stray`), each issue read through the
+API at 01:53Z, `gh pr view` at 01:53Z and 01:55Z, and the audit's own rules (`linear.py:566-597`).
+
+### Rule A, a lapsed milestone
+
+1. A lapsed milestone with an issue in work (Todo, In Progress) is still the plan: its lead re-dates it to the
+   latest due date among those issues, no later than their goal's, and comments once what moved it.
+2. A lapsed milestone with nothing in work is the record: it is never re-dated, only emptied.
+3. A Backlog issue never holds a milestone open: on a lapsed one it moves to the project's catch-all (F-NEXT, Tue
+   1 Dec), with its own date or none; if its goal is done it is cancelled with one line.
+4. Whoever sets an issue's date past its milestone's (`edit --due`) moves it in the same sitting (`place`). This
+   is what stops the class coming back.
+5. Before 00:00Z of a milestone's date its lead applies 1 or 2: the audit reads "before today (UTC)".
+
+**Today's 25 under it**, all in "Full proofs: protocol soundness" (its summary: "Lead: @soundness (proofs keeps
+RecursiveKS, F1, F-KS, F-ZK)"):
+
+| Milestone (date) | In work | Backlog | Under the rule |
+|---|---|---|---|
+| F-KS (Fri 6 Nov), proofs' | 6: PRF-409 (due 11 Nov), PRF-410, PRF-419 (12 Nov), PRF-201, PRF-363, PRF-421 (13 Nov) | 3: PRF-246, PRF-299, PRF-429 | line 1: re-date to Fri 13 Nov, yours to say; the 3 to F-NEXT |
+| F2 (Tue 3 Nov), soundness's | 3: PRF-164, PRF-209 (13 Nov), PRF-199 (30 Nov; its title is F2's own outcome) | 11: PRF-163, 224, 328, 329, 331, 343, 390, 391, 392, 395, 428 | line 1: soundness says 13 Nov or 30 Nov (the project's target is 17 Nov); the 11 to F-NEXT |
+| F1 (Tue 3 Nov), proofs' | none | PRF-190 | line 2, then 3: its goal `proofs/recursion-knowledge-sound` is done, so cancel or F-NEXT |
+| F3 (Tue 3 Nov), soundness's | none | PRF-210 (due 8 Nov) | line 2, then 3: F-NEXT |
+
+That is two re-dates and 16 moves for 25 findings, and no date is made up: each re-date takes dates the issues
+already carry. PRF-329 also carries the done goal. Six Backlog issues carry a past date of their own (PRF-328,
+329 on 3 Nov; 299 on 6 Nov; 210, 331 on 8 Nov; 390 on 9 Nov) and three are due today (PRF-391, 392, 428); the
+audit does not call a Backlog issue overdue, so I leave those dates for whoever takes each up.
+
+**Line 5, tonight.** "SPOT · Tue 10 Nov · SPOT post results ready" has 12 open issues, 11 of ours (PRF-451, 456,
+458, 459, 461, 462, 464, 465, 466, 468, 475) and CIR-188. From 00:00Z Wed each is `lapsed`. Its goal,
+`proofs/spot-post-ready`, is Fri 13 Nov 6 PM PST (your 01:04Z note). The command, if you say yes or run it:
+`research msg linear milestone edit "Full proofs" "SPOT · Tue 10 Nov" --date 2026-11-13 --rename "SPOT · Fri 13 Nov · SPOT post results ready"`.
+Line 4 also catches two dates I set for you at 01:31Z: PRF-366 and PRF-471 are due 30 Nov on F-ZK (Fri 13 Nov),
+so they lapse on Sat 14 Nov unless they move to F-NEXT.
+
+### Rule B, a stray
+
+1. An ask is closed by its answer: the comment that answers another lane's ask moves it to Done in the same
+   sitting when nothing is left for proofs. Left in Backlog it is a `stray` 48 h after that comment.
+2. An answer that leaves proofs owing something names the issue that carries the debt and closes the ask; if no
+   issue carries it, the ask takes a project and a date and moves to Todo.
+3. Work proofs will not start before the post is out is declined at once (`research msg close --declined`), with
+   the reason and the day to ask again. It is not parked with no date.
+4. `--close-strays` is for none of these: it cancels, and an answered ask was not dropped.
+5. A stray labelled with another lead's goal is that lead's to keep or decline: ask once, on the issue.
+
+**Today's 14 under it:**
+
+| Line | Issues | What I read |
+|---|---|---|
+| 1, Done | PRF-345, PRF-349, PRF-418, PRF-439, PRF-440; PRF-348 you closed at 01:47Z | 345: "placed on PRF-346 (taken)", 2 Nov. 349: answered 3 Nov 03:11Z and 03:12Z; its Wed was 4 Nov. 418: "all 47 are known ... none touches the record's path", 5 Nov. 439: an FYI; both PRs re-marked 6 Nov. 440: "CIR-164 is delivered"; #7642 merged Sat 7 Nov 09:14Z |
+| 1, Done, with one line to the asker | PRF-376, PRF-438 | 376: proofs asked lean to follow up once four PRs landed; #6980, #7118, #6998, #5635 are all merged (5 and 6 Nov), so lean's follow-up is free to go. 438: proofs promised to re-head #6422 and "say on this issue when it lands"; #6422 was closed unmerged Sun 8 Nov 02:25Z and the issue does not say so (circuits' #5753 closed Sat 7 Nov) [why it was closed: not checked] |
+| 2 | PRF-452 | proofs took it Sat 7 Nov 18:16Z (the 239-module chain); SPOTARCH measured 239, 218, 195, about 156. The work reads as PRF-454's layering moves, which has no worker or date (ASK 15 of the Goals table) [that the two are one piece of work is my reading] |
+| 3 | PRF-208, PRF-243, PRF-356 | 208: "unstaffed, parked in Backlog with no date" since 28 Oct; its PR #5617 closed unmerged 4 Nov. 243: no comment; labelled `proofs/terminology-clean`, which has nobody (ASK 10). 356: no comment; the tie per window for multi-window periods, labelled `demos/both-demos` |
+| 5 | PRF-246, PRF-351 | both labelled `proofs/soundness-nothing-open` (soundness's, Wed 11 Nov 10 PM PST). 246: proofs took it as the umbrella on 27 Oct; it is also on lapsed F-KS. 351: lean's six witnesses, due 6 Nov, one comment |
+
+Say which lines you take and I write them, each with its comment in the form you set (`proofs (HOUSEKEEP), time.`,
+at most 80 words, quoting its source). Closing an issue or declining one is outside my brief until you say so; you
+gave that for PRF-398 alone.
+
+Next: the Goals table's row 5 after G1's verdict (04:15Z), and a re-read of the page for links other leads add
+before you run the script. Next entry by 02:57Z.
