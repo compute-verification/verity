@@ -5292,6 +5292,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5493,12 +5499,6 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
   }
  },
  "witnesses_assumed": {
@@ -44593,7 +44593,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "39dee9fca09c8660501e45b269ca5d8c5f4be38cd48808247a89764d7c257aff",
+   "digest": "f07697cd0fedd3c8b808e4998c0079865b5fecb39128c4f1dac44c2b7bf7af78",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -44722,7 +44722,7 @@
     "NetworkCheck.Period.certificateOf": "23705d7deefcf043100fe1689acef9c6a8b0d778482d9a85000e184bab7636b9",
     "NetworkCheck.Period.certifies": "2803235f6ec55f07888c0a09fa51eace653cb90b35adadd4d5693235a1ee7ff5",
     "NetworkCheck.Period.certifiesOn": "171f63a57032e389c2374de9f1d7e2990ea02fb0b34ba10c7c82090bd40ab411",
-    "NetworkCheck.Period.check": "db55c676a6d2b03eba819f70dae93f4b87cf8f7e2409bfcc2e920dd3486c895a",
+    "NetworkCheck.Period.check": "3e935a69be8779fcefbb9685a5ad19ce74180fd4ffdad197d7e4b36a780fa068",
     "NetworkCheck.Period.clearClocks": "f3d5c8cc2493a8bbfa1d7bf161c066530730dbc6f6c6bf9575f1dfb6de5fcb34",
     "NetworkCheck.Period.clockDigest": "b00053981453a122c0cf6e04e51482c993365526c33520f49eb09ccb03fd4dde",
     "NetworkCheck.Period.clockTag": "dac49ad8ff6064134028a068f766570c10643c1261cf4667962a3c000a5bddcc",
@@ -44763,6 +44763,7 @@
     "NetworkCheck.Period.partNames": "badc9758e4738275c12fc353b4c979c3926245c8c6b126e3201254f2202a8cd6",
     "NetworkCheck.Period.profileJson": "b0c58e63ca7fb149271c3d878ecee533a50ac8914e70e41797c9efec66f76736",
     "NetworkCheck.Period.progName": "2de5c3a902de67782695321a70c44a30ddbfd0c7d15c826607f2cec5049956e4",
+    "NetworkCheck.Period.progParam": "0938e69805c94ed4f9bc1ad43e3d7f60b0a5b4867c189997622194db6f737322",
     "NetworkCheck.Period.progParams": "cd3161d2dc7ddca978ca523e364577d03e434752f9848ff6cf9dab2c8de12b39",
     "NetworkCheck.Period.progTied": "aea483e11be84e62937596a04e0906e676d332b153fcd11e08500b2f3f7930ad",
     "NetworkCheck.Period.protocol": "b7a94ee276d6eeeeaf99b83366b055c48733ba680ba134457da82439c01c534e",
@@ -44799,6 +44800,10 @@
     "NetworkCheck.Period.termsJson": "7cc873413ea930bb26253780d3cce7de8fe599e566a73264313d8f1ba0c53fd1",
     "NetworkCheck.Period.tiedAudits": "d2b6a61095ed897496f01c415bc58055d2ec98ed1ba616baf01c612e3c453c80",
     "NetworkCheck.Period.tiedIn": "c61a279d13da96e9f75ff03a75664ffcbdbe8c1709f4c79f26783c81d6ccb128",
+    "NetworkCheck.Period.tiedInputCheck": "2f3e8d3717540ecf91a3ae80a7434e01a26266bd961686287341cea3aea6cd6a",
+    "NetworkCheck.Period.tiedInputChecks": "5c706ac53c528b8d8dc2a4355a31fd728104c768813119497f2dd7b6ece062cd",
+    "NetworkCheck.Period.tiedInputWired": "7f2591b2af89ae119616866d3fa12f2ecfd84deba4517398cff68bee71af7cdb",
+    "NetworkCheck.Period.tiedKey": "db98a5d1df91e2efac39068ef72ac1aec124e7274acb04ce508b5c8ea8702a10",
     "NetworkCheck.Period.tiedOf": "0cb27c1b526a7ad3cff170900af018046f3700a280c9c23a5c49d32538bae6dd",
     "NetworkCheck.Period.unitLevel": "628450a5396d927976e8e4c9c94c1af776d9123759e78255c1aff8c85de87bb5",
     "NetworkCheck.Period.windowCheck": "499fab8b39873a4e3d109fd9a1418eca3f6ba546168cfbe22552e9e4be900804",
