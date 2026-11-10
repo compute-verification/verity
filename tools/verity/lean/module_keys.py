@@ -322,12 +322,13 @@ def pins(manifest: dict) -> dict | str:
 def fetches(d: Path) -> set[str] | None:
     """The names of the packages the package at ``d`` fetches, those its path dependencies fetch among them: the entries
     of its own manifest, which is what Lake resolved for it as a root, that aren't packages required by path. None when it
-    has no manifest to say so: its modules' keys then name every package their root fetches."""
+    has no manifest that says so: its modules' keys then name every package their root fetches."""
     try:
         entries = json.loads((d / MANIFEST).read_text())["packages"]
-        return {e["name"] for e in entries if e.get("type") != "path"}
-    except (OSError, ValueError, KeyError, TypeError):
+        names = [e["name"] for e in entries if e.get("type") != "path"]
+    except (OSError, ValueError, LookupError, TypeError, AttributeError):
         return None
+    return set(names) if all(isinstance(n, str) for n in names) else None
 
 
 def env_parts(root: Path, of: Path | None = None) -> dict[str, str] | str:
@@ -349,9 +350,10 @@ def env_parts(root: Path, of: Path | None = None) -> dict[str, str] | str:
     if isinstance(pinned, str):
         return f"{m}: {pinned}"
     if of is not None and (names := fetches(of)) is not None:
-        if unpinned := sorted(names - {e.get("name") for e in pinned["fetched"]}):
+        mine = [e for e in pinned["fetched"] if isinstance(e.get("name"), str) and e["name"] in names]
+        if unpinned := sorted(names - {e["name"] for e in mine}):
             return f"{m} pins no {unpinned[0]}, which {of} fetches"
-        pinned["fetched"] = [e for e in pinned["fetched"] if e.get("name") in names]
+        pinned["fetched"] = mine
     return {TOOLCHAIN: digest(root / TOOLCHAIN),
             FETCHED: C.digest(json.dumps(pinned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())}
 
@@ -628,7 +630,7 @@ def _fetches(root: Path, of: Path | None = None) -> tuple[str, dict[str, dict]] 
     names = fetches(of) if of is not None else None
     pinned = pins(json.loads((root / MANIFEST).read_text()))["fetched"]
     return digest(root / TOOLCHAIN), {str(e.get("name")).replace("«", "").replace("»", ""): e for e in pinned
-                                      if names is None or e.get("name") in names}
+                                      if names is None or isinstance(e.get("name"), str) and e["name"] in names}
 
 
 def pinned_as(root: Path, of: Path, here: Path) -> str | None:

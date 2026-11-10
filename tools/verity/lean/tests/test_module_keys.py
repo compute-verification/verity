@@ -373,10 +373,17 @@ def test_the_keys_of_a_root_s_own_modules_name_every_pin_of_the_root(tmp_path):
     assert MK.workspace(root)[1] == C.env_digest(sorted(whole), whole)
     less = whole | {"fetched packages": _canon({"manifest": {}, "fetched": [mathlib]})}
     assert keyed["D.X"].parts == less and keyed["D.X"].env == C.env_digest(sorted(less), less)
-    (tmp_path / "d" / "lake-manifest.json").unlink()
-    again = MK.keys(root)
-    assert {m: (k.task, k.env) for m, k in again.items() if m != "D.X"} == {m: (k.task, k.env) for m, k in own.items()}
-    assert again["D.X"].parts == whole, "a package with no manifest of its own: every pin of the root"
+    assert MK.fetches(tmp_path / "d") == {"mathlib"} and MK.fetches(root) == {"mathlib", "arklib"}
+    for unread in ("{", "[]", '{"packages": 1}', '{"packages": ["mathlib"]}', '{"packages": [{"type": "git"}]}',
+                   '{"packages": [{"type": "git", "name": ["mathlib"]}]}', None):
+        if unread is None:
+            (tmp_path / "d" / "lake-manifest.json").unlink()
+        else:
+            (tmp_path / "d" / "lake-manifest.json").write_text(unread)
+        again = MK.keys(root)
+        assert {m: (k.task, k.env) for m, k in again.items() if m != "D.X"} == {m: (k.task, k.env) for m, k in own.items()}
+        assert MK.fetches(tmp_path / "d") is None and again["D.X"].parts == whole, \
+            f"a package whose manifest doesn't say what it fetches ({unread}): every pin of the root"
 
 
 def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
