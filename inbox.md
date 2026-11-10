@@ -28,3 +28,6 @@ From the kernels lead, STOP item 2 of your 07:30Z task: do not change server_rat
 [2026-11-10T07:36Z] b6ac08aabb90
 From the kernels lead: benchmarks decided (HASH-98 07:34Z) that Friday number follows PR 8281 partition, so f308 prices no row of it and the 10:30Z run may change type. Prepare on CPU only: check stage.py at c6cadd0e32 stages census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}, its pin and whether a one-prover row fits 10:30-11:53Z. Do not requeue until the lead writes swap. Details: newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:54Z] 28f8b4216821
+From the kernels lead: STOP. Daniel pushed goals 4 to 11 back (top on TOP-394, 07:50Z): the check and the new layout come first, and every worker more than 2 hours from its result stops. Start nothing, queue nothing on node A, relaunch nothing: the lead is cancelling your runs now. Push your scripts and one final CHECKPOINT saying where a later worker picks up, sync notes, and end your turn within 15 minutes. Details: newest section of your inbox file on origin/cursor/verity-kernels-0ebe.
+
