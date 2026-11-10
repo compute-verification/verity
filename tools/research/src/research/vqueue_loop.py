@@ -11,7 +11,8 @@ The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`re
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
-`main` landed since, as `tools/move/restack.py` carries a branch: `Queue.mapped_change`, which the end of a tick starts working
+`main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
+mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working
 out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
@@ -603,7 +604,7 @@ class World:
         q, flags = self.q, flags_at(self.repo, main)
         self.labels = labels = self.labels_at()
         labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
-        labels.moved = q.mapped_change if q.mapped_jobs else None
+        labels.moved, labels.owners = q.mapped_change if q.mapped_jobs else None, self._owners
         if flags.signed_verdicts:
             labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
         q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
@@ -613,6 +614,11 @@ class World:
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
         return self._prs
+
+    def _owners(self, n: int) -> set[str | None]:
+        """Whose land verdict on PR ``n`` counts at none of its heads (`StoreLabels.owners`): its owner and that owner's handle,
+        as `review_owners` has them, with each head's mark's author."""
+        return {p.owner, self.q.handle(p)} if (p := self.open().get(n)) else set()
 
     def _missing(self, shas: Iterable[str]) -> set[str]:
         if not (shas := list(dict.fromkeys(shas))):
@@ -2242,8 +2248,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
                     help=f"old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and none "
-                         f"waits on, running every move's script on a scratch worktree under --merged-root, so a mark or land "
-                         f"verdict carries to a head whose own change is theirs mapped (`Queue.mapped_change`); those "
+                         f"waits on, running every move's script on a scratch worktree under --merged-root, so an old head's "
+                         f"land verdict and mark carry to a head whose own change is theirs mapped (`Queue.mapped_change`), "
+                         f"from a head with a land verdict of its own only (`StoreLabels.lands`); those "
                          f"`research queue map-moves` mapped elsewhere count once copied into mapped-changes.d/ beside the "
                          f"log; 0 carries none across a move (default {MAPPED_JOBS})")
     ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",

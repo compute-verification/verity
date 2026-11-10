@@ -151,8 +151,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    agreement and every disagreement (parts missing in the executor and tasks
                                                    only it ran among them), and whether the newest 3 agree fully, none
                                                    incomplete: the gate for `executor = "on"` (`research.executor`)
-    research queue map-moves HEAD... [--jobs N] [--tip REF] [--out FILE]
-                                                   each old head's own change once it has crossed the moves REF (default
+    research queue map-moves N@HEAD... [--jobs N] [--tip REF] [--out FILE]
+                                                   the own change of each old head HEAD of PR N with a land verdict of its
+                                                   own (the store's: `StoreLabels.lands`; any other is refused, its tree run
+                                                   by no script) once it has crossed the moves REF (default
                                                    origin/main) has and it lacks, as `tools/move/restack.py` carries it
                                                    (`map_moves`), N heads at a time, as JSON by `mapped_key`: copied into
                                                    `mapped-changes.d/` beside the verified queue's loop's cache, it spares the
@@ -186,8 +188,9 @@ whitespace-kept patch-id (`git patch-id --verbatim`) of its diff from its merge 
 costs no new mark and no new review, a withdrawn mark holds there too, and a head whose own diff differs, if only in whitespace
 (an indentation, the spaces in a string), takes none.  The verified queue's loop also gives a head those of each other head
 whose own change, once it has crossed the moves `main` landed since as `tools/move/restack.py` carries a branch
-(`Queue.mapped_change`), is the head's: so a restack across a move costs none either, and one that changes anything besides
-takes none.
+(`Queue.mapped_change`), is the head's, when that head's own land verdict counts: so a restack across a move costs none either,
+and one that changes anything besides takes none.  Mapping a head runs a move's script on its tree, which runs the tree's own
+code, so the loop maps only a head a reviewer passed (`StoreLabels.lands`), and a mark alone carries across no move.
 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
@@ -1364,11 +1367,15 @@ class StoreLabels:
     each other head of its PR whose own change is the same, logging which (`_counted`): so a merge of `main` costs no new mark
     and no new review, while a head whose own diff differs takes none.  With ``moved`` too (`Queue.mapped_change`: an old
     head's own change once it has crossed the moves the new head's base has, as `tools/move/restack.py` carries it), so does
-    each whose own change, so mapped, is the head's: a restack across a move costs none either."""
+    each whose own change, so mapped, is the head's, if its own land verdict counts (`lands`, the PR's ``owners`` given):
+    mapping a head runs a move's script on its tree, which runs the tree's own code as the queue's user, so a mark alone, or
+    a hold, carries across no move.  A restack across a move costs a passed head none either."""
 
     def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None,
-                 change: Callable[[str], str | None] | None = None, moved: Callable[[str, str], str | None] | None = None):
+                 change: Callable[[str], str | None] | None = None, moved: Callable[[str, str], str | None] | None = None,
+                 owners: Callable[[int], Iterable[str | None]] | None = None):
         self.store, self.log, self.since, self.verify, self.change, self.moved = store, log, since, verify, change, moved
+        self.owners = owners
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1421,6 +1428,14 @@ class StoreLabels:
         """Each ``key`` label on `pr:{n}@{head}` that ``verify`` reads as absent, with why; none without ``verify``."""
         return self._counted(pr, head, key)[1]
 
+    def lands(self, pr: int, head: str) -> bool:
+        """Whether ``head``'s own `reviewed` labels land it (`unreviewed`): a land verdict that ``verify`` counts, by none of the
+        PR's ``owners`` (its owning lane and that lane's handle; none when not given) nor its newest ready mark's author there,
+        and no hold.  The one kind of old head ``moved`` maps, and `map_moves` (`UNLANDED`)."""
+        marks = [lab for lab in self._verified(pr, head, self._labels(pr, head, vocab.READY))[0] if str(lab.value).lower() == "true"]
+        mine = {*(self.owners(pr) if self.owners is not None else ()), max(marks, key=lambda lab: lab.ts).by if marks else None}
+        return unreviewed(self._verified(pr, head, self._labels(pr, head, vocab.REVIEWED))[0], mine) is None
+
     def _counted(self, pr: int, head: str, key: str) -> tuple[list, list[str]]:
         """The ``key`` labels on `pr:{n}@{head}` that count, and why each other one doesn't.  With ``change``, a head none of
         whose own counts takes those of each other head of the PR with the same own change (``change``, never None for
@@ -1431,7 +1446,8 @@ class StoreLabels:
             return counted, refused
         came, moved = [], []
         for old, labs in others.items():
-            if (same := self.change(old) == own) or self.moved is not None and self.moved(old, head) == own:
+            if (same := self.change(old) == own) or (self.moved is not None and self.lands(pr, old)
+                                                     and self.moved(old, head) == own):
                 got, why = self._verified(pr, old, labs)
                 counted, refused = [*counted, *got], [*refused, *why]
                 (came if same else moved).extend([old] if got else [])
@@ -1507,7 +1523,7 @@ class StoreLabels:
         from .store.local import StoreError
 
         target = label_target(pr, head)
-        if target in self._fresh:
+        if target in self._fresh or pr in self._pulled:     # pulled whole, every head's (`prefetch`, `_other_heads`)
             return self.store.labels(target, key=key)
         try:
             labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"), strict=True)
@@ -3971,7 +3987,11 @@ MAPPED_RE = re.compile(r"^mapped ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
 MAPPED_TIMEOUT_S = 1800.0
 #: what `mapped_tree`'s run of a head's own code never gets: the queue's GitHub and Slack credentials, any of which can push
-UNREVIEWED_UNSET = ("GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR", "SLACK_BOT_TOKEN")
+SCRIPT_UNSET = ("GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR", "SLACK_BOT_TOKEN")
+#: why neither the loop (`StoreLabels.lands`) nor `map_moves` maps a head without a land verdict of its own that counts: a move's
+#: script runs the tree's own code as the queue's user, in a worktree of its clone, which a hook planted there or a mapping
+#: written beside it would subvert
+UNLANDED = "no land verdict of its own counts, and a move's script runs a tree's own code, so it runs only on a head a reviewer passed"
 
 
 def scratch() -> tempfile.TemporaryDirectory:
@@ -3988,9 +4008,10 @@ def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
     runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
     ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
     with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's
-    own code runs there, so the run gets none of the queue's credentials (`UNREVIEWED_UNSET`), and `gh` a config that isn't there."""
+    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials (`SCRIPT_UNSET`), so
+    the run gets none, and `gh` a config that isn't there."""
     with scratch() as d:
-        env = {k: v for k, v in _script_env().items() if k not in UNREVIEWED_UNSET}
+        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
         rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
                             env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())
@@ -4076,14 +4097,17 @@ def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]
         return None, f"{type(e).__name__}: {e}"
 
 
-def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int) -> dict[str, tuple[str, str | None, str]]:
+def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int,
+              refuse: Callable[[str], str | None]) -> dict[str, tuple[str, str | None, str]]:
     """Each of ``heads``' own change mapped across the moves ``main`` has and it lacks, ``jobs`` heads at once, as the loop maps
     an old head for a new one on ``main`` (`Queue.mapped_change`): by head, (its `mapped_key`, the patch-id or None, why not),
-    none for a head that crosses no move.  What `research queue map-moves` works out, for the loop to read."""
+    none for a head that crosses no move, and None for one ``refuse`` says why not of (no land verdict of its own:
+    `UNLANDED`), whose tree no script runs on.  What `research queue map-moves` works out, for the loop to read."""
     todo = {h: moves for h in heads if (moves := moves_between(repo, main, h))}
+    refused = {h: why for h in todo if (why := refuse(h))}
     with concurrent.futures.ThreadPoolExecutor(max(1, jobs)) as pool:
-        got = {h: pool.submit(map_one, repo, h, main, moves) for h, moves in todo.items()}
-    return {h: (mapped_key(h, todo[h]), *f.result()) for h, f in got.items()}
+        got = {h: pool.submit(map_one, repo, h, main, moves) for h, moves in todo.items() if h not in refused}
+    return {h: (mapped_key(h, todo[h]), *(got[h].result() if h in got else (None, refused[h]))) for h in todo}
 
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
@@ -6289,12 +6313,26 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 
 def _map_moves(a: argparse.Namespace) -> int:
-    """`research queue map-moves HEAD...` (`map_moves`), in this checkout, fetching what it lacks: each old head's own change
-    mapped across the moves --tip has and it lacks, as JSON by `mapped_key`, which the loop reads once the file is copied into
-    `mapped-changes.d/` beside its `mapped-changes.json`; a line for each head on stderr.  The loop's threads map a head on
-    the control pod's few cores; this maps them on a node with many (`research run --on`)."""
+    """`research queue map-moves N@HEAD...` (`map_moves`), in this checkout, fetching what it lacks: the own change of each old
+    head HEAD of PR N whose own land verdict counts there (`StoreLabels.lands`, from the evidence store's labels, pulled from
+    its remote; its mark's author's and the owner's own don't count), mapped across the moves --tip has and it lacks, as JSON
+    by `mapped_key`, which the loop reads once the file is copied into `mapped-changes.d/` beside its `mapped-changes.json`; a
+    line for each head on stderr.  The loop's threads map a head on the control pod's few cores; this maps them on a node with
+    many (`research run --on`)."""
+    from .store.local import LocalStore
+
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-    heads = [h for h in (a.pr, *a.shard_run) if h]
+    pairs = [x.partition("@") for x in (a.pr, *a.shard_run) if x]
+    if bad := ["".join(p) for p in pairs if not (p[0].isdigit() and p[1] and p[2])]:
+        raise SystemExit(f"research queue map-moves: {', '.join(bad)}: give each old head as N@HEAD, its PR's number and the head")
+    prs = {h: int(n) for n, _, h in pairs}
+    heads, labels = list(prs), StoreLabels(LocalStore(a.store), log=lambda s: print(s, file=sys.stderr))
+
+    def refuse(h: str) -> str | None:
+        try:
+            return None if labels.lands(prs[h], h) else UNLANDED
+        except QueueError as e:
+            return str(e)
 
     def lacks(h: str) -> bool:
         return bool(_git(top, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode)
@@ -6303,7 +6341,7 @@ def _map_moves(a: argparse.Namespace) -> int:
     for h in filter(lacks, heads):
         _git(top, *STALL, "fetch", "-q", "origin", h, check=False)
     missing = set(filter(lacks, heads))
-    got = map_moves(top, heads, _out(top, "rev-parse", a.tip), a.jobs)
+    got = map_moves(top, heads, _out(top, "rev-parse", a.tip), a.jobs, refuse)
     for h in heads:
         _, own, why = got.get(h, ("", None, "no such commit here or on origin" if h in missing else "it crosses no move"))
         print(f"research queue map-moves: {h[:12]}: {own or why}", file=sys.stderr)
@@ -6328,9 +6366,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of `checked` ci knows is green, which `main` moves to; "
                     "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
-                    "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head")
+                    "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it; "
-                    "map-moves: the other old heads")
+                    "map-moves: the other old heads, as N@HEAD")
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="map-moves: the heads mapped at once, each running a move's "
                     "script on a whole tree in a worktree of its own under --preflight-root (default 1)")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")

@@ -28,6 +28,13 @@ MAP, PATHS, LIB = "tools/move/demo_map.toml", "tools/move/demo_paths_map.toml", 
 A = "def f():\n    return 1\n\n\ndef g():\n    return 2\n"
 B = "import old_proto.a\n\nX = old_proto.a.f()\n\n\nZ = 1\n"
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+#: the start of a `pins.py` that `rename.py` imports from the tree it runs on: the git directory of that worktree, the clone's
+GIT_DIR = ("import json, pathlib, subprocess\n"
+           "c = pathlib.Path(subprocess.run(['git', 'rev-parse', '--git-common-dir'], capture_output=True, text=True)"
+           ".stdout.strip()).resolve()\n")
+#: one that plants a hook there, which the clone's next fetch would run with the queue's credentials
+PLANT = (GIT_DIR + "(c / 'hooks').mkdir(exist_ok=True)\n"
+         "(c / 'hooks' / 'reference-transaction').write_text('#!/bin/sh\\ncat > /dev/null\\n')\nPINS = ()\n")
 
 
 @pytest.fixture
@@ -320,17 +327,23 @@ def test_at_most_mapped_jobs_threads_map_at_once_and_a_head_wanted_meanwhile_wai
 def test_research_queue_map_moves_maps_old_heads_elsewhere_and_the_loop_reads_them_from_mapped_changes_d(world, monkeypatch,
                                                                                                          capsys):
     """`research queue map-moves`, in a clone of its own, maps each old head across the moves `main` has as the loop would,
-    and writes what it worked out by `mapped_key`, saying so for each head, and why for a head crossing no move or missing.
+    and writes what it worked out by `mapped_key`, saying so for each head, and why for a head crossing no move, missing, or
+    marked with no land verdict of its own (the store's labels), whose tree no script runs on; each is given as N@HEAD.
     Copied into `mapped-changes.d/` beside the loop's `mapped-changes.json`, the file serves the loop's queue without a script:
     read when the queue first looks, and again by `work_out_mapped` once a file there has changed; one that doesn't parse is
     said and skipped."""
     world.gh.put(1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}), ready=False)
     _mark(world, 1, old)
+    world.gh.put(3, bare := world.change({"old_proto/a.py": A.replace("return 1", "return 4")}), ready=False)
+    world.store.add_label(label_target(3, bare), vocab.READY, True, "lane-3", ts="2026-11-10T10:00:00Z")
     _git(world.tmp, "clone", "-q", str(world.origin), str(elsewhere := world.tmp / "elsewhere"))
     landed = _land(world, move := _move(world))
     world.gh.put(1, new := _restack(world, old), ready=False)
     world.gh.put(2, late := world.change({"x.txt": "x\n"}, base=f"{landed}^1"), ready=False)
+    _mark(world, 2, late)
     out, missing = world.tmp / "mapped.json", "f" * 40
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(world.tmp / "store.toml"))
+    store = ["--store", str(world.tmp / "store")]
     pools: list[int] = []
 
     class Pool(concurrent.futures.ThreadPoolExecutor):
@@ -340,7 +353,8 @@ def test_research_queue_map_moves_maps_old_heads_elsewhere_and_the_loop_reads_th
 
     monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor", Pool)
     monkeypatch.chdir(elsewhere)
-    assert Q.main(["map-moves", old, new, late, missing, "--jobs", "2", "--out", str(out)]) == 0
+    assert Q.main(["map-moves", f"1@{old}", f"1@{new}", f"2@{late}", f"3@{bare}", f"4@{missing}", "--jobs", "2",
+                   "--out", str(out), *store]) == 0
     q = _queue(world)
     assert json.loads(out.read_text()) == {Q.mapped_key(old, [(move, [])]): q.own_change(new)}
     assert capsys.readouterr().err.splitlines() == [
@@ -348,8 +362,11 @@ def test_research_queue_map_moves_maps_old_heads_elsewhere_and_the_loop_reads_th
         f"research queue map-moves: {new[:12]}: it crosses no move",
         f"research queue map-moves: {late[:12]}: it has {_git(q.workdir, 'rev-parse', f'{landed}^1')[:12]}, which came after "
         f"{_git(q.workdir, 'rev-parse', f'{move}^')[:12]}, the base of the move {move[:12]}: restack.py refuses it (based-after)",
+        f"research queue map-moves: {bare[:12]}: {Q.UNLANDED}",
         f"research queue map-moves: {missing[:12]}: no such commit here or on origin"]
-    assert Q.main(["map-moves", new, "--jobs", "0"]) == 0 and capsys.readouterr().out == "{}\n" and pools == [2, 1]
+    assert Q.main(["map-moves", f"1@{new}", "--jobs", "0", *store]) == 0 and capsys.readouterr().out == "{}\n" and pools == [2, 1]
+    with pytest.raises(SystemExit, match=f"{old}: give each old head as N@HEAD"):
+        Q.main(["map-moves", old, *store])
 
     monkeypatch.setattr(Q, "mapped_tree", lambda *a, **k: pytest.fail("a script ran"))
     q.mapped_jobs = 1
@@ -436,17 +453,70 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
 
 
-def test_a_moves_script_on_an_unreviewed_head_runs_without_the_queues_credentials(world, monkeypatch):
-    """The script runs the head's own code (`rename.py` runs the tree's `pins.py`, `layout.py` its `uv lock`), which nobody
-    reviewed, so it sees none of the queue's GitHub and Slack credentials, and `gh` finds no stored login."""
+def test_a_moves_script_runs_without_the_queues_credentials(world, monkeypatch):
+    """The script runs the head's own code (`rename.py` runs the tree's `pins.py`, `layout.py` its `uv lock`), which needs none
+    of the queue's GitHub and Slack credentials, so it sees none, and `gh` finds no stored login."""
     q = _queue(world)
     head = _git(q.workdir, "rev-parse", q.base)
-    for k in Q.UNREVIEWED_UNSET:
+    for k in Q.SCRIPT_UNSET:
         monkeypatch.setenv(k, "dummy-" + k.lower())
     monkeypatch.setattr(Q, "_MAPPED", "import os, sys; gh = os.environ.get('GH_CONFIG_DIR', ''); sys.exit("
                         "','.join(sorted(k for k, v in os.environ.items() if v.startswith('dummy-'))) + '|' + "
                         "str(gh.startswith(os.environ['TMPDIR']) and not os.path.exists(gh)))")
     assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: |True")
+
+
+def test_only_an_old_head_a_reviewer_passed_runs_a_moves_script_so_a_head_marked_alone_plants_no_hook(world):
+    """Mapping an old head runs a move's script on its tree, which runs the tree's own code (`rename.py` imports its
+    `pins.py`) as the queue's user in a worktree of the queue's clone, so `StoreLabels` maps only an old head whose own land
+    verdict counts (`lands`).  #2's old head, marked on ci's word and passed by nobody, has a `pins.py` that plants a hook in
+    the clone, which the queue's next fetch would run with its credentials: no script runs on it, so nothing is planted, and
+    its mark carries to no head across the move.  Its owner's own land verdict changes nothing (``owners``); a reviewer's
+    lets the script run, and the mapping, not the new head's own change, carries nothing."""
+    world.gh.put(2, old := world.change({"tools/verity/check/pins.py": PLANT, "b.py": B + "W = 1\n"}), ready=False)
+    world.store.add_label(label_target(2, old), vocab.READY, True, "ci", ts="2026-11-10T10:00:00Z")
+    _land(world, _move(world))
+    world.gh.put(2, new := world.change({"d.txt": "d\n"}), ready=False)
+    q = _queue(world)
+    hook = Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "hooks" / "reference-transaction"
+
+    def kept() -> tuple[bool, list]:
+        return _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"}), 2, new)
+
+    assert kept() == (False, []) and not q._mapped
+    q.fetch(world.gh.open_prs())
+    assert not hook.exists()
+    world.store.add_label(label_target(2, old), vocab.REVIEWED, "land", "lane-2", ts="2026-11-10T11:00:00Z")
+    assert kept() == (False, []) and not q._mapped and not hook.exists()
+    world.store.add_label(label_target(2, old), vocab.REVIEWED, "land", "reviewer", ts="2026-11-10T12:00:00Z")
+    assert kept() == (False, []) and list(q._mapped) == [(old, new)] and hook.exists()
+
+
+def test_a_head_marked_alone_runs_no_script_so_its_code_forges_no_mapping_that_carries_another_prs_verdict(world):
+    """Nor can such a head's code write `mapped-changes.d/`, which the loop reads as mappings worked out elsewhere: #2's
+    `pins.py` would write there that #1's passed old head maps to the own change of #1's new head, which adds a file nobody
+    reviewed.  No script runs on #2's heads, so nothing is written there, and #1's new head takes no label: #1's old head,
+    mapped for real, isn't its own change."""
+    world.gh.put(1, h0 := world.change({"b.py": B + "Y = 1\n"}), ready=False)
+    _mark(world, 1, h0)
+    before = world.change({"e.txt": "e\n"})
+    _land(world, _move(world))
+    world.gh.put(1, h2 := world.change({"evil.py": "import os\n"}), ready=False)
+    q = _queue(world)
+    onto = _git(q.workdir, "merge-base", q.base, h2)
+    key, target = Q.mapped_key(h0, Q.moves_between(q.workdir, onto, h0)), q.own_change(h2)
+    forge = (GIT_DIR + "d = c / 'mapped-changes.d'\nd.mkdir(exist_ok=True)\n"
+             f"(d / 'x.json').write_text(json.dumps({{{key!r}: {target!r}}}))\nPINS = ()\n")
+    world.gh.put(2, k1 := world.change({"tools/verity/check/pins.py": forge}, base=f"{before}^"), ready=False)
+    world.store.add_label(label_target(2, k1), vocab.READY, True, "lane-2", ts="2026-11-10T10:00:00Z")
+    q.fetch(world.gh.open_prs())
+    world.gh.put(2, k2 := world.change({"f.txt": "f\n"}), ready=False)
+    q.fetch(world.gh.open_prs())
+    labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
+    assert _kept(labels, 2, k2) == (False, [])
+    q.work_out_mapped()
+    assert not (Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "mapped-changes.d").exists()
+    assert _kept(labels, 1, h2) == (False, []) and q.mapped_change(h0, h2) not in (None, target)
 
 
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
