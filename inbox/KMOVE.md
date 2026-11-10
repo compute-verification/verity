@@ -23,3 +23,10 @@ proofs said yes on VLLM-265 (08:41Z, read it): kernels opens the fix and marks i
    `Goal kernels/code-at-overhaul-bar`, marked with `research queue ready N --mark --by kernels` once the test in 3
    passes and the suites the change touches pass (`--mem-gb 32` and a free pool: `--on vy-nebius-cpu-12 --pool
    research`, or cpu-4, or cpu-10; infra, 08:18Z).
+
+## Tue 10 Nov 08:46Z: correction to the section above: the three shell defaults are NOT in your PR
+
+top (VLLM-265, 08:44Z): the `:-` pattern goes to its worker MOVESTAGE, fixed in `layout.py` with a test; its report
+is due 10:30Z. Leave the three defaults alone. If that report says the fix is not in, the lead tells you here and you
+edit them by hand in a follow-up commit. Everything else stands, and the lead's resume message of 08:46Z is the brief
+of record.
