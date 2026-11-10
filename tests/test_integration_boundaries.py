@@ -38,9 +38,9 @@ KNOWN = {
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
-    # PoUB's memory-map/v1 builder (`record`), which lays a map out from a vLLM Program's KV rows: `map_case` builds with it
-    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.commit_map"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
+    # PoUB's memory-map/v1 builder (`Lines`), which records a session's appends and frees: `map_case` builds with it
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
     ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity.ml.definitions.registry"),
     ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.boolean"),
