@@ -12,11 +12,11 @@ import pytest
 
 from verity.ml.circuits.types import Array, Value
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registered as G
+from verity.core.protocols.spot.one_stage import partition as P, registered as G, registration as R
 
 from test_service import PAIR as ONE_TEMPLATE, _spec as one_template_spec
-from test_two_stage import (DELTA, MIXED, Q, WINDOW, Clock, _refused, _window_boundary, _window_interior,
-                            _window_spec)
+from test_two_stage import (DELTA, MIXED, Q, WINDOW, WINDOW_QUERY, Clock, _refused, _window_boundary,
+                            _window_interior, _window_spec)
 
 import fake_challenger as FC
 
@@ -49,17 +49,19 @@ def _digest_words(d: bytes) -> list[int]:
 
 
 def _interior(stream: S.Stream, previous: str, first, flat: bool = False) -> tuple[dict, dict]:
-    """The interior registration of `first`'s replay sample registering ``hist``: as the verifier fills it from
-    `SUPPLIED` (`registered.supplied_value`), or, `flat`, committed as the flat form's rows, 32 u16 words a span."""
+    """The interior registration of `first`'s replay sample, a v2 record registering ``hist``: as the verifier fills it
+    from `SUPPLIED` (`registered.supplied_value`), or, `flat`, committed as the flat form's rows, 32 u16 words a span."""
     program = stream.interior_program(len(first.units))
-    rec, ports = _window_interior(program, previous, first)
+    bare, ports = _window_interior(program, previous, first)
     if flat:
         prog = P.program_digest(program)
         rows = [_digest_words(r) for r in ROOTS]
         value = G.Registered.commit(prog, "hist", rows, G.supplied_salts(prog, "hist", len(rows)), 16)
     else:
-        value = G.supplied_value(program, "hist", G.sources(SUPPLIED)["hist"], rec)
-    return {**rec, "registered": [value.entry()]}, ports
+        value = G.supplied_value(program, "hist", G.sources(SUPPLIED)["hist"], bare)
+    n = P.units(program, WINDOW_QUERY)
+    return R.record(program, WINDOW_QUERY, {"law": "subset", "k": n}, S.SCHEME, bare["roots"], bare["window"],
+                    previous=previous, registered=[value.entry()]), ports
 
 
 def test_the_interior_program_takes_a_per_span_value_at_q_typed_by_its_leaf_type():
