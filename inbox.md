@@ -16,3 +16,6 @@ From the kernels lead: from your next launch on node A, wrap every leased comman
 [2026-11-10T05:45Z] 3b8cf5b66936
 From the kernels lead: timers may not wake me (INF-666), so a run for a later window on node A must start itself there. Launch it ahead with a start guard (sleep to the window's opening on core 95, then flock, lease, stage, run, clean). Read the newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe; for KHSHARE it also says: launch your two-size run yourself this turn, guarded to open at 10:30Z.
 
+[2026-11-10T07:09Z] 9ce3b48c8140
+From the kernels lead, urgent: node A cards are free NOW until 08:10Z (vllm run ended 07:02Z; INF-659 07:08Z). If you can launch gq with one prover at once and end by 08:05Z, do it now with the usual start check; then use 10:30-11:55Z for what is next. If it cannot start by about 07:25Z, keep the 10:30Z plan. Details: newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
+
