@@ -57,7 +57,7 @@ SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "se
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
     from verity.core.protocols.pouw import verifier as PV
-    from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+    from verity.core.protocols.spot.one_stage import registration as REG
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
@@ -89,7 +89,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
 
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: TV._accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: TV._accepted())
     monkeypatch.setattr(S, "pearlplus_coins", lambda served, out, gate, key, main: {
         "session": TV.SID, "closed": served["coins"]["closed"], "passes": 4, "reason": None})
     (toy := tmp_path / "compose").mkdir()

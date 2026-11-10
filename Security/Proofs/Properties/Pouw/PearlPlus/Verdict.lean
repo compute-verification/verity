@@ -1,18 +1,21 @@
 module
 
 public import Properties.Pouw.PearlPlus
+public import Properties.Pouw.PearlPlus.Witnesses
 public import Proofs.Properties.Core.Evaluate
 public import Proofs.Properties.Pouw.Commit
 
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
 
-`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap` and
-`YIsTheUnscale`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
+`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap`,
+`YIsTheUnscale` and `WorkIsTheCredit`, by unfolding the port's definitions step by step: each `Except` chain one bind
+at a time (`bind_ok`),
 each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their
 pure model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities. A tile
 `checkOpened` passes keeps the inert-work bound (`TileKeepsTheCap`); one over it is `checkTile`'s `overCap`, which the
-run accepts only when it credits such a tile nothing (`AcceptMeans`).
+run accepts only when it credits such a tile nothing (`AcceptMeans`). The work an accepted run publishes is the credit
+on the verdicts it answers with, and a rejected run publishes none (`WorkIsTheCredit`, `check`'s two branches).
 -/
 
 @[expose] public section
@@ -832,5 +835,38 @@ theorem yIsTheUnscale : YIsTheUnscale := by
   · cases h
   · cases h
     exact unscale_eq u alphaA alphaB
+
+/-! ## The published work -/
+
+/-- Once `plan` succeeds, `check` publishes the credit on its own verdicts when it accepts, and none when it rejects. -/
+theorem check_work {i : Input} {pl : Plan} (opener : Nat → Nat → Except String TileOpening) (hp : plan i = .ok pl) :
+    ((check i opener).accept = true → (check i opener).work = some (testCredit i.testInstance
+        (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA))) ∧
+      ((check i opener).accept = false → (check i opener).work = none) := by
+  unfold check
+  rw [hp]
+  dsimp only
+  split
+  · exact ⟨fun _ => rfl, fun h => by cases h⟩
+  · exact ⟨fun h => (by cases h), fun _ => rfl⟩
+
+theorem workIsTheCredit : WorkIsTheCredit := by
+  refine ⟨fun i opener hacc => ?_, fun i opener hrej => ?_⟩
+  · cases hp : plan i with
+    | error r => rw [refusedBeforeTheCoin i opener r hp] at hacc; cases hacc
+    | ok pl => exact ⟨pl, rfl, (check_work opener hp).1 hacc⟩
+  · cases hp : plan i with
+    | error r => exact (congrArg RunAnswer.work (refusedBeforeTheCoin i opener r hp)).trans rfl
+    | ok pl => exact (check_work opener hp).2 hrej
+
+/-- A verdict that accepts every run (`acceptAllCheck`) publishes no work, so not the credit of the plan that a `plan`
+accepting every run returns (`acceptAllPlan`). `Witnesses`' `workIsTheCredit_nontrivial` says so of every credit; this
+one names its plan, since `WorkIsTheCredit` is a conjunction and the lock reads no `∃` before one. -/
+theorem workIsTheCredit_acceptAll :
+    ¬ (acceptAllCheck emptyRun noOpening).work = some (testCredit emptyRun.testInstance
+      (creditAtAssumption acceptAllPlan.passes emptyRun.draws
+        (overCapDraws acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
+  intro h
+  cases h
 
 end Properties.Pouw.PearlPlus

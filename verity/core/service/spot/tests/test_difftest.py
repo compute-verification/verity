@@ -61,13 +61,8 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
-<<<<<<< HEAD
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum, work_k
-from verity.core.protocols.spot import challenger as CH, second_stage as SS, service
-=======
-from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.spot import challenger as CH, schedule as SCH, second_stage as SS, service
->>>>>>> origin/main
 from verity.core.protocols.spot.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                   link_points as LP, partition as P, produced as PD, proofs as PF,
                                                   registered as G, registration as R)
@@ -4581,6 +4576,37 @@ def _read_interior(c: dict, x: int) -> dict:
                                                                                "root": read["root"]}}}}}
 
 
+#: The root and domain of the value the interior registers under a link's name, in `_read_linked`.
+LINKED_VALUE = {"root": "7f" * 64, "domain": "80" * 64}
+
+
+def _read_linked(c: dict, x: int) -> dict:
+    """`c` with its interior registering a value of its first link's name (`LINKED_VALUE`, the link's rows a block for
+    each sampled block), and each statement of the linked template reading it at the linked port as round 2 places it,
+    each slot its unit's row of its cell's sampled block, as the verifier of record reports it. By `x`, that read is as
+    placed, at the boundary port, at another root, domain or leaf count, or at the boundary port's rows."""
+    links, rows, sample, ss = c.get("links"), c.get("rows"), c.get("sample"), c.get("statements")
+    if not (isinstance(links, list) and links and isinstance(rows, list) and isinstance(sample, list)
+            and isinstance(ss, list)):
+        return c
+    link = links[0]
+    per = next(r["per"] for r in rows if r["template"] == link["template"] and r["port"] == link["port"])
+    entry = {"value": link["value"], **LINKED_VALUE, "leaves": len(sample) * per}
+    out, reported = c, dict(c["verdicts"]["lean"].get("registered") or {})
+    for k, s in enumerate(ss):
+        if s.get("template") != link["template"]:
+            continue
+        e = s["registered"]["ports"][link["port"]]
+        placed = {**e, **entry, "reads": [None if r is None else sample.index(r // per) * per + r % per
+                                          for r in e["reads"]]}
+        read = [placed, e, {**placed, "root": "00" * 64}, {**placed, "domain": "01" * 64},
+                {**placed, "leaves": entry["leaves"] + 1}, {**e, **entry}][x]
+        out = _second_with(out, k, registered={**s["registered"], "ports": {**s["registered"]["ports"],
+                                                                              link["port"]: read}})
+        reported[f"{s['template']}/{link['port']}"] = {"value": read["value"], "root": read["root"]}
+    return {**out, "interior": {**out["interior"], "registered": [*(out["interior"].get("registered") or []), entry]},
+            "verdicts": {**out["verdicts"], "lean": {**out["verdicts"]["lean"], "registered": reported}}}
+
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links, wires or rows, the reads the
@@ -5238,23 +5264,13 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-<<<<<<< HEAD
               (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
-              (FILE_POPULATION, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (FILE_POPULATION, 400), (TABLES_HELD, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
-              (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (REPLAY_LINKS, 300),
-              (REPLAY_WIRES, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
-=======
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400), (TABLES_HELD, 300),
-              (CHECK_PROVED, 300), (BOUND, 500),
-              (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (SECOND_INTERIOR_READS, 200), (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300),
-              (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
->>>>>>> origin/main
+              (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -6223,9 +6239,10 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     while it is refused (`two-stage-form`); every part needs a statement, the second stage drawing in it or not
     (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
     its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
-    the boundary port its link names, or a linked port not read (`second-read`) is refused, as are reads the verifier
-    of record doesn't report (`second-reported`); links none derived, one for a template of no part, or one whose rows
-    don't place its part's units, are refused (`second-links`);
+    the boundary port its link names (or the interior's value of its name, where the interior registers one), or a
+    linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't report
+    (`second-reported`); links none derived, one for a template of no part, or one whose rows don't place its part's
+    units, are refused (`second-links`);
     a header that isn't its template's reference header placed in the run (`second_stage.at_run`: its set
     `served/<run>/m<k>` at its template's position, its ports' bindings the window rule's) but for the run's fields
     (`second_stage.RUN_FIELDS`, `units.blocks` and `registered` among them), or of a template with none, is refused
@@ -6611,6 +6628,27 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
     v = SS.check(True, own, statements)
     assert v.ok and SS.attach({"checks": {}}, v, SS.interior_reads(own, statements))["interior_reads"] == [h]
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
+
+def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_it(pieces):
+    """A port a link names reads the value the interior registers under the link's name, where it registers one, and
+    never the boundary port then, each slot at its unit's row of its cell's sampled block (`readOk`, `wiredRow`):
+    Lean's the Python's whole (`second-read`, `second_interior_reads`), over the two-template interior after a replay
+    sample of two with TRIPLE's `x` linked (`_read_linked`). The read as placed passes; at the boundary port, at another
+    root, domain or leaf count, or at the boundary port's rows it is refused (`second-read`). Each such read is named
+    (`second_interior_reads`, at another root too), and with no such value the boundary port is read as before. A
+    value the verifier supplies (a table's root, an index) reaches a template's parameter this way."""
+    _, triple = SECOND_MIXED.templates
+    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
+    for x in range(6):
+        case, codes = _read_linked(linked, x), [] if x == 0 else ["second-read"]
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (x, got)
+    read = {"template": triple, "port": "x", "value": linked["links"][0]["value"]}
+    for case, want in [(linked, []), (_read_linked(linked, 0), [read]), (_read_linked(linked, 2), [read])]:
+        got = second_interior_reads(copy.deepcopy(case))
+        assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
+        assert got == want, (want, got)
 
 
 def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):

@@ -1984,10 +1984,6 @@
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
    "unfolded_hash": "05200ef6f50931e03b88116c26dec93324ef67c3084d4527fdc8c1d65b634766"
   },
-  "Properties.NetworkPeriod.rowsTiedSampled": {
-   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
-   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
-  },
   "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
    "type_hash": "59afc5f62f7084ed1d08eb8098c537d877d5669db75840144a1bbaa47c87120f",
    "unfolded_hash": "894ebd2a140ad427d3007a1ffbae3c1d4b1ae6721e81b6468f2f6b86d8b2cb94"
@@ -5860,19 +5856,6 @@
    },
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "49d11a4dc9c098650eded0616de009de0659264effc14bccd1569b2442c1390f"
-  },
-  "Properties.NetworkPeriod.rowsTiedSampled": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsTiedSampled : Properties.NetworkPeriod.RowsTiedSampled"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
-   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -12444,10 +12427,6 @@
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
-   "Properties.NetworkPeriod.rowsTiedSampled": {
-    "function": "NetworkCheck.Period.check",
-    "outcome": "accept"
-   },
    "Properties.Spot.wiresAcyclic": {
     "function": "Spot.Wires.check",
     "outcome": "accept"
@@ -12744,7 +12723,8 @@
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },

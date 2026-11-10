@@ -196,7 +196,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
-    from verity.core.protocols.sampled_proofs.one_stage import verifier as V
+    from verity.core.protocols.spot.one_stage import verifier as V
 
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
@@ -329,7 +329,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.core.protocols.sampled_proofs.challenger import CoinError
+    from verity.core.protocols.spot.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)
