@@ -33,13 +33,13 @@ activation of the circuit's template (``Extract.claimedUnits``), and a class her
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
-(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
-`census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup
-slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
-and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
-``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
-the Program's reference (``twin`` null). ``census:NAME`` stages any other block type of the serving rows the same way, its
-values seeded by the same rule and its seeds keyed by the name.
+(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width
+in the template's word view, `census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU
+reads in Flock's lookup slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's
+slot types; RMSNorm's inline, and a Boolean ``_v2`` template's flat, its MUFU reads in gates) under its unit name, so the
+statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The circuit is streamed to
+circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null). ``census:NAME`` stages
+any other block type of the serving rows the same way, its values seeded by the same rule and its seeds keyed by the name.
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -65,8 +65,14 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
-    fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
-                its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
+    fi          `CENSUS`: FlashInferFp8Linear_v2{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row
+                as served, the Boolean version of ``FlashInferFp8Linear_v1``: its bf16 x quantized in the block, its RCP
+                reads in gates, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
+    fi-quant    `CENSUS`: FlashInferFp8Quant1x128_v2{K}, that linear's quantisation part, one token row's x to E4M3 in groups of
+                128 and their scales, as served (the row's quantisation once, which its coordinates read).
+    router-row  `CENSUS`: MoeRouterSigmoidBias_v2{E=256,TOPK=8,..}, the MoE router's sigmoid, bias and top-8 of one token row as
+    router-slots  served, its EX2 and RCP reads in gates; ``router-slots`` is its slots form (the per-slot outputs).
+    dsa-q-row   `CENSUS`: DsaIndexerQ_v2{H=32,D=128,ROPE=64}, DSA's indexer query row as served, its EX2 reads in gates.
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
@@ -226,9 +232,14 @@ class Census:
 
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+_ROUTER = 'E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
-    "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
+    "fi": Census("FlashInferFp8Linear_v2", {"K": 2048, "N": 1}),
+    "fi-quant": Census("FlashInferFp8Quant1x128_v2", {"K": 6144}),
+    "router-row": Census("MoeRouterSigmoidBias_v2", {}, _ROUTER),
+    "router-slots": Census("MoeRouterSigmoidBiasSlots_v2", {}, _ROUTER),
+    "dsa-q-row": Census("DsaIndexerQ_v2", {}, "H=32,D=128,ROPE=64"),
     "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
     "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
@@ -331,7 +342,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
         raise SystemExit(f"stage.py: {cen.name(S)} lacks the static {e}: census:NAME takes the census name with every static, "
                          "as the serving rows name it") from None
     d = tp.fn
-    params, _ret = d.signature()
+    params, _ret = template(tp.word).fn.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
     vals: dict[str, np.ndarray] = {}
     types = dict(params)
@@ -364,7 +375,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
     if stmt.get("reads") == "slots":
         FC.IL.write_tables(out / "tables")
     meta = got["meta"]
-    return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
+    return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "word": tp.word, "census": cen.name(S),
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
             "statement": stmt, "caps": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
             "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
