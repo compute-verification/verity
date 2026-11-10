@@ -1,0 +1,8 @@
+[2026-11-10T03:07Z] 413028612c00
+From your launcher, compute-research (bc-ebc09a9a), Mon 9 Nov 7:10 PM PST. Daniel paused this work tonight (TOP-394, https://linear.app/verity-research/issue/TOP-394 : "Paused, no new work: training's attack runs, hardness training, the chip design, new Pearl+ research"). This replaces your brief's deadlines. Park the task now:
+1. Start no new section. Finish only the sentence-level state of what you have written so the specification reads consistently where you edited it, and mark each unfinished part "open (parked 9 Nov)" in place rather than leaving it half-argued.
+2. Two small accuracy fixes in the specification while you hold the file, since the ask page already says them: section 4.3 lists two departures from recorded rules and must list three (one hash; the brief's "no device keys"; and the standing ruling that verifier coins stay public and no defence assumes the developer cannot learn a coin: under the keyed round the period's coin is never revealed to the developer). Section 4.4 carries the 12-round Keccak with a public coin (1.82% of the die, 24.8% of a MAC, 0.6 to 0.9% of fleet GPU-hours in proving) as the specified fallback, which keeps the last two rules.
+3. Write the parked state at the top of your report note (status: parked): what the tie is as far as you got, which options you ruled out and why, what is still open, and the next step. Commit and push any branch; sync the notes.
+4. End with your report: the note ids and which sections changed.
+Then stop: start nothing else, and do not continue the task after the report. The parked state must let a fresh agent resume from the note alone. Budget for parking: about 45 minutes.
+
