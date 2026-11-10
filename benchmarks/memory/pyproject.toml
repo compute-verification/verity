@@ -8,5 +8,11 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`)
-inputs = ["benchmarks/remote_session/summary.py"]
+# the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`), and
+# settings.py is built on verity_config's registry
+inputs = [
+    "benchmarks/remote_session/summary.py",
+    "tools/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+]

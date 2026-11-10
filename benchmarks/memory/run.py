@@ -42,15 +42,16 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
+#: this directory's registry: PACED, and the variables a research run sets
+SETTINGS = of(__file__)
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
 ROLE = "LLAMA32_1B_BF16"
-#: the node run's one session, as the verifier's `--paced` words it: K passes a coin, a stretch's milliseconds, its
-#: draws, the credited stretches
-PACED = "1:1000:2773:7"
 REFERENCES = HERE / "references.json"
 #: a store's block, `remote_bandwidth`'s
 BLOCK_BYTES = 4096
@@ -200,7 +201,7 @@ def cores() -> tuple[str, str]:
 
 def source_commit(run: Callable = subprocess.run) -> str | None:
     """The commit this tree is at: a `research run`'s source, else git's HEAD, marked when the tree has changes."""
-    if sha := os.environ.get("RESEARCH_SOURCE_SHA"):
+    if sha := SETTINGS.RESEARCH_SOURCE_SHA:
         return sha
     head = run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True)
     if head.returncode:
@@ -214,28 +215,28 @@ def loopback(run: Callable = subprocess.run) -> dict:
     The variables `run.sh` reads pass through; the defaults here are a store of 64 blocks and three windows of a
     second, with seconds of lateness allowed each way, far past a CPU pass on a busy machine, so the session's checks
     decide and the machine's load doesn't."""
-    held = os.environ.get("RESEARCH_RUN_DIR")
+    held = SETTINGS.RESEARCH_RUN_DIR
     with tempfile.TemporaryDirectory() as tmp:
         verifier_cpus, prover_cpus = cores()
         env = {"CPU": "64", "WINDOWS": "3", "WINDOW_MS": "1000", "SAMPLES": "16", "JITTER_MS": "5000",
                "VERIFIER_CPUS": verifier_cpus, "PROVER_CPUS": prover_cpus, "PY": sys.executable,
-               "RESEARCH_RUN_DIR": held or tmp, **os.environ, "ROLE": "both", "PLAN": "honest"}
+               **SETTINGS.environ(), "RESEARCH_RUN_DIR": held or tmp, "ROLE": "both", "PLAN": "honest"}
         env.pop("SERVE", None)
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
             raise NoNumber(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
         s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None)
-    return document(s, source_commit(run), os.environ.get("RESEARCH_RUN_ID"), loopback=True)
+    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
 def node(store, period: str, dry: bool, k: int | None, run: Callable = subprocess.run,
          wait: Callable[[float], None] = time.sleep) -> dict | int:
     """The gate run of one honest session under `period`, then its printed document from the store; `gate_run.sh`'s
     exit status when it launched nothing or ran dry."""
-    paced = os.environ.get("PACED", PACED)
+    paced = SETTINGS.PACED
     if len(paced.split()) != 1:
         raise Unreadable(f"PACED is {paced!r}: the bench runs one session, one word")
-    env = {"ROLE": ROLE, **os.environ, "PLAN": "honest", "PACED": paced}
+    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", "PACED": paced}
     rc = run(["bash", str(RS / "gate_run.sh"), *(["--dry-run"] if dry else []), period], cwd=ROOT, env=env,
              stdout=sys.stderr).returncode
     if dry:
@@ -365,7 +366,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Stor
     print(text(doc))
     line = json.dumps(doc)
     print(line)
-    if held := os.environ.get("RESEARCH_RUN_DIR"):
+    if held := SETTINGS.RESEARCH_RUN_DIR:
         (Path(held) / "out").mkdir(parents=True, exist_ok=True)
         (Path(held) / "out" / "memory.json").write_text(line + "\n")
     return 0

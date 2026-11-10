@@ -26,6 +26,7 @@ from benchmarks.remote_session import summary  # noqa: E402
 RUN, FIRE, PROVER = "r20000101-000000-aaaa", "r20000101-000001-bbbb", "r20000101-000002-cccc"
 POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
 COMMIT = "c" * 40
+PACED = M.SETTINGS.setting("PACED").default
 GIB = 1 << 30
 
 
@@ -383,8 +384,8 @@ def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run
     assert bench(store, "some-period", run=gate_run(tmp_path, seen), wait=wait) == 0
     ((argv, env),) = seen
     assert argv == ["bash", str(ROOT / "benchmarks/remote_session/gate_run.sh"), "some-period"]
-    assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", M.PACED, "d" * 40)
-    assert len(M.PACED.split()) == 1 and waits == [60, 60]
+    assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", PACED, "d" * 40)
+    assert len(PACED.split()) == 1 and waits == [60, 60]
     text, doc, err = printed(capsys)
     assert (doc["value"], doc["run"], doc["commit"], doc["loopback"]) == (0.375, FIRE, COMMIT, False)
     assert f"fire {FIRE}, prover {PROVER}" in err and f"verity bench memory --from {FIRE}" in err
