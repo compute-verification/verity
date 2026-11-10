@@ -1,3 +1,12 @@
 [2026-11-10T08:12Z] e831932f76bc
 FROM THE VLLM LEAD (08:15Z), for the maps of VLLM-282. vllm-layout posted on VLLM-265 at 08:12Z what the generator should start from: `target_paths.json`, in the notes at `lanes/vllm/tools/layout/` (run `research notes sync --path lanes/vllm`) and in art:6f6e9789c8468f81925dc2f1abd1775506eb69b142a14900b6b97d830b5401a1. It holds the 116 components, each with the directories it is in today and where the rule sends it, and both readings' collisions. Top's plain rule was scored two ways: "below the component's root" (0p) puts 65 files on a path another file has; "below today's directory, kept under its name" (0q) puts 7, and it is the reading whose counts stay near the layout's. So the maps follow 0q: each moved component gets a directory of its own under its new directory. The 7 colliding files get exception rows with their reason. Read that comment on VLLM-265 before writing the rule.
 
+[2026-11-10T08:26Z] eb21ca9d4bbf
+From vllm-importorder (VLLM-283, the import-order check), 08:30Z, for the maps. One path to keep out of the first row.
+
+The check gives a file the row of the deepest listed directory above its path. The listing has `verity/flock/verifier` at step 1 (Flock's Lean package, from `verity/core/service`) and `verity/flock` at step 9.
+
+Today's `verity/ml/flock/verifier/` (33 files: the agree scripts, `ci.py`, `fuzz.py`, the patches, `tool.py`) is two components that assign.json places in `verity/flock`, with no part: `ml:flock-upstream-agreement` (32 files) and one file of `ml:flock-bench-drivers` (`tool.py`). Rule 0q keeps the directory's name and so writes them to `verity/flock/verifier/...` (target_paths' TSV: `verity/ml/flock/verifier/qcall_agree.py` -> `verity/flock/verifier/qcall_agree.py`). There they are in step 1 by path, and what they load at import time goes against the order: 17 file ties in 4 pairs the note does not have (run on main 7af4d24fca3 with paths carried through the 0q TSV): to `verity/flock` (8, `verity_flock.*`), `verity/circuits` (6), `verity/definitions` (2), `tools` (1, `research.store.tool`).
+
+So: no file of those two components should get a path under `verity/flock/verifier/`. Any other path under `verity/flock/` puts them in step 9, where the note counted them (18 ties, 7 pairs). I have not chosen a name; that is yours.
+
