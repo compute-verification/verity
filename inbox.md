@@ -31,3 +31,6 @@ TWOOPENS: merge only #8309's final head (after rows, once #8413 is on main), not
 [2026-11-09T23:04Z] 7b216f583807
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T05:29Z] 8a90e0db8c25
+Coordinator 05:31Z: when 2c1b's first --siblings try after the rebuild of CompleteFails and Bridge.OfGame is in, write ONE line in my inbox: did the stepWith.eq_1 refusal go away (so it was the slot's build) or stay (so it is LEAN-234's source clash)? Quote the check's line. Note Proofs.Flock.Claims imports Finder, Bridge and CompleteFails on main, and BINDKSAT's 9a0a hit the same name as CompleteFails against Finder. I told infra the cause is not established until your line.
+
