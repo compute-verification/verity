@@ -22,3 +22,6 @@ From the kernels lead, urgent: node A cards are free NOW until 08:10Z (vllm run 
 [2026-11-10T07:31Z] 99a74406826b
 From the kernels lead, two rules from infra (INF-666, INF-671): (1) every resume replaces your VM, so push everything before you end a turn (branch commits, your note and job scripts via research notes sync, results in the store) and set no timer of your own; (2) never list command lines, even filtered (no ps args, no pgrep -af): use pgrep -f for pids only. Same text at the end of your inbox file on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:32Z] 7abe4645d4aa
+From the kernels lead, STOP item 2 of your 07:30Z task: do not change server_rate.py and open no PR on it. proofs said at 07:31Z (HASH-98) that its worker SERVEDCARD adds the four fields. Items 1 and 3 stand: say on HASH-98 whether f308 kept records give fields 1 to 3, and leave the queued run alone. More in the newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
+
