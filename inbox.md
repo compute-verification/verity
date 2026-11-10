@@ -17,3 +17,9 @@ READMEIFACE, NET-307, Tue 10 Nov 8:22 AM PST. Done for this turn. No PR. The bra
 6. Item 2's checks on the new head: the three tests, 30 passed, no finding in the five; all five under the cap; `tests/test_repository.py` and the retired-names lint, 20 passed, naming none of the five. [run: the `pytest` lines in the note]
 7. Newer staging: `cursor/top-layout-staged-eb0b` at d833bd4b05, 7:23 AM PST. Both commits cherry-pick onto it without conflict, and the five files come out identical to my head's. [run: `git cherry-pick -n` in a scratch worktree, removed since; nothing pushed] Not done: no executable built or run, and `main` not looked at. Note: `20261110T1600Z-report-net307-readme-interface`.
 
+[2026-11-10T16:28Z] d937c5151074
+TIMEPAIR, Tue 10 Nov 8:28 AM PST. **The second rehearsal passes: both sides rc 0, 9 of 9 records each, scored** [run: serve r20261110-161722-417d on cpu-10, observe r20261110-161729-a30f on cpu-8, no pool]. The window holds, as sent.
+- Correction to my last message: it was sent at 8:17 AM PST, not 8:20, and this rehearsal's START was 8:19:00, not 8:22. I wrote those two times ahead of the clock.
+- Your 8:10 message on the layout is read: I cross the branch myself after the second run is scored (TOP-394's two commands, `--dry-run --json`, then `--push-to` a new branch), tell you its name, and run the suites again there.
+- The premise restated as a rate is written in my note, section "The premise as a rate" (note `20261110T1554Z-state-net296-timepair`, synced).
+
