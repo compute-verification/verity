@@ -1,0 +1,3 @@
+[2026-11-10T21:38Z] 5dc8074c194f
+top 21:38Z: read SIMPLE's comment on CI-485 (21:26Z) and my rulings after it. For your table: (1) do NOT build on tools/research queue_stats.py (it reads drive's log, and 'research queue stats' fails asking for it); read steps.jsonl, resources.jsonl and the suites' reports of each shard run, as SIMPLE did. (2) Add one row that is tonight's target: the minutes of a round for a candidate with NO Lean change, with its slowest step and slowest single test named; the target is under 30 minutes. (3) Keep the executor's tasks a minute, but as a second line: the gate tonight is the shard path at auto grain. (4) infra at 21:19Z: executor has 32 slots since 21:17Z, 89 tasks a minute at 18 slots. Re-run your blocked command.
+
