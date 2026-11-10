@@ -9,7 +9,8 @@
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
 # (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed, and a pass that could not
 # establish its conditions fails the unit (another pass holding the lock does not), so a unit that deletes nothing never reports
-# success while its node runs out of inodes. Research's unit runs on
+# success while its node runs out of inodes. A store pass that fails (a store this user can't open) fails the unit too, after the
+# source-tree pass has run without it. Research's unit runs on
 # every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it.
@@ -119,8 +120,10 @@ if c is not None:
         line += "; trees a process names: " + ", ".join("%s %d" % (p, len(t)) for p, t in sorted(procs.items(), key=lambda x: -len(x[1]))[:3])
     if c.get("error"):
         line += ", nothing more deleted: " + c["error"]
+if d.get("error"):
+    line += "; FAILED " + d["error"]
 print(line)
-sys.exit(3 if c is not None and c.get("error") and not c["error"].startswith("another pass holds") else 0)
+sys.exit(3 if c is not None and c.get("error") and not c["error"].startswith("another pass holds") else 4 if d.get("error") else 0)
 ' 2> /dev/null)
 src_failed=$?
 if [ -z "$summary" ]; then
@@ -130,5 +133,9 @@ fi
 echo "vy-store-evict: free $before -> $(avail) GiB (mark $FREE GB): evicted $summary$srcnote$keepnote$pycnote ($(basename "$TOOL"))"
 if [ "$src_failed" -eq 3 ]; then
   echo "vy-store-evict: the source-tree pass could not run (above); check the unit's User=, capabilities and src/.evict.lock owner" >&2
+  exit 1
+fi
+if [ "$src_failed" -eq 4 ]; then
+  echo "vy-store-evict: the store pass failed (above; the source-tree pass ran without it); check \$VY_EVICT_STORE's owner" >&2
   exit 1
 fi
