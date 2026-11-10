@@ -439,11 +439,12 @@ theorem toyZ_values : ValuesInjective WZ valZ := fun _ => ⟨Set.injOn_id _, Set
 
 theorem toyZ_noSharedPair : NoSharedPair WZ valZ := fun a a' h => absurd (Subsingleton.elim a a') h
 
-/-- **The premises of `Untied.bound_asInputs_he` hold together on a work that multiplies by a word of `T`.** `CZ`
-computes gate 2 from `θ` alone, and one block holds both computed gates (`PZ`); the block read 1 gate outside `θ`. With
-gate 2 as an input (`T = TZ`), and a work that multiplies by it: at the circuit with the gate as an input,
-`dZ.asInputs TZ`, (H) holds at costs 1 and every `k`; (E) holds and the values are distinct. (H) at `d` fails at every
-`k` and all positive costs: the word's `κ` at `d` is 0. -/
+/-- **Every premise of `Untied.bound_asInputs_he` holds together on a work that multiplies by a word of `T`.** `CZ`
+computes gate 2 from `θ` alone; `T` is that gate, and the work, of the circuit with it as an input, multiplies by it.
+One block holds both computed gates and reads 1 gate outside `θ` (`ReadsAtMost` at `k = 1`). At the circuit with the
+gate as an input, (H) holds at costs 1 and every `k`, so at the block's budget, `k` and the gate of `T` it held; (E)
+holds at `b = 1`; each word carries its own value, and the one matmul shares no pair with another. (H) at `d` fails at
+every `k` and all positive costs: the word's `κ` at `d` is 0. -/
 theorem toyZ_premises :
     (∀ g ∈ TZ, CZ.isInput g = false) ∧ ReadsAtMost dZ PZ 1 ∧
       (∀ k, Assumptions.Hardness (dZ.asInputs TZ) ![WZ.allW, WZ.allX] valZ ![1, 1] k) ∧
