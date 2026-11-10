@@ -56,7 +56,7 @@ class FlashSdpa(_TrainRule):
         if not causal:
             return "numerics_unregistered: a non-causal call (the capture is causal)"
         if dropout:
-            return "side_input: dropout draws from the RNG (a random op)"
+            return "side_input: dropout reads the RNG (a random op)"
         if debug:
             return "numerics_unregistered: a debug mask"
         scale = node.kwargs.get("scale")
