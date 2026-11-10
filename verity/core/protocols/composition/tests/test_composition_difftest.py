@@ -481,6 +481,13 @@ def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_co
                 assert R.trial_verdict(vs) == R.verdict(vs), vs
 
 
+#: An agreement test's two sizes. A case is megabytes that both sides decode layer by layer, so a thousand take a test
+#: many minutes: `CHECKED` cases are the test, and the thousand its sweep, which draws more from the same generator and
+#: so reaches more of the composition's breaks and of the subprotocols' own refusals.
+CHECKED = 150
+SIZES = pytest.mark.parametrize("examples", [CHECKED, 1000])
+
+
 def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
            kinds: tuple[str, ...] = (R.REJECT,)) -> None:
     """Lean and Python agree on every case, and the cases reach each of `kinds` (by default a rejection: sampled proofs'
@@ -495,11 +502,18 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
 
 
 @pytest.mark.slow
-def test_remote_agrees(remote_server):
-    """Remote's subprotocols meet on one record (left to the subprotocols) and on two (refused), each often."""
-    _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
+@SIZES
+def test_remote_agrees(remote_server, examples):
+    """Remote's subprotocols meet on one record (left to the subprotocols) and on two (refused), each often. What only
+    whole cases hold: `remote serve`, the three subprotocols' own Lean behind the composition's framing, takes a case
+    of megabytes (hex in JSON in hex) without failing, decodes it as the reference does (the rejection carries the
+    commitment exactly when the case, the params and the commitment decode) and rejects it. A subprotocol's own
+    difftest never passes its case through that framing. Sampled proofs' refusal alone rejects every case here (the
+    module's docstring), so the outcome doesn't show what remote's record check found."""
+    _agree(REMOTE, remote_server, SEEN["remote"], examples, (R.REJECT, "one record", "two records"))
 
 
+@pytest.mark.slow
 def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
     """On sampled cases remote's verdict is its product's without the record checks (`Core.Composition.product`,
     remote before them), except where its policy and integrity committed to two records, or a window of its PoUW period
@@ -695,13 +709,16 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
 
 
 @pytest.mark.slow
-def test_onsite_agrees(onsite_server, recorded):
+@SIZES
+def test_onsite_agrees(onsite_server, recorded, examples):
     """Onsite rejects with a subprotocol undecided beside the rejection, its policy and integrity meet on one record
     (left to the subprotocols) and on two (refused), its period's windows on the policy's record and on others, and
-    PoUS and PoUB-P2 on one store and on two, each often; and PoUB-P2's case named as the generic bandwidth audit's,
-    which is no subprotocol, refused."""
-    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
-                                                       "two records", "one store", "two stores"))
+    PoUS and PoUB-P2 on one store and on two, each often. What only whole cases hold: `onsite serve`, over its seven
+    subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
+    subprotocol is undecided beside a rejection, which the trial's rule would leave undecided
+    (`test_a_reference_without_reject_dominance_is_caught`)."""
+    _agree(ONSITE, onsite_server, SEEN["onsite"], examples, (R.REJECT, "reject, a component undecided", "one record",
+                                                           "two records", "one store", "two stores"))
 
 
 @pytest.mark.slow
@@ -744,12 +761,17 @@ def test_product_names_only_the_two_composites():
 
 
 @pytest.mark.slow
-def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
-    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
+@SIZES
+def test_product_over_remotes_subprotocols_is_remote(product_remote_server, examples):
+    """`product IDS serve` over remote's subprotocols, which `verity run`'s verifier runs, is held to the reference as
+    `remote serve` is (`test_remote_agrees`): only its own run on whole cases shows that executable to be remote."""
+    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], examples, (R.REJECT, "one record", "two records"))
 
 
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
+    """`product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs, is held to the reference as
+    `onsite serve` is (`test_onsite_agrees`): only its own run on whole cases shows that executable to be onsite."""
     _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 200, (R.REJECT, "reject, a component undecided"))
 
 
