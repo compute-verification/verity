@@ -79,7 +79,7 @@ def test_the_lean_replays_the_shared_vectors(lean):
 
 
 def _honest(rounds: int, budget: int, n: int, rng: random.Random | None) -> tuple[list[list], list, int]:
-    """An honest stream's firewall ops and their results, over `n` registrations of a challenger's stream at `rounds` and
+    """An honest stream's ZK server ops and their results, over `n` registrations of a challenger's stream at `rounds` and
     `budget` (`service._step`, its rules), and the most recursive sessions unended at once. Each step is one the honest
     flow allows next, `rng`'s choice (the first allowed without one): a registration once `ready` allows it, sampled at once;
     a proof session (`session`) over the 1 to `rounds` earliest sampled rounds no session covers (one round without `rng`);
