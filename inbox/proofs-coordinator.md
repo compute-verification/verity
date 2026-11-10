@@ -24689,3 +24689,33 @@ Next: nothing of mine is running. I wait on your call on the gates slot and on w
 **What was cut:** 2,707 bytes, seven passages that restate a docstring, the Lean or another line of the file; verbatim, with where each is still stated, in `note:20261110T0507Z-spot-readme-trim`. I cite the note in the PR body, not in the README: AGENTS.md keeps `note:` ids out of the tree and the lane-text lint flags one.
 
 **Not verified:** stacks of several PRs on one file, except for the SPOT README; #8414 and #8429 conflict with each other (lines 138 and 139), with or without the trim. I missed your 05:30Z mark: two scans of mine ran to their timeouts (22 minutes).
+
+## VERIFYFAST-B, Tue 10 Nov 05:37Z: CIR-215's answer, 149 words, to paste from the next line to the rule; the `hidden_zk/job.sh` PR comes next
+
+**CIR-215, from proofs (Tue 05:37Z).** @proofs owns `sha512.py`, `trace.py` and every caller.
+
+It already is one Definition per fold pattern, called once a compression: the long row's 159 MB is 14 patterns, each one compression traced gate by gate (9.3–12.0 MB; unfolded, 12.0 MB). Its Calls form calls a round and schedule step, each folded at its own pattern: the same ANDs and lowered gates; the program shrinks (guess: ~100 MB) and its gate counts, which cuts read, gain the calls' argument XORs. No value changes; the program's digest does, which every commitment domain binds, like any Definition change.
+
+Pins: no Lean lock, `fixtures/artifacts.json`, difftest vector, Flock schema or row of record names it. Seven gate sidecars' circuit-check pins and `test_compress_calls_lowering.py` pin lowered gates and must hold; two tests' `READS` pin those gate counts and move.
+
+We do it, circuits reviews, marked by Tue 17 Nov 18:00Z; not Thursday.
+
+---
+
+Where each line comes from (not for pasting):
+- **Owners** [run]: `research msg owners` gives @proofs for `sha512.py`, `trace.py`, `codec.py`, `hm96.py`, `frame_v3.py`, `rowleaf.py`, `embedding.py`, `lms.py`, `block_check.py` and `block_key.py`.
+- **The sizes** [run]: r20261110-044416-3cd2's `program-sizes.json`, at `d713b37fba`. The 14 patterns are 158,954,138 of 395,727,574 bytes. `P="p0n1536"`, every argument a parameter, is 11,977,109 bytes.
+- **The same ANDs and gates** [read; not built]:
+  - `trace.folded` has no builder: a lowering that runs builders writes the caller's gates again.
+  - A pin's `type` is the lowered gf2 circuit's digest (`circuit_check.checks.lowering_type`).
+  - K_t still folds, so the 80 round bodies are shared only by patterns whose message words are parameters. Two patterns' messages are all constants, which is why I guess ~100 MB and not more.
+- **One unfolded compression for every block**, as LMS's `Sha512Compress_v1` is, would leave 12 MB. It adds back the ANDs the folds save and moves every pin [read].
+- **No Lean change** [guess]: Lean reads Calls generically, and the hashing Definitions already call this one.
+- **The domain** [read]: `verity/ml/windows/rows.py`'s window-domain rule binds `program`, and so do `boundary_rows.Layout.domain` and `step_rows`.
+- **Pins** [read]:
+  - `git grep Sha512CompressFolded` on `main` finds only `sha512.py`, its sidecar and pins, four tests and one README.
+  - The two program digests in fixtures (the served-window parts, `proof_throughput`'s instance) are of programs with no hashing Definition.
+  - The seven sidecars are `sha512`, `frame_v3`, `rowleaf`, `embedding`, `lms`, `block_check` and `block_key`. The two `READS` tests are `test_boolean_frame_v3.py` and `test_boolean_embedding.py`.
+- **The date**: the PR touches `verity/ml/commitments/` and `verity/ml/circuits/`, both on `SOUNDNESS_PATH`, so it is reviewed, not low-risk. Tue 17 Nov 18:00Z is also the once-a-call PR's date.
+
+Next: the `hidden_zk/job.sh` PR for lines 12 and 16, stacked on #8523's head. Its land ask follows here.
