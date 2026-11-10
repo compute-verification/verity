@@ -319,3 +319,260 @@ Preflight warned: the spot README is 29 B over its cap, which I trim in my next 
   - The Flock-session test I stack on #8498 will add none.
   - #8429, which has a land verdict, adds 257 B on its own, three lines about the step schedule (48,841 B at main, 49,098 B at its head) [run].
   - With #8326 and #8357 that makes the file 49,438 B, 286 B over the cap. So LEDGER's trim needs to cut at least 286 B once #8429 lands, or #8429's three lines should move out [derived].
+
+## TWOINSTANCE → proofs coordinator, Tue 10 Nov 05:09Z: merge list, Deliverable 1 (proofs' `Security/` files the merge of `remote` into `main` touches on both sides)
+
+Labels: [read] I read it in git, a lock, GitHub or the registry; [run] I ran it; [guess] my judgment, not checked by a build. I built no Lean.
+
+**Counts**
+- **528 reproduced [run].** `git merge-tree --write-tree --name-only origin/main origin/remote` at `7af4d24fca` and `700a981f5d`, git 2.43, in this clone, where `tools/verity/lean/merge.py --install` registered the tree's drivers. It gives tree `d0c1bc1197` and 528 conflicted paths, 190 of them under `Security/`.
+- **449 reproduced, but not as plain git [run].** 449 is `main` ⊕ the staging branch `cursor/vllm-remote-stage-496a` at `875cc642dc`, with the drivers: tree `6c85222cb6`, 159 under `Security/`.
+- **672 not reproduced [run].** Plain git, in a shared clone with no driver config, gives 638 for `main` ⊕ `remote` (271 under `Security/`) and 535 for `main` ⊕ staging (230). With `merge.renames=false` it is still 638.
+- **Touched on both sides: 491 `Security/` files [run].** These are the files merge-tree auto-merges or reports in conflict.
+  - In proofs' areas: 243, of which 96 conflict.
+  - Unclear: 15 Core and Hash files outside the sampled and SPOT parts, of which 9 conflict.
+  - The areas come from your list; each file's owner comes from `research msg owners` [run].
+- **The Spot files are `remote`'s Population area [read].** `main` moved `Population` to `SampledProofs` and then to `Spot`. `remote` still has `Definitions/Population/` and `Proofs/Population/`, and git pairs them by rename.
+
+**1. Locked statements that differ (first)**
+
+How I compared them [run]:
+- I took every guarantee in `main`'s and `remote`'s three locks (Definitions, Properties, Proofs) and aligned the signatures token by token, after renaming `SampledProofs`/`Population` to `Spot` in names.
+- I compared premises by digest, then the definition's text in each side's file.
+- I matched declarations to files with a regex extractor over each side's file.
+
+Four guarantees and one premise really differ:
+1. **The IrDep group: `RecDeploy.HonestFixture`, `RecDeploy.HonestHalfFixture.honest_half_fixture` and `RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest` [run].**
+   - The premise is open (LEAN-186) on `main` and an assumption on `remote`; the other two are guarantees.
+   - `remote` states all three at `Ir := RecDeploy.VStarBuild.IrDep x`, the deployed reference inner prover, and drops the conjunct `IrShaped` from the premise.
+   - `main` states them for some `∃ Ir` and keeps `IrShaped`.
+   - This is PRF-210. It reached `remote`'s line as `Queue: #5302` (`2f79b7eacd`) and never reached `main`; #5302 is closed on GitHub [read].
+   - The three files:
+     - `Assumptions/HonestFixture.lean` conflicts, and `main` only swept it, so lean's rule takes `remote`'s side.
+     - `HonestHalfFixture.lean` merges clean to `remote`'s statement.
+     - `Recursive/KSCoinTreeWitnesses.lean` is an add/add conflict; `remote`'s copy is `main`'s witnesses ported onto `IrDep x` [read].
+   - **Proposal: `remote`'s, for all three [guess].** The statement is ours and stronger (at the deployed prover), and the open premise loses a conjunct.
+   - The merged tree already has `remote`'s form: its `HonestHalfFixture.lean` reads `IrDep`, and its `HonestHalf.lean` reads `IrDep` and no longer `IrShaped`, which `main`'s reads [run: grep on `d0c1bc1197`].
+2. **`Claims.Sampling.Binding_meets` and `Binding_meets_one` [run].** `main` reads `c.ownAt roots o.pos` where `remote` reads `c.own` (`05d543928f`, "ports a position reads under the run's roots"). Only `main` changed `Claims/Witnesses/BindingMeets.lean`, so the merge takes `main`'s without a conflict.
+
+Listed on one side only (the same statement wherever both have it):
+
+3. **Partitioning.**
+   - `main`'s #7194 (LEAN-108) unlisted 13 `FlockSoundness.Audit.Partitioning.SecurityProofs.*` as lemmas [read].
+   - `remote` still lists 8 of them, with the premise `Partitioning.MeetsTarget` [run].
+   - `remote` also lists two new ones, `ServedGranularityOptimum` and `ServedGranularityChoice` (`6afe44d22a`, only on `remote`) [run].
+   - `Partitioning/Guarantees.lean` and `Model.lean` conflict; `SecurityProofs/FreeCompute.lean` merges clean [run].
+   - **Your call.** Either `main`'s files plus `remote`'s two served statements, kept unlisted as #7194 did the family [guess], or drop the two.
+4. **Pearl+ properties.**
+   - 26 `Properties.Pouw.PearlPlus.*` guarantees owned by @proofs are listed only on `remote` [run].
+   - Their files, `Security/Proofs/Properties/Pouw/PearlPlus/`, exist only there. They are proofs' #7267, #7372 and #7248, each applied to `remote` as one commit; all three are closed on GitHub [read].
+   - Not touched on both sides; the merge adds them without a conflict [run]. Keep or drop is a decision for whoever owns Pearl+ now.
+5. **The rest, as counts, owner @proofs [run].**
+   - Definitions lock, listed only on `remote`: 78 that `main`'s #7194 unlisted; `twoStage_influence`, which `main` retired with the old two-stage audit (`b854ecc357`); and the two served ones above.
+   - Also listed only on `remote`: 4 `Claims.Sampling.*_fails`, whose namesakes `main` lists as `Claims.SamplingGeneric.*_fails` [guess: moved].
+   - Listed only on `main`: 136 guarantees that are new on `main`, and 12 declared on both sides but listed only on `main`.
+   - Properties lock, listed only on `main`: 67 new on `main`, and `wiresAcyclic`.
+   - Premises defined on both sides but listed on one, in each case because the guarantees that take them differ:
+     - only on `main`: `Claims.Complete` (domain), `Claims.Out64`, `Verity.Partition.Correct`, `DecodeZLJ.RecordsLiveJ`, `FailClosed.FlockVerifyAcceptsR` and `FailClosed.LiveDesign`;
+     - in `main`'s Properties lock only: `Claims.ExpectedCR`, `Verity.Site.Boundary` (@lean) and `Spot.ExpectsV2`;
+     - only on `remote`: `Composed.DrawOkZKJ`, `ZkHidden.DrawOkZKHJ` and `Partitioning.MeetsTarget`.
+
+The same statement on both sides:
+
+6. **17 rename-only differences [run].** In 7 audit guarantees, `LinkSound` became `BindSound` and `FlockSoundness.Audit.Circuit` became `Verity.Boolean.Circuit`: `life_harm_budget`, `audit_exfiltration`, `audit_influence`, `audit_profile`, `audit_window_split_of_record` and two in `Work`. In 10 Properties guarantees, `SampledProofs` became `Spot`. Of the files in proofs' areas that declare them, only `Select/Misses.lean` (clean) and `Proofs/Properties/Spot.lean` (conflict) are touched on both sides.
+7. **Premise digests that differ while the definition's text is the same [run].** `Claims.StrictBirthday` and `Verity.TC.Relation.ChainHolds` differ only through what they read. `Claims.ExpectedCR` differs only in its docstring ("C-Flock's link" became "Flock's link").
+8. **`NetTiming`** [run]. Its differing statements, `NetTiming.Witness.PeriodLeakAccepted_honest` and `_nontrivial`, are owned by @network-accounting in both locks, so they aren't listed here.
+9. `reads` digests differ in 53 of these files' modules [run]. Every one I opened was a rename. The lock run on the merged tree recomputes them.
+
+**2. Proofs' files touched on both sides, conflicts first**
+
+How I applied lean's rule [run]:
+- For each side, I took the non-merge commits on the file that the other side lacks, following renames.
+- I sorted them into four kinds:
+  - tool sweeps: the move maps, the module-system port, import pruning, prose sweeps, merge reverts;
+  - a staged copy of a PR, matched against `main`'s log by subject;
+  - `remote`'s prune;
+  - edits.
+- I also checked whether `remote`'s bytes appear in `main`'s history.
+- No file below declares a locked statement that differs, except the ones §1 names.
+
+**The writer's word (both edited), with my proposal: 7**
+
+- `Proofs/Flock/Bridge/V5/Statement.lean`: main whole [run]. Remote added the premise `StatementParses` and reverted it (`c6ac73cb1a`, `9c34aba01b`: no net change [run]); its other change is the V5 statement-circuit change main has (`6dc24e0f23`).
+- `Proofs/Flock/Claims/Sampling/Reference/DeployedCode.lean`: main whole [guess]. Remote's `797a3c8bd7` refuses Bernoulli at 0<p<1 and closure maps; main has that rule as `770cc7b475` and later refuses every Bernoulli law (#7335).
+- `Proofs/Flock/Recursive/KSCoinTreeWitnesses.lean`: remote whole, the writer's word: ours, with the IrDep group (locked §1.1). Remote's file is main's witnesses (`ca220d462f`) ported onto `IrDep x` (`1e517d48c0`) [read].
+- `Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean`: hand merge [guess]: main's file (`b854ecc357` retired the old two-stage audit) plus remote's `ServedGranularityOptimum`/`ServedGranularityChoice` (`6afe44d22a`), or main whole without them. Your call (§1.3).
+- `Proofs/Flock/Soundness/Audit/Partitioning/Model.lean`: hand merge as Guarantees.lean [guess]: main's (`f1453c36d1`, the planner's one-stage checker) plus remote's served model (`6afe44d22a`); remote's other change re-imports `Audit.Harm`.
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/Placed.lean`: remote whole, then main's Boolean-profile rename (`c721439995`) [run]. Remote's `6c960e7df1` adds `PinBit` and the field `pin` (a pinned output's bits are 0), with `PinnedCols.lean`, which only remote has.
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/PlacedP.lean`: main whole [run]. Remote's `33b0b94775` (`ProgPlaces` through `PlacedSat`) is already in main's text; the rest of the diff is main's sweeps.
+
+**Deleted by remote's prune `961d79950d` and changed on main (modify/delete): 49**
+
+- `Proofs/Flock/Claims/Bridge.lean`: remote (deleted) [run]. Main: its edits `3ff4370941` Claims: drop the Rooted modules, which nothing reads; `05d543928f` Sampling code: ports a position reads under the run's roots….
+- `Proofs/Flock/Claims/Complete.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/Complete/Replay.lean`: remote (deleted) [run]. Main: its edits `6efaea5bcf` LEAN-190: the masked completeness docs say level 0's…; `f0c571f9a6` LEAN-73, LEAN-190: delete 59 more Lean modules that nothing….
+- `Proofs/Flock/Claims/GS.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/KS.lean`: remote (deleted) [run]. Main: its edits `f0c571f9a6` LEAN-73, LEAN-190: delete 59 more Lean modules that nothing….
+- `Proofs/Flock/Claims/KS/PlainUntrim.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/KS/ZkAccepts.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning.
+- `Proofs/Flock/Claims/Recursion.lean`: remote (deleted) [run]. Main: its edits `f0c571f9a6` LEAN-73, LEAN-190: delete 59 more Lean modules that nothing….
+- `Proofs/Flock/Claims/Recursion/Finders.lean`: remote (deleted) [run]. Main: trace/transcript move, module-system port, import pruning.
+- `Proofs/Flock/Claims/Recursion/SeqCap.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/Recursion/SeqDeploy.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/Recursion/SeqDeployStop.lean`: main whole [run]: `Claims/Recursion/RecSystem`, which the merge keeps, imports it. Main: Core: the interaction and composition vocabulary moves into Definitions/Core,….
+- `Proofs/Flock/Claims/Recursion/SeqKey.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/Recursion/SeqStop.lean`: remote (deleted) [run]. Main: its edits `734c94a877` Core: the interaction and composition vocabulary moves into….
+- `Proofs/Flock/Claims/RootFind.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Claims/Sampling/Reference.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning.
+- `Proofs/Flock/Claims/Sampling/Select.lean`: main whole [run]: `SamplingGeneric/TwoCode`, which the merge keeps, imports it. Main: SecondMisses: a guarantee of the Properties lock, with its honest and….
+- `Proofs/Flock/Claims/ZK.lean`: remote (deleted) [run]. Main: its edits `010e4c92dd` LEAN-190: Claims.ZK's docstring drops its deleted round…; `dbc93bd0de` LEAN-73: keep Claims/ZK/DeferredOut.lean and….
+- `Proofs/Flock/Claims/ZK/PadsRoot.lean`: main whole [run]: `SessionLoop/RoundOff`, which the merge keeps, imports it. Main: Claims.ZK.PadsRoot: back for RoundOff, which reads padsRoot_tapeOfDraws;….
+- `Proofs/Flock/Claims/ZK/Stop.lean`: main whole [run]: `Core/Rec`, which the merge keeps, imports it. Main: Core: the interaction and composition vocabulary moves into Definitions/Core,….
+- `Proofs/Flock/EndToEnd/Joint.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning.
+- `Proofs/Flock/Soundness/Audit/Partitioning.lean`: remote (deleted) [run]. Main: terms move, module-system port.
+- `Proofs/Flock/Soundness/Binding.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/CROnly.lean`: main whole [run]: `Discharge/ZkView/Statements`, which the merge keeps, imports it. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/Aliased.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/Const.lean`: remote (deleted) [run]. Main: its edits `f0c571f9a6` LEAN-73, LEAN-190: delete 59 more Lean modules that nothing….
+- `Proofs/Flock/Soundness/Discharge/DecodeZL.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/DecodeZLJ.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/Exec.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning, prose sweep.
+- `Proofs/Flock/Soundness/Discharge/FailClosed.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/General.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/General/Instances.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/HdecCor.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/HiddenDec.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/Integrate.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/PlainHJ.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/PlainJ.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/PlainReg.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/PlaysCoin.lean`: remote (deleted) [run]. Main: its edits `737c0f59b0` Security: the decoder premise and the Discharge areas by….
+- `Proofs/Flock/Soundness/Discharge/Tables.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning, prose sweep.
+- `Proofs/Flock/Soundness/Discharge/Zero.lean`: remote (deleted) [run]. Main: its edits `f0c571f9a6` LEAN-73, LEAN-190: delete 59 more Lean modules that nothing….
+- `Proofs/Flock/Soundness/Discharge/ZkBind.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean`: remote (deleted) [run]. Main: terms move, module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/ZkEveryCoin.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/ZkExec.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/ZkLink.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Discharge/ZkView.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/Registered.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+- `Proofs/Flock/Soundness/ZK/GK.lean`: remote (deleted) [run]. Main: module-system port, import pruning.
+
+**Remote whole, rerunning main's tools: main only swept: 3**
+
+- `Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean`: remote whole. Main: terms move, module-system port, import pruning. [run]
+- `Proofs/Flock/Claims/Recursion/Serve.lean`: remote whole. Main: terms move, trace/transcript move, module-system port, import pruning. [run]
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/Sites.lean`: remote whole. Main: terms move, module-system port, import pruning. [run]
+
+**Main whole: remote's copy is older, or remote only swept: 11**
+
+- `Proofs/Flock/Bridge/PopMatches.lean`: main whole. Remote: word renames. [run]
+- `Proofs/Flock/Bridge/V5/EndToEndHidden.lean`: main whole. Remote: an older copy of a change main has (`6dc24e0f23` V5 at the statement circuit: SampledKSLiveV5 and its targets read…). [run]
+- `Proofs/Flock/Bridge/V5/Honest.lean`: main whole. Remote: an older copy of a change main has (`6dc24e0f23` V5 at the statement circuit: SampledKSLiveV5 and its targets read…). [run]
+- `Proofs/Flock/Claims/Sampling/EndToEndDeploy.lean`: main whole. Remote: word renames. [run]
+- `Proofs/Flock/Claims/ZK/Layout.lean`: main whole. Remote: word renames. [run]
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean`: main whole. Remote: an older copy of a change main has (`4a4e4759b5` Flock P chain at the statement circuit: AcceptedHP's sites, keys and…). [run]
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/SiteHP.lean`: main whole. Remote: an older copy of a change main has (`f7f6955197` UnrolledP: srcKeyP's public-leaf cases by by_cases, not split_ifs;…). [run]
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/SitesP.lean`: main whole. Remote: an older copy of a change main has (`94a1c14268` SitesP, CustodyJP: parseStmt_of_commit is FlockSoundness's). [run]
+- `Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean`: main whole. Remote: an older copy of a change main has (`94a1c14268` SitesP, CustodyJP: parseStmt_of_commit is FlockSoundness's). [run]
+- `Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean`: main whole. Remote: an older copy of a change main has (`6dc24e0f23` V5 at the statement circuit: SampledKSLiveV5 and its targets read…). [run]
+- `Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousSeg.lean`: main whole, rerun remote's incorrect move. Remote: the incorrect move and its prune-then-keep; main: `cb0ad41cc3` Flock scope: take #7516's form of the row-seg/v1 widening whole. [run]
+
+**Apart: Spot (your list says ours; the registry says @lean, by the fallback `Security/`), conflicts: 26**
+
+- `Definitions/Spot.lean` (remote: `Definitions/Population.lean`): main whole. Remote: the incorrect move. Registry: @lean. [run]
+- `Definitions/Spot/Dataflow.lean` (remote: `Definitions/Population/Dataflow.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Definitions/Spot/Exfiltration.lean` (remote: `Definitions/Population/Exfiltration.lean`): main whole. Remote: the incorrect move and the acceptProb move. Registry: @lean. [run]
+- `Definitions/Spot/LongValue.lean` (remote: `Definitions/Population/LongValue.lean`): remote whole. Main: terms move, SPOT names move, module-system port, merge revert/reapply. Registry: @lean. [run]
+- `Definitions/Spot/Necessity.lean` (remote: `Definitions/Population/Necessity.lean`): main whole. Remote: the incorrect move. Registry: @lean. [run]
+- `Definitions/Spot/Oblivious.lean` (remote: `Definitions/Population/Oblivious.lean`): remote whole. Main: terms move, SPOT names move, module-system port, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Properties/Spot.lean`: main whole [guess]. Remote has #7295 staged (closed on GitHub; main states `sampleLinkFirst` in 11 files, remote in 7 [run]) and `7a47f3114d` `Core.Draw`→`Core.SamplingDesign`, which main doesn't have [run]. Registry: @lean.
+- `Proofs/Spot.lean` (remote: `Proofs/Population.lean`): main whole, rerun remote's incorrect move. Remote: the incorrect move and its prune-then-keep; main: `f6553abd97` Core: independent draws (piLaw, iid, prodLaw) live beside prPMFReal…. Registry: @lean. [run]
+- `Proofs/Spot/Determinacy.lean` (remote: `Proofs/Population/Determinacy.lean`): remote whole. Main: terms move, SPOT names move, module-system port, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Egress.lean` (remote: `Proofs/Population/Egress.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Exfiltration.lean` (remote: `Proofs/Population/Exfiltration.lean`): main whole. Remote: the incorrect move and the acceptProb move. Registry: @lean. [run]
+- `Proofs/Spot/ExfiltrationBound.lean` (remote: `Proofs/Population/ExfiltrationBound.lean`): main whole. Remote: the incorrect move and the acceptProb move. Registry: @lean. [run]
+- `Proofs/Spot/ExfiltrationExamples.lean` (remote: `Proofs/Population/ExfiltrationExamples.lean`): main whole, rerun remote's incorrect move. Remote: the incorrect move and its prune-then-keep; main: `48479e6d83` Population: imports for Core's prPMFReal lemmas and uniformOfFinset;…. Registry: @lean. [run]
+- `Proofs/Spot/HonestCone.lean` (remote: `Proofs/Population/HonestCone.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Instance.lean` (remote: `Proofs/Population/Instance.lean`): remote whole. Main: terms move, SPOT names move, trace/transcript move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/JointPressure.lean` (remote: `Proofs/Population/JointPressure.lean`): main whole. Remote: the incorrect move and the acceptProb move. Registry: @lean. [run]
+- `Proofs/Spot/Leakage.lean` (remote: `Proofs/Population/Leakage.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/LongValue.lean` (remote: `Proofs/Population/LongValue.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Necessity.lean` (remote: `Proofs/Population/Necessity.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/NecessityMatrix.lean` (remote: `Proofs/Population/NecessityMatrix.lean`): main whole, rerun remote's incorrect move. Remote: the incorrect move and its prune-then-keep; main: `7dc18f1a61` Population: restate Exfil.prob and Iop.prob as core's prPMFReal under…. Registry: @lean. [run]
+- `Proofs/Spot/NecessitySkeleton.lean` (remote: `Proofs/Population/NecessitySkeleton.lean`): main whole. Remote: the incorrect move. Registry: @lean. [run]
+- `Proofs/Spot/Oblivious.lean` (remote: `Proofs/Population/Oblivious.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Transfer.lean` (remote: `Proofs/Population/Transfer.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Proofs/Spot/Work.lean` (remote: `Proofs/Population/Work.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+- `Properties/Spot.lean`: main whole [guess]. Remote has #7295 staged (closed on GitHub; main states `sampleLinkFirst` in 11 files, remote in 7 [run]) and `7a47f3114d` `Core.Draw`→`Core.SamplingDesign`, which main doesn't have [run]. Registry: @lean.
+- `Properties/Spot/Draw.lean` (remote: `Properties/SampledProofs/Draw.lean`): remote whole. Main: terms move, SPOT names move, module-system port, import pruning, merge revert/reapply. Registry: @lean. [run]
+
+**Apart: Core outside its sampled and SPOT parts, and Hash (unclear), conflicts: 9**
+
+- `Definitions/Core/Partition.lean`: remote whole. Main: terms move, trace/transcript move, module-system port. Registry: @proofs. [run]
+- `Definitions/Core/Site.lean`: main whole [run: remote's bytes are in main's history]. Remote: an older copy of a change main has (`e4f5e83d85` #7043 at 66bb72a1cd, squashed and ported onto remote: one declared…). Registry: @proofs. [run]
+- `Proofs/Core/Annotation.lean`: remote (deleted) [run]. Main: module-system port. Registry: @proofs.
+- `Proofs/Core/Fp32.lean`: remote (deleted) [run]. Main: module-system port, import pruning. Registry: @proofs.
+- `Proofs/Core/HongKung.lean`: remote (deleted) [run]. Main: module-system port, import pruning. Registry: @proofs.
+- `Proofs/Core/Site.lean`: main whole [run: remote's bytes are in main's history]. Remote: an older copy of a change main has (`e4f5e83d85` #7043 at 66bb72a1cd, squashed and ported onto remote: one declared…). Registry: @proofs. [run]
+- `Proofs/Core/TC/Ampere.lean`: remote (deleted) [run]. Main: module-system port. Registry: @proofs.
+- `Proofs/Core/TC/Proofs.lean`: remote (deleted) [run]. Main: module-system port. Registry: @proofs.
+- `Properties/Core/Site.lean`: main whole [run: remote's bytes are in main's history]. Remote: an older copy of a change main has (`e4f5e83d85` #7043 at 66bb72a1cd, squashed and ported onto remote: one declared…). Registry: @lean. [run]
+
+**Apart, clean: 9**
+
+`Definitions/Core/Interaction.lean` (unclear, @proofs); `Definitions/Core/TC/Pipeline.lean` (unclear, @proofs); `Definitions/Core/TC/Relation.lean` (unclear, @proofs); `Definitions/Hash/Tree.lean` (unclear, @proofs); `Proofs/Core.lean` (unclear, @lean); `Proofs/Core/TC.lean` (unclear, @proofs); `Proofs/Flock.lean` (Spot, @lean); `Proofs/Spot/Converse.lean` (Spot, @lean); `Proofs/Spot/Pointer.lean` (Spot, @lean). [run]
+
+**Proofs' clean files: 144**, by directory (each merges with no conflict; none declares a locked statement that differs except where §1 names it) [run]
+
+- `Proofs/Flock/`: Bridge.lean, C3.lean, Claims.lean, Recursive.lean, Soundness.lean [run]
+- `Proofs/Flock/Bridge/V5/`: OpeningsCanon.lean, Transports.lean [run]
+- `Proofs/Flock/C3/Reps/`: RoundOfHolo.lean [run]
+- `Proofs/Flock/Claims/`: RootFindAlg.lean, RootFindGF128.lean, Sampling.lean [run]
+- `Proofs/Flock/Claims/Complete/`: Walk.lean [run]
+- `Proofs/Flock/Claims/Complete/Replay/`: LigeritoBasis.lean, LigeritoSum.lean, Lincheck.lean, LincheckAlgebra.lean, RepRounds.lean, RingSwitch.lean, RingSwitchAlgebra.lean, Zerocheck.lean, ZerocheckAlgebra.lean, ZerocheckGoal.lean [run]
+- `Proofs/Flock/Claims/Complete/Zk/`: ConsCoins.lean, ConsLincheck.lean, ConsReplay.lean, ConsRingSwitch.lean, ConsZerocheck.lean, InnerGo.lean, PiopGo.lean, RingSwitch.lean [run]
+- `Proofs/Flock/Claims/Complete/ZkTables/`: Pass.lean, RepRuns.lean, RepSplit.lean, ReplayGo.lean, RunsGo.lean, ShapeGo.lean, View.lean [run]
+- `Proofs/Flock/Claims/GS/`: RR.lean [run]
+- `Proofs/Flock/Claims/KS/`: DecodeHidden.lean, Mixture.lean, PlainDrawRCols.lean, ZkFirst.lean [run]
+- `Proofs/Flock/Claims/Recursion/`: BoundRouteMergedLin.lean, DeployFacts.lean, HonestAccR.lean, HonestHalf.lean, HonestHalfFixture.lean, HonestHalfTops.lean, KS.lean, KSFlockLinR.lean, RestVerdictBasesHold.lean, Seq.lean, SeqSession.lean, SeqSim.lean, VStarDense.lean, VStarRowsFit.lean [run]
+- `Proofs/Flock/Claims/Sampling/`: Seq.lean [run]
+- `Proofs/Flock/Claims/Sampling/Select/`: DrawLaw.lean, Layout.lean, Misses.lean, Steps.lean, Take.lean [run]
+- `Proofs/Flock/Claims/ZK/`: InnerBatched.lean, InnerTauVal.lean, L0PinRec.lean, OneTape.lean, PiopSrcLc.lean, PiopSrcVals.lean, RepReplay.lean, Round1Pads.lean, SimInner.lean, SimLig.lean, SimPiopGo.lean, SimZerocheck.lean, SplitInner.lean [run]
+- `Proofs/Flock/Recursive/ZkReg/`: DrawnRefines.lean [run]
+- `Proofs/Flock/Soundness/`: ComposeDag.lean, ComposePlace.lean, ExecFlatClass.lean, ExecTemplatePlace.lean, ExecTemplateSetup.lean, TmplComputes.lean [run]
+- `Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/`: FreeCompute.lean [run]
+- `Proofs/Flock/Soundness/Discharge/`: Composed.lean, Hidden.lean, ZkHidden.lean, ZkReg.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Composed/`: Base.lean, Defs.lean, DefsJ.lean, Setup.lean [run]
+- `Proofs/Flock/Soundness/Discharge/DecodeZL/`: Runs.lean [run]
+- `Proofs/Flock/Soundness/Discharge/DecodeZLJ/`: Statements.lean [run]
+- `Proofs/Flock/Soundness/Discharge/FailClosed/`: One.lean, PlainRegistered.lean [run]
+- `Proofs/Flock/Soundness/Discharge/General/`: Hidden.lean [run]
+- `Proofs/Flock/Soundness/Discharge/HdecCor/`: Headlines.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Hidden/`: Rows.lean, SpecP.lean, UnrolledP.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Hidden/Wide/`: FitS.lean, SegFit.lean, SegFitP.lean [run]
+- `Proofs/Flock/Soundness/Discharge/HiddenExec/`: Copies.lean, CopiesP.lean, Defs.lean, Flat.lean, HeadlineInst.lean, Inst.lean, KeyH.lean, KeyHP.lean, PinnedOne.lean, Ret.lean, RowsAtHP.lean, SetupP.lean, SiteH.lean, Tables.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Hm/`: Accept.lean, Copy.lean, Flat.lean, Place.lean, Typed.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Integrate/`: Sites.lean [run]
+- `Proofs/Flock/Soundness/Discharge/Layout/`: Keyed.lean, Scope.lean [run]
+- `Proofs/Flock/Soundness/Discharge/PlainHJ/`: Bind.lean [run]
+- `Proofs/Flock/Soundness/Discharge/ZkBind/`: Place.lean [run]
+- `Proofs/Flock/Soundness/Discharge/ZkExec/`: Compiled.lean, Shape.lean [run]
+- `Proofs/Flock/Soundness/Discharge/ZkHidden/`: BindInst.lean, BindStmt.lean, DefsJ.lean, RunsJP.lean, SoundBind.lean [run]
+- `Proofs/Flock/Soundness/Discharge/ZkView/`: Defs.lean [run]
+- `Proofs/Flock/Soundness/Types/`: Dag.lean, Parts.lean, Program.lean, ProgramPlaces.lean, Units.lean [run]
+- `Proofs/Flock/VBridge/Family/`: AccRows.lean [run]
+- `Proofs/Flock/Verifier/`: Hash.lean, Merkle.lean, Registered.lean [run]
+
+**3. A build of the merged tree: what it would decide (I didn't run one; yours to decide)**
+- **The deletions.** For the 44 deleted modules in proofs' areas and the 5 in Core, the drivers already dropped the import lines in the files the merge keeps [run]. Examples:
+  - `Proofs/Flock/Soundness.lean`;
+  - `Discharge/Composed/Defs.lean`, which imported `ZkBind`, `ZkExec`, `ZkLink` and `ZkView` on `main`.
+
+  Whether those files still elaborate without the modules is lean's work list, and only a build shows it.
+- **The IrDep group (§1.1).** Whether `KSCoinTreeWitnesses.lean`, taken from `remote`, elaborates against the merged `HonestHalfFixture.lean`.
+- **The build.** The Lean build of the `Security` packages on the merged tree, with the resolutions above applied. That is the tree from `d0c1bc1197` plus the hand merges, on a CPU node under `research run`.
+
+**Deliverable 2** waits on vllm's list naming the shared slice's five proofs files, cut Tue 18:00Z. TOP-394 and its comments don't name them [read]. I'll take each file's side or write its hand merge on `cursor/proofs-mergelist-<hex>` by Wed 12:00Z, and open no PR.
+
+**#8363** All three runs on cpu-11 exited 0, ending 04:20Z to 04:55Z: the records run (`r20261110-035433-fbfb`), the suites run (`r20261110-035609-509b`) and the check (`r20261110-035808-ebe9`) [run]. Still to do: commit the records' lock change, if there is one, then rewrite the PR body and mark it. That is my next step, unless you'd rather I start on Deliverable 2's files first.
