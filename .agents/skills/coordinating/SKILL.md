@@ -32,8 +32,8 @@ using-slack skill).
 
 ## The map
 
-- **Goals** are the Goals page's: one outcome each, with one owner and a date, tier 1 a project in Daniel's words and
-  tiers 2 and 3 its pieces and steps (the writing-goals skill). Leads write their own; Daniel sets priorities.
+- **Goals** are the Goals page's: one outcome each, with one owner and a date, titled as a short headline in Daniel's
+  words; a goal under another is its subgoal (the writing-goals skill). Leads write their own; Daniel sets priorities.
 - **An issue carries its goal's label**, from the `goal` label group (one label per goal id, kept in step with the page
   by top), and is due no later than that goal.
 - **A Linear project** groups a stream of issues under one goal when that helps its lead: `Lead: @handle` at the start
