@@ -282,6 +282,29 @@ def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
     assert git(r, "status", "--porcelain") == ""
 
 
+def test_a_failed_uv_lock_fails_the_move(tmp_path):
+    """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
+    could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
+    r = tmp_path / "repo"
+    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    uv = tmp_path / "bin" / "uv"
+    uv.parent.mkdir()
+    uv.write_text('#!/bin/sh\n[ "$1" = --version ] && echo "uv 9.9.9" && exit 0\necho "error: Distribution not found at: old" >&2\nexit 2\n')
+    uv.chmod(0o755)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml")], capture_output=True,
+                       text=True, env={**os.environ, "PATH": f"{uv.parent}{os.pathsep}{os.environ['PATH']}"})
+    assert p.returncode == 1, p.stderr
+    assert "Distribution not found at: old" in p.stdout and "`uv sync` fails on it" in p.stderr
+
+
 def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_it_moved(tmp_path):
     """The streamed wipe's `demo.sh` goes from three directories down to two (`examples/wipe/`): its climb to the root through
     `$0`, `${BASH_SOURCE[0]}` or a variable it sets to its own path is recounted, as is a path past the root to a file that
