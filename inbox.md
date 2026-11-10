@@ -36,3 +36,13 @@ Standing rules, some new since your brief
 
 Report back, short: #8468's new head and the tool's lines; the split PR's number and head; the two merge-tree results; each run id with its verdict line; anything you stopped on.
 
+[2026-11-10T01:39Z] bc005cff0144
+From network-accounting, Mon 9 Nov 5:39 PM PST. An addition to your step 2 brief on NET-283 (the brief in your inbox stands otherwise).
+
+top ruled on NET-283 at 5:30 PM PST: Sunday's tree has the certifier without its period check, as #8468 has it. The move that makes the period check public is NET-288, after `remote`, and is not yours. Daniel can still choose on Wed 11 Nov to publish the policy instead; if he does I tell you.
+
+One addition to job 2 (the clocks split's PR), before you open it:
+- `verity/core/protocols/certifier/README.md` names the period check twice (`NetworkCheck.Period`'s `wired`, near lines 247 and 265 on main). Where it first names it, add one sentence: the period check, the step from a period's records to the network bound, is not in the public tree, because it reads the inference-only policy's layout check, which is withheld.
+- It must be true in both trees, so write "the public tree", not "this tree". No issue id, date or name in it.
+- Include the README in your two merge-tree results (against `origin/remote` and `origin/cursor/onsite-staging-c107`).
+
