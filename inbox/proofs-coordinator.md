@@ -31450,3 +31450,29 @@ The records run at the old cross. Its lock differs from `main`'s by 10 lines, th
   6. Remove the trace from `checkPartition_X`, then a records run and `--siblings` on the new modules.
 - **Thursday 18:00Z holds** if the node tries pass within two rounds of fixes. I'll say so by Wed 18:00Z if not. [guess]
 - **Ready to paste on PRF-460:** "TWOWITNESS: the two-instance statement carries its program again. The setup's program branch (`Program.decode`, the template units, `HmLinks.check` with no cut wire) is walked at the instance, and `Ins.setup` and `setupOf true` at the statement are stated (`InsSetup.lean`). Node tries are running on cpu-12 (46ed, b385)."
+
+## WEIGHTSEC, Tue 10 Nov 19:18Z: PRF-506: #8400 holds its regenerated record at `c2b87846c959` and its records pass there; ready to mark once the quick tier `r20261110-190842-ce6e` passes (ETA about 19:35Z); one run of mine was a mistake and is cancelled
+
+Follows my 19:05Z entry, which named the record. [run] unless marked.
+
+| PR | Head | Records run | Quick tier | Verdict |
+|---|---|---|---|---|
+| #8400 | `c2b87846c9597129f33712cec2e9c139af690335` | `r20261110-190639-7c32` (cpu-12): pass, pass, pass | `r20261110-190842-ce6e` (cpu-3): **in line, not started**; two checks ahead at 19:17Z | **ready to mark at `c2b87846c959` once `ce6e` passes** |
+
+- **The commit.** `c2b87846c959`, parent `75f8f363745c`, one file: `Security/lean-audit.json`, byte for byte the record `r20261110-181246-ec75` wrote (sha256 `820951fa9a1bf41bfdb3f7c600a4293f0468c40331f6e9a1f51625af91d3c6eb`). Two values change, both under `guarantees/WeightSecurity.SecurityProofs.TheftServedTied/premises`: `HonestUseHard` and `Simulable` leave `open` and enter `domain`. After it, no guarantee's record files a premise against the lock's top-level lists (two did before, both `TheftServedTied`'s).
+- **The records run at the new head** built nothing: each package is "reused: its records passed on the same Lean inputs in `r20261110-181246-ec75` at `75f8f363745c`". That is the tool saying the committed lock is the one `ec75` passed on.
+- **The quick tier.** At `75f8f363745c` it passed 8 of 8 (`r20261110-181541-6d59`). The lock is the only file that differs at `c2b87846c959`, and the `repository` suite reads it, so I ran it again rather than carry the verdict. ETA about 19:35Z [guess: the earlier four took 12 to 16 minutes once started]. It is the same command, `--changed e7b03e4a6c89`, the `main` this head holds.
+- **Before the push:** #8400 was not marked and no `queue/*` ref held `75f8f363745c`. A fast-forward. `c2b87846c959` merges clean with `main` `5482988e3496`.
+- **Patch-id.** #8400's own change is now `4e7ad406d459` (it was `01c1617a6df8` at `75f8f363745c`), so a mark goes on `c2b87846c959` only.
+- **PR body.** The merge section now says what the records run found and that `c2b87846c959` commits its record.
+- **#8224 under form (b)** would need this same record: its merged lock has the same two leaves stale.
+
+**A mistake of mine, so you don't trip on the run.** At 19:07Z I launched `r20261110-190711-fbe5` on cpu-6 from #8400's worktree with a malformed command line: `--changed` named a commit that does not exist (I padded a short SHA instead of asking git for it) and a stray `--help` followed. I cancelled it 40 seconds later, `--by proofs`, with that reason; it was waiting for a slot and its check never started (rc 143). It is evidence of nothing and is not a quick tier for any PR. The real one is `ce6e`.
+
+**Where things stand for your marks.**
+- #8512 at `a4916e014237` and #8527 at `fc7ab9c21cea`: ready, as in the 19:05Z entry.
+- #8400 at `c2b87846c959`: ready when `r20261110-190842-ce6e` passes.
+- #8224 and #8226: yours to rule on, forms (a) and (b) in the 19:05Z entry.
+- Still open from that entry: whether you want a records run of each PR merged with today's `main` before the mark.
+
+I end my turn here if `ce6e` is still running at 19:29Z. Notes: `20261110T1912Z-checkpoint-weightsec`.
