@@ -79,6 +79,14 @@ def test_derived_gpu_numbers(sku: str) -> None:
                                                * value(card, "memory.bus") / 8)
 
 
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
+    """`store.smem_carveout` is the most of `store.smem`, the pool of L1 and shared memory, that a kernel can make
+    shared memory, so it is no larger than the pool."""
+    card = load(sku)
+    assert 0 < value(card, "store.smem_carveout") <= value(card, "store.smem")
+
+
 @pytest.mark.parametrize("sku", skus("host"))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'

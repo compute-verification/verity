@@ -21,11 +21,13 @@ sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 
 tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (Accounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
-# The stores. Registers in 32-bit words an SM; the rest in bytes.
+# The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
+# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.1.1: 'The register file size is 64K 32-bit registers per SM'" }
 reg_extra = { value = 70030, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words), as the H200's at the Tuning Guide's 64 warps an SM; and the tensor memory, 256 KiB an SM (65536 words: PTX ISA 9.0 'Tensor Memory', 128 lanes of 512 32-bit columns), which Isa.lean has no Store for" }
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.2.3: the B200's 'combined L1 cache, texture cache, and shared memory of 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
+smem_carveout = { value = 233472, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 10.x, 'Maximum amount of shared memory per SM 228 KB' (the table's KB is 1024 bytes); Blackwell Tuning Guide section 1.4.2.3, the B200 supports 'shared memory capacities of 0, 8, 16, 32, 64, 100, 132, 164, 196 and 228 KB per SM'" }
 l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: Blackwell Tuning Guide section 1.4.2.2, 'The NVIDIA GB200 GPU increases the L2 cache capacity to 126 MB', taken as MiB; no document gives the HGX B200's, and the device's L2 size isn't on record" }
 dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
 

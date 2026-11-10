@@ -18,11 +18,12 @@ so the same GPU in another host needs no second card). Each number is an entry `
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
 Every card of a kind has the same sections. A GPU card's are `sm`, `clock` (`tensor` the tensor's, `sm` every other
-resource's, `memory` device memory's), `store`, `rate` (each resource's units a SM-clock), `memory` (device memory's bus,
-transfers and bandwidth), `weight` (the tensor units a MAC of each format uses) and `model` (`Accel.Card`'s `exact` and
-code space). A host card's are `cpu` (sockets and cores), `clock`, `rate` (AMX MACs and the host's op peak), `memory`
-(DRAM's channels, speed, bandwidth, measured read and write ceiling) and `store` (its caches and allowances, and `chip`,
-the host's on-chip bytes in S_chip).
+resource's, `memory` device memory's), `store` (each store's size; `smem` is the pool of L1 and shared memory, and
+`smem_carveout` the most of that pool a kernel can make shared memory, a part of `smem` that no store's size adds),
+`rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor
+units a MAC of each format uses) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (sockets
+and cores), `clock`, `rate` (AMX MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth, measured
+read and write ceiling) and `store` (its caches and allowances, and `chip`, the host's on-chip bytes in S_chip).
 
 ~~~python
 from verity.hardware.cards import load, skus
