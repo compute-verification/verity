@@ -28,12 +28,12 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
-    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
-SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+SPLIT_DOCUMENT_DIRS = {"security/Proofs/Flock/Soundness/assumption-notes/": "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
                        "verity/protocols/certifier/verifier/protocol/": "verity/protocols/certifier/verifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
@@ -77,7 +77,7 @@ ALLOWLIST = {
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
 #: what the spec alert shows when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
-#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
+#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
@@ -174,7 +174,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
-    soundness = "Security/Proofs/Flock/Soundness/"
+    soundness = "security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
