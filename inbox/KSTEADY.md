@@ -65,3 +65,14 @@ proofs' final run has all eight cards Wed 01:30 to 03:00Z. If it fails, its retr
 lead agreed (INF-659, 04:35Z). So plan Wednesday's window as 04:30 to 14:00Z. Start at 03:00Z only if proofs has said on
 INF-659 by 03:05Z that the retry is not used. Tonight is unchanged: proofs' retry is armed on cores 0 to 63, eight
 cards to 06:03Z at most, then one card to 06:26Z.
+
+## Tue 10 Nov 04:49Z: one lock for every kernels run on node A
+
+A second kernels run will use the Tue 10:30 to 16:00Z window: HASH-100's profile of main's prover, about 30 minutes,
+one card, cores 64 to 95 (worker KHSHARE). Two kernels runs must never overlap on those cores, whichever cards they hold.
+
+- From your next launch on, wrap the leased command of every run on node A in one lock, outermost:
+  `flock /dev/shm/kernels-node-a.lock gpu_lease.sh 1 --wait --max-min N -- CMD`. KHSHARE does the same.
+- The lock is first come, first served. Do not queue a run long before you can use it: a waiting run holds the other
+  out of order. Your runs come first in tonight's window; KHSHARE launches only from 10:30Z.
+- If a run of yours launched before this message is still going at 10:30Z without the lock, say so on HASH-98 at once.
