@@ -17,7 +17,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
 "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
-{<descriptor id>: cap}, "row_tables"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
+{<descriptor id>: cap}, "row_tables"?: true, "zk"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
 (`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
@@ -33,7 +33,9 @@ block or end or a ``STAGES`` stage; and a row template or
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
-``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
+``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).  ``zk: true`` says the
+window is for ``verify --zk`` sessions: a chunked template whose statement is a form ``--zk`` refuses (its table reads in lookup
+slots, `chunk_rows.zk_refusal`) is refused by name before any row is read, with the Boolean version to name in its place.
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
 computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
@@ -410,7 +412,8 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Binding, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
-    template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
+    template queries, or says ``zk: true`` and names a template whose statement ``verify --zk`` refuses for its form
+    (`chunk_rows.zk_refusal`).  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
     commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
     compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
@@ -422,6 +425,10 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
+    if partition.get("zk"):
+        for t in tmpls:
+            if chunked(t, partition.get("chunk_cap") or {}) and (why := CR.zk_refusal(template(t))) is not None:
+                raise ValueError(f"a partition for --zk sessions names {why}")
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     plan = EX.Plan(tmpls, rows)
@@ -452,6 +459,7 @@ def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
             **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}),
+            **({"zk": True} if partition.get("zk") else {}),
             **({"work_table": window.work_table} if window.work_table is not None else {}), "partition": window.partition,
             "partition_digest": window.partition_digest, "population": window.population}
 

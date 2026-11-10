@@ -1,5 +1,6 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
+(`unit_rows`), table reads (`reads`) and statement (`statement`), why ``verify --zk`` refuses that statement's form
+(`zk_refusal`, a partition file's ``zk``), the most of them one flock-circuit statement holds
 (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
 chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
 (``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
@@ -65,6 +66,72 @@ def statement(tp: Any) -> dict[str, Any]:
     if tp.layout == "read":
         return {"layout": READ_LAYOUT, "structural": True}
     return {"reads": reads(tp)}
+
+
+_PIECE_TABLES: dict[str, frozenset[str]] = {}
+
+
+def _piece_tables(prim: Any) -> frozenset[str]:
+    """The tables a lookup slot holds (`read_slots.split`'s ``slot``) that primitive ``prim``'s Flock piece reads, the piece
+    lowered once on free operands as `ir_lower.definition_ands` counts it; none for a gate, a primitive with no piece, and a
+    piece that lowers only on a constant operand (wiring)."""
+    if prim.id not in _PIECE_TABLES:
+        import inspect
+
+        from verity.ml.circuits.evaluation.reference import signature_of
+        from verity_flock import ir_lower as IL, read_slots as RS, tail as TL
+
+        tables: frozenset[str] = frozenset()
+        if (getattr(prim, "family", None) not in ("Input", "Const") and prim.params and prim.id in IL.PIECES
+                and getattr(inspect.unwrap(IL.PIECES[prim.id]), "ands", None) is None):
+            C = IL.Circuit()
+            params, _ = signature_of(prim)
+            IL.lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
+            tables = frozenset(t for t, idx, w in C.lookups if RS.SLOT_TABLES.get(t) == len(idx) and w <= TL.VALUE_BITS)
+        _PIECE_TABLES[prim.id] = tables
+    return _PIECE_TABLES[prim.id]
+
+
+def slot_tables(fn: Any) -> tuple[str, ...]:
+    """The tables a lookup slot holds that Definition ``fn``'s unit reads, sorted: what `UnitStager` splits out of the unit
+    under ``reads="slots"``.  Read off the Definition and never lowered: each specialized Definition's body is walked once
+    and each primitive's piece lowered once (`_piece_tables`).  None for a body whose MUFU is gates."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    memo: dict[int, frozenset[str]] = {}
+
+    def tables(f: Any) -> frozenset[str]:
+        if isinstance(f, PrimitiveDefinition):
+            return _piece_tables(f)
+        if id(f) not in memo:
+            body = getattr(f, "body", None)
+            called = {} if body is None else {id(nd.fn): nd.fn for nd in body.nodes}
+            memo[id(f)] = frozenset().union(*(tables(g) for g in called.values()))
+        return memo[id(f)]
+
+    return tuple(sorted(tables(resolve(fn))))
+
+
+def zk_refusal(tp: Any) -> str | None:
+    """Why `verify --zk` refuses chunked template ``tp``'s `statement` for its form, known before anything is staged; None
+    for a form it takes.  A flat statement whose unit reads a table a lookup slot holds (`slot_tables`), laid out in slots
+    (`reads`), returns its outputs from its last tail stage, and the unit's form the sampled audit's knowledge soundness
+    covers has the unit return them (`one_stage.proofs.ks_form_why`, `Flock.ProvedScope.scopeOkH`).  The reason names the
+    template, the tables and, for a word Definition with one registered, the Boolean version to name in its place."""
+    if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
+        return None
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.definitions import boolean as BB
+
+    fix = "it is a Boolean Definition whose body still reads them"
+    if tp.id == tp.word:
+        try:
+            fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"
+        except BB.NoBooleanVersion:
+            fix = "no Boolean version of it is registered"
+    return (f"{tp.id}: its statement reads {', '.join(tables)} in lookup slots and returns its outputs from a tail stage, a "
+            f"form `verify --zk` refuses (`ProvedScope.scopeOkH`); {fix}")
 
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
