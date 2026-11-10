@@ -1,10 +1,10 @@
 """kappa for frontier training: twice the counted multiplications over the reference training circuit's computed gates,
 per token at a context length, over a model's pretraining schedule, and for the board's other rows (``ROWS``).
 
-``Nci.SecurityProofs.ThreadedTraining`` (``Security/Definitions/Nci/Guarantees/Threads.lean``) takes kappa through its
+``InferenceOnly.SecurityProofs.ThreadedTraining`` (``Security/Definitions/InferenceOnly/Guarantees/Threads.lean``) takes kappa through its
 hypothesis ``kappa * c.D.size c.D.computed <= 2 * T.M.card``: every computed gate of the reference circuit ``c``
 against twice its counted multiplications ``M``, the gates that multiply an updated weight by an activation or an
-activation gradient (``Nci.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's
+activation gradient (``InferenceOnly.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's
 gates are its flops, 2 per multiply-add, and a nonlinear function, comparison or select is one gate. The circuit is the
 minimal one: causal attention computes only the pairs it uses, and nothing is recomputed. Per token, with ``N`` the
 active weights outside the embedding and the LM head:

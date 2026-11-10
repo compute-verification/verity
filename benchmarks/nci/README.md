@@ -1,7 +1,7 @@
 # The inference-only policy's literature index and slowdown board
 
 Data and a calculator for the question negotiators will ask about the
-[inference-only policy](../../verity/core/protocols/network/nci/README.md) ("bounding accumulation"): if both sides
+[inference-only policy](../../verity/core/protocols/network/inference_only/README.md) ("bounding accumulation"): if both sides
 adopt it, how fast can a determined actor still advance frontier capability? Four parts:
 
 - every source we rely on, each claim quoted verbatim (`sources/`);
@@ -9,13 +9,13 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
-(`Security/Definitions/Nci/Guarantees/Training.lean`).
+Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Threads.lean`) and `InferenceOnly.SecurityProofs.IncompressibleContainedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Training.lean`).
 
 The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
+`rho.theorem.multiple_bound` in Lean's form (`InferenceOnly.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
 `fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
@@ -146,7 +146,7 @@ of new state per block can reach. What it throttles is moving the base model's f
 
 For each row under each calibration of its model, `bracket.py` computes a bracket:
 
-- `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
+- `lower` is the proven bound, `InferenceOnly.SecurityProofs.ThreadedTraining`:
   \(\text{slowdown} \ge \kappa\, b_a / (2\alpha\Lambda_T)\) with \(\alpha = K/\Gamma\) and the thread term
   \(\Lambda_T = \max(e,\ cK/(4 d\, b_w))\) (not the Notation's Λ). It holds under the row's rates and the theorem's
   assumptions. `rates` caps the inputs where a row's own numbers make an
@@ -162,7 +162,7 @@ For each row under each calibration of its model, `bracket.py` computes a bracke
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum rule, `Nci.SecurityProofs.IncompressibleContainedTraining`:
+- `chain` is the partial-sum rule, `InferenceOnly.SecurityProofs.IncompressibleContainedTraining`:
   \(\text{slowdown} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumption is that
   one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\)

@@ -21,7 +21,7 @@
    "modules": 241,
    "declarations": 1843
   },
-  "Proofs/Nci": {
+  "Proofs/InferenceOnly": {
    "modules": 1,
    "declarations": 4
   },
