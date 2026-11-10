@@ -25,10 +25,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "codec_tensor")
 sys.path.insert(0, str(HERE.parents[1]))
 
-from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
+from verity.protocols.poub.prover.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
 from verity.protocols.poub.verifier import receipts as rb, store
 from verity.commitments import merkle_depth
 from verity.commitments.indexed import RangeIndexedDomain

@@ -40,7 +40,7 @@ untraced = [
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
 # verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
-# `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
+# `workloads/onsite_served/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
 # `benchmarks/one_stage/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
@@ -64,10 +64,10 @@ inputs = ["verity", "verity/spot/verifier/lean/lakefile.toml", "verity/composite
           "verity/flock/prover/python/verity_flock/input_sets.py",
           "verity/flock/prover/python/verity_flock/subcircuit_templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
-          "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
-          "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/gpu.py", "benchmarks/pous/p2_v1/reference.py",
-          "benchmarks/pous/p2_v1/wire.py", "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/audit-vectors.json",
-          "benchmarks/pous/p2_v1/audit-negative-vectors.json", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json",
+          "benchmarks/pous/p2_v1", "workloads/onsite_served/onsite_pieces.sh",
+          "verity/protocols/pous/prover/p2_v1/store.py", "verity/protocols/pous/prover/p2_v1/gpu.py", "verity/protocols/pous/verifier/p2_v1/reference.py",
+          "verity/protocols/pous/verifier/p2_v1/wire.py", "verity/protocols/pous/verifier/p2_v1/vectors.json", "verity/protocols/pous/verifier/p2_v1/audit-vectors.json",
+          "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/poub/verifier/p2_v1/bandwidth-mem69-v2.json",
           "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]
 

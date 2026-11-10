@@ -40,7 +40,7 @@ research = ["--cwd", "clone", "--timeout", "6h"]
 [run.window.env]
 H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"
 H1_PEER = "vy-dc-h200"
-ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
+ONSITE_PIECES = "workloads/onsite_served/onsite_pieces.sh"
 KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
 
 [run.commit]

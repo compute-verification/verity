@@ -47,7 +47,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from benchmarks.word_codec import cuda_lib
+from verity.protocols.poub.prover.word_codec import cuda_lib
 
 BLOCK = 4096
 GIB = 1 << 30

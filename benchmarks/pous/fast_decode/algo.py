@@ -300,7 +300,7 @@ def d_map(width: Width, z: int) -> int:
 
 
 def decode(width: Width, c: int, k: int, t: int) -> int:
-    """P2's D(c) = d(sigma_K(d(c))) - t mod p at this width (`p2_v1.reference.decode`'s maps)."""
+    """P2's D(c) = d(sigma_K(d(c))) - t mod p at this width (`verity.protocols.pous.verifier.p2_v1.reference.decode`'s maps)."""
     r = d_map(width, c)
     x = r ^ k
     return (d_map(width, x if x < width.p else r) - t) % width.p

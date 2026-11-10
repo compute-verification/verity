@@ -153,7 +153,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
              "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
-               "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
+               "vy-auditor-2; served_verdicts.sh sets it where the tree has workloads/onsite_served/served_piece.sh and this node "
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
                   ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "

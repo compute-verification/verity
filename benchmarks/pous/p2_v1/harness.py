@@ -52,7 +52,7 @@ from typing import Any
 
 from band_gpu import harness as H
 
-from . import reference as R
+from verity.protocols.pous.verifier.p2_v1 import reference as R
 
 HERE = Path(__file__).resolve().parent
 MEMORY_CHALLENGER = HERE / "memory_challenger.py"

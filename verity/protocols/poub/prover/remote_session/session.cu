@@ -36,7 +36,7 @@
 // under its pass constants kC, kL, kNodeTpl and gNib, which its rb_set, rb_chain_set and rb_chain set. reader.cu's own
 // kernels (rb_leaves, rb_pads, rb_tree and level_kernel) hash the same tree unfused, one kernel a level: the fused one's
 // cross-check.
-#include "../../verity/definitions/kernels/row_commit.cuh"
+#include "../../../../definitions/kernels/row_commit.cuh"
 #include "../codec_tensor/reader.cu"
 
 namespace rb {

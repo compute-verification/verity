@@ -1,4 +1,4 @@
-"""`p2-audit-wire/v4` (`benchmarks/pous/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
+"""`p2-audit-wire/v4` (`verity/protocols/pous/verifier/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
 FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash `reference.py` pins is the files', and the
 package's copy of the keys is `vectors.json`'s."""
 from __future__ import annotations
@@ -15,9 +15,9 @@ pytest.importorskip("verity")
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
 
-from p2_v1 import reference as R  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
 from p2_v1 import vectors as V  # noqa: E402
-from p2_v1 import wire as Wi  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import wire as Wi  # noqa: E402
 from verity.protocols.pous.verifier.verifier import MerkleTree  # noqa: E402
 
 

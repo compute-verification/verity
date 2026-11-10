@@ -33,7 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from p2_v1 import reference as R  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
 from p2_v1.gpu import Kernels  # noqa: E402
 from p2_v1.harness import KEYS  # noqa: E402
 

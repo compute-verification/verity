@@ -1,5 +1,5 @@
 """The store's codec: Sloth over one wide word, byte-exact with `verity/word-codec/kv/v0` (the reference
-`benchmarks/word_codec/kv.py`, its kernel `kv.cu`), a 4 KiB chunk as W words.  A codec is its field, its k ≥ 2 rounds
+`verity/protocols/poub/prover/word_codec/kv.py`, its kernel `kv.cu`), a 4 KiB chunk as W words.  A codec is its field, its k ≥ 2 rounds
 and whether σ_K masks between them, and a registration names it (`Codec.name`).  The default is p = 2^1024 − 105,
 masked, k = 3, with k = 2 at the same width the fallback.  p = 2^512 − 569, unmasked, is kept as the upgrade path.
 
@@ -49,7 +49,7 @@ byte 0xFF, one under E4M3), and every chunk of finite values encodes.
 
 The same map is the word codecs' reference at any field p = 2^n − c ≡ 3 (mod 4) and any k ≥ 1 (`Sloth`, of which a
 store's `Codec` is the case a registration names), with its key by this derivation in a domain of the caller's
-(`derive`): the KV cache's (`benchmarks/word_codec/kv.py`), the tensor-core codec's (`benchmarks/codec_tensor/wide.py`),
+(`derive`): the KV cache's (`verity/protocols/poub/prover/word_codec/kv.py`), the tensor-core codec's (`benchmarks/codec_tensor/wide.py`),
 and, under key derivations of their own, the 61-bit word's and the fused GEMM's wide words'
 (`benchmarks/word_codec/codec.py`, `benchmarks/word_codec/wide.py`), each of which keeps only its layout.  A field's
 word is S = ⌈n/8⌉ bytes; its payload is any word below p at full slot (n a multiple of 32), else n − 1 bits, of which a

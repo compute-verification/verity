@@ -4,7 +4,7 @@
 #
 #   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set (empty: none):
 #       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it
-#       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
+#       POUS_CMD       'bash workloads/onsite_served/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes
 #       BANDWIDTH_CMD  once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect ...', which collects
@@ -23,8 +23,8 @@ onsite_piece_commands() {
   [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
     && WIPE_CMD=${WIPE_CMD-'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'}
   # shellcheck disable=SC2016
-  [ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
-    && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
+  [ -f "$TREE/workloads/onsite_served/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
+    && POUS_CMD=${POUS_CMD-'bash workloads/onsite_served/served_piece.sh "$@"'}
   # shellcheck disable=SC2016
   if [ -n "${POUS_CMD:-}" ]; then
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}

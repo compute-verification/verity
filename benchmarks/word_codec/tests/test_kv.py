@@ -13,7 +13,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((HERE.parents[2] / "benchmarks/word_codec/kv.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/poub/prover/word_codec/kv.py").parent))
 
 import kv as K  # noqa: E402
 import kv_twin as T  # noqa: E402
@@ -72,7 +72,7 @@ def test_fields(name):
 
 
 def test_kernel_constants_match():
-    src = (HERE.parents[2] / "benchmarks/word_codec/kv.cu").read_text()
+    src = (HERE.parents[2] / "verity/protocols/poub/prover/word_codec/kv.cu").read_text()
     for f in K.FIELDS.values():
         assert re.search(rf"constexpr int NBITS = {f.n};\nconstexpr u32 CF = {f.c};", src)
     assert f"constexpr int LOW_MIN = {K.LOW_MIN};" in src and "constexpr int KMAX = 8;" in src

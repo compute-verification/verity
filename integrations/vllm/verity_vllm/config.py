@@ -48,14 +48,14 @@ CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
-REMOTE_SESSION = (ROOT.parent.parent / "benchmarks/remote_session/prover.py").parent
+REMOTE_SESSION = (ROOT.parent.parent / "verity/protocols/poub/prover/remote_session/prover.py").parent
 #: The session's pass over vLLM's tensors where they are (``inplace.py``), which stays in the session's harness.
 REMOTE_INPLACE = ROOT.parent.parent / "benchmarks" / "remote_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
-VLLM_ENCODED = (ROOT.parent.parent / "benchmarks/vllm_encoded/paged.py").parent
+VLLM_ENCODED = (ROOT.parent.parent / "verity/protocols/poub/prover/vllm_encoded/paged.py").parent
 #: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
 #: POUS encodes with (`protocols.pous`).
-P2_POUS = (ROOT.parent.parent / "benchmarks/pous/p2_v1/store.py").parent.parent
+P2_POUS = (ROOT.parent.parent / "verity/protocols/pous/prover/p2_v1/store.py").parent.parent
 #: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
 P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
