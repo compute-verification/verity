@@ -4,7 +4,7 @@ The bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) work on t
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
 (with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
-`step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
+`step.py` is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
 
 **Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
