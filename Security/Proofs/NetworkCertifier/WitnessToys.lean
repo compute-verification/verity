@@ -34,9 +34,6 @@ witnesses; `Witnesses` has the steps `obs0` and `obs1` and the accepting verifie
   sampled Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible incorrect sets
   (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
   (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
-* `tapOps`: the network certifier's openings at `notStmt` that register `obs0` under every opening passing
-  (`tapOps_opens`), which no possible incorrect set accepts at any `δ` (`obs0_notAcc`). The accepting verifier at
-  which `PeriodLeakAccepted`'s per-window bound fails is `certL` (`Witnesses`, `certL_bound_fails`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
@@ -48,7 +45,7 @@ witnesses; `Witnesses` has the steps `obs0` and `obs1` and the accepting verifie
 namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
-open Claims.Witness.SamplingGeneric (notProg notStmt notPart)
+open Claims.Witness.SamplingGeneric (notStmt notPart)
 
 /-! ## The honest certifier -/
 
@@ -329,69 +326,6 @@ theorem obs1_sampAcc :
     (notLay.egress 0 ℓ) σ
   rw [hrow, sampProg_val _ hin]
   rfl
-
-/-! ## The network certifier's openings at the negation -/
-
-theorem obs0_covered : Covered 1 [obs0] := by
-  intro t ht _ κ
-  obtain rfl : t = 0 := by omega
-  rfl
-
-/-- At any `δ`, the only possible incorrect set of `notStmt` is empty: its one unit is sampled `all`. -/
-theorem notFaulty_empty {δ : ℝ} {F : Finset ℕ} (hF : F ∈ faultySets notStmt.design notPart δ) : F = ∅ := by
-  classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
-  obtain ⟨hsub, -, hdis⟩ := hF
-  refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-  have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
-  obtain rfl : v = 0 := by omega
-  exact Finset.disjoint_left.1 hdis hv (by decide)
-
-/-- **`obs0` is accepted under no possible incorrect set**, at every `δ` and whatever the inputs `As` admits: the only
-possible incorrect set is empty, so no gate is held, and the circuit, the negation of the ingress `false`, holds a frame
-where `obs0` has none. -/
-theorem obs0_notAcc (δ : ℝ) (As : Set (ℕ → Bool)) :
-    [obs0] ∉ AccSeqsSampled notProg notPart notStmt.design notLay 1 As δ (fun _ _ => [false]) 1 := by
-  intro h
-  obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h
-  obtain rfl := notFaulty_empty hF
-  have hnone : free = fun _ => none := funext fun g => by
-    cases hg : free g with
-    | none => rfl
-    | some b =>
-      obtain ⟨v, hv, -⟩ := hfree g b hg
-      simp at hv
-  subst hnone
-  obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
-  have hin : notLay.inputOf 1 [[false]] a 0 = false := rfl
-  have h1 : (none : Option (List Bool)) =
-      rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 :=
-    congrFun (congrFun hrows 0) 0
-  have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 =
-      if valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none) 1 then
-        some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)))
-      else none := rfl
-  rw [hrow, notProg_val _ hin] at h1
-  simp at h1
-
-/-- The network certifier's openings at `notStmt`: the input `false` and the negation's presence gate `false`. -/
-def tapOps : List (Opening Bool) := [⟨0, false, []⟩, ⟨1, false, []⟩]
-
-/-- **The network certifier's openings register `obs0`**, under every opening passing: they open the input and the
-egress slot's presence gate, both `false`, so the step's row holds no frame and its ingress is `false`. -/
-theorem tapOps_opens (H : Msg → Msg) :
-    CertifierRegisters H accCm notLay 1 (fun _ _ => [false]) notStmt tapOps [obs0] := by
-  refine ⟨fun q _ => rfl, fun t ht => ?_⟩
-  obtain rfl : t = 0 := by omega
-  refine ⟨fun ℓ σ g hg => ?_, fun g hg => ?_, Nat.one_pos, fun ℓ => ?_, rfl⟩
-  · simp [notLay, slotGates] at hg
-    subst hg
-    exact ⟨fun b hb => by simp [notStmt, notProg] at hb, ⟨1, false, []⟩, by simp [tapOps], rfl⟩
-  · simp [notLay] at hg
-    subst hg
-    exact ⟨⟨0, false, []⟩, by simp [tapOps], rfl⟩
-  · funext σ
-    rfl
 
 /-! ## The monitoring period, pooled -/
 

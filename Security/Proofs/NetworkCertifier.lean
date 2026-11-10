@@ -34,7 +34,6 @@ public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessToys
 public import Proofs.NetworkCertifier.CountWitnesses
 public import Proofs.NetworkCertifier.PeriodWitnesses
-public import Proofs.NetworkCertifier.Assumptions.SampledCode
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
