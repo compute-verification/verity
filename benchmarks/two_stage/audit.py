@@ -229,7 +229,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
               record: dict, proofs: dict) -> dict:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
     replay block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, and
-    `second_stage.replay_wires`, as the stream derives them), the reads the audit record's verdicts of record report,
+    `second_stage.replay_wires`, as the stream derives them) and their rows (`second_stage.replay_rows`), the reads the
+    audit record's verdicts of record report,
     what they name of each session they accepted (`second_stage.verified_of`), and each template's reference header and
     registered reads the params ``proofs`` give."""
     from verity.core.protocols.spot import second_stage as SS
@@ -243,7 +244,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
-                 wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)))
+                 wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)),
+                 rows=SS.replay_rows(replay, descriptor_id(T.REPLAY)))
     return SS.check(True, own, stmts).to_json()
 
 

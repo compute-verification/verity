@@ -1,0 +1,51 @@
+# The analysis directory's move: what `tools/move/layout.py --map tools/move/security_dir_map.toml` moves and rewrites.
+#
+# `Security/` becomes `security/`: the layout's top-level directories are lower case. The row moves every file under it
+# and rewrites each path that names it, and the directory's name where it stands alone between quotes or backticks
+# ([rewrite] words): a package's path in a tuple or a ratchet's key (`"Security": 284`), `ROOT / "Security"`. The toy tree
+# the unread tests read is laid out as ours is, so its directory moves too.
+#
+# No Lean module, declaration or lock record changes: a module is named from its package's root (`Definitions.Core`,
+# `Proofs.Flock`), never from the repository's. No Lean file's bytes change either ([rewrite] exclude): a path in a Lean
+# comment keeps the old name until an edit of that file takes it, because rewriting the 170 Lean files that name one would
+# recompile about 3,500 of the tree's 5,200 modules on every build directory, and change the digests the pins record.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"Security/" = "security/"
+"tools/verity/lean/tests/fixtures/unread/Security/" = "tools/verity/lean/tests/fixtures/unread/security/"
+
+[retired]
+paths = ["Security/", "tools/verity/lean/tests/fixtures/unread/Security/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file (above), and every Lake manifest: none names the directory, a package's
+# requirements by path sit where they sat from it (`../Properties`, `../../verity/...`), and a manifest's bytes key its
+# package's fetched dependencies (`lean_audit.deps_key`), so a path in one written shorter would fetch Mathlib again.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/lake-manifest.json", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean"]
+# Rewritten though a pattern above matches: the pins that record a file's digest under its path, whose paths follow the
+# move while every digest stays (the run refuses a digest that would change).
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json",
+           "verity/core/protocols/spot/tests/fixtures/exfiltration_two_lean.json",
+           "verity/ml/flock/tests/fixtures/randomness_lean.json"]
+# The directory's name alone, between quotes or backticks, is the directory wherever it is written, Python included.
+words = ["Security"]
+# The node sweep lists where a tree of each age keeps its Lake packages: the old names stay beside the new.
+keep_in = {"tools/research/src/research/pods/nebius/node_sweep.sh" = ["Security", "Security/*"]}
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`): a Python file under a directory is named by its path from the root.
+# Neither directory holds one, and a one-word module is never rewritten, so no dotted name changes.
+"Security" = "security"
+"tools.verity.lean.tests.fixtures.unread.Security" = "tools.verity.lean.tests.fixtures.unread.security"
