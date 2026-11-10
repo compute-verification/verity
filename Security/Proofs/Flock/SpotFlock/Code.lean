@@ -114,9 +114,9 @@ structure Names where
 
 /-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
 (`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
-stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`) and wires (`wires`)
-round 2's statement check reads, the names the boundary and interior registrations' records must name
-(`boundaryNames`, `interiorNames`), template `t`'s reference session statement
+stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`), wires (`wires`) and
+the rows their units read (`rows`) round 2's statement check reads, the names the boundary and interior registrations'
+records must name (`boundaryNames`, `interiorNames`), template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
 null for none (`refReads t`), and the commitment's layout and the reference prover's framing
 (`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). The reference reads are a copy of their own,
@@ -131,6 +131,7 @@ structure Held where
   names : List String
   links : Option (Array Spot.SecondStage.Link)
   wires : Option (Array Spot.SecondStage.Wire)
+  rows : Array Spot.SecondStage.Rows
   boundaryNames : Names
   interiorNames : Names
   xS₀ : ℕ → Msg
@@ -463,12 +464,12 @@ def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length)
 /-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
 statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample and the parts in
 it (`partsAt`, where a wired read finds its writer's), the interior and boundary registrations' records, the second
-draw's units, the design's links and wires and the templates' reference headers and registered reads, which the
-registration fixes before the run. -/
+draw's units, the design's links and wires and the rows their units read, and the templates' reference headers and
+registered reads, which the registration fixes before the run. -/
 def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
   { sample := h.reg.sample (src c₀), parts := some (partsAt h (h.reg.sample (src c₀)).size), interior := rec,
     boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
-    refs := refsOf h, refReads := refRegisteredOf h }
+    rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
 verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the
