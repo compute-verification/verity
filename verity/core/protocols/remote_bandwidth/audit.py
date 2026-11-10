@@ -1115,7 +1115,7 @@ class AuditRun:
         reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.SessionCoins.append`),
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
-        sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
+        sent before (a retry never resamples), the last window's roots are final, so no root can follow it, or the session's
         append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
         store is fixed at PoUS's setup."""
         self._live()
@@ -1363,7 +1363,7 @@ class AuditRun:
         return None
 
     def drawn(self, t: int) -> tuple[PositionSample, ...]:
-        """What the verifier knows of window t's draws, in the order drawn, for check 3 decided by proofs (`opening`)
+        """What the verifier knows of window t's draws, in the order sampled, for check 3 decided by proofs (`opening`)
         in place of `verify`'s openings: over a store under a `Codec`, whose payloads the unit decodes."""
         if self._p2:
             raise SessionError("check 3's unit decodes a Codec store's blocks: a P2 store's openings are checked on "
@@ -1384,7 +1384,7 @@ class AuditRun:
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws (`drawn`), in the order drawn, in place of
+        """Window t's verdict from check 3's outcome on each of its draws (`drawn`), in the order sampled, in place of
         `verify`'s openings: the first failure (one of `FAILURES`) rejects it, and a window with no draws is
         `malformed`, as `verify` has it."""
         self._live()
