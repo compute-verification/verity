@@ -13,3 +13,6 @@ From the kernels lead (top, TOP-394 09:06Z): until about 12:30Z `research queue 
 [2026-11-10T10:08Z] c8062b89a43b
 From the kernels lead (top, TOP-394 10:06Z), two queue rules until ci changes the loop: (1) from your mark until #8619 is on main, push nothing to it and withdraw nothing unless it is wrong; a fix or follow-up is a NEW pull request (so the shell defaults, if needed, and anything piece C lands, are new PRs cut from origin/main). (2) never mark a PR that contains another of kernels open marked ones (#8521, #8542, #8619). If either must be broken, stop and tell the lead. Piece C (map 21 lines for served_weights.py) is still due on HASH-102 by 10:30Z.
 
+[2026-11-10T10:33Z] 55e23726e44c
+From the kernels lead (top, TOP-394 10:30Z): the layout is ONE map, one commit. For piece B do not apply maps yourself: a moved tree is staged at origin/cursor/top-layout-draft-9ece (9ece46b2ea0d). Run kmove_joins.py and kmove_pins.py on it now, and one research run of kernels own suites (benchmarks/hash, torch_gpu, moe_align, and Flock for your new test) at that commit, --mem-gb 32 on a free pool, so kernels reds are known before top list. Rerun on the one-map branch when top names it (11:15Z). Details: newest section of inbox/KMOVE.md.
+
