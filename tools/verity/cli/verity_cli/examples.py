@@ -52,7 +52,7 @@ class Demo:
 
 def demos(root: Path) -> list[Demo]:
     out = []
-    for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
+    for d in sorted(p for p in (root / "workloads").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
         runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "demo.toml"
         if not f.is_file():
@@ -123,10 +123,10 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols (packages under verity/protocols/, the composites among them) and workloads."""
+    """The known protocols (packages under verity/protocols/ and the composites under verity/composite/verifier/) and workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
-    return dirs(root / "verity" / "protocols"), [*dirs(root / "integrations"), "none"]
+    return sorted(dirs(root / "verity" / "protocols") + dirs(root / "verity" / "composite" / "verifier")), [*dirs(root / "integrations"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
@@ -148,7 +148,7 @@ def schema(ex: Demo, root: Path) -> list[str]:
     if not ps or not all(isinstance(x, str) for x in ps) or (isinstance(p, list) and len(ps) < 2):
         out.append(f"protocol: give a protocol or composite ({', '.join(protocols)}) or a list of two or more")
     elif unknown := [x for x in ps if x not in protocols]:
-        out.append(f"protocol {unknown} is no package under verity/protocols/: one of {', '.join(protocols)}")
+        out.append(f"protocol {unknown} is no package under verity/protocols/ or verity/composite/verifier/: one of {', '.join(protocols)}")
     if d.get("workload") not in workloads:
         out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under integrations/, or none)")
     for axis, steps in AXES.items():
