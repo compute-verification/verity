@@ -814,6 +814,175 @@ def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacke
     assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
 
 
+# -- the verdict carry's judgement and a check's auto plan
+
+#: a PR's new head and two older heads, for `_carried_from`, and who marked each head ready
+NEW, OLD, OLDER = "n" * 40, "o" * 40, "p" * 40
+MARKED = {NEW: "marker", OLD: "old-marker"}
+
+
+@pytest.mark.parametrize("labels, why, owner, carries, got", [
+    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "lane-1", True, (OLD, "only merges", True)),
+    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "lane-1", False, (OLD, "edited-merge: only merges", False)),
+    ({OLD: [("@LANE-1", "land", "T1"), ("Marker", "land", "T2"), ("old-marker", "land", "T3")]}, "no land verdict", "lane-1",
+     True, None),
+    ({OLD: [("rev", "land", "T1")]}, "held by top (wait)", "lane-1", True,
+     (OLD, f"held by top (wait) at {NEW[:12]}", False)),
+    ({OLD: [("rev", "land", "T1")], OLDER: [("@top", "hold", "T2", "wait")]}, "no land verdict", "lane-1", True,
+     (OLD, f"top's hold at {OLDER[:12]} (wait) is newer", False)),
+    ({OLD: [("rev", "land", "T1")], OLDER: [("lane-1", "hold", "T2", "mine")]}, "no land verdict", "lane-1", True,
+     (OLD, f"lane-1's hold at {OLDER[:12]} (mine) is newer", False)),
+    ({OLDER: [("rev", "land", "T1")], OLD: [("top", "hold", "T1")]}, "no land verdict", "lane-1", True,
+     (OLDER, f"top's hold at {OLD[:12]} (no reason) is newer", False)),
+    ({OLD: [("top", "hold", "T1", "x"), ("rev", "land", "T2")]}, "no land verdict", "lane-1", True,
+     (OLD, f"held by top (x) at {OLD[:12]}", False)),
+    ({OLD: [("rev", "land", "T2"), ("rev", "hold", "T1", "x")]}, "no land verdict", "lane-1", True, (OLD, "only merges", True)),
+    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "@ci is among its owners, so its verdict wouldn't count",
+                                                                     False)),
+    ({OLDER: [("rev", "land", "T1")], OLD: [("rev2", "land", "T2")]}, "no land verdict", "lane-1", True,
+     (OLD, "only merges", True)),
+], ids=["carries", "no-carry", "owners-only", "held-here", "newer-hold", "owners-hold", "tie-hold", "standing-hold",
+        "reviewers-newest", "ci-owned", "newest-land"])
+def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold_or_an_owners_own(world, labels, why, owner,
+                                                                                                 carries, got):
+    """`Landing._carried_from`: of each reviewer's newest verdict at each older head, a hold by anyone or a land by none of the
+    PR's owners nor the head's ready mark's author (without case or a leading `@`), the newest decides, a hold over a land of
+    the same time.  A hold at the new head (``why``) or a newer one at an older head keeps it, as a hold standing at the land's
+    own head does; `CI` among its owners carries nothing; else the land carries when `delta` says so, of the new head over the
+    land's, trusting the landed tips and the trusted heads."""
+    from research.carry import Delta
+    from research.store.model import Label
+
+    asked = []
+    d = Landing(q := world.queue(), on="", ready_by=lambda pr, head: MARKED.get(head),
+                reviews=lambda pr, head: [Label(f"pr/{pr}@{head}", "reviewed", v, by, ts, *ref)
+                                          for by, v, ts, *ref in labels.get(head, ())])
+    q.handle = lambda pr: None
+    d.delta = lambda old, new, landed, trusted: asked.append((old, new, landed, trusted)) or Delta(
+        "merge-only" if carries else "edited-merge", "only merges")
+    assert d._carried_from(Member(1, NEW, owner, ""), [OLDER, OLD], why, ["m" * 40], {"t" * 40}) == got
+    assert asked == ([(got[0], NEW, ["m" * 40], {"t" * 40})] if got and got[1] in ("only merges", "edited-merge: only merges")
+                     else [])
+
+
+def test_a_landing_reads_verdicts_and_ready_marks_from_the_store_and_whose_verdict_doesnt_count(world):
+    """By default a `Landing` reads a PR head's verdicts and who marked it from the queue's store (`StoreLabels`); a PR's
+    owners (`_owners`) are its merge's `Owner`, the handle of its open PR's lane (else of that `Owner`) and who marked its
+    head."""
+    from research.queue import label_target
+    from research.store import vocab
+
+    world.with_store_remote()
+    head = world.change({"a.txt": "1\n"})
+    world.gh.put(1, head, body="Lane `lane-9`.")
+    world.store.add_label(label_target(1, head), vocab.REVIEWED, "land", "reviewer", ts="2026-11-10T00:00:00Z")
+    world.store.add_label(label_target(1, head), vocab.READY, "true", "marker", ts="2026-11-10T00:00:00Z")
+    d = Landing(q := world.queue(), on="")
+    q.handle = lambda pr: f"handle-of-{pr.owner}"
+    assert [(lab.by, lab.value) for lab in d.reviews(1, head)] == [("reviewer", "land")] and d.ready_by(1, head) == "marker"
+    assert d._owners(Member(1, head, "lane-1", "")) == {"lane-1", "handle-of-lane-9", "marker"}
+    assert d._owner(Member(2, head, "lane-2", "")) == "handle-of-lane-2"
+
+
+def test_a_landings_delta_carries_a_merge_of_a_landed_tip_and_not_of_an_untrusted_one(world):
+    """`Landing.delta` is `carry.delta` of the new head over the old in the queue's clone, trusting the landed tips given."""
+    from test_queue import _merge
+
+    old = world.change({"a.txt": "1\n"})
+    _move_main(world, {"m.txt": "moved\n"})
+    new = _merge(world, old, main := _main(world))
+    q = world.queue()
+    q._clone()
+    _git(q.workdir, "fetch", "-q", "origin", f"refs/dev/{old}", f"refs/dev/{new}")
+    d = Landing(q, on="")
+    assert d.delta(old, new, [main], set()).carries
+    assert d.delta(old, new, [], set()).kind == "untrusted-parent"
+
+
+def test_an_auto_plan_is_planned_in_the_background_in_a_directory_of_its_own_and_a_landing_launches_it(tmp_path, monkeypatch):
+    """`plan_shards` detaches `PLAN_JOB` on the tip's check of the steps given, at most ``max_shards`` shards, into a new
+    directory under `LAUNCHES` that its record names (``out``); a `Landing` plans with it and reads the plan with `planned`."""
+    import types
+
+    from research.landing import LAUNCHES, PLAN_JOB, plan_shards, planned
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    jobs = []
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: jobs.append((repo, argv, env["GIT_TERMINAL_PROMPT"])) or
+                        {"dir": "job", "pid": 1})
+    one, two = plan_shards(tmp_path, "c" * 40, "pytest,ratchet-gate", 3), plan_shards(tmp_path, "c" * 40, "pytest")
+    assert one["out"] != two["out"] and all(Path(r["out"]).parent == tmp_path / LAUNCHES for r in (one, two))
+    assert jobs == [(tmp_path, ["sh", "-c", PLAN_JOB, "sh", one["out"], "c" * 40, "--deferred", "pytest,ratchet-gate",
+                                "--max-shards", "3"], "0"),
+                    (tmp_path, ["sh", "-c", PLAN_JOB, "sh", two["out"], "c" * 40, "--deferred", "pytest"], "0")]
+    d = Landing(types.SimpleNamespace(auth=(), workdir=tmp_path), on="m1")
+    assert (d.plan_shards, d.planned) == (plan_shards, planned)
+
+
+@pytest.mark.parametrize("rc, plan, got", [
+    ("0", {"kind": "check-shard-plan/v1", "n": 1}, ({"kind": "check-shard-plan/v1", "n": 1}, None)),
+    ("0", {"kind": "check-shard-plan/v1", "n": 0}, (None, "`check.py --shard-plan` exited 0: planned")),
+    ("0", {"kind": "check-shard-plan/v1", "n": "2"}, (None, "`check.py --shard-plan` exited 0: planned")),
+    ("0", {"kind": "check-shard-plan/v0", "n": 2}, (None, "`check.py --shard-plan` exited 0: planned")),
+    ("0", "not json", (None, "`check.py --shard-plan` exited 0: JSONDecodeError: Expecting value: line 1 column 1 (char 0)")),
+    ("1", None, (None, "`check.py --shard-plan` exited 1: planned")),
+    (None, None, (None, None)),
+    ("gone", None, (None, "its process is gone with no exit written (a restart of the pod)")),
+], ids=["one-shard", "no-shards", "n-not-int", "other-kind", "not-json", "failed", "running", "gone"])
+def test_planned_takes_a_plan_of_a_shard_or_more_once_its_job_exited_0_and_says_why_there_is_none(tmp_path, rc, plan, got):
+    """`planned`: the plan its directory's `check-shard-plan.json` holds (check.py's `AUTO_PLAN`, the name each shard's run
+    sends it under) once its job exited 0 and it is a `check-shard-plan/v1` of at least one shard; else why there is none,
+    or (None, None) while the job runs."""
+    from research.landing import AUTO_PLAN, planned
+
+    job, out = tmp_path / "job", tmp_path / "plan"
+    for d in (job, out):
+        d.mkdir()
+    pid = os.getpid()
+    if rc == "gone":
+        (p := subprocess.Popen(["true"])).wait()
+        pid = p.pid
+    elif rc is not None:
+        (job / "rc").write_text(f"{rc}\n")
+        (job / "log").write_text("planned\n")
+    if plan is not None:
+        (out / AUTO_PLAN).write_text(plan if isinstance(plan, str) else json.dumps(plan))
+    assert AUTO_PLAN == "check-shard-plan.json"
+    assert planned({"dir": str(job), "pid": pid, "out": str(out)}) == got
+
+
+@pytest.mark.parametrize("rc", [0, 2])
+def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
+    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
+    its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
+    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
+    from research.landing import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
+
+    repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
+    for d in (repo, out, job, bin_):
+        d.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "tip")
+    tip = _git(repo, "rev-parse", "HEAD")
+    doc = {"kind": "check-shard-plan/v1", "n": 3, "digest": "d" * 64}
+    (bin_ / "uv").write_text("#!/bin/sh\n"
+                             f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
+                             'while [ "$1" != --out ]; do shift; done\n'
+                             f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
+    (bin_ / "uv").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
+    subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
+                    "--max-shards", "3"], cwd=repo, env=env, check=True)
+    cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
+    assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
+    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
+                    "--deferred", "pytest", "--max-shards", "3"]
+    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
+    got = planned({"dir": str(job), "pid": None, "out": str(out)})
+    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
+    assert not job.exists() and (out / AUTO_PLAN).is_file()
+
+
 # -- the loop's modules
 
 

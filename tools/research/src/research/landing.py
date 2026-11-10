@@ -32,8 +32,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
-from . import policy
-from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, _git
+from . import carry, policy
+from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, unreviewed
 
 #: who hears what the queue can't settle
 CI = "@ci"
@@ -262,6 +262,47 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
     except (PermissionError, ValueError, TypeError, KeyError):
         pass
     return None, tail
+
+
+#: how long a sharded check of `after_landing_shards = "auto"` waits for its plan (`plan_shards`: gathering the newest checks'
+#: verdict packs to price it takes minutes on the control pod) before it is stopped and the check launches unsharded
+PLAN_WAIT_S = 2400
+#: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
+AUTO_PLAN = "check-shard-plan.json"
+#: a sharded check's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's
+#: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
+#: the worktree removed after; its venv kept between plans
+PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
+            'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
+            'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
+            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
+
+
+def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
+    """The auto plan of ``tip``'s check of ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
+    ``max_shards`` shards), made in the background (`detach`) into a directory of its own under `LAUNCHES`: the record
+    `planned` reads."""
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    out = tempfile.mkdtemp(prefix="plan-", dir=root)
+    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else [])]
+    return {**detach(repo, ["sh", "-c", PLAN_JOB, "sh", out, tip, *args], {**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
+            "out": out}
+
+
+def planned(rec: dict) -> tuple[dict | None, str | None]:
+    """(the auto plan a `plan_shards` job wrote, None) once it exited 0; (None, why) once it failed or its process is gone with
+    no exit; (None, None) while it runs.  The plan's directory (``out``) stays: its shards send the file."""
+    if (end := _job_end(rec, AUTO_PLAN)) is None or isinstance(end, str):
+        return None, end
+    rc, tail, text = end
+    try:
+        doc = json.loads(text) if text is not None else None
+    except ValueError as e:
+        doc, tail = None, f"{type(e).__name__}: {e}"
+    if isinstance(doc, dict) and doc.get("kind") == "check-shard-plan/v1" and isinstance(doc.get("n"), int) and doc["n"] >= 1:
+        return doc, None
+    return None, f"`check.py --shard-plan` exited {rc}: {tail}"
 
 
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
@@ -647,16 +688,28 @@ class Landing:
     checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_postland`
     and `launch_locks` wrap; ``states``, ``evidence`` and ``cancel`` read and stop runs (`run_states`, `evidence`,
     `cancel_runs`); ``post`` posts to the merge thread (`merge_thread_post`); ``now`` is the clock; ``warn_steps`` is
-    drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`."""
+    drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`; ``reviews`` and ``ready_by`` read a PR head's
+    verdicts and who marked it (`StoreLabels`)."""
 
     def __init__(self, q: Queue, *, on: str,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], dict[str, str] | None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, warn_steps: tuple[str, ...] = ()):
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, warn_steps: tuple[str, ...] = (),
+                 reviews: Callable[[int, str], list] | None = None, ready_by: Callable[[int, str], str | None] | None = None):
         self.q, self.on = q, on
         #: drive.toml's `warn_steps`: the check's steps whose failure doesn't hold `main`
         self.warn_steps = warn_steps
+        #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
+        self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
+        #: who wrote the ready mark on a PR's head (`StoreLabels.ready_by`), one of those whose verdict doesn't count (`_owners`)
+        self.ready_by: Callable[[int, str], str | None] = ready_by or (lambda pr, head: StoreLabels(q.store, q.log).ready_by(pr, head))
+        #: `carry.delta` of a new head over an older one, trusting the landed tips and the heads given (`_carried_from`)
+        self.delta: Callable[[str, str, list[str], set[str]], carry.Delta] = (
+            lambda old, new, landed, trusted: carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted)))
+        #: a sharded check's auto plan, made in the background (`plan_shards`), and what it made once it ended (`planned`)
+        self.plan_shards: Callable[..., dict] = plan_shards
+        self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
@@ -919,6 +972,46 @@ class Landing:
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
         return self.q.handle(self._prs[pr]) if pr in self._prs else None
+
+    def _owner(self, m: Member) -> str | None:
+        """The owning lane of a PR the queue landed: its open PR's (`_handle`), else the one its merge's `Owner` names."""
+        return self._handle(m.pr) or self.q.handle(PR(m.pr, m.head, body=f"Lane {m.owner}"))
+
+    def _owners(self, m: Member) -> set[str | None]:
+        """Whose verdict on ``m`` doesn't count (`queue.review_owners`): its merge's `Owner`, that owner's handle (`_owner`), and
+        who wrote its ready mark."""
+        return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
+
+    def _carried_from(self, m: Member, heads: list[str], why: str, landed: list[str],
+                      trusted: set[str]) -> tuple[str, str, bool] | None:
+        """(the older head whose land verdict the verdict carry judges for ``m``, why it carries or not, whether it does), or
+        None when there is none.  Of each reviewer's newest verdict at each of ``heads``, a hold by anyone or a land by none of
+        `_owners` nor that head's ready mark's author, the newest decides: a hold keeps ``m``, as one at its head does (``why``,
+        `queue.unreviewed`'s of its head, says so), and a land at a head with no hold carries when `delta` says so, trusting
+        ``landed`` (the landed tips) and the ``trusted`` heads."""
+        owners = self._owners(m)
+        labels = {h: self.reviews(m.pr, h) for h in heads}
+        verdicts = []                                   # (when, a hold, the head, the label)
+        for h, labs in labels.items():
+            newest = {}
+            for lab in sorted(labs, key=lambda lab: lab.ts):
+                newest[_who(lab.by)] = lab
+            mine = {_who(o) for o in (*owners, self.ready_by(m.pr, h)) if o}
+            verdicts += [(lab.ts, lab.value == "hold", h, lab) for by, lab in newest.items()
+                         if lab.value == "hold" or by not in mine]
+        if not (lands := [v for v in verdicts if not v[1]]):
+            return None
+        old = max(lands, key=lambda v: v[0])[2]
+        if why.startswith("held"):
+            return old, f"{why} at {m.head[:12]}", False
+        if (v := max(verdicts, key=lambda v: v[:2]))[1]:
+            return old, f"{v[3].by.lstrip('@')}'s hold at {v[2][:12]} ({v[3].ref or 'no reason'}) is newer", False
+        if held := unreviewed(labels[old], (*owners, self.ready_by(m.pr, old))):
+            return old, f"{held} at {old[:12]}", False
+        if _who(CI) in {_who(o) for o in owners if o}:
+            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
+        d = self.delta(old, m.head, landed, trusted)
+        return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 
     @staticmethod
     def _ran_on(states: dict) -> list[str]:

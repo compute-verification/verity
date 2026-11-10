@@ -254,46 +254,13 @@ class Planner:
         h.d.planned = lambda rec: self.answer
 
     def plan(self, repo, tip, steps, max_shards=None) -> dict:
-        from research.drive import AUTO_PLAN
+        from research.landing import AUTO_PLAN
 
         self.asked.append((tip, steps, max_shards))
         out = self.tmp / f"plan-{len(self.asked)}"
         out.mkdir()
         (out / AUTO_PLAN).write_text("{}\n")
         return {"dir": str(out / "job"), "pid": None, "out": str(out)}
-
-
-@pytest.mark.parametrize("rc", [0, 2])
-def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
-    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
-    its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
-    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
-    from research.drive import AUTO_PLAN, PLAN_JOB, planned
-    from research.landing import DETACH_JOB
-
-    repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
-    for d in (repo, out, job, bin_):
-        d.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "tip")
-    tip = _git(repo, "rev-parse", "HEAD")
-    doc = {"kind": "check-shard-plan/v1", "n": 3, "digest": "d" * 64}
-    (bin_ / "uv").write_text("#!/bin/sh\n"
-                             f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
-                             'while [ "$1" != --out ]; do shift; done\n'
-                             f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
-    (bin_ / "uv").chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
-    subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
-                    "--max-shards", "3"], cwd=repo, env=env, check=True)
-    cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
-    assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
-    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
-                    "--deferred", "pytest", "--max-shards", "3"]
-    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
-    got = planned({"dir": str(job), "pid": None, "out": str(out)})
-    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
-    assert not job.exists() and (out / AUTO_PLAN).is_file()
 
 
 def _plan_doc(n: int) -> dict:
@@ -306,7 +273,7 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
     tip beside circuit-check's records step, and the run launches once both are done: the plan's N shards, each `--shard
     auto:K/N` with the plan's file and the records' artifact.  A shard that never started launches the run again on the same
     plan, or on a new one when its file is gone (a restart of the pod); `main` is verified once every shard passed."""
-    from research.drive import AUTO_PLAN
+    from research.landing import AUTO_PLAN
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto:4"
@@ -348,7 +315,7 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
 def test_a_run_ci_adds_to_an_auto_shard_counts_only_as_a_shard_of_its_plan(world, monkeypatch):
     """`drive-shard-add` to an auto run: the run's record must be `--shard auto:K/N` and its inputs must hold the run's plan
     (`AUTO_PLAN`), so a hand run of another plan's shard K, which ran other parts, verifies nothing."""
-    from research.drive import AUTO_PLAN
+    from research.landing import AUTO_PLAN
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto"
@@ -387,7 +354,7 @@ def test_a_run_ci_adds_to_an_auto_shard_counts_only_as_a_shard_of_its_plan(world
 def test_an_auto_after_landing_run_with_no_plan_runs_unsharded_and_says_so(world, monkeypatch, ends):
     """A plan that failed, or that is still being made `PLAN_WAIT_S` after it started (stopped then), never holds the run: ci is
     told once and the run launches unsharded, one run of every step, its plan's directory removed."""
-    from research.drive import PLAN_WAIT_S
+    from research.landing import PLAN_WAIT_S
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto"

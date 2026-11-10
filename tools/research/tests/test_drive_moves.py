@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-import research.drive as D
 import research.landing as L
 import research.queue as Q
 from research.queue import RESTACKING
@@ -94,7 +93,6 @@ def jobs(monkeypatch, tmp_path) -> list[Job]:
         return {"dir": str(d), "pid": os.getpid()}
 
     monkeypatch.setattr(L, "detach", detach)
-    monkeypatch.setattr(D, "detach", detach)
     return started
 
 
@@ -245,7 +243,6 @@ def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_th
         return rec
 
     monkeypatch.setattr(L, "detach", detach)
-    monkeypatch.setattr(D, "detach", detach)
     _move_pr(world, 1)
     heads = {n: world.change({f"old_proto/x{n}.py": f"X = {n}\n"}) for n in (2, 3, 4)}
     for n, head in heads.items():
