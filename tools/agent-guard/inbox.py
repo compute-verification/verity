@@ -20,9 +20,10 @@ in (`--repo`). Wherever AGENT_ID runs, its shell hook starts `pull` in the backg
 seconds (default 30): `pull` appends the branch's new messages to this VM's inbox and pushes a commit that empties the file,
 so a message reaches one VM once. A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and
 messages sent before delivery queue up in it. The agent's next shell command is refused once with them as the refusal's text,
-and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands. An
-agent whose turn has ended (FINISHED or IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up.
-`send` says when earlier messages to the agent are still uncollected on origin.
+and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands; one
+still waiting when its turn completes is the turn's follow-up (`stop_hook.py`). An agent whose turn has ended (FINISHED or
+IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up. `send` says when earlier messages to
+the agent are still uncollected on origin.
 `--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
 
 AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the `bc-…` id its Task call returned.
@@ -51,6 +52,8 @@ LOCK_STALE_S = 300
 #: a pushed message no VM has taken after this long: its target's hook isn't polling (one branch held every message for three
 #: hours while each `send` said only "pushed")
 STALE_S = 600
+#: each git call's bound; the stop hook, which runs inside Cursor's hook timeout, lowers it
+GIT_TIMEOUT_S = 120
 
 
 def agent_id(agent: str) -> str:
@@ -88,7 +91,7 @@ def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
 
 
 def git(repo: Path, *args: str, stdin: str | None = None) -> str:
-    r = subprocess.run(["git", "-C", str(repo), *args], input=stdin, capture_output=True, text=True, timeout=120)
+    r = subprocess.run(["git", "-C", str(repo), *args], input=stdin, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
     if r.returncode:
         raise RuntimeError(f"git {args[0]} exited {r.returncode}: {r.stderr.strip()[-400:]}")
     return r.stdout

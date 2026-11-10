@@ -54,6 +54,7 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     hooks = cursor_reads(tmp_path / "ws/.cursor/hooks.json")["hooks"]
     (entry,) = hooks["beforeShellExecution"]
     assert entry == {"command": f"python3 {tmp_path / 'opt'}/shell_hook.py", "timeout": 10, "failClosed": True}
+    assert hooks["stop"] == [{"command": f"python3 {tmp_path / 'opt'}/stop_hook.py", "timeout": 60}]
     assert git("status", "--porcelain") == ""
     hook = subprocess.run(entry["command"].split(), input=json.dumps({"hook_event_name": "beforeShellExecution",
                                                                       "command": "env | cut -d= -f1", "cwd": "/"}),
@@ -114,6 +115,7 @@ def test_boot_puts_the_hook_at_a_task_launched_agents_root_above_its_checkout(tm
     (entry,) = hooks["beforeShellExecution"]
     assert entry["failClosed"] is True and entry["command"].endswith(" guard shell_hook.py")
     assert [h["matcher"] for h in hooks["preToolUse"]] == ["Task", "CallDynamicTool", "^MCP:"]
+    assert [h["command"].rsplit(" ", 1)[1] for h in hooks["stop"]] == ["stop_hook.py"]
 
     def verdict():
         out = subprocess.run(entry["command"], shell=True, cwd=tmp_path / "agent", capture_output=True, text=True, check=True,

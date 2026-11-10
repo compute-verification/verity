@@ -52,7 +52,7 @@ def test_cursor_reads_the_hooks_file_as_its_json_says(monkeypatch):
     inbox = guard_module("inbox", monkeypatch)
     text = (ROOT / ".cursor/hooks.json").read_text()
     assert inbox.as_cursor_reads(text) == json.loads(text)
-    assert sorted(json.loads(text)["hooks"]) == ["beforeShellExecution", "preToolUse"]
+    assert sorted(json.loads(text)["hooks"]) == ["beforeShellExecution", "preToolUse", "stop"]
     old = json.dumps({"version": 1, "hooks": {
         "beforeShellExecution": [{"command": "ls -td c/*/ | head -1; run shell_hook.py", "failClosed": True}],
         "preToolUse": [{"command": "ls -td c/*/ | head -1; run task_hook.py", "matcher": m}
@@ -466,8 +466,46 @@ def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deli
     bad = selftest(other)
     assert bad.returncode == 1 and f"pushed to origin's inbox/{other}" in bad.stdout
     assert f"PROBLEM: Cursor reads {hooks.resolve()} otherwise than its JSON says" in bad.stdout
-    assert "the steps beforeShellExecution" in bad.stdout and "PROBLEM: Cursor reads no shell hook" in bad.stdout
+    assert "the steps beforeShellExecution, stop" in bad.stdout and "PROBLEM: Cursor reads no shell hook" in bad.stdout
     assert f"PROBLEM: no shell hook has run for {other}" in bad.stdout
+
+
+STOP_HOOK = ROOT / "tools/agent-guard/stop_hook.py"
+
+
+def stop(conversation: str, inbox: Path, status: str = "completed", roots: tuple[str, ...] = (), poll: str = "off") -> dict:
+    event = {"hook_event_name": "stop", "conversation_id": conversation, "status": status, "loop_count": 0,
+             "workspace_roots": list(roots)}
+    out = subprocess.run([sys.executable, STOP_HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, **GIT_ENV, "AGENT_INBOX": str(inbox), "AGENT_INBOX_POLL_S": poll}).stdout
+    return json.loads(out)
+
+
+def test_a_message_still_queued_when_a_turn_completes_is_its_follow_up_once(tmp_path):
+    """A worker that ends its turn with no further shell command never met the shell hook's refusal, so a message sent after
+    its last command waited until it was resumed by hand. The stop hook hands it to Cursor as the turn's follow-up."""
+    W = "bc-77777777-7777-4777-8777-777777777777"
+    queue(W, "park the PR", tmp_path)
+    assert stop(W, tmp_path, status="aborted") == {}
+    assert stop("bc-other", tmp_path) == {}
+    first = stop(W, tmp_path)
+    assert "park the PR" in first["followup_message"] and "stop hook" in first["followup_message"]
+    assert stop(W, tmp_path) == {}
+    assert hook("ls", W, tmp_path) == {"permission": "allow"}, "delivered once, by whichever hook took it"
+    assert "park the PR" in (tmp_path / f"{W}.delivered").read_text()
+
+
+def test_the_stop_hook_pulls_a_message_pushed_from_another_vm_first(tmp_path):
+    origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "agent/repos/verity"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    W = "bc-88888888-8888-4888-8888-888888888888"
+    subprocess.run([sys.executable, INBOX_TOOL, "send", W, "--text", "stop and report", "--repo", str(coord)], check=True,
+                   capture_output=True, env=env)
+    got = stop(W, tmp_path / "inbox", roots=(str(tmp_path / "agent"),), poll="30")
+    assert "stop and report" in got["followup_message"]
 
 
 def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp_path):

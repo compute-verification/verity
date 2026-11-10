@@ -35,6 +35,9 @@ else
       {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "^MCP:", "timeout": 10}
+    ],
+    "stop": [
+      {"command": "python3 $dest/stop_hook.py", "timeout": 60}
     ]
   }
 }
@@ -58,10 +61,11 @@ import json, sys
 root, dest = sys.argv[1:]
 run = (f"sh -c 'for h in {root}/repos/?*/tools/agent-guard/hook.sh; do [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; done; "
        f"exec python3 {dest}/\"$1\"' guard ")
-hook = lambda name, **kw: {"command": run + name, "timeout": 10, **kw}
+hook = lambda name, timeout=10, **kw: {"command": run + name, "timeout": timeout, **kw}
 out = json.dumps({"version": 1, "hooks": {
     "beforeShellExecution": [hook("shell_hook.py", failClosed=True)],
-    "preToolUse": [hook("task_hook.py", matcher=m) for m in ("Task", "CallDynamicTool", "^MCP:")]}}, indent=2)
+    "preToolUse": [hook("task_hook.py", matcher=m) for m in ("Task", "CallDynamicTool", "^MCP:")],
+    "stop": [hook("stop_hook.py", timeout=60)]}}, indent=2)
 if "/*" in out or "//" in out:
     sys.exit(f"agent-guard: a hooks.json for {root} would hold `/*` or `//`, which Cursor strips as a comment")
 print(out)
