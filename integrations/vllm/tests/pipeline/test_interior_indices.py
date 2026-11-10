@@ -130,9 +130,10 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
     ``c``'s row ``s·NC + j`` and `B`'s reads ``i``'s row ``s·W + j mod W``, where round 2 holds a linked port's read of an
     interior value. From the challenger's ``bytes`` sources alone the verifier fills the same rows
     (`registered.supplied_rows` on the stream's own interior program), and those rows at the public salts under the
-    port's row format commit to the entry the interior registers. The stream takes the interior's roots and names; it
-    refuses the supplied values' rows (`R7-supplied`) alone, its verifier committing a supplied value's rows under
-    row/v1 where the ports read row/v2."""
+    port's row format commit to the entry the interior registers. The stream registers the interior under the links'
+    row formats (`link_schemas`). It refuses the supplied values' rows (`R7-supplied`) alone where the challenger's
+    sources give ``c`` other indices, and where the supplied values' formats are missing, its verifier then committing
+    their rows under row/v1 where the ports read row/v2."""
     stream, reg, first = staged
     it = _interior(reg, first, [_spans(s) for s in first.units])
     c, w = it.committed, it.committed.window
@@ -158,10 +159,13 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
     for q in (1, SPANS):
         sized = IR.interior_window(MEMBERS, CELLS, "00", list(range(q)), values=IR.link_values(LINKS, q))
         assert P.program_digest(stream.interior_program(q)) == P.program_digest(sized.program)
-    with pytest.raises(S.Refused) as refused:
-        IR.register(stream, first, it, registered=IR.link_words(LINKS), supplied=srcs,
-                    schemas=IR.link_schemas(MEMBERS, OPERANDS))
-    assert refused.value.verdict.codes == ("R7-supplied",)
+    formats = IR.link_schemas(MEMBERS, LINKS)
+    other = {**srcs, f"{KEY}/c": [[{"bytes": f"{r + 1:08x}"}] for _ in range(Q) for r in range(NC)]}
+    for bad in (dict(supplied=other, schemas=formats), dict(supplied=srcs, schemas=IR.link_schemas(MEMBERS, OPERANDS))):
+        with pytest.raises(S.Refused) as refused:
+            IR.register(stream, first, it, registered=IR.link_words(LINKS), **bad)
+        assert refused.value.verdict.codes == ("R7-supplied",)
+    assert IR.register(stream, first, it, registered=IR.link_words(LINKS), supplied=srcs, schemas=formats).digest
 
 
 def test_an_operand_port_is_rows_of_a_value_the_interior_registers_as_its_own():

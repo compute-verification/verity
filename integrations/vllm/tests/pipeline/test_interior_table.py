@@ -161,9 +161,10 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     (0, 1, 2, 3) of theirs, and the commitment is the one the same rows given in full under the values' salts makes. The stream takes the interior's roots, names and history (the
     public-items rule and R7-history pass), and its interior program takes each value a `Digest` a row a sampled span, so
     its verifier reads each resolved source in a `Digest` port's order: its 512 leaves packed into u16 words are the
-    row the interior registers. It refuses the values' rows (`R7-leaves`, `R7-domain`, `R7-supplied`): it counts and
-    commits a supplied value's rows as row/v1 rows of 32 one-bit leaves, where the reads hold a `Digest` a row under their
-    port's row/v2 (`link_schemas`); the replay's own values pass."""
+    row the interior registers. Under the links' row formats (`link_schemas`) it registers the interior, and refuses
+    sources that name the sampled spans' tables in another order (`R7-supplied`). Without the supplied values' formats it
+    refuses their rows (`R7-leaves`, `R7-domain`, `R7-supplied`): it counts and commits them as row/v1 rows of 32 one-bit
+    leaves, where the reads hold a `Digest` a row under their port's row/v2; the replay's own values pass."""
     tables = _tables()
     stream, reg, first, rec = _first(tables)
     drawn = [tables[u] for u in first.units]
@@ -212,6 +213,13 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
         IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
                     supplied=IR.sources(LINKS, Q, names), schemas=IR.link_schemas(MEMBER, OPERANDS))
     assert refused.value.verdict.codes == ("R7-leaves", "R7-domain", "R7-supplied")
+    formats = IR.link_schemas(MEMBER, LINKS)
+    with pytest.raises(S.Refused) as refused:
+        IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                    supplied=IR.sources(LINKS, Q, names[::-1]), schemas=formats)
+    assert refused.value.verdict.codes == ("R7-supplied",)
+    assert IR.register(stream, first, it, history=hist, registered=IR.link_words(LINKS),
+                       supplied=IR.sources(LINKS, Q, names), schemas=formats).digest
 
 
 def test_a_table_round_1_did_not_register_is_refused():
