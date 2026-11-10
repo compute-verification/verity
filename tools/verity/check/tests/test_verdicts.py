@@ -341,6 +341,39 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
 
 
+def test_a_gather_passes_over_a_pack_that_would_take_it_past_its_byte_budget_before_fetching_it(tmp_path, monkeypatch, capsys):
+    """A recorded check can publish a pack far larger than the rest.  Every shard's launch fetched it and recombined its
+    entries, staging many times its size on the launcher's disk, so no run started within the queue's wait.  A pack whose
+    listed size would take the gather past `GATHER_BYTES` is passed over by name and never fetched; the smaller packs of older
+    checks are still taken, and a pack the store lists no size for counts by the file fetched."""
+    check = _load("check")
+    packs = {}
+    for name in ("new", "big", "old", "older"):
+        r = _machine(tmp_path, monkeypatch, name)
+        _write(r["tests"] / f"{name}.json", name)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    fetched = []
+
+    class Sized(_Store):
+        def listing(self, art: str) -> list[dict]:
+            rid = art.removeprefix("art:")
+            return [{"path": "verdicts.tar.gz", **({} if rid == "r-new" else {"bytes": 10**9 if rid == "r-big" else 100})}]
+
+        def fetch(self, art: str, to: Path, *, paths: list[str]) -> Path:
+            fetched.append(art)
+            return super().fetch(art, to, paths=paths)
+
+    budget = packs["new"].stat().st_size + 150
+    monkeypatch.setattr(check, "GATHER_BYTES", budget)
+    store = Sized(tmp_path, {"r-new": packs["new"], "r-big": packs["big"], "r-old": packs["old"], "r-older": packs["older"]})
+    check.gather_verdicts(tmp_path / "out", store)
+    out = capsys.readouterr().out
+    assert "skipping r-big's pack: its 954 MiB would take this gather past" in out
+    assert "skipping r-older's pack" in out, "r-new's fetched size and r-old's 100 bytes leave under 100 bytes of room"
+    assert "2 entries gathered from 2 recorded checks (r-new, r-old)" in out
+    assert fetched == ["art:r-new", "art:r-old"], "a pack passed over is never fetched"
+
+
 def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
     """A pre-warm of a cold circuit-check can run 4.5 h while drive starts more than twelve warm checks; ordered by start, its
     pack would be out of the window when the train it warmed ran."""
