@@ -779,16 +779,16 @@ def _submit(tmp_path, template, **shell):
 
 
 def _signed_claims(token: str) -> dict | None:
-    """The claims of a temporary key's session token, or None unless the store's own secret signed it."""
+    """The claims of a temporary key's session token, or None with no token or one the store's own secret did not sign. A token that
+    is no JWT at all raises."""
     import base64
 
     from research.store import credentials as C
 
-    try:
-        jwt = base64.b64decode(token).decode()[len("jwt/"):]
-        claims = C.decode_jwt(jwt)[1]
-    except ValueError:
+    if not token:
         return None
+    jwt = base64.b64decode(token).decode()[len("jwt/"):]
+    claims = C.decode_jwt(jwt)[1]
     return claims if C.sign_jwt_hs256(claims, STORE_PAIR["AWS_SECRET_ACCESS_KEY"]) == jwt else None
 
 
