@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import functools
 import random
 from collections import Counter
 from dataclasses import replace
@@ -63,6 +64,13 @@ def _small():
     return bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))
 
 
+@functools.cache
+def _laid():
+    """`_small` and its layout, built once for the slow tests that read it."""
+    t = _small()
+    return t, LR.layout(RUN, t)
+
+
 def test_the_served_row_is_4213_units_of_56_templates() -> None:
     t = LR.served()
     assert {k: t.bindings[k] for k in LR.SERVED} == {"N": 1 << 17, "TOPK": 2048, "BLOCK": 16384}
@@ -86,10 +94,9 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     """The check template registered inline at small statics, and round 2's own derivation run on the replay block it
     registers: every unit's operand gets a link or a wire. About a minute, nearly all of it building the template's body (its
     units' gates, the picks' most); no cheaper test runs `second_stage` on the registered descriptor, which round 2 reads."""
-    t = _small()
+    t, L = _laid()
     nodes = t.body.nodes
     assert _members(nodes) == [descriptor_id(d) for _, d in LR.units(t)]
-    L = LR.layout(RUN, t)
     assert (L.per_prompt, L.per_output, L.prompt, L.outputs, L.n_rho) == (0, 1, 1 << 17, 2, 2)
     assert [descriptor_id(x) for x in L.templates] == list(dict.fromkeys(descriptor_id(n.fn) for n in nodes))
     assert L.provenance()["check"] == descriptor_id(t) and L.provenance()["inline"] is True
@@ -170,8 +177,7 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
     those values against the stream's interior program at replay samples of one and two spans. About a minute, building
     the small template's body as the layout test does; nothing cheaper runs round 2's derivation, which reads the
     block's Program."""
-    t = _small()
-    L = LR.layout(RUN, t)
+    t, L = _laid()
     key, q0 = descriptor_id(L.replay), L.n_rho
     ms, cells = LR.window(t, q0)
     assert [m.template for m in ms] == [descriptor_id(x) for x in L.templates] and sum(cells) == q0 * len(LR.units(t))
@@ -255,10 +261,9 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     `interior_rows.interior` commits them under the replay block's wires (`second_stage.replay_wires`) and `links`: its
     program is the stream's at two spans and it registers the block's nine parameters as round 2 names them. It refuses a
     span whose wired row is not its writer's output, whose scores at one unit are not the block's another unit read, or
-    whose read is not an opening of its table. About a minute over the links test, which builds the same layout: nothing
-    cheaper has the block's wires."""
-    t = _small()
-    L = LR.layout(RUN, t)
+    whose read is not an opening of its table. On the layout the links test builds (`_laid`): nothing cheaper has the
+    block's wires."""
+    t, L = _laid()
     key, q0 = descriptor_id(L.replay), L.n_rho
     ms, cells = LR.window(t, q0)
     links, wires = LR.links(t, q0, tables=True), SS.replay_wires(L.program, key)
