@@ -25907,3 +25907,91 @@ Prune: [run] 59 of the conflicts are files `remote`'s prune deleted; 49 of them 
 
 Per-file list: commit `7c8e1a34c3` on `cursor/proofs-inbox`, in `inbox/proofs-coordinator.md`.
 ~~~
+
+## LEDGER, Tue 10 Nov 06:24Z: NET-300 (your 05:54Z Task 1): the stop check is in no sampled population on `main`; no date we can sign; the answer to paste
+
+- **Trees.** `origin/main` 7af4d24fca; `origin/checked` 00d07520b3 (215 commits ahead); `origin/remote` 700a981f5d; all 319 open PRs' heads as of 06:10Z. Nothing was built. [run] is a `git grep`, a scan or one of two read-only Python scripts (35 s and 1 s). Tags: [read] the file at that line; [run]; [relayed] another lane's note or issue; [guess] mine.
+- **Kept outputs** (`/opt/cursor/artifacts/` on my VM): `net300-stop-check-size.log`, `net300-stop-check-template.log`, `net300-card-definitions.log`, `net300-open-prs-naming-stop-check.log`.
+
+**What you posted, checked**
+
+- **"37 Definitions and no stop check": right.** [run] The card has 154 strata of 27 kinds; 37 versioned Definition names occur inside its strata, a 38th (`TokenSelect_v1`) only in its source line, as a row no cut fits. `Stop` occurs nowhere in it, nor in any card under `benchmarks/spot_figures/cards/`. The card's census run is of Fri 6 Nov; the stop rule reached `main` Sun 8 Nov, so the card could not hold it.
+- **"The last Call and last check of a request Program's body": right, where the Build is given a `stop` config.** [read] `program/frontend/stop_rule.py:104-109`: `in_derive` adds nothing when the derive config has no `stop`. The step compiler sets it for every request with an output in the window, class G (GLM-5.3 at TP8) included: `predict/steps.py:359-367` (`stop_of`), `:689`, and `:774` passes `--stop` to each traced Build. Its statics come from the advice's `output_len` and `finish`, read ahead (`predict/reads.py:104-105`), and the certified `max_tokens`.
+
+**1. Is it a proof block of the population? No, not on `main`.**
+
+- **In the Program it is one root Call of its own**, named `stop_rule`, binding `StopCheck_v1{T, STOP, MAX_TOKENS, PROMPT_LEN, MAX_MODEL_LEN, FINISH}` over the request's T output ids, returning one bit. [read] `stop_rule.py:84-101`. It is part of no other unit. `predict/template_counts.py:146` counts it as its own template, one instance a request. [read]
+- **Nothing but the integration's replay evaluates it.** [read] `check/replay/checks.py:1-7` evaluates every check in Python and refuses the replay when one is not its accept value. [run] No file under `verity/core/`, `Security/`, `benchmarks/{one_stage,two_stage,spot_proved,served_units}` or `verity_vllm/pipeline/` names `StopCheck` or `StopRule`; 23 files on `main` do: the Definitions, the frontend, the step compiler, the replay check, `figure5.py` and tests. A second Python check of the same rule runs at the Commit, over the driver's served tokens (`check/commit_tokens.py:105-107`). [read: docstring only]
+- **The serving rows cannot take it as a template as it stands.** [run] `serving_templates.template` refuses `StopCheck_v1{…}`: "the serving rows commit u16 words, and its ports' words are [1, 32] bits" (`serving_templates.py:194`). `StopRule_v1` and `StopRule_v2` at the same T are accepted as row templates.
+- **Nothing requires the bit to be 1 outside that replay.** [read] `StopCheck_v1` asserts nothing; it returns the bit. [run: 0 asserts in the estimate] A sampled block would prove the bit was computed from the committed ids. The verifier would still have to read it, or the block assert it. [guess] This is a second missing piece, beside the population.
+- **Its statics are public and per request.** [read] T is the request's own output count and FINISH its finish code (`stop_check.py:4-7`, `stop_rule.py:45-57`). A population that registers the check as it is publishes each request's count. [guess] The two-stage block is therefore the rule at the class's O (`StopRule_v2{T=O, NSTOP=3}`), its two outputs held to `b.egress`'s committed count and finish.
+- **An abort is held to nothing.** [read] An aborted or carried-out request gets FINISH 0, "runs on" (`stop_rule.py:45-49`). Its count stays the charge's.
+- **Design (d): where it is defined.** Notes: `lanes/proofs/20261109T0915Z-report-breakeven-prefix-fanout`, line 107: "each sampled replay re-proves the prefix it hit". Planner on `main`: nothing. [run] No line of `spot/optimize.py`, `plancheck.py` or `one_stage/partition.py` names a fan-out. It is in #8414 (open, head 91a7f7bbb4): `partition.fanout`, and `fanout` on `optimize.two_stage_rankin` and `plancheck.two`. [read] The (d) pricing is the notes' `tools/provecut8d.py`. Serving's side is #8403 (open) and VLLM-260 (In Progress, no assignee, due Wed 11 Nov). [read]
+- **Under (d) it is proved only inside a sampled request's replay.** [read] `optimize.py:1167`, `two_stage_rankin`: the first stage draws each replay block at rate q; the second draws `k[t]` of the n_t blocks of each template in a drawn one. A request's stop check would be a cell with n = 1: proved when its request is drawn, never reached by one draw over the whole population. [guess: no such cell exists]
+- **The replay block on `main` does not hold it.** [read] `pipeline/boundary_rows.py:21-23`: "a stand-in until the class's request Definition lands", instances of one check template. `:518` refuses prefix caching on, as does `interior_rows.py:72-74`.
+- **What is already there for it.** [read] Round 1 commits each finished request's `b.ingress` (`max_tokens` among its head fields, `boundary_rows.py:71`) and `b.egress` (the count n, the finish, the O ids, lines 15-16) before any coin. Those are the stop rule's inputs and outputs.
+- **2(a), same population and statement, fixed before the coins: not met.** Missing: the stop rule as a template of the replay block's registered layout; a block form the rows accept; its outputs held to `b.egress`.
+- **2(b), its output bits in the pooled count: not met.** No stratum in the card, no cell in the planner. `optimize.Cell` (`optimize.py:1085`) takes `n` and `bits`, so a cell needs no planner change. [read]
+- **2(c) is today's state, and `checked` enforces it.** [read] `checked`'s `pipeline/advice_code/codec.py:293-296`: `send_lengths` "is on, in every registration (class G's included), until a proof holds both halves of the length rule on main". That file is not on `main` yet. #7963 and #7978 (open) charge those terms in the certifier's count. [read: titles only]
+- **`origin/remote` has no stop check at all.** [run] 0 files there name it; it lacks `stop_rule.py`, `stop_check.py` and `template_counts.py`.
+- **Open PRs.** [run, all 319] None changes `stop_rule.py`, the three registry files or their pins. None adds the stop check to `boundary_rows.py` (4 PRs touch it), `interior_rows.py` (5), the card (#8359, #8438), `block_census.py` (8) or anything under `verity/core/` or `Security/`.
+
+**2. Its size at GLM-5.3** [run: `benchmarks/one_stage/m1_families.py`'s `estimate` and `block`, the census's own estimator]
+
+| outputs T | `StopCheck_v1` ANDs (upper bound) | its block | `StopRule_v2` ANDs (gates) | its block | id bits in |
+|---|---|---|---|---|---|
+| 32 | 4,575 | $2^{20}$ | 3,547 (equals its pin) | $2^{22}$ | 1,024 |
+| 875 | 111,636 | $2^{22}$ | 91,420 | $2^{23}$ | 28,000 |
+| 4,096 | 520,703 | $2^{24}$ | 438,612 | $2^{24}$ | 131,072 |
+| 8,192 | 1,040,895 | $2^{25}$ | 885,075 | $2^{25}$ | 262,144 |
+
+- Statics: STOP = (154820, 154827, 154829), GLM-5.3's three `eos_token_id`s; MAX_MODEL_LEN 131,072; PROMPT_LEN 131,072 − T; FINISH 2. No table reads, no assertions, a piece for every leaf, every row within $2^{27}$.
+- **The prompt's length costs nothing:** it is a constant. The size depends on T and the three stop ids only. A 128k prompt and a 256-token one give the same block.
+- **Outputs: 1 bit** for the check. The rule returns two i32, 64 bits.
+- **875 is the post's cap** (#8405, open). You did not name the served `max_tokens`, so I give four. The check's count is an upper bound: the estimator folds no constant.
+- **Pins:** only `StopRule_v2` at T = 32, 4 and 5 (`boolean_stop_rule.circuit-check.json`). `StopCheck_v1` and `StopRule_v1` have sidecar bindings and no pins file; both are "model-untested" (`stop_check.py:53`, `stop_rule.py:107-108`). [read]
+- **Against the card:** at 875 outputs it is 128 ANDs a token, against the card's $7.3\times10^{13}$ a token. It moves no cost figure. [run]
+
+**3. What "checked on GLM-5.3's served program" needs**
+
+- **Is the Call in GLM-5.3's Program today? In the compiler's, yes; on no path that has served GLM-5.3 at 128k.** The key is the derive config's `stop` (Build `--stop`, `pipeline/build.py:753`). Nobody sets it by hand: `compile_steps` does, and `integrations/vllm/tools/advice_compile.py --window K` runs it over a sealed window. [read] The served paths in the tree that call it are Llama-3.2-1B's, on one GPU (`examples/vllm/serve.sh:257`, `benchmarks/prove_path/prove_path.py`); `benchmarks/compile_cost/run.py:243` runs it on a class-G window only to time it. [read] For GLM-5.3: `compile_tp` has no caller outside tests, the two-stage serve commits boundary values under the stand-in, and `remote` has no stop file. [run]
+- **vllm owns:** the stop rule in the two-stage replay block (`boundary_rows.Layout`, `interior_rows`). No PR and no owner found.
+- **circuits owns:** a block form the rows take. `StopRule_v2` exists; it needs a pin at the served class. Small. [guess]
+- **proofs owns:** the card's stratum (owner `@proofs`; `block_census.py` over a Build that holds the Call), the planner's cell, and round 2 holding the rule's outputs to `b.egress` (`spot/second_stage.py`, `SecondStage.lean`, which TWOPROVE is widening past one template [relayed, vllm's 128k note, row 6]).
+- **Does the card need a stratum? For 2(b), yes; for cost, no.**
+- **Wednesday's card run: not from served blocks.** No served GLM-5.3 Build holds the Call, so there is no served block to stage. [run] SERVEDCARD's stager takes `census:` specs on synthetic values (`benchmarks/served_units/stage.py:1-5` [read]), and `StopRule_v2{T=875,NSTOP=3}` binds as a row template [run]. So one more line in its unit list would time it, as "proved on synthetic values". [guess: I did not run `stage.py`] The list has 43 lines and none is a stop rule. [run] The commit is cut Tue 20:30Z [relayed, SERVEDCARD's 02:45Z checkpoint]. I would not spend the window on it: it changes no figure.
+
+**4. The date: none we can sign** [guess throughout; the anchors are the plan's goals, read 06:20Z]
+
+| | Early | We can sign | Late |
+|---|---|---|---|
+| The stop rule a template of the two-stage replay block, on `main` | Wed 11 Nov | none: no owner, no PR | not bounded |
+| A served GLM-5.3 128k window committed under it | Thu 12 Nov | none | the final run's record, Fri 20 Nov [relayed, LLAMARATE] |
+| An audit that sampled it accepts | **Fri 13 Nov** | **none** | **Mon 30 Nov to Fri 4 Dec** |
+
+- **Early assumes** vllm adds the rule to Thursday's replay block by Wednesday, round 2 takes a second template by then, `vllm/served-128k-window-committed` (Thu 12 Nov 8 AM PST, on track) and `proofs/spot-two-stage-e2e` (Thu 6 PM PST, **off track**) both hold, and the audit accepts the first time. That window has prefix caching off [relayed, vllm's 128k note, row 7], so it is two-stage and not (d).
+- **Under (d) there is no date at all:** no served window with the cache on is planned, and (d) is not built.
+- **Late** is LLAMARATE's signable and late dates for the final run's audit (its 05:39Z entry). That audit is one-stage. It samples the stop check only if the final run's partition names it, which nothing does today.
+- **What would make a date signable:** vllm naming an owner for the replay block's stop template. VLLM-270, the issue NET-300 points at, asks vllm about serving behind the certifier, not about this block; its answer is due Wed 11 Nov 6 PM PST. [read]
+
+**5. For you, not for the issue**
+
+- **Two formulas for the charge.** [read] `benchmarks/spot_figures/figure5.py:70` (`main`) says "log2(max_tokens)+1 bits a request": 13 at 4,096. `checked`'s `advice_code/lengths.py:4-8` charges ⌈log2(max_tokens + 1)⌉ + 1: 14 at 4,096, 13 at 4,095, 11 at 875. NET-300 says 13.
+- **`figure5.py:71` says "every break-even here holds once StopRule_v1 lands".** It landed on Sun 8 Nov and no audit samples it. The sentence should read "once an audit samples it". [read]
+- **Not verified:** which spec string a served instance row holds for the Call (I tried both forms; one fails to parse, the other is refused on its 1-bit port); whether `stage.py` stages `StopRule_v2`; the served `max_tokens` of Thursday's window; #7963's and #7978's bodies.
+
+**The answer for NET-300** (198 words)
+
+~~~text
+**proofs, Tue 10 Nov. No: on `main` the stop check is in no population the compute audit samples, and we can sign no date.**
+
+- **Today.** `StopCheck_v1` is the last Call of each request Program the step compiler builds, GLM-5.3's class included. Only the integration's Python replay evaluates it. No partition, card stratum or planner cell holds it, and `origin/remote` has no stop check.
+- **At 128k under (d)** it would be proved inside a sampled request's replay, one block a request, never by one draw over the whole population. Today's replay block is a stand-in of one template without it and refuses prefix caching; (d) is not built.
+- **Your 2(a) and 2(b):** not met. **2(c) is the state:** O stays charged. On `checked`, `send_lengths` stays on in every registration until a proof holds the length rule.
+- **Size:** at most 111,636 ANDs at 875 outputs, 520,703 at 4,096; one output bit; one block.
+- **Date:** none. The replay block's stop template has no owner and no PR. The earliest is Thursday's two-stage window, caching off, if vllm adds it by Wednesday.
+
+Please keep O charged at 128k until we post that a served audit sampled it.
+~~~
+
+Next: Task 2 (LEAN-243), due Wed 12:00Z.
