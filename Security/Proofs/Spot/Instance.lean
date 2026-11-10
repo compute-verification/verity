@@ -124,7 +124,7 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n
 theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
     P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
   ext u
-  simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_wrong, P.correct_iff hW X u]
+  simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_incorrect, P.correct_iff hW X u]
 
 /-- **A sandwich is a cycle**: if a unit `u` holds gates `g` and `k`, another unit `v` holds `h`, and `g` is read by
 `h`, which `k` reads, the population is not acyclic. -/
