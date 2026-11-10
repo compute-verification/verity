@@ -3,5 +3,4 @@
 circuits core's protocols' provers build (`protocols`), which their verifiers don't read. Lean is the definition and the
 verifier, and the Python here mirrors it for the prover's speed, held to it by difftest. A verifier imports
 none of it; until each protocol's verifier is Lean, what its Python verifier reads
-of it is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`), which only shrinks. Nothing here imports
-`verity.core` but what `ML_IMPORTS_CORE` names."""
+of it is on the soundness path (the `trusted` entries of `tests/import_order.toml`), which only shrinks."""
