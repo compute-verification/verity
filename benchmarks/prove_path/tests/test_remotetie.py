@@ -69,7 +69,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF, rows as CS
@@ -93,7 +93,7 @@ H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
 RUN = "ab" * 64
-LAW = D.parse_law("stratified:1")
+LAW = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped row: round 1's o-projection's (call 1 of the round) first slot
 FLIP = ("row-table/1/k2048", M * 1)
