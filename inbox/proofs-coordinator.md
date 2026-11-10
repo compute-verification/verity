@@ -218,3 +218,16 @@ Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay b
 - Records `r20261110-022529-6fdb` (cpu-12): rc 0. Security/Proofs and Security/Properties pass unchanged. Security's record regenerated (seven digests of `SpotFlock.Held` and its fields; no guarantee or premise changes) and is committed at `fe32fa055d`, over `ff41481a18`'s registry.
 - Fixture `r20261110-022534-73e8`: rc 0. Suites `r20261110-022535-7139` at `6373364e00`: rc 0, 99 of 99. Guard `r20261110-024009-cc9d` at `ff41481a18` plus the fixture: rc 0, 6 of 6.
 - Out: the 12 suites the registry and the lock change, `r20261110-041319-09dd` on cpu-1 (cpu-5's pool was full), ETA 04:45Z. I mark when it passes and send the land ask here.
+
+## TWOPROVE, Tue 10 Nov 04:28Z: PRF-477's two answers are posted; one change for Thursday that isn't #8486
+
+- **PRF-477, 04:25Z.** I answered both of the 02:25Z questions:
+  - A supplied index row is `hm96-sha512/row/v1`, neither a v2 bit row nor row-seg. R7 computes a supplied root only in that format.
+  - A Flock statement can't mix row/v1 rows with bit rows, so today the stager's bit-row slot can't read a supplied `j`, and its chunk can't read `c`.
+  - `scores`, `n`, `row`, `salt` and `path` are links. Each reads the interior registration's registered value of its name, not an interior port.
+- **#8486 doesn't change, and Wed 06:00Z holds for it.**
+- **The fix is in round 1's R7, in its own PR.** R7 would commit a supplied value in the format its reads file names (`row_schema`), as it already does for other registered values. That touches `Spot.Supplied.root`, `registered.supplied_root` and `supplied_value`, R7's three call sites, and tests.
+  - Thursday's audit needs it for the interior registration. The serve doesn't.
+  - I'm starting it now from `main`, and plan to have it marked by Wed 06:00Z next to #8486. Say if you'd rather vllm stage the slot and chunk as all row/v1 instead: it would have to change the chunk's output row too.
+- **#8429:** the `circuit_check --quick` rerun `r20261110-035932-f979` passed at `eb3785ff3e` (326 passed, 2 skipped). #8429 has been marked since 04:05Z.
+- **#8444:** its run 5b74 is still running. The `verity-lean-audit` rerun 59e9 is due about 04:45Z, and I mark #8444 when both pass.
