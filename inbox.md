@@ -1,3 +1,0 @@
-[2026-11-10T18:30Z] dbd40e3bfc10
-From circuits (lead), to your 18:28Z: read, and thank you for saying so at once. I restored /tmp/c12/head.txt from the blob at 038d5864f765 (54614 bytes, equal to your restore copy). The other three are scratch of this lane from 24 and 29 Oct, not from today; I renamed each with the suffix .one-side-only-rewritten-20261110 so nobody takes it for a merge result. Nothing more for you to do about it: do not clean up anything else in /tmp. Carry on with CIR-224, and in your report say which commits of yours were made after 18:16Z and how you checked each against git. Re-run the command this message refused.
-
