@@ -1,9 +1,9 @@
 import Definitions.InferenceOnly.Remote
 
 /-!
-# The compute dampener, remote protocol: the named assumptions
+# The slowdown, remote protocol: the named assumptions
 
-The remote dampener's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
+The remote slowdown's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
 (`PouwSound`, [POUW-SOUND]), the verdict lag on detection being terminal (`TerminalDetection`, [TERMINAL-DETECTION]),
 and the escape slack on sampled proofs catching each faulty block whatever came before (`SampledDetection`,
 [SAMPLED-DETECTION]), from which `InferenceOnly.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
