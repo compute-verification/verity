@@ -30066,3 +30066,46 @@ I will edit `a509`'s verdict in when it reads.
 **Needs your word:** nothing for the cure. One choice is yours. The scratch cross `cursor/proofs-accountd-cross-034a` predates `fa866c78d7`. I will merge `fa866c78d7` into it, which touches only the scratch branch, so the PRF-504 commit branches off a cross that carries the cure. Unless you say otherwise, I do it after `a509` reads.
 
 **Unchanged:** the PRF-504 commit (Wed 12:00Z) and text (Wed 16:00Z), and the `RequestsCover` recommendation (Wed 16:00Z).
+
+## BREAKEVEN, Tue 10 Nov 17:47Z: vllm's three: the 2.05 points carry the step record in name only (0.163, priced as the edge snapshot's pause) and neither the two-stage boundary commitment nor the history tables; text ready to paste. r20261110-173854-ea3b queued 9 deep on cpu-8 (ETA about 19:05Z); 0d56 running (ends by 18:08Z)
+
+**Ready to paste on PRF-456, for @vllm:**
+
+---
+
+proofs, for @vllm (PRF-456, 17:11Z): **of your three, the 2.05 points carry the step record in name only, and the boundary commitment and one layer's history tables not at all.** Since all three are on in every Wednesday serve, that comes first. The step record sits in the name of a part whose figure is the edge snapshot's pause. The two-stage boundary commitment and the history tables have no part.
+
+**What the 2.05 is** [read: the planner at a5e4e56a11 with its rows of record]. It is the serve share less the wait at e: 4.339 − 2.293 = 2.045 points. That is four parts, which add to the row's figure to the last digit [run: the rows of `r20261110-055410-0c58`]. The rows of record price serving with `live: false` and `commit_write: false` (their `sc_case`).
+
+| part | points | where it comes from |
+|---|---:|---|
+| certified-tick rule | 1.626 | serve_tax card, simulated on Llama-3.2-1B traces |
+| "step record, token commits and replay-block edge snapshot" | 0.163 | serve_tax card, measured on GLM-5.3 at TP8 (`r20261107-155724-3f53`) |
+| deterministic top-k | 0.25 | serve_tax card, kernel-modeled |
+| the carried K/V pages hashed once each 600 s edge | 0.006 | `kv` arm's rate (`r20261106-193235-5170`), modeled pool |
+| lost prefill | 0 | — |
+
+- **The tick's figure** is throughput 0.984 of vLLM's on the mean run.
+- **The second part's 0.163** is 0.98 s ÷ 600 s: the serving pause to copy and hash the KV pool at each replay block's edge, at the median.
+- **The page hash** is 37.26 GB at the rate serve_tax's `kv` arm measured on Moonlight on one H200: 103.33 GB in a median 547 ms. It is split over 8 ranks.
+- **Lost prefill is 0** because the rows read "certified hits, replays reprove hits": the hits' cost is on the proving side.
+
+1. **(a) The step record: yes, in name only** [read: the serve_tax card's `tokens` configuration]. It is in the second part. But that part's 0.163 is the edge snapshot's pause alone. The record and the token commits were in the same measurement, with an edge every 30 s, "within noise at every load, up to 2.4% at saturation" (the part's `high`, 0.024).
+   - With the edge snapshot off, as in Wednesday's serves, our parts give the record 0 below saturation.
+   - Its own figure is serve_tax's `record` arm over `compiled`. On Moonlight on one H200 that was +0.0% at light load, +0.1% at medium and +2.7% [−1.8, +7.2] at saturation, not significant [read: `r20261106-175939-df52`]. Your arm's figure on GLM-5.3 at TP8 replaces both.
+2. **(b) The boundary commitment: no** [read]. I take it to be `boundary-rows`'s: the two-stage audit's commitment of each window's finished requests by size class, off the engine loop (`verity_vllm.pipeline.boundary_rows`). No part prices it.
+   - **The nearest part** is the token commits in the second part's name: each window's tokens, 4 B each, in `rows-sha512` rows. They measured nothing (the `tokens` arm over `tick`: −0.8% [−2.4, +0.7] at saturation on Moonlight, `r20261106-175939-df52`).
+   - **The boundary commitment the 0.163 does price** is the `boundary` arm's: the KV pool hashed and copied at each replay block's edge. That is the edge snapshot, which is off in your serves.
+   - **`boundary-rows` also turns prefix caching off.** If Wednesday's serves run with it off, our 2.05 lacks that change too. The rows of record keep caching on. The planner's own price for turning it off at the 128k plan is `PREFIX_OFF`, 13.86% of the FLOPs computed (`sweep.py`), and no row of record takes it [read].
+3. **(c) One layer's history tables: no** [read]. Neither the planner nor the serve_tax card has a part for a window's history tables (`verity/ml/windows/history.py`).
+   - **The "page hashing" of ours** is the 0.006 above: every carried K/V page hashed once each edge, without the tables' rows or roots.
+   - **The nearest priced line is off in the rows of record:** `COMMIT_WRITE`, every full K/V page hashed when written, 0.045 points.
+4. **Once measured, do they enter the figure? Not by themselves** [read: `Case.tax` in `sweep.py`]. The plan reads three things from the card's `tokens` configuration: the certified tick and the top-k by name, and the edge pause through `tc.EDGE_PAUSE`. A part your benchmark measures counts only when it is added to the card and `Case.tax` reads it.
+   - **The names we would add:** "step record", split from the edge snapshot; "two-stage boundary commitment"; and "history tables".
+   - **When:** in our card PR after tonight's layout. Until then, put "not in the model" beside each of the three.
+
+---
+
+**For you alone:**
+- **Draft 1 named the 0.17 wrongly.** It said "the edge snapshot, the prefix-cache hits the pool's windows lose and hashing the carried pages, 0.17 together". It is 0.163 (the step record, token commits and edge snapshot part) plus 0.006 (the carried pages' hash), with no lost hits. The comment above corrects it in its table, so nothing else needs posting.
+- **The kv arm's run.** The page hash's rate is from `r20261106-193235-5170`. The `record` and `tokens` arms are from `r20261106-175939-df52`. Both are Moonlight on one H200 and are cited as read, not rerun.
