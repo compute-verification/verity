@@ -138,7 +138,7 @@ paths = [
     "verity/core/primitives/lms/lean",
     "verity/flock/verifier/interface",
     "verity/flock/verifier",
-    "verity/core/service/spot",
+    "verity/spot/verifier/lean",
 ]
 
 [[tool.verity.tests.reads]]

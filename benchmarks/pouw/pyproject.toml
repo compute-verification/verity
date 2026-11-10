@@ -65,7 +65,7 @@ inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/record.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/spot",
+          "verity/spot/verifier/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/spot",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
@@ -163,7 +163,7 @@ timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
              "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
-             "verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest"]
+             "verity/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -198,7 +198,7 @@ paths = ["verity/definitions/ops"]
 tests = ["tests/test_h1_prove_live.py"]
 paths = [
     "verity/core/protocols/pouw",
-    "verity/core/protocols/spot/one_stage",
+    "verity/spot/verifier/one_stage",
     "verity/circuits",
     "verity/ml/commitments/frame_v3",
     "verity/flock/prover/python/verity_flock",

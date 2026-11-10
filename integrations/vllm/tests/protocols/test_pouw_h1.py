@@ -26,9 +26,9 @@ from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.spot import challenger as LC  # noqa: E402
-from verity.core.protocols.spot import remote as R  # noqa: E402
-from verity.core.protocols.spot.challenger import CoinError, LiveRecord  # noqa: E402
+from verity.spot.device import challenger as LC  # noqa: E402
+from verity.spot.device import remote as R  # noqa: E402
+from verity.spot.device.challenger import CoinError, LiveRecord  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402

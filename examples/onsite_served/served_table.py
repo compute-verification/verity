@@ -38,8 +38,8 @@ from verity.core.deploy import config as K
 from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.pous import wipe_parties as WP
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage.draw import parse_design
+from verity.spot.verifier import parties as SP
+from verity.spot.verifier.one_stage.draw import parse_design
 from verity.core.wire import Refused
 
 ROOT = Path(__file__).resolve().parents[2]

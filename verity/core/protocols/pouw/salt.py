@@ -45,7 +45,7 @@ from verity.ml.commitments.scheme import DIGEST_BYTES
 from .protocol import U64, DomainError
 
 if TYPE_CHECKING:
-    from verity.core.protocols.spot.service import WindowCommitmentRecord
+    from verity.spot.verifier.service import WindowCommitmentRecord
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
 SALT_BYTES = DIGEST_BYTES["sha512"]

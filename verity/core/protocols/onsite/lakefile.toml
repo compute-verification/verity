@@ -27,7 +27,7 @@ path = "../composition"
 # `PouwCheck.Period`).
 [[require]]
 name = "core_spot"
-path = "../../service/spot"
+path = "../../../spot/verifier/lean"
 
 [[require]]
 name = "pouw_check"
@@ -58,7 +58,7 @@ path = "../remote_bandwidth/lean"
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"
-path = "../../service/vstar/recursive"
+path = "../../../spot/verifier/recursive"
 
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]

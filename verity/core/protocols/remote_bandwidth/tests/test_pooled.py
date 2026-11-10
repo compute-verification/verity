@@ -11,7 +11,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.spot.verifier.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, pooled
 
 DELTA = Fraction(1, 2 ** 40)

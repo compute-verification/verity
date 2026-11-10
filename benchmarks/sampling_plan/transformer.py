@@ -52,11 +52,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols import reporting
-from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
-from verity.core.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.spot.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.spot.verifier.profile import Stratified, Stratum  # noqa: E402
+from verity.spot.candidates import Shape, cuts, shape_of  # noqa: E402
+from verity.spot.costfit import Fitted, fit  # noqa: E402
+from verity.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
+from verity.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.circuits.codec import descriptor_id  # noqa: E402

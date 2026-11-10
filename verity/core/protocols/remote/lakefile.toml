@@ -24,7 +24,7 @@ path = "../composition"
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period (work).
 [[require]]
 name = "core_spot"
-path = "../../service/spot"
+path = "../../../spot/verifier/lean"
 
 [[require]]
 name = "pouw_check"
@@ -39,7 +39,7 @@ path = "../network/nci/lean"
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"
-path = "../../service/vstar/recursive"
+path = "../../../spot/verifier/recursive"
 
 [[lean_lib]]
 name = "CoreRemote"

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.spot.verifier.one_stage import proofs as PF
 
 OPEN = "accepted by the mirror; shared rows: Lean's sharedWhy not run"
 

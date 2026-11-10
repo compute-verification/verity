@@ -445,7 +445,7 @@ def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
     from verity.core.protocols.remote_bandwidth.session.checks import Checks
 
-    from verity.core.protocols.profile import IntegrityProfile, Subset
+    from verity.spot.verifier.profile import IntegrityProfile, Subset
 
     profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
                 for n, k in ((4096, 64), (10 ** 6, 300), (10 ** 6, 301))]
@@ -846,7 +846,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
 
     from verity.core.protocols.remote_bandwidth.session import challengers
     import replay
-    from verity.core.protocols.spot import challenger as C
+    from verity.spot.device import challenger as C
 
     asked = []
 

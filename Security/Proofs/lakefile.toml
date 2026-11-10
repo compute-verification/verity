@@ -39,7 +39,7 @@ path = "../../verity/flock/verifier/vstar"
 # `RecursiveKSAt`'s event
 [[require]]
 name = "core_vstar_recursive"
-path = "../../verity/core/service/vstar/recursive"
+path = "../../verity/spot/verifier/recursive"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from test_rec_outer import BIN
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.spot.verifier.one_stage import partition as P
 from verity.circuits.codec import program_digest
 
 POD = Path(__file__).resolve().parents[2] / "pod"

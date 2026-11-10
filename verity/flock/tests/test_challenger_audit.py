@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from verity.core.protocols.spot import challenger as C
+from verity.spot.device import challenger as C
 
 from verity_flock import challengers as CH
 
-SP = Path(__file__).resolve().parents[2] / "core" / "service" / "spot"
+SP = Path(__file__).resolve().parents[2] / "spot" / "verifier" / "lean"
 #: ``challenger/`` (its record and release log) and ``session/`` (the plain session it sampled and opened the tree of)
 FIXTURE = Path(__file__).resolve().parent.parent.parent / "ml" / "flock" / "tests" / "fixtures" / "plain-tree"
 

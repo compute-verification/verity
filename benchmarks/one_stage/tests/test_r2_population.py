@@ -12,7 +12,7 @@ import pytest
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.spot.verifier.one_stage import partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

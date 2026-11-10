@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.spot.verifier.one_stage import proofs as PF
 
 HERE = (Path(__file__).resolve().parent.parent / "prover" / "tests")
 LEAN = HERE.parents[2] / "core" / "service" / "flock"

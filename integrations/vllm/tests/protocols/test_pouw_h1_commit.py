@@ -26,8 +26,8 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot import remote as R
-from verity.core.protocols.spot.one_stage import registered as G, registration as REG
+from verity.spot.device import remote as R
+from verity.spot.verifier.one_stage import registered as G, registration as REG
 from verity.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E

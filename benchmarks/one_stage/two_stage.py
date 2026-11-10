@@ -31,7 +31,7 @@ Usage::
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window; FILE.json the interior values,
 ``[[name, schema], ...]``; REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows
 name. A ``local`` session's challenger reads its coins through ``sampled-proofs-verifier``, which must be built first
-(``lake build sampled-proofs-verifier`` in ``verity/core/service/spot``): building it on first use outlasts the
+(``lake build sampled-proofs-verifier`` in ``verity/spot/verifier/lean``): building it on first use outlasts the
 local gate's start.
 """
 from __future__ import annotations
@@ -45,8 +45,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.spot.one_stage import draw as D, partition as P
+from verity.spot.device import challenger as Ch, coins as CC
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import draw as D, partition as P
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.ml.windows import rows as CS

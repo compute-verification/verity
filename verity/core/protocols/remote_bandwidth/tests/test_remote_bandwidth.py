@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.spot.verifier.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.ml.randomness import frame

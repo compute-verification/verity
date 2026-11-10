@@ -41,8 +41,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import partition as P, registered as REG, registration as R
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program

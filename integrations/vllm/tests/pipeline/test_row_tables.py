@@ -20,7 +20,7 @@ from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW

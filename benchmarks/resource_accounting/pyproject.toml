@@ -15,9 +15,9 @@ inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/pri
           "verity/core/protocols/record.py",
           "benchmarks/bandwidth/summarize.py", "benchmarks/bandwidth/gpu.py", "benchmarks/bandwidth/reference.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pouw",
+          "verity/spot/verifier/profile.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pouw",
           "verity/core/protocols/pous", "verity/core/claims",
-          "verity/core/protocols/spot/__init__.py", "verity/core/protocols/spot/challenger.py",
+          "verity/spot/verifier/__init__.py", "verity/spot/device/challenger.py",
           "verity/ml/__init__.py", "verity/circuits", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
           "verity/ml/protocols/pous",
           "verity/ml/commitments", "verity/ml/crypto", "verity/definitions/kernels", "verity/ml/randomness"]

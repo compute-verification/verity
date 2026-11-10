@@ -15,12 +15,12 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "spot" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "spot" / "verifier" / "tests"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 

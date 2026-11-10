@@ -23,7 +23,7 @@ spot = [
     "Security/Definitions/Claims/SamplingGeneric.lean",
     "Security/Proofs/Flock/SamplingGeneric*",
     "verity/core/protocols/spot",
-    "verity/core/service/spot",
+    "verity/spot/verifier/lean",
 ]
 # C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
 flock = [
@@ -282,7 +282,7 @@ what = "the auditor ledger's `lane` field: a monitoring period's prover, as the 
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
 paths = [
     "verity/core/protocols/{spot,pouw}",
-    "verity/core/service/spot",
+    "verity/spot/verifier/lean",
     "Security/*/Pouw",
     "Security/Proofs/Properties/Pouw",
     "integrations/vllm",

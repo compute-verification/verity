@@ -212,8 +212,8 @@ from verity.core.protocols.certifier.online import Prover, Refused
 from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.service import WindowCommitmentRecord
+from verity.spot.verifier.one_stage import registration as R
+from verity.spot.verifier.service import WindowCommitmentRecord
 
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3

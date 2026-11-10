@@ -11,10 +11,10 @@ cfg=${1:?usage: qcall.sh CONFIG X...}
 shift
 uv sync -q --all-packages --extra torch-cpu
 { (cd verity/flock/verifier && lake build flock-verify) && \
-  (cd verity/core/service/spot && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
+  (cd verity/spot/verifier/lean && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log" >&2; exit 1; }
 FV=$PWD/verity/flock/verifier/.lake/build/bin/flock-verify
-SP=$PWD/verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest
+SP=$PWD/verity/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 uv run python - "$cfg" "$d" "$O" <<'EOF'

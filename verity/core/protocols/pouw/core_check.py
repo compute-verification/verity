@@ -83,9 +83,9 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.spot.verifier.one_stage import registration as R
+from verity.spot.device import challenger as Ch
+from verity.spot.verifier.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening

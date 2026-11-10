@@ -24,7 +24,7 @@ import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.protocol import Shape as Unit  # noqa: E402
-from verity.core.protocols.profile import WINDOW_DELTA  # noqa: E402
+from verity.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 
 

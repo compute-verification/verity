@@ -559,7 +559,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
-  onsite's (`verity/core/protocols/spot/README.md`): `CoinsConfidential`, the named Prop
+  onsite's (`verity/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
   Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in

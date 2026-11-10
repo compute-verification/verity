@@ -83,7 +83,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Card": (f"{CORE}Accel/Card.lean::Verity.Accel.Card",),
     "Certificate": ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate",
                     "verity/core/protocols/certifier/certificate.py::Certificate"),
-    "Challenger": ("verity/core/protocols/spot/parties.py::Challenger",),
+    "Challenger": ("verity/spot/verifier/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": ("verity/ml/commitments/coin_tree.py::CoinTree",),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
@@ -92,14 +92,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Dag": (),
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
-    "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/core/protocols/spot/service.py::Draw"),
+    "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/spot/verifier/service.py::Draw"),
     "Game": (f"{CORE}Game.lean::Verity.Game",),
     "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
     "Law": (f"{CORE}Draw.lean::Verity.Law", f"{FLOCK}Draw.lean::Flock.Draw.Law",
-            "verity/core/protocols/spot/service.py::Law"),
+            "verity/spot/verifier/service.py::Law"),
     "Layout": (),
     "Ledger": (),
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
@@ -154,7 +154,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/core/protocols/certifier/grid.py::Record":
         ("verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
          "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
-    "verity/core/protocols/spot/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
+    "verity/spot/verifier/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -942,15 +942,15 @@ KNOWN: dict[str, str] = {
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/spot/one_stage/verdict.py::Verdict":
+    "verity/spot/verifier/one_stage/verdict.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/core/protocols/spot/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
-    "verity/core/protocols/spot/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
-    "verity/core/protocols/spot/service.py::Outcome":
+    "verity/spot/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
+    "verity/spot/device/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
+    "verity/spot/verifier/service.py::Outcome":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/core/protocols/spot/service.py::Registration":
+    "verity/spot/verifier/service.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
-    "verity/core/protocols/spot/service.py::Session":
+    "verity/spot/verifier/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
     "verity/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
@@ -971,11 +971,11 @@ KNOWN: dict[str, str] = {
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
     "verity/flock/verifier/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
     "verity/flock/verifier/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
-    "verity/core/service/spot/Spot/Program.lean::Spot.Program":
+    "verity/spot/verifier/lean/Spot/Program.lean::Spot.Program":
         "duplicate of `program.Program`, read from its descriptor's bytes: becomes its code-Lean side once a difftest holds the two (proofs)",
-    "verity/core/service/spot/Spot/Slots.lean::Spot.Slots.Layout":
+    "verity/spot/verifier/lean/Spot/Slots.lean::Spot.Slots.Layout":
         "homonym, the claims' partition: rename (proofs)",
-    "verity/core/service/spot/Spot/Wires.lean::Spot.Wires.Circuit":
+    "verity/spot/verifier/lean/Spot/Wires.lean::Spot.Wires.Circuit":
         "homonym, an execution block's wiring: rename (proofs)",
     # verity/ml/
     "verity/circuits/boolean/forms.py::Circuit":
