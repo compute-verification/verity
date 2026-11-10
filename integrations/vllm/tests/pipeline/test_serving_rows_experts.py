@@ -291,7 +291,10 @@ def test_the_members_are_their_references_the_reads_open_and_the_blocks_are_the_
     check_words(plan, ms, SRW.read_all(ms, layer.rows, layer.store, None, tables=tables), BLOCK, layer)
 
 
-def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_count_registered_where_pinned(layer):
+def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_count_registered_where_pinned(layer, monkeypatch):
+    """With the tables pinned the reads' rows, salts and paths are free until the reads' Definitions are pinned too
+    (`interface.input_count`'s ``readers``): then the free inputs are the activations alone. One constant stands in for
+    every reader's digest here."""
     plan, ms = cut(layer.rows)
     tables = EX.commit_tables(plan, layer.store, None, None, SRW._slices, committer(plan))
     reg = EX.declarations(plan)
@@ -316,7 +319,10 @@ def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_cou
     counted = IF.input_count(doc, resolve, pins=pins, roots=pins)
     words = {t: dict(next(m for m in ms if m.template == t).rows) for t in TMPLS}
     free = 16 * (T * (words[SLOTS]["in0"] + words[SLOTS]["in1"]) + P * B * (words[BLOCK]["in0"] + words[BLOCK]["in1"]))
-    assert counted["free"] == free and counted["registered"] > 0
+    unpinned = 16 * sum(o.units * words[o.reader][p] for o in reg.openings for p in o.ports)
+    assert counted["free"] == free + unpinned and unpinned > 0 and counted["registered"] > 0
+    monkeypatch.setattr(IF, "reader_digest", lambda fn: "ef" * 64)
+    assert IF.input_count(doc, resolve, pins=pins, roots=pins, readers=["ef" * 64])["free"] == free
     assert IF.input_count(doc, resolve, pins=None, roots=pins)["registered"] == 0
 
 
@@ -453,7 +459,9 @@ def test_a_fused_blocks_scale_row_is_its_own_g_blocks(monkeypatch):
 
 def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_count_registered_where_pinned(monkeypatch):
     """The fused block declares its table as a read does, its root, domain id and verdict are committed by reference, and with
-    the tables pinned its free inputs are its activations alone: its rows are an opening, never a free input or an output."""
+    the tables and the opening readers pinned (`interface.input_count`'s ``readers``, one constant standing in for every
+    reader's digest here) its free inputs are its activations alone: its rows are an opening, never an output, and a free
+    input only while its reader is unpinned."""
     tmpls, caps = fused("w2")
     FU, ns = tmpls[-1], build(monkeypatch, "w2")
     rows = rows_of(tmpls, ns)
@@ -476,8 +484,11 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
     resolve = {t: SRW.template(t).fn for t in tmpls}.__getitem__
     words = {t: dict(next(m for m in ms if m.template == t).rows) for t in tmpls}
     free = 16 * (T * (words[SLOTS]["in0"] + words[SLOTS]["in1"]) + P * B * (words[FU][ports(FU)["xq"]] + words[FU][ports(FU)["sx"]]))
+    unpinned = 16 * sum(o.units * words[o.reader][p] for o in reg.openings for p in o.ports)
     counted = IF.input_count(doc, resolve, pins=pins, roots=pins)
-    assert counted["free"] == free and counted["registered"] > 0
+    assert counted["free"] == free + unpinned and unpinned > 0 and counted["registered"] > 0
+    monkeypatch.setattr(IF, "reader_digest", lambda fn: "ef" * 64)
+    assert IF.input_count(doc, resolve, pins=pins, roots=pins, readers=["ef" * 64])["free"] == free
     assert IF.input_count(doc, resolve, pins=None, roots=pins)["registered"] == 0
 
 
