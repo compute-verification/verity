@@ -7,7 +7,7 @@ import pytest
 from verity.core.protocols.pouw.circuit import partition as CP
 from verity.core.protocols.pouw.circuit import reference as CR
 
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.evaluation import evaluate
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
 

@@ -8,12 +8,12 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import bind
 from verity.ml.private_circuits import universal as U
 
 #: (G, N_IN, N_OUT) -> (And, Xor, Not gates, standalone program digest)

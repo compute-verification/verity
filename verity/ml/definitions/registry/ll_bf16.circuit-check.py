@@ -9,9 +9,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The word Definitions at GLM-5.3's gate (K 6144): the dotprod at BS 128, VEC 8 with and without contraction, the split-K at
     SPLIT_K 6 and 8 (TILE_K 256, WARPS 4); at DeepSeek-V4-Pro's (K 7168): the dotprod at BS 256 (a tail tile past its main
     tiles) and the split-K at SPLIT_K 7 (28 tiles over 7 ranks); the rows at small statics."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import ll_bf16 as LL
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -31,8 +31,8 @@ def _boolean_roots() -> list[Any]:
     """On bits: the dotprod over two tiles of two warps' lanes, two elements per vector load, with and without contraction, and
     over one tile, a tail tile and a ragged round of one warp; the split-K over two ranks of two warps, two tiles each; and their
     rows at two W rows."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import ll_bf16 as LL
 
     HOP = BG.HopperBF16WgmmaDot16

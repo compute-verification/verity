@@ -136,7 +136,7 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.ml.circuits import library as L
+    from verity.circuits import library as L
     from verity.ml.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
@@ -252,7 +252,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     """One head of `Attention_v2{..., DOT=HopperBF16WgmmaDot16_v1, INV=Fa2InvSum_v1}` restated over the registered primitives by the
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
     from verity.ml.definitions.registry import b1, hopper
     from verity.ml.definitions.registry import prims as P
 
@@ -312,8 +312,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
-    from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
     from verity.ml.definitions.numerics import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity.ml.definitions.registry import b1, hopper

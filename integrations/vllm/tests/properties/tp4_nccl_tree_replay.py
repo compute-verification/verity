@@ -137,9 +137,9 @@ def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
     """One step's calls `items` ([(k, rows, statics)]): every rank's words against each order."""
     import torch
 
-    from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits import evaluation as E
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import bits as BS
     from verity.ml.definitions.registry import boolean_tp_allreduce as BA
 
     dumps = [torch.load(Path(capture) / f"coll.rank{r}.step{step}.pt", map_location="cpu", mmap=True, weights_only=True)

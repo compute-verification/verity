@@ -163,7 +163,7 @@ paths = ["verity/ml/definitions/registry", "verity/ml/flock/python/verity_flock/
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/ml/circuits/ops", "verity/ml/definitions/registry", "verity/ml/flock/python/verity_flock"]
+paths = ["verity/circuits/ops", "verity/ml/definitions/registry", "verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -195,7 +195,7 @@ paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_lean_verifier.py"]
-paths = ["verity/ml/circuits/tests", "verity/ml/flock/python/verity_flock/templates"]
+paths = ["verity/circuits/tests", "verity/ml/flock/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -222,7 +222,7 @@ paths = ["verity/core/service/flock/Flock/Draw.lean", "verity/core/service/flock
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_circuits.py"]
-paths = ["verity/ml/circuits", "verity/ml/flock/python/verity_flock"]
+paths = ["verity/circuits", "verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_inner_stage.py"]

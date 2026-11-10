@@ -355,7 +355,7 @@ def entries_twin(layer: str, kv: np.ndarray, score: np.ndarray, nrows: np.ndarra
 
 
 def entry_fn(layer: str, rows: int):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     if layer == "c4":
         return bind(R.Dsv4MlaCompressC4, ROWS=rows, D=D, QB=QB, EPS=EPS)
@@ -575,8 +575,8 @@ def _flat_out(y) -> list[int]:
 def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """State rows [lo, hi): their score words against `fadd(score, ape)`, the reference `Dsv4CompressorScore_v1{W}` on every
     ref_every-th."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -592,7 +592,7 @@ def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache rows [lo, hi): every word against the twin, the reference `Dsv4MlaCompressC4_v1{ROWS,...}` or
     `Dsv4MlaCompressC128_v1{8,16,...}` on every ref_every-th."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -611,8 +611,8 @@ def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_columns(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Ratio-128 columns of tokens [lo, hi): every word against `c128_columns`, the reference `Dsv4MlaC128Column_v1{8,16}` on every
     column of every ref_every-th."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -697,7 +697,7 @@ def ptx(outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the decode's row reader at the row they write."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import flashmla as F
 
     row = {"D": D, "QB": QB, "EPS": EPS}

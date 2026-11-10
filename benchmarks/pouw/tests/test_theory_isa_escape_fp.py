@@ -12,7 +12,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from verity.ml.circuits.silicon import models as M
+from verity.circuits.silicon import models as M
 
 SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "isa_escape_fp.py"
 

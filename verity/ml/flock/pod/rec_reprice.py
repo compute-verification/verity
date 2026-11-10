@@ -56,10 +56,10 @@ def chain_program():
     """``N`` instances of the template in a chain over ``x0`` (one word), ``xs`` (``N`` rows of ``K - 1``) and ``w`` (``N``
     rows of ``K``): unit 0's ``x`` is ``x0`` then ``xs[0]``, unit u's unit u - 1's output then ``xs[u]``, its ``wrow``
     ``w[u]``; the root returns the last unit's output."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import coll_concat
-    from verity.ml.circuits.types import Array
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.program import Program
+    from verity.circuits.refs import coll_concat
+    from verity.circuits.types import Array
 
     t, n = template(), population()
     (_, xt), _ = t.signature()[0]
@@ -81,7 +81,7 @@ def partition(d: Path, prog=None) -> dict:
     verifier refuses (`rec_budget.inner`). ``prog``: the program (default `chain_program` under REC_LINKS=1, else
     `program`)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
     from verity_flock import rec_budget as RB
     from verity_flock import rec_live as RL
 
@@ -137,7 +137,7 @@ def stage_chain(d: Path) -> dict:
     """The wired inner statement (`chain_program`) staged into ``d`` with every instance's own rows, its links file and its
     partition's files; the staging's record."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.ml.circuits import partition_object as PO
+    from verity.circuits import partition_object as PO
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
 

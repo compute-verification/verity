@@ -12,8 +12,8 @@ import re
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity.ml.definitions.numerics import cublas_gemm_rows as C, rows
 from verity.ml.definitions.numerics.kernel_registry import Declined
@@ -82,7 +82,7 @@ def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
     """The provenance's split counts are the route table's at every (shape, M) the capture ran (the scan maps the same routes),
     and the Definitions' conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity.ml.circuits.defs import conformance_label
+    from verity.circuits.defs import conformance_label
 
     p = C.PROVENANCE
     assert p["scan"].startswith(BC.CUBLAS_ROUTES["run_record"])

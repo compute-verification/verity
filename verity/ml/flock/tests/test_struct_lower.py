@@ -2,11 +2,11 @@
 computes."""
 from __future__ import annotations
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as GB
-from verity.ml.circuits.ops.boolean import scalar as SB
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as GB
+from verity.circuits.ops.boolean import scalar as SB
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 

@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """The whole clip over a 3-element tensor (the strided path) and a 4-element one (the 4-vector path), which reaches every
     family at its smallest; a full lane's 32 squares; and a thread's sum of two chunk slots."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import torch_clip as TC
 
     return [

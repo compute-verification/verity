@@ -15,8 +15,8 @@ skip ``__pow``'s special cases. ``exp_inline``'s two special inputs are handled 
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, const_bits, multiply, mux, or_reduce, sub
-from verity.ml.circuits.silicon import fp
+from verity.circuits.boolean.forms import NOT, OR, ZERO, add, const_bits, multiply, mux, or_reduce, sub
+from verity.circuits.silicon import fp
 from verity.ml.definitions.registry import glibc_pow_data as D
 
 __all__ = ["F64_ONE", "F64_QNAN", "f32_to_f64", "f64_add", "f64_div", "f64_fma", "f64_mul", "f64_neg", "f64_sub",

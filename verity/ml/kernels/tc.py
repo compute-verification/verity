@@ -1,4 +1,4 @@
-"""numpy kernels for the tensor-core steps and GEMM coordinates, bit-exact batch forms of `verity.ml.circuits.silicon`.
+"""numpy kernels for the tensor-core steps and GEMM coordinates, bit-exact batch forms of `verity.circuits.silicon`.
 
     group_sum_total_batch      `GroupSum` on every encoding (`total.tc_dot_total` for BF16, `total_fp8.tc_dot_total_e4m3`
                                for E4M3): NaN / sticky and saturating infinities / `+0` zero, as the scalar total rules
@@ -9,7 +9,7 @@
 
 Encodings are unsigned integer arrays with a leading batch axis; the arithmetic is int64 (every intermediate is below
 2^53).  The IR kernels are registered next to their Definitions (`prims`, `gemm`).  The FP8 and NVFP4 steps have no core
-Definition yet, so their references are `ScalarReference`s over the `verity.ml.circuits.silicon` functions, registered here.
+Definition yet, so their references are `ScalarReference`s over the `verity.circuits.silicon` functions, registered here.
 """
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import ScalarReference, register_kernel
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.evaluation import ScalarReference, register_kernel
+from verity.circuits.types import Array, Value
 
-from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
-from verity.ml.circuits.silicon.term import FORMATS
-from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
+from verity.circuits.silicon.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
+from verity.circuits.silicon.term import FORMATS
+from verity.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
 __all__ = [
     "HOPPER_E4M3_DOT",
@@ -114,7 +114,7 @@ def mxf4_step_total_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: 
 
 def f32_to_e2m1_sat_batch(a: np.ndarray, nan: int) -> tuple[np.ndarray, None]:
     """`cast.f32_to_e2m1_sat_word` on every word."""
-    from verity.ml.circuits.silicon.cast import E2M1_UP
+    from verity.circuits.silicon.cast import E2M1_UP
 
     u = np.asarray(a, dtype=np.uint32)
     sign = ((u >> 31) << 3).astype(np.uint8)
@@ -132,7 +132,7 @@ def e4m3_to_f32_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
     """`cast.e4m3_to_f32_word` on every byte (a 256-entry table of it)."""
     global _E4M3_TO_F32
     if _E4M3_TO_F32 is None:
-        from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
+        from verity.circuits.silicon.cast import e4m3_to_f32_word
 
         _E4M3_TO_F32 = np.array([e4m3_to_f32_word(b) for b in range(256)], dtype=np.uint32)
     return _E4M3_TO_F32[np.asarray(a, dtype=np.int64) & 0xFF], None

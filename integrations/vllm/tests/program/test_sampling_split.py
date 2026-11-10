@@ -6,7 +6,7 @@
   constructed it.  The pins were written on the unsplit tree; a change to a Definition of the
   family rewrites them (this module's `--write`, run by `REWRITE`'s command), keeping every key they hold.
 * The family's Definition modules import only the stdlib, numpy, `verity`, one another, and the two other families' modules
-  they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/ml/circuits/`, which
+  they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/circuits/`, which
   imports only `verity`, with the Definitions they call.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ REWRITE = ("a change meant to move the family's Definitions rewrites the pins wi
            "`uv run python tools/verity/check/pins.py --write integrations/vllm/tests/program/data/sampling_split_digests.json`")
 PKG = "verity.ml.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -60,7 +60,7 @@ SLOW_TRACE = ("GumbelLane_v1", "GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", 
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -72,7 +72,7 @@ def family_definitions() -> dict[str, object]:
     registered on first use, so whether the registry holds one depends on what ran before)."""
     import importlib
 
-    from verity.ml.circuits.defs import FunctionDefinition
+    from verity.circuits.defs import FunctionDefinition
     from verity.ml.definitions.registry.catalog import load
 
     load()

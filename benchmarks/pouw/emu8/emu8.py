@@ -9,7 +9,7 @@ The limbs: x = 16 h + l with l in [-8, 7] (h = (x + 8) >> 4), m = h + l. k3 (Kar
 (ulp 1/8), so that the step's increment is 15 bits(acc1) + 2 bits(acc2) mod 2^32 (15 C1 + 2 C2 = 0); k4 chains the four products (16h)(16h'), (16h) l', l (16h'), l l' into
 one accumulator from C0 = 0x4B400000. `recheck` regenerates every case's operands from emu8.cu's counter hash, checks the device's bytes
 against them, recomputes every k32 prefix word in int64 and compares each arm's words with them; it also replays sampled
-k32 steps of k3 and k4 through `verity.ml.circuits.silicon`'s E4M3 model, so the words are shown to be the model's.
+k32 steps of k3 and k4 through `verity.circuits.silicon`'s E4M3 model, so the words are shown to be the model's.
 """
 from __future__ import annotations
 
@@ -151,10 +151,10 @@ def exact_words(A: np.ndarray, B: np.ndarray) -> np.ndarray:
 
 def silicon_model():
     try:
-        from verity.ml.circuits.silicon import models as m
+        from verity.circuits.silicon import models as m
     except ImportError:  # the node's python3 runs this from the source tree, outside the workspace's environment
         sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-        from verity.ml.circuits.silicon import models as m
+        from verity.circuits.silicon import models as m
     return m.BLACKWELL_SM120_E4M3_M16N8K32
 
 

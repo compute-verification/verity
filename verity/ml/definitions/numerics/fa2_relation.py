@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits.ops import mufu
+from verity.circuits.ops import mufu
 from verity.ml.definitions.numerics import fa2_model as FA
 from verity.ml.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
@@ -51,7 +51,7 @@ _TABLES: dict[str, FA.MufuTables] = {}
 
 
 def tables_dir() -> str:
-    """Where the MUFU.EX2 / MUFU.RCP delta tables live: core's (``verity.ml.circuits.ops.mufu.TABLE_DIR``), pinned by :data:`TABLE_SHA256`."""
+    """Where the MUFU.EX2 / MUFU.RCP delta tables live: core's (``verity.circuits.ops.mufu.TABLE_DIR``), pinned by :data:`TABLE_SHA256`."""
     return mufu.TABLE_DIR
 
 

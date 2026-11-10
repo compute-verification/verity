@@ -9,8 +9,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.refs import Coll, Refs, concat
-from verity.ml.circuits.types import Array, Type, Value
+from verity.circuits.refs import Coll, Refs, concat
+from verity.circuits.types import Array, Type, Value
 
 
 class Unexpressible(Exception):

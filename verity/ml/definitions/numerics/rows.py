@@ -7,7 +7,7 @@ members too.  It raises `Declined` with the reason when the instance is outside 
 step, a wiring of another arity, a non-finite lane of a vectorised twin) and ValueError on operands the Definition does not
 take.
 
-Every row kernel is registered with core `verity.ml.circuits.evaluation` under the kernel name "rows" against its Definition id
+Every row kernel is registered with core `verity.circuits.evaluation` under the kernel name "rows" against its Definition id
 (`kernel_registry.register`).  The core kernel returns the `returns` members flattened, and declines the instances the row
 kernel declines or raises ValueError on, and those with a bf16 operand or result word that is not finite: the domain
 `self_check` covers.  The replay calls the row kernel on whatever words were committed.
@@ -23,7 +23,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
+from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register, register_rows
 from verity.ml.definitions.numerics.moe_router_rows import moe_router_topk
@@ -89,9 +89,9 @@ EVALUATORS = {
     **{f"TokenSelect_v{n}": f"first-max argmax over the bf16 logits (TokenSelect_v{n} = TokenSelect_v1 word for word, index 0 at V = 1)" for n in (3, 4)},
     # the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
-    # evaluated by the core reference (`verity.ml.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
+    # evaluated by the core reference (`verity.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
-    "GumbelTopPTokenSelect_v1": "verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect{V} via verity.ml.circuits.evaluation.evaluate (TemperatureScale -> "
+    "GumbelTopPTokenSelect_v1": "verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect{V} via verity.circuits.evaluation.evaluate (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
@@ -205,10 +205,10 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     """`GumbelTopPTokenSelect_v1{V}` on its six operand word arrays -- (bf16 logits[V], f32 top_p, i64 seed,
     i64 pos, f32 temp, i32 splits) -- evaluated by the REGISTRY (the composite of record: TemperatureScale -> TopPMask_v1{V} with `splits`
     as the S operand -> GumbelSelectF32, Philox draws from (seed, pos)); returns the sampled id.  No re-implementation: the core
-    reference (`verity.ml.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
+    reference (`verity.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
     from verity.ml.definitions.registry import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):
@@ -670,7 +670,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import b1, dead_free, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}

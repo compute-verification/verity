@@ -45,7 +45,7 @@ def sm120_model(models):
     """BLACKWELL_SM120_E4M3_M16N8K32 and where it came from."""
     m = getattr(models, "BLACKWELL_SM120_E4M3_M16N8K32", None)
     if m is not None:
-        return m, "verity.ml.circuits.silicon.models"
+        return m, "verity.circuits.silicon.models"
     return (models.GroupSum(name="blackwell_sm120_e4m3_m16n8k32", arch="sm_120", dtype="e4m3", operand_bits=8, groups=(32,),
                             width=26, zero_exponent=-133, validated=CAPTURE),
             "parameters of cursor/sm120-fp8-capture-75d4 7dcce2c12")
@@ -70,7 +70,7 @@ def expected(a_rows, b_rows, ai, bi, k: int):
     """The sm_120 model's words and Ada's at the coordinates (a_rows[ai], b_rows[bi])."""
     import numpy as np
     from verity.ml.kernels.tc import chain_batch, group_sum_total_batch
-    from verity.ml.circuits.silicon import models
+    from verity.circuits.silicon import models
     model, _ = sm120_model(models)
     want, neg = np.empty(len(ai), np.uint32), np.empty(len(ai), np.uint32)
     for lo in range(0, len(ai), 32768):
@@ -113,7 +113,7 @@ def cache(out_dir: str) -> int:
     """The CPU step: every gated shape's and range's model words (plan(), MODEL_SAMPLES, FULL_MODEL) into out_dir, from the
     operands regenerated on the host, so that the GPU job only compares."""
     import numpy as np
-    from verity.ml.circuits.silicon import models
+    from verity.circuits.silicon import models
     os.makedirs(out_dir, exist_ok=True)
     os.environ["MODEL_CACHE"] = out_dir
     samples, full = int(os.environ.get("MODEL_SAMPLES", "4096")), int(os.environ.get("FULL_MODEL", "131072"))
@@ -164,7 +164,7 @@ class Fp8Bench(NB.Bench):
         CPU step), once the sampled rows' sha256 equals the file's; else computed here."""
         try:
             import numpy as np
-            from verity.ml.circuits.silicon import models
+            from verity.circuits.silicon import models
         except ImportError as e:
             return {"skipped": f"{type(e).__name__}: {e}"}
         dev, t0 = self.dev, time.time()

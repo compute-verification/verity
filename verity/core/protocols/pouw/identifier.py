@@ -7,7 +7,7 @@ there is no seed digest.  The proof binds the object through ``pub.sha``, which 
 verifier recomputes the bytes from the epoch it audits (`identifier_bytes`), and Flock's verifier compares the proof's
 object with them byte for byte (``--identifier F``).
 
-Canonical bytes are RFC 8785 (`verity.ml.circuits.codec.canonical_json`), on the domain where that function is RFC 8785: ASCII
+Canonical bytes are RFC 8785 (`verity.circuits.codec.canonical_json`), on the domain where that function is RFC 8785: ASCII
 strings and integers of magnitude at most 2^53 − 1.  Anything outside it is refused.
 """
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json, jcs_domain_error
+from verity.circuits.codec import canonical_json, jcs_domain_error
 from verity.ml.commitments import domains
 from verity.ml.commitments.scheme import DIGEST_BYTES
 

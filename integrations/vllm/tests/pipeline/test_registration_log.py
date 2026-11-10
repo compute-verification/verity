@@ -10,10 +10,10 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, RecordType, Value
 from verity.ml.commitments import hm96
 from verity_vllm.pipeline import registration_log as RL
 

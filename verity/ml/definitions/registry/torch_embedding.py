@@ -76,17 +76,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.ops.boolean.scalar import gt_u
-from verity.ml.circuits.refs import Affine, Coll, Explicit, Strided, broadcast, concat, strided_view, tuple_of
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.scalar import gt_u
+from verity.circuits.refs import Affine, Coll, Explicit, Strided, broadcast, concat, strided_view, tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
 
 from . import boolean_gather as BGA
 from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU, transpose, transposes

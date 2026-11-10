@@ -41,11 +41,11 @@ EVALUATORS = {
     "ResidualAdd_v1": "Bf16Add per coordinate (ResidualAdd_v1{N}: one f32 add of the widened words, RNE to bf16; BiasAdd_v1's row)",
     "RoPEHeadGptJ_v2": "verity.ml.definitions.numerics.derived_rows fma_rn / mul_rn / bf16_rn_torch (RoPEHeadGptJ_v2{D}: out[2i] = RopeOut_v1("
                        "x[2i], x[2i+1], cos[i], sin[i]), out[2i+1] = RopeOutAdd_v1(x[2i+1], x[2i], sin[i], cos[i]), node for node)",
-    "DsaIndexerKRow_v1": "registry.dsa.DsaIndexerKRow{D,ROPE,EPS} by verity.ml.circuits.evaluation.evaluate_batch (the word reference) -> "
+    "DsaIndexerKRow_v1": "registry.dsa.DsaIndexerKRow{D,ROPE,EPS} by verity.circuits.evaluation.evaluate_batch (the word reference) -> "
                          "the slot's e4m3 bytes, its f32 scale",
-    "DsaIndexerQ_v1": "registry.dsa.DsaIndexerQ{H,D,ROPE} by verity.ml.circuits.evaluation.evaluate_batch (the word reference) -> "
+    "DsaIndexerQ_v1": "registry.dsa.DsaIndexerQ{H,D,ROPE} by verity.circuits.evaluation.evaluate_batch (the word reference) -> "
                       "index_q_fp8 [H, D] e4m3, index_weights_out [H] f32",
-    "MoeRouterSigmoidBias_v1": "registry.moe.MoeRouterSigmoidBias{E,TOPK,SCALE,KERNEL} by verity.ml.circuits.evaluation.evaluate_batch (the "
+    "MoeRouterSigmoidBias_v1": "registry.moe.MoeRouterSigmoidBias{E,TOPK,SCALE,KERNEL} by verity.circuits.evaluation.evaluate_batch (the "
                                "word reference: _moe_C.grouped_topk's sigmoid, biased top-k and renormalisation) -> router_w f32, router_ids i32",
 }
 
@@ -221,10 +221,10 @@ def rope_head_gptj(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[s
 
 def _reference(definition: Any, names: tuple[str, ...], statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """`definition` bound at `statics` on one row by core's word reference, its return value split into its Tuple fields (`names`)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.evaluation.batch import type_dtype
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation.batch import type_dtype
+    from verity.circuits.evaluation.reference import signature_of
     d = bind(definition, **statics)
     params, ret = signature_of(d)
     if len(ops) != len(params):
@@ -283,8 +283,8 @@ _EXPERT_ARG = {"MoeExpertFp8Gemm_v1": 2, "MoeExpertFp8GemmW_v1": 2}
 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import b1, boolean_rope, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
     from verity.ml.definitions.registry import ll_bf16, moe, sparse_mla_split
     hop = hopper.HopperBF16WgmmaDot16

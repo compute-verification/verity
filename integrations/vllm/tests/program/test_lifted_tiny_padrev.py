@@ -23,13 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 L = pytest.importorskip("verity.ml.definitions.registry.lifted")
 
-from verity.ml.circuits import Program  # noqa: E402
+from verity.circuits import Program  # noqa: E402
 from verity.ml.definitions.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
 from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
 from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
 from tests.program import test_lifted_tiny as T  # noqa: E402  (`test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.circuits.types import Array, Value  # noqa: E402
 
 RNG = np.random.default_rng(20260920)
 

@@ -79,7 +79,7 @@ verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
 verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json
 verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
-verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json
+verity/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 integrations/vllm/data/logs/m1.jsonl.gz
 integrations/vllm/data/logs/m6/log.jsonl.gz
@@ -174,20 +174,20 @@ integrations/vllm/workloads/workload_llama32_1b_32x16_1req.json
 integrations/vllm/workloads/workload_phi3_mini_32x16_1req.json
 integrations/vllm/workloads/workload_qwen05_32x16_1req.json
 integrations/vllm/workloads/workload_qwen15_32x16_1req.json
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz
-verity/ml/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz
-verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json
-verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz
-verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json
-verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
-verity/ml/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json
-verity/ml/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total.json
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16
+verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json
+verity/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total.json
 
 # Pre-move fixture paths (the layout move, 378453fb3): a checkout that fetched fixtures before the move still holds them here,
 # and `git add -A` would sweep them in. Exact files only, so a stale gate path to a moved directory still fails test_gate_paths.

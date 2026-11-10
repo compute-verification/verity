@@ -1,4 +1,4 @@
-"""`core_requirement` against `verity.ml.circuits.requirement`, through the core difftest harness (`verity/core/difftest`).
+"""`core_requirement` against `verity.circuits.requirement`, through the core difftest harness (`verity/core/difftest`).
 
 `requirement-difftest` (`CircuitRequirement.Difftest.table`) serves `requirement`: an instance's live and read values at
 each step, their bits, by value and by block, those in complete blocks (the credited ones) and their bits, the resident
@@ -16,7 +16,7 @@ devices (sometimes in lockstep, with windows that bound their steps from inside 
 without a tick, which both refuse), and malformed instances, which both refuse. Then Programs
 end to end, each through `requirement.execution`, `pack` and
 `placed`, where Lean must find the honest store and plans W's at every step: the toy decoder of
-`verity/ml/circuits/tests/test_requirement.py`, and two rows of the vLLM registry, `b1.Serve` at the vLLM tests' tiny
+`verity/circuits/tests/test_requirement.py`, and two rows of the vLLM registry, `b1.Serve` at the vLLM tests' tiny
 configuration (a two-layer model's prefill of three tokens and two decode steps, 37,172 gates) and
 `b1.RMSNormFusedCudaV1` at N = 64.
 """
@@ -35,12 +35,12 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.ml.circuits import requirement as R
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.ops import fp32
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import requirement as R
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ops import fp32
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 
 LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

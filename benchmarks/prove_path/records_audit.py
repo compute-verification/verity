@@ -144,7 +144,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
+from verity.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from

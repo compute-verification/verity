@@ -13,7 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8 keys (whose V rows `AttnBlockFirst_v1` pads to
     a k-step), and `AttnBlockFirst_v2` at those two first blocks with a key's value in 4 slices of 4 columns, also at Ampere's
     k16 step (FA2's on sm_80 and sm_89)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF, hopper, prims as P
 
     fa2 = {"D": 16, "BN": 32, "MASKED_FROM": 1, "DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}

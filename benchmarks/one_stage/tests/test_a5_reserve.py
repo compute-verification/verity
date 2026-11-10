@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
 

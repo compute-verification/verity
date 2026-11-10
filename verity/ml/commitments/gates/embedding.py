@@ -44,12 +44,12 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO, const_bits
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO, const_bits
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, Tuple
 
 from ..merkle import merkle_depth
 from ..rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row

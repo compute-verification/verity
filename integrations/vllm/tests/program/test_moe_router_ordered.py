@@ -12,10 +12,10 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.codec import encode_program
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits.evaluation import evaluate
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.registry import moe
 

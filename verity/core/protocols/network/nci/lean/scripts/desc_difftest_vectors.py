@@ -12,7 +12,7 @@ every expansion: the description-sized check against the unrolled one, on the sa
 
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
 across its arrays' rows (`transposed`), then each distinct descriptor
-the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
+the circuits fixtures hold (`verity/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
 `NciCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
@@ -36,12 +36,12 @@ import random
 from fractions import Fraction
 from pathlib import Path
 
-import verity.ml.circuits
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Strided, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+import verity.circuits
+from verity.circuits import codec
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Strided, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -59,7 +59,7 @@ reference = vectors.reference
 COUNT = 3000
 PER_FIXTURE = 24
 TRANSPOSED = 0.25
-FIXTURES = Path(verity.ml.circuits.__file__).resolve().parent / "tests"
+FIXTURES = Path(verity.circuits.__file__).resolve().parent / "tests"
 MALFORMED = vectors.MALFORMED
 
 
@@ -466,13 +466,13 @@ def write(out: Path, count: int | None = None) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits reads the programs")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits reads the programs")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=None, help="the first N instances (default: all, `total()`)")
     a = ap.parse_args()
-    here = Path(verity.ml.circuits.__file__).resolve()
+    here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.ml.circuits comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

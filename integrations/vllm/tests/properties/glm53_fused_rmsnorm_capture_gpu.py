@@ -345,7 +345,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 
 def bind_check() -> dict[str, Any]:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.definitions import boolean as SW
     from verity.ml.definitions.registry import dsa_norm as DN
 
@@ -369,8 +369,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.ml.definitions.registry import dsa_norm as DN
 
     (r0, r1), N = job["span"], job["N"]

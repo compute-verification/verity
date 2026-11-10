@@ -1526,7 +1526,7 @@ LEDGER_SOURCES = {
 
 class PostSeedVerdict(Protocol):
     """The stacking property's verdict on the circuits that wrote a session's post-seed blocks (P(c, R_in, L),
-    `verity.ml.circuits.stacking`), as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most
+    `verity.circuits.stacking`), as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most
     the carriers among a window's post-seed blocks can hold when its certified reads are `read_bytes`,
     R_in·L + (c_ρ·read_bytes·L/E)·b, the side capacity the guarantee adds to c.  That the verdict is of the circuits
     that wrote this session's appends is the property's proof to bind and check, not the ledger's."""
@@ -1540,14 +1540,14 @@ class PostSeedVerdict(Protocol):
 class RequirementLink(Protocol):
     """The served circuit's requirement, linked to a session's passes (Lean's `Accounting.Requirement`), as `ledger`
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
-    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
+    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
     the proof blocks have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
     map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
     gather that may select one included (the memory-map unit; `memory_map.py`), both units Definitions of
-    `verity.ml.circuits.requirement_units`.  The link
+    `verity.circuits.requirement_units`.  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A

@@ -35,8 +35,8 @@ import sys
 import time
 from pathlib import Path
 
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.ops.boolean import softmax as SM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import softmax as SM
 
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from . import circuit_types as CT
@@ -172,7 +172,7 @@ def table_gates(table: str) -> dict:
     (they are its constant); a program table's every bit does. The table is constants in the XOR sums."""
     if table not in _TABLE_GATES:
         import numpy as np
-        from verity.ml.circuits import library
+        from verity.circuits import library
 
         n, width = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
         words = np.asarray(gf2.table(table), dtype=np.uint32)
@@ -240,7 +240,7 @@ class CircuitTypeTable:
     def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
         circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
-        from verity.ml.circuits import library
+        from verity.circuits import library
 
         _patch()
         types, root, names = TT.trace_types(build, label or library.PROGRAM)
@@ -386,15 +386,15 @@ _PRIMS: dict | None = None
 
 
 def prims() -> dict:
-    """Every registered PrimitiveDefinition by id (verity.ml.circuits.ops and the vLLM registry modules)."""
+    """Every registered PrimitiveDefinition by id (verity.circuits.ops and the vLLM registry modules)."""
     global _PRIMS
     if _PRIMS is None:
         import importlib
         import pkgutil
 
-        from verity.ml.circuits.defs import PrimitiveDefinition
+        from verity.circuits.defs import PrimitiveDefinition
 
-        mods = ["verity.ml.circuits.ops.prims"]
+        mods = ["verity.circuits.ops.prims"]
         import verity.ml.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
@@ -485,7 +485,7 @@ class Walker:
                     acc = C.input("in32", 32)
                     C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                     return C
-            from verity.ml.circuits import library
+            from verity.circuits import library
 
             self.cache[key] = self.reg.type_of(build, f"tensor-core k-step unit ({pid}, total)", "tc-step", library.definition_label(pid))
             gc.collect()
@@ -786,9 +786,9 @@ class Commitments:
         self.openings = walker.openings
 
     def of(self, fn) -> str:
-        from verity.ml.circuits.codec import descriptor_id
-        from verity.ml.circuits.cut import separable
-        from verity.ml.circuits.defs import PrimitiveDefinition
+        from verity.circuits.codec import descriptor_id
+        from verity.circuits.cut import separable
+        from verity.circuits.defs import PrimitiveDefinition
         import verity.ml.definitions.word as WQ
 
         fid = descriptor_id(fn)
@@ -867,8 +867,8 @@ class Commitments:
         from collections import Counter
 
         import numpy as np
-        from verity.ml.circuits.codec import descriptor_id
-        from verity.ml.circuits.layout import WIDE_FAN_IN
+        from verity.circuits.codec import descriptor_id
+        from verity.circuits.layout import WIDE_FAN_IN
 
         G = WQ.Graph(fn)
         R = WQ.units(G, X_BITS, W_BITS)
@@ -876,7 +876,7 @@ class Commitments:
         own2, _k, head = WQ.partition(G, X_BITS)
         if not (own2 == owner).all():
             raise AssertionError(f"{fid}: the partition is not deterministic")
-        from verity.ml.circuits.cut import call_scope
+        from verity.circuits.cut import call_scope
         c, call = call_scope(fn)
         lo = call.offset
         leaves = _leaf_lookup(fn.signature()[0])
@@ -1006,7 +1006,7 @@ def _empty(fid, gates) -> dict:
 def _leaf_lookup(params):
     """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
     parameter has over 10^8)."""
-    from verity.ml.circuits.types import Array, RecordType, Tuple
+    from verity.circuits.types import Array, RecordType, Tuple
 
     starts, names, types, o = [], [], [], 0
     for name, t in params:
@@ -1463,7 +1463,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     q = g.get("q_word_v1") or {}
     try:
         if g["definition"] in OPENED and GATHERS == "opening":
-            from verity.ml.circuits.defs import PrimitiveDefinition
+            from verity.circuits.defs import PrimitiveDefinition
 
             fn = specialization(g["definition"], g["statics"])
             cm.openings.update(n.fn.id for n in fn.body.nodes if isinstance(n.fn, PrimitiveDefinition) and n.fn.id.startswith("Gather"))
@@ -1536,7 +1536,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
 
 
 def _library_digest() -> str:
-    from verity.ml.circuits import library
+    from verity.circuits import library
 
     return library.digest()
 

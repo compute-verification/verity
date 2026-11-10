@@ -611,8 +611,8 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
     from verity.ml.definitions.registry import b1
 
     nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
@@ -1689,8 +1689,8 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     """The evaluator provenance a record carries names the total family (`silicon_total.TOTAL_FAMILY_VERSION` /
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
-    without verity.ml.circuits); this test holds them equal to the constants the step is evaluated with."""
-    from verity.ml.circuits.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    without verity.circuits); this test holds them equal to the constants the step is evaluated with."""
+    from verity.circuits.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
 
     ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
@@ -1705,8 +1705,8 @@ def test_moe_evaluators_equal_the_registered_definitions():
     """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.program import Program
+    from verity.circuits.defs import bind
+    from verity.circuits.program import Program
     from verity.ml.definitions.registry import moe as R
     from verity.ml.definitions.numerics.serve3_reference import materialize
 

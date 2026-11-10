@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import flashmla_twin as FT
 from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
@@ -281,7 +281,7 @@ SAMPLES = {
 def _targets(defs: dict, family: str) -> list:
     """The specialisations the self-check binds: the kernels' columns, norms and groups at the served widths, the composites
     at D = 32."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     eps = 1e-6
     statics = {

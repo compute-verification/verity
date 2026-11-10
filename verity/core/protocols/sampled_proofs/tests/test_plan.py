@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import query
-from verity.ml.circuits.layout import FunctionCall
+from verity.circuits import query
+from verity.circuits.layout import FunctionCall
 from verity.core.protocols.sampled_proofs.plan import DEFAULT_CLASS, Obligation, UnconditionalObligation, VerificationPlan, weight_binding_plan
 
-RUNNING_EXAMPLE = Path(__file__).resolve().parents[4] / "ml" / "circuits" / "tests" / "test_running_example.py"
+RUNNING_EXAMPLE = Path(__file__).resolve().parents[4] / "circuits" / "tests" / "test_running_example.py"
 
 
 def _running_example():

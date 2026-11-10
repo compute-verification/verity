@@ -25,15 +25,15 @@ is over circuit-check's partition budget.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.census import silicon_step
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.silicon import fp as FP
-from verity.ml.circuits.boolean.forms import OR, add, and_reduce, mux, or_reduce
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits import boolean as BL
+from verity.circuits.census import silicon_step
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.silicon import fp as FP
+from verity.circuits.boolean.forms import OR, add, and_reduce, mux, or_reduce
+from verity.circuits.boolean.trace import definition
 from verity.ml.definitions.registry import boolean_dsa as BD
 from verity.ml.definitions.registry import boolean_moe as BMOE
 from verity.ml.definitions.registry import mhc as M
