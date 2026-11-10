@@ -1,0 +1,10 @@
+module
+
+public import PouwWindow.Difftest
+
+/-! The port's difftest server (`verity/difftest`): the functions of `PouwWindow.Difftest` behind
+`Difftest.serve`, which `tests/test_difftest.py` drives against `window.py`. -/
+
+@[expose] public section
+
+def main : IO Unit := Difftest.serve PouwWindow.Difftest.table

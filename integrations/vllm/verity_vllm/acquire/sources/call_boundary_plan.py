@@ -281,8 +281,8 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
 
 def _definition(spec: str) -> tuple[Any, list[Any]]:
     """The registered Definition a Call's spec names and its parameters."""
-    from verity.ml.circuits.evaluation.reference import signature_of
-    from verity.ml.definitions.call_scope import specialization
+    from verity.circuits.evaluation.reference import signature_of
+    from verity.definitions.call_scope import specialization
     from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
 
@@ -355,7 +355,7 @@ class _Context:
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
-            from verity.ml.definitions.numerics import kernel_registry, rows
+            from verity.definitions.numerics import kernel_registry, rows
 
             try:
                 d, params = _definition(spec)
@@ -373,7 +373,7 @@ class _Context:
         return spec
 
     def literal(self, cid: int) -> str:
-        from verity.ml.circuits.evaluation import evaluate
+        from verity.circuits.evaluation import evaluate
 
         spec = self.definition(cid)
         if spec not in self.plan.literals:
@@ -650,7 +650,7 @@ def of_json(doc: Mapping[str, Any]) -> Plan:
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
                       shared: dict | None = None) -> dict[str, np.ndarray]:
     """Target name -> its [R, f * width] words ([1, f * width] for a step-shared target): `tpl` over R rows, level by level, one
-    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity.ml.definitions.numerics.rows` where one is,
+    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity.definitions.numerics.rows` where one is,
     the reference for the rest and for what a kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined
     instance a ValueError).  `operands[k]` = forward argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read
     as a broadcast view (never copied per row); `shared` = the step-shared Values by form, kept across steps by the caller (weights and
@@ -670,8 +670,8 @@ def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.n
 def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.ndarray], ops: Sequence[np.ndarray],
          weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
     """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
     vals: dict[int, np.ndarray] = {}
 
@@ -702,11 +702,11 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
 def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
     """`d` on every row of `arrays` by its row kernel alone (its batch form where it has one: `kernel_registry.register`); an
     instance the kernel declines is a ValueError naming it."""
-    from verity.ml.circuits.evaluation import kernels
-    from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-    from verity.ml.circuits.evaluation.reference import signature_of, statics_of
-    from verity.ml.definitions.numerics.kernel_registry import Declined, instance
-    from verity.ml.definitions.numerics.rows import KERNEL
+    from verity.circuits.evaluation import kernels
+    from verity.circuits.evaluation.batch import type_dtype, type_shape
+    from verity.circuits.evaluation.reference import signature_of, statics_of
+    from verity.definitions.numerics.kernel_registry import Declined, instance
+    from verity.definitions.numerics.rows import KERNEL
 
     params, ret = signature_of(d)
     statics = statics_of(d)

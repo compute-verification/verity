@@ -10,7 +10,7 @@ The binding is two keys of the registration's window provenance (`binding`, `tp.
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
 covers and the coins commit to before sampling, so the sample comes after both are fixed and the record gains no field.  The advice
 is not published: its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
-zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
+zero-padded, under `verity.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
 compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
 
 * **The prover** commits the window from a rank's sealed bundle over the compiler's Programs for the advice (`commit_window`:
@@ -59,13 +59,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.commitments import advice as AC
-from verity.ml.windows import interface as IF
+from verity.circuits.codec import canonical_json
+from verity.commitments import advice as AC
+from verity.windows import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity.core.protocols.certifier.advice"
+I1 = "verity.protocols.certifier.verifier.advice"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")

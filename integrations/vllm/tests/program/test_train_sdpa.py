@@ -9,9 +9,9 @@ import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import CC, _bits, _data, _meta, _program
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import fa2_train as FT
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import fa2_train as FT
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules

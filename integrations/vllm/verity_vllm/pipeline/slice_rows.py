@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline.serving_templates import SLICES, Template, _bind, template
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -74,7 +74,7 @@ def read(m: CS.Member, rows: Sequence[tuple[str, Any, dict, dict]], store: Any, 
 
 def dims(ty: Any) -> list[int]:
     """A parameter type's dimensions, outermost first (none for a scalar)."""
-    from verity.ml.circuits.types import Array
+    from verity.circuits.types import Array
 
     out = []
     while isinstance(ty, Array):
