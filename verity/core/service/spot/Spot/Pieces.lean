@@ -203,11 +203,14 @@ def fanout (j : Json) : V Json := do
     ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
-(`Partition.fanout?`), whatever the record. -/
+(`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
+record. -/
 def registration (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   let cs := (Registration.check (getD j "record") v).map Json.str
-  return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList)
+  let through := Registration.tiedThrough v
+  return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
+    ++ (if through.isEmpty then [] else [("tied", Lean.toJson through)]))
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/

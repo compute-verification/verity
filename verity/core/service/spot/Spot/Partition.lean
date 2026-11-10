@@ -334,4 +334,23 @@ alone (`sharedInputs`). -/
 def readAlone (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Bool :=
   ((templateRanges? p query).map (sharedInputs p.prog · held)).all (·.isEmpty)
 
+/-- The run Input nodes of a template query's partition, outside the gates `held`, that its proof blocks don't each
+read alone (`sharedInputs`); none for another query or one that doesn't apply. -/
+def shared? (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Array Nat :=
+  ((templateRanges? p query).map (sharedInputs p.prog · held)).getD #[]
+
+/-- Whether root node `i`'s gates lie in `[first, first + count)` (`partition.within`). -/
+def within (P : Flock.Program.Prog) (first count i : Nat) : Bool :=
+  let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
+  first ≤ offs.getD i 0 && offs.getD (i + 1) 0 ≤ first + count
+
+/-- Whether the root's nodes whose gates lie in `[first, first + count)` are run Input nodes, and one does
+(`partition.run_inputs`): a parameter R8 may let through as tied is one the run binds. -/
+def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
+  let nodes := Flock.Registered.rootNodes P
+  let inside := (List.range nodes.size).filter (within P first count)
+  !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.RUN
+    | none => false
+
 end Spot.Partition

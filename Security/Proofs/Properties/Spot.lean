@@ -790,6 +790,13 @@ theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array 
   rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
   exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
 
+/-- R8's codes (`Registration.r8Codes`) add none exactly when R8 holds. -/
+theorem r8Codes_nil (v : Registration.Verifier) (c : Array String) :
+    Registration.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
+  unfold Registration.r8Codes R8
+  rw [kept_nil, kept_nil]
+  exact ⟨fun ⟨⟨h, t⟩, r⟩ => ⟨h, t, r⟩, fun ⟨h, t, r⟩ => ⟨⟨h, t⟩, r⟩⟩
+
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
   simp
@@ -839,7 +846,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ R8 v := fun c => kept_nil _ c _
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ R8 v := fun c => r8Codes_nil v c
   have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
       WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v := by
     intro c

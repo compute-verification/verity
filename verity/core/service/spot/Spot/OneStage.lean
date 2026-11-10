@@ -11,8 +11,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
-  `delta` (an exact ratio in (0, 1)); with `registered` not null, also `parameters`, its program function's `[[name,
-  type], ...]`, which the descriptor does not carry (`Registered.params`); and, when it expects values registered, it may
+  `delta` (an exact ratio in (0, 1)); with `registered` not null or `tied` given, also `parameters`, its program
+  function's `[[name, type], ...]`, which the descriptor does not carry (`Registered.params`); and, when it expects
+  values registered, it may
   add `supplied`, the ones it fills itself (`Supplied.sources`: `{value: [[{"port" | "value" | "bytes" | "position" |
   "window": string}, ...], ...]}`), and `pinned`, the roots it held before the record for others (`{value: root}`, each
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
@@ -40,6 +41,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
   an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
   and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  and it may add `tied`, a list of the program's parameters, which needs `parameters` with or without `registered`:
+  run Inputs whose rows a later check ties to the registrations that computed them, which R8 lets through
+  (`Registration.tiedGate`, `R8-tied`), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -220,7 +224,9 @@ private def poolValues (pool : Option Registration.Pool) (program : String) (log
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
-  let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let tiedGiven := (field? j "tied").isSome
+  let keys := if v2 || tiedGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let keys := if tiedGiven then keys.push "tied" else keys
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "pinned").isSome then keys.push "pinned" else keys
   let keys := if (field? j "outputs").isSome then keys.push "outputs" else keys
@@ -259,11 +265,17 @@ def paramsParsed (j : Json) : V Params := do
       if !(getD p "program" matches .str _) || !(getD p "query" matches .obj _) then
         throw "partition names no program digest or query"
       pure (some p)
-  let (registered, params) ← if !v2 then pure (#[], #[]) else do
-    let registered ← (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
+  let registered ← if !v2 then pure #[] else
+    (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
-    pure (registered, ← Registered.params program.desc (getD j "parameters"))
+  let params ← if v2 || tiedGiven then Registered.params program.desc (getD j "parameters") else pure #[]
+  let tied ← match getD j "tied" with
+    | .null => pure #[]
+    | .arr ts => ts.mapM fun t => match t with
+      | .str t => pure t
+      | _ => throw "tied values are a list of the program's parameters"
+    | _ => throw "tied values are a list of the program's parameters"
   let given := [field? j "supplied", field? j "pinned", field? j "outputs"]
   let pool ← match getD j "pool" with
     | .null => pure none
@@ -359,7 +371,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool },
+                                    declared, seedSalt, pool, tied },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
