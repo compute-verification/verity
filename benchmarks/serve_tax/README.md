@@ -1,13 +1,16 @@
 # The serve tax
 
 What each change Verity makes to the serving engine costs on every token served, measured against stock compiled
-vLLM at the integration's pin (d9105ea80) on the same node, workload and SLO. Each arm is one engine configuration of
+vLLM at the integration's pin (d9105ea80) on the same node, workload and SLO, and the serving cost, one number with a
+target (below). Each arm is one engine configuration of
 vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`), its change installed as a vLLM general plugin, and adds
 its change to the arm it names as its parent (`serve_tax.ARMS`):
 
 | arm | its change | parent |
 |---|---|---|
 | `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
+| `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
+| `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -42,6 +45,49 @@ The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts 
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
 (`ignore_eos`) so that every arm serves the same tokens, sent by the corpus's streaming client. A job serves each arm in
 one server lifetime: a warm-up, then each load REPS times, rep by rep, each from an empty prefix cache.
+
+## The serving cost
+
+One number: how much more serving compute an arm needs than stock for the same traffic within the SLO, in percent of
+stock's serving compute (lower is better), with the loads sent by vLLM's own benchmark client (`vllm bench serve` at the
+pin) in place of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of its header's last form:
+
+~~~text
+research run --on NODE --source . --cwd source --send SHAREGPT.json --env BOUNDARY_ROWS=JSON -- \
+  bash benchmarks/serve_tax/run.sh --model glm53 --dataset chat=SHAREGPT.json
+~~~
+
+- **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. `chat` is the load of vLLM's standing
+  serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length, from a file in
+  ShareGPT's format that `--dataset chat=FILE` names. `random` is the client's synthetic prompts, which need no file.
+- **A rung** is a concurrency the client holds (`--request-rate inf --max-concurrency RUNG`): it sends the next request
+  when one ends, as vLLM's standing tests do. A fixed arrival rate can't carry this number: below capacity goodput only
+  repeats the rate, and at capacity the queue grows for as long as the pass lasts. `--loads chat=12+16+24` names the
+  rungs; a load's own are a first ladder, to find where stock peaks.
+- **A pass** is a load at a rung, `<load>@<rung>`. An arm serves each pass REPS times in one server lifetime, each from
+  an empty prefix cache, every request greedy and decoding to its length (`--ignore-eos`), the same prompts under one
+  seed. `<load>@<rung>/rep-<r>/result.json` is the result the client saved, and the table's figures for a pass are the
+  client's own.
+- **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is stock's best goodput over the arm's,
+  less one. Goodput is the client's "Request goodput": requests a second within the model's SLO (TTFT and time per output
+  token). Each side's best is at the rung where its mean over reps is largest, so each arm is read at its own operating
+  point. The 95% interval is over reps, from the spread of the two arms' ratio rep by rep. The number is the largest
+  of the loads' costs.
+- **The verdict** against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the whole interval
+  is at or under the target, `misses` where all of it is over, else `cannot tell`. `compiled-again` gives the noise
+  floor, which reps inside one server lifetime don't see, and the verdict widens the interval by it at each end. An arm
+  that meets the SLO for no request at any rung has no finite cost and misses; the same ratio of output tokens a second
+  is printed beside every cost.
+- **The arms** are by default `compiled`, `compiled-again` and `boundary-rows`, and the cost is of the last one named.
+  `--arms all` adds `record` and `no-prefix-cache`. Each arm's cost is printed over stock and over the nearest arm above
+  it that ran, with its share of the whole for the arms from the measured one up to stock.
+- **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
+  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's, fed by the
+  stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+
+It writes `serving_cost.txt`, whose first line is the number with its interval, target and verdict, and
+`serving_cost.json`, one object whose first keys are `value`, `unit`, `commit` and `run`. `--json` prints the object
+last, and `serve_tax.py cost ARM_DIR... --json` prints it alone from a finished job's arm directories.
 
 ## Running it
 

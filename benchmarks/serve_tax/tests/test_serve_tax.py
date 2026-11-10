@@ -758,3 +758,26 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
         assert bool(ours) == bool(arm_.plugin or arm_.tick), a
     assert S.same_engine("compiled", "compiled-again") and not S.same_engine("compiled", "no-prefix-cache")
     assert not S.same_engine("compiled", "record") and not S.same_engine("compiled", "absent")
+
+
+def run_sh(*flags: str, **env: str) -> tuple[int, str]:
+    """run.sh's flags, read before it asks for the research run it needs: what it refuses, and its exit code."""
+    import subprocess
+
+    p = subprocess.run(["bash", str(S.HERE / "run.sh"), *flags], capture_output=True, text=True,
+                       env={"PATH": S.os.environ["PATH"], **env})
+    return p.returncode, p.stdout + p.stderr
+
+
+def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
+    assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
+                                    "--target, --json)\n")
+    assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
+    rc, out = run_sh("--model", "glm53")              # the default arms end in boundary-rows, which needs its object
+    assert rc == 2 and out == "serve-tax: the boundary-rows arm needs BOUNDARY_ROWS, its JSON object (README.md)\n"
+    rc, out = run_sh("--model", "glm53", "--arms", "compiled compiled-again", "--json")
+    assert rc != 0 and "run this under research run" in out        # past the flags: only the run is missing
+    rc, out = run_sh(ARMS="compiled", RATES="light=1")             # the corpus client's form is untouched
+    assert rc != 0 and "run this under research run" in out
+    sh = (S.HERE / "run.sh").read_text()
+    assert 'cost "${dirs[@]}" --arm "${ARMS##* }"' in sh and '--client vllm-bench --loads "$LOADS"' in sh
