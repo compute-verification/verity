@@ -27,13 +27,19 @@ with code it tests (a module that lands in that suite's directory from outside i
 suite's: under 3 what it imports must land in that suite's inputs.
 
 Rows decide 1 and 2. 3 is decided by rows only where one new directory holds all of an input's files; elsewhere the
-suite's inputs need an edit after the move, and the check prints the directories they would need.
+suite's inputs need an edit after the move, and the check prints the entries to add (`needs`). An entry is a directory
+only where the files under it after the move were under the suite's inputs today, all of them or all but one in ten,
+whose count it prints; elsewhere it is the directory's children, down to the module. So no entry is `verity`.
 
 With no map it checks REF's tree as it is, which passes all three. Imports are read from the source (`import`, `from`),
 resolved under the first map's `[roots] old`; a module loaded by path or by name at run time is not seen, and one imported
 where no test runs is. So 3 is wider than the read guard, and each finding says whether the import runs when a test file is
 imported (`at_import`: outside every function and `if TYPE_CHECKING:`), which the guard is sure to see. The last line
-says how many imports are outside their suite's inputs on REF already, which 3 counts none of."""
+says how many imports are outside their suite's inputs on REF already, which 3 counts none of.
+
+3 is also narrower than the read guard in one way: it follows modules, and not the `__init__.py` of each package above
+a module, which Python runs and the guard counts. Where a module lands under packages its suite's inputs don't hold,
+the suite needs those `__init__.py` too, and neither the count nor the entries to add have them."""
 from __future__ import annotations
 
 import argparse
@@ -271,7 +277,40 @@ def check(m: Moved) -> dict:
                     "at_import": f in opened,
                     "holds_it_after": m.new[f][: -len(rest)] if m.new[f].endswith(rest) and len(rest) < len(m.new[f])
                     else posixpath.dirname(m.new[f])})
-    return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()),
+
+    after = {m.new[f]: f for f in m.files}                      # each path after the maps, and the file it is today
+    kids = defaultdict(set)
+    for n in after:
+        while n:
+            kids[posixpath.dirname(n)].add(n)
+            n = posixpath.dirname(n)
+
+    def entries(mine: set[str], need: set[str]) -> tuple[list[str], dict[str, int]]:
+        """The inputs that hold `need` after the maps, and how many files each brings that are not `mine`."""
+        more = {}
+
+        def cover(d: str) -> tuple[int, int, list[str]]:
+            if d in after:
+                return 1, after[d] not in mine, [d] if d in need else []
+            files, new, picks = 0, 0, []
+            for k in sorted(kids[d]):
+                n, x, es = cover(k)
+                files, new, picks = files + n, new + x, picks + es
+            if d and picks and (not new or ("/" in d and new * 10 <= files)):
+                picks = [d]
+                more[d] = new
+            return files, new, picks
+
+        picks = cover("")[2]
+        return picks + sorted(need - set(after)), {e: more[e] for e in picks if more.get(e)}
+
+    needs = []
+    for p in sorted({x["suite"] for x in lost.values()}):
+        covers = [path for q in (p, *(q for _, q in sent[p])) for _, path in inputs_of(q)]
+        mine = {f for f in m.files if any(path == "." or under(f, path) for path in covers)}
+        add, more = entries(mine, {x["lands"] for x in lost.values() if x["suite"] == p})
+        needs.append({"suite": p, "suite_lands": m.new[p], "add": add, "more_than_today": more})
+    return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()), "needs": needs,
             "loads_archive": sorted(loads.values(), key=lambda x: x["module"]), "archived_with_code": with_code,
             "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values())}
 
@@ -324,11 +363,9 @@ def main(argv: list[str] | None = None) -> int:
     for x in r["loads_archive"]:
         print(f"  goes to archive/ and is still imported: {x['module']} (by {x['imported_by']}; the tests of {len(x['suites'])} "
               f"suite{'s' if len(x['suites']) != 1 else ''} reach it)")
-    needs = defaultdict(set)
-    for x in r["inputs"]:
-        needs[x["suite_lands"]].add(x["holds_it_after"])
-    for suite, dirs in sorted(needs.items()):
-        print(f"  {suite}: its inputs would also need {', '.join(sorted(dirs))}")
+    for x in sorted(r["needs"], key=lambda x: x["suite_lands"]):
+        add = [e + (f" ({n} files more than today)" if (n := x["more_than_today"].get(e)) else "") for e in x["add"]]
+        print(f"  {x['suite_lands']}: add to its inputs {', '.join(add)}")
     if r["reached"]:
         today = r["outside_today"]
         print(f"  not counted: {len(today)} of the {r['reached']} imports (a suite and a module its tests reach) are outside the "

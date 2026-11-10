@@ -122,6 +122,13 @@ def test_an_imported_module_outside_the_inputs_is_named(repo: Path) -> None:
     assert (r["orphans"], r["parted"]) == ([], [])
     assert [(x["module"], x["lands"], x["imported_by"], x["holds_it_after"]) for x in r["inputs"]] == [
         ("old/lib/deep.py", "new/elsewhere/deep.py", "old/lib/mod.py", "new/elsewhere")]
+    assert r["needs"] == [{"suite": "old/pkg/pyproject.toml", "suite_lands": "new/pkg/pyproject.toml",
+                           "add": ["new/elsewhere"], "more_than_today": {}}]
+
+
+def test_the_entry_to_add_is_a_directory_only_where_its_files_were_the_suites(repo: Path) -> None:
+    rows = ROOTS + "[paths]\n" + PARTS + '"docs.md" = "new/elsewhere/docs.md"\n[tokens]\n"old/lib/" = "new/lib/"\n'
+    assert [x["add"] for x in suites(repo, rows)["needs"]] == [["new/elsewhere/deep.py"]]
 
 
 def test_an_import_inside_a_function_is_told_from_one_a_test_file_runs(repo: Path) -> None:
