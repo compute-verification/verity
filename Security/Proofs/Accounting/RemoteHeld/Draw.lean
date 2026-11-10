@@ -878,13 +878,7 @@ section Session
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
-<<<<<<< ours
-theorem draws_le (t : Fin n) (ω : DrawCoins n κ X) : D.draws t ω ≤ m :=
-||||||| base
-theorem draws_le (t : Fin n) (ω : Coins n κ X) : D.draws t ω ≤ m :=
-=======
-theorem samples_le (t : Fin n) (ω : Coins n κ X) : D.samples t ω ≤ m :=
->>>>>>> theirs
+theorem samples_le (t : Fin n) (ω : DrawCoins n κ X) : D.samples t ω ≤ m :=
   (min_le_right _ _).trans (Nat.lt_succ_iff.1 (D.size t ω).isLt)
 
 theorem good_le (t : Fin n) (ω : DrawCoins n κ X) : D.good t ω ≤ D.size t ω :=
@@ -1041,16 +1035,8 @@ theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ
     (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t) = 0 := by
   have hl : ∀ j ω b, D.lands j ω b := fun j ω b ha =>
-<<<<<<< ours
-    (openings_subset _ (min_le_right _ _) (draws_le D j ω) ha).trans (hc j ω)
-  let E : DrawCoins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
-||||||| base
-    (openings_subset _ (min_le_right _ _) (draws_le D j ω) ha).trans (hc j ω)
-  let E : Coins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
-=======
     (openings_subset _ (min_le_right _ _) (samples_le D j ω) ha).trans (hc j ω)
-  let E : Coins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
->>>>>>> theirs
+  let E : DrawCoins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
   have e : ∀ y b, D.distinguisher prf δ t (y, b) ↔ E y :=
     fun y b => ⟨fun h => h.2.2, fun h => ⟨fun j _ => hl _ _ _, hl _ _ _, h⟩⟩
   have h1 : pr (fun x : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ => D.distinguisher prf δ t (x.1, prf t x.2)) =
@@ -1209,22 +1195,10 @@ theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintyp
     D.opened prf rest t ω ⊆ D.correct t ω :=
   fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
-<<<<<<< ours
-/-- `PooledDraw` at one committed session. -/
-theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
-    (com : DrawCoins n κ X → Cm) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
-||||||| base
-/-- `PooledDraw` at one committed session. -/
-theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
-    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
-=======
 /-- `PooledSample` at one committed session. -/
 theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
-    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
->>>>>>> theirs
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
+    (com : DrawCoins n κ X → Cm) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
     (hL : ∀ c, Live (F.view c)) (hR : Refused (F.play com) prf rest T R) (hC : Counted (F.play com) T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
@@ -1277,19 +1251,9 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
 
 /-- `PooledSample` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
 (`hide_const`). -/
-<<<<<<< ours
-theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
+theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
-||||||| base
-theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
-=======
-theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
->>>>>>> theirs
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
