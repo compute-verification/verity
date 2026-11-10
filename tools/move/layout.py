@@ -1554,10 +1554,8 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
     which is spent once read. It refuses a rows file that is not the checkout's own, that holds more than [paths], or a row
     of which changes what the map alone says or moves nothing."""
     tracked = {p for p in git(root, "ls-files", "-z").split("\0") if p}
-    try:
-        rel = rows_file.resolve().relative_to(root).as_posix()
-    except ValueError:
-        rel = None
+    here = rows_file.resolve()
+    rel = here.relative_to(root).as_posix() if here.is_relative_to(root) else None
     if rel not in tracked:
         raise SystemExit(f"{rows_file}: a rows file is its branch's own, committed beside the map in the checkout that moves")
     try:
