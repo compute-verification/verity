@@ -53,9 +53,11 @@ entries, whichever block reads them, so they are counted against `T`; steps 2 an
 (`card_held_sq_le`), so they need the cap on `G` alone and count only the outputs with a wire in a block of `G`
 (`outOn`: at most the output wires in the blocks of `G`, `wiresOn`, themselves at most `O`; `outOn_le_wiresOn`,
 `wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`).
-`counts` is `counts_on` at every block. `bound_on_caps` is step 5 on those counts, with `S = ∑ Π(κ u)` over `G` for
-`m Π(k)` (`real_step_on`), and under (H) at each block's own cap and (E), `bound_on_caps_he` puts
-`κ u² / (4 β_w β_x)` for each `Π(κ u)`. `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one cap.
+Those are the MACs each of whose gates is in the block (`card_whole_eq`). `counts` is `counts_on` at every block.
+`bound_on_caps` is step 5 on those counts, with `S = ∑ Π(κ u)` over `G` for `m Π(k)` (`real_step_on`). Under (H) at
+each block's own cap and its own `β_x`, and (E), `bound_on_rows` puts `κ u² / (4 β_w β_x u)` for each `Π(κ u)`;
+`bound_on_caps_he` is it at one `β_x`, and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one
+cap.
 -/
 
 @[expose] public section
@@ -258,6 +260,15 @@ theorem sum_card_inBlock_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Wo
     exact ⟨g, (mem_filter.1 (mem_sigma.1 hs).2).2 hg, hg⟩
   · by_contra hst
     exact disjoint_left.1 (W.mac_disjoint s t hst) hs.2 ht.2
+
+/-- The MACs block `u` holds, over every matmul, are the MACs each of whose gates is in the block. -/
+theorem card_whole_eq {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) :
+    (univ.filter fun s : W.Mac => W.mac s ⊆ P.gates u).card = ∑ a, (inBlock P W u a).card :=
+  calc (univ.filter fun s : W.Mac => W.mac s ⊆ P.gates u).card
+      = (univ.sigma (inBlock P W u)).card := congrArg Finset.card (Finset.ext fun s =>
+        ⟨fun h => mem_sigma.2 ⟨mem_univ _, mem_filter.2 ⟨mem_univ _, (mem_filter.1 h).2⟩⟩,
+          fun h => mem_filter.2 ⟨mem_univ _, (mem_filter.1 (mem_sigma.1 h).2).2⟩⟩)
+    _ = ∑ a, (inBlock P W u a).card := card_sigma _ _
 
 /-- The words block `u`'s MACs read. -/
 def readWords {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) : Finset (Finset (Fin C.N)) :=
@@ -990,12 +1001,48 @@ theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] 
       _ = (k / 2) ^ 2 * (G.card * T / (βw * βx * b)) := by ring
   linarith [bound_on W P G hk hT]
 
-/-- **The bound over a set of blocks, each under its own cap, under (H) and (E).** `HE`'s premises on the values, with
-(H) at each block of `G`'s own cap `κ u` and (E) at `b > 0`; all the blocks together read at most `T` gates outside
-`θ`. With `Q = ∑_{u ∈ G} (κ u)²`: `N` is at most the MACs the blocks outside `G` hold, plus
-`T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x b))`, with `O_G` the outputs with a wire in a block of `G` (`outOn`),
-at most `O`. (H) at a cap gives it at every smaller one, so (H) at the largest `κ u` is enough; at one cap `k` on `G`,
-`Q = |G| k²` and it is `bound_on_he`. -/
+/-- **The bound over a set of blocks, (H) at each block's own cap and its own `β_x`.** `HE`'s premises on the values
+and (E) at `b > 0`; each block `u` of `G` takes (H) at its own cap `κ u` and its own `β_x u`, so
+`Π(κ u) ≤ κ u² / (4 β_w β_x u)`; all the blocks together read at most `T` gates outside `θ`. With `Q` at least the sum
+over `G` of `κ u² / (β_w β_x u)`: `N` is at most the MACs the blocks outside `G` hold, plus
+`T + ½ √(Q O_G) + ½ √(Q T / b)`, with `O_G` the outputs with a wire in a block of `G` (`outOn`), at most `O`. No block's
+cap or cost is another's. -/
+theorem bound_on_rows {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
+    {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw b Q : ℝ} (P : Partition d.D m)
+    (G : Finset (Fin m)) (κ : Fin m → ℕ) (βx : Fin m → ℝ) (hw : 0 < βw) (hx : ∀ u ∈ G, 0 < βx u) (hb : 0 < b)
+    (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
+    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx u] (κ u))
+    (hE : Assumptions.Exports W b) (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
+    (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) (hQ : ∑ u ∈ G, (κ u : ℝ) ^ 2 / (βw * βx u) ≤ Q) :
+    (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T +
+      1 / 2 * √(Q * outOn P W G) + 1 / 2 * √(Q * T / b) := by
+  have hS : ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) ≤ Q / 4 :=
+    calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) = ∑ u ∈ G, (piMax d W (κ u) : ℝ) := Nat.cast_sum _ _
+      _ ≤ ∑ u ∈ G, (κ u : ℝ) ^ 2 / (βw * βx u) / 4 := sum_le_sum fun u hu =>
+          ((onePremise hw (hx u hu) hval hshare (hH u hu)).1).trans_eq (by ring)
+      _ = (∑ u ∈ G, (κ u : ℝ) ^ 2 / (βw * βx u)) / 4 := (sum_div _ _ _).symm
+      _ ≤ Q / 4 := div_le_div_of_nonneg_right hQ (by norm_num)
+  have hQ0 : (0 : ℝ) ≤ Q / 4 := (Nat.cast_nonneg _).trans hS
+  have hT0 : (0 : ℝ) ≤ T := Nat.cast_nonneg _
+  have hhalf : (0 : ℝ) ≤ 1 / 2 := by norm_num
+  have h1 : √((∑ u ∈ G, piMax d W (κ u) : ℕ) * outOn P W G) ≤ 1 / 2 * √(Q * outOn P W G) := by
+    rw [← sqrt_scaled hhalf]
+    refine Real.sqrt_le_sqrt ?_
+    calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) * outOn P W G
+        ≤ Q / 4 * outOn P W G := mul_le_mul_of_nonneg_right hS (Nat.cast_nonneg _)
+      _ = (1 / 2) ^ 2 * (Q * outOn P W G) := by ring
+  have h2 : √((∑ u ∈ G, piMax d W (κ u) : ℕ) * (T / W.bY)) ≤ 1 / 2 * √(Q * T / b) := by
+    rw [← sqrt_scaled hhalf]
+    refine Real.sqrt_le_sqrt ?_
+    calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) * (T / W.bY)
+        ≤ Q / 4 * (T / b) := mul_le_mul hS (div_bY_le W hb hT0 hE) (div_nonneg hT0 (bY_nonneg W)) hQ0
+      _ = (1 / 2) ^ 2 * (Q * T / b) := by ring
+  linarith [bound_on_caps W P G κ hκ hT]
+
+/-- **The bound over a set of blocks, each under its own cap, under (H) and (E).** `bound_on_rows` at one `β_x`: with
+`Q = ∑_{u ∈ G} (κ u)²`, `N` is at most the MACs the blocks outside `G` hold, plus
+`T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x b))`. (H) at a cap gives it at every smaller one, so (H) at the
+largest `κ u` is enough; at one cap `k` on `G`, `Q = |G| k²` and it is `bound_on_he`. -/
 theorem bound_on_caps_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
     {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw βx b : ℝ} (P : Partition d.D m)
     (G : Finset (Fin m)) (κ : Fin m → ℕ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
@@ -1005,31 +1052,15 @@ theorem bound_on_caps_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableE
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T +
       1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * outOn P W G / (βw * βx)) +
       1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * T / (βw * βx * b)) := by
-  have hS : ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) ≤ (∑ u ∈ G, κ u ^ 2 : ℕ) / (4 * βw * βx) := by
-    rw [Nat.cast_sum, Nat.cast_sum, sum_div]
-    refine sum_le_sum fun u hu => ?_
-    rw [Nat.cast_pow]
-    exact (onePremise hw hx hval hshare (hH u hu)).1
-  have hQ : (0 : ℝ) ≤ (∑ u ∈ G, κ u ^ 2 : ℕ) / (4 * βw * βx) :=
-    div_nonneg (Nat.cast_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le
-  have hT0 : (0 : ℝ) ≤ T := Nat.cast_nonneg _
-  have hhalf : (0 : ℝ) ≤ 1 / 2 := by norm_num
-  have h1 : √((∑ u ∈ G, piMax d W (κ u) : ℕ) * outOn P W G) ≤
-      1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * outOn P W G / (βw * βx)) := by
-    rw [← sqrt_scaled hhalf]
-    refine Real.sqrt_le_sqrt ?_
-    calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) * outOn P W G
-        ≤ (∑ u ∈ G, κ u ^ 2 : ℕ) / (4 * βw * βx) * outOn P W G :=
-          mul_le_mul_of_nonneg_right hS (Nat.cast_nonneg _)
-      _ = (1 / 2) ^ 2 * ((∑ u ∈ G, κ u ^ 2 : ℕ) * outOn P W G / (βw * βx)) := by ring
-  have h2 : √((∑ u ∈ G, piMax d W (κ u) : ℕ) * (T / W.bY)) ≤
-      1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * T / (βw * βx * b)) := by
-    rw [← sqrt_scaled hhalf]
-    refine Real.sqrt_le_sqrt ?_
-    calc ((∑ u ∈ G, piMax d W (κ u) : ℕ) : ℝ) * (T / W.bY)
-        ≤ (∑ u ∈ G, κ u ^ 2 : ℕ) / (4 * βw * βx) * (T / b) :=
-          mul_le_mul hS (div_bY_le W hb hT0 hE) (div_nonneg hT0 (bY_nonneg W)) hQ
-      _ = (1 / 2) ^ 2 * ((∑ u ∈ G, κ u ^ 2 : ℕ) * T / (βw * βx * b)) := by ring
-  linarith [bound_on_caps W P G κ hκ hT]
+  have hQ : ∑ u ∈ G, (κ u : ℝ) ^ 2 / (βw * βx) ≤ ((∑ u ∈ G, κ u ^ 2 : ℕ) : ℝ) / (βw * βx) := by
+    rw [Nat.cast_sum, sum_div]
+    exact sum_le_sum fun u _ => le_of_eq (by rw [Nat.cast_pow])
+  have h := bound_on_rows (W := W) P G κ (fun _ => βx) hw (fun _ _ => hx) hb hval hshare hH hE hκ hT hQ
+  have e1 : ((∑ u ∈ G, κ u ^ 2 : ℕ) : ℝ) / (βw * βx) * outOn P W G =
+      (∑ u ∈ G, κ u ^ 2 : ℕ) * outOn P W G / (βw * βx) := by ring
+  have e2 : ((∑ u ∈ G, κ u ^ 2 : ℕ) : ℝ) / (βw * βx) * T / b = (∑ u ∈ G, κ u ^ 2 : ℕ) * T / (βw * βx * b) := by
+    ring
+  rw [e1, e2] at h
+  exact h
 
 end Nci.Cut.SecurityProofs
