@@ -971,7 +971,8 @@ def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
     if argv[:2] != ["gh", "api"] or f"/contents/{M.CI_TOML}?ref=" not in argv[-1]:
         return None
     text = (refs or {}).get(ref := argv[-1].rpartition("?ref=")[2], CI_TOML)
-    return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else (1, "", f"gh: No commit found for the ref {ref}")))
+    return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else
+                                                (1, "", f"gh: No commit found for the ref {ref}")))
 
 
 def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), logs=None, failure=None, by=""):
@@ -1103,7 +1104,8 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
               steps=[{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"},
                      {"step": "ratchet-gate", "status": "passed", "log": "ratchet-gate.log"}],
               logs={"pytest.log": "FAILED tests/test_a.py::test_b - x\n", "ratchet-gate.log": RATCHET_LOG})
-    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="failed", rc=1, steps=[{"step": "ratchet-gate", "status": "failed"}])
+    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed"}])
 
     def rows():
         script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
@@ -1206,7 +1208,8 @@ def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each
     assert got["r1"].text == ("*Check `r1` failed step `ratchet-gate` on vy-nebius-2* at 20:20Z: its log's first failing line is "
                               "`#12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries`. `ratchet-gate` fails #12 "
                               "`cursor/x-558b`, #14 `cursor/y-8c79`.")
-    assert got["r2"].owners == ("circuits", "vllm", M.LANDER) and got["r2"].text.endswith(" `ratchet-gate` fails #14 `cursor/y-8c79`.")
+    assert got["r2"].owners == ("circuits", "vllm", M.LANDER)
+    assert got["r2"].text.endswith(" `ratchet-gate` fails #14 `cursor/y-8c79`.")
     assert got["r3"].owners == ("lean", M.LANDER) and got["r4"].owners == (M.LANDER,)
     refs["main"] = None                   # nor main's: the lanes and the lander still hear of it, and the post says why
     got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}

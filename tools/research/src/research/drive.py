@@ -180,7 +180,7 @@ from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry,
                     _out, _who, built_on, changed, forces_cold, label_target, lean_change, move_of, on_first_parents, queue_commit,
                     unreviewed)
 from .queue_stats import ts
-from .reds import RATCHET_STEP, job_owner, ratchet_failed, red_owners
+from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner, ratchet_failed, red_owners
 from .store import vocab
 
 #: who hears what drive can't settle
@@ -215,9 +215,8 @@ KILLED_SAYS = "not a kernel verdict"
 #: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`Driver._machine_fault`)
 FAULT_RE = re.compile(r"No space left on device|\bENOSPC\b|\[Errno 28\]|Cannot allocate memory|\[Errno 12\]|\bMemoryError\b"
                       r"|\b[Oo]ut of memory\b")
-#: circuit-check's report of a failure: `FAIL <check> <target>`, and `circuit-check/killed` for a target whose process died
+#: circuit-check's report of a failure: `FAIL <check> <target>`, and `reds.CIRCUIT_KILLED` for a target whose process died
 CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
-CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
 #: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR (its rings are daily), and
@@ -3513,7 +3512,8 @@ class Driver:
         return cache[commit]
 
     def _step_owner(self, step: str, commit: str) -> str | None:
-        """The owner ci.toml at ``commit`` gives job ``step`` (`reds.job_owner`), None for a step it doesn't declare (a preflight)."""
+        """The owner ci.toml at ``commit`` gives job ``step`` (`reds.job_owner`), None for a step it doesn't declare (a
+        preflight)."""
         return job_owner(self._jobs(commit), step)
 
     def _timed(self, drive: dict, kind: str, ids: list[str]) -> None:
