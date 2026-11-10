@@ -8,8 +8,9 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
   deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
   skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1.string_of`). It checks that they are
-  `v1.encode`'s string under a registration that sends no length terms (`advice_code.lengths`): the charge circuits
-  count the window code's segments, and a length term's fixed-width tail isn't among them;
+  `v1.encode`'s string under the registration's default, which sends each request's length term
+  (`advice_code.lengths`): a fixed-width tail after the segment of the window its body lands in. The coder's circuits
+  check the segments, and `ChargeCount_v2` charges the tails too;
 - `fields(trace)`: the derived rules' still-sent fields (`derived.residual`: the hits past the pool bound, the resumes,
   the order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -21,9 +22,10 @@ its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. O
 `ChargeCount_v1`, one window's charge from its decisions alone, to `code_v1` (`check_charges`): its reference on each
 window's decisions and on the decisions cut again into windows of at most `--cut` slots with gaps, and with `--circuit`
 the Definition at that N on the cut. It holds `ChargeCount_v2` (`window_charge`), the whole window's charge with its
-hits and order entries, to `code_v1` too (`check_windows`): its reference on each window at its own sizes (v1's
-charges), on the windows with `SEEDED` hits and order entries added, and on their cut into `WHOLE` slots, and with
-`--circuit` `ChargeLink_v2` on the cut's committed rows. `--steps` takes the
+hits, order entries and length terms, to `code_v1` too (`check_windows`): its reference on each window at its own sizes
+(v1's charges, the tails included), on the windows with `SEEDED` hits, order entries and length terms added, and on
+their cut into `WHOLE` slots, and with `--circuit` `ChargeLink_v2` on the cut's committed rows. Each decisions stream's
+report has its length terms' bits as `ChargeCount_v2` charges them and as v1's string holds them. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the trace-corpus fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
@@ -65,9 +67,10 @@ V, R, C, D, CV = _load("v1"), _load("replay"), _load("code"), _load("derived"), 
 K = 18
 #: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`), and in the fixture's streams, the compile slice's P·A
 CUT, SLICE_CUT = 64, 14
-#: `ChargeCount_v2`'s slots a window (decisions, hits, order entries) in the whole windows' cut, and the hits and order
-#: entries seeded into each decisions stream, since the fixtures' traces send almost none
-WHOLE, SEEDED = (4, 2, 2), (12, 10)
+#: `ChargeCount_v2`'s slots a window (decisions, hits, order entries, length terms) in the whole windows' cut, and the
+#: hits, order entries and length terms seeded into each decisions stream: the fixtures' traces send almost no hits or
+#: order entries, and their length terms' max_tokens are the traffic's few
+WHOLE, SEEDED = (4, 2, 2, 2), (12, 10, 8)
 EOS = 2
 FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
@@ -136,23 +139,30 @@ def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
 
 
 def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "batch", cut: int = CUT,
-              rng: random.Random | None = None, seeded: tuple[int, int] = (0, 0)) -> dict[str, Any]:
+              rng: random.Random | None = None, seeded: tuple[int, int, int] = (0, 0, 0)) -> dict[str, Any]:
     """Advice v1's stream for `trace` (the module's docstring), with its decisions' charges (`decision_charges`) and
-    its whole windows' (`window_charges`)."""
+    its whole windows' (`window_charges`): each window's length terms (max_tokens, output_len), and v1's charges, its
+    segment's bits and its tail's."""
+    from verity_vllm.pipeline.advice_code.codec import lengths
     rec = V.record_of(trace, stops)
     adv = V.advice_of(trace, rec)
-    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order, send_lengths=False)
+    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
     wins = V.residual(adv, rec, reg)
     reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
-    bits, charge = V.string_of(wins, reg)
+    tails = V.length_tails(rec, reg)
+    bits, charge = V.string_of(wins, reg, tails)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
         raise AssertionError("the windows aren't v1.encode's")
+    terms = [[[rec.requests[k].max_tokens, len(rec.requests[k].output)] for k in w] for w in lengths(rec, reg)]
+    if any(len(tail) != 2 * len(t) or tail[0::2] != [(n, mt.bit_length()) for mt, n in t]
+           or any(width != 1 for _f, width in tail[1::2]) for t, tail in zip(terms, tails, strict=True)):
+        raise AssertionError("the length terms aren't v1's tails")
     s = _stream(wins, reg.book)
-    if s["charge"] != charge:
+    if [c - sum(n for _v, n in t) for c, t in zip(charge, tails, strict=True)] != s["charge"]:
         raise AssertionError("the charges aren't v1's")
     rng = rng or random.Random(0)
     s["decisions"] = decision_charges(wins, reg.book, cut, rng)
-    s["window"] = window_charges(wins, reg.book, WHOLE, rng, seeded)
+    s["window"] = {**window_charges(wins, reg.book, WHOLE, rng, seeded, terms), "charge": charge}
     return s
 
 
@@ -241,29 +251,52 @@ def _seed(wins: Sequence[Any], rng: random.Random, n_hits: int, n_order: int) ->
     return [dataclasses.replace(win, hits=tuple(h), order=tuple(o)) for win, (h, o) in zip(wins, out)]
 
 
+def _seed_lengths(terms: Sequence[Sequence[list[int]]], rng: random.Random, n: int) -> list[list[list[int]]]:
+    """`terms` with `n` length terms added at random windows, after the window's own: max_tokens at 0, powers of two
+    and one below, and the u32's top; each output_len 0, the top of bitlen(max_tokens) bits or between."""
+    out = [list(t) for t in terms]
+    for w in sorted(rng.randrange(len(terms)) for _ in range(n)):
+        mt = rng.choice([0, 1, 2, 3, 255, 256, (1 << 16) - 1, 1 << 16, rng.randrange(1 << 32), (1 << 32) - 1])
+        out[w].append([mt, rng.choice([0, (1 << mt.bit_length()) - 1, rng.randrange(1 << mt.bit_length())])])
+    return out
+
+
+def _tails(terms: Sequence[Sequence[list[int]]]) -> list[list[tuple[int, int]]]:
+    """Each window's tail as `code_v1` takes it: each term's output_len in bitlen(max_tokens) bits, then its finish,
+    which no charge reads, in 1."""
+    return [[x for mt, n in t for x in ((n, mt.bit_length()), (int(n == mt), 1))] for t in terms]
+
+
 def _whole(w: Any) -> list:
     return [_bits(w.arrived), list(w.hits), [p for p, _r in w.order], [r[0] for _p, r in w.order]]
 
 
-def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int], rng: random.Random,
-                   seeded: tuple[int, int] = (0, 0)) -> dict[str, Any]:
-    """What `ChargeCount_v2` is held to: the run's own windows, each (decisions, hits, order positions, ranks), whose
-    charges are v1's (`own`); with `seeded`, the same windows with that many hits and order entries added (`_seed`)
-    and `code_v1`'s charge for each (`seeded`); and those windows' values cut again into `code_v1` windows of at most
-    `cut` = (N, H, O) decisions, hits and order entries, each field in its slots in order with disabled slots between,
-    a disabled slot's values random, with `code_v1`'s charge for each (`cut`). The cut's sizes are 0, the slots and
-    random, so its windows reach every bin of each count."""
-    out: dict[str, Any] = {"own": [_whole(w) for w in wins]}
+def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int, int], rng: random.Random,
+                   seeded: tuple[int, int, int] = (0, 0, 0),
+                   terms: Sequence[Sequence[list[int]]] | None = None) -> dict[str, Any]:
+    """What `ChargeCount_v2` is held to: the run's own windows, each (decisions, hits, order positions, ranks, length
+    terms), whose charges are v1's (`own`); with `seeded`, the same windows with that many hits, order entries and
+    length terms added (`_seed`, `_seed_lengths`) and `code_v1`'s charge for each, its tail's included (`seeded`); and
+    those windows' values cut again into `code_v1` windows of at most `cut` = (N, H, O, L) decisions, hits, order
+    entries and length terms, each field in its slots in order with disabled slots between, a disabled slot's values
+    random, with `code_v1`'s charge for each (`cut`). The cut's sizes are 0, the slots and random, so its windows reach
+    every bin of each count."""
+    terms = [list(t) for t in terms] if terms is not None else [[] for _ in wins]
+    out: dict[str, Any] = {"own": [_whole(w) + [t] for w, t in zip(wins, terms, strict=True)]}
     if any(seeded):
-        wins = _seed(wins, rng, *seeded)
-        out["seeded"] = [_whole(w) + [n] for w, n in zip(wins, CV.encode(wins, book).lens, strict=True)]
-    flat = ([b for w in wins for b in w.arrived], [h for w in wins for h in w.hits], [o for w in wins for o in w.order])
-    at, cutwins = [0, 0, 0], []
+        wins = _seed(wins, rng, *seeded[:2])
+        terms = _seed_lengths(terms, rng, seeded[2])
+        out["seeded"] = [_whole(w) + [t, n] for w, t, n in zip(wins, terms, CV.encode(wins, book, _tails(terms)).lens,
+                                                              strict=True)]
+    flat = ([b for w in wins for b in w.arrived], [h for w in wins for h in w.hits], [o for w in wins for o in w.order],
+            [x for t in terms for x in t])
+    at, cutwins, cutterms = [0, 0, 0, 0], [], []
     while any(a < len(f) for a, f in zip(at, flat)):
         n = [min(rng.choice([0, S, rng.randrange(S + 1), rng.randrange(S + 1)]), len(f) - a)
              for S, f, a in zip(cut, flat, at)]
         cutwins.append(CV.Window(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
                                  order=tuple(flat[2][at[2]:at[2] + n[2]])))
+        cutterms.append(flat[3][at[3]:at[3] + n[3]])
         at = [a + k for a, k in zip(at, n)]
 
     def place(S: int, values: Sequence, filler: Callable[[], Any]) -> tuple[list[int], list]:
@@ -272,50 +305,59 @@ def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int], rn
         en = [int(j in slots) for j in range(S)]
         return en, [next(it) if e else filler() for e in en]
 
-    N, H, O = cut
+    N, H, O, L = cut
     rows = []
-    for w, length in zip(cutwins, CV.encode(cutwins, book).lens, strict=True):
+    for w, t, length in zip(cutwins, cutterms, CV.encode(cutwins, book, _tails(cutterms)).lens, strict=True):
         en, bits = place(N, [int(b) for b in w.arrived], lambda: rng.randrange(2))
         hen, short = place(H, list(w.hits), lambda: rng.randrange(1 << 17))
         oen, entries = place(O, list(w.order), lambda: (rng.randrange(1 << 32), (rng.randrange(1 << 25),)))
+        qen, lens = place(L, list(t), lambda: [rng.randrange(1 << 32), rng.randrange(1 << 32)])
         rows.append([_bits(en), _bits(bits), _bits(hen), short, _bits(oen), [p for p, _r in entries],
-                     [r[0] for _p, r in entries], length])
-    return {**out, "N": N, "H": H, "O": O, "cut": rows}
+                     [r[0] for _p, r in entries], _bits(qen), [m for m, _n in lens], [n for _m, n in lens], length])
+    return {**out, "N": N, "H": H, "O": O, "L": L, "cut": rows}
 
 
 def check_windows(stream: dict[str, Any], *, circuit: bool) -> dict[str, Any]:
     """`ChargeCount_v2`'s reference against `code_v1` on `window_charges`' windows, the carry passed along: the own
-    windows, each at its own sizes with every slot enabled, at v1's charges; the seeded ones at theirs; the cut at its
-    (N, H, O) with its gaps. With `circuit`, `ChargeLink_v2` at the cut's statics against the reference on every cut
-    window, on its committed rows."""
+    windows, each at its own sizes with every slot enabled, at v1's charges, the tails included; the seeded ones at
+    theirs; the cut at its (N, H, O, L) with its gaps. The own windows' length terms' bits as `ChargeCount_v2` charges
+    them (`length_bits`) and as v1's string holds them, its charge less the segment's (`length_bits_v1`), and the windows
+    where they differ. With `circuit`, `ChargeLink_v2` at the cut's statics against the reference on every cut window,
+    on its committed rows."""
     WC = _wc()
     book, win = stream["decisions"]["book"], stream["window"]
 
     def chain(rows: Sequence[list], lens: Sequence[int]) -> int:
         carry, bad = WC.window_book(book, 0, 0, 0)[1], 0
-        for (bits, hits, p, r, *_x), length in zip(rows, lens, strict=True):
-            N, H, O = len(bits), len(hits), len(p)
-            ok, got, carry = WC.reference_window(N, H, O, WC.window_book(book, N, H, O)[0], carry, [1] * N,
-                                                 [int(c) for c in bits], [1] * H, hits, [1] * O, p, r)
+        for (bits, hits, p, r, terms, *_x), length in zip(rows, lens, strict=True):
+            N, H, O, L = len(bits), len(hits), len(p), len(terms)
+            ok, got, carry = WC.reference_window(N, H, O, L, WC.window_book(book, N, H, O)[0], carry, [1] * N,
+                                                 [int(c) for c in bits], [1] * H, hits, [1] * O, p, r, [1] * L,
+                                                 [m for m, _n in terms], [n for _m, n in terms])
             bad += not ok or got != length
         return bad
 
-    out = {"whole_windows": len(win["own"]), "whole_hits": sum(len(w[1]) for w in win["own"]),
-           "whole_order": sum(len(w[2]) for w in win["own"]), "whole_mismatches": chain(win["own"], stream["charge"])}
+    own = win["own"]
+    tail = [sum(WC.length_bits(m) for m, _n in w[4]) for w in own]
+    tail_v1 = [c - s for c, s in zip(win["charge"], stream["charge"], strict=True)]
+    out = {"whole_windows": len(own), "whole_hits": sum(len(w[1]) for w in own), "whole_order": sum(len(w[2]) for w in own),
+           "whole_lengths": sum(len(w[4]) for w in own), "length_bits": sum(tail), "length_bits_v1": sum(tail_v1),
+           "max_length_bits": max(tail, default=0), "length_mismatches": sum(a != b for a, b in zip(tail, tail_v1)),
+           "whole_mismatches": chain(own, win["charge"])}
     if "seeded" in win:
         out["seeded_mismatches"] = chain(win["seeded"], [w[-1] for w in win["seeded"]])
-    N, H, O = win["N"], win["H"], win["O"]
-    slots = [([int(c) for c in en], [int(c) for c in bits], [int(c) for c in hen], short, [int(c) for c in oen], p, r)
-             for en, bits, hen, short, oen, p, r, _l in win["cut"]]
+    N, H, O, L = win["N"], win["H"], win["O"], win["L"]
+    slots = [([int(c) for c in en], [int(c) for c in bits], [int(c) for c in hen], short, [int(c) for c in oen], p, r,
+              [int(c) for c in qen], mt, olen) for en, bits, hen, short, oen, p, r, qen, mt, olen, _l in win["cut"]]
     try:
-        ses = WC.session(N, H, O, book, slots)
+        ses = WC.session(N, H, O, L, book, slots)
     except ValueError as e:
         return {**out, "cut_windows": len(slots), "cut_whole_mismatches": len(slots), "cut_refused": str(e)}
     out.update(cut_windows=len(slots), cut_whole_mismatches=sum(s[0] != w[-1] for s, w in zip(ses, win["cut"])))
     if circuit:
         wb = WC.window_book(book, N, H, O)[0]
         cases = [(wb, c_in, c_out, *s) for (_l, c_in, c_out), s in zip(ses, slots)]
-        got = [g for chunk in _chunks(cases) for g in WC.evaluate_links(N, H, O, chunk)]
+        got = [g for chunk in _chunks(cases) for g in WC.evaluate_links(N, H, O, L, chunk)]
         out["window_circuit_mismatches"] = sum(g != (1, s[0]) for g, s in zip(got, ses, strict=True))
     return out
 
@@ -521,7 +563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ok &= not (r["reference_mismatches"] or r["kt_mismatches"] or r["context_mismatches"]
                    or r.get("circuit_mismatches") or r.get("charge_mismatches") or r.get("cut_mismatches")
                    or r.get("charge_circuit_mismatches") or r.get("whole_mismatches") or r.get("seeded_mismatches")
-                   or r.get("cut_whole_mismatches") or r.get("window_circuit_mismatches"))
+                   or r.get("cut_whole_mismatches") or r.get("window_circuit_mismatches") or r.get("length_mismatches"))
         print(f"{name}: {json.dumps(r)}", flush=True)
         kept.append({"source": name, **stream})
     if a.out:
