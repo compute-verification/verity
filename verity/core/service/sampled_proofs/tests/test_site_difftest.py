@@ -93,7 +93,8 @@ SHEET_S = figures(SHEET_A, clock=Fraction(21, 20) * GHZ, uniform_s8=Fraction(21,
 the higher rate it states."""
 A, B, Q, S = SHEET_A.digest(), SHEET_B.digest(), SHEET_Q.digest(), SHEET_S.digest()
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"), ("chal0", ""))),
-           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE)}
+           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE),
+           "remote-network-no-pouw": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"),))}
 NODE = Entry("", (SHEET_A, SHEET_B), (
     Loc("site0", "site"), Loc("node0", "host", "site0"),
     Loc("gpu0", "device", "node0", sheet=A), Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=64 << 30),
@@ -107,6 +108,9 @@ FIRST = {
                              Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0),
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
+    "remote-network-no-pouw": replace(
+        NODE, locs=(*NODE.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key")),
+        links=(Link("uplink0", ("node0", "cert0"), 100_000, 100_000), Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0))),
 }
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
@@ -133,7 +137,7 @@ ENTRIES = {
                                                            Loc("dram1", "memory", "node1", tier="dram", bytes=1)),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
-REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
+ACCEPTS = {"onsite": set(), "remote": {"bare-uplink", "unreached-host"}, "remote-network-no-pouw": {"unreached-host"}}
 LATERS = [e for _, e in ENTRIES.values()]
 
 
@@ -320,7 +324,7 @@ def test_the_lifecycle_cases(server, composite: str, name: str):
     """Each of the 15 later entries draws the same refusal from both sides, and the log it ends is refused at it or
     accepted alike."""
     log, e = case(composite, name)
-    want = None if composite == "remote" and name in REMOTE_ACCEPTS else ENTRIES[name][0]
+    want = None if name in ACCEPTS[composite] else ENTRIES[name][0]
     j = {"auditor": AUDITOR[composite].to_json(), "entry": e.to_json(), "log": log.to_json()}
     out = {"digest": e.digest(), "head": log.head, "refusal": want}
     assert ref_refusal(j) == out
