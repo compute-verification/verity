@@ -27,7 +27,7 @@ Internal, reached only through `runtime.run`'s arguments:
   `SeededCoins` or `OsCoins`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
 
-The served table of `verity run` doesn't go through `runtime.run`: it runs `served_verdicts.sh`.
+The served table of `verity run` doesn't go through `runtime.run`: it runs `benchmarks/one_stage/served_verdicts.sh`.
 
 ## Where to look
 
