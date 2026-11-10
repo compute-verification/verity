@@ -321,9 +321,9 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `δ + ε_ks + ε_bind + Pr[B_tap]`. The period's operator is fixed before the period and the secrets, a function of the
   observations: window `i`'s operator reads only the windows before `i`, closed by then (`runsBefore`), and its own
   window only through the observations before each step. What it reads the count already charged to the earlier
-  windows, so the windows' bounds still multiply, by induction over the windows (`SampledCharge.lean`'s
-  `encard_chain_le`); `PooledLeakAccepted` takes the same operator, and at operators that read no earlier window
-  each is the statement with one operator a window (`periodLeak_fixed`, `pooledLeak_fixed`).
+  windows, so the windows' bounds still multiply, by induction over the windows (`encard_carried_le` at the empty
+  pool); `PooledLeakAccepted` takes the same operator, and at operators that read no earlier window each is the
+  statement with one operator a window (`periodLeak_fixed`, `pooledLeak_fixed`).
   Every proof block outside the incorrect set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
