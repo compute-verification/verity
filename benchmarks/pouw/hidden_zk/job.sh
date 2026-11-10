@@ -78,13 +78,13 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/flock/verifier" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit, the prover's placement of a templated unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/flock/verifier" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && cp "$SRC/verity/ml/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
     && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
@@ -110,7 +110,7 @@ setup() {
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
   [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
-  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key verity/core/service/flock)" build_lean > "$W/lean.dir" &
+  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key verity/flock/verifier)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }

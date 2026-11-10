@@ -1737,6 +1737,14 @@
         "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
         "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/interface/": "verity/flock/verifier/interface/",
+        "verity/core/service/firewall/": "verity/flock/verifier/firewall/",
+        "verity/core/service/flock/": "verity/flock/verifier/",
+        "verity/core/service/vstar/": "verity/flock/verifier/vstar/"
+      }
     }
   ]
 }

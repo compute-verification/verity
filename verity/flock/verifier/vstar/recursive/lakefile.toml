@@ -13,15 +13,15 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"
-path = "../../../protocols/interface"
+path = "../../interface"
 
 [[require]]
 name = "flock_verifier"
-path = "../../flock"
+path = "../.."
 
 [[require]]
 name = "core_spot"
-path = "../../spot"
+path = "../../../../core/service/spot"
 
 [[lean_lib]]
 name = "VStarRecursive"

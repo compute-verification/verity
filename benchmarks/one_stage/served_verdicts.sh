@@ -396,7 +396,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
-  leanb=$TREE/verity/core/service/flock/.lake/build/bin
+  leanb=$TREE/verity/flock/verifier/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
@@ -807,7 +807,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
+  (cd verity/flock/verifier && lake build flock-verify flock-firewall) || return 7
   (cd verity/core/service/spot && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates

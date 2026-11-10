@@ -381,7 +381,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
+PORTED_ROOTS = ("Security/Definitions.lean", "verity/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -3466,7 +3466,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/core/service/flock",)
+LEAN_BUILDS = ("verity/flock/verifier",)
 
 
 def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:

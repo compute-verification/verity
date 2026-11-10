@@ -31,7 +31,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import bit_row
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 EXE = LEAN / ".lake/build/bin/flock-read-tmpl"
 needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 #: (V, H): depth 1 and one segment; depth 3 with a token bound that isn't a power of two; two segments

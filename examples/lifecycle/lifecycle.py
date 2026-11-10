@@ -903,7 +903,7 @@ def label(seed: str, i: int) -> str:
 
 def answer(protocol: str, verdict: str, commitment: str | None, reason: str | None = None,
            public: Any = None, profile: Any = None) -> dict[str, Any]:
-    """`Core.Protocol`'s outcome (`verity/core/protocols/interface`): public outputs and a profile on acceptance only."""
+    """`Core.Protocol`'s outcome (`verity/flock/verifier/interface`): public outputs and a profile on acceptance only."""
     ok = verdict == "accept"
     return {"protocol": protocol, "verdict": verdict, "commitment": commitment, "reason": None if ok else reason,
             "public": public if ok else None, "profile": profile if ok else None}

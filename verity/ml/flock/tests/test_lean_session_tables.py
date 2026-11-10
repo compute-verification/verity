@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from verity_flock.record_text import session_text
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (8 instances) with loopback sessions of several tables: J = 2 without a sample, J = 2 with `--draw subset:4` (two), J = 4

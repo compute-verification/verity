@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 TAPE = LEAN / ".lake" / "build" / "bin" / "flock-frame-tape"
 VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_stop_vectors.json"

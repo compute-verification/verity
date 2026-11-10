@@ -8,7 +8,7 @@ statement, on a fixed schedule. [Flock's live protocol](../../../ml/flock/live/P
 
 Its Lean is two packages, code and not analysis:
 
-- `Flock.Firewall`, in [Flock's Lean verifier](../flock/README.md) and run as `flock-firewall`: the session loop, each
+- `Flock.Firewall`, in [Flock's Lean verifier](../README.md) and run as `flock-firewall`: the session loop, each
   rep's frame, the tap and the coin check, which hold every message to §10's send check;
 - this package, `core_firewall`, the release side (§10.5): the record `firewall/v0`, one Π_out session's decision over
   `Flock.Firewall.Contract`, that decision as a core protocol (`core-firewall`), and the release side around the session

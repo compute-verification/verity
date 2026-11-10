@@ -95,10 +95,10 @@ inputs = [
     "verity/core/protocols/network/nci/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
-    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
+    "verity/flock/verifier/Flock/Zk.lean", "verity/flock/verifier/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
-    "verity/core/service/flock/Flock/Test/RecCap.lean",
+    "verity/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/ml/flock/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
@@ -111,13 +111,13 @@ worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
-artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
-             "verity/core/service/flock/.lake/build/bin/flock-firewall",
-             "verity/core/service/flock/.lake/build/bin/flock-frame-tape",
-             "verity/core/service/flock/.lake/build/bin/flock-rec-sparse",
-             "verity/core/service/flock/.lake/build/bin/flock-witness",
-             "verity/core/service/flock/.lake/build/bin/flock-rec-opening",
-             "verity/core/service/flock/.lake/build/bin/flock-rec-links",
+artifacts = ["verity/flock/verifier/.lake/build/bin/flock-verify",
+             "verity/flock/verifier/.lake/build/bin/flock-firewall",
+             "verity/flock/verifier/.lake/build/bin/flock-frame-tape",
+             "verity/flock/verifier/.lake/build/bin/flock-rec-sparse",
+             "verity/flock/verifier/.lake/build/bin/flock-witness",
+             "verity/flock/verifier/.lake/build/bin/flock-rec-opening",
+             "verity/flock/verifier/.lake/build/bin/flock-rec-links",
              "Security/.lake/packages/mathlib/.lake/build"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -136,8 +136,8 @@ tests = ["tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
     "verity/core/primitives/lms/lean",
-    "verity/core/protocols/interface",
-    "verity/core/service/flock",
+    "verity/flock/verifier/interface",
+    "verity/flock/verifier",
     "verity/core/service/spot",
 ]
 
@@ -244,7 +244,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_randomness_spec.py"]
-paths = ["verity/core/service/flock/Flock/Draw.lean", "verity/core/service/flock/Flock/Hash.lean"]
+paths = ["verity/flock/verifier/Flock/Draw.lean", "verity/flock/verifier/Flock/Hash.lean"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_circuits.py"]

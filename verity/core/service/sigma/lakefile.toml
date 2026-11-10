@@ -10,7 +10,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../flock"
+path = "../../../flock/verifier"
 
 [[require]]
 name = "verity_difftest"

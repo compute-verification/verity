@@ -1,7 +1,7 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
 Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
+hold them, each on Flock's verifier and the core interface (`../../../flock/verifier/interface`) by path, onsite and remote also on their
 subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
@@ -68,7 +68,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
-| SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
+| SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../flock/verifier/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
@@ -119,7 +119,7 @@ products are one:
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
 network certification name one record a window, in their evidence and their period commitment, so they join the check
-when each window's record names the registration log's head (`Core.Registration`, `../interface`), which then is the one
+when each window's record names the registration log's head (`Core.Registration`, `../../../flock/verifier/interface`), which then is the one
 every subprotocol names.
 
 A tie (`Tie`, `Tie.lean`) is the values each named subprotocol reads off its own case (its commitment's bytes, or its

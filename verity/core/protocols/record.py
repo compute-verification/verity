@@ -1,5 +1,5 @@
 """`Core.Record` in Python: a record entry, one message of a run's transcript, numbered, chained to the entry before it
-and signed by the party that sent it (`verity/core/protocols/interface`, `CoreProtocol/Record.lean`).
+and signed by the party that sent it (`verity/flock/verifier/interface`, `CoreProtocol/Record.lean`).
 
     entry   = {body, kind, prev, schema, seq, session, sig}
     message = SHA-512([role] || I || [d])              d: the schema's tagged SHA-512 of the entry without its sig

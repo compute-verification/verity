@@ -43,7 +43,7 @@ trap 'rm -rf $S' EXIT
 
 # Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
-LSHA=$( (cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
+LSHA=$( (cd verity/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
   cat $REPO/verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
 (
@@ -51,7 +51,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ]; then
-    rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
+    rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/flock/verifier/. $L/lean-src/ \
       && cp verity/ml/flock/tests/lean/TmplUnit.lean $L/lean-src/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $L/lean-src/lakefile.toml \
       && (cd $L/lean-src && lake build flock-verify flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \

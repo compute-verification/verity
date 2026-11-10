@@ -47,7 +47,7 @@ if [ -z "${H1L_J10R:-}" ]; then
 fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(tree_key verity/flock/verifier verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"

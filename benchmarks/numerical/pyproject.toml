@@ -28,7 +28,7 @@ untraced = ["tests/bench/test_input_sets.py", "tests/bench/test_lowerings.py", "
 # tests/bench/test_bench_judge.py runs benchmarks/judge.py; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
-inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures",
+inputs = ["verity/flock/verifier/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures",
           "integrations/vllm/tests/regression/expected"]
 parallel = true
 

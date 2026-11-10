@@ -21,7 +21,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
 sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
-server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as
+server replace it (`verity/ml/flock/`, `verity/flock/verifier/`). Everything else is the repository's own code, as
 (b) says.
 
 ## Terms

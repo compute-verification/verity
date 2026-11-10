@@ -7010,7 +7010,7 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
 
 /// `prove --firewall-state DIR --session ID --part NAME`: the ZK server's release side (PROTOCOL.md §10.5) on the state
 /// directory `verity_flock.firewall` shares, run by the Lean session loop it goes through (`core-firewall session`:
-/// `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/service/firewall). It runs behind the send check
+/// `FC_CORE_FIREWALL`, else the build in this checkout's verity/flock/verifier/firewall). It runs behind the send check
 /// only, through the Lean session loop ([`firewall_on`]), proves one session (the ZK server serves each statement of a
 /// recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each session's verdict.
 struct ReleaseArgs {

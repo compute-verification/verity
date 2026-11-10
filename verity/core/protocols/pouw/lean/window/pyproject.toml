@@ -37,12 +37,12 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/ml/randomness", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/service/spot/lakefile.toml", "verity/core/service/spot/lake-manifest.json",
           "verity/core/service/spot/lean-toolchain", "verity/core/service/spot/Spot.lean",
-          "verity/core/service/spot/Spot", "verity/core/protocols/interface",
+          "verity/core/service/spot/Spot", "verity/flock/verifier/interface",
           "verity/core/primitives/lms/lean/lakefile.toml", "verity/core/primitives/lms/lean/lake-manifest.json",
           "verity/core/primitives/lms/lean/lean-toolchain", "verity/core/primitives/lms/lean/Lms.lean",
           "verity/core/primitives/lms/lean/Lms",
-          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock",
+          "verity/flock/verifier/lakefile.toml", "verity/flock/verifier/lake-manifest.json",
+          "verity/flock/verifier/lean-toolchain", "verity/flock/verifier/Flock",
           # `test_lanes.py` holds `leaf_lanes.py`'s reads and known rows to `PouwWindow.Lanes`, with the proof system's
           # one-stage modules it imports
           "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/spot/one_stage/__init__.py",

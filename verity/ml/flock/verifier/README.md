@@ -1,6 +1,6 @@
 # Flock verifier: runners and cross-checks
 
-Flock's verifier is the Lean package in `verity/core/service/flock/` (`flock_verifier`, Lean 4, no
+Flock's verifier is the Lean package in `verity/flock/verifier/` (`flock_verifier`, Lean 4, no
 dependencies, toolchain pinned in its `lean-toolchain`). Its definitions are the specification, and its docstrings say
 what each check is. This directory holds what runs it and what holds it to other implementations: the agreement job
 against upstream's Rust verifier, the agreement scripts for single parts, the mutant and fuzz generators, and the vectors.
@@ -16,7 +16,7 @@ The protocol is the Flock paper (Bünz, Rothblum, Wang, ePrint 2026/1329: §4 an
 (succinctlabs/flock `b684b12`) was read only for byte formats, constants and the order of operations; the places where
 the verifier follows upstream because the paper is silent are listed below.
 
-| part | Lean (`verity/core/service/flock/`) |
+| part | Lean (`verity/flock/verifier/`) |
 |---|---|
 | fields: GF(2^128) in GHASH form, the AES field and its embedding φ8, GF(2^256) | `Flock.Field` |
 | SHA-512, the hm96-sha512 hiding leaves | `Flock.Hash`, `Flock.Hm96` |
@@ -78,7 +78,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
   (`RecordCustodyExec`, `RecordCustodyExecH`) and `Assumptions/Zk.lean` (the `Zk.RecordCustodyZK*` family). What each
   means: `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
 - The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
-  under them, and no declaration swaps a definition for code no proof reads (`verity/core/service/flock/README.md`,
+  under them, and no declaration swaps a definition for code no proof reads (`verity/flock/verifier/README.md`,
   enforced by `verity/ml/flock/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is
   `verity/ml/flock/tests/test_vectors_coverage.py`.
 - The lemmas the verifier's parts rest on: `merkle_binding` (`Security/Proofs/Flock/Verifier/Merkle.lean`),
@@ -88,7 +88,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ## Running it
 
 ~~~text
-cd verity/core/service/flock && lake build    # .lake/build/bin/flock-verify and the other executables
+cd verity/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
     [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
 flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only

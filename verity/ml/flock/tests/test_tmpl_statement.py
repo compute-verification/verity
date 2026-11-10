@@ -29,7 +29,7 @@ from verity_flock import class_statement as CS
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 MODE = "iv/hybrid/4"
 

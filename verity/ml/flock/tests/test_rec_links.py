@@ -14,7 +14,7 @@ from verity_flock import rec_links as R
 
 from verity.core.protocols.spot.one_stage import registered as G
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-links"
 
 

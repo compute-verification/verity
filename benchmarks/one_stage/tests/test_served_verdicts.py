@@ -1056,7 +1056,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
     environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
-    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "flock" / "verifier",
               tree / "verity" / "core" / "service" / "spot", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
