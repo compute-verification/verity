@@ -3700,7 +3700,7 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     that finds it made launches its 6 shards `--shard auto:K/6` with its file, a machine each; the candidate advances once
     every shard passed.  One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
     from research.landing import AFTER_LANDING, AUTO_PLAN
-    from test_drive_review import _plan_doc
+    from test_landing import _plan_doc
     from test_vqueue_slim import Plans
 
     main = env.main()
