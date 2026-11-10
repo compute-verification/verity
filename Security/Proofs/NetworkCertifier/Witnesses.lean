@@ -7,6 +7,7 @@ public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Definitions.NetworkCertifier.TapRows
 public import Definitions.NetworkCertifier.Witness
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.SampledCharge
 public import Definitions.NetworkCertifier.SampledReg
 public import Proofs.Flock.Claims.DeployCode
@@ -77,6 +78,8 @@ accepts everything. Each builds its instance and takes no hypothesis.
   `leakL`, `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`,
   `certOps`), and no definition of this module: a statement the lock lists reads no proof-only definition outside the
   excepted toys.
+* `PooledLeakAccepted`. At one window whose audit always accepts, `δ = 1/2`, `Fmax = 1` and no error, its observations
+  empty where the horizon is one step, no window meets its leak relation, and the escape bound reads `1 ≤ 1/2`.
 * `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
@@ -445,6 +448,22 @@ theorem PeriodLeakAccepted_nontrivial :
   certL_bound_fails shaD _ _ [] (certL_noWit shaD _ []) (by linarith [certL_κ (Coin := Bool) []])
 
 /-! ## The monitoring period -/
+
+/-- **`PooledLeakAccepted`'s escape bound fails at an audit that always accepts**: one window, `δ = 1/2`, `Fmax = 1`, no
+error, and the window's observations empty where its horizon is one step, so its good event fails at every sample. -/
+theorem PooledLeakAccepted_nontrivial :
+    ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
+        ¬PooledGood (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1
+          (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ _ => [false]) 1 (fun _ => ∅)
+          (fun _ => [])) ≤
+      (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
+  have hp : (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
+      ¬PooledGood (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1
+        (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ _ => [false]) 1 (fun _ => ∅)
+        (fun _ => [])) = fun _ => True :=
+    funext fun _ => propext (iff_true_intro ⟨fun _ => trivial, fun h => absurd (h.2 0).2.1 (by simp)⟩)
+  rw [hp]
+  norm_num [Pr, Claims.prUniform]
 
 /-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
 and each `k`-subset with share `1 / C(n, k)`. -/

@@ -10,7 +10,7 @@ import pytest
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 sys.path.insert(0, str(THEORY))
-sys.path.insert(0, str(THEORY.parent / "receipts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/receipts"))
 
 import fold_root_check as fr
 import fold_root_sweep as sw
