@@ -1026,7 +1026,7 @@ def domainOf (program window session : String) (e : Json) : R String := do
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
   pure (Flock.hexOf d)
 
-def otherRegistration (v : String) : String :=
+def otherRecord (v : String) : String :=
   s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
   s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
   "value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the " ++
@@ -1355,7 +1355,7 @@ def held (program window session v : String) (e : Json) : R (Option String) := d
     return some (s!"registered value {v}'s entry is not one-stage's \{value, root, leaves, words, domain} (with " ++
       s!"word_bits only when it is not 16), its rows at least 1 and its words from 1 to {MAX_ROWS}")
   let d ← domainOf program window session e
-  pure (if str? (get e "domain") == some d then none else some (otherRegistration v))
+  pure (if str? (get e "domain") == some d then none else some (otherRecord v))
 
 /-- `_registration`'s call pointer: from call `c`, the last call whose first unit (`starts`, each call's in order) is at
 most `u`. Over units in ascending order its steps total the calls, never the units. -/
