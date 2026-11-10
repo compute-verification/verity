@@ -62,7 +62,7 @@ bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H2
 tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS" }
 nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
-f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 whitepaper: FP64 Tensor Core 67 TFLOPS over 132 SMs at its 1980 MHz FP64 boost clock is 128.2 DMMA MACs a SM-clock there; at clock.tensor that is 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate stays at or above the whitepaper's; 32 at clock.sm's 1980 MHz" }
+f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H200 data sheet: 'FP64 Tensor Core 67 TFLOPS', which over 132 SMs at the 1980 MHz boost clock the H100 whitepaper V1.04 Table 3 gives FP64 tensor operations is 128.2 DMMA MACs a SM-clock there (the whitepaper's own 'Peak FP64 Tensor TFLOPS' 66.9 is 128.0); 128 a SM-clock there is, at clock.tensor, 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate, 67.08 TFLOPS, stays at or above both figures; 32 at clock.sm's 1980 MHz" }
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]
