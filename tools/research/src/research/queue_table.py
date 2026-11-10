@@ -43,7 +43,7 @@ OFF_GATE = ("circuit-check", "ratchet-gate")
 STATE = Path.home() / ".research" / "queue-table.json"
 
 CONTROL_SCRIPT = r'''
-import json, re, sys
+import ast, json, re, shlex, subprocess, sys
 live, since = sys.argv[1], sys.argv[2]
 rows = []
 for line in open(live + "/decisions.jsonl", errors="replace"):
@@ -69,7 +69,23 @@ try:
     args = open(live + "/args").read()
 except OSError:
     args = ""
-print(json.dumps({"decisions": rows, "ticks": ticks, "args": args}))
+# the executor's own list of its checks: one line a check, its tasks by state (`graph2.py status`, which only reads)
+checks, why = [], ""
+try:
+    words = shlex.split(args)
+    g2 = shlex.split(words[words.index("--graph2") + 1]) if "--graph2" in words else []
+    out = subprocess.run([*g2, "status"], capture_output=True, text=True, timeout=40).stdout if g2 else ""
+    why = "" if out else "the loop's args name no --graph2, or its status printed nothing"
+except (OSError, ValueError, subprocess.SubprocessError) as e:
+    out, why = "", repr(e)[:200]
+for line in out.splitlines():
+    m = re.match(r"s(\d{8}T\d{6})Z-\w+ (\w+) \S+ (\{.*\})$", line)
+    if m and m.group(1) >= since.replace("-", "").replace(":", ""):
+        try:
+            checks.append({"at": m.group(1), "sha": m.group(2), "tasks": ast.literal_eval(m.group(3))})
+        except (ValueError, SyntaxError) as e:
+            why = "a status line did not parse: " + repr(e)[:120]
+print(json.dumps({"decisions": rows, "ticks": ticks, "args": args, "executor": checks, "executor_why": why}))
 '''
 
 NODE_SCRIPT = r'''
@@ -615,8 +631,25 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
     add("6", "Executor: overhead before a run's first task result", "", _dist(win(over, hour), "s"), _dist(win(over, day), "s"), "",
         "the run id's time to its first result file, less that task's own seconds; a run holds p50 "
         f"{pct([r.get('tasks') or 0 for r in workers], .5) or 0:.0f} tasks")
-    add("6", "Executor: share served from the cache; tasks waiting on other tasks", "not measured: both are in the executor's database, "
-        "which this command does not read")
+    submitted = [dict(c, at=rid_time("r" + c["at"][:8] + "-" + c["at"][9:])) for c in doc["control"].get("executor") or []]
+    unfinished = [c["tasks"] for c in submitted if any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
+
+    def cached(since: float) -> str:
+        cs = [c["tasks"] for c in submitted if c["at"] >= since and sum(c["tasks"].values())]
+        if not cs:
+            return "none"
+        hit, every = sum(t.get("hit", 0) for t in cs), sum(sum(t.values()) for t in cs)
+        return f"{hit / every:.0%} from the cache ({hit} of {every} tasks in {len(cs)} checks)"
+
+    if submitted:
+        add("6", "Executor: share served from the cache; tasks waiting on other tasks",
+            f"{sum(t.get('waiting', 0) for t in unfinished)} waiting on other tasks, {sum(t.get('queued', 0) for t in unfinished)} waiting for a slot, "
+            f"{sum(t.get('leased', 0) for t in unfinished)} given to a worker, in {len(unfinished)} checks", cached(hour), cached(day), "",
+            "the executor's own list of its checks (`graph2.py status`): a check's tasks by state; the share is tasks answered from the "
+            "cache over all the tasks of the checks submitted in the window, so a task cancelled before it ran counts as not served")
+    else:
+        add("6", "Executor: share served from the cache; tasks waiting on other tasks",
+            f"not measured: {doc['control'].get('executor_why') or 'the executor listed no check'}")
     add("6", "Executor: shadow checks", "", "", f"{sum(r.get('graph2') in ('pass', 'fail') for r in compares.values())} reached a pass or a fail, "
         f"{len(compares)} compared with the shards, {sum(r.get('check') == r.get('graph2') for r in compares.values())} agreed; "
         f"{cancelled} cancelled with their candidate", "", "the loop's `compare` lines, and its `drop` lines whose cancel of the executor's check went through")
@@ -675,6 +708,8 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         "the loop's `build` to the latest `took` among its shards: the launch and the wait for a check slot")
     add("8", "Green candidate: verdict to `main`", "", _dist(win(v2l, hour)), _dist(win(v2l, day)), "",
         "`judged pass` to `advance`: the wait for the candidates below it and for the tick")
+    add("8", "The floor: the longest chain of a candidate's tasks not in the cache", "not measured: needs each task's dependencies and "
+        "seconds, which the executor's database holds and its `status` does not print")
     return rows
 
 
