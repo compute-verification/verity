@@ -211,7 +211,9 @@ The public monorepo is exported one way from this repository. `public_boundary.t
 paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
 list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
 commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
-(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
+(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. A
+Lean library's root file it doesn't copy, an aggregate importing what isn't public, it writes as the imports of the modules
+below it that it does copy, so the library builds whole. It
 never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
 the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
 (`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's

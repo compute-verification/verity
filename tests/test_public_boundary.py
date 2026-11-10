@@ -282,6 +282,50 @@ def test_a_lakefile_loses_only_what_names_a_file_the_export_does_not_copy() -> N
         "default": ["tool"], "modules": ["Agg.X", "Pub.A", "Pub.B.C"], "missing_roots": ["Pub.B", "Agg"]}
 
 
+class _Texts:
+    """A tree as `generated_roots` reads it: its files' texts."""
+
+    def __init__(self, files: dict[str, str]):
+        self.files = files
+
+    def text(self, f: str) -> str:
+        return self.files[f]
+
+
+def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -> None:
+    """The export writes a library's root only where it copies modules below it and not the file: every such module but
+    those the package's lock exempts, as a `module` when each of them is one. The lakefile then keeps its default target."""
+    lakefile = ('name = "p"\nsrcDir = "src"\ndefaultTargets = ["Agg", "Mixed"]\n[[lean_lib]]\nname = "Agg"\n'
+                '[[lean_lib]]\nname = "Has"\n[[lean_lib]]\nname = "Mixed"\nroots = ["Mixed.In"]\n')
+    files = {
+        "p/lakefile.toml": lakefile,
+        "p/lean-audit.json": json.dumps({"roots": ["Agg"], "exempt": {"Agg.Probe": "a probe"}}),
+        "p/src/Agg/A.lean": "module\n\npublic import Agg.B.C\n",
+        "p/src/Agg/B/C.lean": "/- a comment -/\nmodule\n",
+        "p/src/Agg/Probe/Run.lean": "def main : IO Unit := pure ()\n",
+        "p/src/AggOther.lean": "module\n",
+        "p/src/Has.lean": "import Has.X\n",
+        "p/src/Has/X.lean": "def x := 1\n",
+        "p/src/Has/Y.lean": "def y := 1\n",
+        "p/src/Mixed/In/X.lean": "module\n",
+        "p/src/Mixed/In/Y.lean": "def y := 1\n",
+    }
+    got = PE.generated_roots(_Texts(files), set(files))
+    assert got == {
+        "p/src/Agg.lean": ("module\n\npublic import Agg.A\npublic import Agg.B.C\n\n"
+                           "/-! The modules under `Agg` that this tree holds. -/\n"),
+        "p/src/Mixed/In.lean": ("import Mixed.In.X\nimport Mixed.In.Y\n\n"
+                                "/-! The modules under `Mixed.In` that this tree holds. -/\n")}
+    for text in got.values():
+        assert PE.PB.HEADERS.header(text) is not None
+    built = set(files) | set(got)
+    assert PE.rewrite_lakefile(lakefile, "p", built) == (lakefile, [])
+    targets = PE.lean_targets(lakefile, "p", tomllib.loads(lakefile), built)
+    assert targets["default"] == ["Agg", "Mixed"] and targets["missing_roots"] == []
+    assert PE.generated_roots(_Texts(files), set(files) - {"p/src/Agg/A.lean", "p/src/Agg/B/C.lean"}).keys() == {
+        "p/src/Mixed/In.lean"}, "a root with only exempt modules below it has nothing to import"
+
+
 def test_a_manifest_loses_the_path_packages_the_export_does_not_copy() -> None:
     doc = {"version": "1.1.0", "packages": [
         {"type": "path", "name": "kept", "dir": "../kept", "configFile": "lakefile.toml"},
@@ -524,17 +568,17 @@ def _lock() -> dict:
     }
 
 
-def _lean(root: Path, lock: dict):
-    """The tree of `LOCK_TREE` with ``lock`` as its package's, tracked, and its judgment."""
+def _lean(root: Path, lock: dict, boundary: str = LOCK_BOUNDARY):
+    """The tree of `LOCK_TREE` with ``lock`` as its package's, tracked, and its judgment under ``boundary``."""
     files = LOCK_TREE | {"lean/lean-audit.json": PE.LEAN_CHECK.text(lock)}
     for f, text in files.items():
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(text, encoding="utf-8")
-    (root / "boundary.toml").write_text(LOCK_BOUNDARY, encoding="utf-8")
+    (root / "boundary.toml").write_text(boundary, encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "add", *files], cwd=root, check=True)
-    tree, boundary = PE.PB.Tree(root, files=files), PE.PB.Boundary.load(root / "boundary.toml")
-    return tree, boundary, PE.PB.judge(tree, boundary)
+    tree, loaded = PE.PB.Tree(root, files=files), PE.PB.Boundary.load(root / "boundary.toml")
+    return tree, loaded, PE.PB.judge(tree, loaded)
 
 
 def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_factory) -> None:
@@ -580,6 +624,24 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
     assert report["sites"] == {} and report["site_list"] == []
     assert report["spelled"] == {} and report["spelled_list"] == []
     assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
+
+
+def test_the_export_writes_the_root_file_its_boundary_leaves_out(tmp_path_factory) -> None:
+    """A library whose root file is private is still one the export's lock can name as a root: the export writes the file,
+    commits it with what it copied and reports it, and no root is missing."""
+    private = LOCK_BOUNDARY.replace('team = [', 'team = ["lean/Lib.lean", ')
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock(), private)
+    assert "lean/Lib.lean" not in j.public and "lean/Lib/Shown.lean" in j.public
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert (dest / "lean/Lib.lean").read_text(encoding="utf-8") == (
+        "import Lib.Shown\n\n/-! The modules under `Lib` that this tree holds. -/\n"), "less what the lock exempts"
+    assert got["generated_roots"] == ["lean/Lib.lean"]
+    assert got["lean_targets"]["lean"] == {"default": [], "modules": ["Lib", "Lib.Hidden.Open", "Lib.Shown"],
+                                           "missing_roots": []}
+    assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))["roots"] == ["Lib"]
+    tracked = subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
+    assert sorted(tracked) == sorted([*j.public, "lean/Lib.lean"])
 
 
 def test_the_export_leaves_a_lock_that_is_public_as_it_stands(tmp_path_factory) -> None:

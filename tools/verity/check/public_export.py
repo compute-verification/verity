@@ -16,6 +16,10 @@ script are the edges the check counts closed by the export (`EXPORT_CUTS`), and 
 every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
 copy.
 
+A library's root file the export doesn't copy, while it copies modules below it, is written by the export
+(`generated_roots`): an aggregate module that imports what isn't public can't ship, so the export's is the imports of the
+modules below it that it does copy. The library then builds as a whole, and its lock's roots have their files.
+
 A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
 only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
 owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy. The export fails,
@@ -30,7 +34,7 @@ can't read in DEST.
 
 The report gives:
 
-* what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
+* what the export copied, rewrote, and cut, the root files it wrote, and the fetched fixtures it shipped and couldn't;
 * per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
   went with a witness it doesn't copy, the kept names a file it leaves out declares too, and what the text of a kept
   entry still holds, each with its section, entry, kind and text: the lane-text sites, and the declarations, modules and
@@ -200,9 +204,9 @@ def _module_path(src: str, mod: str) -> str:
 
 def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[tuple[str, str]]]:
     """A lakefile at ``here`` without the targets and path requires the export doesn't copy, and (kind, name) of each
-    entry it dropped. A library keeps each root the export copies a module at or below; a default target whose root file
-    it doesn't copy (an aggregate module importing what isn't public) leaves `defaultTargets`, and its modules build one
-    by one (`lean_targets`)."""
+    entry it dropped; ``copied`` holds the root files the export writes (`generated_roots`) too. A library keeps each root
+    the export copies a module at or below; a default target with a root that has no file there leaves `defaultTargets`,
+    and its modules build one by one (`lean_targets`)."""
     where = _norm(here, "lakefile.toml")
     doc = tomllib.loads(text)
     src = _norm(here, doc.get("srcDir", "."))
@@ -263,6 +267,35 @@ def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[
 def _parents(path: str) -> list[str]:
     parts = path.split("/")[:-1]
     return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
+
+
+def generated_roots(tree, copied: set[str]) -> dict[str, str]:
+    """{file: its text} of each root file the export writes: a root of a copied lakefile's library whose file the export
+    doesn't copy while it copies modules below it. The text is the imports of those modules, less the ones the package's
+    lock exempts (a test or a probe, which no root imports); no copied file imports the root, so nothing reads it but the
+    build. It is a `module` when every module it imports is one, since a `module` imports only modules."""
+    out = {}
+    for lakefile in sorted(f for f in copied if f.rpartition("/")[2] == "lakefile.toml"):
+        here = os.path.dirname(lakefile)
+        doc = tomllib.loads(tree.text(lakefile))
+        src = _norm(here, doc.get("srcDir", "."))
+        prefix = f"{src}/" if src else ""
+        lock = _norm(here, LOCK)
+        exempt = tuple(json.loads(tree.text(lock)).get("exempt", {})) if lock in copied else ()
+        for root in (r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])):
+            at = _module_path(src, root)
+            if f"{at}.lean" in copied or f"{at}.lean" in out:
+                continue
+            below = {c[len(prefix):].removesuffix(".lean").replace("/", "."): c
+                     for c in copied if c.endswith(".lean") and c.startswith(f"{at}/")}
+            mods = sorted(m for m in below if not any(m == e or m.startswith(f"{e}.") for e in exempt))
+            if not mods:
+                continue
+            modular = all((h := PB.HEADERS.header(tree.text(below[m]))) is not None and h.module for m in mods)
+            word = "public import" if modular else "import"
+            out[f"{at}.lean"] = (("module\n\n" if modular else "") + "".join(f"{word} {m}\n" for m in mods)
+                                 + f"\n/-! The modules under `{PB.HEADERS.name(root)}` that this tree holds. -/\n")
+    return out
 
 
 def lean_targets(text: str, here: str, original: dict, copied: set[str]) -> dict:
@@ -629,13 +662,19 @@ def written(judgment, shipped: dict[str, list[str]]) -> list[str]:
 
 def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) -> dict:
     """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests, its lists
-    of the tree's paths and its Lean locks, and commit it as a new repository's one commit. `ValueError`, before the
+    of the tree's paths and its Lean locks, write the root files it lacks (`generated_roots`), and commit it as a new
+    repository's one commit. `ValueError`, before the
     commit, when a lock's kept text still holds lane text or names what the export leaves out, and the boundary lists it
     under no known residue (`public_lock.refusal`)."""
     copied = set(judgment.public)
     for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(tree.root / f, dest / f)
+    roots = generated_roots(tree, copied)
+    for f, text in roots.items():
+        (dest / f).parent.mkdir(parents=True, exist_ok=True)
+        (dest / f).write_text(text, encoding="utf-8")
+    built = copied | set(roots)
     _, dists, _, _ = tree.python
     exported = {d for d, p in dists.items() if p in copied}
     required = {n for f in copied if f.rpartition("/")[2] == "pyproject.toml"
@@ -653,7 +692,7 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
             continue
         old = (dest / f).read_text(encoding="utf-8")
         new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
-                        else rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
+                        else rewrite_lakefile(old, here, built) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_lock(old, here, held) if name == LOCK
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required,
@@ -663,7 +702,7 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
         if dropped:
             rewrites[f] = dropped
         if name == "lakefile.toml":
-            targets[here or "."] = lean_targets(new, here, tomllib.loads(old), copied)
+            targets[here or "."] = lean_targets(new, here, tomllib.loads(old), built)
         if name == LOCK:
             wrote = json.loads((dest / f).read_text(encoding="utf-8"))
             if left := PUBLIC_LOCK.missing(wrote, lambda kind, n, here=here: held.has(here, kind, n)):
@@ -695,8 +734,8 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     subprocess.run([*git, "commit", "-q", "-m", "The public monorepo"], cwd=dest, check=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, capture_output=True, text=True, check=True).stdout.strip()
     return {"copied": len(copied), "rewrites": {f: [f"{k} {v}" for k, v in d] for f, d in rewrites.items()},
-            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "locks": locks, "symlinks_not_copied": symlinks,
-            "commit": head}
+            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "generated_roots": sorted(roots), "locks": locks,
+            "symlinks_not_copied": symlinks, "commit": head}
 
 
 def scrub(dest: Path, files: list[str]) -> dict:
@@ -914,6 +953,7 @@ def main(argv: list[str] | None = None) -> int:
     source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
     report = {"source": {"root": str(root), "commit": source}, "dest": str(dest), "edges": len(judgment.edges)}
     report |= export(tree, boundary, judgment, dest, shipped)
+    files = sorted({*files, *report["generated_roots"]})
     report["fixtures"] = {"shipped": sorted(shipped), "not_shipped": unshipped}
     report["scrub"] = scrub(dest, files)
     report["residue"] = residue(dest, files, boundary)
@@ -946,7 +986,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{sum(lock['dropped'].values())}" + "".join(f"; {m}" for m in more))
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
-          f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")
+          f"wrote: {report['generated_roots']}; root files it lacks: "
+          f"{[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")
     print(f"leftovers by kind: {report['scrub']['by_kind']}")
     for area, kinds in list(report["scrub"]["by_area"].items())[:25]:
         print(f"  {area}: {kinds}")
