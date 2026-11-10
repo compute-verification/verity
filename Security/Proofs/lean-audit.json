@@ -110,6 +110,7 @@
   "Proofs.Properties.Verity.Sampled.Members",
   "Proofs.Properties.Verity.Sampled.Window.Members",
   "Proofs.Properties.Verity.Sampled.Window.Assembled",
+  "Proofs.Properties.Verity.Sampled.Window.Order",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
