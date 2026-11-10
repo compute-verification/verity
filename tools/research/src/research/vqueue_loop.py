@@ -1458,7 +1458,7 @@ class Loop:
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
                  gate: str = GRAPH2_GATE, shards: int | str = SHARDS):
-        if gate not in GATES or gate == CHECK_GATE and (slim is None or _count(slim, shards) < 1):
+        if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
                              "(`research.vqueue_slim`) as one shard or more")
@@ -2175,12 +2175,12 @@ def _shards(text: str) -> int | str:
     return int(text) if text.isdigit() else text
 
 
-def _count(slim, shards: int | str) -> int:
-    """How many shards ``shards`` is to ``slim`` (`vqueue_slim.shard_count`), 0 for one it refuses."""
+def _sharded(slim, shards: int | str) -> bool:
+    """Whether ``shards`` is one shard or more to ``slim`` (`vqueue_slim.shard_count`); False for one it refuses."""
     try:
-        return slim.shard_count(shards)[0]
+        return slim.shard_count(shards)[0] >= 1
     except ValueError:
-        return 0
+        return False
 
 
 def _locked(path: Path):
@@ -2260,7 +2260,7 @@ def main(argv: list[str]) -> int:
         print("research queue vqueue: research.vqueue_slim isn't in this tree, so no run beside a candidate's check can start: "
               "--no-slim judges each candidate on its graph2 check alone", file=sys.stderr)
         return 1
-    if a.gate == CHECK_GATE and (a.no_slim or _count(slim, a.shards) < 1):
+    if a.gate == CHECK_GATE and (a.no_slim or not _sharded(slim, a.shards)):
         print(f"research queue vqueue: --gate {CHECK_GATE} is the run beside each candidate's check, as one shard or more: "
               "it runs with neither --no-slim nor --shards below 1, and --shards is N (ci.toml's plan) or auto:N (an auto "
               "plan)", file=sys.stderr)
