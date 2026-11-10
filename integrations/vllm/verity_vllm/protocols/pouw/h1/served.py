@@ -96,15 +96,15 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import weights as Wt
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.spot.verifier.one_stage import partition as P, registered as G
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV

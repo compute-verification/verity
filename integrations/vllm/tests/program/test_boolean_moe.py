@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
+"""`verity.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
 Definitions (`trace.word_of`): the routed sum's coordinate on every word at one slot, on every pair of special words, every word
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
 few ulps and rows that overflow; the sum in 64-column chunks (`MoeSum_v3`, the lift's version) on random and special rows; the router's exponential on special words, random words and words across its range, its
@@ -17,23 +17,23 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ZERO
-from verity.ml.circuits.cut import separable
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.registry import boolean_moe as BM
-from verity.ml.definitions.registry import moe as M
-from verity.ml.definitions.numerics import moe_twins
-from verity.ml.definitions.registry.prims import F32, I32
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import partition_object as PO
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ZERO
+from verity.circuits.cut import separable
+from verity.definitions import boolean as SW
+from verity.definitions.registry import boolean_moe as BM
+from verity.definitions.registry import moe as M
+from verity.definitions.numerics import moe_twins
+from verity.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

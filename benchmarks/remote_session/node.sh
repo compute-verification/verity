@@ -42,7 +42,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 V=
 if [ "${ROLE:-both}" = both ]; then
   # shellcheck disable=SC2086
-  taskset -c "$VERIFIER_CPUS" "$PY" benchmarks/remote_session/verifier_process.py $VERIFY_ARGS ${VERIFIER_ARGS:-} > "$O/verifier.log" 2>&1 & V=$!
+  taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS ${VERIFIER_ARGS:-} > "$O/verifier.log" 2>&1 & V=$!
 fi
 # shellcheck disable=SC2086
 taskset -c "$PROVER_CPUS" "$PY" $RS/node.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \

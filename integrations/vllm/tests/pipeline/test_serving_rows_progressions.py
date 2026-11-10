@@ -6,14 +6,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.ml.definitions.registry import boolean_moe as BMOE
-from verity.ml.definitions.registry import moe as M
+from verity.definitions.registry import boolean_moe as BMOE
+from verity.definitions.registry import moe as M
 
 TOPK, W, w, P0 = 3, 8, 2, 100
 OP = "model.layers.3.mlp.experts"

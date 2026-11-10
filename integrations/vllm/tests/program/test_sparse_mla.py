@@ -9,16 +9,16 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.registry import b1, hopper
-from verity.ml.definitions.registry import boolean_sparse_mla as BM
-from verity.ml.definitions.registry import fa3_check_inf as F3
-from verity.ml.definitions.registry import sparse_mla as M
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.boolean import trace as TR
+from verity.definitions import boolean as SW
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import boolean_sparse_mla as BM
+from verity.definitions.registry import fa3_check_inf as F3
+from verity.definitions.registry import sparse_mla as M
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
