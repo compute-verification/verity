@@ -4872,9 +4872,10 @@ def publish(pkg: Path, rep: dict, held: threading.Event, said: dict, log=print) 
 
 
 def publishing(pkg: Path, rep: dict, log=print) -> None:
-    """Once ``pkg``'s build steps and its sampled recompile passed in the sandbox, whatever its audit comes to: start its
-    `publish`, and return once that holds the build. The seal, the facts and the replay, which read the seal's copies,
-    run beside the put; the build is announced (`built`) after this returns, so no dependent's build writes it first."""
+    """Once ``pkg``'s build steps and its sampled recompile passed in the sandbox and its build is sealed, whatever its
+    audit comes to: start its `publish`, and return once that holds the build. The build is announced (`built`) after
+    this returns, so no dependent's build writes it before the put has read it; the facts and the replay, which read the
+    seal's copies, run beside the put, and a dependent's build waits for it (`writing`)."""
     held, said = threading.Event(), {}
     build = {"package": rep["package"], "sandbox": rep["sandbox"], "failures": list(rep["failures"])}
     t = threading.Thread(target=publish, args=(pkg, build, held, said, log), daemon=True)
@@ -5517,8 +5518,6 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if fails:
                 rep["failures"] += fails
                 return reported(rep)
-        if ARTIFACTS is not None and rep["sandbox"] and not DEV_CACHE:
-            publishing(pkg, rep, log)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
@@ -5533,6 +5532,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
     # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
     store = (sealed is not None) if store is None else store
+    if build and ARTIFACTS is not None and rep["sandbox"] and not DEV_CACHE:
+        publishing(pkg, rep, log)
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
