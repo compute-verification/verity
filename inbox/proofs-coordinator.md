@@ -31558,3 +31558,55 @@ Your 19:08Z item 1, run early [run: `r20261110-192030-e7f1`, proofs pool on cpu-
 > - **Shapes:** row 13 `{V=256,H=4}` (65 return leaves), row 30 `{V=256,H=96}` (1,537), the reads in rows 3 and 5 `{V=256,H=3072}` (49,153) and `{V=256,H=4096}` (65,537). Also rows 3 and 5's fused Definitions (`MoeExpertFp8ReadGemm_v1`, 17 return leaves; `MoeExpertFp8ReadGemmW_v1`, 513). Every return leaf is computed by a gate with two or more distinct non-constant operands.
 > - **The check:** each Definition is encoded as a Program and decoded, and only the decoded root is read. Each return leaf is followed back through `Not`, constant-folded `And`/`Xor`, callee returns and batch members. A control Definition built with 11 pass-throughs (a callee's `NOT`, direct wiring, `t AND t`, `t XOR 1 XOR 1`, `y0 XOR 1`) is found in full.
 > - **So** if the form compares the read's ports in their word view, nothing of proofs' moves: no signature, no pin, no template, no fixture. This week's records keep today's pin.
+
+## HOUSEKEEP, Tue 10 Nov 19:30Z: TOP-396 descriptions: 24 of 24 written, with 17 blockers files (every off-track goal of the 24), in the notes at `85b534fc3e` under `lanes/proofs/goals-20261110/`; `apply.sh` is written and NOT run; 3 choices to confirm, 6 fields that look wrong
+
+Tags: [run] a command of mine today, [read] read at the source named, [old] the old sentence or my 07:55Z draft kept without its ids, not rechecked.
+
+**What is there** [run]
+- 24 `<id>.desc.md`, 17 `<id>.blockers.md`, `apply.sh`, `lint.py`, `goals-read.json` (the page as read at 19:27Z). Longest description 2,241 characters.
+- `bash apply.sh` (or `RESEARCH=/agent/repos/verity/.venv/bin/research bash apply.sh`): one `research goals set ID --description @FILE [--blockers @FILE]` a goal, soonest due first, `sleep 5` after each, each answer and its exit code printed, then "24 goals sent, N refused". Run only against a stub: 24 sent, 0 refused. It was never run against the site.
+- `python3 lint.py -q .` reports 0 findings. It is the site's check (ported from `plain.ts`, unchanged at 19:10Z) plus your rules: ids, PR numbers, code names, paths, the banned words, a link's text equal to its target's title, both caveat strings in any file with a plan figure. Refresh `goals-read.json` (`research goals show --json`) before you run it: circuits retitled eight goals between 19:15Z and 19:27Z, and I link two of theirs.
+
+**Three choices of mine, yours to confirm**
+1. `--no-blockers` on the two on-track goals whose stored blockers hold ids and code names (`spot-one-stage-premises`: "…GOALAUDIT; TRUST6…"; `weight-security-bridge`: "#8311… CUTLEMMA"). Delete the flag on those two lines of `apply.sh` to keep the old text.
+2. "decoding steps" stays once, in `spot-checks-closed` (0 rows differ over 14,903 decoding steps): a measured count, not a goal's step.
+3. "In review" is written only where `research queue status` said admitted at 19:25Z [run]. Unmarked heads read "written and not yet in review": #8224, #8400, #8363, #8539, #8568, #8462, #8139, and vllm's #8385, #8448, #7874. If you mark any before you apply, change the word.
+
+**Changed against the old text, from today's sources**
+- `spot-128k-attention-proved`: Thursday's long row gets the first round alone, the record it reads has no table for the row [read: TWOPROVE 17:59Z; vllm-longrow agrees, VLLM-261 19:07Z, with its list of what comes after Thursday].
+- `spot-overhead-measured`: Monday's 65 of 74 statements are on synthetic values at the served sizes [read: `stage.py`'s docstring on main], so the opening no longer says "on served values"; the Lean run checks each proof and then refuses the session for want of the block's program [read: your log, 02:45Z plan].
+- `fused-kinds-staged-for-timing`: all three stage at full size, both form checks accept [read: SERVEDCARD 19:11Z]; kernels' goal says it has a steady timing for both fused types [read: the page].
+- `spot-advice-certified`: #7874 is unmarked and held behind #7816, so not "in review" [run]; no answer on VLLM-242 since your Mon 9:59 PM question [read].
+- `slice-clean`: 39 open changes say "Lane proofs" at 19:18Z; since Tue 08:00Z 32 merged, 14 closed unmerged [run: gh]. SPOT's old name is in no path and in 367 files, Flock's in 169 [run: `git grep -i` on main `5482988e34`].
+- `weight-security-bridge`: the four open premises as main's lock lists them [read]; the one about advice is PRF-512, due 30 Nov, no worker [read].
+- `spot-ten-percent`: your figures and both caveats verbatim from `accounting/network-glm53` [read 19:27Z]; kernels' goal now says 27 block types have a steady one-prover timing, so I say that and "the path above still uses the assumed factor".
+
+**Facts I could not check** [old unless marked]
+- `fused-kinds`: the two fused types' 26.1% and 10.6% of proving time.
+- `slice-clean`: "@top does this cleanup since Sat 7 Nov"; the list posted with a README change by Thu 12 Nov [read: your log only].
+- `spot-bind-term`: 2^124, 2^261, 2^-90 and 2^-45.5 are PRF-466's "done when" figures [read], written as what the finished proof gives; "the first three parts on main"; Fri 13 Nov is the issue's due date.
+- `spot-checks-closed`: six of eight settled (Monday's goal audit); "@proofs settles the two by Wed 10 AM" (PRF-461).
+- `spot-numbers-lean-checked`: that only the infiltration curve's caption is left.
+- `spot-fused-cut-served`: 22.7 GB to 69.9 MB; 1,264 sessions, the ms a block, 4.1% to 4.5% [relayed: FUSEDSERVE, LEDGER].
+- `spot-128k`: 0.45 TB (a guess in its source); 82.5% (your top goal).
+- `spot-advice-certified`: "a client in the certifier's place"; the three replayed hits and their limits [read: VLLM-260 only].
+- `spot-one-stage-premises`: "Daniel has not ruled on that default" [read: #8470's title says provisional; the ask not opened].
+- `spot-overhead-measured`: 34 block types, 260 sessions, "about 10% of the table"; whether the run with the Lean verifier is still on for Tue evening (written as "the plan of Tue 10 Nov morning").
+- `spot-two-stage-e2e`: Monday's run (first round accepted, four spans replayed bit for bit).
+- `spot-verifier-cost`: 14 s, 2,474 s, 100 GB (Sat); 1,899.6 and 257.7 core-seconds; "attention and combine blocks still unrolled".
+- `terminology-clean`, `zk-leaks-closed`, `spot-figures`, `spot-output-accounting`: each one's "on main" list. Output accounting's is my 07:55Z list, which disagrees with Monday's blockers (1 landed, 1 admitted, 3 without evidence).
+- `zero-knowledge`: 2,598 s against 51.3 s; the outer-proof measurement's result (written as started, result due that afternoon).
+- `spot-post-ready`: the post out Mon 16 Nov [read: the ask page and network's goal, not your log].
+- `spot-two-stage-sound`: "the statement by Thu 12 Nov 10 AM" (your guess).
+- `sampling-generic`: the formula, verbatim from the old text.
+
+**Looks wrong in a field I did not change**
+1. `fused-kinds-staged-for-timing` (on-track, due Tue 8 PM) looks done. The stager fix `d7ab9059c3` has no PR [run], and kernels' goal says "not on main yet".
+2. `spot-numbers-lean-checked` (on-track, Wed) looks done: both last changes are on main.
+3. `slice-clean`: its due is stored as `2026-11-11T02:00Z` where every other is `-08:00`; it waits only on two done goals; no tags. `spot-overhead-measured`, `spot-figures`, `spot-claims-checked` have no tags either.
+4. `spot-bind-term` is due Wed 11 Nov; PRF-466 is due Fri 13 Nov, and the last link (the period bound to weight theft) is not stated and has nobody.
+5. Stale waits: `spot-fused-cut-served` and `terminology-clean` wait only on a done goal; `zero-knowledge` on six done of seven; `spot-post-ready` holds 16 links, the site's cap. `terminology-clean` and `weight-security-bridge` are on-track with nobody on the rename and a premise dated 30 Nov.
+6. Not ours: `vllm/served-128k-window-committed` (on-track, Thu 8 AM) still plans "Thu, @proofs: the audit's second round runs on it", against vllm-longrow's 19:07Z. Soundness's title "Sampled proofs sound as deployed" and kernels' done titles with "C-Flock" use retired names, so I link neither. `accounting/network-glm53`'s description writes "PST" eight times, where the skill says no zone.
+
+Nothing of mine is running. No timer is pending.
