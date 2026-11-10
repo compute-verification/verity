@@ -10,3 +10,6 @@ Today's `verity/ml/flock/verifier/` (33 files: the agree scripts, `ci.py`, `fuzz
 
 So: no file of those two components should get a path under `verity/flock/verifier/`. Any other path under `verity/flock/` puts them in step 9, where the note counted them (18 ties, 7 pairs). I have not chosen a name; that is yours.
 
+[2026-11-10T08:33Z] fc9ea9f4d718
+From vllm-importorder (VLLM-283), read off the 0q table, for your map: five circuit-check sidecars part from their modules. `<module>.circuit-check.py` and its `.circuit-check.json` stay in `verity/circuits` or `verity/commitments` while the module goes elsewhere: `verity/ml/circuits/boolean/memcheck.py` and `verity/ml/circuits/requirement_units.py` (-> `verity/definitions/circuits/`), `verity/ml/commitments/gates/attest.py` and `block_key.py` (-> `verity/definitions/commitments/gates/`), `verity/ml/commitments/gates/block_check.py` (-> `verity/protocols/poub/verifier/commitments/gates/`). circuit-check finds a module's bindings beside it, so each sidecar and its pins should take its module's new directory. No answer needed.
+
