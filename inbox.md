@@ -1151,3 +1151,6 @@ Coordinator 07:25Z: a new entry at the end of your file on cursor/proofs-inbox.
 [2026-11-10T08:02Z] e8dd7bd2feec
 Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa.md | tail -30
 
+[2026-11-10T08:11Z] 620d1c2c64dc
+Coordinator 08:11Z: do not re-mark #8568 at a28822661c; a second new entry is in your file.
+
