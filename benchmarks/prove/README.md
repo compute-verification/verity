@@ -20,12 +20,14 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   session (the `proof_overhead` card), modeled from k_log (the card's types' median seconds a witness bit), or missing.
   Each row names the run or art its figure is from. A type several steady-state reports measured takes the fullest
   statement's, the newest run's among equals; a steady-state attempt that didn't stand is named on its row.
-- **The totals:** the prover's GPU-seconds per served token, the tokens a prover GPU covers per second, and the prover
+- **The totals:** the prover GPU-seconds per served token, the tokens a prover GPU covers per second, and the prover
   GPUs a serving GPU needs, each with its range, whose other end prices every type not measured at steady state at the
-  steady-state types' median seconds a witness bit. A total is called measured only when steady-state measurements
-  cover all of its proving time. The verifier's seconds and the proof's bytes are given where a record holds them, and
-  "not measured" where none does. The served MACs the census holds in no proof block are in no figure, and the totals
-  give their share.
+  steady-state types' median seconds a witness bit. A total is called measured only when every block type is measured
+  at steady state. When a block type has no figure the totals leave its proving out and are called partial, naming each
+  such type with its share of the blocks, and of the MACs where the census holds them (a type with no time has no
+  share of the proving time). Otherwise a total is modeled. The verifier's seconds and the proof's bytes are given
+  where a record holds them, and "not measured" where none does. The served MACs the census holds in no proof block
+  are in no figure, and the totals give their share.
 - **The share of the proving time each source covers.**
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.

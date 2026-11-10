@@ -2,7 +2,13 @@
 block type's proving time, the totals and their range, SPOT over a sampling plan), then the store side on a real store with
 a directory remote: a workload's records as `fixtures/prove/` holds them (each cut to the fields the command reads;
 `records.json` names what each was cut from), the hand computation they reproduce, every refusal by name, and the
-command."""
+command.
+
+`fixtures/prove/` is the reader's input, not a result: the store side parses the bytes the producers wrote (a block
+census, the cards, a sampling plan, the proof servers' reports), so its fixtures are those bytes, never regenerated
+here, and synthetic ones would test a format the producers don't write. The figures pinned below hold this code's
+arithmetic to a computation done independently of it on the same records; they publish no measurement, and what the
+command says of a workload is what it prints from the store's records of record."""
 
 from __future__ import annotations
 
@@ -145,7 +151,9 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert t["gpu_seconds_per_token"] == total and t["tokens_per_gpu_second"] == 1 / total
     assert t["gpu_seconds_per_token_range"] == [low, high] and t["tokens_per_gpu_second_range"] == [1 / high, 1 / low]
     assert t["gpus_per_serving_gpu"] == total and t["blocks_per_token"] == 4.25
-    assert t["status"] == "modeled" and t["steady_time_share"] == pytest.approx(2.0 / total)
+    # the cut's bare block type has no figure, so the totals are partial and name it; this cut holds no MACs
+    assert t["status"] == "partial" and t["steady_time_share"] == pytest.approx(2.0 / total)
+    assert t["missing"] == [{"block": "Bare_v1{N=4}", "per_token": 0.25, "block_share": 0.25 / 4.25, "mac_share": None}]
     assert t["verifier_seconds_per_token"] == {"value": 1.0, "block_types": 1, "block_share": 2.0 / 4.25}
     assert t["proof_bytes_per_token"] is None
     by = {s["source"]: s for s in doc["sources"]}
@@ -157,11 +165,56 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert [r["block"] for r in doc["rows"]][-1] == "Bare_v1{N=4}" and doc["rows"][-1]["time_share"] is None
     assert doc["rows"][0]["time_share"] == max(r["time_share"] or 0 for r in doc["rows"])
 
-    # measured only when steady-state measurements cover all of the proving time
+    # measured only when every block type is measured at steady state; modeled when one is priced another way
     whole = P.Census.of({**CENSUS, "definitions": {GEMM64: CENSUS["definitions"][GEMM64]}})
     unverified = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
     measured = P.report(P.Flock(unverified, SESSIONS, "art:card").table(whole), 1.0)["totals"]
-    assert measured["status"] == "measured" and measured["verifier_seconds_per_token"] is None
+    assert measured["status"] == "measured" and measured["verifier_seconds_per_token"] is None and measured["missing"] == []
+    modeled = P.report(P.Flock(unverified, SESSIONS, "art:card").table(P.Census.of(CENSUS)), 1.0)["totals"]
+    assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
+
+
+def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatch):
+    """One steady-state type and one type with no figure at three quarters of the blocks: steady-state measurements
+    cover all of the time the total prices, and the total is still partial, never measured. It names the type it leaves
+    out with its share of the blocks, and of the MACs where the census holds them."""
+
+    doc = {"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 80}, "definitions": {
+        GEMM64: {"k_log": 20, "of": {"Linear_v1": "row"}, "prefill": 1, "decode": 0, "macs": 60},
+        "Unpriced_v1{N=1}": {"of": {"Unpriced_v1": "row"}, "prefill": 3, "decode": 0, "macs": 5},
+        "Rare_v1{N=1}": {"of": {"Rare_v1": "row"}, "prefill": 1, "decode": 0, "macs": 5}}}
+    reports = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
+    out = P.report(P.Flock(reports, SESSIONS, "art:card").table(P.Census.of(doc)), 1.0)
+    t = out["totals"]
+    assert {s["source"]: s["block_types"] for s in out["sources"]} == {P.STEADY: 1, P.SINGLE: 0, P.MODELED: 0, P.MISSING: 2}
+    assert (t["steady_time_share"], t["gpu_seconds_per_token"], t["status"]) == (1.0, 1.0, "partial")
+    assert t["missing"] == [
+        {"block": "Unpriced_v1{N=1}", "per_token": 3.0, "block_share": 0.6, "mac_share": 0.1875},
+        {"block": "Rare_v1{N=1}", "per_token": 1.0, "block_share": 0.2, "mac_share": 0.0625}]
+
+    # a census that holds no MACs for one of its types gives the share of the blocks alone
+    del doc["definitions"][GEMM64]["macs"]
+    bare = P.report(P.Flock(reports, SESSIONS, "art:card").table(P.Census.of(doc)), 1.0)["totals"]
+    assert bare["status"] == "partial" and [(m["block_share"], m["mac_share"]) for m in bare["missing"]] == [(0.6, None), (0.2, None)]
+    # at a sampling plan the shares are of the blocks the plan samples
+    cells = [{"block": name, "type": "", "taken": 1.0} for name in doc["definitions"]]
+    sampled = P.report(P.Spot(P.Flock(reports, SESSIONS, "art:card"), plan(cells), P.Serving(0.5, 400.0, "stated")).table(
+        P.Census.of(doc)), 1.0)["totals"]
+    assert sampled["status"] == "partial" and [m["block_share"] for m in sampled["missing"]] == pytest.approx([1 / 3, 1 / 3])
+
+    page = {"workload": "toy", "model": "Toy", "inputs": [], "refused": [], "macs_in_blocks": 0.8, **out,
+            "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    text = R.render(page)
+    assert "- prover GPUs per serving GPU: 1, partial: steady-state measurements cover 100.0% of the proving time it prices" in text
+    assert ("- partial: 2 block types have no figure, so every total here leaves their proving out: `Unpriced_v1{N=1}` "
+            "(60.00% of the blocks, 18.75% of the blocks' MACs); `Rare_v1{N=1}` (20.00% of the blocks, 6.25% of the "
+            "blocks' MACs)\n") in text
+    assert "not measured at that size, and partial as that ratio is:" in text
+    monkeypatch.setattr(R, "MISSING_NAMED", 1)
+    assert "(60.00% of the blocks, 18.75% of the blocks' MACs); and 1 more, which `--json` names\n" in R.render(page)
+    whole = R.render(page | {"totals": t | {"status": "measured", "missing": []}})
+    assert "measured: steady-state measurements cover 100.0% of its proving time" in whole and "partial" not in whole
 
 
 def plan(cells: list[dict], **over) -> P.SamplingPlan:
@@ -184,7 +237,7 @@ def test_spot_prices_the_blocks_its_plan_samples_and_refuses_another_census_plan
     # a cell is a row's by name, else by the staged type that measured the row; the costs are the prover's own
     assert [(r.block, r.per_token) for r in table.rows] == [(GEMM64, 40 / 800), (GEMM32, 20 / 800), (NORM, 8 / 800)]
     assert [r.cost for r in table.rows] == [r.cost for r in inner.rows]
-    # the prover's GPUs a serving GPU are the plan's proving over its serving, whatever the serving rate
+    # the prover GPUs a serving GPU are the plan's proving over its serving, whatever the serving rate
     proving = sum(n * r.cost.seconds for n, r in zip((40.0, 20.0, 8.0), inner.rows))
     assert P.report(table, 1.0)["totals"]["gpus_per_serving_gpu"] == pytest.approx(proving / 800.0)
     half = P.Serving(0.25, 4000.0, "stated")
@@ -327,7 +380,7 @@ def recorded(tmp: Path) -> tuple[Store, dict[str, str]]:
 
 def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     """The figures a hand computation gave on these records, to the last digit it kept: with every block proved, the
-    blocks and the prover's GPU-seconds a token, the tokens a prover GPU proves a second and each source's share; at the
+    blocks and the prover GPU-seconds a token, the tokens a prover GPU proves a second and each source's share; at the
     sampling plan, the served tokens a prover GPU covers a second and the prover GPUs a serving GPU, with the range's
     other end. A fresh machine gets them from the store's remote alone."""
 
