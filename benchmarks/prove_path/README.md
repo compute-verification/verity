@@ -76,11 +76,11 @@ What doesn't change:
 
 ## What an accepted audit means
 
-Each guarantee below is listed in the lock (`Security/lean-audit.json`), which records its statement, the definitions it
+Each guarantee below is listed in the lock (`security/lean-audit.json`), which records its statement, the definitions it
 reads and its named assumptions.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`Security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
+(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
@@ -142,26 +142,26 @@ history would discharge, and doesn't discharge them yet.
 **A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
 `SoundExecH` at hidden outputs, `SoundExecHR` with registered reads), in the game form
-(`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
+(`security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
 sampling relation, as `SampledKSLiveV3` does under `--zk`, so a plain audit shows each session's soundness, not the audit
 guarantee above.
 
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
-  (`Security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
-  `Claims.ExpectedCR` (`Security/Definitions/Core/Interaction.lean`).
+  (`security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
+  `Claims.ExpectedCR` (`security/Definitions/Core/Interaction.lean`).
 - A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file as the first two).
 - Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`
-  (`Security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
-  `Security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
-  (`Security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
-  and `RecordCustodyExecH` (`Security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
-- `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
+  (`security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
+  `security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
+  (`security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
+  and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
+- `Verity.Assumptions.TrustedHost` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
-- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Core/Hm96.lean`).
+- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
 match is refused. It is never a soundness gap.
