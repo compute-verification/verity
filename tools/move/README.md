@@ -11,6 +11,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 | `layout_maps.py` | Writes the layout as one map, `layout_one_map.toml` (or, by `--form moves`, as one map a move in the order they run, `layout_NN_NAME_map.toml`), from `layout_maps.json` (each moved component's new directory and files) and the files HEAD tracks; it fails on a tracked file with no destination, so it is the one rerun when `main` moves (`--form`, `--ref`, `--targets`, `--created`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
+| `flock_base.py` | What follows the modules of Flock's Lean package that moved to the base packages it requires by path: `private` names the module in each `open private … from Flock.M`, `moves` prints the map `check.py --update --moved` takes, and `rewrite` makes every import of an old name, and every lock's `layers` entry for one, name the base module and deletes the re-exports (`--dry-run`). It goes with the re-exports. |
 
 A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename.py --map`) maps old words to new ones:
 
