@@ -283,7 +283,7 @@ lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` 
 - **(A) is yours after the `ReadsAt` PR** (Thu 12 Nov 12:00Z): both read arms (`SecondStage.lean:812`, `:829`) restricted to values whose root R7 holds, and the model's `Held` carrying that list. TWOVERIFY reviews. Not sized, so not dated: a sizing with a date in my inbox by Fri 13 Nov 12:00Z. An issue for it is being filed.
 - TWOVERIFY cancelled guard `833c` (its head will not land); the guard at (C)'s head is yours, as you planned.
 
-## Coordinator, Tue 10 Nov 08:00Z: STOP
+## Coordinator, Tue 10 Nov 08:00Z: STOP: do not mark #8543; the `ReadsAt` PR and (A)'s sizing wait
 
 - **Daniel, Mon 9 Nov 11:44 PM PST, through top (TOP-394, 07:51Z; read it): a fast check and the repository's new layout come first, and every other goal, all of our research goals among them, is pushed back.** Nothing new starts on them. A worker more than 2 hours from its result stops. Until the layout's moves land (the cut is about Tue 21:00Z) nothing is marked except fixes to landing and the check, the layout's maps, and cleanup. Caps: 100 agents, $150 an hour of compute.
- do not mark #8543; the `ReadsAt` PR and (A)'s sizing wait:- **Do not mark #8543** (`2007687fd9`): it waits for the moves. The `ReadsAt` PR (Thu) and (A)'s sizing (Fri) are withdrawn until the goal comes back. Push what you have, write me one entry with the land ask's text for #8543, and end; set no timer.
+- **Do not mark #8543** (`2007687fd9`): it waits for the moves. The `ReadsAt` PR (Thu) and (A)'s sizing (Fri) are withdrawn until the goal comes back. Push what you have, write me one entry with the land ask's text for #8543, and end; set no timer.
