@@ -2,6 +2,8 @@ module
 
 public import Properties.NetworkScan
 public import Proofs.Properties.NetworkScan.Fits
+public import Proofs.Properties.NetworkScan.Causal
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
-public import Proofs.Properties.NetworkScan.Causal
-public import Proofs.Flock.SamplingScope
 
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
@@ -50,7 +50,8 @@ layout half is `ScanFits` at the statement's descriptor, the scan's canonical by
 
 The witnesses (the two-lemma rule): `scan_honest` exhibits what both take that no named assumption supplies, and
 `scanFits_nontrivial` and `scanScopeAcc_nontrivial` show neither conclusion is trivial, at a circuit that returns
-nothing (`not_fits_of_no_outs`).
+nothing (`not_fits_of_no_outs`). `scanScopeAcc_nontrivial_of` is the second's transfer form, at any compiled sampled
+verifier.
 -/
 
 @[expose] public section
@@ -58,17 +59,9 @@ nothing (`not_fits_of_no_outs`).
 namespace Properties.NetworkScan
 
 theorem scanScopeAcc_of_scanFits (h : ScanFits) : ScanScopeAcc := by
-<<<<<<< ours
-  intro j program s sc c hscan hc Coin Col T _ _ _ _ _ D x hflat hmatch hsc hdesc
-  have hm : Claims.Sampling.ScopeMatches D := hmatch
-  have hS : Claims.Sampling.Scope D x := (hm x).2 hsc
-||||||| base
-  intro Coin Col T _ _ _ _ _ D j program s sc c x hflat hmatch hsc hscan hc hdesc
-  have hS : Claims.Sampling.Scope D x := (hmatch x).2 hsc
-=======
-  intro Coin _ _ _ A D j program s sc c x hflat hmatch hsc hscan hc hdesc
-  have hS : D.Scope x := (hmatch x).2 hsc
->>>>>>> theirs
+  intro j program s sc c hscan hc Coin _ _ _ A D x hflat hmatch hsc hdesc
+  have hm : Claims.ScopeMatches D.Scope D.scopeCheck := hmatch
+  have hS : D.Scope x := (hm x).2 hsc
   refine ⟨hS, ?_⟩
   obtain ⟨st, _, hx, _⟩ := hS
   obtain ⟨P, hP, hF⟩ := hflat x st hx
@@ -109,8 +102,9 @@ theorem canon_null : Flock.canon .null = .ok "null" := by
   rfl
 
 /-- **`ScanFits`' and `ScanScopeAcc`'s honest witness** (the two-lemma rule's `_honest`): of what the two take,
-C-Flock's canonical form accepts a scan (`Flock.canon` at `null`), and a Program has a flattening (`Flattens`, at the
-Program with no definitions). The deployment's premises are named assumptions (`Properties.NetworkScan.Assumptions`).
+Flock's canonical form accepts a scan (`Flock.canon` at `null`), and a Program has a flattening (`Flattens`, at the
+Program with no definitions). The compiled sampled verifier's premises are named assumptions
+(`Properties.NetworkScan.Assumptions`).
 `scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: both read `Lean.Json.parse`, a `partial def`
 the kernel can't unfold. -/
 theorem scan_honest : Flock.canon .null = .ok "null" ∧ Flattens default ⟨[], []⟩ := ⟨canon_null, empty_flattens⟩
@@ -121,7 +115,6 @@ definitions, so its flattening returns nothing (`empty_flattens`, `not_fits_of_n
 no file decoding to it can be exhibited, since `Flock.Program.decode` reads through `Lean.Json.parse`, a `partial def`
 the kernel can't unfold. -/
 theorem scanFits_nontrivial :
-<<<<<<< ours
     ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule) (_ : Flattens P C),
       ¬ (scanLayout P s).Fits C s.window :=
   ⟨default, ⟨[], []⟩, oneSlot, empty_flattens, not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩⟩
@@ -130,56 +123,30 @@ theorem bytes_of_data_toList (b : ByteArray) : (⟨b.data.toList.toArray⟩ : By
 
 /-- The statement whose descriptor is the bytes of `null` and whose circuit is empty. -/
 def nullStmt : Claims.Sampling.AuditStatement :=
-  { Claims.Sampling.ScopeWitness.toyStmt with desc := "null".toUTF8.data.toList, prog := ⟨[], []⟩ }
+  { Claims.Witness.Sampling.toyStmt with desc := "null".toUTF8.data.toList, prog := ⟨[], []⟩ }
 
-/-- A deployment whose scope check takes everything and which parses every message to `nullStmt`. -/
-def acceptAllDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
-  { Claims.Sampling.ScopeWitness.toyD with parse := fun _ => some nullStmt }
+/-- A compiled sampled verifier whose scope check takes everything and which parses every message to `nullStmt`: the
+toy verifier `Claims.Witness.SamplingGeneric.sksL` with that parser. -/
+noncomputable def acceptAllCompiled :
+    Claims.SamplingGeneric.Compiled Bool (Claims.Witness.SamplingGeneric.toyA Bool) :=
+  { Claims.Witness.SamplingGeneric.sksL Bool with parse := fun _ => some nullStmt }
 
-/-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
-canonicalizes as `null` and a deployment whose scope check takes everything and whose statements have that text as
-their descriptor and the empty circuit, a statement is not in `ScopeAcc` at a schedule (`oneSlot`): its circuit returns
-nothing (`not_fits_of_no_outs`). -/
+/-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan Flock
+canonicalizes as `null` and a compiled sampled verifier whose scope check takes everything and whose statements have
+that text as their descriptor and the empty circuit, a statement is not in `ScopeAcc` at a schedule (`oneSlot`): its
+circuit returns nothing (`not_fits_of_no_outs`). -/
 theorem scanScopeAcc_nontrivial :
     ∃ (s : NetworkCheck.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
-      (D : Claims.Sampling.Deploy Bool ℕ Unit) (x : Claims.Msg) (_ : D.scopeCheck x = true)
+      (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg)
+      (_ : D.scopeCheck x = true)
       (_ : ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8),
       ¬ NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x := by
-  refine ⟨oneSlot, .null, "null", canon_null, acceptAllDeploy, [], rfl, fun st hx => ?_, ?_⟩
+  refine ⟨oneSlot, .null, "null", canon_null, _, acceptAllCompiled, [], rfl, fun st hx => ?_, ?_⟩
   · cases (Option.some.inj hx : nullStmt = st)
     exact bytes_of_data_toList "null".toUTF8
   · rintro ⟨-, st, hx, hF⟩
     cases (Option.some.inj hx : nullStmt = st)
     exact not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩ hF
-||||||| base
-    ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule),
-      Flattens P C ∧ ¬ (scanLayout P s).Fits C s.window := by
-  refine ⟨default, ⟨[], []⟩, ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩,
-    ⟨rfl, fun g hg => absurd hg (Nat.not_lt_zero g), fun g => ⟨fun h => by simp at h, ?_⟩⟩, empty_not_fits⟩
-  rintro ⟨j, hj, -⟩
-  exact absurd hj (Nat.not_lt_zero j)
-
-/-- **`ScanScopeAcc`'s conclusion is not trivial**, transferred from `scanFits_nontrivial`'s instance (the transfer
-form of the two-lemma rule's `_nontrivial`): at any deployment, a statement that parses
-to a descriptor decoding to the empty Program, with the empty circuit, is not in `ScopeAcc` at that Program's
-schedule, though a scan check and a scope check accepting everything would pass it. -/
-theorem scanScopeAcc_nontrivial_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] {D : Claims.Sampling.Deploy Coin Col T} {x : Claims.Msg} {st : Claims.Sampling.AuditStatement}
-    (hx : D.parse x = some st)
-    (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
-    ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩) (fun _ => 1) x := by
-  rintro ⟨-, st', hx', hF⟩
-  obtain rfl := Option.some.inj (hx.symm.trans hx')
-  unfold layOf at hF
-  rw [hP, hC] at hF
-  exact empty_not_fits hF
-=======
-    ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule),
-      Flattens P C ∧ ¬ (scanLayout P s).Fits C s.window := by
-  refine ⟨default, ⟨[], []⟩, ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩,
-    ⟨rfl, fun g hg => absurd hg (Nat.not_lt_zero g), fun g => ⟨fun h => by simp at h, ?_⟩⟩, empty_not_fits⟩
-  rintro ⟨j, hj, -⟩
-  exact absurd hj (Nat.not_lt_zero j)
 
 /-- **`ScanScopeAcc`'s conclusion is not trivial**, transferred from `scanFits_nontrivial`'s instance (the transfer
 form of the two-lemma rule's `_nontrivial`): at any compiled sampled verifier, a statement that parses
@@ -189,12 +156,11 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
     {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
     {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
-    ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩) (fun _ => 1) x := by
+    ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => 1) x := by
   rintro ⟨-, st', hx', hF⟩
   obtain rfl := Option.some.inj (hx.symm.trans hx')
   unfold layOf at hF
   rw [hP, hC] at hF
-  exact empty_not_fits hF
->>>>>>> theirs
+  exact not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩ hF
 
 end Properties.NetworkScan
