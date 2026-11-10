@@ -664,7 +664,9 @@ LOADS = {
     "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
                  ("--dataset-name", "sharegpt"), 200, (4, 8, 12, 16, 24, 32, 48), 4096,
                  Dataset("anon8231489123/ShareGPT_Vicuna_unfiltered", "192ab2185289094fc556ec8ce5ce1e8e587154ca",
-                         "ShareGPT_V3_unfiltered_cleaned_split.json", 672837942, "PLACEHOLDER")),
+                         "ShareGPT_V3_unfiltered_cleaned_split.json", 672837942,
+                         "324efe241e9a5a284c94a9cd15776a8a037092528e44b4bc6aa7338f7c93ee80"
+                         "62e859ae182c2b9440a1099f6f6f7659b1c3d4ffecf2672e0d9ff8771946d5db")),
     "long": Load("8,192 random tokens in and 128 out (vLLM's random dataset at one long length)",
                  ("--dataset-name", "random", "--random-input-len", "8192", "--random-output-len", "128"), 24,
                  (1, 2, 4, 8), 16384, slo=("tpot",)),
