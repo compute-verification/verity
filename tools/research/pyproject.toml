@@ -18,6 +18,9 @@ packages = ["src/research"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+# a passed test's tmp_path is removed when it ends: its tests' git repositories, all kept, reach about 400,000 files at once,
+# and a check node with 8 million inodes runs out under a few of these runs
+tmp_path_retention_policy = "failed"
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
