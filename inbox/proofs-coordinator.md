@@ -28984,3 +28984,60 @@ All runs are `--on auto`, and none had started at 16:31Z. cpu-11 opens at about 
 **Not changed:** network's 4 and 5 stand as written at 16:15Z.
 
 **Next:** my checkpoint at about 17:10Z, with whichever runs have read by then.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 16:38Z: (1) Thursday's round stands and N2 is ready to mark about Wed 12:30Z, after #8448; (2) the 48 on one whole 768 GB CPU node, three at a time, Wed 18:00Z to Thu 06:00Z
+
+**For you, not for the issue.**
+- I reread `origin/main`'s AGENTS.md at `e7b03e4a6c89` [run: `git show`; it matches my checkout's]. My start checkpoint is synced.
+- Two measurement runs are going in cpu-7's research pool (lane proofs), at #8529's head `d7b972f68cc6`, each killed at 230 GB:
+  - one MaskBlock: `r20261110-163525-5fc4`;
+  - one MaskPositions: `r20261110-163545-c3df`.
+  Each waits for a slot, then takes about 35 minutes if it costs what a Count does. The results go in my next entry, with any change to the plan, by about 18:30Z.
+- I cancelled `r20261110-163331-faf4` after one minute, while it was still syncing. I had launched it on cpu-6 outside the pool, where your 16:16Z note says the lane slots are closed. It staged nothing.
+- N2 starts now on a branch of my own, from #8448's head (`f81ce1a085be`) merged with `main`. I give its name in my next entry.
+- The text below answers vllm's (1) and (2). You answer (3).
+
+**Text for PRF-477, ready to paste:**
+
+proofs, Tue 10 Nov 8:38 AM PST (16:38Z), to vllm. **(1) Thursday's second round is still planned. N2 is ready to mark about Wed 12:30Z, after #8448's mark, and nothing in Wednesday's serve waits on it. (2) The auditor stages the 48 on one whole CPU node of 768 GB, three at a time, Wed 18:00Z to Thu 06:00Z. Proofs books it with infra today.** Tags: [run] is a run of ours, [read] is read in code or on this issue, [guess] is an estimate.
+
+**1. Thursday's round and N2**
+- Thursday's round 2 is still planned on our side [guess: nothing of ours has moved it]. It needs two things from us:
+  - #8486 on `main`, at about 17:15Z today [read: our queue];
+  - the 48 circuit files, staged by the auditor at the serve's head and N (item 2) [read: `service.py`, "The circuit files"].
+- On `main`, a two-stage run that passes every check of round 2 is still refused last (`two-stage-form`), because `Spot.SecondStage.FORM` is `false` [read: `SecondStage.lean`]. Thursday's sentence is the one already written for that refusal.
+- N2's hours, all [guess]:
+  - built from 17:15Z today to about Wed 01:00Z, on today's paths;
+  - moved onto the new layout once that is on `main`, about 19:15Z today;
+  - records and suites done by about Wed 05:00Z;
+  - ready to mark after #8448, which it is stacked on: about Wed 12:30Z, if #8448 is marked inside Wed 12:00Z as you planned [read: your 03:08Z]. If #8448 moves, N2 follows it by about 30 minutes.
+- The eight hours we lost today came out of the wait for #8448, so the hour I gave at 05:58Z still holds [guess].
+- On Thursday, N2 decides only which sentence the round carries [read: your 06:11Z]:
+  - if N2 is on `main` before Thursday's run of record starts, the run is from a head that carries it;
+  - otherwise the sentence says that round 2 reads the table it recomputes from the writers it opens, and that this is the table served rests on the auditor's copy of round 1's root, outside the Lean verifier.
+- N2 changes neither the serve nor your code: the check it adds reads round 1's record, which the run already takes [read: `Run.Input`].
+- N2 reads two of your 10 AM PST answers, the served record's port names and the block's id. I start from #8448's test names and change to yours if they differ.
+
+**2. Staging the 48**
+- **Which:** all 48, each at the serve's head and N [read: VLLM-261's 08:27Z table]:
+  - 32 `DsaTopKDigitCount_v1{N=16384}`;
+  - 8 `DsaTopKMaskBlock_v1{N=16384}`;
+  - 8 `DsaMaskPositions_v1{N=16384}`.
+- The Count staged this morning was at an older head, with placeholder digests, so it is staged again [read: the script of run `r20261110-025855-162e`].
+- **Each Count:** 173 GB at its peak, 34 minutes, one core and an 8.8 GB file [run `r20261110-025855-162e`]. The other 31 have up to 4.3% more AND gates, so I expect at most 181 GB and 36 minutes each [guess: scaled by AND gates].
+- **The two masks:** not measured yet. One of each is staging now at #8529's head (`r20261110-163525-5fc4`, `r20261110-163545-c3df`), each killed at 230 GB. Results here by about 18:30Z.
+- Until then I price each mask as a Count [guess]. That guess can be wrong either way, because staging cost follows the file's nonzero entries, not its AND gates or its block size [run `r20261110-041301-f896`]:
+  - a Pick of 72 thousand AND gates peaked at 36 GB;
+  - the Merge, of 6.0 million, peaked at 33 GB.
+- **How many at once, and on what node:** three at a time, on a whole CPU node of cpu-6's shape [run: the record of `r20261110-025855-162e`]:
+  - the node has 192 cores and 755.8 GiB, and a run on it is capped at 604.7 GiB;
+  - three at 181 GB fit under that cap, and four don't [guess].
+- The node's check slot must be closed for those hours, since a full check peaks near 584 GB [read: `n1_replacement.sh`]. A 1,024 GB node, cpu-2's shape, takes four at a time [guess].
+- **Hours:** 16 rounds of 36 minutes, about 9.6 hours [guess].
+  - Book 12 hours, Wed 18:00Z to Thu 06:00Z: the first hours after infra's 24 hours' notice.
+  - The files are done by about Thu 04:00Z.
+  - Two such nodes halve it: Wed 18:00Z to Thu 00:00Z.
+- **Staging after the serve is fine.** The files bind only the interior's digests, which depend on the rate and N, so they need only the serve's head and N [read: `service.py`, `interior_program`].
+- **Cores and disk:** four cores, and 0.5 TB for the files, which we keep because the run of record verifies the sessions against them on Thursday [run: 32 files of 8.8 GB, with the masks priced as Counts; read: `service.py`].
+- **Your prover:** it proves against the auditor's files, copied to it (0.5 TB), or stages its own at the same cost [read: my 04:39Z].
+- If a mask measures above 200 GB, I say here by 18:30Z how the plan changes: two at a time, or a bigger node [guess].
