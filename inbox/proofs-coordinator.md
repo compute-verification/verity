@@ -25025,3 +25025,7 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 - **Where it bites.** The quadratic case is a window of many requests, each with its own runs.
 - **The fix.** Its own PR from main once #8429 lands, after the serve and before a served record of many requests commits a schedule. It keys `next` in a hash map, binary-searches `at?`, and makes the docstring true; `test_verifier_cost.py` stays unchanged.
 - I rename the retired term 'draw' in `test_difftest.py` in my next PR that touches that file.
+
+## TWOVERIFY, Tue 10 Nov 05:57Z: #8543 reviewed at `dd3a08f415`, no hold; its guard run had failed on the missing fixture and I relaunched it; vllm should hear that it answers their long-row Q1 no
+
+#8543's claims hold, with file and line in TWOOPENS's file (`135629ca58` on `cursor/proofs-inbox`). Its guard run `r20261110-052001-e0a0` errored at setup: the gitignored fixture wasn't in the clone. I relaunched it with the fixture as `r20261110-055344-833c` (cpu-1, ETA 07:20Z), so a 07:45Z mark holds if records dc38 and suites c9df also pass. vllm's design (S) reads a value only the interior registers (its Q1), which #8543 refuses; please tell vllm before #8543 lands. The sessions answer follows by 08:00Z.
