@@ -31715,3 +31715,30 @@ The PRF-504 runs are as in my 19:12Z table.
 2. `v2_case.py` on a window of several members with one sampled: `missing.json` (as now), or a5's case for the Lean to refuse? As now.
 
 Next entry when the run ends or your word arrives, by 20:35Z at the latest.
+
+## WEIGHTSEC, Tue 10 Nov 19:37Z: PRF-506: #8400 is ready to mark at `c2b87846c9597129f33712cec2e9c139af690335` (records `r20261110-190639-7c32`, quick tier `r20261110-190842-ce6e`, both at that SHA); form (a) is in both bodies; #8226 stops: `FaultedTwo.lean` does not elaborate on #8400, two forms of its statement for you
+
+Your 19:17Z entry, read at 19:26Z. [run] unless marked.
+
+**#8400: ready to mark at `c2b87846c9597129f33712cec2e9c139af690335`.**
+- Records run at that SHA: `r20261110-190639-7c32` (cpu-12): `Security/Proofs`, `Security` and `Security/Properties` pass, each reused by input key from `r20261110-181246-ec75`, the run that wrote the committed record.
+- Quick tier at that SHA: `r20261110-190842-ce6e` (cpu-3), `suites.py --changed e7b03e4a6c89 --quick`: 8 of 8 suites passed, 0 failed (it ended at 19:36Z).
+- Not marked, and no `queue/*` ref holds it; it merges clean with `main`, still `5482988e3496` (all checked at 19:36Z).
+
+**Form (a), bodies only, done at 19:27Z** (`research queue edit`; no commit):
+- #8400's body opens: it carries #8224's change and lands it, #8224 is not marked on its own, the branch holds #8224's head `ee04d349d202`. Then the one lock line: `TheftServedTied`'s premises record moves `HonestUseHard` and `Simulable` from `open` to `domain`, because the lock's top-level lists file both as `domain` since `5ea4217bb7` and `TheftServedTied` landed after #8224 branched; `c2b87846c959` commits the record the check wrote.
+- #8224's body opens: it lands with #8400 and is not marked on its own; #8400 holds its head `ee04d349d202`; its two `layers` entries are #8400's `ce64184557`, without which the records check fails at this head; it closes when #8400 is on `main`.
+
+**#8226: `FaultedTwo.lean` does not elaborate against #8400's `TheftFaulted`. I stopped; nothing is pushed to its branch.**
+- Scratch: `cursor/proofs-cross-8226-4b1f` at `5e0a916a42b0a3e09309db07a6a0f07d55f62ccd`, #8400's head `c2b87846c959` merged into `3a579391f981`. One stop, the module doc of `Security/Proofs/WeightSecurity.lean`, closed by keeping both sentences (`FaultedTwo`'s, then `Cut`'s). Over #8400 the tree adds `FaultedTwo.lean` and changes nine lines of the proofs root (its import and the doc); the lock is #8400's, byte for byte.
+- The try: `r20261110-193023-9db7` (cpu-12, pool `proofs`), `lean_changed.py --try Security/Proofs/WeightSecurity/FaultedTwo.lean`. Its imports build ("Build completed successfully"), then lean exits 1 with five errors of one cause:
+  - Lines 43 and 53, the statement: `faultChannel R Q Adv O V Tick F size` has `size : F → ℕ` where `faultChannel` now takes `κ : Cut (Q × Adv) (O → V)` (and two `HAdd ℕ ℕ F` failures that follow from it).
+  - Line 58, the proof: `TheftFaulted C Cf size φ₀ gen` has `gen` where `TheftFaulted` now takes `κ`.
+- So it is the statement that has to change, and the proof term with it. `TheftFaultedTwo` is a theorem of the proofs tree with no lock record [run: #8226's lock change is empty], so nothing keyed moves either way.
+
+**The claim: what `TheftFaultedTwo` would say.** Today, on #8224's form, it takes `FaultedUseHard C Cf size … T M Aset Af lam` at every replay-block pattern `F`, with `M = T·(K − 1) + 1`, and its bound's \(N\) is `patternCount size T M`. Two forms on #8400:
+- **(A) With a cut, as `TheftFaulted` now reads.** It takes `κ : Cut (Q × Adv) (O → V)`; `Af` is over `κ.Interiors Cf size φ₀`; `FaultedUseHard` is taken at the faulted function restricted to the interior patterns; `Simulable` and the bound read `faultChannel … (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M …` and `patternCount (fun φ : κ.Interiors Cf size φ₀ => size φ.1) T M`. What it says: at a two-stage audit, replay blocks `κ` cuts cost their hints in \(|S|\) and nothing in \(N\); `FaultedUseHard` is rested on for interior replay blocks only. That is decision 1 carried to the two-stage audit. The proof should stay one application, `TheftFaulted C Cf size φ₀ κ gen …` [guess: not built].
+- **(B) Without a cut, saying what #8226 says today.** `FaultedUseHard` at every replay-block pattern. On #8400 that is (A) at `κ := Cut.none`, written over `(Cut.none _ _).Interiors Cf size φ₀`, where every pattern is interior [read: `Cut.Interior`'s doc]. Written over `F` itself, as today, it needs a transport along that subtype for `FaultedUseHard`, `Simulable`, the channel's strings and `patternCount`; #8400 has none outside the toy [read: `Cut.none` appears only in the toy witnesses and docs]. It says strictly less than (A) and keeps the premise decision 1 narrowed.
+- I'd take (A): it is `TheftFaulted`'s own form, one line of proof, and (B) is its instance. Whether #8226's theorem may change its premise this way is the claim, and yours to take to Daniel. I make no edit to `FaultedTwo.lean` until you say which.
+
+**What I hold now.** Nothing running. #8512 and #8527: no push from me, as you said. Scratch branches stand: the five old ones, `cursor/proofs-cross-8226-7d2e` (`d759d47c0242`, superseded by `-4b1f`) and `cursor/proofs-cross-8226-4b1f`. Notes: `20261110T1912Z-checkpoint-weightsec` and the one I write after this entry.
